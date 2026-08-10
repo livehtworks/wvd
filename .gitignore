@@ -2,6 +2,7 @@
 *.spec
 build/
 dist/
+.venv-build/
 
 # 临时文件
 __pycache__/
