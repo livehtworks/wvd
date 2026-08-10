@@ -1364,11 +1364,15 @@ def Factory():
                 return State.Quit, DungeonState.Quit, screen
 
             if TryPressRetry(screen):
-                    Sleep(2)
+                Sleep(2)
+                counter += 1
+                continue
 
             if Press(CheckIf(screen,"startdownload",[[222,901,465,84]])):
                 logger.info(_("确认, 下载, 确认."))
                 Sleep(2)
+                counter += 1
+                continue
 
             identifyConfig = [
                 ("dungFlag",      DungeonState.Dungeon),
@@ -2175,7 +2179,7 @@ def Factory():
                                 Press([36+(counter_trychar%3)*286,1425])
                                 Sleep(2)
                                 continue
-                            elif CheckIf(scn:=ScreenShot(),"trait"):
+                            elif CheckIf(scn,"trait"):
                                 if CheckIf(scn,"story", [[676,800,220,108]]):
                                     Press([725,850])
                                 else:
