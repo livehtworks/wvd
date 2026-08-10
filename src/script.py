@@ -451,13 +451,21 @@ def CheckAndRecoverDevice(setting : FarmConfig, runtimeContext: RuntimeContext, 
 
             logger.info(_("连接失败: {a}".format(a=result.stderr.strip())))
             time.sleep(2)
-            KillEmulator()
+            if FORCE_RESTART_EMU or attempt >= 5:
+                logger.info(_("连接多次失败, 升级为重启模拟器."))
+                KillEmulator()
+            else:
+                logger.info(_("连接失败, 先只重启ADB, 暂不关闭模拟器."))
             KillAdb()
             time.sleep(2)
         except Exception as e:
             logger.error(_("重启ADB服务时出错: {a}".format(a=e)))
             time.sleep(2)
-            KillEmulator()
+            if FORCE_RESTART_EMU or attempt >= 5:
+                logger.info(_("ADB恢复异常且多次失败, 升级为重启模拟器."))
+                KillEmulator()
+            else:
+                logger.info(_("ADB恢复异常, 先只重启ADB, 暂不关闭模拟器."))
             KillAdb()
             time.sleep(2)
             return None
@@ -988,6 +996,48 @@ def Factory():
             SaveImage(ScreenShot())
 
         package_name = "jp.co.drecom.wizardry.daphne"
+        def TryDeviceShellOnce(cmdStr):
+            logger.debug(_("TryDeviceShellOnce {a}".format(a=cmdStr)))
+            try:
+                return setting._ADBDEVICE.shell(cmdStr, timeout=5)
+            except Exception as e:
+                logger.warning(_("ADB命令执行失败, 本次不自动重启模拟器 ({a}): {b}").format(a=cmdStr, b=e))
+                return None
+        def TryRestartGameApp():
+            logger.info(_("尝试仅重启游戏应用..."))
+            if TryDeviceShellOnce("logcat -c") is None:
+                return False
+
+            mainActResult = TryDeviceShellOnce(f"cmd package resolve-activity --brief {package_name}")
+            if mainActResult is None:
+                return False
+            mainAct = mainActResult.strip().split("\n")[-1]
+            if not mainAct:
+                logger.warning(_("未能解析游戏启动Activity."))
+                return False
+
+            if TryDeviceShellOnce(f"am force-stop {package_name}") is None:
+                return False
+            Sleep(2)
+
+            focus = TryDeviceShellOnce("dumpsys window | grep mCurrentFocus")
+            if focus is None:
+                return False
+            if package_name in focus:
+                logger.warning(_("执行force-stop后游戏仍在前台, 判定为仅重启游戏失败."))
+                return False
+
+            logger.info(_("巫术, 启动!"))
+            startResult = TryDeviceShellOnce(f"am start -n {mainAct}")
+            if startResult is None:
+                return False
+            logger.debug(startResult)
+            Sleep(10)
+
+            logs = TryDeviceShellOnce("logcat -d | grep -i \"unable to initialize.*graphics api\"")
+            if logs and logs.strip():
+                logger.error(_("检测到崩溃日志, 暂时不重启模拟器.{a}".format(a=logs)))
+            return True
 
         runtimeContext._CRASHCOUNTER +=1
         logger.info(_("崩溃计数: {a}\n崩溃计数超过{b}次后会重启模拟器.".format(a=runtimeContext._CRASHCOUNTER, b=setting.MAX_CRASH_LIMIT)))
@@ -999,16 +1049,16 @@ def Factory():
             CheckAndRecoverDevice(setting, runtimeContext, FORCE_RESTART_EMU=True)
             Sleep(5)
 
-        DeviceShell("logcat -c")
-        mainAct = DeviceShell(f"cmd package resolve-activity --brief {package_name}").strip().split("\n")[-1]
-        DeviceShell(f"am force-stop {package_name}")
-        logger.info(_("巫术, 启动!"))
-        logger.debug(DeviceShell(f"am start -n {mainAct}"))
-        Sleep(10)
-        logs = DeviceShell("logcat -d | grep -i \"unable to initialize.*graphics api\"")
-        if logs.strip():
-            logger.error(_("检测到崩溃日志, 暂时不重启模拟器.{a}".format(a=logs)))
-            # restartGame(skip_screenshot = False, force_restart_EMU = True)
+        if not TryRestartGameApp():
+            logger.info(_("仅重启游戏失败, 先尝试恢复ADB后再次重启游戏."))
+            ResetDevice(force_restart_adb=True)
+            Sleep(2)
+            if not TryRestartGameApp():
+                logger.info(_("恢复ADB后仍无法仅重启游戏, 升级为重启模拟器."))
+                CheckAndRecoverDevice(setting, runtimeContext, FORCE_RESTART_EMU=True)
+                Sleep(5)
+                if not TryRestartGameApp():
+                    logger.error(_("重启模拟器后仍无法启动游戏."))
 
         raise RestartSignal()
     class RestartSignal(Exception):
@@ -1563,6 +1613,73 @@ def Factory():
                 Press([850,1100])
             Sleep(5)
             return
+        def ClampPoint(pos):
+            return [int(max(1, min(898, pos[0]))), int(max(1, min(1598, pos[1])))]
+        def PressNextTarget(next_pos):
+            offsets = [
+                [0, 75],
+                [0, 115],
+                [-35, 145],
+                [35, 145],
+                [0, 185],
+                [-70, 210],
+                [70, 210],
+                [0, 250],
+                [-105, 275],
+                [105, 275],
+            ]
+            for offset in offsets:
+                Press(ClampPoint([next_pos[0] + offset[0], next_pos[1] + offset[1]]))
+                Sleep(0.08)
+        def PressEnemyTargetFallback():
+            for y in [430, 560, 700, 830]:
+                for x in [140, 300, 460, 620, 780, 860]:
+                    Press([x, y])
+                    Sleep(0.04)
+        def CheckRolePortraitMatch(screenImage, shortPathOfTarget, active_pos=None):
+            template = LoadTemplateImage(shortPathOfTarget)
+            template_h, template_w = template.shape[:2]
+            base_roi_list = [
+                [_("旧版头像位"), [87, 55, template_w, template_h]],
+                [_("新版头像位"), [24, 55, template_w, template_h]],
+                [_("新版头像位偏下"), [24, 63, template_w, template_h]],
+                [_("新版头像位偏右"), [32, 55, template_w, template_h]],
+            ]
+            if active_pos is not None:
+                base_roi_list.append([
+                    _("Active动态头像位"),
+                    [int(active_pos[0] - template_w * 0.35), int(active_pos[1] + 35), template_w, template_h],
+                ])
+
+            crop_list = [
+                [_("整图"), [0, 0, template_w, template_h]],
+                [_("右半"), [template_w * 40 // 100, 0, template_w - template_w * 40 // 100, template_h]],
+                [_("右上"), [template_w * 33 // 100, 0, template_w - template_w * 33 // 100, template_h * 80 // 100]],
+                [_("上半"), [0, 0, template_w, template_h * 70 // 100]],
+            ]
+
+            highest_match_rate = 0
+            highest_match_desc = ""
+            checked_roi = set()
+            for base_name, base_roi in base_roi_list:
+                base_key = tuple(base_roi)
+                if base_key in checked_roi:
+                    continue
+                checked_roi.add(base_key)
+                for crop_name, crop_roi in crop_list:
+                    crop_x, crop_y, crop_w, crop_h = crop_roi
+                    if crop_w <= 0 or crop_h <= 0:
+                        continue
+                    template_crop = template[crop_y:crop_y + crop_h, crop_x:crop_x + crop_w]
+                    screen_roi = [base_roi[0] + crop_x, base_roi[1] + crop_y, crop_w, crop_h]
+                    _, match_rate = _check(screenImage, template_crop, [screen_roi])
+                    logger.debug(_("角色匹配检测: {a}/{b}/{c} 匹配程度为{d:.2f}%.".format(
+                        a=shortPathOfTarget, b=base_name, c=crop_name, d=match_rate * 100
+                    )))
+                    if match_rate > highest_match_rate:
+                        highest_match_rate = match_rate
+                        highest_match_desc = _("{a}/{b}".format(a=base_name, b=crop_name))
+            return highest_match_rate, highest_match_desc
         def SkillLvlSelectAndDoubleCheck(skillPos,skilllvl, supportTarget):
             skillPosDict = { _("左上技能"):[266,965],_("右上技能"):[640,965],_("左下技能"):[266,1054],_("右下技能"):[640,1054]}
             supportTargetDict = {"左上角色": [200,1200], "中上角色": [450,1200], "右上角色": [700,1200], "左下角色":[200,1400], "中下角色":[450,1400], "右下角色":[700,1400]}
@@ -1587,21 +1704,21 @@ def Factory():
             # 设置等级
             Sleep(1)
             scn = ScreenShot()
-            has_lv_1 = (CheckIf(scn,f"spellskill\skillLvl\lv1")) or (CheckIf(scn,f"spellskill\skillLvl\s_lv1"))
+            has_lv_1 = (CheckIf(scn,f"spellskill/skillLvl/lv1")) or (CheckIf(scn,f"spellskill/skillLvl/s_lv1"))
             if (not has_lv_1):
                 if (skilllvl>=2):
                     logger.error(_("错误: 设定了高于1级的技能, 但并未检测到技能等级.\n 使用默认技能."))
             else:
                 if skilllvl!=1:
-                    has_lv_x = (CheckIf(scn,f"spellskill\skillLvl\lv{skilllvl}")) or (CheckIf(scn,f"spellskill\skillLvl\s_lv{skilllvl}"))
+                    has_lv_x = (CheckIf(scn,f"spellskill/skillLvl/lv{skilllvl}")) or (CheckIf(scn,f"spellskill/skillLvl/s_lv{skilllvl}"))
                 else:
                     has_lv_x = has_lv_1
 
                 if not has_lv_x:
                     skilllvl = 1
                     logger.error(_("错误: 未检测到目标等级\n 使用1级技能."))
-                if not Press(CheckIf(scn,f"spellskill\skillLvl\lv{skilllvl}")):
-                    if not Press(CheckIf(scn,f"spellskill\skillLvl\s_lv{skilllvl}")):
+                if not Press(CheckIf(scn,f"spellskill/skillLvl/lv{skilllvl}")):
+                    if not Press(CheckIf(scn,f"spellskill/skillLvl/s_lv{skilllvl}")):
                         logger.error(_("错误: 我认为不可能发生这种情况. 请务必告诉我."))
 
             # 辅助技能
@@ -1616,31 +1733,12 @@ def Factory():
                 logger.info(_("释放了位于\"{a}\"的全体技能, 技能等级为{b}.".format(a=skillPos, b=skilllvl)))
                 Sleep(2)
             else:
-                repeat = 2
                 if pos:= CheckIf(scn,"next",[[1,291,898,600]]):
-                    Press([pos[0],pos[1]+50])
                     logger.info(_("释放了位于\"{a}\"的单体技能, 技能等级为{b}. 选择next作为敌方目标.".format(a=skillPos, b=skilllvl)))
-                    repeat = 1
-
-                for t in range(repeat): # 至少保证一轮随机选择
-                    x0, y0 = 75, 296
-                    width, height = 827, 600
-
-                    cols = 4
-                    rows = 3
-                    cell_w = width / cols
-                    cell_h = height / rows
-
-                    for row in range(rows):
-                        for col in range(cols):
-                            left = x0 + col * cell_w
-                            top = y0 + row * cell_h
-                            x = left + random.random() * cell_w
-                            y = top + random.random() * cell_h
-                            Press([x, y])
-                            Sleep(0.05)
-
-                logger.info(_("释放了位于\"{a}\"的单体技能, 技能等级为{b}. 随机选择敌方目标.".format(a=skillPos, b=skilllvl)))
+                    PressNextTarget(pos)
+                else:
+                    logger.info(_("释放了位于\"{a}\"的单体技能, 技能等级为{b}. 未检测到next, 轮询选择敌方目标.".format(a=skillPos, b=skilllvl)))
+                    PressEnemyTargetFallback()
                 Sleep(2)
 
             # 资源不足
@@ -1691,6 +1789,7 @@ def Factory():
         highest_match_rate = 0
         target_skill = None
         scn = ScreenShot()
+        active_pos = StateCombatCheck(scn)
         t = time.time()
         for skill in skill_settings:
             role_var = skill.get("role_var")
@@ -1701,11 +1800,11 @@ def Factory():
                 img_path = os.path.join(IMAGE_FOLDER, "spellskill", "char", f"{candidate}.png")
                 full_path = ResourcePath(img_path)
                 if os.path.exists(full_path):
-                    match_rate = CheckHow(scn, f"spellskill/char/{candidate}", [[87,55,73,51]])
+                    match_rate, match_desc = CheckRolePortraitMatch(scn, f"spellskill/char/{candidate}", active_pos)
                     if match_rate > highest_match_rate:
                         highest_match_rate = match_rate
                         target_skill = skill
-                        logger.debug(_("最佳 {a}, {b}".format(a=candidate, b=highest_match_rate)))
+                        logger.debug(_("最佳 {a}, {b}, {c}".format(a=candidate, b=highest_match_rate, c=match_desc)))
         logger.debug(f"匹配时间 {time.time() - t}")
 
         # 4. 判断匹配率是否达标
