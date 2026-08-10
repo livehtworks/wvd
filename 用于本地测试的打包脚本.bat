@@ -7,6 +7,8 @@ cd /d "%~dp0"
 set "APP_NAME=wvd"
 set "BUILD_VENV=.venv-build"
 set "REQUIREMENTS_FILE=requirements-build.txt"
+set "CONFIG_BACKUP=%TEMP%\%APP_NAME%_config_backup_%RANDOM%_%RANDOM%.json"
+set "CONFIG_WAS_BACKED_UP=0"
 
 echo [INFO] Project dir: %CD%
 
@@ -58,9 +60,31 @@ if errorlevel 1 (
 )
 
 echo [INFO] Cleaning old build outputs...
+if exist "dist\%APP_NAME%\config.json" (
+    echo [INFO] Preserving dist\%APP_NAME%\config.json
+    copy /y "dist\%APP_NAME%\config.json" "%CONFIG_BACKUP%" >nul
+    if errorlevel 1 (
+        echo [ERROR] Failed to back up dist\%APP_NAME%\config.json.
+        goto :fail
+    )
+    set "CONFIG_WAS_BACKED_UP=1"
+)
+
 if exist "dist" rd /s /q "dist"
 if exist "build" rd /s /q "build"
 if exist "%APP_NAME%.spec" del /q "%APP_NAME%.spec"
+if exist "dist" (
+    echo [ERROR] Failed to clean dist. Close any running dist\%APP_NAME%\%APP_NAME%.exe windows and retry.
+    goto :fail
+)
+if exist "build" (
+    echo [ERROR] Failed to clean build.
+    goto :fail
+)
+if exist "%APP_NAME%.spec" (
+    echo [ERROR] Failed to remove %APP_NAME%.spec.
+    goto :fail
+)
 
 echo [INFO] Running PyInstaller...
 python -m PyInstaller ^
@@ -86,11 +110,22 @@ if errorlevel 1 (
 )
 
 if exist "CHANGES_LOG.md" copy /y "CHANGES_LOG.md" "dist\%APP_NAME%\" >nul
+if "%CONFIG_WAS_BACKED_UP%"=="1" (
+    copy /y "%CONFIG_BACKUP%" "dist\%APP_NAME%\config.json" >nul
+    del /q "%CONFIG_BACKUP%" >nul 2>nul
+    echo [INFO] Restored dist\%APP_NAME%\config.json
+)
 
 echo [INFO] Build completed: dist\%APP_NAME%\%APP_NAME%.exe
 goto :done
 
 :fail
+if "%CONFIG_WAS_BACKED_UP%"=="1" (
+    if not exist "dist\%APP_NAME%" mkdir "dist\%APP_NAME%"
+    copy /y "%CONFIG_BACKUP%" "dist\%APP_NAME%\config.json" >nul
+    del /q "%CONFIG_BACKUP%" >nul 2>nul
+    echo [INFO] Restored dist\%APP_NAME%\config.json
+)
 echo [INFO] Script failed.
 if /i not "%NO_PAUSE%"=="1" pause
 exit /b 1
