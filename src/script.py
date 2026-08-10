@@ -1672,7 +1672,7 @@ def Factory():
                         continue
                     template_crop = template[crop_y:crop_y + crop_h, crop_x:crop_x + crop_w]
                     screen_roi = [base_roi[0] + crop_x, base_roi[1] + crop_y, crop_w, crop_h]
-                    _, match_rate = _check(screenImage, template_crop, [screen_roi])
+                    match_pos, match_rate = _check(screenImage, template_crop, [screen_roi])
                     logger.debug(_("角色匹配检测: {a}/{b}/{c} 匹配程度为{d:.2f}%.".format(
                         a=shortPathOfTarget, b=base_name, c=crop_name, d=match_rate * 100
                     )))
