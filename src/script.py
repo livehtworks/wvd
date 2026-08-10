@@ -741,7 +741,17 @@ def Factory():
             pos=[roi[0][0] + max_loc[0] + template.shape[1]//2,
                  roi[0][1] + max_loc[1] + template.shape[0]//2]
         return pos,max_val
+    DEFAULT_CHECK_ROI = {
+        "combatActive": [[0,0,150,80]],
+        "combatActive_2": [[0,0,150,80]],
+        "combatActive_3": [[0,0,150,80]],
+        "combatActive_4": [[0,0,150,80]],
+        "flee": [[720,1120,180,130]],
+        "next": [[1,291,898,600]],
+    }
     def CheckIf(screenImage, shortPathOfTarget, roi = None, outputMatchResult = False):
+        if roi is None:
+            roi = DEFAULT_CHECK_ROI.get(shortPathOfTarget)
         pos, max_val = _check(screenImage, LoadTemplateImage(shortPathOfTarget), roi, outputMatchResult)
 
         if max_val < 0.8:
