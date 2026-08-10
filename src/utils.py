@@ -366,21 +366,33 @@ def BuildQuestReflection():
         raise FileNotFoundError(f"{e}")
 ###########################################
 IMAGE_FOLDER = fr'resources/images/'
+TEMPLATE_IMAGE_CACHE = {}
 def LoadTemplateImage(shortPathOfTarget):
     logger.debug(f"加载图片: {shortPathOfTarget}")
+    if shortPathOfTarget in TEMPLATE_IMAGE_CACHE:
+        return TEMPLATE_IMAGE_CACHE[shortPathOfTarget]
+
     image_filename = f"{shortPathOfTarget}.png"
 
     # 1. 优先从 ResourcePath 加载
     resource_path = ResourcePath(os.path.join(IMAGE_FOLDER, image_filename))
     try:
-        return LoadImage(resource_path)
+        image = LoadImage(resource_path)
+        if image is None:
+            raise FileNotFoundError(image_filename)
+        TEMPLATE_IMAGE_CACHE[shortPathOfTarget] = image
+        return image
     except (FileNotFoundError, OSError, Exception) as e:
         logger.debug(f"资源路径未找到 {image_filename}: {e}，尝试 mod 目录")
 
     # 2. 资源路径失败，尝试 mod 目录
     mod_path = os.path.join('mod', image_filename)
     if os.path.isfile(mod_path):
-        return LoadImage(mod_path)
+        image = LoadImage(mod_path)
+        if image is None:
+            raise FileNotFoundError(image_filename)
+        TEMPLATE_IMAGE_CACHE[shortPathOfTarget] = image
+        return image
 
     # 3. 两处都未找到
     raise FileNotFoundError(
