@@ -112,6 +112,7 @@ class RuntimeContext:
     TASK_STEP_INDEX = 0
     _LAST_BAGCLEAR = 0
     _SKIP_SCREENSHOT_WARNING = False # 截图返回是否包含错误代码.
+    _LAST_FOCUS_CHECK = 0
 class FarmQuest:
     _TARGETINFOLIST = None
     _EOT = None
@@ -592,11 +593,13 @@ def Factory():
     def Sleep(t=1):
         time.sleep(t)
     def ScreenShot():
-        if "wizardry" not in DeviceShell("dumpsys window | grep mCurrentFocus"):
-            logger.error("游戏未启动!")
-            restartGame(skip_screenshot=True)
-
         nonlocal runtimeContext
+        now = time.time()
+        if now - runtimeContext._LAST_FOCUS_CHECK >= 3:
+            runtimeContext._LAST_FOCUS_CHECK = now
+            if "wizardry" not in DeviceShell("dumpsys window | grep mCurrentFocus"):
+                logger.error("游戏未启动!")
+                restartGame(skip_screenshot=True)
 
         t = time.time()
         class AppKeepAliveError(Exception):
