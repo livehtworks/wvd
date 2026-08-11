@@ -1,10 +1,10 @@
-# Local Stability and Performance Notes
+# 本地稳定性与性能优化记录
 
 本文档记录当前 fork 中围绕稳定性、截图性能、重启恢复和打包瘦身的本地改动与后续计划。
 
 ## 当前本地改动
 
-当前分支相对上游 `arnold2957/wvd@master` 包含 9 个功能提交和 1 个说明文档提交。它不是一个只包含 `NEXT` 改动的最小 PR 分支。
+当前分支相对上游 `arnold2957/wvd@master` 包含 9 个功能提交和 1 个说明文档提交。它不是一个只包含 `NEXT` 改动的最小 Pull Request 分支。
 
 涉及文件：
 
@@ -20,7 +20,7 @@
 - 新增 `requirements-build.txt`，本地打包使用独立 `.venv-build`。
 - 打包脚本在构建前备份 `dist/wvd/config.json`，构建后恢复，避免覆盖用户本地配置。
 - `.gitignore` 增加 `.venv-build/`。
-- 打包脚本继续排除若干大型无关模块，并保留 locale 编译流程。
+- 打包脚本继续排除若干大型无关模块，并保留本地化文件编译流程。
 
 这部分对应提交：
 
@@ -31,7 +31,7 @@
 
 - 调整战斗中选择敌方目标的恢复逻辑。
 - 当单体技能选择 `NEXT` 目标失败时，增加更保守的恢复路径，降低敌人在右侧边缘、只露出部分身体时点不到导致卡住的概率。
-- 删除本地临时 range 思路后，改为围绕现有 `next` 模板识别和点击逻辑做更稳的兜底。
+- 删除本地临时扩大 range 的思路后，改为围绕现有 `next` 模板识别和点击逻辑做更稳的兜底。
 
 这部分主要对应提交：
 
@@ -89,7 +89,7 @@ UnboundLocalError: cannot access local variable '_' where it is not associated w
 
 ## 截图方案评估
 
-### ADB screencap
+### ADB 截图
 
 当前主链路使用：
 
@@ -97,7 +97,7 @@ UnboundLocalError: cannot access local variable '_' where it is not associated w
 adb -s <serial> exec-out screencap
 ```
 
-优点是兼容性高、实现简单、无需额外组件。缺点是每次截图都要启动命令、通过 ADB 搬运整帧 raw 数据，速度上限较低。
+优点是兼容性高、实现简单、无需额外组件。缺点是每次截图都要启动命令、通过 ADB 搬运整帧原始数据，速度上限较低。
 
 ### scrcpy
 
@@ -119,9 +119,9 @@ scrcpy -s 127.0.0.1:16448 --no-window --no-audio --record <file> --time-limit=5 
 - 只要目标电脑能通过 ADB 连接模拟器，scrcpy 方案理论上可用。
 - 需要随程序分发或让用户配置 scrcpy 可执行文件。
 - 不同模拟器、Android 版本、显卡驱动和编码器可能影响稳定性。
-- 需要保留 ADB screencap fallback。
+- 需要保留 ADB 截图兜底。
 
-`py-scrcpy-client 0.4.1` 不建议直接作为正式依赖。它内置 `scrcpy-server-v1.24.jar`，依赖旧版 `adbutils` 和 `av`，在当前 MuMu Android 15 环境可握手但无法收到视频帧。
+`py-scrcpy-client 0.4.1` 不建议直接作为正式依赖。它内置 `scrcpy-server-v1.24.jar`，依赖旧版 `adbutils` 和 `av`，在当前 MuMu Android 15 环境中可以握手，但无法收到视频帧。
 
 ### MuMu 增强截图
 
@@ -132,7 +132,7 @@ C:/soft/MuMu Player 12/nx_main/sdk/external_renderer_ipc.dll
 C:/soft/MuMu Player 12/nx_device/15.0/shell/sdk/external_renderer_ipc.dll
 ```
 
-MAAFramework 通过 `nemu_connect` 和 `nemu_capture_display` 调用该 DLL，直接从模拟器渲染器获取 RGBA buffer。该方案理论上更快且无损，但依赖 MuMu 版本和闭源 DLL，适合作为实验后端，不适合直接替代默认截图。
+MAAFramework 通过 `nemu_connect` 和 `nemu_capture_display` 调用该 DLL，直接从模拟器渲染器获取 RGBA 图像缓冲区。该方案理论上更快且无损，但依赖 MuMu 版本和闭源 DLL，适合作为实验后端，不适合直接替代默认截图。
 
 ## 后续建议
 
@@ -146,7 +146,7 @@ MAAFramework 通过 `nemu_connect` 和 `nemu_capture_display` 调用该 DLL，�
 ### Clash
 
 - 增加可选项：模拟器重启后启动 Clash。
-- 使用 Clash Meta 官方 external control intent：
+- 使用 Clash Meta 官方外部控制 intent：
 
 ```text
 am start -n com.github.metacubex.clash.meta/com.github.kr328.clash.ExternalControlActivity -a com.github.metacubex.clash.meta.action.START_CLASH
@@ -157,10 +157,10 @@ am start -n com.github.metacubex.clash.meta/com.github.kr328.clash.ExternalContr
 
 ### 识别速度
 
-- 保留当前 ADB screencap 默认链路。
+- 保留当前 ADB 截图默认链路。
 - 增加可选 `scrcpy` 高速截图后端。
 - 后端以后台线程持续接收最新帧，`ScreenShot()` 仅读取最近一帧。
-- 检测黑帧、断流、超时后自动回退 ADB screencap。
+- 检测黑帧、断流、超时后自动回退 ADB 截图。
 - 对高频识别点继续补 ROI，减少整图模板匹配。
 
 ### 打包瘦身
@@ -173,7 +173,7 @@ am start -n com.github.metacubex.clash.meta/com.github.kr328.clash.ExternalContr
 
 ## 上游贡献建议
 
-建议拆成多个小 PR：
+建议拆成多个小 Pull Request：
 
 - 打包脚本保留 `config.json`。
 - 修复模拟器 PID 关闭命令。
@@ -182,4 +182,4 @@ am start -n com.github.metacubex.clash.meta/com.github.kr328.clash.ExternalContr
 - 移除未使用依赖并验证打包。
 - `scrcpy` 高速截图后端作为实验功能单独讨论。
 
-这些改动由 AI 辅助整理，并经过本地人工验证。后续提交上游时应在 PR 描述中明确测试方式和兼容性边界。
+这些改动由 AI 辅助整理，并经过本地人工验证。后续提交上游时应在 Pull Request 描述中明确测试方式和兼容性边界。
