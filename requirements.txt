@@ -1,7 +1,3 @@
 numpy
 pure-python-adb
 opencv-python
-scipy
-pyinstaller
-win10toast
-babel

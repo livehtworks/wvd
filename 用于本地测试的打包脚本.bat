@@ -1,5 +1,5 @@
 @echo off
-setlocal EnableExtensions
+setlocal EnableExtensions EnableDelayedExpansion
 
 chcp 65001 >nul
 cd /d "%~dp0"
@@ -9,6 +9,9 @@ set "BUILD_VENV=.venv-build"
 set "REQUIREMENTS_FILE=requirements-build.txt"
 set "CONFIG_BACKUP=%TEMP%\%APP_NAME%_config_backup_%RANDOM%_%RANDOM%.json"
 set "CONFIG_WAS_BACKED_UP=0"
+set "FINAL_DIST=dist\%APP_NAME%"
+set "PYI_DIST=%TEMP%\%APP_NAME%_pyinstaller_dist_%RANDOM%_%RANDOM%"
+set "PYI_BUILD=%TEMP%\%APP_NAME%_pyinstaller_build_%RANDOM%_%RANDOM%"
 
 echo [INFO] Project dir: %CD%
 
@@ -60,30 +63,48 @@ if errorlevel 1 (
 )
 
 echo [INFO] Cleaning old build outputs...
-if exist "dist\%APP_NAME%\config.json" (
-    echo [INFO] Preserving dist\%APP_NAME%\config.json
-    copy /y "dist\%APP_NAME%\config.json" "%CONFIG_BACKUP%" >nul
+if exist "%FINAL_DIST%\config.json" (
+    echo [INFO] Preserving %FINAL_DIST%\config.json
+    copy /y "%FINAL_DIST%\config.json" "%CONFIG_BACKUP%" >nul
     if errorlevel 1 (
-        echo [ERROR] Failed to back up dist\%APP_NAME%\config.json.
+        echo [ERROR] Failed to back up %FINAL_DIST%\config.json.
         goto :fail
     )
     set "CONFIG_WAS_BACKED_UP=1"
 )
 
-if exist "dist" rd /s /q "dist"
-if exist "build" rd /s /q "build"
-if exist "%APP_NAME%.spec" del /q "%APP_NAME%.spec"
-if exist "dist" (
-    echo [ERROR] Failed to clean dist. Close any running dist\%APP_NAME%\%APP_NAME%.exe windows and retry.
+if exist "%PYI_DIST%" rd /s /q "%PYI_DIST%"
+if exist "%PYI_BUILD%" rd /s /q "%PYI_BUILD%"
+if exist "build" rd /s /q "build" >nul 2>nul
+if exist "%APP_NAME%.spec" del /q "%APP_NAME%.spec" >nul 2>nul
+
+if not exist "dist" mkdir "dist"
+if not exist "%FINAL_DIST%" mkdir "%FINAL_DIST%"
+
+for /f "delims=" %%I in ('dir /a /b "%FINAL_DIST%" 2^>nul') do (
+    if /i not "%%I"=="config.json" (
+        if exist "%FINAL_DIST%\%%I\*" (
+            rd /s /q "%FINAL_DIST%\%%I" 2>nul
+        ) else (
+            del /f /q "%FINAL_DIST%\%%I" 2>nul
+        )
+    )
+)
+
+set "STALE_ITEM="
+for /f "delims=" %%I in ('dir /a /b "%FINAL_DIST%" 2^>nul') do (
+    if /i not "%%I"=="config.json" set "STALE_ITEM=%%I"
+)
+if defined STALE_ITEM (
+    echo [ERROR] Failed to clean stale item in %FINAL_DIST%: !STALE_ITEM!
+    echo [ERROR] Close any running %FINAL_DIST%\%APP_NAME%.exe windows and retry.
     goto :fail
 )
 if exist "build" (
-    echo [ERROR] Failed to clean build.
-    goto :fail
+    echo [WARN] Could not remove old local build directory. Using a temp PyInstaller work dir.
 )
 if exist "%APP_NAME%.spec" (
-    echo [ERROR] Failed to remove %APP_NAME%.spec.
-    goto :fail
+    echo [WARN] Could not remove old local spec file. Using a temp PyInstaller spec dir.
 )
 
 echo [INFO] Running PyInstaller...
@@ -92,11 +113,13 @@ python -m PyInstaller ^
     --clean ^
     --onedir ^
     --name "%APP_NAME%" ^
-    --paths "src" ^
-    --add-data "resources;resources" ^
-    --add-data "locale;locale" ^
-    --add-data "CHANGES_LOG.md;." ^
-    --hidden-import "pkg_resources" ^
+    --distpath "%PYI_DIST%" ^
+    --workpath "%PYI_BUILD%" ^
+    --specpath "%PYI_BUILD%" ^
+    --paths "%CD%\src" ^
+    --add-data "%CD%\resources;resources" ^
+    --add-data "%CD%\locale;locale" ^
+    --add-data "%CD%\CHANGES_LOG.md;." ^
     --exclude-module "torch" ^
     --exclude-module "pandas" ^
     --exclude-module "matplotlib" ^
@@ -109,23 +132,39 @@ if errorlevel 1 (
     goto :fail
 )
 
-if exist "CHANGES_LOG.md" copy /y "CHANGES_LOG.md" "dist\%APP_NAME%\" >nul
-if "%CONFIG_WAS_BACKED_UP%"=="1" (
-    copy /y "%CONFIG_BACKUP%" "dist\%APP_NAME%\config.json" >nul
-    del /q "%CONFIG_BACKUP%" >nul 2>nul
-    echo [INFO] Restored dist\%APP_NAME%\config.json
+if not exist "%PYI_DIST%\%APP_NAME%\%APP_NAME%.exe" (
+    echo [ERROR] PyInstaller output is missing: %PYI_DIST%\%APP_NAME%\%APP_NAME%.exe
+    goto :fail
 )
 
-echo [INFO] Build completed: dist\%APP_NAME%\%APP_NAME%.exe
+echo [INFO] Copying build output to %FINAL_DIST%...
+robocopy "%PYI_DIST%\%APP_NAME%" "%FINAL_DIST%" /E /NFL /NDL /NJH /NJS /NP >nul
+if errorlevel 8 (
+    echo [ERROR] Failed to copy build output to %FINAL_DIST%.
+    goto :fail
+)
+
+if "%CONFIG_WAS_BACKED_UP%"=="1" (
+    copy /y "%CONFIG_BACKUP%" "%FINAL_DIST%\config.json" >nul
+    del /q "%CONFIG_BACKUP%" >nul 2>nul
+    echo [INFO] Restored %FINAL_DIST%\config.json
+)
+
+if exist "%PYI_DIST%" rd /s /q "%PYI_DIST%" >nul 2>nul
+if exist "%PYI_BUILD%" rd /s /q "%PYI_BUILD%" >nul 2>nul
+
+echo [INFO] Build completed: %FINAL_DIST%\%APP_NAME%.exe
 goto :done
 
 :fail
 if "%CONFIG_WAS_BACKED_UP%"=="1" (
-    if not exist "dist\%APP_NAME%" mkdir "dist\%APP_NAME%"
-    copy /y "%CONFIG_BACKUP%" "dist\%APP_NAME%\config.json" >nul
+    if not exist "%FINAL_DIST%" mkdir "%FINAL_DIST%"
+    copy /y "%CONFIG_BACKUP%" "%FINAL_DIST%\config.json" >nul
     del /q "%CONFIG_BACKUP%" >nul 2>nul
-    echo [INFO] Restored dist\%APP_NAME%\config.json
+    echo [INFO] Restored %FINAL_DIST%\config.json
 )
+if exist "%PYI_DIST%" rd /s /q "%PYI_DIST%" >nul 2>nul
+if exist "%PYI_BUILD%" rd /s /q "%PYI_BUILD%" >nul 2>nul
 echo [INFO] Script failed.
 if /i not "%NO_PAUSE%"=="1" pause
 exit /b 1

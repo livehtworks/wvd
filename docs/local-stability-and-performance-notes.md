@@ -168,9 +168,9 @@ am start -n com.github.metacubex.clash.meta/com.github.kr328.clash.ExternalContr
 
 ### 打包瘦身
 
-- `scipy.optimize.curve_fit` 与 `scipy.signal.find_peaks` 当前仅 import，未发现实际调用。移除 SciPy 可能显著降低打包体积。
-- `win10toast.ToastNotifier` 当前仅实例化，未发现实际通知调用。可评估移除依赖。
-- 打包产物中 `cv2`、`scipy`、`numpy.libs` 是主要体积来源。
+- 已移除未使用的 `scipy.optimize.curve_fit`、`scipy.signal.find_peaks` 和 `win10toast.ToastNotifier`，避免 PyInstaller 因空 import 拉入 SciPy 与通知库。
+- `pyinstaller` 与 `babel` 仅用于本地构建，已从运行依赖移动到 `requirements-build.txt`。
+- 打包产物中 `cv2`、`numpy.libs` 仍是主要体积来源；后续如果继续瘦身，应优先评估截图/识图链路是否能替换或精简 OpenCV。
 - 发布包不应携带运行期 `logs`。
 - 根目录 `巫术.png` 和 `resources/images/press!!!.png` 是较大的已跟踪图片，但删除前需要确认是否用于 README、发布页或人工调试。
 

@@ -1,7 +1,4 @@
 from ppadb.client import Client as AdbClient
-from win10toast import ToastNotifier
-from scipy.optimize import curve_fit
-from scipy.signal import find_peaks
 from enum import Enum
 import os
 import subprocess
@@ -530,7 +527,6 @@ def CutRoI(screenshot, roi):
     return main_img
 ##################################################################
 def Factory():
-    toaster = ToastNotifier()
     setting =  None
     quest = None
     runtimeContext = RuntimeContext()
