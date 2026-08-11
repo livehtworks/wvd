@@ -852,9 +852,10 @@ def Factory():
         underscore, max_val, underscore, max_loc = cv2.minMaxLoc(result)
 
         if outputMatchResult:
-            SaveImage(search_area,"origin.png")
-            cv2.rectangle(search_area, max_loc, (max_loc[0] + template.shape[1], max_loc[1] + template.shape[0]), (0, 255, 0), 2)
-            SaveImage(search_area,"matched.png")
+            debug_image = search_area.copy()
+            SaveImage(debug_image, "origin.png")
+            cv2.rectangle(debug_image, max_loc, (max_loc[0] + template.shape[1], max_loc[1] + template.shape[0]), (0, 255, 0), 2)
+            SaveImage(debug_image, "matched.png")
 
         if roi is None or len(roi) == 0:
             pos=[max_loc[0] + template.shape[1]//2,
@@ -894,9 +895,10 @@ def Factory():
         underscore, max_val, underscore, max_loc = cv2.minMaxLoc(result)
 
         if outputMatchResult:
-            SaveImage(search_area, "origin.png")
-            cv2.rectangle(search_area, max_loc, (max_loc[0] + template.shape[1], max_loc[1] + template.shape[0]), (0, 255, 0), 2)
-            SaveImage(search_area, "matched.png")
+            debug_image = search_area.copy()
+            SaveImage(debug_image, "origin.png")
+            cv2.rectangle(debug_image, max_loc, (max_loc[0] + template.shape[1], max_loc[1] + template.shape[0]), (0, 255, 0), 2)
+            SaveImage(debug_image, "matched.png")
 
         pos = [
             offset_x + max_loc[0] + template.shape[1] // 2,
