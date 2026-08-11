@@ -71,6 +71,9 @@ UnboundLocalError: cannot access local variable '_' where it is not associated w
 - 减少部分状态判断中的重复截图。
 - 高频模板补充默认 ROI，减少整屏匹配范围。
 - 截图前台检查节流，避免每次截图都调用 `dumpsys window | grep mCurrentFocus`。
+- `CheckIf()` / `CheckHow()` 增加同一帧内匹配结果缓存，同一张截图里重复检查同一模板和 ROI 时不再重复执行 `matchTemplate`。
+- 亮色遮罩匹配缓存模板 mask，避免 `NEXT` 和目标倒三角识别时反复灰度化、阈值化和膨胀模板。
+- 战斗目标兜底连点改为批量 ADB shell，减少多次 `input tap` 的往返成本。
 
 这部分对应提交：
 
@@ -79,6 +82,7 @@ UnboundLocalError: cannot access local variable '_' where it is not associated w
 - `c19075a Reduce redundant state screenshots`
 - `16f540b Add default ROIs for combat templates`
 - `d2d97d2 Throttle screenshot focus checks`
+- 待提交：非 ROI 匹配缓存与批量点击优化
 
 ### 说明文档
 
@@ -206,11 +210,11 @@ am start -n com.github.metacubex.clash.meta/com.github.kr328.clash.ExternalContr
 
 ### 识别速度
 
-- 保留当前 ADB 截图默认链路。
-- 增加可选 `scrcpy` 高速截图后端。
-- 后端以后台线程持续接收最新帧，`ScreenShot()` 仅读取最近一帧。
-- 检测黑帧、断流、超时后自动回退 ADB 截图。
-- 对高频识别点继续补 ROI，减少整图模板匹配。
+- 当前 MuMu IPC 已成为优先截图后端，ADB 保留为兜底。
+- 截图耗时降低后，主要瓶颈转移到全屏 `matchTemplate`、固定等待和 ADB shell 往返。
+- ROI 优化需要知道图标大致位置，后续应结合具体事件逐个补，不适合一次性硬塞全局 ROI。
+- 不依赖坐标的优化优先级更高：同帧匹配缓存、亮色遮罩缓存、批量点击、固定等待改短轮询。
+- 固定等待改短轮询需要结合动画和网络状态实测；未验证前不建议大面积缩短 `Sleep()`。
 
 ### 打包瘦身
 

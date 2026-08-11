@@ -896,16 +896,33 @@ def Factory():
     runtimeContext = RuntimeContext()
     runtimeContext = None
     screenshotBackend = None
+    matchCacheFrame = None
+    matchResultCache = {}
+    brightMaskCache = {}
     ##################################################################
     def ResetScreenshotBackend():
         nonlocal screenshotBackend
         if screenshotBackend is not None:
             screenshotBackend.invalidate()
     def CaptureScreen():
+        nonlocal matchCacheFrame
         nonlocal screenshotBackend
         if screenshotBackend is None:
             screenshotBackend = ScreenshotBackendManager(setting)
-        return screenshotBackend.capture(setting, runtimeContext)
+        image = screenshotBackend.capture(setting, runtimeContext)
+        matchCacheFrame = image
+        matchResultCache.clear()
+        return image
+    def NormalizeRoiCacheKey(roi):
+        if roi is None:
+            return None
+        return tuple(tuple(rect) for rect in roi)
+    def GetMatchCache(screenImage):
+        nonlocal matchCacheFrame
+        if matchCacheFrame is not screenImage:
+            matchCacheFrame = screenImage
+            matchResultCache.clear()
+        return matchResultCache
     def ResetDevice(force_restart_emu=False, force_restart_adb = False):
         nonlocal setting # 修改device
         nonlocal runtimeContext
@@ -1050,9 +1067,13 @@ def Factory():
             logger.error(_("亮色遮罩匹配仅支持单个ROI."))
             return None, 0
 
-        gray_template = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
-        mask = cv2.inRange(gray_template, min_brightness, 255)
-        mask = cv2.dilate(mask, np.ones((2, 2), np.uint8), iterations=1)
+        mask_key = (id(template), min_brightness)
+        mask = brightMaskCache.get(mask_key)
+        if mask is None:
+            gray_template = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
+            mask = cv2.inRange(gray_template, min_brightness, 255)
+            mask = cv2.dilate(mask, np.ones((2, 2), np.uint8), iterations=1)
+            brightMaskCache[mask_key] = mask
         if not np.any(mask):
             logger.error(_("亮色遮罩匹配失败: 模板没有足够的亮色像素."))
             return None, 0
@@ -1091,7 +1112,17 @@ def Factory():
     def CheckIf(screenImage, shortPathOfTarget, roi = None, outputMatchResult = False):
         if roi is None:
             roi = DEFAULT_CHECK_ROI.get(shortPathOfTarget)
-        pos, max_val = _check(screenImage, LoadTemplateImage(shortPathOfTarget), roi, outputMatchResult)
+        cache_key = None
+        if not outputMatchResult:
+            cache_key = ("match", shortPathOfTarget, NormalizeRoiCacheKey(roi))
+            cached = GetMatchCache(screenImage).get(cache_key)
+            if cached is not None:
+                pos, max_val = cached
+            else:
+                pos, max_val = _check(screenImage, LoadTemplateImage(shortPathOfTarget), roi, outputMatchResult)
+                GetMatchCache(screenImage)[cache_key] = (pos, max_val)
+        else:
+            pos, max_val = _check(screenImage, LoadTemplateImage(shortPathOfTarget), roi, outputMatchResult)
 
         if max_val < 0.8:
             logger.debug(_("匹配失败: {a}的匹配程度为{b:.2f}%, 不足阈值.".format(a=shortPathOfTarget, b=max_val*100)))
@@ -1100,7 +1131,18 @@ def Factory():
             logger.debug(_("匹配成功: {a}的匹配程度为{b:.2f}%, 位于{c}.".format(a=shortPathOfTarget, b=max_val*100,c=pos)))
             return pos
     def CheckHow(screenImage, shortPathOfTarget, roi = None, outputMatchResult = False):
-        pos, max_val = _check(screenImage, LoadTemplateImage(shortPathOfTarget), roi, outputMatchResult)
+        if roi is None:
+            roi = DEFAULT_CHECK_ROI.get(shortPathOfTarget)
+        if not outputMatchResult:
+            cache_key = ("match", shortPathOfTarget, NormalizeRoiCacheKey(roi))
+            cached = GetMatchCache(screenImage).get(cache_key)
+            if cached is not None:
+                pos, max_val = cached
+            else:
+                pos, max_val = _check(screenImage, LoadTemplateImage(shortPathOfTarget), roi, outputMatchResult)
+                GetMatchCache(screenImage)[cache_key] = (pos, max_val)
+        else:
+            pos, max_val = _check(screenImage, LoadTemplateImage(shortPathOfTarget), roi, outputMatchResult)
 
         logger.debug(_("匹配检测: {a}的匹配程度为{b:.2f}%, 位于{c}.".format(a=shortPathOfTarget,b=max_val*100, c=pos)))
         return max_val
@@ -1249,6 +1291,13 @@ def Factory():
             DeviceShell(f"input tap {pos[0]} {pos[1]}")
             return True
         return False
+    def PressBatch(pos_list):
+        valid_pos = [pos for pos in pos_list if pos is not None and len(pos) == 2]
+        if not valid_pos:
+            return False
+        commands = [f"input tap {int(pos[0])} {int(pos[1])}" for pos in valid_pos]
+        DeviceShell("; ".join(commands))
+        return True
     def PressReturn():
         DeviceShell("input keyevent KEYCODE_BACK")
     def WrapImage(image,r,g,b):
@@ -2003,14 +2052,16 @@ def Factory():
                 [0, 275],
                 [70, 275],
             ]
-            for offset in offsets:
-                Press(ClampCombatTargetPoint([marker_pos[0] + offset[0], marker_pos[1] + offset[1]]))
-                Sleep(0.08)
+            PressBatch([
+                ClampCombatTargetPoint([marker_pos[0] + offset[0], marker_pos[1] + offset[1]])
+                for offset in offsets
+            ])
         def PressEnemyTargetFallback():
-            for y in [430, 560, 700, 830]:
-                for x in [140, 300, 460, 620, 780, 860]:
-                    Press([x, y])
-                    Sleep(0.04)
+            PressBatch([
+                [x, y]
+                for y in [430, 560, 700, 830]
+                for x in [140, 300, 460, 620, 780, 860]
+            ])
         def CheckCombatTargetByBrightMask(scn, target, threshold=0.88, min_brightness=145):
             template = LoadTemplateImage(target)
             pos, max_val = _check_bright_mask(
