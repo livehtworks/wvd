@@ -1,6 +1,8 @@
 # wvdas - 巫术daphne的自动挂机脚本
 [English (v1.8.20)](README.en.md)
 
+> 本仓库是个人 fork，用于本地环境适配、稳定性验证和技术分享，并非上游官方版本。来源、改动范围和权利声明见 [FORK_NOTICE.md](FORK_NOTICE.md)，本地改动记录见 [docs/local-stability-and-performance-notes.md](docs/local-stability-and-performance-notes.md)。
+
 一个自带gui的巫术手游的刷怪脚本.
 现已进行了2.0版本的更新!
 
