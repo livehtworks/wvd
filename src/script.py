@@ -744,13 +744,54 @@ def Factory():
             pos=[roi[0][0] + max_loc[0] + template.shape[1]//2,
                  roi[0][1] + max_loc[1] + template.shape[0]//2]
         return pos,max_val
+    def _check_bright_mask(screenImage, template, roi = None, min_brightness = 145, outputMatchResult = False):
+        if roi is None or len(roi) == 0:
+            search_area = screenImage
+            offset_x, offset_y = 0, 0
+        elif len(roi) == 1:
+            x, y, w, h = roi[0]
+            search_area = screenImage[y:y + h, x:x + w]
+            offset_x, offset_y = x, y
+        else:
+            logger.error(_("亮色遮罩匹配仅支持单个ROI."))
+            return None, 0
+
+        gray_template = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
+        mask = cv2.inRange(gray_template, min_brightness, 255)
+        mask = cv2.dilate(mask, np.ones((2, 2), np.uint8), iterations=1)
+        if not np.any(mask):
+            logger.error(_("亮色遮罩匹配失败: 模板没有足够的亮色像素."))
+            return None, 0
+
+        try:
+            result = cv2.matchTemplate(search_area, template, cv2.TM_CCORR_NORMED, mask=mask)
+            result = np.nan_to_num(result, nan=-1, posinf=-1, neginf=-1)
+        except Exception as e:
+            logger.error("{a}".format(a=e))
+            if isinstance(e, (cv2.error)):
+                logger.info(_("cv2异常."))
+            return None, 0
+
+        underscore, max_val, underscore, max_loc = cv2.minMaxLoc(result)
+
+        if outputMatchResult:
+            SaveImage(search_area, "origin.png")
+            cv2.rectangle(search_area, max_loc, (max_loc[0] + template.shape[1], max_loc[1] + template.shape[0]), (0, 255, 0), 2)
+            SaveImage(search_area, "matched.png")
+
+        pos = [
+            offset_x + max_loc[0] + template.shape[1] // 2,
+            offset_y + max_loc[1] + template.shape[0] // 2,
+        ]
+        return pos, max_val
     DEFAULT_CHECK_ROI = {
         "combatActive": [[0,0,150,80]],
         "combatActive_2": [[0,0,150,80]],
         "combatActive_3": [[0,0,150,80]],
         "combatActive_4": [[0,0,150,80]],
         "flee": [[720,1120,180,130]],
-        "next": [[1,291,898,600]],
+        "next": [[80,220,819,680]],
+        "combatTarget": [[80,220,819,680]],
     }
     def CheckIf(screenImage, shortPathOfTarget, roi = None, outputMatchResult = False):
         if roi is None:
@@ -1646,27 +1687,61 @@ def Factory():
             return
         def ClampPoint(pos):
             return [int(max(1, min(898, pos[0]))), int(max(1, min(1598, pos[1])))]
-        def PressNextTarget(next_pos):
+        def ClampCombatTargetPoint(pos):
+            return [int(max(1, min(898, pos[0]))), int(max(260, min(900, pos[1])))]
+        def PressCombatTargetArea(marker_pos):
+            # 敌人头顶标记与实际可点击身体区域之间通常有 50~100 像素距离。
+            # 这里扫标记下方横向矩形区域，兼容右侧边缘敌人、大体型敌人和前后排高度差。
             offsets = [
-                [0, 75],
-                [0, 115],
-                [-35, 145],
-                [35, 145],
-                [0, 185],
-                [-70, 210],
-                [70, 210],
-                [0, 250],
-                [-105, 275],
-                [105, 275],
+                [-80, 80],
+                [0, 80],
+                [80, 80],
+                [-120, 140],
+                [-40, 140],
+                [40, 140],
+                [120, 140],
+                [-110, 210],
+                [-35, 210],
+                [35, 210],
+                [110, 210],
+                [-70, 275],
+                [0, 275],
+                [70, 275],
             ]
             for offset in offsets:
-                Press(ClampPoint([next_pos[0] + offset[0], next_pos[1] + offset[1]]))
+                Press(ClampCombatTargetPoint([marker_pos[0] + offset[0], marker_pos[1] + offset[1]]))
                 Sleep(0.08)
         def PressEnemyTargetFallback():
             for y in [430, 560, 700, 830]:
                 for x in [140, 300, 460, 620, 780, 860]:
                     Press([x, y])
                     Sleep(0.04)
+        def CheckCombatTargetByBrightMask(scn, target, threshold=0.88, min_brightness=145):
+            template = LoadTemplateImage(target)
+            pos, max_val = _check_bright_mask(
+                scn,
+                template,
+                DEFAULT_CHECK_ROI.get(target),
+                min_brightness=min_brightness,
+            )
+            if max_val < threshold:
+                logger.debug(_("战斗目标匹配失败: {a}的亮色匹配程度为{b:.2f}%, 不足阈值.".format(
+                    a=target, b=max_val * 100
+                )))
+                return None
+
+            logger.debug(_("战斗目标匹配成功: {a}的亮色匹配程度为{b:.2f}%, 位于{c}.".format(
+                a=target, b=max_val * 100, c=pos
+            )))
+            return pos
+        def CheckCombatNextTarget(scn):
+            # next.png 的暗底会跟随敌人、雾气和特效变化，普通模板匹配容易把背景当成特征。
+            # 战斗选敌时只匹配 NEXT 的亮色字形，并限制在敌方活动区，避开左侧行动条和下方技能/角色UI。
+            return CheckCombatTargetByBrightMask(scn, "next", threshold=0.9, min_brightness=150)
+        def CheckCombatTargetMarker(scn):
+            # 当 NEXT 字形也不可用时，使用敌人头顶的白色倒三角作为兜底锚点。
+            # 该标记同样只在敌方活动区内识别，避免下方按钮和角色面板干扰。
+            return CheckCombatTargetByBrightMask(scn, "combatTarget", threshold=0.88, min_brightness=145)
         def CheckRolePortraitMatch(screenImage, shortPathOfTarget, active_pos=None):
             template = LoadTemplateImage(shortPathOfTarget)
             template_h, template_w = template.shape[:2]
@@ -1764,11 +1839,14 @@ def Factory():
                 logger.info(_("释放了位于\"{a}\"的全体技能, 技能等级为{b}.".format(a=skillPos, b=skilllvl)))
                 Sleep(2)
             else:
-                if pos:= CheckIf(scn,"next",[[1,291,898,600]]):
+                if pos:= CheckCombatNextTarget(scn):
                     logger.info(_("释放了位于\"{a}\"的单体技能, 技能等级为{b}. 选择next作为敌方目标.".format(a=skillPos, b=skilllvl)))
-                    PressNextTarget(pos)
+                    PressCombatTargetArea(pos)
+                elif pos:= CheckCombatTargetMarker(scn):
+                    logger.info(_("释放了位于\"{a}\"的单体技能, 技能等级为{b}. 未检测到next, 选择目标标记作为敌方目标.".format(a=skillPos, b=skilllvl)))
+                    PressCombatTargetArea(pos)
                 else:
-                    logger.info(_("释放了位于\"{a}\"的单体技能, 技能等级为{b}. 未检测到next, 轮询选择敌方目标.".format(a=skillPos, b=skilllvl)))
+                    logger.info(_("释放了位于\"{a}\"的单体技能, 技能等级为{b}. 未检测到next和目标标记, 轮询选择敌方目标.".format(a=skillPos, b=skilllvl)))
                     PressEnemyTargetFallback()
                 Sleep(2)
 
