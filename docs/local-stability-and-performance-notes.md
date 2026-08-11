@@ -1,0 +1,123 @@
+# Local Stability and Performance Notes
+
+本文档记录当前 fork 中围绕稳定性、截图性能、重启恢复和打包瘦身的本地改动与后续计划。
+
+## 当前本地改动
+
+- 打包脚本调整为使用独立 `.venv-build`，避免污染用户运行环境。
+- 打包时保留 `dist/wvd/config.json`，避免覆盖本地配置。
+- 修复角色头像匹配里翻译占位变量 `_` 的作用域问题。
+- 改善战斗目标恢复逻辑，降低 `NEXT` 目标无法点击时的卡死概率。
+- 减少部分重复截图与重复状态检查。
+- 模板图片加载增加内存缓存。
+- 模板匹配时减少不必要的整图 copy。
+- 给部分高频模板增加默认 ROI。
+- 截图前台检查改为节流执行，避免每次截图都跑 `dumpsys window`。
+
+## 当前观察到的问题
+
+- ADB `exec-out screencap` 截图链路仍是主要瓶颈，本地实测约 350ms 级别。
+- `ScreenShot()` 仍通过每次启动 adb 子进程获取整帧画面，无法达到流式截图速度。
+- 游戏重启链路已有“先重启游戏，再恢复 ADB，再重启模拟器”的雏形，但部分异常可能过早升级为模拟器重启。
+- `KillEmulator()` 中按 PID 关闭模拟器的命令疑似不正确，后续需要修正并验证。
+- `restartGame()` 的崩溃计数可能长期累积，成功重启游戏后是否应重置仍需确认。
+- `logcat -d | grep ...` 可能把诊断命令自身异常误判为游戏崩溃线索。
+- Clash Meta 在模拟器重启后可能没有自动恢复 VPN，需要独立恢复与验证链路。
+- `dist/wvd/logs` 可能快速膨胀，当前本地曾出现约 120MB 日志和截图。
+
+## 截图方案评估
+
+### ADB screencap
+
+当前主链路使用：
+
+```text
+adb -s <serial> exec-out screencap
+```
+
+优点是兼容性高、实现简单、无需额外组件。缺点是每次截图都要启动命令、通过 ADB 搬运整帧 raw 数据，速度上限较低。
+
+### scrcpy
+
+本地验证官方 `scrcpy v4.1` 可连接 MuMu：
+
+```text
+scrcpy -s 127.0.0.1:16448 --no-window --no-audio --record <file> --time-limit=5 --max-fps=30
+```
+
+验证结果：
+
+- MuMu Android 15 可连接。
+- `--no-audio` 必须启用，否则默认 opus audio encoder 可能失败。
+- 可录出 900x1600 视频，约 23fps。
+- 前几帧可能是黑帧，后端需要等待非黑帧。
+
+兼容性判断：
+
+- 只要目标电脑能通过 ADB 连接模拟器，scrcpy 方案理论上可用。
+- 需要随程序分发或让用户配置 scrcpy 可执行文件。
+- 不同模拟器、Android 版本、显卡驱动和编码器可能影响稳定性。
+- 需要保留 ADB screencap fallback。
+
+`py-scrcpy-client 0.4.1` 不建议直接作为正式依赖。它内置 `scrcpy-server-v1.24.jar`，依赖旧版 `adbutils` 和 `av`，在当前 MuMu Android 15 环境可握手但无法收到视频帧。
+
+### MuMu 增强截图
+
+本机 MuMu 安装目录存在：
+
+```text
+C:/soft/MuMu Player 12/nx_main/sdk/external_renderer_ipc.dll
+C:/soft/MuMu Player 12/nx_device/15.0/shell/sdk/external_renderer_ipc.dll
+```
+
+MAAFramework 通过 `nemu_connect` 和 `nemu_capture_display` 调用该 DLL，直接从模拟器渲染器获取 RGBA buffer。该方案理论上更快且无损，但依赖 MuMu 版本和闭源 DLL，适合作为实验后端，不适合直接替代默认截图。
+
+## 后续建议
+
+### 稳定性
+
+- 修正 `KillEmulator()` 的 PID 关闭命令。
+- 将游戏重启、ADB 恢复、模拟器重启拆成明确的恢复阶段。
+- 每个阶段保存清晰日志：触发原因、执行命令、验证结果、升级原因。
+- 游戏重启成功后考虑重置或衰减崩溃计数。
+
+### Clash
+
+- 增加可选项：模拟器重启后启动 Clash。
+- 使用 Clash Meta 官方 external control intent：
+
+```text
+am start -n com.github.metacubex.clash.meta/com.github.kr328.clash.ExternalControlActivity -a com.github.metacubex.clash.meta.action.START_CLASH
+```
+
+- 启动后用 `dumpsys connectivity` 验证 `VPN CONNECTED`、`tun0`、`com.github.metacubex.clash.meta`。
+- 如果 VPN 未恢复，可选择阻止游戏启动，避免进入网络异常状态。
+
+### 识别速度
+
+- 保留当前 ADB screencap 默认链路。
+- 增加可选 `scrcpy` 高速截图后端。
+- 后端以后台线程持续接收最新帧，`ScreenShot()` 仅读取最近一帧。
+- 检测黑帧、断流、超时后自动回退 ADB screencap。
+- 对高频识别点继续补 ROI，减少整图模板匹配。
+
+### 打包瘦身
+
+- `scipy.optimize.curve_fit` 与 `scipy.signal.find_peaks` 当前仅 import，未发现实际调用。移除 SciPy 可能显著降低打包体积。
+- `win10toast.ToastNotifier` 当前仅实例化，未发现实际通知调用。可评估移除依赖。
+- 打包产物中 `cv2`、`scipy`、`numpy.libs` 是主要体积来源。
+- 发布包不应携带运行期 `logs`。
+- 根目录 `巫术.png` 和 `resources/images/press!!!.png` 是较大的已跟踪图片，但删除前需要确认是否用于 README、发布页或人工调试。
+
+## 上游贡献建议
+
+建议拆成多个小 PR：
+
+- 打包脚本保留 `config.json`。
+- 修复模拟器 PID 关闭命令。
+- Clash 自动启动与 VPN 验证，默认关闭。
+- 模板缓存和 ROI 优化。
+- 移除未使用依赖并验证打包。
+- `scrcpy` 高速截图后端作为实验功能单独讨论。
+
+这些改动由 AI 辅助整理，并经过本地人工验证。后续提交上游时应在 PR 描述中明确测试方式和兼容性边界。
