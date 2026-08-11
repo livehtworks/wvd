@@ -147,6 +147,22 @@ C:/soft/MuMu Player 12/nx_device/15.0/shell/sdk/external_renderer_ipc.dll
 
 MAAFramework 通过 `nemu_connect` 和 `nemu_capture_display` 调用该 DLL，直接从模拟器渲染器获取 RGBA 图像缓冲区。该方案理论上更快且无损，但依赖 MuMu 版本和闭源 DLL，适合作为实验后端，不适合直接替代默认截图。
 
+当前 fork 已完成独立 PoC，尚未接入 `ScreenShot()` 主链：
+
+- PoC 脚本：`tools/mumu_ipc_poc.py`
+- 本机 MuMu 根目录：`C:/soft/MuMu Player 12`
+- DLL：`nx_device/15.0/shell/sdk/external_renderer_ipc.dll`
+- 实例号：`2`
+- `nemu_connect` 成功，handle 为 `1`
+- `nemu_get_display_id` 返回 `0`
+- `nemu_capture_display` 返回 `900x1600`
+- IPC 原始图为 RGBA，转换为 BGR 后需要垂直翻转；与 ADB 截图对比平均像素差约 `4.4-4.7`
+- 连续三轮 100 次截图均 `100/100` 成功
+- 三轮平均耗时约 `12-15ms`，对照 ADB 30 次平均约 `352ms`
+- 退出时 `nemu_disconnect` 已正常执行
+
+注意：MuMu DLL 当前会向 stderr 输出 `connect not same day`，但返回值、分辨率、图像内容和连续截图均正常。后续正式接入前仍需把该 stderr 作为诊断信息记录。
+
 ## 后续建议
 
 ### 稳定性
