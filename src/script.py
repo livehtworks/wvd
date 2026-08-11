@@ -2,6 +2,7 @@ from ppadb.client import Client as AdbClient
 from enum import Enum
 import os
 import subprocess
+import re
 from utils import *
 import random
 from threading import Thread,Event
@@ -11,6 +12,13 @@ import copy
 import struct
 
 DUNGEON_TARGETS = BuildQuestReflection()
+GAME_PACKAGE_NAME = "jp.co.drecom.wizardry.daphne"
+CLASH_PACKAGE_CANDIDATES = [
+    "com.github.metacubex.clash.meta",
+    "com.github.kr328.clash",
+    "com.github.kr328.clash.foss",
+]
+CLASH_EXTERNAL_ACTIVITY = "com.github.kr328.clash.ExternalControlActivity"
 
 ##################################################################
         
@@ -19,6 +27,7 @@ CONFIG_VAR_LIST = [
             ["GENERAL",   "EMU_PATH",                 tk.StringVar,  None],
             ["GENERAL",   "EMU_INDEX",                tk.IntVar,     0],
             ["GENERAL",   "ADB_ADRESS",               tk.StringVar,  "127.0.0.1:16384"],
+            ["GENERAL",   "AUTO_START_CLASH",         tk.BooleanVar, False],
             ["GENERAL",   "LAST_VERSION",             tk.StringVar,  None],
             ["GENERAL",   "LATEST_VERSION",           tk.StringVar,  None],
             ["GENERAL",   "FARM_TARGET_TEXT",         tk.StringVar,  ""],
@@ -223,6 +232,120 @@ def GetADBPathFromEmuPath(emu_path):
             return None
     
         return adb_path
+def DeviceShellOnce(device, cmdStr, timeout=5, log_error=True):
+    try:
+        return device.shell(cmdStr, timeout=timeout)
+    except Exception as e:
+        if log_error:
+            logger.warning(_("ADB命令执行失败 ({a}): {b}").format(a=cmdStr, b=e))
+        return None
+def GetCurrentFocusPackage(device):
+    focus = DeviceShellOnce(device, "dumpsys window | grep mCurrentFocus", log_error=False) or ""
+    if not focus:
+        focus = DeviceShellOnce(device, "dumpsys window windows | grep mCurrentFocus", log_error=False) or ""
+    return focus
+def ResolveMainActivity(device, package_name):
+    result = DeviceShellOnce(device, f"cmd package resolve-activity --brief {package_name}", log_error=False)
+    if not result:
+        return None
+
+    main_activity = result.strip().split("\n")[-1].strip()
+    if "/" not in main_activity or "No activity found" in main_activity:
+        return None
+    return main_activity
+def StartAndroidPackage(device, package_name):
+    main_activity = ResolveMainActivity(device, package_name)
+    if main_activity:
+        return DeviceShellOnce(device, f"am start -n {main_activity}") is not None
+
+    result = DeviceShellOnce(device, f"monkey -p {package_name} -c android.intent.category.LAUNCHER 1")
+    return result is not None and "No activities found" not in result
+def FindInstalledClashPackage(device):
+    packages = DeviceShellOnce(device, "pm list packages", log_error=False) or ""
+    for package_name in CLASH_PACKAGE_CANDIDATES:
+        if f"package:{package_name}" in packages:
+            return package_name
+
+    match = re.search(r"package:([^\s]*clash[^\s]*)", packages, re.IGNORECASE)
+    if match:
+        return match.group(1)
+    return None
+def IsAndroidVpnConnected(device):
+    tun0_info = DeviceShellOnce(device, "ip addr show tun0", log_error=False) or ""
+    if tun0_info and "does not exist" not in tun0_info.lower() and "tun0" in tun0_info:
+        return True
+
+    connectivity = DeviceShellOnce(device, "dumpsys connectivity", timeout=8, log_error=False) or ""
+    for block in connectivity.split("NetworkAgentInfo{")[1:]:
+        block = block.split("\n\n", 1)[0]
+        if "Transports: VPN" in block:
+            return True
+    return False
+def AcceptVpnPermissionDialogIfPresent(device):
+    focus = GetCurrentFocusPackage(device)
+    if "com.android.vpndialogs" not in focus:
+        return False
+
+    logger.info(_("检测到Android VPN授权弹窗, 尝试点击确认."))
+    dump_result = DeviceShellOnce(device, "uiautomator dump /sdcard/window.xml >/dev/null && cat /sdcard/window.xml", timeout=8, log_error=False) or ""
+    for text in ["确定", "允许", "OK", "Allow"]:
+        match = re.search(rf'text="{re.escape(text)}"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', dump_result)
+        if match:
+            x1, y1, x2, y2 = [int(v) for v in match.groups()]
+            DeviceShellOnce(device, f"input tap {(x1 + x2) // 2} {(y1 + y2) // 2}", log_error=False)
+            time.sleep(1)
+            return True
+
+    # 兜底坐标按 900x1600 竖屏确认按钮区域估算，仅在已确认是系统VPN弹窗时使用。
+    DeviceShellOnce(device, "input tap 690 1045", log_error=False)
+    time.sleep(1)
+    return True
+def EnsureClashVpn(setting: FarmConfig, device):
+    if not getattr(setting, "AUTO_START_CLASH", False):
+        return True
+
+    package_name = FindInstalledClashPackage(device)
+    if not package_name:
+        logger.warning(_("已启用Clash自动恢复, 但模拟器内未检测到Clash应用."))
+        return False
+
+    focus_before = GetCurrentFocusPackage(device)
+    game_was_focused = GAME_PACKAGE_NAME in focus_before
+
+    if IsAndroidVpnConnected(device):
+        logger.info(_("Clash/VPN已处于连接状态."))
+        return True
+
+    logger.info(_("正在启动Clash并恢复VPN: {a}").format(a=package_name))
+    start_action = f"{package_name}.action.START_CLASH"
+    start_commands = [
+        f"am start -n {package_name}/{CLASH_EXTERNAL_ACTIVITY} -a {start_action}",
+        f"am start -a {start_action} -p {package_name}",
+    ]
+
+    for cmd in start_commands:
+        result = DeviceShellOnce(device, cmd, log_error=False)
+        if result is not None and "Error" not in result and "Exception" not in result:
+            break
+
+    AcceptVpnPermissionDialogIfPresent(device)
+
+    for check_index in range(8):
+        if IsAndroidVpnConnected(device):
+            logger.info(_("Clash/VPN已恢复连接."))
+            if game_was_focused and GAME_PACKAGE_NAME not in GetCurrentFocusPackage(device):
+                logger.info(_("恢复Clash后切回游戏前台."))
+                StartAndroidPackage(device, GAME_PACKAGE_NAME)
+            return True
+        time.sleep(1)
+        AcceptVpnPermissionDialogIfPresent(device)
+
+    logger.warning(_("已尝试启动Clash, 但未检测到VPN连接. 请检查Clash配置或首次VPN授权."))
+    StartAndroidPackage(device, package_name)
+    if game_was_focused:
+        time.sleep(1)
+        StartAndroidPackage(device, GAME_PACKAGE_NAME)
+    return False
 def CheckAndRecoverDevice(setting : FarmConfig, runtimeContext: RuntimeContext, FORCE_RESTART_EMU = False, FORCE_RESTART_ADB = False):
     def CheckEmulator():
         result = subprocess.run(
@@ -288,7 +411,7 @@ def CheckAndRecoverDevice(setting : FarmConfig, runtimeContext: RuntimeContext, 
                 if runtimeContext._RUNNING_EMU_PID:
                     logger.info(_("使用已知进程号{a}关闭模拟器...").format(a=runtimeContext._RUNNING_EMU_PID))
                     subprocess.run(
-                        f"taskkill /IM /pid {runtimeContext._RUNNING_EMU_PID}", 
+                        f"taskkill /F /PID {runtimeContext._RUNNING_EMU_PID}",
                         shell=True,
                         stdout=subprocess.DEVNULL,
                         stderr=subprocess.DEVNULL,
@@ -466,7 +589,6 @@ def CheckAndRecoverDevice(setting : FarmConfig, runtimeContext: RuntimeContext, 
                 logger.info(_("ADB恢复异常, 先只重启ADB, 暂不关闭模拟器."))
             KillAdb()
             time.sleep(2)
-            return None
     else:
         logger.info(_("达到最大重试次数，连接失败"))
         return None
@@ -480,6 +602,7 @@ def CheckAndRecoverDevice(setting : FarmConfig, runtimeContext: RuntimeContext, 
         for device in devices:
             if device.serial == target_device:
                 logger.info(_("成功创建设备对象: {a}".format(a=device.serial)))
+                EnsureClashVpn(setting, device)
                 return device
     except Exception as e:
         logger.error(_("创建ADB设备时出错: {a}".format(a=e)))
@@ -1059,7 +1182,7 @@ def Factory():
             logger.info(_("进行重启前截图..."))
             SaveImage(ScreenShot())
 
-        package_name = "jp.co.drecom.wizardry.daphne"
+        package_name = GAME_PACKAGE_NAME
         def TryDeviceShellOnce(cmdStr):
             logger.debug(_("TryDeviceShellOnce {a}".format(a=cmdStr)))
             try:
@@ -1110,7 +1233,7 @@ def Factory():
             force_restart_EMU = True
 
         if force_restart_EMU:
-            CheckAndRecoverDevice(setting, runtimeContext, FORCE_RESTART_EMU=True)
+            ResetDevice(force_restart_emu=True)
             Sleep(5)
 
         if not TryRestartGameApp():
@@ -1119,7 +1242,7 @@ def Factory():
             Sleep(2)
             if not TryRestartGameApp():
                 logger.info(_("恢复ADB后仍无法仅重启游戏, 升级为重启模拟器."))
-                CheckAndRecoverDevice(setting, runtimeContext, FORCE_RESTART_EMU=True)
+                ResetDevice(force_restart_emu=True)
                 Sleep(5)
                 if not TryRestartGameApp():
                     logger.error(_("重启模拟器后仍无法启动游戏."))

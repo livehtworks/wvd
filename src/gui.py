@@ -674,6 +674,18 @@ class ConfigPanelApp(tk.Toplevel):
         self.button_save_emu_index = ttk.Button(frame_row, text=_("保存"), command=self.save_config, width=5)
         self.button_save_emu_index.grid(row=0, column=2)
 
+        row_counter += 1
+        frame_row = ttk.Frame(container)
+        frame_row.grid(row=row_counter, column=0, sticky="ew", pady=2)
+        self.auto_start_clash_check = ttk.Checkbutton(
+            frame_row,
+            text=_("模拟器重连/重启后自动启动Clash并恢复VPN"),
+            variable=self.AUTO_START_CLASH,
+            command=self.save_config,
+            style="Custom.TCheckbutton"
+        )
+        self.auto_start_clash_check.grid(row=0, column=0, sticky=tk.W, pady=5)
+
 
         # ==========================================
         # 分组 2: 目标
@@ -1629,6 +1641,7 @@ class ConfigPanelApp(tk.Toplevel):
             self.task_specific_config_check,
             self.button_save_adb_port,
             self.button_save_emu_index,
+            self.auto_start_clash_check,
             self.delete_task_specific_config_button,
             self.active_csc,
             self.bypass_the_wall,

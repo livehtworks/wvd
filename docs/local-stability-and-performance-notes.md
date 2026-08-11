@@ -13,6 +13,7 @@
 - `用于本地测试的打包脚本.bat`
 - `src/script.py`
 - `src/utils.py`
+- `src/gui.py`
 - `docs/local-stability-and-performance-notes.md`
 
 ### 打包与本地配置保护
@@ -40,7 +41,7 @@
 
 - `e26b54c Improve combat target recovery`
 
-注意：当前分支还没有实现“scrcpy 高速截图后端”，也没有实现“Clash 自动启动”。这些仍在后续建议中。
+注意：当前分支还没有实现“scrcpy 高速截图后端”。Clash 自动恢复已作为可选项加入，默认关闭。
 
 ### 角色头像识别修复
 
@@ -54,6 +55,14 @@ UnboundLocalError: cannot access local variable '_' where it is not associated w
 这部分对应提交：
 
 - `ff37ee5 Fix role portrait matcher translation scope`
+
+### Clash 与恢复链路
+
+- 模拟器设置区新增“模拟器重连/重启后自动启动Clash并恢复VPN”复选框，默认关闭。
+- 设备连接成功后，如果该选项开启，会检测模拟器内 Clash 包并通过外部控制 action 启动 VPN。
+- VPN 恢复后如检测到启动前游戏在前台，会切回游戏。
+- 修正强制重启模拟器后没有写回新 ADB device 的问题。
+- 修正按 PID 关闭 MuMu 进程时使用了错误 `taskkill` 参数的问题。
 
 ### 截图与模板匹配性能
 
@@ -84,7 +93,8 @@ UnboundLocalError: cannot access local variable '_' where it is not associated w
 - ADB `exec-out screencap` 截图链路仍是主要瓶颈，本地实测约 350ms 级别。
 - `ScreenShot()` 仍通过每次启动 adb 子进程获取整帧画面，无法达到流式截图速度。
 - 游戏重启链路已有“先重启游戏，再恢复 ADB，再重启模拟器”的雏形，但部分异常可能过早升级为模拟器重启。
-- `KillEmulator()` 中按 PID 关闭模拟器的命令疑似不正确，后续需要修正并验证。
+- 已修正 `KillEmulator()` 中按 PID 关闭模拟器的 Windows 命令，避免已知 PID 路径实际没有正确关闭目标进程。
+- 强制重启模拟器后改为通过 `ResetDevice()` 写回新的 ADB device，避免后续继续使用旧连接对象。
 - `restartGame()` 的崩溃计数可能长期累积，成功重启游戏后是否应重置仍需确认。
 - `logcat -d | grep ...` 可能把诊断命令自身异常误判为游戏崩溃线索。
 - Clash Meta 在模拟器重启后可能没有自动恢复 VPN，需要独立恢复与验证链路。
@@ -148,15 +158,16 @@ MAAFramework 通过 `nemu_connect` 和 `nemu_capture_display` 调用该 DLL，�
 
 ### Clash
 
-- 增加可选项：模拟器重启后启动 Clash。
-- 使用 Clash Meta 官方外部控制 intent：
+- 已增加可选项：模拟器重连、ADB 恢复或模拟器重启后启动 Clash 并恢复 VPN。
+- 使用 Clash Meta 外部控制 intent：
 
 ```text
 am start -n com.github.metacubex.clash.meta/com.github.kr328.clash.ExternalControlActivity -a com.github.metacubex.clash.meta.action.START_CLASH
 ```
 
-- 启动后用 `dumpsys connectivity` 验证 `VPN CONNECTED`、`tun0`、`com.github.metacubex.clash.meta`。
-- 如果 VPN 未恢复，可选择阻止游戏启动，避免进入网络异常状态。
+- 启动后优先用 `ip addr show tun0` 验证 VPN 接口，再用 `dumpsys connectivity` 检查 `Transports: VPN`。
+- 如果启动前游戏在前台，恢复 Clash/VPN 后会尝试切回游戏。
+- 首次授权时会尝试识别 Android VPN 系统确认弹窗并点击确认；如果仍未连接，会保留日志并打开 Clash 供人工检查。
 
 ### 识别速度
 
