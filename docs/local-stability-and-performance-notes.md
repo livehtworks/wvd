@@ -147,7 +147,7 @@ C:/soft/MuMu Player 12/nx_device/15.0/shell/sdk/external_renderer_ipc.dll
 
 MAAFramework 通过 `nemu_connect` 和 `nemu_capture_display` 调用该 DLL，直接从模拟器渲染器获取 RGBA 图像缓冲区。该方案理论上更快且无损，但依赖 MuMu 版本和闭源 DLL，适合作为实验后端，不适合直接替代默认截图。
 
-当前 fork 已完成独立 PoC，尚未接入 `ScreenShot()` 主链：
+当前 fork 已完成独立 PoC，并已接入 `ScreenShot()` 主链作为优先截图后端：
 
 - PoC 脚本：`tools/mumu_ipc_poc.py`
 - 本机 MuMu 根目录：`C:/soft/MuMu Player 12`
@@ -161,7 +161,15 @@ MAAFramework 通过 `nemu_connect` 和 `nemu_capture_display` 调用该 DLL，�
 - 三轮平均耗时约 `12-15ms`，对照 ADB 30 次平均约 `352ms`
 - 退出时 `nemu_disconnect` 已正常执行
 
-注意：MuMu DLL 当前会向 stderr 输出 `connect not same day`，但返回值、分辨率、图像内容和连续截图均正常。后续正式接入前仍需把该 stderr 作为诊断信息记录。
+接入方式：
+
+- `ScreenShot()` 通过 `ScreenshotBackendManager` 优先使用 `MumuIpcScreenshotBackend`。
+- MuMu IPC 初始化、截图或句柄失效时，自动断开 IPC 并临时回退 `AdbScreenshotBackend`。
+- ADB 截图仍保留原有解析、警告处理和异常恢复逻辑。
+- `ResetDevice()` 会主动让截图后端失效，避免 ADB/模拟器重连后继续使用旧 DLL handle。
+- 当前实机 smoke：第一次截图约 `89ms`（包含连接），后续约 `11-15ms`，返回 `(1600, 900, 3)`。
+
+注意：MuMu DLL 当前会向 stderr 输出 `connect not same day`，但返回值、分辨率、图像内容和连续截图均正常。当前仅作为诊断信息观察，不作为失败条件。
 
 ## 后续建议
 

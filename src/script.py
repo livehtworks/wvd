@@ -3,6 +3,7 @@ from enum import Enum
 import os
 import subprocess
 import re
+import ctypes
 from utils import *
 import random
 from threading import Thread,Event
@@ -346,6 +347,246 @@ def EnsureClashVpn(setting: FarmConfig, device):
         time.sleep(1)
         StartAndroidPackage(device, GAME_PACKAGE_NAME)
     return False
+
+class ScreenshotAppKeepAliveError(Exception):
+    pass
+
+class AdbScreenshotBackend:
+    name = "ADB"
+
+    def capture(self, setting: FarmConfig, runtimeContext: RuntimeContext):
+        serial = setting._ADBDEVICE.serial
+        if not runtimeContext._SKIP_SCREENSHOT_WARNING:
+            cmd = "screencap"
+        else:
+            cmd = "screencap 2>/dev/null"
+
+        process_result = subprocess.run(
+            [GetADBPathFromEmuPath(setting.EMU_PATH), "-s", serial, "exec-out", cmd],
+            capture_output=True,
+            timeout=5
+        )
+
+        if process_result.stderr:
+            logger.error(_("截图命令报错: {a}".format(
+                a=process_result.stderr.decode('utf-8', errors='ignore'))))
+            raise RuntimeError(_("截图命令报错"))
+
+        raw_data = process_result.stdout
+        if len(raw_data) < 12:
+            logger.error(_("截图数据不足12字节(无头信息)"))
+            raise RuntimeError(_("截图数据异常"))
+
+        w, h, fmt = struct.unpack("<III", raw_data[:12])
+        if not (0 < w <= 16384 and 0 < h <= 16384):
+            if raw_data.startswith(
+                b'[Warning] Multiple displays were found, but no display id was specified! '
+                b'Defaulting to the first display found, however this default is not guaranteed '
+                b'to be consistent across captures. A display id should be specified.\n'
+            ):
+                raise ScreenshotAppKeepAliveError("你开启了应用保活, 请关闭.")
+
+            if not runtimeContext._SKIP_SCREENSHOT_WARNING:
+                logger.error(f"无法识别的截屏数据，头部内容: {raw_data[:400]}")
+                logger.error(f"将在之后截图时跳过所有警告信息.")
+                runtimeContext._SKIP_SCREENSHOT_WARNING = True
+                return self.capture(setting, runtimeContext)
+
+            logger.error(f"再次收到非法数据，头部内容: {raw_data[:400]}")
+            raise RuntimeError("截图数据异常，无法修复")
+
+        expected_pixels = w * h * 4
+        pixels_data = raw_data[12:]
+
+        if len(pixels_data) == expected_pixels:
+            pass
+        elif len(pixels_data) > expected_pixels:
+            pixels_data = pixels_data[:expected_pixels]
+        else:
+            logger.error(_("数据长度校验失败: 头部声明 {a}x{b}x4={d}, 实际收到 {c}.").format(
+                a=w, b=h, c=len(pixels_data), d=expected_pixels))
+            raise RuntimeError(_("截图数据不完整"))
+
+        image = np.frombuffer(pixels_data, dtype=np.uint8)
+        image = image.reshape((h, w, 4))
+        image = cv2.cvtColor(image, cv2.COLOR_RGBA2BGR)
+        return NormalizeScreenshotImage(image)
+
+class MumuIpcScreenshotBackend:
+    name = "MuMu IPC"
+
+    def __init__(self, setting: FarmConfig):
+        self.setting = setting
+        self.handle = 0
+        self.display_id = None
+        self.width = None
+        self.height = None
+        self.dll_path, self.mumu_root = self._resolve_paths(setting.EMU_PATH)
+        self.dll = self._load_dll(self.dll_path)
+
+    def _resolve_paths(self, emu_path_value):
+        emu_path = Path(str(emu_path_value).replace("/", "\\"))
+        if not emu_path.exists():
+            raise RuntimeError(_("模拟器启动程序不存在: {a}").format(a=emu_path))
+
+        candidates = []
+        if emu_path.name == "MuMuNxDevice.exe":
+            mumu_root = emu_path.parents[3]
+            candidates.append(emu_path.parent / "sdk" / "external_renderer_ipc.dll")
+            candidates.append(mumu_root / "nx_device" / "15.0" / "shell" / "sdk" / "external_renderer_ipc.dll")
+            candidates.append(mumu_root / "nx_main" / "sdk" / "external_renderer_ipc.dll")
+        else:
+            raise RuntimeError(_("当前截图后端仅支持MuMu 12增强截图."))
+
+        for dll_path in candidates:
+            if dll_path.exists():
+                return dll_path, mumu_root
+        raise RuntimeError(_("MuMu增强截图DLL不存在."))
+
+    def _load_dll(self, dll_path):
+        dll = ctypes.CDLL(str(dll_path))
+        dll.nemu_connect.argtypes = [ctypes.c_wchar_p, ctypes.c_int]
+        dll.nemu_connect.restype = ctypes.c_int
+        dll.nemu_disconnect.argtypes = [ctypes.c_int]
+        dll.nemu_disconnect.restype = None
+        dll.nemu_get_display_id.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int]
+        dll.nemu_get_display_id.restype = ctypes.c_int
+        dll.nemu_capture_display.argtypes = [
+            ctypes.c_int,
+            ctypes.c_uint,
+            ctypes.c_int,
+            ctypes.POINTER(ctypes.c_int),
+            ctypes.POINTER(ctypes.c_int),
+            ctypes.POINTER(ctypes.c_ubyte),
+        ]
+        dll.nemu_capture_display.restype = ctypes.c_int
+        return dll
+
+    def connect(self):
+        if self.handle:
+            return
+
+        self.handle = self.dll.nemu_connect(str(self.mumu_root), int(self.setting.EMU_INDEX))
+        if self.handle <= 0:
+            self.handle = 0
+            raise RuntimeError(_("MuMu增强截图连接失败."))
+
+        self.display_id = self.dll.nemu_get_display_id(
+            self.handle,
+            GAME_PACKAGE_NAME.encode("utf-8"),
+            0
+        )
+        if self.display_id < 0:
+            self.disconnect()
+            raise RuntimeError(_("MuMu增强截图无法获取display_id."))
+
+        width = ctypes.c_int()
+        height = ctypes.c_int()
+        ret = self.dll.nemu_capture_display(
+            self.handle,
+            ctypes.c_uint(self.display_id),
+            0,
+            ctypes.byref(width),
+            ctypes.byref(height),
+            None,
+        )
+        if ret != 0 or width.value <= 0 or height.value <= 0:
+            self.disconnect()
+            raise RuntimeError(_("MuMu增强截图无法获取分辨率."))
+
+        self.width = width.value
+        self.height = height.value
+        logger.info(_("MuMu增强截图已启用: display_id={a}, 分辨率={b}x{c}.").format(
+            a=self.display_id, b=self.width, c=self.height))
+
+    def disconnect(self):
+        if self.handle:
+            try:
+                self.dll.nemu_disconnect(self.handle)
+            except Exception as e:
+                logger.debug(_("MuMu增强截图断开异常: {a}").format(a=e))
+            finally:
+                self.handle = 0
+                self.display_id = None
+                self.width = None
+                self.height = None
+
+    def capture(self, setting: FarmConfig, runtimeContext: RuntimeContext):
+        self.connect()
+        buffer_size = self.width * self.height * 4
+        width = ctypes.c_int()
+        height = ctypes.c_int()
+        buffer = (ctypes.c_ubyte * buffer_size)()
+        ret = self.dll.nemu_capture_display(
+            self.handle,
+            ctypes.c_uint(self.display_id),
+            buffer_size,
+            ctypes.byref(width),
+            ctypes.byref(height),
+            buffer,
+        )
+        if ret != 0:
+            raise RuntimeError(_("MuMu增强截图失败: ret={a}").format(a=ret))
+        if width.value != self.width or height.value != self.height:
+            self.width = width.value
+            self.height = height.value
+            raise RuntimeError(_("MuMu增强截图分辨率发生变化."))
+
+        raw = np.ctypeslib.as_array(buffer).reshape((self.height, self.width, 4))
+        image = cv2.cvtColor(raw, cv2.COLOR_RGBA2BGR)
+        image = cv2.flip(image, 0)
+        return NormalizeScreenshotImage(image)
+
+class ScreenshotBackendManager:
+    def __init__(self, setting: FarmConfig):
+        self.setting = setting
+        self.adb = AdbScreenshotBackend()
+        self.mumu = None
+        self.mumu_disabled_until = 0
+
+    def invalidate(self):
+        if self.mumu:
+            self.mumu.disconnect()
+            self.mumu = None
+        self.mumu_disabled_until = 0
+
+    def _get_mumu_backend(self):
+        if time.time() < self.mumu_disabled_until:
+            return None
+        if self.mumu is None:
+            try:
+                self.mumu = MumuIpcScreenshotBackend(self.setting)
+            except Exception as e:
+                logger.debug(_("MuMu增强截图不可用, 本次使用ADB截图: {a}").format(a=e))
+                self.mumu_disabled_until = time.time() + 30
+                return None
+        return self.mumu
+
+    def capture(self, setting: FarmConfig, runtimeContext: RuntimeContext):
+        mumu = self._get_mumu_backend()
+        if mumu:
+            try:
+                return mumu.capture(setting, runtimeContext)
+            except Exception as e:
+                logger.warning(_("MuMu增强截图失败, 回退ADB截图: {a}").format(a=e))
+                mumu.disconnect()
+                self.mumu = None
+                self.mumu_disabled_until = time.time() + 30
+
+        return self.adb.capture(setting, runtimeContext)
+
+def NormalizeScreenshotImage(image):
+    current_h, current_w = image.shape[:2]
+    if (current_h, current_w) != (1600, 900):
+        if (current_h, current_w) == (900, 1600):
+            logger.debug(_("截图尺寸错误: 当前{a}, 检测为横屏.".format(a=image.shape)))
+            image = image.transpose(1, 0, 2)
+        else:
+            logger.error(_("截图尺寸错误: 期望(1600,900), 实际({a},{b}).".format(
+                a=current_h, b=current_w)))
+            raise RuntimeError(_("分辨率异常: {a}x{b}".format(a=current_w, b=current_h)))
+
+    return image
 def CheckAndRecoverDevice(setting : FarmConfig, runtimeContext: RuntimeContext, FORCE_RESTART_EMU = False, FORCE_RESTART_ADB = False):
     def CheckEmulator():
         result = subprocess.run(
@@ -654,10 +895,21 @@ def Factory():
     quest = None
     runtimeContext = RuntimeContext()
     runtimeContext = None
+    screenshotBackend = None
     ##################################################################
+    def ResetScreenshotBackend():
+        nonlocal screenshotBackend
+        if screenshotBackend is not None:
+            screenshotBackend.invalidate()
+    def CaptureScreen():
+        nonlocal screenshotBackend
+        if screenshotBackend is None:
+            screenshotBackend = ScreenshotBackendManager(setting)
+        return screenshotBackend.capture(setting, runtimeContext)
     def ResetDevice(force_restart_emu=False, force_restart_adb = False):
         nonlocal setting # 修改device
         nonlocal runtimeContext
+        ResetScreenshotBackend()
         if device := CheckAndRecoverDevice(setting, runtimeContext, force_restart_emu, force_restart_adb):
             setting._ADBDEVICE = device
             logger.info(_("ADB服务成功启动，设备已连接."))
@@ -721,88 +973,10 @@ def Factory():
                 restartGame(skip_screenshot=True)
 
         t = time.time()
-        class AppKeepAliveError(Exception):
-            pass
 
         while True:
             try:
-                serial = setting._ADBDEVICE.serial
-
-                # 1. 根据运行情况选择指令
-                if not runtimeContext._SKIP_SCREENSHOT_WARNING:
-                    cmd = "screencap"
-                else:
-                    cmd = "screencap 2>/dev/null"
-                process_result = subprocess.run(
-                    [GetADBPathFromEmuPath(setting.EMU_PATH), "-s", serial, "exec-out",
-                    cmd],
-                    capture_output=True,
-                    timeout=5
-                )
-
-                if process_result.stderr:
-                    logger.error(_("截图命令报错: {a}".format(
-                        a=process_result.stderr.decode('utf-8', errors='ignore'))))
-                    raise RuntimeError(_("截图命令报错"))
-
-                raw_data = process_result.stdout
-
-                
-                if len(raw_data) < 12:
-                    logger.error(_("截图数据不足12字节(无头信息)"))
-                    raise RuntimeError(_("截图数据异常"))
-
-                    # 尝试解析宽高
-                w, h, fmt = struct.unpack("<III", raw_data[:12])
-
-                # 2. 合理性校验（若合法则跳出循环）
-                if not (0 < w <= 16384 and 0 < h <= 16384):
-                    # 特殊警告：开启应用保活导致的多显示器提示
-                    if raw_data.startswith(
-                        b'[Warning] Multiple displays were found, but no display id was specified! '
-                        b'Defaulting to the first display found, however this default is not guaranteed '
-                        b'to be consistent across captures. A display id should be specified.\n'
-                    ):
-                        raise AppKeepAliveError("你开启了应用保活, 请关闭.")
-
-                    if not runtimeContext._SKIP_SCREENSHOT_WARNING:
-                        logger.error(f"无法识别的截屏数据，头部内容: {raw_data[:400]}")
-                        logger.error(f"将在之后截图时跳过所有警告信息.")
-                        runtimeContext._SKIP_SCREENSHOT_WARNING = True
-                        return ScreenShot()
-                    else:
-                        logger.error(f"再次收到非法数据，头部内容: {raw_data[:400]}")
-                        raise RuntimeError("截图数据异常，无法修复")
-
-                # 3. 后续原始处理
-                expected_pixels = w * h * 4
-                pixels_data = raw_data[12:]
-
-                if len(pixels_data) == expected_pixels:
-                    pass
-                elif len(pixels_data) > expected_pixels:
-                    pixels_data = pixels_data[:expected_pixels]
-                else:
-                    logger.error(_("数据长度校验失败: 头部声明 {a}x{b}x4={d}, 实际收到 {c}.").format(
-                        a=w, b=h, c=len(pixels_data), d=expected_pixels))
-                    raise RuntimeError(_("截图数据不完整"))
-
-                image = np.frombuffer(pixels_data, dtype=np.uint8)
-                image = image.reshape((h, w, 4))
-                image = cv2.cvtColor(image, cv2.COLOR_RGBA2BGR)
-
-                current_h, current_w = image.shape[:2]
-                if (current_h, current_w) != (1600, 900):
-                    if (current_h, current_w) == (900, 1600):
-                        logger.debug(_("截图尺寸错误: 当前{a}, 检测为横屏.".format(a=image.shape)))
-                        image = image.transpose(1, 0, 2)
-
-                    else:
-                        logger.error(_("截图尺寸错误: 期望(1600,900), 实际({a},{b}).".format(
-                            a=current_h, b=current_w)))
-                        raise RuntimeError(_("分辨率异常: {a}x{b}".format(a=current_w, b=current_h)))
-
-                return image
+                return CaptureScreen()
 
             except subprocess.TimeoutExpired:
                 logger.warning(_("截图超时 (Subprocess)"))
@@ -814,7 +988,7 @@ def Factory():
                 if isinstance(e, (AttributeError, RuntimeError, ConnectionResetError, cv2.error)):
                     logger.info(_("ADB操作失败/数据错误, 尝试重启ADB或模拟器程序..."))
                     ResetDevice()
-                if isinstance(e, (AppKeepAliveError)):
+                if isinstance(e, (ScreenshotAppKeepAliveError)):
                     logger.info(_("你开启了应用保活, 请关闭.\n请在\"设备设置-其他-应用运行\"中关闭."))
                     setting._FORCESTOPING.set()
                     return
