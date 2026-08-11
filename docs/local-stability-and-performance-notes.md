@@ -4,15 +4,77 @@
 
 ## 当前本地改动
 
-- 打包脚本调整为使用独立 `.venv-build`，避免污染用户运行环境。
-- 打包时保留 `dist/wvd/config.json`，避免覆盖本地配置。
-- 修复角色头像匹配里翻译占位变量 `_` 的作用域问题。
-- 改善战斗目标恢复逻辑，降低 `NEXT` 目标无法点击时的卡死概率。
-- 减少部分重复截图与重复状态检查。
-- 模板图片加载增加内存缓存。
-- 模板匹配时减少不必要的整图 copy。
-- 给部分高频模板增加默认 ROI。
-- 截图前台检查改为节流执行，避免每次截图都跑 `dumpsys window`。
+当前分支相对上游 `arnold2957/wvd@master` 包含 9 个功能提交和 1 个说明文档提交。它不是一个只包含 `NEXT` 改动的最小 PR 分支。
+
+涉及文件：
+
+- `.gitignore`
+- `requirements-build.txt`
+- `用于本地测试的打包脚本.bat`
+- `src/script.py`
+- `src/utils.py`
+- `docs/local-stability-and-performance-notes.md`
+
+### 打包与本地配置保护
+
+- 新增 `requirements-build.txt`，本地打包使用独立 `.venv-build`。
+- 打包脚本在构建前备份 `dist/wvd/config.json`，构建后恢复，避免覆盖用户本地配置。
+- `.gitignore` 增加 `.venv-build/`。
+- 打包脚本继续排除若干大型无关模块，并保留 locale 编译流程。
+
+这部分对应提交：
+
+- `11ac2b7 Make local packaging reproducible`
+- `cca3e00 Preserve local config during packaging`
+
+### 战斗目标与 `NEXT` 相关
+
+- 调整战斗中选择敌方目标的恢复逻辑。
+- 当单体技能选择 `NEXT` 目标失败时，增加更保守的恢复路径，降低敌人在右侧边缘、只露出部分身体时点不到导致卡住的概率。
+- 删除本地临时 range 思路后，改为围绕现有 `next` 模板识别和点击逻辑做更稳的兜底。
+
+这部分主要对应提交：
+
+- `e26b54c Improve combat target recovery`
+
+注意：当前分支还没有实现“scrcpy 高速截图后端”，也没有实现“Clash 自动启动”。这些仍在后续建议中。
+
+### 角色头像识别修复
+
+- 修复 `CheckRolePortraitMatch` 中翻译函数 `_` 与局部变量占位符冲突导致的 `UnboundLocalError`。
+- 该问题曾在实机运行时触发：
+
+```text
+UnboundLocalError: cannot access local variable '_' where it is not associated with a value
+```
+
+这部分对应提交：
+
+- `ff37ee5 Fix role portrait matcher translation scope`
+
+### 截图与模板匹配性能
+
+- `LoadTemplateImage()` 增加内存缓存，避免同一模板反复从磁盘读取和解码。
+- `_check()` 在常见路径减少整图 copy，只在必要时 copy ROI 或匹配结果。
+- 减少部分状态判断中的重复截图。
+- 高频模板补充默认 ROI，减少整屏匹配范围。
+- 截图前台检查节流，避免每次截图都调用 `dumpsys window | grep mCurrentFocus`。
+
+这部分对应提交：
+
+- `9805121 Avoid full screenshot copies in matcher`
+- `7954333 Cache template images in memory`
+- `c19075a Reduce redundant state screenshots`
+- `16f540b Add default ROIs for combat templates`
+- `d2d97d2 Throttle screenshot focus checks`
+
+### 说明文档
+
+- 新增本文档，用来记录本地稳定性、性能、截图后端和上游贡献拆分建议。
+
+这部分对应提交：
+
+- `64ec6e9 Document local stability and performance notes`
 
 ## 当前观察到的问题
 
