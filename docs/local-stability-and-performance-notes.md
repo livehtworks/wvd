@@ -171,6 +171,17 @@ MAAFramework 通过 `nemu_connect` 和 `nemu_capture_display` 调用该 DLL，�
 
 注意：MuMu DLL 当前会向 stderr 输出 `connect not same day`，但返回值、分辨率、图像内容和连续截图均正常。当前仅作为诊断信息观察，不作为失败条件。
 
+### 恢复链实机验证
+
+当前分支在本机 `127.0.0.1:16448`、MuMu 实例 `2` 上验证：
+
+- 普通 ADB 连接后，Clash/VPN 检测为已连接。
+- 仅关闭游戏后，旧 ADB device 曾变为 `offline`；随后按现有恢复链执行 `ResetDevice(force_restart_adb=True)`，能重新拿到设备、确认 VPN、启动游戏并恢复 IPC 截图。
+- 强制重启模拟器后，能重新连接 `127.0.0.1:16448`、确认 VPN、启动游戏，并重新建立 MuMu IPC 截图 handle。
+- 重启模拟器后的 5 次截图均返回 `(1600, 900, 3)`，耗时约 `10-27ms`。
+
+结论：高速截图后端没有破坏现有“游戏重启 -> ADB 恢复 -> 模拟器重启”的稳定性链路；后续若遇到 IPC 失败，应优先按日志确认是否已触发 ADB fallback。
+
 ## 后续建议
 
 ### 稳定性
