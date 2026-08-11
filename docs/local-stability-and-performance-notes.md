@@ -121,7 +121,7 @@ adb -s <serial> exec-out screencap
 本地验证官方 `scrcpy v4.1` 可连接 MuMu：
 
 ```text
-scrcpy -s 127.0.0.1:16448 --no-window --no-audio --record <file> --time-limit=5 --max-fps=30
+scrcpy -s <ADB地址> --no-window --no-audio --record <file> --time-limit=5 --max-fps=30
 ```
 
 验证结果：
@@ -145,8 +145,8 @@ scrcpy -s 127.0.0.1:16448 --no-window --no-audio --record <file> --time-limit=5 
 本机 MuMu 安装目录存在：
 
 ```text
-C:/soft/MuMu Player 12/nx_main/sdk/external_renderer_ipc.dll
-C:/soft/MuMu Player 12/nx_device/15.0/shell/sdk/external_renderer_ipc.dll
+<MuMu安装目录>/nx_main/sdk/external_renderer_ipc.dll
+<MuMu安装目录>/nx_device/<Android版本>/shell/sdk/external_renderer_ipc.dll
 ```
 
 MAAFramework 通过 `nemu_connect` 和 `nemu_capture_display` 调用该 DLL，直接从模拟器渲染器获取 RGBA 图像缓冲区。该方案理论上更快且无损，但依赖 MuMu 版本和闭源 DLL，适合作为实验后端，不适合直接替代默认截图。
@@ -154,9 +154,9 @@ MAAFramework 通过 `nemu_connect` 和 `nemu_capture_display` 调用该 DLL，�
 当前 fork 已完成独立 PoC，并已接入 `ScreenShot()` 主链作为优先截图后端：
 
 - PoC 脚本：`tools/mumu_ipc_poc.py`
-- 本机 MuMu 根目录：`C:/soft/MuMu Player 12`
-- DLL：`nx_device/15.0/shell/sdk/external_renderer_ipc.dll`
-- 实例号：`2`
+- MuMu 根目录：从配置的 `EMU_PATH` 自动反推，不应写死为某台电脑的安装路径。
+- DLL：优先从当前 MuMu 实例目录查找 `shell/sdk/external_renderer_ipc.dll`，再尝试 MuMu 通用 SDK 目录。
+- 实例号：读取配置中的 `EMU_INDEX`
 - `nemu_connect` 成功，handle 为 `1`
 - `nemu_get_display_id` 返回 `0`
 - `nemu_capture_display` 返回 `900x1600`
@@ -177,11 +177,11 @@ MAAFramework 通过 `nemu_connect` 和 `nemu_capture_display` 调用该 DLL，�
 
 ### 恢复链实机验证
 
-当前分支在本机 `127.0.0.1:16448`、MuMu 实例 `2` 上验证：
+当前分支在本机配置的 MuMu 实例和 ADB 地址上验证：
 
 - 普通 ADB 连接后，Clash/VPN 检测为已连接。
 - 仅关闭游戏后，旧 ADB device 曾变为 `offline`；随后按现有恢复链执行 `ResetDevice(force_restart_adb=True)`，能重新拿到设备、确认 VPN、启动游戏并恢复 IPC 截图。
-- 强制重启模拟器后，能重新连接 `127.0.0.1:16448`、确认 VPN、启动游戏，并重新建立 MuMu IPC 截图 handle。
+- 强制重启模拟器后，能重新连接配置中的 ADB 地址、确认 VPN、启动游戏，并重新建立 MuMu IPC 截图 handle。
 - 重启模拟器后的 5 次截图均返回 `(1600, 900, 3)`，耗时约 `10-27ms`。
 
 结论：高速截图后端没有破坏现有“游戏重启 -> ADB 恢复 -> 模拟器重启”的稳定性链路；后续若遇到 IPC 失败，应优先按日志确认是否已触发 ADB fallback。
