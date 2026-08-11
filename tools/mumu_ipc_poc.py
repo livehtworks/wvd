@@ -43,7 +43,12 @@ def resolve_paths(config):
 
     if emu_path.name == "MuMuNxDevice.exe":
         mumu_root = emu_path.parents[3]
-        dll_path = mumu_root / "nx_device" / "15.0" / "shell" / "sdk" / "external_renderer_ipc.dll"
+        dll_candidates = [
+            emu_path.parent / "sdk" / "external_renderer_ipc.dll",
+            *mumu_root.glob("nx_device/*/shell/sdk/external_renderer_ipc.dll"),
+            mumu_root / "nx_main" / "sdk" / "external_renderer_ipc.dll",
+        ]
+        dll_path = next((path for path in dll_candidates if path.exists()), dll_candidates[0])
         adb_path = emu_path.with_name("adb.exe")
     else:
         raise MumuIpcPocError(f"当前 PoC 只处理 MuMuNxDevice.exe: {emu_path}")

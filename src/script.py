@@ -433,7 +433,7 @@ class MumuIpcScreenshotBackend:
         if emu_path.name == "MuMuNxDevice.exe":
             mumu_root = emu_path.parents[3]
             candidates.append(emu_path.parent / "sdk" / "external_renderer_ipc.dll")
-            candidates.append(mumu_root / "nx_device" / "15.0" / "shell" / "sdk" / "external_renderer_ipc.dll")
+            candidates.extend(mumu_root.glob("nx_device/*/shell/sdk/external_renderer_ipc.dll"))
             candidates.append(mumu_root / "nx_main" / "sdk" / "external_renderer_ipc.dll")
         else:
             raise RuntimeError(_("当前截图后端仅支持MuMu 12增强截图."))
