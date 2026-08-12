@@ -2117,6 +2117,21 @@ def Factory():
             Press([850,1100])
             Sleep(2)
             return
+        def AutoThisCharAfterTargetFailure(reason):
+            # 详情弹窗会盖住自动战斗按钮，先退出详情再降级自动战斗。
+            logger.warning(_("技能目标选择失败, 改用自动战斗: {a}").format(a=reason))
+            for underscore in range(3):
+                scn = ScreenShot()
+                if not CheckSkillPopupOpen(scn):
+                    break
+                close_pos, _ = CheckTemplateInRoi(scn, "close", [[250, 1420, 420, 150]], threshold=0.8)
+                if close_pos:
+                    Press(close_pos)
+                else:
+                    PressReturn()
+                Sleep(0.3)
+            AutoThisChar()
+            return True
         def ActiveAutoCombat():
             scn = ScreenShot()
             if CheckIf(scn,"spellskill/CombatAutoDisable",[[842, 1124-42, 35, 13]]):
@@ -2172,6 +2187,10 @@ def Factory():
             # 亮色遮罩会忽略背景，洞穴纹理或特效偶尔能拿到很高分，导致锚点跑到空地。
             # 这里用完整 NEXT 小图做普通相关匹配；若 NEXT 背景变化导致分数不足，再交给倒三角兜底。
             return CheckCombatTargetByTemplate(scn, "next", threshold=0.86)
+        def CheckCombatNextTargetLowConfidence(scn):
+            # 远距离怪物会让 NEXT 渲染得更小更淡，强阈值失败时允许低阈值兜底。
+            # 低阈值只在单体技能目标选择阶段使用，仍限制在敌方活动 ROI 内。
+            return CheckCombatTargetByTemplate(scn, "next", threshold=0.60)
         def CheckCombatTargetMarker(scn):
             # 当 NEXT 字样不可用时，使用敌人头顶的倒三角作为兜底锚点。
             # 倒三角背景比 NEXT 更干净，但仍限制在敌方活动区内，避开行动条和技能UI。
@@ -2293,10 +2312,13 @@ def Factory():
                 elif pos:= CheckCombatTargetMarker(scn):
                     logger.info(_("释放了位于\"{a}\"的单体技能, 技能等级为{b}. 未检测到next, 选择目标标记作为敌方目标.".format(a=skillPos, b=skilllvl)))
                     PressCombatTargetArea(pos, "combatTarget")
+                elif pos:= CheckCombatNextTargetLowConfidence(scn):
+                    logger.warning(_("释放了位于\"{a}\"的单体技能, 技能等级为{b}. NEXT强识别失败, 使用60%低阈值兜底选择敌方目标.".format(a=skillPos, b=skilllvl)))
+                    PressCombatTargetArea(pos, "next_low_confidence")
                 else:
-                    logger.info(_("释放了位于\"{a}\"的单体技能, 技能等级为{b}. 未检测到next和目标标记, 轮询选择敌方目标.".format(a=skillPos, b=skilllvl)))
+                    logger.warning(_("释放了位于\"{a}\"的单体技能, 技能等级为{b}. 未检测到next和目标标记, 改用自动战斗避免误判卡死.".format(a=skillPos, b=skilllvl)))
                     SaveDebugImage(scn, "combat_target_before_fallback")
-                    PressEnemyTargetFallback()
+                    return AutoThisCharAfterTargetFailure(_("未检测到NEXT或目标标记"))
                 Sleep(2)
 
             # 资源不足
@@ -2307,7 +2329,7 @@ def Factory():
                     a=skillPos, b=skilllvl
                 ))
                 SaveDebugImage(scn, "combat_target_after_press_still_detail")
-                return False
+                return AutoThisCharAfterTargetFailure(_("点击目标后技能详情弹窗仍未关闭"))
             if CheckIf(scn,"notenoughsp") or CheckIf(scn,"notenoughmp"):
                 for underscore in range(3):
                     PressReturn()
