@@ -1038,7 +1038,8 @@ def Factory():
                 if isinstance(e, (cv2.error)):
                     logger.info(_("cv2异常."))
                     # SaveImage(screenshot,"cv2异常")
-                    return None
+                    return None, 0
+                return None, 0
 
         underscore, max_val, underscore, max_loc = cv2.minMaxLoc(result)
 
@@ -1061,8 +1062,16 @@ def Factory():
             offset_x, offset_y = 0, 0
         elif len(roi) == 1:
             x, y, w, h = roi[0]
-            search_area = screenImage[y:y + h, x:x + w]
-            offset_x, offset_y = x, y
+            img_h, img_w = screenImage.shape[:2]
+            x_start = max(0, x)
+            y_start = max(0, y)
+            x_end = min(img_w, x + w)
+            y_end = min(img_h, y + h)
+            if x_start >= x_end or y_start >= y_end:
+                logger.error("错误:roi1范围无效.")
+                return None, 0
+            search_area = screenImage[y_start:y_end, x_start:x_end]
+            offset_x, offset_y = x_start, y_start
         else:
             logger.error(_("亮色遮罩匹配仅支持单个ROI."))
             return None, 0
@@ -1099,6 +1108,17 @@ def Factory():
             offset_x + max_loc[0] + template.shape[1] // 2,
             offset_y + max_loc[1] + template.shape[0] // 2,
         ]
+        return pos, max_val
+    def CheckTemplateInRoi(screenImage, shortPathOfTarget, roi, threshold=0.8, outputMatchResult=False):
+        pos, max_val = _check(screenImage, LoadTemplateImage(shortPathOfTarget), roi, outputMatchResult)
+        if max_val < threshold:
+            logger.debug(_("{a}在指定ROI内匹配失败, 匹配程度为{b:.2f}%, 不足阈值{c:.2f}%.").format(
+                a=shortPathOfTarget, b=max_val * 100, c=threshold * 100
+            ))
+            return None, max_val
+        logger.debug(_("{a}在指定ROI内匹配成功, 匹配程度为{b:.2f}%, 位于{c}.").format(
+            a=shortPathOfTarget, b=max_val * 100, c=pos
+        ))
         return pos, max_val
     DEFAULT_CHECK_ROI = {
         "combatActive": [[0,0,150,80]],
@@ -1325,8 +1345,23 @@ def Factory():
         time_str = datetime.now().strftime("%Y%m%d-%H%M%S") 
         runtimeContext._IMPORTANTINFO = " {a} {b}\n{c}".format(a = time_str, b=str, c=runtimeContext._IMPORTANTINFO)
     ##################################################################
+    def SaveDebugImage(scn, reason):
+        reason = re.sub(r"[^0-9A-Za-z_-]+", "_", str(reason)).strip("_") or "debug"
+        SaveImage(scn, f"debug_{reason}_{datetime.now().strftime('%H%M%S.%f')[:-3]}")
+    def CheckSkillPopupOpen(scn):
+        if CheckIf(scn, "spellskill/skillDetail"):
+            return True
+        close_pos, close_match = CheckTemplateInRoi(scn, "close", [[250, 1420, 420, 150]], threshold=0.8)
+        if close_pos:
+            logger.debug(_("检测到技能详情弹窗底部Close按钮: 坐标={a}, 匹配程度={b:.2f}%.").format(
+                a=close_pos, b=close_match * 100
+            ))
+            return True
+        return False
     def FindCoordsOrElseExecuteFallbackAndWait(targetPattern, fallback,waitTime):
         # fallback可以是坐标[x,y]或者字符串. 当为字符串的时候, 视为图片地址
+        last_scn = None
+        last_try_index = 0
         def pressTarget(target):
             if target.lower() == "return":
                 PressReturn()
@@ -1342,10 +1377,13 @@ def Factory():
                 return CheckIf(scn,pattern)
 
         while True:
+            skill_detail_debug_saved = False
             for underscore in range(setting.MAX_TRY_LIMIT):
                 if setting._FORCESTOPING.is_set():
                     return None
                 scn = ScreenShot()
+                last_scn = scn
+                last_try_index = underscore + 1
                 if isinstance(targetPattern, (list, tuple)):
                     for pattern in targetPattern:
                         if p:=checkPattern(scn, pattern):
@@ -1360,17 +1398,33 @@ def Factory():
                 if Press(CheckIf_fastForwardOff(scn)):
                     Sleep(1)
                     continue
-                
+                if CheckSkillPopupOpen(scn):
+                    logger.warning(_("等待目标{a}时检测到技能详情弹窗仍在屏幕上. 当前尝试次数: {b}/{c}.").format(
+                        a=targetPattern, b=underscore + 1, c=setting.MAX_TRY_LIMIT
+                    ))
+                    if not skill_detail_debug_saved:
+                        SaveDebugImage(scn, "wait_target_skill_detail")
+                        skill_detail_debug_saved = True
+
                 if fallback: # Execute
                     if isinstance(fallback, (list, tuple)):
                         if (len(fallback) == 2) and all(isinstance(x, (int, float)) for x in fallback):
+                            logger.debug(_("等待目标{a}未命中, 执行坐标fallback: {b}. 尝试次数: {c}/{d}.").format(
+                                a=targetPattern, b=fallback, c=underscore + 1, d=setting.MAX_TRY_LIMIT
+                            ))
                             Press(fallback)
                         else:
                             for p in fallback:
                                 if isinstance(p, str):
+                                    logger.debug(_("等待目标{a}未命中, 执行图片/命令fallback: {b}. 尝试次数: {c}/{d}.").format(
+                                        a=targetPattern, b=p, c=underscore + 1, d=setting.MAX_TRY_LIMIT
+                                    ))
                                     pressTarget(p)
                                 elif isinstance(p, (list, tuple)) and len(p) == 2:
                                     t = time.time()
+                                    logger.debug(_("等待目标{a}未命中, 执行坐标fallback: {b}. 尝试次数: {c}/{d}.").format(
+                                        a=targetPattern, b=p, c=underscore + 1, d=setting.MAX_TRY_LIMIT
+                                    ))
                                     Press(p)
                                     if (waittime:=(time.time()-t)) < 0.1:
                                         Sleep(0.1-waittime)
@@ -1380,6 +1434,9 @@ def Factory():
                                     return None
                     else:
                         if isinstance(fallback, str):
+                            logger.debug(_("等待目标{a}未命中, 执行图片/命令fallback: {b}. 尝试次数: {c}/{d}.").format(
+                                a=targetPattern, b=fallback, c=underscore + 1, d=setting.MAX_TRY_LIMIT
+                            ))
                             pressTarget(fallback)
                         else:
                             logger.debug(_("错误: 非法的目标."))
@@ -1388,6 +1445,13 @@ def Factory():
                 Sleep(waitTime) # and wait
 
             logger.info(_("{a}次截图依旧没有找到目标{b}, 疑似卡死. 重启游戏.".format(a=setting.MAX_TRY_LIMIT, b=targetPattern)))
+            if last_scn is not None:
+                logger.info(_("等待目标失败前最后一次截图: 目标={a}, fallback={b}, 最后尝试次数={c}.").format(
+                    a=targetPattern, b=fallback, c=last_try_index
+                ))
+                if CheckSkillPopupOpen(last_scn):
+                    logger.warning(_("等待目标失败前最后一帧仍检测到技能详情弹窗."))
+                SaveDebugImage(last_scn, "wait_target_failed")
             Sleep()
             restartGame()
             return None # restartGame会抛出异常 所以直接返回none就行了
@@ -1772,6 +1836,10 @@ def Factory():
                 counter += 1
                 continue
 
+            if TryResumePauseOverlay(screen):
+                counter = 0
+                return IdentifyState()
+
             identifyConfig = [
                 ("dungFlag",      DungeonState.Dungeon),
                 ("chestFlag",     DungeonState.Chest),
@@ -1963,6 +2031,32 @@ def Factory():
             if totalDiff<=threshold:
                 return queue, True
         return queue, False
+    def CheckPauseOverlay(screen):
+        # 游戏应用重启后可能默认停在 Pause 画面。这里用中心区域的暗底和白色 Pause 字样做轻量判断，
+        # 不把队伍死亡、濒死等战斗状态纳入条件，避免把普通战斗恢复逻辑混在一起。
+        if screen is None:
+            return False
+        x, y, w, h = 330, 740, 240, 110
+        roi = screen[y:y + h, x:x + w]
+        if roi.size == 0:
+            return False
+        gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+        dark_ratio = np.count_nonzero(gray < 70) / gray.size
+        white_ratio = np.count_nonzero(gray > 120) / gray.size
+        max_brightness = int(gray.max())
+        result = (dark_ratio > 0.65) and (0.015 < white_ratio < 0.09) and (max_brightness > 135)
+        if result:
+            logger.info(_("检测到Pause暂停覆盖层: dark={a:.2f}, white={b:.2f}, max={c}.").format(
+                a=dark_ratio, b=white_ratio, c=max_brightness
+            ))
+        return result
+    def TryResumePauseOverlay(screen):
+        if not CheckPauseOverlay(screen):
+            return False
+        logger.info(_("检测到游戏处于Pause状态, 点击画面中部恢复游戏."))
+        Press([450, 760])
+        Sleep(2)
+        return True
     def StateCombatCheck(screen):
         combatActiveFlag = [
             "combatActive",
@@ -2033,7 +2127,7 @@ def Factory():
             return [int(max(1, min(898, pos[0]))), int(max(1, min(1598, pos[1])))]
         def ClampCombatTargetPoint(pos):
             return [int(max(1, min(898, pos[0]))), int(max(260, min(900, pos[1])))]
-        def PressCombatTargetArea(marker_pos):
+        def PressCombatTargetArea(marker_pos, reason="unknown"):
             # 敌人头顶标记与实际可点击身体区域之间通常有 50~100 像素距离。
             # 这里扫标记下方横向矩形区域，兼容右侧边缘敌人、大体型敌人和前后排高度差。
             offsets = [
@@ -2052,42 +2146,36 @@ def Factory():
                 [0, 275],
                 [70, 275],
             ]
-            PressBatch([
+            points = [
                 ClampCombatTargetPoint([marker_pos[0] + offset[0], marker_pos[1] + offset[1]])
                 for offset in offsets
-            ])
+            ]
+            logger.info(_("战斗目标点击诊断: 来源={a}, 标记坐标={b}, 点击点={c}.").format(
+                a=reason, b=marker_pos, c=points
+            ))
+            PressBatch(points)
         def PressEnemyTargetFallback():
-            PressBatch([
+            points = [
                 [x, y]
                 for y in [430, 560, 700, 830]
                 for x in [140, 300, 460, 620, 780, 860]
-            ])
-        def CheckCombatTargetByBrightMask(scn, target, threshold=0.88, min_brightness=145):
-            template = LoadTemplateImage(target)
-            pos, max_val = _check_bright_mask(
-                scn,
-                template,
-                DEFAULT_CHECK_ROI.get(target),
-                min_brightness=min_brightness,
-            )
-            if max_val < threshold:
-                logger.debug(_("战斗目标匹配失败: {a}的亮色匹配程度为{b:.2f}%, 不足阈值.".format(
-                    a=target, b=max_val * 100
-                )))
-                return None
-
-            logger.debug(_("战斗目标匹配成功: {a}的亮色匹配程度为{b:.2f}%, 位于{c}.".format(
-                a=target, b=max_val * 100, c=pos
-            )))
+            ]
+            logger.info(_("战斗目标兜底点击诊断: 未识别到NEXT或目标标记, 点击敌方候选区域={a}.").format(a=points))
+            PressBatch(points)
+        def CheckCombatTargetByTemplate(scn, target, threshold=0.86):
+            pos, max_val = CheckTemplateInRoi(scn, target, DEFAULT_CHECK_ROI.get(target), threshold=threshold)
+            logger.info(_("战斗目标识别诊断: 模板={a}, ROI={b}, 匹配方式=普通相关, 阈值={c:.2f}%, 匹配程度={d:.2f}%, 坐标={e}.").format(
+                a=target, b=DEFAULT_CHECK_ROI.get(target), c=threshold * 100, d=max_val * 100, e=pos
+            ))
             return pos
         def CheckCombatNextTarget(scn):
-            # next.png 的暗底会跟随敌人、雾气和特效变化，普通模板匹配容易把背景当成特征。
-            # 战斗选敌时只匹配 NEXT 的亮色字形，并限制在敌方活动区，避开左侧行动条和下方技能/角色UI。
-            return CheckCombatTargetByBrightMask(scn, "next", threshold=0.9, min_brightness=150)
+            # 亮色遮罩会忽略背景，洞穴纹理或特效偶尔能拿到很高分，导致锚点跑到空地。
+            # 这里用完整 NEXT 小图做普通相关匹配；若 NEXT 背景变化导致分数不足，再交给倒三角兜底。
+            return CheckCombatTargetByTemplate(scn, "next", threshold=0.86)
         def CheckCombatTargetMarker(scn):
-            # 当 NEXT 字形也不可用时，使用敌人头顶的白色倒三角作为兜底锚点。
-            # 该标记同样只在敌方活动区内识别，避免下方按钮和角色面板干扰。
-            return CheckCombatTargetByBrightMask(scn, "combatTarget", threshold=0.88, min_brightness=145)
+            # 当 NEXT 字样不可用时，使用敌人头顶的倒三角作为兜底锚点。
+            # 倒三角背景比 NEXT 更干净，但仍限制在敌方活动区内，避开行动条和技能UI。
+            return CheckCombatTargetByTemplate(scn, "combatTarget", threshold=0.86)
         def CheckRolePortraitMatch(screenImage, shortPathOfTarget, active_pos=None):
             template = LoadTemplateImage(shortPathOfTarget)
             template_h, template_w = template.shape[:2]
@@ -2137,41 +2225,53 @@ def Factory():
             supportTargetDict = {"左上角色": [200,1200], "中上角色": [450,1200], "右上角色": [700,1200], "左下角色":[200,1400], "中下角色":[450,1400], "右下角色":[700,1400]}
             
             # 打开详情界面
+            logger.info(_("技能释放诊断: 准备释放技能={a}, 坐标={b}, 目标等级={c}, 辅助目标={d}.").format(
+                a=skillPos, b=skillPosDict[skillPos], c=skilllvl, d=supportTarget
+            ))
             into_detail = False
             for underscore in range(3):
                 Press(skillPosDict[skillPos])
                 Sleep(1)
-                if CheckIf(ScreenShot(),"spellskill/skillDetail"):
+                detail_scn = ScreenShot()
+                if CheckIf(detail_scn,"spellskill/skillDetail"):
+                    logger.info(_("技能释放诊断: 第{a}次点击后检测到技能详情界面.").format(a=underscore + 1))
                     into_detail = True
                     break
+                logger.debug(_("技能释放诊断: 第{a}次点击后未检测到技能详情界面.").format(a=underscore + 1))
             if not into_detail:
                 logger.info(_("没有检测到任务详情界面. 疑似法力不足, 使用自动战斗."))
+                SaveDebugImage(detail_scn, "skill_detail_not_found")
                 for underscore in range(3):
                     PressReturn()
                     Sleep(0.2)
 
                 AutoThisChar()
-                return
+                return True
 
             # 设置等级
             Sleep(1)
             scn = ScreenShot()
             has_lv_1 = (CheckIf(scn,f"spellskill/skillLvl/lv1")) or (CheckIf(scn,f"spellskill/skillLvl/s_lv1"))
+            logger.info(_("技能等级诊断: 是否检测到1级按钮={a}, 目标等级={b}.").format(a=bool(has_lv_1), b=skilllvl))
             if (not has_lv_1):
                 if (skilllvl>=2):
                     logger.error(_("错误: 设定了高于1级的技能, 但并未检测到技能等级.\n 使用默认技能."))
+                    SaveDebugImage(scn, "skill_level_missing")
             else:
                 if skilllvl!=1:
                     has_lv_x = (CheckIf(scn,f"spellskill/skillLvl/lv{skilllvl}")) or (CheckIf(scn,f"spellskill/skillLvl/s_lv{skilllvl}"))
                 else:
                     has_lv_x = has_lv_1
+                logger.info(_("技能等级诊断: 目标等级按钮检测结果={a}, 目标等级={b}.").format(a=bool(has_lv_x), b=skilllvl))
 
                 if not has_lv_x:
                     skilllvl = 1
                     logger.error(_("错误: 未检测到目标等级\n 使用1级技能."))
+                    SaveDebugImage(scn, "skill_target_level_missing")
                 if not Press(CheckIf(scn,f"spellskill/skillLvl/lv{skilllvl}")):
                     if not Press(CheckIf(scn,f"spellskill/skillLvl/s_lv{skilllvl}")):
                         logger.error(_("错误: 我认为不可能发生这种情况. 请务必告诉我."))
+                        SaveDebugImage(scn, "skill_level_press_failed")
 
             # 辅助技能
             if CheckIf(ScreenShot(),"supportSkillCheck",[[677,1475,189,80]]):
@@ -2181,31 +2281,40 @@ def Factory():
 
             # 确认
             scn = ScreenShot()
-            if Press(CheckIf(scn,"OK")):
+            ok_pos = CheckIf(scn,"OK")
+            logger.info(_("技能确认诊断: OK坐标={a}.").format(a=ok_pos))
+            if Press(ok_pos):
                 logger.info(_("释放了位于\"{a}\"的全体技能, 技能等级为{b}.".format(a=skillPos, b=skilllvl)))
                 Sleep(2)
             else:
                 if pos:= CheckCombatNextTarget(scn):
                     logger.info(_("释放了位于\"{a}\"的单体技能, 技能等级为{b}. 选择next作为敌方目标.".format(a=skillPos, b=skilllvl)))
-                    PressCombatTargetArea(pos)
+                    PressCombatTargetArea(pos, "next")
                 elif pos:= CheckCombatTargetMarker(scn):
                     logger.info(_("释放了位于\"{a}\"的单体技能, 技能等级为{b}. 未检测到next, 选择目标标记作为敌方目标.".format(a=skillPos, b=skilllvl)))
-                    PressCombatTargetArea(pos)
+                    PressCombatTargetArea(pos, "combatTarget")
                 else:
                     logger.info(_("释放了位于\"{a}\"的单体技能, 技能等级为{b}. 未检测到next和目标标记, 轮询选择敌方目标.".format(a=skillPos, b=skilllvl)))
+                    SaveDebugImage(scn, "combat_target_before_fallback")
                     PressEnemyTargetFallback()
                 Sleep(2)
 
             # 资源不足
             Sleep(1)
             scn = ScreenShot()
+            if CheckSkillPopupOpen(scn):
+                logger.warning(_("技能目标点击后仍检测到技能详情弹窗: 技能={a}, 技能等级={b}.").format(
+                    a=skillPos, b=skilllvl
+                ))
+                SaveDebugImage(scn, "combat_target_after_press_still_detail")
+                return False
             if CheckIf(scn,"notenoughsp") or CheckIf(scn,"notenoughmp"):
                 for underscore in range(3):
                     PressReturn()
                     Sleep(0.2)
 
-                SkillLvlSelectAndDoubleCheck(skillPos,1,supportTarget)
-                return
+                return SkillLvlSelectAndDoubleCheck(skillPos,1,supportTarget)
+            return True
 
         ###################################################################################
         # 主逻辑开始
@@ -2275,7 +2384,10 @@ def Factory():
             Press([513,1200])
             Sleep(0.1)
         else:
-            SkillLvlSelectAndDoubleCheck(target_skill.get("skill_var"), target_skill.get("skill_lvl"), target_skill.get("target_var"))
+            skill_released = SkillLvlSelectAndDoubleCheck(target_skill.get("skill_var"), target_skill.get("skill_lvl"), target_skill.get("target_var"))
+            if not skill_released:
+                logger.warning(_("技能目标选择未完成, 保留当前策略条目以便下次重试."))
+                return
 
         # 6. 释放技能后删除条目
         if target_skill in runtimeContext.CURRENT_STRATEGY.get("skill_settings", []):
@@ -2533,21 +2645,28 @@ def Factory():
             match dungState:
                 case None:
                     s, dungState,scn = IdentifyState()
+                    logger.info(_("state:None诊断: IdentifyState返回 state={a}, dungState={b}.").format(
+                        a=s, b=dungState
+                    ))
                     if (s == State.Inn) or (dungState == DungeonState.Quit):
                         logger.debug(_(f"本次地下城打开地图次数{gameFrozen_StateMapCounter}"))
                         break
 
-                    gameFrozen_StateNoneScreenHistory, result = GameFrozenCheck(gameFrozen_StateNoneScreenHistory,scn)
-                    if result:
-                        logger.info(_("由于画面卡死, 在state:None中重启."))
-                        restartGame()
-                    MAXTIMEOUT = 400
-                    if (runtimeContext._TIME_CHEST != 0 ) and (time.time()-runtimeContext._TIME_CHEST > MAXTIMEOUT):
-                        logger.info(_("由于宝箱用时过久, 在state:None中重启."))
-                        restartGame()
-                    if (runtimeContext._TIME_COMBAT != 0) and (time.time()-runtimeContext._TIME_COMBAT > MAXTIMEOUT):
-                        logger.info(_("由于战斗用时过久, 在state:None中重启."))
-                        restartGame()
+                    if dungState is None:
+                        gameFrozen_StateNoneScreenHistory, result = GameFrozenCheck(gameFrozen_StateNoneScreenHistory,scn)
+                        if result:
+                            logger.info(_("由于画面卡死, 在state:None中重启."))
+                            restartGame()
+                        MAXTIMEOUT = 400
+                        if (runtimeContext._TIME_CHEST != 0 ) and (time.time()-runtimeContext._TIME_CHEST > MAXTIMEOUT):
+                            logger.info(_("由于宝箱用时过久, 在state:None中重启."))
+                            restartGame()
+                        if (runtimeContext._TIME_COMBAT != 0) and (time.time()-runtimeContext._TIME_COMBAT > MAXTIMEOUT):
+                            logger.info(_("由于战斗用时过久, 在state:None中重启."))
+                            restartGame()
+                    else:
+                        gameFrozen_StateNoneScreenHistory.clear()
+                        logger.debug(_("state:None诊断: 已识别到dungState={a}, 跳过None态卡死/超时检测.").format(a=dungState))
                 case DungeonState.Quit:
                     logger.debug(_(f"本次地下城打开地图次数{gameFrozen_StateMapCounter}"))
                     break
@@ -3046,19 +3165,26 @@ def Factory():
                     match dungState:
                         case None:
                             s, dungState,scn = IdentifyState()
+                            logger.info(_("state:None诊断: IdentifyState返回 state={a}, dungState={b}.").format(
+                                a=s, b=dungState
+                            ))
                             if (s == State.Inn) or (dungState == DungeonState.Quit):
                                 break
-                            gameFrozen_StateNoneScreenHistory, result = GameFrozenCheck(gameFrozen_StateNoneScreenHistory,scn)
-                            if result:
-                                logger.info(_("由于画面卡死, 在state:None中重启."))
-                                restartGame()
-                            MAXTIMEOUT = 400
-                            if (runtimeContext._TIME_CHEST != 0 ) and (time.time()-runtimeContext._TIME_CHEST > MAXTIMEOUT):
-                                logger.info(_("由于宝箱用时过久, 在state:None中重启."))
-                                restartGame()
-                            if (runtimeContext._TIME_COMBAT != 0) and (time.time()-runtimeContext._TIME_COMBAT > MAXTIMEOUT):
-                                logger.info(_("由于战斗用时过久, 在state:None中重启."))
-                                restartGame()
+                            if dungState is None:
+                                gameFrozen_StateNoneScreenHistory, result = GameFrozenCheck(gameFrozen_StateNoneScreenHistory,scn)
+                                if result:
+                                    logger.info(_("由于画面卡死, 在state:None中重启."))
+                                    restartGame()
+                                MAXTIMEOUT = 400
+                                if (runtimeContext._TIME_CHEST != 0 ) and (time.time()-runtimeContext._TIME_CHEST > MAXTIMEOUT):
+                                    logger.info(_("由于宝箱用时过久, 在state:None中重启."))
+                                    restartGame()
+                                if (runtimeContext._TIME_COMBAT != 0) and (time.time()-runtimeContext._TIME_COMBAT > MAXTIMEOUT):
+                                    logger.info(_("由于战斗用时过久, 在state:None中重启."))
+                                    restartGame()
+                            else:
+                                gameFrozen_StateNoneScreenHistory.clear()
+                                logger.debug(_("state:None诊断: 已识别到dungState={a}, 跳过None态卡死/超时检测.").format(a=dungState))
                         case DungeonState.Dungeon:
                             Press([1,1])
                             ########### TIMER
