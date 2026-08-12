@@ -2031,9 +2031,54 @@ def Factory():
             if totalDiff<=threshold:
                 return queue, True
         return queue, False
+    def TryReadPauseTextByOcr(roi):
+        # OCR 作为可选增强能力：本地未安装 pytesseract 时直接跳过，不把 OCR 引入强依赖。
+        try:
+            import pytesseract
+            from PIL import Image
+        except Exception:
+            return None
+        try:
+            gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+            gray = cv2.resize(gray, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
+            _, binary = cv2.threshold(gray, 110, 255, cv2.THRESH_BINARY)
+            text = pytesseract.image_to_string(
+                Image.fromarray(binary),
+                config="--psm 7 -c tessedit_char_whitelist=Pausepause"
+            )
+            return re.sub(r"[^A-Za-z]+", "", text).lower()
+        except Exception as e:
+            logger.debug(_("Pause OCR识别异常: {a}").format(a=e))
+            return None
+    def CheckPauseTextLayout(roi):
+        gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+        mask = cv2.inRange(gray, 120, 255)
+        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, np.ones((2, 2), np.uint8), iterations=1)
+        component_count, labels, stats, centroids = cv2.connectedComponentsWithStats(mask, 8)
+        components = []
+        for index in range(1, component_count):
+            x, y, w, h, area = stats[index]
+            if 6 <= area <= 700 and 2 <= w <= 80 and 8 <= h <= 70:
+                components.append((x, y, w, h, area))
+        if not components:
+            return False, 0, 0, 0
+        left = min(item[0] for item in components)
+        top = min(item[1] for item in components)
+        right = max(item[0] + item[2] for item in components)
+        bottom = max(item[1] + item[3] for item in components)
+        text_width = right - left
+        text_height = bottom - top
+        # Pause 通常是中心附近一行短英文；角色面板等误判场景会出现更多组件或更高的文字块。
+        layout_ok = (
+            3 <= len(components) <= 8
+            and 55 <= text_width <= 190
+            and 18 <= text_height <= 70
+            and 5 <= top <= 80
+        )
+        return layout_ok, len(components), text_width, text_height
     def CheckPauseOverlay(screen):
-        # 游戏应用重启后可能默认停在 Pause 画面。这里用中心区域的暗底和白色 Pause 字样做轻量判断，
-        # 不把队伍死亡、濒死等战斗状态纳入条件，避免把普通战斗恢复逻辑混在一起。
+        # 游戏应用重启后可能默认停在 Pause 画面。先用中心暗底做候选，再用 OCR/文字布局二次确认，
+        # 避免角色面板这类“暗底+白字”界面被当成 Pause。
         if screen is None:
             return False
         x, y, w, h = 330, 740, 240, 110
@@ -2044,10 +2089,27 @@ def Factory():
         dark_ratio = np.count_nonzero(gray < 70) / gray.size
         white_ratio = np.count_nonzero(gray > 120) / gray.size
         max_brightness = int(gray.max())
-        result = (dark_ratio > 0.65) and (0.015 < white_ratio < 0.09) and (max_brightness > 135)
+        candidate = (dark_ratio > 0.65) and (0.015 < white_ratio < 0.09) and (max_brightness > 135)
+        if not candidate:
+            return False
+        ocr_text = TryReadPauseTextByOcr(roi)
+        if ocr_text is not None:
+            result = "pause" in ocr_text
+            method = "ocr"
+            detail = _("text={a}").format(a=ocr_text)
+        else:
+            result, components, text_width, text_height = CheckPauseTextLayout(roi)
+            method = "layout"
+            detail = _("components={a}, text_size={b}x{c}").format(
+                a=components, b=text_width, c=text_height
+            )
         if result:
-            logger.info(_("检测到Pause暂停覆盖层: dark={a:.2f}, white={b:.2f}, max={c}.").format(
-                a=dark_ratio, b=white_ratio, c=max_brightness
+            logger.info(_("检测到Pause暂停覆盖层: dark={a:.2f}, white={b:.2f}, max={c}, method={d}, {e}.").format(
+                a=dark_ratio, b=white_ratio, c=max_brightness, d=method, e=detail
+            ))
+        else:
+            logger.debug(_("Pause候选被二次确认排除: dark={a:.2f}, white={b:.2f}, max={c}, method={d}, {e}.").format(
+                a=dark_ratio, b=white_ratio, c=max_brightness, d=method, e=detail
             ))
         return result
     def TryResumePauseOverlay(screen):
@@ -2134,8 +2196,27 @@ def Factory():
             return True
         def ActiveAutoCombat():
             scn = ScreenShot()
-            if CheckIf(scn,"spellskill/CombatAutoDisable",[[842, 1124-42, 35, 13]]):
+            auto_roi = [[780, 1030, 120, 160]]
+            disable_pos, disable_match = CheckTemplateInRoi(scn, "spellskill/CombatAutoDisable", auto_roi, threshold=0.8)
+            enable_pos, enable_match = CheckTemplateInRoi(scn, "spellskill/CombatAutoEnable", auto_roi, threshold=0.8)
+            if disable_pos:
+                runtimeContext._AUTO_COMBAT_UNKNOWN_COUNT = 0
+                logger.info(_("检测到自动战斗未开启, 点击Auto. 匹配程度={a:.2f}%.").format(a=disable_match * 100))
                 Press([850,1100])
+            elif enable_pos:
+                runtimeContext._AUTO_COMBAT_UNKNOWN_COUNT = 0
+                logger.debug(_("自动战斗已开启. 匹配程度={a:.2f}%.").format(a=enable_match * 100))
+            else:
+                runtimeContext._AUTO_COMBAT_UNKNOWN_COUNT = getattr(runtimeContext, "_AUTO_COMBAT_UNKNOWN_COUNT", 0) + 1
+                logger.warning(_("无法确认自动战斗开关状态: disabled={a:.2f}%, enabled={b:.2f}%, count={c}/3.").format(
+                    a=disable_match * 100, b=enable_match * 100, c=runtimeContext._AUTO_COMBAT_UNKNOWN_COUNT
+                ))
+                if runtimeContext._AUTO_COMBAT_UNKNOWN_COUNT >= 3:
+                    logger.warning(_("连续无法确认自动战斗状态, 执行保底Auto点击, 避免长时间卡在全自动战斗分支."))
+                    SaveDebugImage(scn, "auto_combat_unknown")
+                    runtimeContext._AUTO_COMBAT_UNKNOWN_COUNT = 0
+                    AutoThisChar()
+                    return
             Sleep(5)
             return
         def ClampPoint(pos):
