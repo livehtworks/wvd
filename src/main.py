@@ -22,6 +22,7 @@ class AppController(tk.Tk):
             
         self.quest_threading = None
         self.quest_setting = None
+        self.quest_finish_requested = False
 
         self.is_checking_for_update = False 
         self.updater = AutoUpdater(
@@ -36,6 +37,18 @@ class AppController(tk.Tk):
     def run_in_thread(self, target_func, *args):
         thread = threading.Thread(target=target_func, args=args, daemon=True)
         thread.start()
+    def notify_quest_finished(self):
+        if self.quest_finish_requested:
+            return
+        self.quest_finish_requested = True
+        self.msg_queue.put(('quest_finished', None))
+    def run_farm_safely(self, farm_func, setting):
+        try:
+            farm_func(setting)
+        except Exception:
+            logger.exception("任务线程异常退出.")
+        finally:
+            self.notify_quest_finished()
     def schedule_periodic_update_check(self):
         # 如果当前没有在检查或下载，则启动一个新的检查
         if not self.is_checking_for_update:
@@ -60,8 +73,10 @@ class AppController(tk.Tk):
                     self.quest_setting = value                    
                     self.quest_setting._MSGQUEUE = self.msg_queue
                     self.quest_setting._FORCESTOPING = Event()
+                    self.quest_setting._FINISHINGCALLBACK = self.notify_quest_finished
+                    self.quest_finish_requested = False
                     Farm = Factory()
-                    self.quest_threading = Thread(target=Farm,args=(self.quest_setting,))
+                    self.quest_threading = Thread(target=self.run_farm_safely,args=(Farm, self.quest_setting))
                     self.quest_threading.start()
                     logger.info(f'启动任务\"{self.quest_setting.FARM_TARGET_TEXT}\"...')
 
@@ -70,6 +85,14 @@ class AppController(tk.Tk):
                     if hasattr(self, 'quest_threading') and self.quest_threading.is_alive():
                         if hasattr(self.quest_setting, '_FORCESTOPING'):
                             self.quest_setting._FORCESTOPING.set()
+                    else:
+                        logger.info('任务线程已不在运行, 恢复界面状态.')
+                        self.notify_quest_finished()
+
+                case 'quest_finished':
+                    if self.main_window and getattr(self.main_window, 'quest_active', False):
+                        self.main_window.finishingcallback()
+                    self.quest_threading = None
                 
                 case 'turn_to_7000G':
                     logger.info('开始要钱...')
@@ -78,7 +101,9 @@ class AppController(tk.Tk):
                     while 1:
                         if not self.quest_threading.is_alive():
                             Farm = Factory()
-                            self.quest_threading = Thread(target=Farm,args=(self.quest_setting,))
+                            self.quest_finish_requested = False
+                            self.quest_setting._FINISHINGCALLBACK = self.notify_quest_finished
+                            self.quest_threading = Thread(target=self.run_farm_safely,args=(Farm, self.quest_setting))
                             self.quest_threading.start()
                             break
                     if self.main_window:

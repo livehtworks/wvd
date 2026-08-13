@@ -70,6 +70,8 @@ UnboundLocalError: cannot access local variable '_' where it is not associated w
 - 未知界面诊断会按原因限频保存截图，避免 `logs` 因每秒截图快速膨胀。
 - Pause 暂停层识别改为更保守：仅在游戏重启后的短窗口，或状态连续无法识别后检查；同时用角色界面、恢复按钮、技能详情、底部 `Close` 作为反证，反证命中时不会点击恢复。
 - Pause 候选被反证排除、Pause 确认命中时都会限频保存现场截图，方便后续用真实样本继续调阈值。
+- 修正点击“停止”时刚好打断战斗等待目标导致的异常：`FindCoordsOrElseExecuteFallbackAndWait()` 可因停止事件返回 `None`，`StateCombat()` 现在会识别该情况并正常退出。
+- 任务线程增加异常兜底：即使 Farm 线程未捕获异常退出，也会通知界面执行收尾，避免按钮长期停留在“停止”状态。
 
 ### 截图与模板匹配性能
 

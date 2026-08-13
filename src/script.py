@@ -2555,7 +2555,14 @@ def Factory():
             return
 
         # 2. 非全自动模式：点击任意键直到出现“flee”图片
-        [pos_x, pos_y] = FindCoordsOrElseExecuteFallbackAndWait(["flee","chestFlag","dungFlag", "someonedead","multipeopledead","RiseAgain"],[1,1],1)
+        target_pos = FindCoordsOrElseExecuteFallbackAndWait(["flee","chestFlag","dungFlag", "someonedead","multipeopledead","RiseAgain"],[1,1],1)
+        if target_pos is None:
+            if setting._FORCESTOPING.is_set():
+                logger.info(_("停止任务时退出战斗状态等待."))
+            else:
+                logger.warning(_("战斗状态等待目标返回空结果, 放弃本轮战斗处理并回到状态识别."))
+            return
+        [pos_x, pos_y] = target_pos
         if (pos_x>=735)and(pos_x<=735+126)and(pos_y>=1158)and(pos_y<=1158+68):
             pass
         else:
