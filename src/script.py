@@ -2652,6 +2652,14 @@ def Factory():
             if targetPos!=None:
                 return targetPos
         return targetPos
+    def CheckMapAutoMoveHint(scn):
+        # AutoMove.png 对应的是地图上方浮出的说明提示，不是可点击按钮。
+        # 它在启动移动后仍存在，通常表示 UI 层还活着但地下城移动逻辑没有接管。
+        return CheckTemplateInRoi(scn, "AutoMove", [[120, 250, 780, 950]], threshold=0.35)
+    def PressMapAutoMove():
+        logger.info(_("点击地图Auto-Move控制坐标[136,1431]."))
+        Press([136,1431])
+        return True
     def StateMoving_CheckStop():
         runtimeContext._RESUMEAVAILABLE = True
         lastscreen = None
@@ -2661,6 +2669,13 @@ def Factory():
             Sleep(3)
             underscore, dungState,screen = IdentifyState()
             if dungState == DungeonState.Map:
+                auto_move_hint, auto_move_match = CheckMapAutoMoveHint(screen)
+                if auto_move_hint:
+                    logger.warning(_("点击Auto-Move后仍停留在地图, 且Auto-Move提示仍存在: 坐标={a}, 匹配程度={b:.2f}%. 判定为地下城物理逻辑冻结, 重启游戏.").format(
+                        a=auto_move_hint, b=auto_move_match * 100
+                    ))
+                    SaveDebugImage(screen, "map_automove_physics_frozen")
+                    restartGame()
                 logger.info(_("开始移动失败. 不要停下来啊面具男!"))
                 FindCoordsOrElseExecuteFallbackAndWait("dungFlag",[[280,1433],[1,1]],1)
                 dungState = dungState.Dungeon
@@ -2718,13 +2733,15 @@ def Factory():
         else:
             if target in normalPlace or target.endswith("_quit") or target.startswith("stair"):
                 Press(searchResult)
-                Press([136,1431]) # automove
+                Sleep(0.2)
+                PressMapAutoMove()
                 return StateMoving_CheckStop(),False
             else:
                 if (CheckIf_FocusCursor(ScreenShot(),target)): #注意 这里通过二次确认 我们可以看到目标地点 而且是未选中的状态
                     logger.info(_("经过对比中心区域, 确认没有抵达."))
                     Press(searchResult)
-                    Press([136,1431]) # automove
+                    Sleep(0.2)
+                    PressMapAutoMove()
                     return StateMoving_CheckStop(), False
                 else:
                     # if setting._DUNGWAITTIMEOUT == 0:

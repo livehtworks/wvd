@@ -72,6 +72,7 @@ UnboundLocalError: cannot access local variable '_' where it is not associated w
 - Pause 候选被反证排除、Pause 确认命中时都会限频保存现场截图，方便后续用真实样本继续调阈值。
 - 修正点击“停止”时刚好打断战斗等待目标导致的异常：`FindCoordsOrElseExecuteFallbackAndWait()` 可因停止事件返回 `None`，`StateCombat()` 现在会识别该情况并正常退出。
 - 任务线程增加异常兜底：即使 Farm 线程未捕获异常退出，也会通知界面执行收尾，避免按钮长期停留在“停止”状态。
+- 地图目标选中后，`AutoMove.png` 对应的是浮动说明提示，不是可点击按钮本体。若点击地图 Auto-Move 控制后仍停留在地图，且该提示仍存在，说明 UI 层仍能响应但地下城移动/物理逻辑没有接管，当前会记录截图并按“地下城物理逻辑冻结”仅重启游戏。
 
 ### 截图与模板匹配性能
 
