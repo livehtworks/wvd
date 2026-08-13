@@ -64,6 +64,13 @@ UnboundLocalError: cannot access local variable '_' where it is not associated w
 - 修正强制重启模拟器后没有写回新 ADB device 的问题。
 - 修正按 PID 关闭 MuMu 进程时使用了错误 `taskkill` 参数的问题。
 
+### 诊断与误判降低
+
+- 新增未知界面诊断：当 `IdentifyState()` 多轮无法识别状态，或 `state:None` 即将因为假死/宝箱超时/战斗超时重启前，会记录一组关键模板的最高匹配结果。
+- 未知界面诊断会按原因限频保存截图，避免 `logs` 因每秒截图快速膨胀。
+- Pause 暂停层识别改为更保守：仅在游戏重启后的短窗口，或状态连续无法识别后检查；同时用角色界面、恢复按钮、技能详情、底部 `Close` 作为反证，反证命中时不会点击恢复。
+- Pause 候选被反证排除、Pause 确认命中时都会限频保存现场截图，方便后续用真实样本继续调阈值。
+
 ### 截图与模板匹配性能
 
 - `LoadTemplateImage()` 增加内存缓存，避免同一模板反复从磁盘读取和解码。
@@ -103,6 +110,7 @@ UnboundLocalError: cannot access local variable '_' where it is not associated w
 - `logcat -d | grep ...` 可能把诊断命令自身异常误判为游戏崩溃线索。
 - Clash Meta 在模拟器重启后可能没有自动恢复 VPN，需要独立恢复与验证链路。
 - `dist/wvd/logs` 可能快速膨胀，当前本地曾出现约 120MB 日志和截图。
+- Pause 误判需要继续用真实截图样本校准；当前先通过反证模板和触发时机降低误点概率，暂不引入 OCR 强依赖。
 
 ## 截图方案评估
 

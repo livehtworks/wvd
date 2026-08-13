@@ -120,6 +120,8 @@ class RuntimeContext:
     _LAST_BAGCLEAR = 0
     _SKIP_SCREENSHOT_WARNING = False # 截图返回是否包含错误代码.
     _LAST_FOCUS_CHECK = 0
+    _PAUSE_CHECK_UNTIL = 0
+    _LAST_DEBUG_IMAGE_AT = None
 class FarmQuest:
     _TARGETINFOLIST = None
     _EOT = None
@@ -1348,6 +1350,79 @@ def Factory():
     def SaveDebugImage(scn, reason):
         reason = re.sub(r"[^0-9A-Za-z_-]+", "_", str(reason)).strip("_") or "debug"
         SaveImage(scn, f"debug_{reason}_{datetime.now().strftime('%H%M%S.%f')[:-3]}")
+    def SaveDebugImageThrottled(scn, reason, min_interval=60):
+        if scn is None:
+            return False
+        reason = re.sub(r"[^0-9A-Za-z_-]+", "_", str(reason)).strip("_") or "debug"
+        now = time.time()
+        last_saved = getattr(runtimeContext, "_LAST_DEBUG_IMAGE_AT", None)
+        if not isinstance(last_saved, dict):
+            last_saved = {}
+            runtimeContext._LAST_DEBUG_IMAGE_AT = last_saved
+        if now - last_saved.get(reason, 0) < min_interval:
+            return False
+        last_saved[reason] = now
+        SaveDebugImage(scn, reason)
+        return True
+    def CollectMatchDiagnostics(scn, probes):
+        results = []
+        for probe in probes:
+            pattern, label = probe[:2]
+            roi = probe[2] if len(probe) >= 3 else None
+            try:
+                score = CheckHow(scn, pattern, roi)
+            except Exception as e:
+                logger.debug(_("诊断匹配跳过: {a}, 原因={b}.").format(a=pattern, b=e))
+                continue
+            results.append((score, label, pattern))
+        results.sort(key=lambda item: item[0], reverse=True)
+        return results
+    def LogUnknownScreenDiagnostics(scn, reason, counter=None, save_image=False):
+        if scn is None:
+            logger.info(_("未知界面诊断: reason={a}, counter={b}, screen=None.").format(
+                a=reason, b=counter
+            ))
+            return
+        probes = [
+            ("dungFlag", "副本移动"),
+            ("chestFlag", "宝箱"),
+            ("whowillopenit", "宝箱选择"),
+            ("mapFlag", "地图"),
+            ("combatActive", "战斗Active"),
+            ("combatActive_2", "战斗Active_2"),
+            ("combatActive_3", "战斗Active_3"),
+            ("combatActive_4", "战斗Active_4"),
+            ("retry", "网络重试"),
+            ("retry_blank", "空白重试"),
+            ("startdownload", "下载确认", [[222, 901, 465, 84]]),
+            ("returnText", "返回文本"),
+            ("returntoTown", "返回城镇"),
+            ("worldmapflag", "世界地图"),
+            ("openworldmap", "打开世界地图"),
+            ("Inn", "旅店"),
+            ("RiseAgain", "复活"),
+            ("sandman_recover", "沙男恢复"),
+            ("totitle", "返回标题"),
+            ("resume", "Resume"),
+            ("trait", "角色界面Trait"),
+            ("recover", "恢复按钮"),
+            ("spellskill/skillDetail", "技能详情"),
+            ("close", "底部Close", [[250, 1420, 420, 150]]),
+            ("spellskill/CombatAutoDisable", "自动战斗未开启", [[780, 1030, 120, 160]]),
+            ("spellskill/CombatAutoEnable", "自动战斗已开启", [[780, 1030, 120, 160]]),
+        ]
+        top_matches = CollectMatchDiagnostics(scn, probes)[:6]
+        summary = ", ".join(
+            "{a}={b:.1f}%".format(a=label, b=score * 100)
+            for score, label, pattern in top_matches
+        )
+        logger.info(_("未知界面诊断: reason={a}, counter={b}, top={c}.").format(
+            a=reason, b=counter, c=summary
+        ))
+        if save_image:
+            saved = SaveDebugImageThrottled(scn, reason, min_interval=60)
+            if not saved:
+                logger.debug(_("未知界面诊断截图已限频跳过: reason={a}.").format(a=reason))
     def CheckSkillPopupOpen(scn):
         if CheckIf(scn, "spellskill/skillDetail"):
             return True
@@ -1513,6 +1588,7 @@ def Factory():
             logs = TryDeviceShellOnce("logcat -d | grep -i \"unable to initialize.*graphics api\"")
             if logs and logs.strip():
                 logger.error(_("检测到崩溃日志, 暂时不重启模拟器.{a}".format(a=logs)))
+            runtimeContext._PAUSE_CHECK_UNTIL = time.time() + 120
             return True
 
         runtimeContext._CRASHCOUNTER +=1
@@ -1836,7 +1912,8 @@ def Factory():
                 counter += 1
                 continue
 
-            if TryResumePauseOverlay(screen):
+            should_check_pause = (counter >= 2) or (time.time() < getattr(runtimeContext, "_PAUSE_CHECK_UNTIL", 0))
+            if should_check_pause and TryResumePauseOverlay(screen):
                 counter = 0
                 return IdentifyState()
 
@@ -1927,6 +2004,12 @@ def Factory():
 
             if counter>=4:
                 logger.info(_("看起来遇到了一些不太寻常的情况..."))
+                LogUnknownScreenDiagnostics(
+                    screen,
+                    "identify_unknown",
+                    counter=counter + 1,
+                    save_image=(counter == 4 or counter % 10 == 0)
+                )
                 if Press(CheckIf(screen,"RiseAgain")):
                     RiseAgainReset(reason = "combat")
                     return IdentifyState()
@@ -1991,6 +2074,12 @@ def Factory():
                 PressReturn()
             if counter>= setting.MAX_TRY_LIMIT:
                 logger.info(_("看起来遇到了一些非同寻常的情况...重启游戏."))
+                LogUnknownScreenDiagnostics(
+                    screen,
+                    "identify_restart",
+                    counter=counter + 1,
+                    save_image=True
+                )
                 restartGame()
                 counter = 0
             if counter>=4:
@@ -2076,6 +2165,18 @@ def Factory():
             and 5 <= top <= 80
         )
         return layout_ok, len(components), text_width, text_height
+    def GetPauseNegativeEvidence(screen):
+        # Pause 没有角色面板和技能详情按钮；这些反证命中时宁可不点，避免把别的界面误当暂停层。
+        probes = [
+            ("trait", "角色界面Trait"),
+            ("recover", "恢复按钮"),
+            ("spellskill/skillDetail", "技能详情"),
+            ("close", "底部Close", [[250, 1420, 420, 150]]),
+        ]
+        for score, label, pattern in CollectMatchDiagnostics(screen, probes):
+            if score >= 0.8:
+                return label, score
+        return None
     def CheckPauseOverlay(screen):
         # 游戏应用重启后可能默认停在 Pause 画面。先用中心暗底做候选，再用 OCR/文字布局二次确认，
         # 避免角色面板这类“暗底+白字”界面被当成 Pause。
@@ -2092,6 +2193,14 @@ def Factory():
         candidate = (dark_ratio > 0.65) and (0.015 < white_ratio < 0.09) and (max_brightness > 135)
         if not candidate:
             return False
+        negative = GetPauseNegativeEvidence(screen)
+        if negative:
+            label, score = negative
+            logger.info(_("Pause候选被反证排除: evidence={a}, match={b:.2f}%, dark={c:.2f}, white={d:.2f}.").format(
+                a=label, b=score * 100, c=dark_ratio, d=white_ratio
+            ))
+            SaveDebugImageThrottled(screen, "pause_candidate_rejected", min_interval=120)
+            return False
         ocr_text = TryReadPauseTextByOcr(roi)
         if ocr_text is not None:
             result = "pause" in ocr_text
@@ -2107,6 +2216,7 @@ def Factory():
             logger.info(_("检测到Pause暂停覆盖层: dark={a:.2f}, white={b:.2f}, max={c}, method={d}, {e}.").format(
                 a=dark_ratio, b=white_ratio, c=max_brightness, d=method, e=detail
             ))
+            SaveDebugImageThrottled(screen, "pause_confirmed", min_interval=120)
         else:
             logger.debug(_("Pause候选被二次确认排除: dark={a:.2f}, white={b:.2f}, max={c}, method={d}, {e}.").format(
                 a=dark_ratio, b=white_ratio, c=max_brightness, d=method, e=detail
@@ -2759,13 +2869,28 @@ def Factory():
                         gameFrozen_StateNoneScreenHistory, result = GameFrozenCheck(gameFrozen_StateNoneScreenHistory,scn)
                         if result:
                             logger.info(_("由于画面卡死, 在state:None中重启."))
+                            LogUnknownScreenDiagnostics(
+                                scn,
+                                "state_none_frozen_restart",
+                                save_image=True
+                            )
                             restartGame()
                         MAXTIMEOUT = 400
                         if (runtimeContext._TIME_CHEST != 0 ) and (time.time()-runtimeContext._TIME_CHEST > MAXTIMEOUT):
                             logger.info(_("由于宝箱用时过久, 在state:None中重启."))
+                            LogUnknownScreenDiagnostics(
+                                scn,
+                                "state_none_chest_timeout_restart",
+                                save_image=True
+                            )
                             restartGame()
                         if (runtimeContext._TIME_COMBAT != 0) and (time.time()-runtimeContext._TIME_COMBAT > MAXTIMEOUT):
                             logger.info(_("由于战斗用时过久, 在state:None中重启."))
+                            LogUnknownScreenDiagnostics(
+                                scn,
+                                "state_none_combat_timeout_restart",
+                                save_image=True
+                            )
                             restartGame()
                     else:
                         gameFrozen_StateNoneScreenHistory.clear()
@@ -3277,13 +3402,28 @@ def Factory():
                                 gameFrozen_StateNoneScreenHistory, result = GameFrozenCheck(gameFrozen_StateNoneScreenHistory,scn)
                                 if result:
                                     logger.info(_("由于画面卡死, 在state:None中重启."))
+                                    LogUnknownScreenDiagnostics(
+                                        scn,
+                                        "state_none_frozen_restart",
+                                        save_image=True
+                                    )
                                     restartGame()
                                 MAXTIMEOUT = 400
                                 if (runtimeContext._TIME_CHEST != 0 ) and (time.time()-runtimeContext._TIME_CHEST > MAXTIMEOUT):
                                     logger.info(_("由于宝箱用时过久, 在state:None中重启."))
+                                    LogUnknownScreenDiagnostics(
+                                        scn,
+                                        "state_none_chest_timeout_restart",
+                                        save_image=True
+                                    )
                                     restartGame()
                                 if (runtimeContext._TIME_COMBAT != 0) and (time.time()-runtimeContext._TIME_COMBAT > MAXTIMEOUT):
                                     logger.info(_("由于战斗用时过久, 在state:None中重启."))
+                                    LogUnknownScreenDiagnostics(
+                                        scn,
+                                        "state_none_combat_timeout_restart",
+                                        save_image=True
+                                    )
                                     restartGame()
                             else:
                                 gameFrozen_StateNoneScreenHistory.clear()
@@ -4058,6 +4198,7 @@ def Factory():
 
         setting = set
         runtimeContext = RuntimeContext()
+        runtimeContext._LAST_DEBUG_IMAGE_AT = {}
 
         Sleep(1)
 
