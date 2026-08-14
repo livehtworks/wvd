@@ -1432,6 +1432,12 @@ def Factory():
                 a=close_pos, b=close_match * 100
             ))
             return True
+        ok_pos, ok_match = CheckTemplateInRoi(scn, "OK", [[420, 1420, 340, 160]], threshold=0.8)
+        if ok_pos:
+            logger.debug(_("检测到技能确认弹窗底部OK按钮: 坐标={a}, 匹配程度={b:.2f}%.").format(
+                a=ok_pos, b=ok_match * 100
+            ))
+            return True
         return False
     def FindCoordsOrElseExecuteFallbackAndWait(targetPattern, fallback,waitTime):
         # fallback可以是坐标[x,y]或者字符串. 当为字符串的时候, 视为图片地址
@@ -2282,8 +2288,35 @@ def Factory():
     def StateCombat():
         if runtimeContext._TIME_COMBAT==0:
             runtimeContext._TIME_COMBAT = time.time()
+        def DismissSkillPopupBeforeAuto(reason):
+            # 自动战斗按钮会被技能详情/确认弹窗遮住。进入自动战斗兜底前先取消弹窗，
+            # 否则会反复点击弹窗下方的固定坐标，长期卡在技能界面。
+            closed_popup = False
+            for underscore in range(3):
+                scn = ScreenShot()
+                if not CheckSkillPopupOpen(scn):
+                    break
+                logger.warning(_("自动战斗前检测到技能弹窗, 尝试关闭: reason={a}, count={b}/3.").format(
+                    a=reason, b=underscore + 1
+                ))
+                close_pos, _ = CheckTemplateInRoi(scn, "close", [[250, 1420, 420, 150]], threshold=0.8)
+                if close_pos:
+                    Press(close_pos)
+                else:
+                    ok_pos, _ = CheckTemplateInRoi(scn, "OK", [[420, 1420, 340, 160]], threshold=0.8)
+                    if ok_pos:
+                        cancel_pos = ClampPoint([ok_pos[0] - 280, ok_pos[1]])
+                        logger.info(_("检测到技能确认弹窗OK按钮, 点击Cancel位置{a}取消技能.").format(a=cancel_pos))
+                        Press(cancel_pos)
+                    else:
+                        PressReturn()
+                closed_popup = True
+                Sleep(0.5)
+            return closed_popup
+
         # 内部函数：复制策略到 runtime.CURRENT_STRATEGY
         def AutoThisChar():
+            DismissSkillPopupBeforeAuto(_("单角色自动战斗"))
             Press([850,1100])
             Sleep(0.5)
             Press([850,1100])
@@ -2292,20 +2325,13 @@ def Factory():
         def AutoThisCharAfterTargetFailure(reason):
             # 详情弹窗会盖住自动战斗按钮，先退出详情再降级自动战斗。
             logger.warning(_("技能目标选择失败, 改用自动战斗: {a}").format(a=reason))
-            for underscore in range(3):
-                scn = ScreenShot()
-                if not CheckSkillPopupOpen(scn):
-                    break
-                close_pos, _ = CheckTemplateInRoi(scn, "close", [[250, 1420, 420, 150]], threshold=0.8)
-                if close_pos:
-                    Press(close_pos)
-                else:
-                    PressReturn()
-                Sleep(0.3)
+            DismissSkillPopupBeforeAuto(reason)
             AutoThisChar()
             return True
         def ActiveAutoCombat():
             scn = ScreenShot()
+            if DismissSkillPopupBeforeAuto(_("全自动战斗")):
+                scn = ScreenShot()
             auto_roi = [[780, 1030, 120, 160]]
             disable_pos, disable_match = CheckTemplateInRoi(scn, "spellskill/CombatAutoDisable", auto_roi, threshold=0.8)
             enable_pos, enable_match = CheckTemplateInRoi(scn, "spellskill/CombatAutoEnable", auto_roi, threshold=0.8)
@@ -2767,8 +2793,37 @@ def Factory():
     def StateChest():
         nonlocal runtimeContext
         availableChar = [0, 1, 2, 3, 4, 5]
-        disarm = [515,934]  # 527,920会按到接受死亡 450 1000会按到技能 445,1050还是会按到技能
+        disarm = [515,934]  # 拆陷阱坐标很靠近战斗技能区，必须只在宝箱上下文中点击。
         haveBeenTried = False
+        def CheckChestExitState(scn):
+            if CheckIf(scn,"dungFlag"):
+                return DungeonState.Dungeon
+            if StateCombatCheck(scn):
+                return DungeonState.Combat
+            if CheckIf(scn,"RiseAgain"):
+                RiseAgainReset(reason = "chest")
+                return None
+            if CheckIf(scn, "ambush"):
+                logger.info("开箱子然后遇到怪物还是善恶, 你这什么运气啊.")
+                return None
+            return False
+        def PressDisarmSafely(times, interval=0.3):
+            for counter in range(times):
+                scn = ScreenShot()
+                exit_state = CheckChestExitState(scn)
+                if exit_state is not False:
+                    logger.warning(_("拆陷阱连点前检测到状态已切换, 停止点击disarm: state={a}, count={b}/{c}.").format(
+                        a=exit_state, b=counter + 1, c=times
+                    ))
+                    return exit_state
+                if not (CheckIf(scn,"chestOpening") or CheckIf(scn,"whowillopenit") or CheckIf(scn,"chestFlag")):
+                    logger.warning(_("拆陷阱连点前未检测到宝箱上下文, 停止点击disarm: count={a}/{b}.").format(
+                        a=counter + 1, b=times
+                    ))
+                    return False
+                Press(disarm)
+                Sleep(interval)
+            return False
 
         if runtimeContext._TIME_CHEST==0:
             runtimeContext._TIME_CHEST = time.time()
@@ -2784,12 +2839,14 @@ def Factory():
                 Sleep(0.2)
                 Press(pos)
                 Sleep(1)
-                for underscore in range(30):
-                    Press(disarm)
-                    Sleep(0.2)
+                exit_state = PressDisarmSafely(30, 0.2)
+                if exit_state is not False:
+                    return exit_state
                 for underscore in range(3):
                     Press([1,1])
-                    Press(disarm)
+                    exit_state = PressDisarmSafely(1, 0.2)
+                    if exit_state is not False:
+                        return exit_state
 
         while 1:
             FindCoordsOrElseExecuteFallbackAndWait(
@@ -2814,11 +2871,9 @@ def Factory():
                         Press(pos)
                         Sleep(1.5)
                         # if not setting._SMARTDISARMCHEST:
-                        for underscore in range(8):
-                            t = time.time()
-                            Press(disarm)
-                            if time.time()-t<0.3:
-                                Sleep(0.3-(time.time()-t))
+                        exit_state = PressDisarmSafely(8, 0.3)
+                        if exit_state is not False:
+                            return exit_state
                                 
                         break
                 if not haveBeenTried:
@@ -2828,10 +2883,9 @@ def Factory():
                 Sleep(1)
                 # if setting._SMARTDISARMCHEST:
                 #     ChestOpen()
-                FindCoordsOrElseExecuteFallbackAndWait(
-                    ["dungFlag","combatActive","chestFlag","RiseAgain"], # 如果这个fallback重启了, 战斗箱子会直接消失, 固有箱子会是chestFlag
-                    [disarm,disarm,disarm,disarm,disarm,disarm,disarm,disarm],
-                    1)
+                exit_state = PressDisarmSafely(8, 0.3)
+                if exit_state is not False:
+                    return exit_state
             
             if CheckIf(scn,"RiseAgain"):
                 RiseAgainReset(reason = "chest")
