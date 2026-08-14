@@ -561,17 +561,10 @@ class ConfigPanelApp(tk.Toplevel):
 
         self.summary_log_display = scrolledtext.ScrolledText(self, wrap=tk.WORD, state=tk.DISABLED, bg="#C6DBF4",bd=2, width = 34, )
         self.summary_log_display.grid(row=1, column=1, pady=5)
-        self.summary_text_handler = ScrolledTextHandler(self.summary_log_display)
+        self.summary_text_handler = ScrolledTextHandler(self.summary_log_display, max_lines=80, replace_on_flush=True)
         self.summary_text_handler.setLevel(logging.INFO)
         self.summary_text_handler.setFormatter(scrolled_text_formatter)
         self.summary_text_handler.addFilter(SummaryLogFilter())
-        original_emit = self.summary_text_handler.emit
-        def new_emit(record):
-            self.summary_log_display.configure(state='normal')
-            self.summary_log_display.delete(1.0, tk.END)
-            self.summary_log_display.configure(state='disabled')
-            original_emit(record)
-        self.summary_text_handler.emit = new_emit
         logger.addHandler(self.summary_text_handler)
 
         self.main_frame = ttk.Frame(self, padding="10")

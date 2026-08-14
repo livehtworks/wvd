@@ -1900,6 +1900,7 @@ def Factory():
     def IdentifyState():
         nonlocal setting # 修改因果
         counter = 0
+        pause_resume_counter = 0
         while 1:
             screen = ScreenShot()
             logger.info(_("状态检查中...(第{a}次)".format(a=counter+1)))
@@ -1919,9 +1920,18 @@ def Factory():
                 continue
 
             should_check_pause = (counter >= 2) or (time.time() < getattr(runtimeContext, "_PAUSE_CHECK_UNTIL", 0))
-            if should_check_pause and TryResumePauseOverlay(screen):
-                counter = 0
-                return IdentifyState()
+            if should_check_pause:
+                if TryResumePauseOverlay(screen):
+                    pause_resume_counter += 1
+                    if pause_resume_counter >= 6:
+                        logger.warning(_("连续{a}次检测到Pause且点击恢复无效, 判定为战斗/地下城物理逻辑冻结, 重启游戏.").format(
+                            a=pause_resume_counter
+                        ))
+                        SaveDebugImage(screen, "pause_physics_frozen")
+                        restartGame()
+                    counter = 0
+                    continue
+                pause_resume_counter = 0
 
             identifyConfig = [
                 ("dungFlag",      DungeonState.Dungeon),

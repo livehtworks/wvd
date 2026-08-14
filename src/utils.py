@@ -12,6 +12,7 @@ import queue
 import numpy as np
 import glob
 import gettext
+import threading
 
 from datetime import datetime
 
@@ -130,20 +131,50 @@ def RegisterConsoleHandler():
     logger.addHandler(console_handler)
 
 class ScrolledTextHandler(logging.Handler):
-    def __init__(self, text_widget):
+    def __init__(self, text_widget, max_lines=1200, flush_interval_ms=100, replace_on_flush=False):
         super().__init__()
         self.text_widget = text_widget
+        self.max_lines = max_lines
+        self.flush_interval_ms = flush_interval_ms
+        self.replace_on_flush = replace_on_flush
+        self.pending_messages = []
+        self.pending_lock = threading.Lock()
+        self.flush_scheduled = False
         self.text_widget.config(state=tk.DISABLED)
 
     def emit(self, record):
         msg = self.format(record)
         try:
-            self.text_widget.config(state=tk.NORMAL)
-            self.text_widget.insert(tk.END, msg + '\n')
-            self.text_widget.see(tk.END)
-            self.text_widget.config(state=tk.DISABLED)
+            with self.pending_lock:
+                self.pending_messages.append(msg)
+                if self.flush_scheduled:
+                    return
+                self.flush_scheduled = True
+            self.text_widget.after(self.flush_interval_ms, self._flush_pending)
         except Exception:
             self.handleError(record)
+    def _flush_pending(self):
+        try:
+            with self.pending_lock:
+                messages = self.pending_messages
+                self.pending_messages = []
+                self.flush_scheduled = False
+            if not messages:
+                return
+            self.text_widget.config(state=tk.NORMAL)
+            if self.replace_on_flush:
+                self.text_widget.delete("1.0", tk.END)
+            self.text_widget.insert(tk.END, "\n".join(messages) + "\n")
+            if not self.replace_on_flush:
+                line_count = int(float(self.text_widget.index("end-1c")))
+                if line_count > self.max_lines:
+                    self.text_widget.delete("1.0", f"{line_count - self.max_lines}.0")
+            self.text_widget.see(tk.END)
+            self.text_widget.config(state=tk.DISABLED)
+        except tk.TclError:
+            pass
+        except Exception:
+            pass
 class SummaryLogFilter(logging.Filter):
     def filter(self, record):
         if hasattr(record, 'summary') and record.summary:
