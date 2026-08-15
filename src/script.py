@@ -4349,6 +4349,8 @@ def Factory():
                         )
 
                         reunionParty("FFXI/FFXIStone")
+                        logger.info("补充镐子需要进入旅店住宿, 开始执行旅店休息。")
+                        StateInn()
                         resetBag = False
 
                     output_str = ""
