@@ -79,6 +79,7 @@ UnboundLocalError: cannot access local variable '_' where it is not associated w
 - GUI 日志框不能从工作线程直接操作 Tk 控件，也不能无限保留日志文本。当前日志处理器改为 Tk 主线程批量刷新，并限制主日志显示行数；摘要日志使用同一套线程安全刷新逻辑。
 - FFXI 挖矿补给回城链路中，曾出现 `City_RoyalCityLuknalia` 高分命中并点击后仍停留世界地图，随后通用等待 `Inn/openworldmap/dungFlag` 50 次失败并重启游戏，重启后又落到标题页循环。当前将世界地图目标点击抽成专用确认逻辑：点击目标周边多个安全点；若仍检测到 `worldmapflag`，先重新定位目标并重试，连续多次仍失败才保存 `worldmap_target_enter_failed` 现场图并重启。
 - FFXI 挖矿补给回城链路中，若世界地图点击已经进入王城，但 `Inn` 等目标状态尚未稳定识别，原确认逻辑会把 `City_RoyalCityLuknalia + [500,1100]` 作为通用 fallback，导致在王城内继续执行世界地图点击。当前改为：进函数先检查城市锚点；点开世界地图后等待 `worldmapflag`；点击世界地图目标后若已离开世界地图，只等待 `Inn/openworldmap/dungFlag` 稳定出现，不再执行世界地图目标 fallback。
+- 世界地图目标点击不能盲目打完所有候选点。现场曾出现第一下已触发入城，后续候选点落到王城人物/对话层，导致 NPC 对话打开。当前每点击一个世界地图候选点后立即截图确认，若已离开 `worldmapflag` 或命中目标状态就停止后续连点；若已离开世界地图但目标状态尚未稳定出现，会点击右下角继续区域处理入城对话。
 - FFXI 挖矿补给不是靠重新选择 `FFXIStone` 队伍完成，必须进入旅店住宿才会补充镐子。当前在补镐子链路完成回王城与重新集结队伍后，会立即执行 `StateInn()`，不受普通休息间隔影响。
 
 ### 截图与模板匹配性能

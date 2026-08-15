@@ -1751,7 +1751,7 @@ def Factory():
     def BuildFallbackList(*items):
         return [item for item in items if item]
 
-    def PressWorldMapTargetArea(pos, target):
+    def PressWorldMapTargetArea(pos, target, stop_patterns=None):
         if pos is None:
             return False
         x = int(pos[0])
@@ -1774,7 +1774,14 @@ def Factory():
         ))
         for candidate in candidates:
             Press(candidate)
-            Sleep(0.25)
+            Sleep(0.45)
+            scn = ScreenShot()
+            if stop_patterns and CheckAnyPattern(scn, stop_patterns):
+                logger.info(_("点击世界地图目标{a}后已检测到目标状态, 停止后续世界地图连点.").format(a=target))
+                return True
+            if not CheckIf(scn, "worldmapflag"):
+                logger.info(_("点击世界地图目标{a}后已离开世界地图, 停止后续世界地图连点.").format(a=target))
+                return True
         return True
 
     def WaitWorldMapTargetEntered(target, swipe, press_any_key, expected_patterns, max_attempts=5):
@@ -1797,13 +1804,15 @@ def Factory():
                     target_pos = FindCoordsOrElseExecuteFallbackAndWait(target, relocate_fallback, 1)
                     if target_pos is None:
                         return False
-                PressWorldMapTargetArea(target_pos, target)
+                PressWorldMapTargetArea(target_pos, target, expected_patterns)
                 Sleep(1.5)
                 continue
 
             logger.debug(_("点击世界地图目标{a}后已不在世界地图, 等待目标状态稳定出现: {b}. 尝试次数: {c}/{d}.").format(
                 a=target, b=expected_patterns, c=attempt + 1, d=max_attempts
             ))
+            logger.info(_("疑似处于入城对话或转场界面, 点击右下角继续区域."))
+            Press([820, 1510])
             Sleep(1.5)
 
         scn = ScreenShot()
@@ -1848,7 +1857,7 @@ def Factory():
 
         # 现在已经确保了可以看见target, 那么确保可以点击成功
         Sleep(1)
-        PressWorldMapTargetArea(pos, target)
+        PressWorldMapTargetArea(pos, target, ["Inn","openworldmap","dungFlag"])
         Sleep(1)
         WaitWorldMapTargetEntered(target, swipe, press_any_key, ["Inn","openworldmap","dungFlag"])
     
@@ -1887,7 +1896,7 @@ def Factory():
 
         # 现在已经确保了可以看见target, 那么确保可以点击成功
         Sleep(1)
-        PressWorldMapTargetArea(pos, target)
+        PressWorldMapTargetArea(pos, target, ["Inn","openworldmap","dungFlag"])
         Sleep(1)
         WaitWorldMapTargetEntered(target, swipe, press_any_key, ["Inn","openworldmap","dungFlag"])
         
