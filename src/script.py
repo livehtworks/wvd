@@ -1779,7 +1779,6 @@ def Factory():
 
     def WaitWorldMapTargetEntered(target, swipe, press_any_key, expected_patterns, max_attempts=5):
         relocate_fallback = BuildFallbackList(swipe, press_any_key)
-        generic_fallback = BuildFallbackList(target, press_any_key)
         for attempt in range(max_attempts):
             scn = ScreenShot()
             if CheckAnyPattern(scn, expected_patterns):
@@ -1802,10 +1801,10 @@ def Factory():
                 Sleep(1.5)
                 continue
 
-            logger.debug(_("点击世界地图目标后已不在世界地图, 交回通用等待确认: {a}.").format(
-                a=expected_patterns
+            logger.debug(_("点击世界地图目标{a}后已不在世界地图, 等待目标状态稳定出现: {b}. 尝试次数: {c}/{d}.").format(
+                a=target, b=expected_patterns, c=attempt + 1, d=max_attempts
             ))
-            return FindCoordsOrElseExecuteFallbackAndWait(expected_patterns, generic_fallback, 1) is not None
+            Sleep(1.5)
 
         scn = ScreenShot()
         logger.info(_("多次点击世界地图目标{a}后仍未进入目标状态{b}, 疑似地图入口未点中或地图状态异常. 重启游戏.").format(
@@ -1859,11 +1858,19 @@ def Factory():
             FindCoordsOrElseExecuteFallbackAndWait("Inn", [[1,1],"worldmapflag","EVENT",target],2)
             return
 
+        if CheckAnyPattern(ScreenShot(), ["Inn"]):
+            logger.info(_("已检测到城市锚点, 判定已经进入回城目标, 跳过世界地图目标定位."))
+            return
+
         FindCoordsOrElseExecuteFallbackAndWait(["dungFlag","worldmapflag","openworldmap","startdownload"],"openworldmap",1)
         scn = ScreenShot()
+        if CheckAnyPattern(scn, ["Inn"]):
+            logger.info(_("已检测到城市锚点, 判定已经进入回城目标, 跳过世界地图目标定位."))
+            return
 
         if Press(CheckIf(scn, "openworldmap")):
-            pass
+            Sleep(0.5)
+            FindCoordsOrElseExecuteFallbackAndWait("worldmapflag","openworldmap",1)
         elif CheckIf(scn,"worldmapflag"):
             # 如果在世界地图, 下一步.
             pass

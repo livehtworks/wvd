@@ -78,6 +78,7 @@ UnboundLocalError: cannot access local variable '_' where it is not associated w
 - Pause 恢复逻辑不能递归调用 `IdentifyState()`。现场曾出现真实 Pause 持续数小时，工具每轮递归重新进状态识别并堆积日志/截图，最终 `wvd.exe` 被 Windows 标记为无响应。当前改为同一轮循环内恢复 Pause；连续 6 次仍恢复失败时，按 AutoMove 同类问题处理为“战斗/地下城物理逻辑冻结”，记录截图并仅重启游戏。
 - GUI 日志框不能从工作线程直接操作 Tk 控件，也不能无限保留日志文本。当前日志处理器改为 Tk 主线程批量刷新，并限制主日志显示行数；摘要日志使用同一套线程安全刷新逻辑。
 - FFXI 挖矿补给回城链路中，曾出现 `City_RoyalCityLuknalia` 高分命中并点击后仍停留世界地图，随后通用等待 `Inn/openworldmap/dungFlag` 50 次失败并重启游戏，重启后又落到标题页循环。当前将世界地图目标点击抽成专用确认逻辑：点击目标周边多个安全点；若仍检测到 `worldmapflag`，先重新定位目标并重试，连续多次仍失败才保存 `worldmap_target_enter_failed` 现场图并重启。
+- FFXI 挖矿补给回城链路中，若世界地图点击已经进入王城，但 `Inn` 等目标状态尚未稳定识别，原确认逻辑会把 `City_RoyalCityLuknalia + [500,1100]` 作为通用 fallback，导致在王城内继续执行世界地图点击。当前改为：进函数先检查城市锚点；点开世界地图后等待 `worldmapflag`；点击世界地图目标后若已离开世界地图，只等待 `Inn/openworldmap/dungFlag` 稳定出现，不再执行世界地图目标 fallback。
 
 ### 截图与模板匹配性能
 
