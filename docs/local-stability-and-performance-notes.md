@@ -77,6 +77,7 @@ UnboundLocalError: cannot access local variable '_' where it is not associated w
 - 宝箱拆陷阱坐标 `[515,934]` 靠近战斗技能区，不能在状态切换后继续连点。当前拆陷阱连点前会确认仍处于宝箱上下文；若已进入战斗、地下城移动、复活或 ambush，会立即停止 disarm 点击并把状态交回地下城状态机，避免宝箱转战斗时点开下个角色不该使用的技能。
 - Pause 恢复逻辑不能递归调用 `IdentifyState()`。现场曾出现真实 Pause 持续数小时，工具每轮递归重新进状态识别并堆积日志/截图，最终 `wvd.exe` 被 Windows 标记为无响应。当前改为同一轮循环内恢复 Pause；连续 6 次仍恢复失败时，按 AutoMove 同类问题处理为“战斗/地下城物理逻辑冻结”，记录截图并仅重启游戏。
 - GUI 日志框不能从工作线程直接操作 Tk 控件，也不能无限保留日志文本。当前日志处理器改为 Tk 主线程批量刷新，并限制主日志显示行数；摘要日志使用同一套线程安全刷新逻辑。
+- FFXI 挖矿补给回城链路中，曾出现 `City_RoyalCityLuknalia` 高分命中并点击后仍停留世界地图，随后通用等待 `Inn/openworldmap/dungFlag` 50 次失败并重启游戏，重启后又落到标题页循环。当前将世界地图目标点击抽成专用确认逻辑：点击目标周边多个安全点；若仍检测到 `worldmapflag`，先重新定位目标并重试，连续多次仍失败才保存 `worldmap_target_enter_failed` 现场图并重启。
 
 ### 截图与模板匹配性能
 

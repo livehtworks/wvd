@@ -1740,6 +1740,81 @@ def Factory():
         # 圈数计时器
         runtimeContext._LAPTIME = time.time()
 
+    def CheckAnyPattern(scn, target_patterns):
+        if isinstance(target_patterns, (list, tuple)):
+            for pattern in target_patterns:
+                if p := CheckIf(scn, pattern):
+                    return p
+            return None
+        return CheckIf(scn, target_patterns)
+
+    def BuildFallbackList(*items):
+        return [item for item in items if item]
+
+    def PressWorldMapTargetArea(pos, target):
+        if pos is None:
+            return False
+        x = int(pos[0])
+        y = int(pos[1])
+
+        def clamp(point):
+            return [int(max(1, min(898, point[0]))), int(max(1, min(1598, point[1])))]
+
+        # 世界地图图标有时只露出一部分，单点可能只选中/拖动地图而不进入。
+        # 围绕模板中心点上方图标、菱形标记和文字区做少量点击，避免长期停在地图上。
+        candidates = [
+            clamp([x, y]),
+            clamp([x, y - 55]),
+            clamp([x - 35, y - 35]),
+            clamp([x + 35, y - 35]),
+            clamp([x, y + 35]),
+        ]
+        logger.info(_("世界地图目标{a}位于{b}, 尝试点击目标周边区域: {c}.").format(
+            a=target, b=pos, c=candidates
+        ))
+        for candidate in candidates:
+            Press(candidate)
+            Sleep(0.25)
+        return True
+
+    def WaitWorldMapTargetEntered(target, swipe, press_any_key, expected_patterns, max_attempts=5):
+        relocate_fallback = BuildFallbackList(swipe, press_any_key)
+        generic_fallback = BuildFallbackList(target, press_any_key)
+        for attempt in range(max_attempts):
+            scn = ScreenShot()
+            if CheckAnyPattern(scn, expected_patterns):
+                return True
+            if TryPressRetry(scn):
+                Sleep(1)
+                continue
+
+            if CheckIf(scn, "worldmapflag"):
+                logger.warning(_("点击世界地图目标{a}后仍停留在世界地图, 准备重新定位. 尝试次数: {b}/{c}.").format(
+                    a=target, b=attempt + 1, c=max_attempts
+                ))
+                target_pos = CheckIf(scn, target)
+                if not target_pos:
+                    logger.info(_("当前视野未看到世界地图目标{a}, 使用回城/寻路滑动重新定位.").format(a=target))
+                    target_pos = FindCoordsOrElseExecuteFallbackAndWait(target, relocate_fallback, 1)
+                    if target_pos is None:
+                        return False
+                PressWorldMapTargetArea(target_pos, target)
+                Sleep(1.5)
+                continue
+
+            logger.debug(_("点击世界地图目标后已不在世界地图, 交回通用等待确认: {a}.").format(
+                a=expected_patterns
+            ))
+            return FindCoordsOrElseExecuteFallbackAndWait(expected_patterns, generic_fallback, 1) is not None
+
+        scn = ScreenShot()
+        logger.info(_("多次点击世界地图目标{a}后仍未进入目标状态{b}, 疑似地图入口未点中或地图状态异常. 重启游戏.").format(
+            a=target, b=expected_patterns
+        ))
+        SaveDebugImage(scn, "worldmap_target_enter_failed")
+        restartGame()
+        return False
+
     def TeleportFromCityToWorldLocation(target, swipe, press_any_key = [550,1]):
         nonlocal runtimeContext
         FindCoordsOrElseExecuteFallbackAndWait(["intoWorldMap","dungFlag","worldmapflag","openworldmap"],["startdownload","closePartyInfo","closePartyInfo_fortress","closePartyInfo_waterway",[1,1]],1)
@@ -1774,9 +1849,9 @@ def Factory():
 
         # 现在已经确保了可以看见target, 那么确保可以点击成功
         Sleep(1)
-        Press(pos)
+        PressWorldMapTargetArea(pos, target)
         Sleep(1)
-        FindCoordsOrElseExecuteFallbackAndWait(["Inn","openworldmap","dungFlag"],[target,press_any_key],1)
+        WaitWorldMapTargetEntered(target, swipe, press_any_key, ["Inn","openworldmap","dungFlag"])
     
     def TeleportFromDungeonToCity(target, swipe=None, press_any_key = [550,1]):
         nonlocal runtimeContext
@@ -1805,9 +1880,9 @@ def Factory():
 
         # 现在已经确保了可以看见target, 那么确保可以点击成功
         Sleep(1)
-        Press(pos)
+        PressWorldMapTargetArea(pos, target)
         Sleep(1)
-        FindCoordsOrElseExecuteFallbackAndWait(["Inn","openworldmap","dungFlag"],[target,press_any_key],1)
+        WaitWorldMapTargetEntered(target, swipe, press_any_key, ["Inn","openworldmap","dungFlag"])
         
     def CursedWheelTimeLeap(target="GhostsOfYore", CSC_symbol=None,CSC_setting = None, chapter = "cursedwheel_impregnableFortress"):
         # CSC_symbol: 是否开启因果? 如果开启因果, 将用这个作为是否点开ui的检查标识
