@@ -3,6 +3,8 @@
 
 > 本仓库是个人 fork，用于本地环境适配、稳定性验证和技术分享，并非上游官方版本。来源、改动范围和权利声明见 [FORK_NOTICE.md](FORK_NOTICE.md)，本地改动记录见 [docs/local-stability-and-performance-notes.md](docs/local-stability-and-performance-notes.md)。
 
+当前同步至上游 2.8.7，功能取舍与验证边界见 [同步说明](docs/upstream-sync-2.8.7.md)。当前架构见 [项目事实](docs/project-status.md)，本地执行约束见 [执行注意项](docs/execution-notes.md)。
+
 一个自带gui的巫术手游的刷怪脚本.
 现已进行了2.0版本的更新!
 
@@ -63,7 +65,7 @@ wvdas可以再检测到"再起之火"耗尽后, 立刻将任务变更为"找公�
 ### 游戏整体设置
 - 游戏为**英文版**.
 - 画面设置为**中(速度优先)**.
-- 调整画面为**30帧**, 地下城亮度为**最暗-25%亮度**.
+- 调整画面为**30帧**, 地下城亮度为**最暗**到**25%亮度**之间.
 - 在自动恢复界面, 勾选了"使用技能驱散异常状态".
 - 在背包补充界面, 勾选了"将非补充对象的道具存入仓库Place all non-refill items in storage"和"与旅店住宿时自动补充 Automatically refill when staying at the inn.". (如果无法确认, 勾选"持有1个哈肯的钩爪Carry 1 Hook of Harken").
 - 在自动移动设置中, **关闭"优先不推进任务的路线(Prioritize routes that avoid advancing the request)"**. 但是, 如果你想要刷某些特殊地图, 则推荐打开. 打开后, 会避开拣骨人, 因此请及时关闭. 

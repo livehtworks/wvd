@@ -171,6 +171,8 @@ class SkillConfigPanel(CollapsibleSection):
         self.SKILL_OPTIONS = [_("左上技能"), _("右上技能"), _("左下技能"), _("右下技能"), _("防御")]
         self.TARGET_OPTIONS = [_("左上角色"), _("中上角色"), _("右上角色"), _("左下角色"), _("右下角色"), _("中下角色"), _("不可用")]
         self.SKILL_LVL = [1, 2, 3, 4, 5, 6, 7]
+        self.complete_one_as_all_var = tk.BooleanVar(
+            value=bool((init_config or {}).get('complete_one_as_all', False)))
 
         # 用初始化内容构建
         self._setup_body_ui(init_config)
@@ -191,6 +193,14 @@ class SkillConfigPanel(CollapsibleSection):
 
             btn_edit = ttk.Button(action_bar, text=_("✎重命名"), command=self.edit_title, width=9.5)
             btn_edit.pack(side=tk.RIGHT, padx=(5, 0))
+
+            ttk.Checkbutton(
+                self.content_frame,
+                variable=self.complete_one_as_all_var,
+                text=_("[高级]该策略释放任一即视为完成."),
+                command=self.on_config_change if self.on_config_change else None,
+                style="CombatStrategy.TCheckbutton",
+            ).pack(anchor=tk.W, padx=5, pady=2)
 
             ttk.Separator(self.content_frame, orient='horizontal').pack(fill='x', pady=2)
 
@@ -394,6 +404,7 @@ class SkillConfigPanel(CollapsibleSection):
         # 返回指定格式，不包含默认行
         return {
             'group_name': self.label.cget("text"),
+            'complete_one_as_all': self.complete_one_as_all_var.get(),
             'skill_settings': skill_settings
         }
 ############################################
@@ -468,7 +479,8 @@ class ConfigPanelApp(tk.Toplevel):
 
         # --- ttk Style ---
         self.style = ttk.Style()
-        self.style.configure("custom.TCheckbutton")
+        self.style.configure("Custom.TCheckbutton")
+        self.style.configure("CombatStrategy.TCheckbutton", background="#FFFFFF")
         self.style.map("Custom.TCheckbutton",
             foreground=[("disabled selected", "#8CB7DF"),("disabled", "#A0A0A0"), ("selected", "#196FBF")])
         self.style.configure("BoldFont.TCheckbutton", font=("微软雅黑", 9,"bold"))
@@ -852,13 +864,16 @@ class ConfigPanelApp(tk.Toplevel):
         row_counter += 1
         row_recover = tk.Frame(container)
         row_recover.grid(row=row_counter, column=0, columnspan=2, sticky=tk.W, pady=2)
-        self.skip_recover_check = ttk.Checkbutton(row_recover, text=_("跳过战后恢复"), variable=self.SKIP_COMBAT_RECOVER,
+        # UI 改为正向描述，但持久化仍使用原 SKIP 字段；旧配置无需迁移。
+        self.skip_recover_check = ttk.Checkbutton(row_recover, text=_("在战斗结束后进行恢复."), variable=self.SKIP_COMBAT_RECOVER,
+                                                  onvalue=False, offvalue=True,
                                                   command=self.save_config, style="Custom.TCheckbutton")
         self.skip_recover_check.grid(row=0, column=0)
         row_counter += 1
         row_recover = tk.Frame(container)
         row_recover.grid(row=row_counter, column=0, columnspan=2, sticky=tk.W, pady=2)
-        self.skip_chest_recover_check = ttk.Checkbutton(row_recover, text=_("跳过开箱后恢复"), variable=self.SKIP_CHEST_RECOVER,
+        self.skip_chest_recover_check = ttk.Checkbutton(row_recover, text=_("在开箱后进行恢复."), variable=self.SKIP_CHEST_RECOVER,
+                                                        onvalue=False, offvalue=True,
                                                         command=self.save_config, style="Custom.TCheckbutton")
         self.skip_chest_recover_check.grid(row=0, column=0)
 

@@ -23,21 +23,24 @@ from datetime import datetime
 # TOOLTIP. 鼠标悬停时的提示.
 
 ############################################
-THREE_DAYS_AGO = time.time() - 3 * 24 * 60 * 60
 LOGS_FOLDER_NAME = "logs"
 os.makedirs(LOGS_FOLDER_NAME, exist_ok=True)
-for filename in os.listdir(LOGS_FOLDER_NAME):
-    file_path = os.path.join(LOGS_FOLDER_NAME, filename)
-    
-    # 获取最后修改时间
-    creation_time = os.path.getmtime(file_path)
-    
-    # 如果文件创建时间早于3天前，则删除
-    if creation_time < THREE_DAYS_AGO:
-        os.remove(file_path)
 ############################################
 LOG_FILE_PREFIX = LOGS_FOLDER_NAME + "/log"
 logger = logging.getLogger('WvDASLogger')
+
+def CleanupOldLogFiles(days=3):
+    """沿用三天保留策略，仅处理日志和截图；目录、mod 和其他文件不参与清理。"""
+    cutoff = time.time() - days * 86400
+    for pattern in ("*.png", "log_*.txt"):
+        for path in glob.glob(os.path.join(LOGS_FOLDER_NAME, pattern)):
+            try:
+                if os.path.isfile(path) and not os.path.islink(path) and os.path.getmtime(path) < cutoff:
+                    os.remove(path)
+            except OSError as error:
+                logger.warning("清理过期诊断文件失败: %s: %s", path, error)
+
+CleanupOldLogFiles()
 #===========================================
 def SetupFileHandle():
     """设置文件处理器"""
@@ -363,6 +366,25 @@ def _build_quest_data():
     return merged
 QUEST_DATA = _build_quest_data()
 
+QUEST_CATEGORY_ORDER = {
+    "最新任务": 0,
+    "WHATS NEW": 0,
+    "主线前三章" : 3,
+    "Chapter 1,2 and 3":3,
+    "主线第四章": 4,
+    "Chapter 4": 4,
+    "任务洞窟": 10,
+    "Request Caves": 10,
+    "矿石" : 20,
+    "Ore": 20,
+    "月常": 30,
+    "Monthly Requests": 30,
+    "FFXI联动": 11,
+    "FFXI Cave": 11,
+    "其他": 999,
+    "Other": 999
+    }
+
 def BuildQuestReflection():
     try:
         data = QUEST_DATA
@@ -385,7 +407,8 @@ def BuildQuestReflection():
             quest_reflect_map.setdefault(category, {})[quest_name] = quest_code
             
         
-        return quest_reflect_map
+        return dict(sorted(quest_reflect_map.items(),
+                           key=lambda item: (QUEST_CATEGORY_ORDER.get(item[0], float("inf")), item[0])))
     
     except KeyError as e:
         raise KeyError(f"不存在'questName'属性: {e}.")
@@ -495,3 +518,89 @@ class Tooltip:
         if self.tooltip_window:
             self.tooltip_window.destroy()
             self.tooltip_window = None
+
+BOBBER = LoadTemplateImage("fishing/bobber") # 边缘
+if BOBBER.ndim == 3:
+    BOBBER = cv2.cvtColor(BOBBER, cv2.COLOR_BGR2GRAY)
+
+def Fishing_DetectBobber(screenshot):
+    # 参数
+    threshold=0.5
+
+    # 模板方向场
+    mask_float = BOBBER.astype(np.float32) / 255.0
+    gx_t = cv2.Sobel(mask_float, cv2.CV_32F, 1, 0, ksize=3)
+    gy_t = cv2.Sobel(mask_float, cv2.CV_32F, 0, 1, ksize=3)
+    mag_t = np.sqrt(gx_t**2 + gy_t**2) + 1e-6
+    gx_t, gy_t = gx_t / mag_t, gy_t / mag_t
+
+    side = min(BOBBER.shape[:2])
+    dedup_dist = 0.5 * side
+
+    # R通道缩放
+    r_channel = screenshot[:, :, 2].astype(np.float32)
+    r_scaled = np.clip((r_channel - 14.0) * (255.0 / 86.0), 0, 255).astype(np.uint8)
+
+    # 方向场响应
+    blurred = cv2.GaussianBlur(r_scaled, (5, 5), 0)
+    gx = cv2.Sobel(blurred, cv2.CV_32F, 1, 0, ksize=3)
+    gy = cv2.Sobel(blurred, cv2.CV_32F, 0, 1, ksize=3)
+    resp = (cv2.filter2D(gx, -1, gx_t, borderType=cv2.BORDER_CONSTANT) +
+            cv2.filter2D(gy, -1, gy_t, borderType=cv2.BORDER_CONSTANT))
+
+    max_resp = resp.max()
+    if max_resp <= 0:
+        return [], r_scaled.copy()
+
+    norm_resp = resp / max_resp
+    binary = (norm_resp >= threshold).astype(np.uint8) * 255
+
+    contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    detections = []
+    for cnt in contours:
+        if cv2.contourArea(cnt) < 10:
+            continue
+        x, y, w, h = cv2.boundingRect(cnt)
+        cx, cy = x + w // 2, y + h // 2
+        score = norm_resp[y:y+h, x:x+w].max()
+        detections.append({'center': (cx, cy), 'score': float(score), 'bbox': (x, y, w, h)})
+
+    detections.sort(key=lambda d: d['score'], reverse=True)
+    kept = []
+    for det in detections:
+        if not any((det['center'][0]-k['center'][0])**2 + (det['center'][1]-k['center'][1])**2 < dedup_dist**2 for k in kept):
+            kept.append(det)
+
+    # 模板匹配得分与过滤
+    final = []
+    for det in kept:
+        cx, cy = det['center']
+        x1, y1 = max(cx - side//2, 0), max(cy - side//2, 0)
+        x2 = min(cx + side//2, screenshot.shape[1]-1)
+        y2 = min(cy + side//2, screenshot.shape[0]-1)
+        roi = r_scaled[y1:y2, x1:x2]
+        if roi.size == 0:
+            continue
+        tmpl = cv2.resize(BOBBER, (roi.shape[1], roi.shape[0]))
+        match_score = float((cv2.matchTemplate(roi, tmpl, cv2.TM_CCOEFF_NORMED)[0][0] + 1.0) / 2.0)
+        det['match_score'] = match_score
+        if det['score'] >= 0.9 and match_score >= 0.8:
+            final.append(det)
+
+    # 标记
+    marked = r_scaled.copy()
+    for det in final:
+        cx, cy = det['center']
+        x1, y1 = max(cx - side//2, 0), max(cy - side//2, 0)
+        x2 = min(cx + side//2, marked.shape[1]-1)
+        y2 = min(cy + side//2, marked.shape[0]-1)
+        cv2.rectangle(marked, (x1, y1), (x2, y2), 255, 2)
+        cv2.putText(marked, f'DF:{det["score"]:.2f}', (x1, y1-5),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, 255, 1)
+        cv2.putText(marked, f'MA:{det["match_score"]:.2f}', (x1, y1-20),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, 255, 1)
+
+    return [(d['center'][0], d['center'][1], d['score'], d['match_score']) for d in final], marked
+
+# EOF

@@ -15,6 +15,10 @@ set "PYI_BUILD=%TEMP%\%APP_NAME%_pyinstaller_build_%RANDOM%_%RANDOM%"
 
 echo [INFO] Project dir: %CD%
 
+rem Only the executable in this output directory can block this build.
+powershell -NoProfile -Command "$target = [IO.Path]::GetFullPath('dist\wvd\wvd.exe'); if (Get-Process wvd -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $target }) { Write-Error 'Close dist\wvd\wvd.exe before packaging.'; exit 1 }"
+if errorlevel 1 goto :fail
+
 if not exist "requirements.txt" (
     echo [ERROR] requirements.txt not found. Run this script from the project root.
     goto :fail
@@ -62,7 +66,7 @@ if errorlevel 1 (
     goto :fail
 )
 
-echo [INFO] Cleaning old build outputs...
+echo [INFO] Preserving runtime files while building in a temporary directory...
 if exist "%FINAL_DIST%\config.json" (
     echo [INFO] Preserving %FINAL_DIST%\config.json
     copy /y "%FINAL_DIST%\config.json" "%CONFIG_BACKUP%" >nul
@@ -73,39 +77,8 @@ if exist "%FINAL_DIST%\config.json" (
     set "CONFIG_WAS_BACKED_UP=1"
 )
 
-if exist "%PYI_DIST%" rd /s /q "%PYI_DIST%"
-if exist "%PYI_BUILD%" rd /s /q "%PYI_BUILD%"
-if exist "build" rd /s /q "build" >nul 2>nul
-if exist "%APP_NAME%.spec" del /q "%APP_NAME%.spec" >nul 2>nul
-
 if not exist "dist" mkdir "dist"
 if not exist "%FINAL_DIST%" mkdir "%FINAL_DIST%"
-
-for /f "delims=" %%I in ('dir /a /b "%FINAL_DIST%" 2^>nul') do (
-    if /i not "%%I"=="config.json" (
-        if exist "%FINAL_DIST%\%%I\*" (
-            rd /s /q "%FINAL_DIST%\%%I" 2>nul
-        ) else (
-            del /f /q "%FINAL_DIST%\%%I" 2>nul
-        )
-    )
-)
-
-set "STALE_ITEM="
-for /f "delims=" %%I in ('dir /a /b "%FINAL_DIST%" 2^>nul') do (
-    if /i not "%%I"=="config.json" set "STALE_ITEM=%%I"
-)
-if defined STALE_ITEM (
-    echo [ERROR] Failed to clean stale item in %FINAL_DIST%: !STALE_ITEM!
-    echo [ERROR] Close any running %FINAL_DIST%\%APP_NAME%.exe windows and retry.
-    goto :fail
-)
-if exist "build" (
-    echo [WARN] Could not remove old local build directory. Using a temp PyInstaller work dir.
-)
-if exist "%APP_NAME%.spec" (
-    echo [WARN] Could not remove old local spec file. Using a temp PyInstaller spec dir.
-)
 
 echo [INFO] Running PyInstaller...
 python -m PyInstaller ^
@@ -138,6 +111,9 @@ if not exist "%PYI_DIST%\%APP_NAME%\%APP_NAME%.exe" (
 )
 
 echo [INFO] Copying build output to %FINAL_DIST%...
+rem Delete only generated libraries, after a successful build and an exact path check.
+powershell -NoProfile -Command "$ErrorActionPreference = 'Stop'; $root = (Get-Location).Path; $target = [IO.Path]::GetFullPath('dist\wvd\_internal'); if ($target -ne (Join-Path $root 'dist\wvd\_internal')) { throw 'Invalid output path' }; foreach ($p in @('dist','dist\wvd',$target)) { if ((Test-Path -LiteralPath $p) -and ((Get-Item -LiteralPath $p).Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'Refusing linked output directory' } }; if (Get-Process wvd -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq (Join-Path $root 'dist\wvd\wvd.exe') }) { throw 'Output executable is running' }; if (Test-Path -LiteralPath $target) { Remove-Item -LiteralPath $target -Recurse -Force }"
+if errorlevel 1 goto :fail
 robocopy "%PYI_DIST%\%APP_NAME%" "%FINAL_DIST%" /E /NFL /NDL /NJH /NJS /NP >nul
 if errorlevel 8 (
     echo [ERROR] Failed to copy build output to %FINAL_DIST%.
@@ -145,13 +121,11 @@ if errorlevel 8 (
 )
 
 if "%CONFIG_WAS_BACKED_UP%"=="1" (
-    copy /y "%CONFIG_BACKUP%" "%FINAL_DIST%\config.json" >nul
     del /q "%CONFIG_BACKUP%" >nul 2>nul
-    echo [INFO] Restored %FINAL_DIST%\config.json
+    echo [INFO] Preserved %FINAL_DIST%\config.json
 )
 
-if exist "%PYI_DIST%" rd /s /q "%PYI_DIST%" >nul 2>nul
-if exist "%PYI_BUILD%" rd /s /q "%PYI_BUILD%" >nul 2>nul
+call :cleanup_temp
 
 echo [INFO] Build completed: %FINAL_DIST%\%APP_NAME%.exe
 goto :done
@@ -159,12 +133,11 @@ goto :done
 :fail
 if "%CONFIG_WAS_BACKED_UP%"=="1" (
     if not exist "%FINAL_DIST%" mkdir "%FINAL_DIST%"
-    copy /y "%CONFIG_BACKUP%" "%FINAL_DIST%\config.json" >nul
+    if not exist "%FINAL_DIST%\config.json" copy /y "%CONFIG_BACKUP%" "%FINAL_DIST%\config.json" >nul
     del /q "%CONFIG_BACKUP%" >nul 2>nul
     echo [INFO] Restored %FINAL_DIST%\config.json
 )
-if exist "%PYI_DIST%" rd /s /q "%PYI_DIST%" >nul 2>nul
-if exist "%PYI_BUILD%" rd /s /q "%PYI_BUILD%" >nul 2>nul
+call :cleanup_temp
 echo [INFO] Script failed.
 if /i not "%NO_PAUSE%"=="1" pause
 exit /b 1
@@ -172,3 +145,8 @@ exit /b 1
 :done
 if /i not "%NO_PAUSE%"=="1" pause
 exit /b 0
+
+:cleanup_temp
+rem Each temporary target must be a direct child of TEMP with our build prefix.
+powershell -NoProfile -Command "$ErrorActionPreference = 'Stop'; $tempRoot = [IO.Path]::GetFullPath($env:TEMP).TrimEnd('\'); foreach ($value in @($env:PYI_DIST, $env:PYI_BUILD)) { $p = [IO.Path]::GetFullPath($value); if ([IO.Path]::GetDirectoryName($p) -ne $tempRoot -or [IO.Path]::GetFileName($p) -notlike 'wvd_pyinstaller_*') { throw 'Invalid temporary path' }; if (Test-Path -LiteralPath $p) { if ((Get-Item -LiteralPath $p).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Refusing linked temporary directory' }; Remove-Item -LiteralPath $p -Recurse -Force } }"
+exit /b %errorlevel%

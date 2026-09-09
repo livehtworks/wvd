@@ -2,6 +2,8 @@
 
 本文档记录当前 fork 中围绕稳定性、截图性能、重启恢复和打包瘦身的本地改动与后续计划。
 
+当前事实与剩余工作以 [project-status.md](project-status.md) 为准；上游 2.8.7 的同步范围见 [upstream-sync-2.8.7.md](upstream-sync-2.8.7.md)。本文保留历史诊断背景与性能测量。
+
 ## 当前本地改动
 
 当前分支相对上游 `arnold2957/wvd@master` 包含若干功能提交和说明文档提交。它不是一个只包含 `NEXT` 改动的最小 Pull Request 分支。
@@ -113,14 +115,13 @@ UnboundLocalError: cannot access local variable '_' where it is not associated w
 
 ## 当前观察到的问题
 
-- ADB `exec-out screencap` 截图链路仍是主要瓶颈，本地实测约 350ms 级别。
-- `ScreenShot()` 仍通过每次启动 adb 子进程获取整帧画面，无法达到流式截图速度。
+- 历史 ADB `exec-out screencap` 实测约 350ms；当前优先使用 MuMu IPC，约 12–15ms，ADB 作为既有后备截图路径。
 - 游戏重启链路已有“先重启游戏，再恢复 ADB，再重启模拟器”的雏形，但部分异常可能过早升级为模拟器重启。
 - 已修正 `KillEmulator()` 中按 PID 关闭模拟器的 Windows 命令，避免已知 PID 路径实际没有正确关闭目标进程。
 - 强制重启模拟器后改为通过 `ResetDevice()` 写回新的 ADB device，避免后续继续使用旧连接对象。
 - `restartGame()` 的崩溃计数可能长期累积，成功重启游戏后是否应重置仍需确认。
 - `logcat -d | grep ...` 可能把诊断命令自身异常误判为游戏崩溃线索。
-- Clash Meta 在模拟器重启后可能没有自动恢复 VPN，需要独立恢复与验证链路。
+- Clash Meta 自动恢复 VPN 已通过可选配置接入；后续关注授权失败和网络不可用现场。
 - `dist/wvd/logs` 可能快速膨胀，当前本地曾出现约 120MB 日志和截图。
 - Pause 误判需要继续用真实截图样本校准；当前先通过反证模板和触发时机降低误点概率，暂不引入 OCR 强依赖。
 
@@ -128,7 +129,7 @@ UnboundLocalError: cannot access local variable '_' where it is not associated w
 
 ### ADB 截图
 
-当前主链路使用：
+当前后备链路使用：
 
 ```text
 adb -s <serial> exec-out screencap
