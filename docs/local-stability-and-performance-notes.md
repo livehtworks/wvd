@@ -81,6 +81,7 @@ UnboundLocalError: cannot access local variable '_' where it is not associated w
 - FFXI 挖矿补给回城链路中，若世界地图点击已经进入王城，但 `Inn` 等目标状态尚未稳定识别，原确认逻辑会把 `City_RoyalCityLuknalia + [500,1100]` 作为通用 fallback，导致在王城内继续执行世界地图点击。当前改为：进函数先检查城市锚点；点开世界地图后等待 `worldmapflag`；点击世界地图目标后若已离开世界地图，只等待 `Inn/openworldmap/dungFlag` 稳定出现，不再执行世界地图目标 fallback。
 - 世界地图目标点击不能盲目打完所有候选点。现场曾出现第一下已触发入城，后续候选点落到王城人物/对话层，导致 NPC 对话打开。当前每点击一个世界地图候选点后立即截图确认，若已离开 `worldmapflag` 或命中目标状态就停止后续连点；若已离开世界地图但目标状态尚未稳定出现，会点击右下角继续区域处理入城对话。
 - FFXI 挖矿补给不是靠重新选择 `FFXIStone` 队伍完成，必须进入旅店住宿才会补充镐子。当前在补镐子链路完成回王城与重新集结队伍后，会立即执行 `StateInn()`，不受普通休息间隔影响。
+- 游戏重启不能只执行 `am start` 后把控制权交回原任务链。现场曾出现重启后停在 `Attention` 免责声明、标题加载页或网络 `Retry` 弹窗，原任务链仍在等待 `Inn/worldmapflag/dungFlag`，最终形成重复重启。当前新增启动恢复阶段：`restartGame()` 启动应用后会等待进入可识别界面；通用等待循环会优先处理 `Retry/startdownload/totitle/resume/Attention/标题页`，再继续执行任务目标 fallback。
 
 ### 截图与模板匹配性能
 
@@ -210,7 +211,7 @@ MAAFramework 通过 `nemu_connect` 和 `nemu_capture_display` 调用该 DLL，�
 ### 稳定性
 
 - 修正 `KillEmulator()` 的 PID 关闭命令。
-- 将游戏重启、ADB 恢复、模拟器重启拆成明确的恢复阶段。
+- 继续观察游戏重启、ADB 恢复、模拟器重启阶段的升级原因是否清晰，必要时进一步拆分日志字段。
 - 每个阶段保存清晰日志：触发原因、执行命令、验证结果、升级原因。
 - 游戏重启成功后考虑重置或衰减崩溃计数。
 

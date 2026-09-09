@@ -1332,12 +1332,50 @@ def Factory():
         if Press(CheckIf(scn,"startdownload")):
             logger.info(_("开始下载……"))
             return True
+        # 网络错误弹窗会把按钮背景和语言叠在不同画面上，旧的 80% 阈值容易漏掉。
+        # retry_blank 是整段弹窗区域模板，命中后点击模板中心下方的按钮位置。
+        pos, match = CheckTemplateInRoi(scn, "retry_blank", None, threshold=0.65)
+        if pos:
+            Press([pos[0], pos[1]+103])
+            logger.info(_("发现并点击了\"重试\". 你遇到了网络波动. 匹配程度: {a:.2f}%.").format(a=match * 100))
+            return True
         if Press(CheckIf(scn,"retry")):
             logger.info(_("发现并点击了\"重试\". 你遇到了网络波动."))
             return True
-        if pos:=(CheckIf(scn,"retry_blank")):
-            Press([pos[0], pos[1]+103])
-            logger.info(_("发现并点击了\"重试\". 你遇到了网络波动."))
+        pos, match = CheckTemplateInRoi(scn, "retry", None, threshold=0.60)
+        if pos:
+            # retry 文本本身在不同语言和遮罩下会偏离按钮中心，只用它确认弹窗存在。
+            Press([450, 900])
+            logger.info(_("低阈值检测到\"重试\"文本, 点击网络弹窗按钮区域. 匹配程度: {a:.2f}%.").format(a=match * 100))
+            return True
+        return False
+    def TryHandleCommonBlockingScreen(scn, reason="common"):
+        if TryPressRetry(scn):
+            logger.info(_("通用阻塞界面处理: reason={a}, action=retry/startdownload.").format(a=reason))
+            return True
+
+        if Press(CheckIf(scn, "totitle")):
+            logger.info(_("通用阻塞界面处理: reason={a}, action=返回标题.").format(a=reason))
+            return True
+
+        if Press(CheckIf(scn, "resume")):
+            logger.info(_("通用阻塞界面处理: reason={a}, action=Resume.").format(a=reason))
+            return True
+
+        pos, match = CheckTemplateInRoi(scn, "boot_attention", [[250, 430, 420, 220]], threshold=0.86)
+        if pos:
+            logger.info(_("通用阻塞界面处理: reason={a}, action=启动免责声明, 匹配程度={b:.2f}%.").format(
+                a=reason, b=match * 100
+            ))
+            Press([450, 1450])
+            return True
+
+        pos, match = CheckTemplateInRoi(scn, "boot_title_logo", [[100, 300, 700, 470]], threshold=0.86)
+        if pos:
+            logger.info(_("通用阻塞界面处理: reason={a}, action=标题/加载页, 匹配程度={b:.2f}%.").format(
+                a=reason, b=match * 100
+            ))
+            Press([450, 1450])
             return True
         return False
     def AddImportantInfo(str):
@@ -1404,6 +1442,8 @@ def Factory():
             ("sandman_recover", "沙男恢复"),
             ("totitle", "返回标题"),
             ("resume", "Resume"),
+            ("boot_attention", "启动免责声明", [[250, 430, 420, 220]]),
+            ("boot_title_logo", "标题/加载页", [[100, 300, 700, 470]]),
             ("trait", "角色界面Trait"),
             ("recover", "恢复按钮"),
             ("spellskill/skillDetail", "技能详情"),
@@ -1473,7 +1513,7 @@ def Factory():
                     if p:=checkPattern(scn,targetPattern):
                         return p # FindCoords
                 # OrElse
-                if TryPressRetry(scn):
+                if TryHandleCommonBlockingScreen(scn, "wait_target"):
                     Sleep(1)
                     continue
                 if Press(CheckIf_fastForwardOff(scn)):
@@ -1536,6 +1576,72 @@ def Factory():
             Sleep()
             restartGame()
             return None # restartGame会抛出异常 所以直接返回none就行了
+    def WaitGameBootReady(timeout=120):
+        stable_patterns = [
+            "Inn",
+            "dungFlag",
+            "worldmapflag",
+            "openworldmap",
+            "returnText",
+            "returntoTown",
+            "mapFlag",
+            "chestFlag",
+            "whowillopenit",
+            "combatActive",
+            "combatActive_2",
+            "combatActive_3",
+            "combatActive_4",
+        ]
+        deadline = time.time() + timeout
+        counter = 0
+        last_scn = None
+
+        logger.info(_("等待游戏启动后进入可识别界面..."))
+        while time.time() < deadline:
+            if setting._FORCESTOPING.is_set():
+                return False
+
+            try:
+                # 重启恢复阶段不使用 ScreenShot() 的前台检测，避免刚启动时递归触发 restartGame。
+                scn = CaptureScreen()
+            except Exception as e:
+                logger.warning(_("启动恢复阶段截图失败 ({a}): {b}").format(a=type(e).__name__, b=e))
+                ResetDevice()
+                Sleep(1)
+                continue
+
+            last_scn = scn
+            for pattern in stable_patterns:
+                if CheckIf(scn, pattern):
+                    logger.info(_("游戏启动恢复完成, 已进入可识别界面: {a}.").format(a=pattern))
+                    return True
+
+            if TryHandleCommonBlockingScreen(scn, "boot_ready"):
+                Sleep(1.5)
+                counter += 1
+                continue
+
+            if counter >= 3:
+                logger.info(_("启动恢复阶段尚未识别稳定界面, 点击安全继续区域. 尝试次数: {a}.").format(a=counter + 1))
+                Press([450, 1450])
+            if counter >= 6:
+                # 兼容旧版“登录/公告页点左上角进入游戏”的兜底，但只在启动恢复阶段后置触发。
+                Press([1, 1])
+
+            if counter == 0 or counter % 10 == 0:
+                LogUnknownScreenDiagnostics(
+                    scn,
+                    "boot_ready_wait",
+                    counter=counter + 1,
+                    save_image=(counter >= 10)
+                )
+            Sleep(1)
+            counter += 1
+
+        logger.warning(_("游戏启动后未能在{a}秒内进入可识别界面.").format(a=timeout))
+        if last_scn is not None:
+            SaveDebugImage(last_scn, "boot_ready_failed")
+        return False
     def restartGame(skip_screenshot = False, force_restart_EMU = False):
         nonlocal runtimeContext
         runtimeContext._COMBATSPD = False # 重启会重置2倍速, 所以重置标识符以便重新打开.
@@ -1589,11 +1695,14 @@ def Factory():
             if startResult is None:
                 return False
             logger.debug(startResult)
-            Sleep(10)
+            Sleep(5)
 
             logs = TryDeviceShellOnce("logcat -d | grep -i \"unable to initialize.*graphics api\"")
             if logs and logs.strip():
                 logger.error(_("检测到崩溃日志, 暂时不重启模拟器.{a}".format(a=logs)))
+            if not WaitGameBootReady(timeout=120):
+                logger.warning(_("游戏应用已启动, 但启动恢复未能进入可识别界面."))
+                return False
             runtimeContext._PAUSE_CHECK_UNTIL = time.time() + 120
             return True
 
@@ -1790,7 +1899,7 @@ def Factory():
             scn = ScreenShot()
             if CheckAnyPattern(scn, expected_patterns):
                 return True
-            if TryPressRetry(scn):
+            if TryHandleCommonBlockingScreen(scn, "worldmap_target_enter"):
                 Sleep(1)
                 continue
 
@@ -1999,7 +2108,7 @@ def Factory():
             if setting._FORCESTOPING.is_set():
                 return State.Quit, DungeonState.Quit, screen
 
-            if TryPressRetry(screen):
+            if TryHandleCommonBlockingScreen(screen, "identify_state"):
                 Sleep(2)
                 counter += 1
                 continue
@@ -3002,7 +3111,7 @@ def Factory():
             if StateCombatCheck(scn):
                 return DungeonState.Combat
             
-            TryPressRetry(scn)
+            TryHandleCommonBlockingScreen(scn, "chest_state")
     def StateDungeon(targetInfoList : list[TargetInfo]):
         gameFrozen_StateNoneScreenHistory = []
         gameFrozen_StateMapCounter = 0
@@ -3530,7 +3639,7 @@ def Factory():
                             ReloadStrategy()
                             while 1:
                                 scn=ScreenShot()
-                                if TryPressRetry(scn):
+                                if TryHandleCommonBlockingScreen(scn, "special_force_combat"):
                                     continue
                                 if CheckIf(scn,"icanstillgo"):
                                     break
@@ -4303,7 +4412,7 @@ def Factory():
                         scn = ScreenShot()
                         Press([450,600])
 
-                        if TryPressRetry(scn):
+                        if TryHandleCommonBlockingScreen(scn, "ffxi_receive"):
                             Sleep(1)
                             continue
 
