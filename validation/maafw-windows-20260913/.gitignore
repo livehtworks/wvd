@@ -1,0 +1,15 @@
+# 仅提交审核源码、固定合成样本和脱敏结论，不提交运行现场。
+/build/
+/sdk/
+/upstream/
+/private/
+/runs/
+/handoff/
+/中文 路径验证/
+/VALIDATION_HANDOFF_*.zip
+__pycache__/
+*.log
+*.jsonl
+*.exe
+*.dll
+*.onnx

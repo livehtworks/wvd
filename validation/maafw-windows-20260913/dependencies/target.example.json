@@ -1,0 +1,6 @@
+{
+  "index": "<确认的实例编号>",
+  "serial": "<确认的ADB地址>",
+  "adb": "<本机adb.exe绝对路径>",
+  "manager": "<本机MuMuManager.exe绝对路径>"
+}

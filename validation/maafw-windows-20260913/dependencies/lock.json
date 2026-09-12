@@ -1,0 +1,47 @@
+{
+  "wvd_sha": "6585f4075f5714ab522aa582993860c09af912c1",
+  "sdk_url": "https://github.com/MaaXYZ/MaaFramework/releases/download/v5.13.0/MAA-win-x86_64-v5.13.0.zip",
+  "maafw_sha": "2bcfa85c66a2eac6ca3e5937f175495275ee0643",
+  "source_sha256": "9AF879FC3445A2699A1FC2A52A96CC753240C7A657D3119C70BDB83AF71E5372",
+  "source_url": "https://api.github.com/repos/MaaXYZ/MaaFramework/zipball/2bcfa85c66a2eac6ca3e5937f175495275ee0643",
+  "sdk_sha256": "179b51b6211fc74317c8dc06f10fae4724aca370df7d1bf694cd00d06ff38efe",
+  "ocr": {
+    "model": "ppocr_v3/en_us",
+    "commit": "dabcd4681ac990dc4361de26416d986abd80e4aa",
+    "repository": "MaaXYZ/MaaCommonAssets",
+    "files": [
+      {
+        "file": "det.onnx",
+        "url": "https://raw.githubusercontent.com/MaaXYZ/MaaCommonAssets/dabcd4681ac990dc4361de26416d986abd80e4aa/OCR/ppocr_v3/en_us/det.onnx",
+        "sha256": "8FE4BF6ABFB20402357827F2EFC964C8B28CF980E29FE09A99B742AE29725FA9",
+        "bytes": 2423224
+      },
+      {
+        "file": "rec.onnx",
+        "url": "https://raw.githubusercontent.com/MaaXYZ/MaaCommonAssets/dabcd4681ac990dc4361de26416d986abd80e4aa/OCR/ppocr_v3/en_us/rec.onnx",
+        "sha256": "DA12C6E863761D774B07D3BD40FBAAA55516F90570E0B1DD9DC112E457301CC9",
+        "bytes": 8956702
+      },
+      {
+        "file": "keys.txt",
+        "url": "https://raw.githubusercontent.com/MaaXYZ/MaaCommonAssets/dabcd4681ac990dc4361de26416d986abd80e4aa/OCR/ppocr_v3/en_us/keys.txt",
+        "sha256": "5662DF9D2D03F0E8CA0D3B0649D6ACBAB904B6A14B3D3521463C71C37C668CE3",
+        "bytes": 190
+      }
+    ]
+  },
+  "nlohmann_json": {
+    "version": "3.11.3",
+    "url": "https://raw.githubusercontent.com/nlohmann/json/v3.11.3/single_include/nlohmann/json.hpp",
+    "sha256": "9bea4c8066ef4a1c206b2be5a36302f8926f7fdc6087af5d20b417d0cf103ea6",
+    "license": "MIT (header retains notice)"
+  },
+  "linux_aarch64_asset": [
+    {
+      "name": "MAA-linux-aarch64-v5.13.0.zip",
+      "url": "https://github.com/MaaXYZ/MaaFramework/releases/download/v5.13.0/MAA-linux-aarch64-v5.13.0.zip",
+      "digest": "sha256:34e674e40e57f081d824e9fa9a8734c0ddb30d25e0baf904c68dd48de1ad1840"
+    }
+  ],
+  "new_download_bytes": 86415592
+}

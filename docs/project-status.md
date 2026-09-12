@@ -11,6 +11,7 @@
 
 ## 当前阶段
 
+- MaaFramework Windows 独立选型验证已完成，审核入口为 `validation/maafw-windows-20260913/REVIEW_GUIDE.md`；未接入生产。28 个必选项目中 27 个通过，生命周期内存增长斜率轻微超线，归因待确认；NEXT/Pause 真实样本回归未验证。
 - 同步目标为上游 2.8.7（`1c37b76`）；保留本地恢复、配置和日志契约。
 - 新增近端/远端钓鱼、沙人缘、FFXI 左侧精英任务；合入挖矿、楼层与任务点策略切换修复。
 - 策略新增“释放任一即完成”；恢复复选框改为正向显示，持久化 SKIP 字段含义不变。
@@ -22,3 +23,4 @@
 - 执行注意项：`execution-notes.md`。
 - 同步取舍和验收：`upstream-sync-2.8.7.md`。
 - 历史稳定性改动与性能测量：`local-stability-and-performance-notes.md`（其中历史观察不替代本文件当前事实）。
+- 独立 C++/MaaFramework 探针、脱敏结论与审核说明：`../validation/maafw-windows-20260913/`；不参与 WVD 构建、加载或运行。

@@ -1,0 +1,26 @@
+{
+  "os": "Microsoft Windows 11 Pro",
+  "version": "10.0.26200",
+  "architecture": "x86_64",
+  "toolchain": "Visual Studio 2022 / MSVC v143 / CMake",
+  "sdk_version": "v5.13.0",
+  "sdk_commit": "2bcfa85c66a2eac6ca3e5937f175495275ee0643",
+  "wvd_commit": "6585f4075f5714ab522aa582993860c09af912c1",
+  "loaded_module": "[VALIDATION_ROOT]/sdk/bin/MaaFramework.dll",
+  "initial_target_running": true,
+  "verified_target_index": 2,
+  "serial": "[TARGET_SERIAL]",
+  "android_version": "15.0",
+  "system_frame": [
+    1600,
+    900
+  ],
+  "game_frame": [
+    900,
+    1600
+  ],
+  "clash_package": "com.github.metacubex.clash.meta",
+  "game_package": "jp.co.drecom.wizardry.daphne",
+  "global_settings_modified": false,
+  "production_modified": false
+}

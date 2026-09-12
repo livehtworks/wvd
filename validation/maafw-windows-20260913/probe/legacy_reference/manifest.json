@@ -1,0 +1,28 @@
+[
+  {
+    "name": "_check",
+    "line_start": 1018,
+    "line_end": 1061,
+    "source_sha256": "e1eaa6289f24bc94f480d59f86e412355cbec20471fed93d652a88483094ec8c",
+    "segment_sha256": "7bd7f04d5cf0bc479c973bd26aa234ffb7e88ecfa5e3a4d24c372e58a5129c54",
+    "diagnostic_substitutions": [
+      "logger",
+      "SaveImage",
+      "identity translation"
+    ],
+    "scope": "single valid ROI or no ROI; CutRoI multi-ROI not exercised"
+  },
+  {
+    "name": "_check_bright_mask",
+    "line_start": 1062,
+    "line_end": 1114,
+    "source_sha256": "e1eaa6289f24bc94f480d59f86e412355cbec20471fed93d652a88483094ec8c",
+    "segment_sha256": "62b40002327b336342eece6de130cd423d3a9a85eebc094ec5b2909bd5d3493f",
+    "diagnostic_substitutions": [
+      "logger",
+      "SaveImage",
+      "identity translation"
+    ],
+    "scope": "single valid ROI or no ROI; CutRoI multi-ROI not exercised"
+  }
+]

@@ -1,0 +1,58 @@
+[
+  {
+    "file": "probe/CMakeLists.txt",
+    "sha256": "200241582df71e83f5d145b4895e9958e4d8fe93973dc1bce383cf921c95a05b"
+  },
+  {
+    "file": "probe/core/device.hpp",
+    "sha256": "9a3a9602554c361adbd868d8b0bcc3bf3536b20fb969fd84c24631690d757c69"
+  },
+  {
+    "file": "probe/core/json.hpp",
+    "sha256": "9bea4c8066ef4a1c206b2be5a36302f8926f7fdc6087af5d20b417d0cf103ea6"
+  },
+  {
+    "file": "probe/core/main.cpp",
+    "sha256": "f21cac222538be2e8ba65c14f01495971a0147512532c13077f798a5bf6c89e4"
+  },
+  {
+    "file": "probe/core/platform.hpp",
+    "sha256": "1a1c0d95594900b4b6ed8f677a1243b4aae21578c6f6a2ae6a90ceb857b35f9d"
+  },
+  {
+    "file": "probe/core/probe.hpp",
+    "sha256": "4cb610486c7ee4270553d50f03a8ce1b34a60620dddfa468bd6e8bb02034e6be"
+  },
+  {
+    "file": "probe/legacy_reference/manifest.json",
+    "sha256": "9cdd50eec6e1ff97099ac88469c912174e0d5f2560dfc7a6d2a13dab61d20ce7"
+  },
+  {
+    "file": "probe/legacy_reference/_check.py",
+    "sha256": "5ad14a070788274f2f90f10f1b9a12580dbf985de32544fb44b7329e99d47563"
+  },
+  {
+    "file": "probe/legacy_reference/_check_bright_mask.py",
+    "sha256": "4ca0bdf28efb8970b7289377449de57fbe0045d72f0221471e5d9a8cf1aff2fc"
+  },
+  {
+    "file": "probe/adapters/fake/fake.cpp",
+    "sha256": "66fea84853e148db6bb5a1f4e15590c2fbceb8a9d75ef73ecc291172593267ee"
+  },
+  {
+    "file": "probe/adapters/windows/app.manifest",
+    "sha256": "e81459870a08839c086e427e459c1f4d8a8c8db768e4efd42c4f1dad71d0d1d7"
+  },
+  {
+    "file": "probe/adapters/windows/device.cpp",
+    "sha256": "52ba15ae9fd4963fe1d3b0ee16c03d964797e21ae7e9161805474b3fc0ee3214"
+  },
+  {
+    "file": "probe/adapters/windows/platform.cpp",
+    "sha256": "954e01d2b1136ba7059c5ee3543ccadf5b6af7ce6b7da757a08ee28eb85bbb0e"
+  },
+  {
+    "file": "sdk/bin/wvd_maa_probe.exe",
+    "sha256": "29f0839c16f46f1f8f0526e5074b8d2b2e97218000c2e729342d46fee5a3a481"
+  }
+]

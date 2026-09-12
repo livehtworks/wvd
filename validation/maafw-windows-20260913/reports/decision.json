@@ -1,0 +1,13 @@
+{
+  "decision": "NO_GO",
+  "fixed_cases": 32,
+  "counts": {
+    "PASS": 28,
+    "UNVERIFIED": 2,
+    "FAIL": 1,
+    "OUT_OF_SCOPE": 1
+  },
+  "mandatory": 28,
+  "mandatory_pass": 27,
+  "not_production_migration": true
+}

@@ -1,0 +1,275 @@
+[
+  {
+    "case": "CLEANUP",
+    "class": "M",
+    "status": "PASS",
+    "evidence": [
+      "reports/cleanup.json"
+    ]
+  },
+  {
+    "case": "E00-BASELINE",
+    "class": "M",
+    "status": "PASS",
+    "evidence": [
+      "private/baseline.json",
+      "sdk/dependencies.json"
+    ]
+  },
+  {
+    "case": "E01-NATIVE",
+    "class": "M",
+    "status": "PASS",
+    "evidence": [
+      "runs/E01-NATIVE-a1"
+    ]
+  },
+  {
+    "case": "E01-UNICODE",
+    "class": "M",
+    "status": "PASS",
+    "evidence": [
+      "中文 路径验证/日志 回调-a2",
+      "中文 路径验证/日志 识别-a2",
+      "中文 路径验证/日志 模板"
+    ],
+    "correction": "process-local UTF-8 manifest; original failed commands preserved"
+  },
+  {
+    "case": "E02-COLD",
+    "class": "M",
+    "status": "PASS",
+    "evidence": [
+      "runs/E02-COLD",
+      "runs/E02-COLD-check",
+      "runs/P5-EMU-RESTART/lifecycle.json",
+      "runs/P5-EMU-RESTART-clash-start"
+    ],
+    "correction": "manager-ready was earlier than ADB readiness; bounded boot-property polling validated on second normal shutdown/start"
+  },
+  {
+    "case": "P1-ASPECT",
+    "class": "M",
+    "status": "PASS",
+    "evidence": [
+      "runs/image-aspect-reject-a1"
+    ]
+  },
+  {
+    "case": "P1-COORD",
+    "class": "M",
+    "status": "PASS",
+    "evidence": [
+      "runs/image-city-900-a1",
+      "runs/image-city-1080-a1"
+    ]
+  },
+  {
+    "case": "P1-NEXT",
+    "class": "L",
+    "status": "UNVERIFIED",
+    "reason": "没有与当前设备来源链一致的真实 NEXT/三角边缘目标完整正负样本；未故意触发战斗。原遮罩函数已提取，未实现/验证新遮罩分支。"
+  },
+  {
+    "case": "P1-OCR",
+    "class": "M",
+    "status": "PASS",
+    "evidence": [
+      "runs/image-ocr-a1"
+    ]
+  },
+  {
+    "case": "P1-PAUSE",
+    "class": "L",
+    "status": "UNVERIFIED",
+    "reason": "没有完整 Pause 正例及角色/技能界面负例；合成 OCR 不等于游戏 Pause 通过。原可选 Tesseract 不可用，保留布局与反证分支待验。"
+  },
+  {
+    "case": "P1-TEMPLATE",
+    "class": "M",
+    "status": "PASS",
+    "evidence": [
+      "runs/image-synthetic-positive-a1",
+      "runs/image-synthetic-negative-flat-a1",
+      "runs/image-synthetic-negative-noise-a1"
+    ]
+  },
+  {
+    "case": "P1-WVD-BASE",
+    "class": "M",
+    "status": "PASS",
+    "evidence": [
+      "runs/image-city-900-a1",
+      "runs/image-wvd-negative-attention-a1",
+      "runs/image-wvd-negative-title-a1"
+    ]
+  },
+  {
+    "case": "P2-EXCEPTION",
+    "class": "M",
+    "status": "PASS",
+    "evidence": [
+      "runs/P2-EXCEPTION-905a8d47"
+    ]
+  },
+  {
+    "case": "P2-FAIL",
+    "class": "M",
+    "status": "PASS",
+    "evidence": [
+      "runs/P2-FAIL-7df3e22d"
+    ]
+  },
+  {
+    "case": "P2-NORMAL",
+    "class": "M",
+    "status": "PASS",
+    "evidence": [
+      "runs/P2-NORMAL-f8b38b7f"
+    ]
+  },
+  {
+    "case": "P2-STOP-CUSTOM",
+    "class": "M",
+    "status": "PASS",
+    "evidence": [
+      "runs/P2-STOP-CUSTOM-final"
+    ]
+  },
+  {
+    "case": "P2-STOP-NESTED",
+    "class": "M",
+    "status": "PASS",
+    "evidence": [
+      "runs/P2-STOP-NESTED-final"
+    ]
+  },
+  {
+    "case": "P2-STOP-WAIT",
+    "class": "M",
+    "status": "PASS",
+    "evidence": [
+      "runs/P2-STOP-WAIT-final"
+    ]
+  },
+  {
+    "case": "P3-INTERRUPT",
+    "class": "M",
+    "status": "PASS",
+    "evidence": [
+      "runs/P3-INTERRUPT-5d2f45fa"
+    ]
+  },
+  {
+    "case": "P3-RESTART",
+    "class": "M",
+    "status": "PASS",
+    "evidence": [
+      "runs/P3-RESTART-30582ba8"
+    ]
+  },
+  {
+    "case": "P3-STALE",
+    "class": "M",
+    "status": "PASS",
+    "evidence": [
+      "runs/P3-STALE-c11c680d"
+    ]
+  },
+  {
+    "case": "P4-CONTEXT",
+    "class": "M",
+    "status": "PASS",
+    "evidence": [
+      "runs/P4-CONTEXT-final",
+      "runs/P4-CLONE-STOP-final",
+      "runs/P4-CONTEXT-96198c7a"
+    ]
+  },
+  {
+    "case": "P4-HISTORY",
+    "class": "M",
+    "status": "PASS",
+    "evidence": [
+      "runs/P4-HISTORY-43a0a6ae"
+    ]
+  },
+  {
+    "case": "P4-LIFETIME",
+    "class": "M",
+    "status": "FAIL",
+    "evidence": [
+      "runs/P4-LIFETIME-c328fe0a"
+    ]
+  },
+  {
+    "case": "P4-PACK-ISOLATION",
+    "class": "M",
+    "status": "PASS",
+    "evidence": [
+      "runs/P4-PACK-ISOLATION-a1"
+    ]
+  },
+  {
+    "case": "P5-APP-RESTART",
+    "class": "M",
+    "status": "PASS",
+    "evidence": [
+      "runs/P5-APP-RESTART-stop",
+      "runs/P5-APP-RESTART-ready"
+    ]
+  },
+  {
+    "case": "P5-CAPTURE",
+    "class": "M",
+    "status": "PASS",
+    "evidence": [
+      "runs/P5-CAPTURE-system-a1",
+      "runs/P5-CAPTURE-game-a1"
+    ]
+  },
+  {
+    "case": "P5-EMU-RESTART",
+    "class": "M",
+    "status": "PASS",
+    "evidence": [
+      "runs/P5-EMU-RESTART-clash-start",
+      "runs/P5-EMU-RESTART-vpn-enable",
+      "runs/P5-EMU-RESTART-game-ready"
+    ]
+  },
+  {
+    "case": "P5-INPUT",
+    "class": "M",
+    "status": "PASS",
+    "evidence": [
+      "runs/P5-INPUT-open",
+      "runs/P5-INPUT-return"
+    ]
+  },
+  {
+    "case": "P5-IPC",
+    "class": "L",
+    "status": "PASS",
+    "evidence": [
+      "runs/P5-IPC-a1"
+    ]
+  },
+  {
+    "case": "P5-RECONNECT",
+    "class": "M",
+    "status": "PASS",
+    "evidence": [
+      "runs/P5-EMU-RESTART-game-ready",
+      "runs/P5-RECONNECT-a1"
+    ]
+  },
+  {
+    "case": "SPARK-RUNTIME",
+    "class": "OUT_OF_SCOPE",
+    "status": "OUT_OF_SCOPE",
+    "evidence": [
+      "reports/PORTABILITY_REVIEW.md"
+    ]
+  }
+]

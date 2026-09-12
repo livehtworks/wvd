@@ -1,0 +1,82 @@
+[
+  {
+    "file": "runs/discovery-native-screen/sample-0.png",
+    "sha256": "68e65a401389fc2cc70d9130fa7f669b5edd04943881ab8e213abf300f8fe18e",
+    "width": 900,
+    "height": 1600,
+    "origin": "verified target instance",
+    "label": "王城，左侧可见 Inn 标识，旅店正例",
+    "label_source": "codex_visual_review",
+    "human_gold": false
+  },
+  {
+    "file": "runs/game-cold-wait-2/sample-0.png",
+    "sha256": "8f0e9eb95036670410222e59920fc14306a8e80ffa84c30ec6bdea8c1ce95e05",
+    "width": 900,
+    "height": 1600,
+    "origin": "verified target instance",
+    "label": "游戏启动 Attention 免责声明，没有 Inn，负例",
+    "label_source": "codex_visual_review",
+    "human_gold": false
+  },
+  {
+    "file": "runs/game-cold-wait-5/sample-0.png",
+    "sha256": "b352a17a9d91fbb819812386504b4c1cf0dbd172114e5e5d49fa152609f5127e",
+    "width": 900,
+    "height": 1600,
+    "origin": "verified target instance",
+    "label": "游戏标题 Tap to Start，没有 Inn，负例",
+    "label_source": "codex_visual_review",
+    "human_gold": false
+  },
+  {
+    "file": "runs/P5-INPUT-open/after.png",
+    "sha256": "df46e5986f4298077aad4505189a6632bf14a8242073e9f66a00f1c50bc7ddf2",
+    "width": 1600,
+    "height": 900,
+    "origin": "verified target instance",
+    "label": "Android 设置：应用页；未修改开关",
+    "label_source": "codex_visual_review",
+    "human_gold": false
+  },
+  {
+    "file": "runs/P5-INPUT-return/after.png",
+    "sha256": "04d19c6761836cb55a48f873fd1416aeb448947f729d87b8edcec7329c66148f",
+    "width": 1600,
+    "height": 900,
+    "origin": "verified target instance",
+    "label": "Android 设置：已返回网络和互联网页；未修改开关",
+    "label_source": "codex_visual_review",
+    "human_gold": false
+  },
+  {
+    "file": "runs/P5-APP-RESTART-ready/sample-0.png",
+    "sha256": "e9af69e2ca9e8bde8eb185b1c83dfaff1526dd4b5ffed35b666c1f8488816d9e",
+    "width": 900,
+    "height": 1600,
+    "origin": "verified target instance",
+    "label": "游戏应用重启后回到王城",
+    "label_source": "codex_visual_review",
+    "human_gold": false
+  },
+  {
+    "file": "runs/P5-EMU-RESTART-game-ready/sample-0.png",
+    "sha256": "fbf98fad44a11abc95951f52c979811b85e551592de565298246ebb81ceeacbd",
+    "width": 900,
+    "height": 1600,
+    "origin": "verified target instance",
+    "label": "模拟器重启、启用VPN后回到王城",
+    "label_source": "codex_visual_review",
+    "human_gold": false
+  },
+  {
+    "file": "runs/P5-IPC-a1/sample-0.png",
+    "sha256": "8580a27ef0963630f5ff868dc506bf8b003b400fb2140aee5680b5a38921bf67",
+    "width": 900,
+    "height": 1600,
+    "origin": "verified target instance",
+    "label": "增强截图为王城；方向和颜色与ADB画面一致",
+    "label_source": "codex_visual_review",
+    "human_gold": false
+  }
+]

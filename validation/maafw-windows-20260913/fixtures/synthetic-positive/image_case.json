@@ -1,0 +1,21 @@
+{
+  "frame": "[VALIDATION_ROOT]\\fixtures\\generated\\synthetic-positive.png",
+  "recognition": {
+    "template": "target.png",
+    "method": 5,
+    "threshold": 0.8,
+    "order_by": "Score",
+    "roi": [
+      100,
+      200,
+      600,
+      700
+    ]
+  },
+  "expected_hit": true,
+  "click": true,
+  "expected_device": [
+    374,
+    437
+  ]
+}

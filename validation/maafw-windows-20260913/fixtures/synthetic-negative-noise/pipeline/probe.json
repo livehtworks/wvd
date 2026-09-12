@@ -1,0 +1,222 @@
+{
+  "Child": {
+    "action": "Custom",
+    "custom_action": "Probe",
+    "custom_action_param": {
+      "op": "cooperate"
+    },
+    "next": [
+      "Click"
+    ],
+    "post_delay": 0,
+    "pre_delay": 0,
+    "rate_limit": 10,
+    "timeout": 1000
+  },
+  "Click": {
+    "action": "Click",
+    "next": [
+      "Terminal"
+    ],
+    "post_delay": 0,
+    "pre_delay": 0,
+    "rate_limit": 10,
+    "target": [
+      120,
+      240,
+      1,
+      1
+    ],
+    "timeout": 1000
+  },
+  "Clone": {
+    "action": "Custom",
+    "custom_action": "Probe",
+    "custom_action_param": {
+      "op": "clone"
+    },
+    "next": [
+      "Terminal"
+    ],
+    "post_delay": 0,
+    "pre_delay": 0,
+    "rate_limit": 10,
+    "timeout": 1000
+  },
+  "CloneNested": {
+    "action": "Custom",
+    "custom_action": "Probe",
+    "custom_action_param": {
+      "op": "clone_nested"
+    },
+    "next": [
+      "Click"
+    ],
+    "post_delay": 0,
+    "pre_delay": 0,
+    "rate_limit": 10,
+    "timeout": 1000
+  },
+  "Cooperate": {
+    "action": "Custom",
+    "custom_action": "Probe",
+    "custom_action_param": {
+      "op": "cooperate"
+    },
+    "next": [
+      "Click"
+    ],
+    "post_delay": 0,
+    "pre_delay": 0,
+    "rate_limit": 10,
+    "timeout": 1000
+  },
+  "Interrupt": {
+    "action": "Click",
+    "max_hit": 1,
+    "post_delay": 0,
+    "pre_delay": 0,
+    "rate_limit": 10,
+    "target": [
+      90,
+      100,
+      1,
+      1
+    ],
+    "timeout": 1000
+  },
+  "InterruptRoot": {
+    "next": [
+      "[JumpBack]Interrupt",
+      "Terminal"
+    ],
+    "post_delay": 0,
+    "pre_delay": 0,
+    "rate_limit": 10,
+    "timeout": 1000
+  },
+  "Nested": {
+    "action": "Custom",
+    "custom_action": "Probe",
+    "custom_action_param": {
+      "op": "nested"
+    },
+    "next": [
+      "Click"
+    ],
+    "post_delay": 0,
+    "pre_delay": 0,
+    "rate_limit": 10,
+    "timeout": 1000
+  },
+  "Never": {
+    "custom_recognition": "Never",
+    "next": [
+      "Click"
+    ],
+    "post_delay": 0,
+    "pre_delay": 0,
+    "rate_limit": 10,
+    "recognition": "Custom",
+    "timeout": 1000
+  },
+  "ProbeData": {
+    "post_delay": 0,
+    "pre_delay": 0,
+    "rate_limit": 10,
+    "roi": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "timeout": 1000
+  },
+  "RecoveryChild": {
+    "action": "Custom",
+    "custom_action": "Probe",
+    "custom_action_param": {
+      "op": "recovery"
+    },
+    "next": [
+      "Click"
+    ],
+    "post_delay": 0,
+    "pre_delay": 0,
+    "rate_limit": 10,
+    "timeout": 1000
+  },
+  "RecoveryRoot": {
+    "action": "Custom",
+    "custom_action": "Probe",
+    "custom_action_param": {
+      "entry": "RecoveryChild",
+      "op": "nested"
+    },
+    "next": [
+      "Click"
+    ],
+    "post_delay": 0,
+    "pre_delay": 0,
+    "rate_limit": 10,
+    "timeout": 1000
+  },
+  "Stale": {
+    "action": "Custom",
+    "custom_action": "Probe",
+    "custom_action_param": {
+      "generation": 1,
+      "op": "stale"
+    },
+    "next": [
+      "Click"
+    ],
+    "post_delay": 0,
+    "pre_delay": 0,
+    "rate_limit": 10,
+    "timeout": 1000
+  },
+  "Start": {
+    "next": [
+      "Click"
+    ],
+    "post_delay": 0,
+    "pre_delay": 0,
+    "rate_limit": 10,
+    "timeout": 1000
+  },
+  "Terminal": {
+    "action": "Custom",
+    "custom_action": "Probe",
+    "custom_action_param": {
+      "op": "terminal"
+    },
+    "post_delay": 0,
+    "pre_delay": 0,
+    "rate_limit": 10,
+    "timeout": 1000
+  },
+  "Throw": {
+    "action": "Custom",
+    "custom_action": "Probe",
+    "custom_action_param": {
+      "op": "throw"
+    },
+    "next": [
+      "Terminal"
+    ],
+    "post_delay": 0,
+    "pre_delay": 0,
+    "rate_limit": 10,
+    "timeout": 1000
+  },
+  "Wait": {
+    "next": [
+      "Never"
+    ],
+    "post_delay": 0,
+    "pre_delay": 0,
+    "rate_limit": 10,
+    "timeout": -1
+  }
+}

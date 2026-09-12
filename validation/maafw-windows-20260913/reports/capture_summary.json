@@ -1,0 +1,29 @@
+[
+  {
+    "run": "P5-CAPTURE-game-a1",
+    "attempts": 50,
+    "valid": 50,
+    "median_ms": 560.72855,
+    "min_ms": 515.4331,
+    "max_ms": 682.6926,
+    "timing_boundary": "Maa post screencap -> wait -> cached decoded image; PNG encoding and disk write are outside measured interval"
+  },
+  {
+    "run": "P5-CAPTURE-system-a1",
+    "attempts": 50,
+    "valid": 50,
+    "median_ms": 213.73805,
+    "min_ms": 194.0833,
+    "max_ms": 284.1879,
+    "timing_boundary": "Maa post screencap -> wait -> cached decoded image; PNG encoding and disk write are outside measured interval"
+  },
+  {
+    "run": "P5-IPC-a1",
+    "attempts": 5,
+    "valid": 5,
+    "median_ms": 11.6743,
+    "min_ms": 11.0369,
+    "max_ms": 13.0859,
+    "timing_boundary": "Maa post screencap -> wait -> cached decoded image; PNG encoding and disk write are outside measured interval"
+  }
+]

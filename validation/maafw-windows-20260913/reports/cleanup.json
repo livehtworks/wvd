@@ -1,0 +1,13 @@
+{
+  "artifacts_retained": "独立验证目录，包括所有失败证据；未删除用户日志。",
+  "checked_files": 466,
+  "changed_files": [],
+  "git_dirty": [],
+  "status": "PASS",
+  "android_diagnostic_removed": true,
+  "probe_processes": [],
+  "production_config": "hash unchanged",
+  "vpn_running": true,
+  "user_state": "游戏保留在王城；Clash/VPN 开启；不关闭用户原先使用的实例。",
+  "target_running": true
+}

@@ -1,0 +1,11 @@
+{
+  "position": [
+    342,
+    309
+  ],
+  "score": 0.0617918036878109,
+  "expected_hit": false,
+  "threshold": 0.8,
+  "source": "unmodified WVD _check",
+  "frame_sha256": "5f9395f50131db628f18003eb7f6e9615c9494320f0b436c26636a21466940d4"
+}
