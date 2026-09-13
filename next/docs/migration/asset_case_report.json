@@ -1,0 +1,4560 @@
+{
+  "images": [
+    "resources/images/7000G/icantagreewithU.png",
+    "resources/images/7000G/illgo.png",
+    "resources/images/7000G/illgonow.png",
+    "resources/images/7000G/iminhungry.png",
+    "resources/images/7000G/leavethechild.png",
+    "resources/images/7000G/noeasytask.png",
+    "resources/images/7000G/olddist.png",
+    "resources/images/7000G/royalcapital.png",
+    "resources/images/7000G/why.png",
+    "resources/images/7thDist.png",
+    "resources/images/AWD/AWD.png",
+    "resources/images/AWD/AWD1F.png",
+    "resources/images/AWD/AWD2F.png",
+    "resources/images/AssembleParty.png",
+    "resources/images/AutoMove.png",
+    "resources/images/B2FTemple.png",
+    "resources/images/B4FLabyrinth.png",
+    "resources/images/B5FWarpedOnesNest.png",
+    "resources/images/BeautifulOre.png",
+    "resources/images/Bharken.png",
+    "resources/images/Bharken2.png",
+    "resources/images/Bounties.png",
+    "resources/images/COS/ArnasPast.png",
+    "resources/images/COS/COS.png",
+    "resources/images/COS/COSB2F.png",
+    "resources/images/COS/COSENT.png",
+    "resources/images/COS/EnaTheAdventurer.png",
+    "resources/images/COS/Okay.png",
+    "resources/images/COS/b2fentrance.png",
+    "resources/images/COS/requestwasfor.png",
+    "resources/images/COS/takehimwithyou.png",
+    "resources/images/COS/替换-凯旋.png",
+    "resources/images/CSC.png",
+    "resources/images/City_DHI.png",
+    "resources/images/City_RoyalCityLuknalia.png",
+    "resources/images/City_fortress.png",
+    "resources/images/City_portTownGrandLegion.png",
+    "resources/images/CompletionReported.png",
+    "resources/images/DH-Church.png",
+    "resources/images/DH-R4.png",
+    "resources/images/DH-R5.png",
+    "resources/images/DH-R6.png",
+    "resources/images/DH-R7.png",
+    "resources/images/DH-R9.png",
+    "resources/images/DH-entrance.png",
+    "resources/images/DH.png",
+    "resources/images/DOE.png",
+    "resources/images/DOEB1F.png",
+    "resources/images/DOE_quit.png",
+    "resources/images/DOF.png",
+    "resources/images/DOFB1F.png",
+    "resources/images/DOF_quit.png",
+    "resources/images/DOL.png",
+    "resources/images/DOLB1F.png",
+    "resources/images/DOL_quit.png",
+    "resources/images/DOLtarget1.png",
+    "resources/images/DOLtarget2.png",
+    "resources/images/DOS.png",
+    "resources/images/DOSB1F.png",
+    "resources/images/DOS_quit.png",
+    "resources/images/DOW.png",
+    "resources/images/DOWB1F.png",
+    "resources/images/DOW_quit.png",
+    "resources/images/Dist.png",
+    "resources/images/EVENT.png",
+    "resources/images/Economy.png",
+    "resources/images/Economy_替换.png",
+    "resources/images/EdgeOfTown.png",
+    "resources/images/Edit.png",
+    "resources/images/FFXI/City_VNH.png",
+    "resources/images/FFXI/EVENT_GCN.png",
+    "resources/images/FFXI/EVENT_VNH.png",
+    "resources/images/FFXI/FFXIStone.png",
+    "resources/images/FFXI/GCN.png",
+    "resources/images/FFXI/ZONE2.png",
+    "resources/images/FFXI/diggable.png",
+    "resources/images/FFXI/entrance.png",
+    "resources/images/FFXI/needpickaxe.png",
+    "resources/images/FFXI/nothingToDig.png",
+    "resources/images/FFXI/nothingToDig2.png",
+    "resources/images/FFXI/nothingToDig3.png",
+    "resources/images/FFXI/org_alter.png",
+    "resources/images/FFXI/org_fine.png",
+    "resources/images/FFXI/org_full.png",
+    "resources/images/FFXI/org_high.png",
+    "resources/images/FFXI/org_lesser_full.png",
+    "resources/images/FFXI/org_low.png",
+    "resources/images/FFXI/org_mid.png",
+    "resources/images/FFXI/org_ouro.png",
+    "resources/images/FFXI/org_position.png",
+    "resources/images/FFXI/org_refine.png",
+    "resources/images/FFXI/org_sliver.png",
+    "resources/images/FFXI/receive.png",
+    "resources/images/FFXI/zone5.png",
+    "resources/images/FortressArrival.png",
+    "resources/images/GHB/GHB.png",
+    "resources/images/GHB/GHB_quit.png",
+    "resources/images/GhostsOfYore.png",
+    "resources/images/GotoDung.png",
+    "resources/images/HSR/AGMM1F.png",
+    "resources/images/HSR/HSR.png",
+    "resources/images/IWO/IWO.png",
+    "resources/images/IWO/IWOB1F.png",
+    "resources/images/IWO/IWOB2F.png",
+    "resources/images/Inn.png",
+    "resources/images/LBC.png",
+    "resources/images/LBC/EnaWasSaved.png",
+    "resources/images/LBC/LBC.png",
+    "resources/images/LBC/LBC_quit.png",
+    "resources/images/LBC/request.png",
+    "resources/images/LBC/symbolofalliance.png",
+    "resources/images/LBC_quit.png",
+    "resources/images/LMG/FTB1F.png",
+    "resources/images/LMG/LMG.png",
+    "resources/images/LMG/LMG1F.png",
+    "resources/images/NoChestCanBeFound.png",
+    "resources/images/OK.png",
+    "resources/images/PartyManagement.png",
+    "resources/images/PartyManagementTitle.png",
+    "resources/images/ReturnText.png",
+    "resources/images/RiseAgain.png",
+    "resources/images/SC/SC.png",
+    "resources/images/SC/SCB1F.png",
+    "resources/images/SC/SCB2F.png",
+    "resources/images/SH_B2F.png",
+    "resources/images/SH_cave.png",
+    "resources/images/SSC/Leap.png",
+    "resources/images/SSC/Request.png",
+    "resources/images/SSC/SSC.png",
+    "resources/images/SSC/SSC1F_left_1_once.png",
+    "resources/images/SSC/SSC1F_left_2_once.png",
+    "resources/images/SSC/SSC1F_left_3_once.png",
+    "resources/images/SSC/SSC1F_left_once.png",
+    "resources/images/SSC/SSC1F_right_once.png",
+    "resources/images/SSC/SSC_quit.png",
+    "resources/images/SSC/dotdotdot.png",
+    "resources/images/SSC/goldenchest_1.png",
+    "resources/images/SSC/shadow.png",
+    "resources/images/SSC/trapdeactived.png",
+    "resources/images/Stay.png",
+    "resources/images/TWC/TWC.png",
+    "resources/images/TWC/TWCB1F.png",
+    "resources/images/TradeWaterway.png",
+    "resources/images/Triumph.png",
+    "resources/images/ambush.png",
+    "resources/images/autoBattleEnable.png",
+    "resources/images/bag.png",
+    "resources/images/beginningAbyss.png",
+    "resources/images/blackScreen.png",
+    "resources/images/blessing.png",
+    "resources/images/bondmate_close.png",
+    "resources/images/boot_attention.png",
+    "resources/images/boot_title_logo.png",
+    "resources/images/bounty/Slayhim.png",
+    "resources/images/bounty/cuthimdown.png",
+    "resources/images/bounty/lethimgo.png",
+    "resources/images/caveinZone.png",
+    "resources/images/chest.png",
+    "resources/images/chestFlag.png",
+    "resources/images/chestOpening.png",
+    "resources/images/chestStone.png",
+    "resources/images/chest_auto.png",
+    "resources/images/chest_auto_minus.png",
+    "resources/images/chestfear.png",
+    "resources/images/close.png",
+    "resources/images/closePartyInfo.png",
+    "resources/images/closePartyInfo_fortress.png",
+    "resources/images/closePartyInfo_waterway.png",
+    "resources/images/combatActive.png",
+    "resources/images/combatActive_2.png",
+    "resources/images/combatActive_3.png",
+    "resources/images/combatActive_4.png",
+    "resources/images/combatAuto.png",
+    "resources/images/combatAuto_2.png",
+    "resources/images/combatClose.png",
+    "resources/images/combatSpd.png",
+    "resources/images/combatSpd_DHI.png",
+    "resources/images/combatTarget.png",
+    "resources/images/cropped.png",
+    "resources/images/cursedWheel.png",
+    "resources/images/cursedWheelTapLeft.png",
+    "resources/images/cursedWheelTapRight.png",
+    "resources/images/cursedWheelTitle.png",
+    "resources/images/cursedWheel_timeLeap.png",
+    "resources/images/cursedwheel_dhi.png",
+    "resources/images/cursedwheel_impregnableFortress.png",
+    "resources/images/cursewheel.png",
+    "resources/images/cursor.png",
+    "resources/images/cursor_0.png",
+    "resources/images/cursor_1.png",
+    "resources/images/cursor_2.png",
+    "resources/images/cursor_3.png",
+    "resources/images/darklight.png",
+    "resources/images/darklight_lightIt.png",
+    "resources/images/dialogueChoices/!adventurersbones.png",
+    "resources/images/dialogueChoices/!halfBone.png",
+    "resources/images/dialogueChoices/#hammer.png",
+    "resources/images/dialogueChoices/DontBuyIt.png",
+    "resources/images/dialogueChoices/buyNothing.png",
+    "resources/images/dialogueChoices/dontGiveAntitoxin.png",
+    "resources/images/dialogueChoices/donthelp.png",
+    "resources/images/dialogueChoices/givehimnothing.png",
+    "resources/images/dialogueChoices/idonthaveany.png",
+    "resources/images/dialogueChoices/ignorethequest.png",
+    "resources/images/dialogueChoices/nope.png",
+    "resources/images/dialogueChoices/nothanks.png",
+    "resources/images/dialogueChoices/spareit.png",
+    "resources/images/dialogueChoices/strange_things.png",
+    "resources/images/didnottakethequest.png",
+    "resources/images/donothing.png",
+    "resources/images/dungFlag.png",
+    "resources/images/fastforward.png",
+    "resources/images/fastforward_off.png",
+    "resources/images/fishing/8bait.png",
+    "resources/images/fishing/CloseFishInfo.png",
+    "resources/images/fishing/FISHBait.png",
+    "resources/images/fishing/baitbox.png",
+    "resources/images/fishing/bobber.png",
+    "resources/images/fishing/cast.png",
+    "resources/images/fishing/iconbait.png",
+    "resources/images/fishing/nobait.png",
+    "resources/images/fishing/quit.png",
+    "resources/images/fishing/size_average.png",
+    "resources/images/fishing/size_large.png",
+    "resources/images/fishing/size_small.png",
+    "resources/images/fishing/startfishing.png",
+    "resources/images/fishing/striking.png",
+    "resources/images/fishing/三文鱼.png",
+    "resources/images/fishing/杂鱼.png",
+    "resources/images/fishing/雅罗.png",
+    "resources/images/fishing/鲈鱼.png",
+    "resources/images/fishing/鲶鱼.png",
+    "resources/images/fishing/鳗鱼.png",
+    "resources/images/fishing/鳟鱼.png",
+    "resources/images/flee.png",
+    "resources/images/fordraig/AskDagger.png",
+    "resources/images/fordraig/B2Fentrance.png",
+    "resources/images/fordraig/B2Fquit.png",
+    "resources/images/fordraig/B3F.png",
+    "resources/images/fordraig/B3F_teleport.png",
+    "resources/images/fordraig/B3fentrance.png",
+    "resources/images/fordraig/B4F.png",
+    "resources/images/fordraig/B4Fquit.png",
+    "resources/images/fordraig/Entrance.png",
+    "resources/images/fordraig/FirstBoss.png",
+    "resources/images/fordraig/FirstTrap.png",
+    "resources/images/fordraig/InsertTheDagger.png",
+    "resources/images/fordraig/Leap.png",
+    "resources/images/fordraig/RequestAccept.png",
+    "resources/images/fordraig/SecondBoss.png",
+    "resources/images/fordraig/SecondTrap.png",
+    "resources/images/fordraig/TryPushingIt.png",
+    "resources/images/fordraig/b1fquit.png",
+    "resources/images/fordraig/labyrinthOfFordraig.png",
+    "resources/images/fordraig/readytoBoss.png",
+    "resources/images/fordraig/thedagger.png",
+    "resources/images/fordraig/thirdMach.png",
+    "resources/images/fortressEntrance.png",
+    "resources/images/fortressb10f.png",
+    "resources/images/fortressb1f.png",
+    "resources/images/fortressb3f.png",
+    "resources/images/fortressb7f.png",
+    "resources/images/gaint_candelabra_1.png",
+    "resources/images/gaint_candelabra_2.png",
+    "resources/images/give.png",
+    "resources/images/gradeexam.png",
+    "resources/images/gradeup.png",
+    "resources/images/guild.png",
+    "resources/images/guildFeatured.png",
+    "resources/images/guildRequest.png",
+    "resources/images/harken.png",
+    "resources/images/harken2.png",
+    "resources/images/icanstillgo.png",
+    "resources/images/ignore.png",
+    "resources/images/impregnableFortress.png",
+    "resources/images/intoWorldMap.png",
+    "resources/images/itemIcon.png",
+    "resources/images/itemList.png",
+    "resources/images/leap.png",
+    "resources/images/leaveDung.png",
+    "resources/images/letswithdraw.png",
+    "resources/images/lounge.png",
+    "resources/images/malice_b3f.png",
+    "resources/images/malice_malice.png",
+    "resources/images/mapFlag.png",
+    "resources/images/mark_auto.png",
+    "resources/images/marker.png",
+    "resources/images/markspot.png",
+    "resources/images/multipeopledead.png",
+    "resources/images/next.png",
+    "resources/images/noneed.png",
+    "resources/images/notenough_close.png",
+    "resources/images/notenoughmp.png",
+    "resources/images/notenoughsp.png",
+    "resources/images/openworldmap.png",
+    "resources/images/output.png",
+    "resources/images/press!!!.png",
+    "resources/images/putinstorage.png",
+    "resources/images/quit.png",
+    "resources/images/ready.png",
+    "resources/images/recover.png",
+    "resources/images/requestToRescueTheDuke.png",
+    "resources/images/request_accepted.png",
+    "resources/images/resume.png",
+    "resources/images/retry.png",
+    "resources/images/retry_blank.png",
+    "resources/images/returntotown.png",
+    "resources/images/rowFlag.png",
+    "resources/images/royalsuite.png",
+    "resources/images/ruins.png",
+    "resources/images/sandman/sandman_1.png",
+    "resources/images/sandman/sandman_2.png",
+    "resources/images/sandman/sandman_bondmate.png",
+    "resources/images/sandman_recover.png",
+    "resources/images/shiphold.png",
+    "resources/images/skull.png",
+    "resources/images/someonedead.png",
+    "resources/images/specialRequest.png",
+    "resources/images/spellskill/CombatAutoDisable.png",
+    "resources/images/spellskill/CombatAutoEnable.png",
+    "resources/images/spellskill/char/0 面具.png",
+    "resources/images/spellskill/char/F 伊亚玛斯.png",
+    "resources/images/spellskill/char/F 凛音.png",
+    "resources/images/spellskill/char/F 凛音_sp.png",
+    "resources/images/spellskill/char/F 吉拉德.png",
+    "resources/images/spellskill/char/F 吉拉德_sp.png",
+    "resources/images/spellskill/char/F 基利昂.png",
+    "resources/images/spellskill/char/F 夏莉莉妮雅.png",
+    "resources/images/spellskill/char/F 奥尔德里科.png",
+    "resources/images/spellskill/char/F 尤尔萨.png",
+    "resources/images/spellskill/char/F 影狼.png",
+    "resources/images/spellskill/char/F 普修利.png",
+    "resources/images/spellskill/char/F 柚奈壬姬.png",
+    "resources/images/spellskill/char/F 狮樱.png",
+    "resources/images/spellskill/char/F 艾妮琪.png",
+    "resources/images/spellskill/char/F 艾尔文.png",
+    "resources/images/spellskill/char/F 莉娜莉亚.png",
+    "resources/images/spellskill/char/F 莉瓦娜.png",
+    "resources/images/spellskill/char/F 莉瓦娜_sp.png",
+    "resources/images/spellskill/char/F 萨维亚.png",
+    "resources/images/spellskill/char/F 萨维亚_sp.png",
+    "resources/images/spellskill/char/F 贝卡南.png",
+    "resources/images/spellskill/char/F 贝卡南_sp.png",
+    "resources/images/spellskill/char/F 赛德.png",
+    "resources/images/spellskill/char/F 迦鲁巴多斯.png",
+    "resources/images/spellskill/char/F 银莲.png",
+    "resources/images/spellskill/char/F 阿尔博里斯.png",
+    "resources/images/spellskill/char/F 雅蓓妮斯.png",
+    "resources/images/spellskill/char/F 雅蓓妮斯_alt.png",
+    "resources/images/spellskill/char/F 雅蓓妮斯_sp.png",
+    "resources/images/spellskill/char/G 亚沙.png",
+    "resources/images/spellskill/char/G 亚沙_sp.png",
+    "resources/images/spellskill/char/G 克拉丽莎.png",
+    "resources/images/spellskill/char/G 克洛艾.png",
+    "resources/images/spellskill/char/G 克洛艾_sp.png",
+    "resources/images/spellskill/char/G 切羽.png",
+    "resources/images/spellskill/char/G 加斯顿.png",
+    "resources/images/spellskill/char/G 卡米尔.png",
+    "resources/images/spellskill/char/G 奥利芙.png",
+    "resources/images/spellskill/char/G 奥菲莉亚.png",
+    "resources/images/spellskill/char/G 巴克什.png",
+    "resources/images/spellskill/char/G 本杰明.png",
+    "resources/images/spellskill/char/G 海因里科.png",
+    "resources/images/spellskill/char/G 玛丽安娜.png",
+    "resources/images/spellskill/char/G 甘道夫.png",
+    "resources/images/spellskill/char/G 米拉娜.png",
+    "resources/images/spellskill/char/G 米拉娜_sp.png",
+    "resources/images/spellskill/char/G 艾莉赛.png",
+    "resources/images/spellskill/char/G 芙尔特.png",
+    "resources/images/spellskill/char/G 芙尔特_sp.png",
+    "resources/images/spellskill/char/G 阿米莉娅.png",
+    "resources/images/spellskill/char/N 人类忍者.png",
+    "resources/images/spellskill/char/N 无名人类女僧侣.png",
+    "resources/images/spellskill/char/N 无名兽人女盗贼.png",
+    "resources/images/spellskill/char/N 无名妖精女法师.png",
+    "resources/images/spellskill/char/P 亚当.png",
+    "resources/images/spellskill/char/P 亚当_sp.png",
+    "resources/images/spellskill/char/P 叶卡捷琳娜.png",
+    "resources/images/spellskill/char/P 叶卡捷琳娜_alt.png",
+    "resources/images/spellskill/char/P 叶卡捷琳娜_sp.png",
+    "resources/images/spellskill/char/P 哲鲁夫_alt.png",
+    "resources/images/spellskill/char/P 拉纳维尔.png",
+    "resources/images/spellskill/char/P 拉纳维尔_alt.png",
+    "resources/images/spellskill/char/P 拉纳维尔_sp.png",
+    "resources/images/spellskill/char/P 爱丽丝.png",
+    "resources/images/spellskill/char/P 爱丽丝_alt.png",
+    "resources/images/spellskill/char/P 爱丽丝_sp.png",
+    "resources/images/spellskill/char/P 黛波拉.png",
+    "resources/images/spellskill/char/P 黛波拉_alt.png",
+    "resources/images/spellskill/char/P 黛波拉_sp.png",
+    "resources/images/spellskill/skillDetail.png",
+    "resources/images/spellskill/skillLvl/lv1.png",
+    "resources/images/spellskill/skillLvl/lv2.png",
+    "resources/images/spellskill/skillLvl/lv3.png",
+    "resources/images/spellskill/skillLvl/lv4.png",
+    "resources/images/spellskill/skillLvl/lv5.png",
+    "resources/images/spellskill/skillLvl/lv6.png",
+    "resources/images/spellskill/skillLvl/lv7.png",
+    "resources/images/spellskill/skillLvl/s_lv1.png",
+    "resources/images/spellskill/skillLvl/s_lv2.png",
+    "resources/images/spellskill/skillLvl/s_lv3.png",
+    "resources/images/spellskill/skillLvl/s_lv4.png",
+    "resources/images/spellskill/skillLvl/s_lv5.png",
+    "resources/images/spellskill/skillLvl/s_lv6.png",
+    "resources/images/spellskill/skillLvl/s_lv7.png",
+    "resources/images/stair_1.png",
+    "resources/images/stair_2.png",
+    "resources/images/stair_3.png",
+    "resources/images/stair_DH_Church.png",
+    "resources/images/stair_DH_R10.png",
+    "resources/images/stair_DH_R4.png",
+    "resources/images/stair_DH_R5.png",
+    "resources/images/stair_DH_R6.png",
+    "resources/images/stair_DH_R7.png",
+    "resources/images/stair_DH_R9.png",
+    "resources/images/stair_down.png",
+    "resources/images/stair_fortress1f.png",
+    "resources/images/stair_fortress3f.png",
+    "resources/images/stair_fortressGate.png",
+    "resources/images/stair_goblinsNest.png",
+    "resources/images/stair_lounge.png",
+    "resources/images/stair_shiphold.png",
+    "resources/images/stair_teleport.png",
+    "resources/images/stair_up.png",
+    "resources/images/startdownload.png",
+    "resources/images/steel.png",
+    "resources/images/story.png",
+    "resources/images/supportSkillCheck.png",
+    "resources/images/theRouteToTheDestinationCannotBeFound.png",
+    "resources/images/tooPoorToReadTheMap.png",
+    "resources/images/totitle.png",
+    "resources/images/trait.png",
+    "resources/images/transfer.png",
+    "resources/images/whowillopenit.png",
+    "resources/images/whowillyougiveitto.png",
+    "resources/images/worldmapflag.png",
+    "resources/images/wraped.png"
+  ],
+  "references": [
+    {
+      "reference": "shortPathOfTarget",
+      "source_ref": "src/script.py:1116",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "shortPathOfTarget",
+      "source_ref": "src/script.py:1145",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "shortPathOfTarget",
+      "source_ref": "src/script.py:1148",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "shortPathOfTarget",
+      "source_ref": "src/script.py:1165",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "shortPathOfTarget",
+      "source_ref": "src/script.py:1168",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "shortPathOfTarget",
+      "source_ref": "src/script.py:1173",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "shortPathOfTarget",
+      "source_ref": "src/script.py:1196",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "f'cursor_{i}'",
+      "source_ref": "src/script.py:1232",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "targetInfo.target",
+      "source_ref": "src/script.py:1248",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "targetInfo.target",
+      "source_ref": "src/script.py:1257",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "correctStair",
+      "source_ref": "src/script.py:1273",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "target",
+      "source_ref": "src/script.py:1289",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "f'fastforward_off'",
+      "source_ref": "src/script.py:1299",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "startdownload",
+      "source_ref": "src/script.py:1333",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/startdownload.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "retry_blank",
+      "source_ref": "src/script.py:1338",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/retry_blank.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "retry",
+      "source_ref": "src/script.py:1343",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/retry.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "retry",
+      "source_ref": "src/script.py:1346",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/retry.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "totitle",
+      "source_ref": "src/script.py:1358",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/totitle.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "resume",
+      "source_ref": "src/script.py:1362",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/resume.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "boot_attention",
+      "source_ref": "src/script.py:1366",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/boot_attention.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "boot_title_logo",
+      "source_ref": "src/script.py:1374",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/boot_title_logo.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "pattern",
+      "source_ref": "src/script.py:1412",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "spellskill/skillDetail",
+      "source_ref": "src/script.py:1468",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/spellskill/skillDetail.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "close",
+      "source_ref": "src/script.py:1470",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/close.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "OK",
+      "source_ref": "src/script.py:1476",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/OK.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "target",
+      "source_ref": "src/script.py:1493",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "pattern",
+      "source_ref": "src/script.py:1499",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "pattern",
+      "source_ref": "src/script.py:1619",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "itemList",
+      "source_ref": "src/script.py:1803",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/itemList.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "itemIcon",
+      "source_ref": "src/script.py:1809",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/itemIcon.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "putinstorage",
+      "source_ref": "src/script.py:1811",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/putinstorage.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "close",
+      "source_ref": "src/script.py:1815",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/close.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "pattern",
+      "source_ref": "src/script.py:1855",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "target_patterns",
+      "source_ref": "src/script.py:1858",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "worldmapflag",
+      "source_ref": "src/script.py:1891",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/worldmapflag.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "worldmapflag",
+      "source_ref": "src/script.py:1906",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/worldmapflag.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "target",
+      "source_ref": "src/script.py:1910",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "dungflag",
+      "source_ref": "src/script.py:1939",
+      "context": "源码模板调用",
+      "status": "CASE_MISMATCH",
+      "matches": [
+        "resources/images/dungFlag.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "openworldmap",
+      "source_ref": "src/script.py:1944",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/openworldmap.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "intoWorldMap",
+      "source_ref": "src/script.py:1949",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/intoWorldMap.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "worldmapflag",
+      "source_ref": "src/script.py:1953",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/worldmapflag.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "openworldmap",
+      "source_ref": "src/script.py:1989",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/openworldmap.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "worldmapflag",
+      "source_ref": "src/script.py:1992",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/worldmapflag.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "target",
+      "source_ref": "src/script.py:2025",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "leap",
+      "source_ref": "src/script.py:2027",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/leap.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "leap",
+      "source_ref": "src/script.py:2029",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/leap.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "target",
+      "source_ref": "src/script.py:2037",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "leap",
+      "source_ref": "src/script.py:2048",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/leap.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "didnottakethequest",
+      "source_ref": "src/script.py:2054",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/didnottakethequest.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "option",
+      "source_ref": "src/script.py:2068",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "leap",
+      "source_ref": "src/script.py:2080",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/leap.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "target",
+      "source_ref": "src/script.py:2082",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "startdownload",
+      "source_ref": "src/script.py:2116",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/startdownload.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "pattern",
+      "source_ref": "src/script.py:2143",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "someonedead",
+      "source_ref": "src/script.py:2151",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/someonedead.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "returnText",
+      "source_ref": "src/script.py:2159",
+      "context": "源码模板调用",
+      "status": "CASE_MISMATCH",
+      "matches": [
+        "resources/images/ReturnText.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "returntoTown",
+      "source_ref": "src/script.py:2163",
+      "context": "源码模板调用",
+      "status": "CASE_MISMATCH",
+      "matches": [
+        "resources/images/returntotown.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "worldmapflag",
+      "source_ref": "src/script.py:2179",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/worldmapflag.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "openworldmap",
+      "source_ref": "src/script.py:2190",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/openworldmap.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "city",
+      "source_ref": "src/script.py:2201",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "Inn",
+      "source_ref": "src/script.py:2203",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/Inn.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "dungFlag",
+      "source_ref": "src/script.py:2205",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/dungFlag.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "Inn",
+      "source_ref": "src/script.py:2208",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/Inn.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "symbol",
+      "source_ref": "src/script.py:2213",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "option",
+      "source_ref": "src/script.py:2218",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "bondmate_close",
+      "source_ref": "src/script.py:2219",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/bondmate_close.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "RiseAgain",
+      "source_ref": "src/script.py:2233",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/RiseAgain.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "sandman_recover",
+      "source_ref": "src/script.py:2236",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/sandman_recover.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "cursedWheel_timeLeap",
+      "source_ref": "src/script.py:2238",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/cursedWheel_timeLeap.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "ambush",
+      "source_ref": "src/script.py:2246",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/ambush.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "ignore",
+      "source_ref": "src/script.py:2246",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/ignore.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "ambush",
+      "source_ref": "src/script.py:2248",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/ambush.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "ambush",
+      "source_ref": "src/script.py:2251",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/ambush.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "ignore",
+      "source_ref": "src/script.py:2256",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/ignore.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "'dialogueChoices/' + op",
+      "source_ref": "src/script.py:2268",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "blessing",
+      "source_ref": "src/script.py:2276",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/blessing.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "combatClose",
+      "source_ref": "src/script.py:2277",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/combatClose.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "multipeopledead",
+      "source_ref": "src/script.py:2282",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/multipeopledead.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "skull",
+      "source_ref": "src/script.py:2286",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/skull.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "totitle",
+      "source_ref": "src/script.py:2289",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/totitle.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "combat",
+      "source_ref": "src/script.py:2460",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "royalsuite",
+      "source_ref": "src/script.py:2465",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/royalsuite.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "quest._preEOTcheck",
+      "source_ref": "src/script.py:2475",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "quest._EOT[-1][1]",
+      "source_ref": "src/script.py:2498",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "GotoDung",
+      "source_ref": "src/script.py:2500",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/GotoDung.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "close",
+      "source_ref": "src/script.py:2516",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/close.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "OK",
+      "source_ref": "src/script.py:2520",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/OK.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "spellskill/CombatAutoDisable",
+      "source_ref": "src/script.py:2550",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/spellskill/CombatAutoDisable.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "spellskill/CombatAutoEnable",
+      "source_ref": "src/script.py:2551",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/spellskill/CombatAutoEnable.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "target",
+      "source_ref": "src/script.py:2612",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "shortPathOfTarget",
+      "source_ref": "src/script.py:2630",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "spellskill/skillDetail",
+      "source_ref": "src/script.py:2686",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/spellskill/skillDetail.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "f'spellskill/skillLvl/lv1'",
+      "source_ref": "src/script.py:2704",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "f'spellskill/skillLvl/s_lv1'",
+      "source_ref": "src/script.py:2704",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "f'spellskill/skillLvl/lv{skilllvl}'",
+      "source_ref": "src/script.py:2712",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "f'spellskill/skillLvl/s_lv{skilllvl}'",
+      "source_ref": "src/script.py:2712",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "f'spellskill/skillLvl/lv{skilllvl}'",
+      "source_ref": "src/script.py:2721",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "f'spellskill/skillLvl/s_lv{skilllvl}'",
+      "source_ref": "src/script.py:2722",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "supportSkillCheck",
+      "source_ref": "src/script.py:2727",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/supportSkillCheck.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "OK",
+      "source_ref": "src/script.py:2734",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/OK.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "notenoughsp",
+      "source_ref": "src/script.py:2764",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/notenoughsp.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "notenoughmp",
+      "source_ref": "src/script.py:2764",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/notenoughmp.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "combatSpd",
+      "source_ref": "src/script.py:2776",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/combatSpd.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "combatSpd_DHI",
+      "source_ref": "src/script.py:2776",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/combatSpd_DHI.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "mapFlag",
+      "source_ref": "src/script.py:2869",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/mapFlag.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "target",
+      "source_ref": "src/script.py:2890",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "AutoMove",
+      "source_ref": "src/script.py:2902",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/AutoMove.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "tooPoorToReadTheMap",
+      "source_ref": "src/script.py:2947",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/tooPoorToReadTheMap.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "dungFlag",
+      "source_ref": "src/script.py:2949",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/dungFlag.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "mapFlag",
+      "source_ref": "src/script.py:2952",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/mapFlag.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "quest._FloorCheck",
+      "source_ref": "src/script.py:2957",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "dungFlag",
+      "source_ref": "src/script.py:3002",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/dungFlag.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "RiseAgain",
+      "source_ref": "src/script.py:3006",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/RiseAgain.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "ambush",
+      "source_ref": "src/script.py:3009",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/ambush.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "chestOpening",
+      "source_ref": "src/script.py:3022",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/chestOpening.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "whowillopenit",
+      "source_ref": "src/script.py:3022",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/whowillopenit.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "chestFlag",
+      "source_ref": "src/script.py:3022",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/chestFlag.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "chestFlag",
+      "source_ref": "src/script.py:3035",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/chestFlag.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "whowillopenit",
+      "source_ref": "src/script.py:3061",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/whowillopenit.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "chestfear",
+      "source_ref": "src/script.py:3070",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/chestfear.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "chestOpening",
+      "source_ref": "src/script.py:3085",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/chestOpening.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "RiseAgain",
+      "source_ref": "src/script.py:3093",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/RiseAgain.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "dungFlag",
+      "source_ref": "src/script.py:3099",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/dungFlag.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "ambush",
+      "source_ref": "src/script.py:3101",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/ambush.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "dungflag",
+      "source_ref": "src/script.py:3251",
+      "context": "源码模板调用",
+      "status": "CASE_MISMATCH",
+      "matches": [
+        "resources/images/dungFlag.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "mapFlag",
+      "source_ref": "src/script.py:3251",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/mapFlag.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "trait",
+      "source_ref": "src/script.py:3255",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/trait.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "story",
+      "source_ref": "src/script.py:3256",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/story.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "recover",
+      "source_ref": "src/script.py:3262",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/recover.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "resume",
+      "source_ref": "src/script.py:3289",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/resume.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "tar",
+      "source_ref": "src/script.py:3334",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "mapflag",
+      "source_ref": "src/script.py:3335",
+      "context": "源码模板调用",
+      "status": "CASE_MISMATCH",
+      "matches": [
+        "resources/images/mapFlag.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "tar",
+      "source_ref": "src/script.py:3339",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "chest_auto_minus",
+      "source_ref": "src/script.py:3343",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/chest_auto_minus.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "NoChestCanBeFound",
+      "source_ref": "src/script.py:3348",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/NoChestCanBeFound.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "theRouteToTheDestinationCannotBeFound",
+      "source_ref": "src/script.py:3348",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/theRouteToTheDestinationCannotBeFound.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "NoChestCanBeFound",
+      "source_ref": "src/script.py:3353",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/NoChestCanBeFound.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "theRouteToTheDestinationCannotBeFound",
+      "source_ref": "src/script.py:3353",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/theRouteToTheDestinationCannotBeFound.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "resume",
+      "source_ref": "src/script.py:3360",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/resume.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "request_accepted",
+      "source_ref": "src/script.py:3407",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/request_accepted.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "7000G/olddist",
+      "source_ref": "src/script.py:3506",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/7000G/olddist.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "7000G/iminhungry",
+      "source_ref": "src/script.py:3509",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/7000G/iminhungry.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "icanstillgo",
+      "source_ref": "src/script.py:3652",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/icanstillgo.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "icanstillgo",
+      "source_ref": "src/script.py:3661",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/icanstillgo.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "letswithdraw",
+      "source_ref": "src/script.py:3664",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/letswithdraw.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "trait",
+      "source_ref": "src/script.py:3777",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/trait.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "recover",
+      "source_ref": "src/script.py:3785",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/recover.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "SSC/Request",
+      "source_ref": "src/script.py:3921",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/SSC/Request.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "Steel",
+      "source_ref": "src/script.py:4269",
+      "context": "源码模板调用",
+      "status": "CASE_MISMATCH",
+      "matches": [
+        "resources/images/steel.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "openworldmap",
+      "source_ref": "src/script.py:4418",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/openworldmap.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "FFXI/org_position",
+      "source_ref": "src/script.py:4418",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/FFXI/org_position.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "FFXI/receive",
+      "source_ref": "src/script.py:4426",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/FFXI/receive.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "FFXI/org_fine",
+      "source_ref": "src/script.py:4428",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/FFXI/org_fine.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "FFXI/org_high",
+      "source_ref": "src/script.py:4429",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/FFXI/org_high.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "FFXI/org_mid",
+      "source_ref": "src/script.py:4430",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/FFXI/org_mid.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "FFXI/org_low",
+      "source_ref": "src/script.py:4431",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/FFXI/org_low.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "FFXI/org_refine",
+      "source_ref": "src/script.py:4432",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/FFXI/org_refine.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "FFXI/org_alter",
+      "source_ref": "src/script.py:4433",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/FFXI/org_alter.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "FFXI/org_sliver",
+      "source_ref": "src/script.py:4434",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/FFXI/org_sliver.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "FFXI/org_ouro",
+      "source_ref": "src/script.py:4435",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/FFXI/org_ouro.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "FFXI/org_lesser_full",
+      "source_ref": "src/script.py:4436",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/FFXI/org_lesser_full.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "FFXI/org_full",
+      "source_ref": "src/script.py:4437",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/FFXI/org_full.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "FFXI/nothingToDig",
+      "source_ref": "src/script.py:4452",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/FFXI/nothingToDig.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "FFXI/nothingToDig2",
+      "source_ref": "src/script.py:4452",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/FFXI/nothingToDig2.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "FFXI/needpickaxe",
+      "source_ref": "src/script.py:4454",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/FFXI/needpickaxe.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "fishing/size_small",
+      "source_ref": "src/script.py:4590",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/fishing/size_small.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "fishing/size_average",
+      "source_ref": "src/script.py:4591",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/fishing/size_average.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "fishing/size_large",
+      "source_ref": "src/script.py:4592",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/fishing/size_large.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "fishing/鲈鱼",
+      "source_ref": "src/script.py:4595",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/fishing/鲈鱼.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "fishing/雅罗",
+      "source_ref": "src/script.py:4596",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/fishing/雅罗.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "fishing/鲶鱼",
+      "source_ref": "src/script.py:4597",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/fishing/鲶鱼.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "fishing/鳟鱼",
+      "source_ref": "src/script.py:4598",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/fishing/鳟鱼.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "fishing/鳗鱼",
+      "source_ref": "src/script.py:4599",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/fishing/鳗鱼.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "fishing/三文鱼",
+      "source_ref": "src/script.py:4600",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/fishing/三文鱼.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "fishing/杂鱼",
+      "source_ref": "src/script.py:4601",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/fishing/杂鱼.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "fishing/cast",
+      "source_ref": "src/script.py:4641",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/fishing/cast.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "fishing/nobait",
+      "source_ref": "src/script.py:4642",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/fishing/nobait.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "fishing/nobait",
+      "source_ref": "src/script.py:4643",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/fishing/nobait.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "fishing/8bait",
+      "source_ref": "src/script.py:4644",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/fishing/8bait.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "intoWorldMap",
+      "source_ref": "src/script.py:4654",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/intoWorldMap.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "fishing/striking",
+      "source_ref": "src/script.py:4700",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/fishing/striking.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "fishing/CloseFishInfo",
+      "source_ref": "src/script.py:4721",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/fishing/CloseFishInfo.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "dungFlag",
+      "source_ref": "src/script.py:4733",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/dungFlag.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "dungFlag",
+      "source_ref": "src/script.py:4749",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/dungFlag.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "fishing/bobber",
+      "source_ref": "src/utils.py:522",
+      "context": "源码模板调用",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/fishing/bobber.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "chest",
+      "source_ref": "resources/quest/quest.json#/Dist/_TARGETINFOLIST/0/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/chest.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "harken",
+      "source_ref": "resources/quest/quest.json#/Dist/_TARGETINFOLIST/1/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/harken.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "TradeWaterway",
+      "source_ref": "resources/quest/quest.json#/Dist/_EOT/0/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/TradeWaterway.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "EdgeOfTown",
+      "source_ref": "resources/quest/quest.json#/Dist/_EOT/0/2/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/EdgeOfTown.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "Dist",
+      "source_ref": "resources/quest/quest.json#/Dist/_EOT/1/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/Dist.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "stair_lounge",
+      "source_ref": "resources/quest/quest.json#/lounge/_TARGETINFOLIST/0/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/stair_lounge.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "chest_auto",
+      "source_ref": "resources/quest/quest.json#/lounge/_TARGETINFOLIST/1/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/chest_auto.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "stair_shiphold",
+      "source_ref": "resources/quest/quest.json#/lounge/_TARGETINFOLIST/2/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/stair_shiphold.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "harken",
+      "source_ref": "resources/quest/quest.json#/lounge/_TARGETINFOLIST/3/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/harken.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "TradeWaterway",
+      "source_ref": "resources/quest/quest.json#/lounge/_EOT/0/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/TradeWaterway.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "EdgeOfTown",
+      "source_ref": "resources/quest/quest.json#/lounge/_EOT/0/2/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/EdgeOfTown.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "shiphold",
+      "source_ref": "resources/quest/quest.json#/lounge/_EOT/1/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/shiphold.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "chest",
+      "source_ref": "resources/quest/quest.json#/fortress-B1F/_TARGETINFOLIST/0/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/chest.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "harken",
+      "source_ref": "resources/quest/quest.json#/fortress-B1F/_TARGETINFOLIST/1/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/harken.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "impregnableFortress",
+      "source_ref": "resources/quest/quest.json#/fortress-B1F/_EOT/0/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/impregnableFortress.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "EdgeOfTown",
+      "source_ref": "resources/quest/quest.json#/fortress-B1F/_EOT/0/2/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/EdgeOfTown.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "fortressb1f",
+      "source_ref": "resources/quest/quest.json#/fortress-B1F/_EOT/1/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/fortressb1f.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "stair_fortress1f",
+      "source_ref": "resources/quest/quest.json#/fortress-B8F_entrance/_TARGETINFOLIST/0/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/stair_fortress1f.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "stair_fortressGate",
+      "source_ref": "resources/quest/quest.json#/fortress-B8F_entrance/_TARGETINFOLIST/3/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/stair_fortressGate.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "impregnableFortress",
+      "source_ref": "resources/quest/quest.json#/fortress-B8F_entrance/_EOT/0/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/impregnableFortress.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "EdgeOfTown",
+      "source_ref": "resources/quest/quest.json#/fortress-B8F_entrance/_EOT/0/2/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/EdgeOfTown.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "fortressEntrance",
+      "source_ref": "resources/quest/quest.json#/fortress-B8F_entrance/_EOT/1/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/fortressEntrance.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "Bharken2",
+      "source_ref": "resources/quest/quest.json#/fortress-10F/_TARGETINFOLIST/1/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/Bharken2.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "impregnableFortress",
+      "source_ref": "resources/quest/quest.json#/fortress-10F/_EOT/0/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/impregnableFortress.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "EdgeOfTown",
+      "source_ref": "resources/quest/quest.json#/fortress-10F/_EOT/0/2/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/EdgeOfTown.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "fortressb10f",
+      "source_ref": "resources/quest/quest.json#/fortress-10F/_EOT/1/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/fortressb10f.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "harken",
+      "source_ref": "resources/quest/quest.json#/DH-4f/_TARGETINFOLIST/3/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/harken.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "stair_DH_R4",
+      "source_ref": "resources/quest/quest.json#/DH-4f/_TARGETINFOLIST/3/2",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/stair_DH_R4.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "DH",
+      "source_ref": "resources/quest/quest.json#/DH-4f/_EOT/0/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/DH.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "EdgeOfTown",
+      "source_ref": "resources/quest/quest.json#/DH-4f/_EOT/0/2/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/EdgeOfTown.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "DH-R4",
+      "source_ref": "resources/quest/quest.json#/DH-4f/_EOT/1/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/DH-R4.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "stair_DH_R6",
+      "source_ref": "resources/quest/quest.json#/DH-6f/_TARGETINFOLIST/0/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/stair_DH_R6.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "chest",
+      "source_ref": "resources/quest/quest.json#/DH-6f/_TARGETINFOLIST/2/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/chest.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "stair_DH_R5",
+      "source_ref": "resources/quest/quest.json#/DH-6f/_TARGETINFOLIST/3/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/stair_DH_R5.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "harken",
+      "source_ref": "resources/quest/quest.json#/DH-6f/_TARGETINFOLIST/4/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/harken.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "DH",
+      "source_ref": "resources/quest/quest.json#/DH-6f/_EOT/0/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/DH.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "EdgeOfTown",
+      "source_ref": "resources/quest/quest.json#/DH-6f/_EOT/0/2/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/EdgeOfTown.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "DH-R6",
+      "source_ref": "resources/quest/quest.json#/DH-6f/_EOT/1/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/DH-R6.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "chest",
+      "source_ref": "resources/quest/quest.json#/DH-7f-right/_TARGETINFOLIST/3/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/chest.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "chest",
+      "source_ref": "resources/quest/quest.json#/DH-7f-right/_TARGETINFOLIST/7/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/chest.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "harken",
+      "source_ref": "resources/quest/quest.json#/DH-7f-right/_TARGETINFOLIST/8/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/harken.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "DH",
+      "source_ref": "resources/quest/quest.json#/DH-7f-right/_EOT/0/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/DH.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "EdgeOfTown",
+      "source_ref": "resources/quest/quest.json#/DH-7f-right/_EOT/0/2/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/EdgeOfTown.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "DH-R7",
+      "source_ref": "resources/quest/quest.json#/DH-7f-right/_EOT/1/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/DH-R7.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "chest_auto",
+      "source_ref": "resources/quest/quest.json#/DH-7f-auto/_TARGETINFOLIST/0/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/chest_auto.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "harken",
+      "source_ref": "resources/quest/quest.json#/DH-7f-auto/_TARGETINFOLIST/1/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/harken.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "DH",
+      "source_ref": "resources/quest/quest.json#/DH-7f-auto/_EOT/0/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/DH.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "EdgeOfTown",
+      "source_ref": "resources/quest/quest.json#/DH-7f-auto/_EOT/0/2/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/EdgeOfTown.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "DH-R7",
+      "source_ref": "resources/quest/quest.json#/DH-7f-auto/_EOT/1/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/DH-R7.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "stair_DH_R10",
+      "source_ref": "resources/quest/quest.json#/DH-10f-test/_TARGETINFOLIST/0/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/stair_DH_R10.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "chest",
+      "source_ref": "resources/quest/quest.json#/DH-10f-test/_TARGETINFOLIST/6/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/chest.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "chest",
+      "source_ref": "resources/quest/quest.json#/DH-10f-test/_TARGETINFOLIST/7/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/chest.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "chest",
+      "source_ref": "resources/quest/quest.json#/DH-10f-test/_TARGETINFOLIST/9/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/chest.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "chest",
+      "source_ref": "resources/quest/quest.json#/DH-10f-test/_TARGETINFOLIST/10/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/chest.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "stair_DH_R9",
+      "source_ref": "resources/quest/quest.json#/DH-10f-test/_TARGETINFOLIST/11/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/stair_DH_R9.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "harken",
+      "source_ref": "resources/quest/quest.json#/DH-10f-test/_TARGETINFOLIST/12/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/harken.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "DH",
+      "source_ref": "resources/quest/quest.json#/DH-10f-test/_EOT/0/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/DH.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "EdgeOfTown",
+      "source_ref": "resources/quest/quest.json#/DH-10f-test/_EOT/0/2/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/EdgeOfTown.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "DH-R9",
+      "source_ref": "resources/quest/quest.json#/DH-10f-test/_EOT/1/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/DH-R9.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "stair_DH_R10",
+      "source_ref": "resources/quest/quest.json#/DH-10f-JR/_TARGETINFOLIST/0/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/stair_DH_R10.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "stair_DH_R9",
+      "source_ref": "resources/quest/quest.json#/DH-10f-JR/_TARGETINFOLIST/3/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/stair_DH_R9.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "harken",
+      "source_ref": "resources/quest/quest.json#/DH-10f-JR/_TARGETINFOLIST/4/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/harken.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "DH",
+      "source_ref": "resources/quest/quest.json#/DH-10f-JR/_EOT/0/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/DH.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "EdgeOfTown",
+      "source_ref": "resources/quest/quest.json#/DH-10f-JR/_EOT/0/2/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/EdgeOfTown.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "DH-R9",
+      "source_ref": "resources/quest/quest.json#/DH-10f-JR/_EOT/1/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/DH-R9.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "chest",
+      "source_ref": "resources/quest/quest.json#/DH-Church-upper/_TARGETINFOLIST/0/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/chest.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "chest",
+      "source_ref": "resources/quest/quest.json#/DH-Church-upper/_TARGETINFOLIST/1/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/chest.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "Bharken",
+      "source_ref": "resources/quest/quest.json#/DH-Church-upper/_TARGETINFOLIST/3/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/Bharken.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "stair_DH_Church",
+      "source_ref": "resources/quest/quest.json#/DH-Church-upper/_TARGETINFOLIST/3/2",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/stair_DH_Church.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "DH",
+      "source_ref": "resources/quest/quest.json#/DH-Church-upper/_EOT/0/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/DH.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "EdgeOfTown",
+      "source_ref": "resources/quest/quest.json#/DH-Church-upper/_EOT/0/2/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/EdgeOfTown.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "DH-Church",
+      "source_ref": "resources/quest/quest.json#/DH-Church-upper/_EOT/1/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/DH-Church.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "chest_auto",
+      "source_ref": "resources/quest/quest.json#/DH-Church-auto/_TARGETINFOLIST/0/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/chest_auto.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "Bharken",
+      "source_ref": "resources/quest/quest.json#/DH-Church-auto/_TARGETINFOLIST/2/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/Bharken.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "stair_DH_Church",
+      "source_ref": "resources/quest/quest.json#/DH-Church-auto/_TARGETINFOLIST/2/2",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/stair_DH_Church.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "DH",
+      "source_ref": "resources/quest/quest.json#/DH-Church-auto/_EOT/0/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/DH.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "EdgeOfTown",
+      "source_ref": "resources/quest/quest.json#/DH-Church-auto/_EOT/0/2/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/EdgeOfTown.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "DH-Church",
+      "source_ref": "resources/quest/quest.json#/DH-Church-auto/_EOT/1/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/DH-Church.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "Mark_auto",
+      "source_ref": "resources/quest/quest.json#/White-G-v2/_TARGETINFOLIST/0/0",
+      "context": "任务数据",
+      "status": "CASE_MISMATCH",
+      "matches": [
+        "resources/images/mark_auto.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "DH",
+      "source_ref": "resources/quest/quest.json#/White-G-v2/_EOT/0/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/DH.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "EdgeOfTown",
+      "source_ref": "resources/quest/quest.json#/White-G-v2/_EOT/0/2/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/EdgeOfTown.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "DH-Church",
+      "source_ref": "resources/quest/quest.json#/White-G-v2/_EOT/1/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/DH-Church.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "chest_auto",
+      "source_ref": "resources/quest/quest.json#/FFXI-2F/_TARGETINFOLIST/0/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/chest_auto.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "FFXI/GCN",
+      "source_ref": "resources/quest/quest.json#/FFXI-2F/_preEOTcheck",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/FFXI/GCN.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "EVENT",
+      "source_ref": "resources/quest/quest.json#/FFXI-2F/_EOT/0/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/EVENT.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "FFXI/EVENT_GCN",
+      "source_ref": "resources/quest/quest.json#/FFXI-2F/_EOT/0/2",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/FFXI/EVENT_GCN.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "FFXI/ZONE2",
+      "source_ref": "resources/quest/quest.json#/FFXI-2F/_EOT/1/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/FFXI/ZONE2.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "FFXI/EVENT_VNH",
+      "source_ref": "resources/quest/quest.json#/FFXI-2F/_RTT/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/FFXI/EVENT_VNH.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "FFXI/GCN",
+      "source_ref": "resources/quest/quest.json#/FFXI-2F-elite/_preEOTcheck",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/FFXI/GCN.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "EVENT",
+      "source_ref": "resources/quest/quest.json#/FFXI-2F-elite/_EOT/0/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/EVENT.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "FFXI/EVENT_GCN",
+      "source_ref": "resources/quest/quest.json#/FFXI-2F-elite/_EOT/0/2",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/FFXI/EVENT_GCN.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "FFXI/ZONE2",
+      "source_ref": "resources/quest/quest.json#/FFXI-2F-elite/_EOT/1/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/FFXI/ZONE2.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "FFXI/EVENT_VNH",
+      "source_ref": "resources/quest/quest.json#/FFXI-2F-elite/_RTT/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/FFXI/EVENT_VNH.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "EVENT",
+      "source_ref": "resources/quest/quest.json#/FFXI-5F-4Elite/_EOT/0/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/EVENT.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "FFXI/EVENT_GCN",
+      "source_ref": "resources/quest/quest.json#/FFXI-5F-4Elite/_EOT/0/2",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/FFXI/EVENT_GCN.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "FFXI/zone5",
+      "source_ref": "resources/quest/quest.json#/FFXI-5F-4Elite/_EOT/1/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/FFXI/zone5.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "FFXI/EVENT_VNH",
+      "source_ref": "resources/quest/quest.json#/FFXI-5F-4Elite/_RTT/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/FFXI/EVENT_VNH.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "EVENT",
+      "source_ref": "resources/quest/quest.json#/FFXI-5F-2Elite-mid/_EOT/0/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/EVENT.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "FFXI/EVENT_GCN",
+      "source_ref": "resources/quest/quest.json#/FFXI-5F-2Elite-mid/_EOT/0/2",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/FFXI/EVENT_GCN.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "FFXI/zone5",
+      "source_ref": "resources/quest/quest.json#/FFXI-5F-2Elite-mid/_EOT/1/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/FFXI/zone5.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "FFXI/EVENT_VNH",
+      "source_ref": "resources/quest/quest.json#/FFXI-5F-2Elite-mid/_RTT/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/FFXI/EVENT_VNH.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "EVENT",
+      "source_ref": "resources/quest/quest.json#/FFXI-5F-2Elite-bottom/_EOT/0/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/EVENT.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "FFXI/EVENT_GCN",
+      "source_ref": "resources/quest/quest.json#/FFXI-5F-2Elite-bottom/_EOT/0/2",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/FFXI/EVENT_GCN.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "FFXI/zone5",
+      "source_ref": "resources/quest/quest.json#/FFXI-5F-2Elite-bottom/_EOT/1/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/FFXI/zone5.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "FFXI/EVENT_VNH",
+      "source_ref": "resources/quest/quest.json#/FFXI-5F-2Elite-bottom/_RTT/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/FFXI/EVENT_VNH.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "EVENT",
+      "source_ref": "resources/quest/quest.json#/FFXI-5F-2Elite-left/_EOT/0/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/EVENT.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "FFXI/EVENT_GCN",
+      "source_ref": "resources/quest/quest.json#/FFXI-5F-2Elite-left/_EOT/0/2",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/FFXI/EVENT_GCN.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "FFXI/zone5",
+      "source_ref": "resources/quest/quest.json#/FFXI-5F-2Elite-left/_EOT/1/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/FFXI/zone5.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "FFXI/EVENT_VNH",
+      "source_ref": "resources/quest/quest.json#/FFXI-5F-2Elite-left/_RTT/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/FFXI/EVENT_VNH.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "EVENT",
+      "source_ref": "resources/quest/quest.json#/FFXI-5F-Elite/_EOT/0/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/EVENT.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "FFXI/EVENT_GCN",
+      "source_ref": "resources/quest/quest.json#/FFXI-5F-Elite/_EOT/0/2",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/FFXI/EVENT_GCN.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "FFXI/zone5",
+      "source_ref": "resources/quest/quest.json#/FFXI-5F-Elite/_EOT/1/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/FFXI/zone5.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "FFXI/EVENT_VNH",
+      "source_ref": "resources/quest/quest.json#/FFXI-5F-Elite/_RTT/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/FFXI/EVENT_VNH.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "chest_auto",
+      "source_ref": "resources/quest/quest.json#/HSR-1F/_TARGETINFOLIST/0/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/chest_auto.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "HSR/HSR",
+      "source_ref": "resources/quest/quest.json#/HSR-1F/_preEOTcheck",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/HSR/HSR.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "intoWorldMap",
+      "source_ref": "resources/quest/quest.json#/HSR-1F/_EOT/0/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/intoWorldMap.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "HSR/HSR",
+      "source_ref": "resources/quest/quest.json#/HSR-1F/_EOT/0/2/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/HSR/HSR.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "HSR/AGMM1F",
+      "source_ref": "resources/quest/quest.json#/HSR-1F/_EOT/1/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/HSR/AGMM1F.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "chest_auto",
+      "source_ref": "resources/quest/quest.json#/IWO/_TARGETINFOLIST/0/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/chest_auto.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "IWO/IWO",
+      "source_ref": "resources/quest/quest.json#/IWO/_preEOTcheck",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/IWO/IWO.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "intoWorldMap",
+      "source_ref": "resources/quest/quest.json#/IWO/_EOT/0/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/intoWorldMap.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "IWO/IWO",
+      "source_ref": "resources/quest/quest.json#/IWO/_EOT/0/2/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/IWO/IWO.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "IWO/IWOB1F",
+      "source_ref": "resources/quest/quest.json#/IWO/_EOT/1/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/IWO/IWOB1F.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "IWO/IWO",
+      "source_ref": "resources/quest/quest.json#/IWO/_EOT/1/2/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/IWO/IWO.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "City_portTownGrandLegion",
+      "source_ref": "resources/quest/quest.json#/IWO/_RTT/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/City_portTownGrandLegion.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "chest_auto",
+      "source_ref": "resources/quest/quest.json#/IWO_2/_TARGETINFOLIST/0/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/chest_auto.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "IWO/IWO",
+      "source_ref": "resources/quest/quest.json#/IWO_2/_preEOTcheck",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/IWO/IWO.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "intoWorldMap",
+      "source_ref": "resources/quest/quest.json#/IWO_2/_EOT/0/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/intoWorldMap.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "IWO/IWO",
+      "source_ref": "resources/quest/quest.json#/IWO_2/_EOT/0/2/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/IWO/IWO.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "IWO/IWOB2F",
+      "source_ref": "resources/quest/quest.json#/IWO_2/_EOT/1/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/IWO/IWOB2F.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "IWO/IWO",
+      "source_ref": "resources/quest/quest.json#/IWO_2/_EOT/1/2/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/IWO/IWO.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "City_portTownGrandLegion",
+      "source_ref": "resources/quest/quest.json#/IWO_2/_RTT/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/City_portTownGrandLegion.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "malice_malice",
+      "source_ref": "resources/quest/quest.json#/malice-B3F/_EOT/0/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/malice_malice.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "EdgeOfTown",
+      "source_ref": "resources/quest/quest.json#/malice-B3F/_EOT/0/2/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/EdgeOfTown.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "malice_B3F",
+      "source_ref": "resources/quest/quest.json#/malice-B3F/_EOT/1/1",
+      "context": "任务数据",
+      "status": "CASE_MISMATCH",
+      "matches": [
+        "resources/images/malice_b3f.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "harken2",
+      "source_ref": "resources/quest/quest.json#/malice-B3F/_TARGETINFOLIST/1/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/harken2.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "chest_auto",
+      "source_ref": "resources/quest/quest.json#/fordraig-B3F/_TARGETINFOLIST/0/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/chest_auto.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "harken",
+      "source_ref": "resources/quest/quest.json#/fordraig-B3F/_TARGETINFOLIST/1/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/harken.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "fordraig/B3F",
+      "source_ref": "resources/quest/quest.json#/fordraig-B3F/_preEOTcheck",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/fordraig/B3F.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "intoWorldMap",
+      "source_ref": "resources/quest/quest.json#/fordraig-B3F/_EOT/0/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/intoWorldMap.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "fordraig/labyrinthOfFordraig",
+      "source_ref": "resources/quest/quest.json#/fordraig-B3F/_EOT/0/2/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/fordraig/labyrinthOfFordraig.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "fordraig/B3F",
+      "source_ref": "resources/quest/quest.json#/fordraig-B3F/_EOT/1/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/fordraig/B3F.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "fordraig/labyrinthOfFordraig",
+      "source_ref": "resources/quest/quest.json#/fordraig-B3F/_EOT/1/2/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/fordraig/labyrinthOfFordraig.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "chest_auto",
+      "source_ref": "resources/quest/quest.json#/SSC_chest/_TARGETINFOLIST/0/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/chest_auto.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "SSC/SSC_quit",
+      "source_ref": "resources/quest/quest.json#/SSC_chest/_TARGETINFOLIST/1/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/SSC/SSC_quit.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "SSC/SSC",
+      "source_ref": "resources/quest/quest.json#/SSC_chest/_preEOTcheck",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/SSC/SSC.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "intoWorldMap",
+      "source_ref": "resources/quest/quest.json#/SSC_chest/_EOT/0/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/intoWorldMap.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "SSC/SSC",
+      "source_ref": "resources/quest/quest.json#/SSC_chest/_EOT/0/2/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/SSC/SSC.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "chest",
+      "source_ref": "resources/quest/quest.json#/LBC/_TARGETINFOLIST/0/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/chest.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "LBC/LBC_quit",
+      "source_ref": "resources/quest/quest.json#/LBC/_TARGETINFOLIST/1/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/LBC/LBC_quit.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "LBC/LBC",
+      "source_ref": "resources/quest/quest.json#/LBC/_preEOTcheck",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/LBC/LBC.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "intoWorldMap",
+      "source_ref": "resources/quest/quest.json#/LBC/_EOT/0/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/intoWorldMap.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "LBC/LBC",
+      "source_ref": "resources/quest/quest.json#/LBC/_EOT/0/2/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/LBC/LBC.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "chest_auto",
+      "source_ref": "resources/quest/quest.json#/AWD/_TARGETINFOLIST/0/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/chest_auto.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "AWD/AWD",
+      "source_ref": "resources/quest/quest.json#/AWD/_preEOTcheck",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/AWD/AWD.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "intoWorldMap",
+      "source_ref": "resources/quest/quest.json#/AWD/_EOT/0/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/intoWorldMap.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "AWD/AWD",
+      "source_ref": "resources/quest/quest.json#/AWD/_EOT/0/2/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/AWD/AWD.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "AWD/AWD2F",
+      "source_ref": "resources/quest/quest.json#/AWD/_EOT/1/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/AWD/AWD2F.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "chest_auto",
+      "source_ref": "resources/quest/quest.json#/AWD-noGorgon/_TARGETINFOLIST/0/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/chest_auto.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "harken",
+      "source_ref": "resources/quest/quest.json#/AWD-noGorgon/_TARGETINFOLIST/2/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/harken.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "AWD/AWD",
+      "source_ref": "resources/quest/quest.json#/AWD-noGorgon/_preEOTcheck",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/AWD/AWD.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "intoWorldMap",
+      "source_ref": "resources/quest/quest.json#/AWD-noGorgon/_EOT/0/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/intoWorldMap.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "AWD/AWD",
+      "source_ref": "resources/quest/quest.json#/AWD-noGorgon/_EOT/0/2/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/AWD/AWD.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "AWD/AWD1F",
+      "source_ref": "resources/quest/quest.json#/AWD-noGorgon/_EOT/1/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/AWD/AWD1F.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "chest",
+      "source_ref": "resources/quest/quest.json#/GHB/_TARGETINFOLIST/5/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/chest.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "chest",
+      "source_ref": "resources/quest/quest.json#/GHB/_TARGETINFOLIST/6/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/chest.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "chest",
+      "source_ref": "resources/quest/quest.json#/GHB/_TARGETINFOLIST/7/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/chest.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "chest",
+      "source_ref": "resources/quest/quest.json#/GHB/_TARGETINFOLIST/8/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/chest.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "GHB/GHB_quit",
+      "source_ref": "resources/quest/quest.json#/GHB/_TARGETINFOLIST/9/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/GHB/GHB_quit.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "GHB/GHB",
+      "source_ref": "resources/quest/quest.json#/GHB/_preEOTcheck",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/GHB/GHB.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "intoWorldMap",
+      "source_ref": "resources/quest/quest.json#/GHB/_EOT/0/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/intoWorldMap.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "GHB/GHB",
+      "source_ref": "resources/quest/quest.json#/GHB/_EOT/0/2/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/GHB/GHB.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "chest",
+      "source_ref": "resources/quest/quest.json#/COS_chest/_TARGETINFOLIST/0/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/chest.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "chest",
+      "source_ref": "resources/quest/quest.json#/COS_chest/_TARGETINFOLIST/1/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/chest.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "stair_3",
+      "source_ref": "resources/quest/quest.json#/COS_chest/_TARGETINFOLIST/2/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/stair_3.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "chest",
+      "source_ref": "resources/quest/quest.json#/COS_chest/_TARGETINFOLIST/3/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/chest.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "chest",
+      "source_ref": "resources/quest/quest.json#/COS_chest/_TARGETINFOLIST/4/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/chest.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "stair_2",
+      "source_ref": "resources/quest/quest.json#/COS_chest/_TARGETINFOLIST/5/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/stair_2.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "harken",
+      "source_ref": "resources/quest/quest.json#/COS_chest/_TARGETINFOLIST/6/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/harken.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "COS/COS",
+      "source_ref": "resources/quest/quest.json#/COS_chest/_EOT/0/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/COS/COS.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "EdgeOfTown",
+      "source_ref": "resources/quest/quest.json#/COS_chest/_EOT/0/2/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/EdgeOfTown.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "COS/COSB2F",
+      "source_ref": "resources/quest/quest.json#/COS_chest/_EOT/1/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/COS/COSB2F.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "chest_auto",
+      "source_ref": "resources/quest/quest.json#/COS_chest_short/_TARGETINFOLIST/0/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/chest_auto.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "harken",
+      "source_ref": "resources/quest/quest.json#/COS_chest_short/_TARGETINFOLIST/1/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/harken.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "COS/COS",
+      "source_ref": "resources/quest/quest.json#/COS_chest_short/_EOT/0/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/COS/COS.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "EdgeOfTown",
+      "source_ref": "resources/quest/quest.json#/COS_chest_short/_EOT/0/2/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/EdgeOfTown.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "COS/COSB2F",
+      "source_ref": "resources/quest/quest.json#/COS_chest_short/_EOT/1/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/COS/COSB2F.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "DOE",
+      "source_ref": "resources/quest/quest.json#/DOE/_EOT/0/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/DOE.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "EdgeOfTown",
+      "source_ref": "resources/quest/quest.json#/DOE/_EOT/0/2/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/EdgeOfTown.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "DOEB1F",
+      "source_ref": "resources/quest/quest.json#/DOE/_EOT/1/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/DOEB1F.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "chest",
+      "source_ref": "resources/quest/quest.json#/DOE/_TARGETINFOLIST/1/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/chest.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "DOE_quit",
+      "source_ref": "resources/quest/quest.json#/DOE/_TARGETINFOLIST/2/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/DOE_quit.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "chest",
+      "source_ref": "resources/quest/quest.json#/DOF/_TARGETINFOLIST/2/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/chest.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "DOF",
+      "source_ref": "resources/quest/quest.json#/DOF/_EOT/0/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/DOF.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "EdgeOfTown",
+      "source_ref": "resources/quest/quest.json#/DOF/_EOT/0/2/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/EdgeOfTown.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "DOFB1F",
+      "source_ref": "resources/quest/quest.json#/DOF/_EOT/1/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/DOFB1F.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "chest_auto",
+      "source_ref": "resources/quest/quest.json#/DOF_Plus/_TARGETINFOLIST/0/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/chest_auto.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "DOF",
+      "source_ref": "resources/quest/quest.json#/DOF_Plus/_EOT/0/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/DOF.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "EdgeOfTown",
+      "source_ref": "resources/quest/quest.json#/DOF_Plus/_EOT/0/2/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/EdgeOfTown.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "DOFB1F",
+      "source_ref": "resources/quest/quest.json#/DOF_Plus/_EOT/1/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/DOFB1F.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "chest",
+      "source_ref": "resources/quest/quest.json#/DOW/_TARGETINFOLIST/0/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/chest.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "DOW_quit",
+      "source_ref": "resources/quest/quest.json#/DOW/_TARGETINFOLIST/1/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/DOW_quit.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "DOW",
+      "source_ref": "resources/quest/quest.json#/DOW/_EOT/0/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/DOW.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "EdgeOfTown",
+      "source_ref": "resources/quest/quest.json#/DOW/_EOT/0/2/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/EdgeOfTown.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "DOWB1F",
+      "source_ref": "resources/quest/quest.json#/DOW/_EOT/1/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/DOWB1F.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "chest_auto",
+      "source_ref": "resources/quest/quest.json#/DOW_Plus/_TARGETINFOLIST/0/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/chest_auto.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "DOW",
+      "source_ref": "resources/quest/quest.json#/DOW_Plus/_EOT/0/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/DOW.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "EdgeOfTown",
+      "source_ref": "resources/quest/quest.json#/DOW_Plus/_EOT/0/2/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/EdgeOfTown.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "DOWB1F",
+      "source_ref": "resources/quest/quest.json#/DOW_Plus/_EOT/1/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/DOWB1F.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "DOL",
+      "source_ref": "resources/quest/quest.json#/DOL/_EOT/0/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/DOL.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "EdgeOfTown",
+      "source_ref": "resources/quest/quest.json#/DOL/_EOT/0/2/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/EdgeOfTown.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "DOLB1F",
+      "source_ref": "resources/quest/quest.json#/DOL/_EOT/1/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/DOLB1F.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "chest",
+      "source_ref": "resources/quest/quest.json#/DOL/_TARGETINFOLIST/0/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/chest.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "DOL",
+      "source_ref": "resources/quest/quest.json#/DOL_PLUS/_EOT/0/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/DOL.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "EdgeOfTown",
+      "source_ref": "resources/quest/quest.json#/DOL_PLUS/_EOT/0/2/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/EdgeOfTown.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "DOLB1F",
+      "source_ref": "resources/quest/quest.json#/DOL_PLUS/_EOT/1/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/DOLB1F.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "chest_auto",
+      "source_ref": "resources/quest/quest.json#/DOL_PLUS/_TARGETINFOLIST/0/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/chest_auto.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "DOS",
+      "source_ref": "resources/quest/quest.json#/DOS/_EOT/0/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/DOS.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "EdgeOfTown",
+      "source_ref": "resources/quest/quest.json#/DOS/_EOT/0/2/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/EdgeOfTown.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "DOSB1F",
+      "source_ref": "resources/quest/quest.json#/DOS/_EOT/1/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/DOSB1F.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "chest",
+      "source_ref": "resources/quest/quest.json#/DOS/_TARGETINFOLIST/2/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/chest.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "DOS_quit",
+      "source_ref": "resources/quest/quest.json#/DOS/_TARGETINFOLIST/3/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/DOS_quit.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "LMG/LMG",
+      "source_ref": "resources/quest/quest.json#/LMG-GT/_preEOTcheck",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/LMG/LMG.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "intoWorldMap",
+      "source_ref": "resources/quest/quest.json#/LMG-GT/_EOT/0/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/intoWorldMap.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "LMG/LMG",
+      "source_ref": "resources/quest/quest.json#/LMG-GT/_EOT/0/2/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/LMG/LMG.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "LMG/LMG1F",
+      "source_ref": "resources/quest/quest.json#/LMG-GT/_EOT/1/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/LMG/LMG1F.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "LMG/LMG",
+      "source_ref": "resources/quest/quest.json#/LMG-FT/_preEOTcheck",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/LMG/LMG.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "intoWorldMap",
+      "source_ref": "resources/quest/quest.json#/LMG-FT/_EOT/0/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/intoWorldMap.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "LMG/LMG",
+      "source_ref": "resources/quest/quest.json#/LMG-FT/_EOT/0/2/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/LMG/LMG.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "LMG/FTB1F",
+      "source_ref": "resources/quest/quest.json#/LMG-FT/_EOT/1/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/LMG/FTB1F.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "FFXI/GCN",
+      "source_ref": "resources/quest/quest.json#/FFXI-Org/_preEOTcheck",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/FFXI/GCN.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "EVENT",
+      "source_ref": "resources/quest/quest.json#/FFXI-Org/_EOT/0/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/EVENT.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "FFXI/EVENT_GCN",
+      "source_ref": "resources/quest/quest.json#/FFXI-Org/_EOT/0/2",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/FFXI/EVENT_GCN.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "FFXI/ZONE2",
+      "source_ref": "resources/quest/quest.json#/FFXI-Org/_EOT/1/1",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/FFXI/ZONE2.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    },
+    {
+      "reference": "City_RoyalCityLuknalia",
+      "source_ref": "resources/quest/quest.json#/FFXI-Org/_RTT/0",
+      "context": "任务数据",
+      "status": "EXACT",
+      "matches": [
+        "resources/images/City_RoyalCityLuknalia.png"
+      ],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver"
+    }
+  ],
+  "case_collisions": [],
+  "limitations": [
+    "动态名称、条件/循环拼接与 mod 提供的模板仍需 M3 按真实上下文回归；未读取用户 mod。",
+    "任务原始字段完整保存，不能把非模板字符串一概判缺图片。"
+  ]
+}

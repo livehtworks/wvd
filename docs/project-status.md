@@ -11,7 +11,10 @@
 
 ## 当前阶段
 
-- MaaFramework Windows 独立选型验证已完成，审核入口为 `validation/maafw-windows-20260913/REVIEW_GUIDE.md`；未接入生产。28 个必选项目中 27 个通过，生命周期内存增长斜率轻微超线，归因待确认；NEXT/Pause 真实样本回归未验证。
+- MaaFramework M0 限定交付已获用户审核接受并收口，继续保留该技术路线；不再重复 M0 内存测试。42 项离线原生断言、18 项汇总器检查及 285 组资源采样的范围结论保留，资源仍 RESOURCE_UNRESOLVED，不放行生产切换。
+- 用户随后明确授权 M1，独立 `next/` C++20/CMake + Vue/TypeScript 工程与完整功能盘点已完成；原生服务只提供版本/能力查询与只读迁移工作台，未链接 Maa、未连接设备、未切换生产。18 项原生服务/盘点测试及 2 项浏览器场景通过，见 `../next/docs/m1-validation.md`。
+- 基线盘点覆盖 250 函数、33 配置、58 任务、82 入口，含 784 条 if/case 分支与嵌套字段；资源报告记录 8 处大小写差异和 44 处动态引用。所有迁移项仍为 MAPPED_NOT_IMPLEMENTED，不代表业务已迁移。
+- 当前停在 M2 之前。OCR 三态缺口为 M2 落实项；真实 NEXT/Pause、原生等待可中断性、资源归因及 Spark 边界仍开放。详见 `maafw-m0-review-resolution.md`。
 - 同步目标为上游 2.8.7（`1c37b76`）；保留本地恢复、配置和日志契约。
 - 新增近端/远端钓鱼、沙人缘、FFXI 左侧精英任务；合入挖矿、楼层与任务点策略切换修复。
 - 策略新增“释放任一即完成”；恢复复选框改为正向显示，持久化 SKIP 字段含义不变。
@@ -24,3 +27,5 @@
 - 同步取舍和验收：`upstream-sync-2.8.7.md`。
 - 历史稳定性改动与性能测量：`local-stability-and-performance-notes.md`（其中历史观察不替代本文件当前事实）。
 - 独立 C++/MaaFramework 探针、脱敏结论与审核说明：`../validation/maafw-windows-20260913/`；不参与 WVD 构建、加载或运行。
+- M0 最新边界与外部验证证据索引：`maafw-m0-review-resolution.md`；历史快照不替代本轮证据结论。
+- M1 工程命令与架构：`../next/README.md`、`../next/docs/architecture.md`；完整映射与业务约束：`../next/docs/migration/README.md`。
