@@ -24,7 +24,7 @@ inline std::vector<std::uint8_t> bytes(const std::filesystem::path &path) {
     require(bool(file), "fixture missing");
     return {std::istreambuf_iterator<char>(file), {}};
 }
-class OfflineDevice final : public devices::DeviceBackend {
+class OfflineDevice : public devices::DeviceBackend {
   public:
     std::string identity = "m2-offline", viewport = "portrait", application = "fixture.app";
     contracts::Size size{900, 1600};
@@ -74,12 +74,48 @@ struct Unblock {
     }
 };
 struct Setup {
+    std::shared_ptr<runtime::BehaviorRegistry> registry =
+        std::make_shared<runtime::BehaviorRegistry>("offline-tests-2");
     maafw::Bundle bundle;
     std::optional<maafw::Bundle> alternate;
     std::shared_ptr<OfflineDevice> device = std::make_shared<OfflineDevice>();
     std::filesystem::path output;
     contracts::InputPolicy policy;
     explicit Setup(const J &config) {
+        registry->add_action({"test.wait", "1"}, [](maafw::Context &context, const J &, const J &) {
+            while (!context.cancelled())
+                std::this_thread::sleep_for(5ms);
+            return false;
+        });
+        auto false_action = +[](maafw::Context &, const J &, const J &) { return false; };
+        registry->add_action({"test.false", "1"}, false_action);
+        registry->add_action({"test.false", "2"}, false_action);
+        registry->add_action({"test.throw", "1"},
+                             [](maafw::Context &, const J &, const J &) -> bool {
+                                 throw std::runtime_error("TEST_CALLBACK_EXCEPTION");
+                             });
+        registry->add_action(
+            {"test.clone", "1"}, [](maafw::Context &context, const J &, const J &) {
+                auto before = context.node_data("Data");
+                auto result =
+                    context.run_child("ChildOK", {{"Data", {{"roi", {11, 22, 33, 44}}}}}, true);
+                require(result.valid && result.status == MaaStatus_Succeeded, "clone child failed");
+                require(context.node_data("Data") == before, "clone modified parent");
+                return true;
+            });
+        auto recovery =
+            +[](const contracts::SessionResult &, const runtime::SessionDefinition &previous,
+                const J &parameters) -> std::optional<runtime::SessionDefinition> {
+            auto mode = parameters.value("mode", std::string("normal"));
+            if (mode == "throw")
+                throw std::runtime_error("TEST_RECOVERY_THROW");
+            auto next = previous;
+            next.entry = mode == "invalid" ? "" : mode == "repeat" ? "Recover" : "Normal";
+            return next;
+        };
+        registry->add_recovery({"test.recovery", "1"}, recovery);
+        registry->add_recovery({"test.recovery", "2"}, recovery);
+        registry->seal();
         bundle.root = maafw::path_from_utf8(config.at("bundle"));
         bundle.revision = "runtime-fixture";
         for (const auto &file : config.at("files"))
@@ -95,6 +131,8 @@ struct Setup {
         device->identity = config.at("device_id");
         if (config.value("large", false))
             device->size = {1080, 1920};
+        if (config.contains("width"))
+            device->size = {config["width"], config["width"].get<int>() * 16 / 9};
         output = maafw::path_from_utf8(config.at("output"));
         policy = {device->identity,
                   "offline",
@@ -116,15 +154,10 @@ struct Setup {
         d.request_id = "request-1";
         d.policy = policy;
         d.initial = {bundle, entry, "Terminal", {}, 5000ms, 150ms};
-        d.initial.actions["TestWait"] = [](maafw::Context &context, const J &) {
-            while (!context.cancelled())
-                std::this_thread::sleep_for(5ms);
-            return false;
-        };
-        d.initial.actions["TestFalse"] = [](maafw::Context &, const J &) { return false; };
-        d.initial.actions["TestThrow"] = [](maafw::Context &, const J &) -> bool {
-            throw std::runtime_error("TEST_CALLBACK_EXCEPTION");
-        };
+        d.initial.actions = {{"TestWait", {"test.wait", "1"}},
+                             {"TestFalse", {"test.false", "1"}},
+                             {"TestThrow", {"test.throw", "1"}},
+                             {"TestClone", {"test.clone", "1"}}};
         return d;
     }
 };

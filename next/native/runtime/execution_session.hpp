@@ -1,21 +1,17 @@
 #pragma once
+#include "behavior_registry.hpp"
 #include "contracts/run.hpp"
 #include "maafw/gateway.hpp"
 #include <condition_variable>
 #include <thread>
 
 namespace wvd::runtime {
-struct SessionDefinition {
-    maafw::Bundle bundle;
-    std::string entry, terminal_node;
-    maafw::ActionRegistry actions;
-    std::chrono::milliseconds time_limit{60000}, stop_timeout{3000};
-};
 class ExecutionSession {
   public:
     ExecutionSession(SessionDefinition definition, devices::DeviceBackend &backend,
                      contracts::InputPolicy policy, std::uint64_t run, std::uint64_t generation,
-                     storage::EventJournal &events);
+                     storage::EventJournal &events,
+                     std::shared_ptr<const BehaviorRegistry> registry);
     ~ExecutionSession();
     void start();
     void request_stop();
@@ -33,6 +29,7 @@ class ExecutionSession {
     void fail(const std::string &reason);
     bool cancelled() const;
     SessionDefinition definition_;
+    std::shared_ptr<const BehaviorRegistry> registry_;
     storage::EventJournal &events_;
     devices::InputGate gate_;
     std::atomic<bool> started_{false}, user_stop_{false}, abort_{false}, recovery_{false},

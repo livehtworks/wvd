@@ -28,6 +28,7 @@ class EventJournal {
     mutable std::mutex mutex_;
     std::deque<Event> events_;
     bool terminal_{};
+    bool committing_{};
 };
 class RunStore {
   public:

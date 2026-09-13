@@ -3,12 +3,23 @@
 namespace fixture {
 J runtime_case(const std::string &name, Setup &s) {
     using namespace contracts;
-    runtime::RunCoordinator coordinator(s.output);
+    runtime::RunCoordinator coordinator(s.output, s.registry, name == "critical-full" ? 8 : 256);
     Unblock safety{s.device};
     auto d = s.definition();
+    if (name == "registry-sealed") {
+        try {
+            s.registry->add_action(
+                {"test.false", "1"}, +[](maafw::Context &, const J &, const J &) { return true; });
+            throw std::runtime_error("sealed registry mutated");
+        } catch (const std::runtime_error &e) {
+            require(std::string(e.what()) == "REGISTRY_SEALED", e.what());
+        }
+        require(s.device->connections == 0, "registry validation connected");
+        return {{"sealed", true}, {"manifest", s.registry->manifest()}};
+    }
     if (name == "session-restart-refused") {
         storage::EventJournal events(platform::unique_id(), 1);
-        runtime::ExecutionSession session(d.initial, *s.device, d.policy, 1, 1, events);
+        runtime::ExecutionSession session(d.initial, *s.device, d.policy, 1, 1, events, s.registry);
         session.start();
         require(session.wait_for(10000ms), "finite session did not finish");
         auto result = session.join();
@@ -76,23 +87,28 @@ J runtime_case(const std::string &name, Setup &s) {
         d.initial.entry = "Cooperate";
         d.initial.time_limit = 150ms;
     }
-    if (name == "recovery") {
+    if (name == "recovery" || name.starts_with("recover-") ||
+        name.starts_with("identity-recovery")) {
         d.initial.entry = "Recover";
         d.recovery_limit = 1;
-        d.recover = [&](const auto &) { return std::optional{s.definition().initial}; };
+        d.recover = contracts::BehaviorBinding{
+            "recovery",
+            {"test.recovery", "1"},
+            {{"mode", name == "recover-throw" || name == "recover-storage" ? "throw"
+                      : name == "recover-invalid"                          ? "invalid"
+                                                                           : "normal"}}};
     }
     if (name == "unresolved-recovery")
         d.initial.entry = "Recover";
+    if (name == "critical-full") {
+        d.initial.entry = "Recover";
+        d.recovery_limit = 3;
+        d.recover = BehaviorBinding{"recovery", {"test.recovery", "1"}, {{"mode", "repeat"}}};
+    }
+    if (name == "recover-storage" || name == "definition-copy")
+        s.device->block_connect = true;
     if (name == "clone-isolation") {
         d.initial.entry = "CloneInspect";
-        d.initial.actions["TestClone"] = [](maafw::Context &context, const J &) {
-            auto before = context.node_data("Data");
-            auto result =
-                context.run_child("ChildOK", {{"Data", {{"roi", {11, 22, 33, 44}}}}}, true);
-            require(result.valid && result.status == MaaStatus_Succeeded, "clone child failed");
-            require(context.node_data("Data") == before, "clone modified parent");
-            return true;
-        };
     }
     if (name == "interrupt")
         d.initial.entry = "InterruptRoot";
@@ -108,6 +124,33 @@ J runtime_case(const std::string &name, Setup &s) {
         return {{"connected", 0}, {"backend_called", 0}};
     }
     auto started = coordinator.start(d, s.device);
+    if (name.starts_with("identity-")) {
+        auto changed = d;
+        if (name == "identity-action-revision")
+            changed.initial.actions[1].implementation.revision = "2";
+        if (name == "identity-action-params")
+            changed.initial.actions[1].parameters["value"] = 42;
+        if (name == "identity-recovery-revision")
+            changed.recover->implementation.revision = "2";
+        if (name == "identity-recovery-params")
+            changed.recover->parameters["value"] = 42;
+        try {
+            coordinator.start(changed, s.device);
+            throw std::runtime_error("changed behavior accepted");
+        } catch (const std::runtime_error &e) {
+            require(std::string(e.what()) == "IDEMPOTENCY_CONFLICT", e.what());
+        }
+    }
+    if (name == "definition-copy") {
+        until([&] { return s.device->connections > 0; });
+        d.initial.entry = "False";
+        d.initial.actions[1].parameters["mutated"] = true;
+        J frozen;
+        std::ifstream(coordinator.run_directory() / "run.json") >> frozen;
+        require(frozen.dump().find("mutated") == std::string::npos,
+                "caller mutation reached frozen definition");
+        s.device->unblock = true;
+    }
     if (name == "idempotency-conflict") {
         auto changed = d;
         changed.initial.entry = "False";
@@ -122,7 +165,7 @@ J runtime_case(const std::string &name, Setup &s) {
         auto duplicate = coordinator.start(d, s.device);
         require(duplicate.run_id == started.run_id, "duplicate created new run");
     }
-    if (name == "result-save-failure") {
+    if (name == "result-save-failure" || name == "recover-storage") {
         // 人为让专属运行结果目标成为目录，真实原子提交必须失败，不能将业务标 Completed。
         until([&] { return s.device->connections.load() > 0; });
         std::filesystem::create_directory(coordinator.run_directory() / "result.json");
@@ -166,7 +209,7 @@ J runtime_case(const std::string &name, Setup &s) {
         } catch (const std::runtime_error &error) {
             require(std::string(error.what()) == "RUN_BUSY", error.what());
         }
-        runtime::RunCoordinator competitor(s.output / "competitor");
+        runtime::RunCoordinator competitor(s.output / "competitor", s.registry);
         try {
             competitor.start(another, s.device);
             throw std::runtime_error("device lease released early");
@@ -194,7 +237,8 @@ J runtime_case(const std::string &name, Setup &s) {
         name == "postcondition-timeout" || name == "permission-denied" ||
         name == "application-mismatch" || name == "initialization-failure" ||
         name == "stop-timeout" || name == "stop-during-connect" || name == "session-time-limit" ||
-        name == "release-timeout" || name == "result-save-failure" || name == "sequential-reset";
+        name == "release-timeout" || name == "result-save-failure" || name == "sequential-reset" ||
+        name.starts_with("recover-") || name == "critical-full";
     auto expected = stopped                         ? RunState::UserStopped
                     : failed                        ? RunState::Failed
                     : name == "unresolved-recovery" ? RunState::Interrupted
@@ -221,7 +265,16 @@ J runtime_case(const std::string &name, Setup &s) {
     if (name == "recovery")
         require(result.generation == 2 && s.device->connections == 2,
                 "recovery did not create fresh session");
-    if (name == "result-save-failure")
+    if (name == "recover-throw" || name == "recover-storage")
+        require(result.reason == "TEST_RECOVERY_THROW", "recovery cause lost");
+    if (name == "recover-invalid")
+        require(result.reason == "RECOVERY_DEFINITION_INVALID", "invalid recovery cause lost");
+    if (name == "critical-full")
+        require(result.reason == "CRITICAL_EVENT_CAPACITY_EXCEEDED",
+                "critical overflow not exercised");
+    if (name == "recover-storage")
+        require(!result.storage_error.empty(), "storage error missing");
+    if (name == "result-save-failure" || name == "recover-storage")
         require(!result.result_saved && !contains(events, "run.terminal"),
                 "failed write claimed persisted terminal");
     else {
@@ -232,8 +285,17 @@ J runtime_case(const std::string &name, Setup &s) {
         require(saved["events"] == events && contains(events, "run.terminal"),
                 "terminal events not atomically persisted");
     }
-    if (!failed && name != "recovery")
+    if (!failed && name != "recovery" && !name.starts_with("identity-recovery"))
         check_cleanup(events);
+    if (name.starts_with("identity-") || name == "definition-copy") {
+        require(s.device->connections == (name.starts_with("identity-recovery") ? 2 : 1),
+                "changed identity connected again");
+        J frozen;
+        std::ifstream(coordinator.run_directory() / "run.json") >> frozen;
+        require(frozen.dump().find("definition_version") != std::string::npos &&
+                    frozen.dump().find("build_id") != std::string::npos,
+                "missing frozen registry identity");
+    }
     if (name == "duplicate-start") {
         require(s.device->connections == 1, "duplicate connection");
         auto again = coordinator.start(d, s.device);

@@ -66,7 +66,8 @@ Image validate_frame(const contracts::FrameEnvelope &frame, const contracts::Fra
                 id.pack_revision == revision && id.pack_revision == current.pack_revision &&
                 id.generation == current.generation,
             "FRAME_CONTEXT_MISMATCH");
-    require(id.frame_id == current.frame_id && id.action_epoch == current.action_epoch,
+    require(id.frame_id == current.frame_id && id.action_epoch == current.action_epoch &&
+                id.connection_generation == current.connection_generation,
             "FRAME_STALE");
     require(id.viewport_id == current.viewport_id && id.raw_size == current.raw_size &&
                 id.recognition_size == current.recognition_size,
@@ -129,6 +130,14 @@ nlohmann::json validate_parameters(const Bundle &bundle, const RecognitionReques
         parameters["threshold"] = templ->threshold;
         parameters["method"] = 5;
         parameters["green_mask"] = false;
+    } else if (const auto *custom =
+                   std::get_if<RecognitionRequest::CustomParameters>(&request.parameters)) {
+        require(!custom->binding.empty() && custom->parameters.is_object() &&
+                    custom->parameters.dump().size() <= 32768,
+                "CUSTOM_PARAMETERS_INVALID");
+        parameters["custom_recognition"] = custom->binding;
+        parameters["custom_recognition_param"] = custom->parameters;
+        parameters["custom_recognition_param"]["parameter_revision"] = request.parameter_revision;
     } else {
         const auto &ocr = std::get<OcrParameters>(request.parameters);
         require(!ocr.expected_text.empty() && ocr.expected_text.size() <= 32,

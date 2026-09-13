@@ -2,6 +2,7 @@
 
 #include "contracts/recognition.hpp"
 #include <filesystem>
+#include <json.hpp>
 #include <memory>
 #include <variant>
 
@@ -25,7 +26,11 @@ struct OcrParameters {
 struct RecognitionRequest {
     std::string recognizer_id, parameter_revision;
     contracts::Box roi;
-    std::variant<TemplateParameters, OcrParameters> parameters;
+    struct CustomParameters {
+        std::string binding;
+        nlohmann::json parameters = nlohmann::json::object();
+    };
+    std::variant<TemplateParameters, OcrParameters, CustomParameters> parameters;
 };
 
 // M2 的离线识别入口：只绑定 Resource，不创建任何 Controller。

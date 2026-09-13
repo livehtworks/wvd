@@ -9,8 +9,10 @@ class InputGate {
   public:
     InputGate(DeviceBackend &backend, contracts::InputPolicy policy, std::uint64_t run,
               std::uint64_t generation, storage::EventJournal &events);
+    ~InputGate();
     bool connect();
     RawFrame capture();
+    void invalidate_frame();
     contracts::FrameIdentity frame_identity() const;
     void confirm_scene(const contracts::Observation &observation, const std::string &scene);
     bool authorize(const contracts::ActionIntent &intent);
@@ -22,6 +24,9 @@ class InputGate {
     }
     bool release_held();
     bool quiescent() const;
+    void disconnect_backend() {
+        backend_.disconnect();
+    }
     contracts::InputCounts counts() const;
     const contracts::InputPolicy &policy() const {
         return policy_;

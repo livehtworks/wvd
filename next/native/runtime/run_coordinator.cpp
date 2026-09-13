@@ -1,53 +1,69 @@
 #include "run_coordinator.hpp"
+#include <algorithm>
 
 namespace wvd::runtime {
 using namespace contracts;
 using namespace std::chrono_literals;
 namespace {
-nlohmann::json frozen(const RunDefinition &d) {
+nlohmann::json frozen(const RunDefinition &d, const BehaviorRegistry &registry,
+                      std::size_t capacity) {
     using J = nlohmann::json;
-    J files = J::array(), actions = J::array(), permissions = J::array(), capabilities = J::array();
-    for (const auto &f : d.initial.bundle.files)
-        files.push_back({{"path", f.relative_path}, {"sha256", f.sha256}});
-    for (const auto &[name, action] : d.initial.actions)
-        actions.push_back(name);
+    J permissions = J::array(), capabilities = J::array();
     for (auto kind : d.policy.permissions)
         permissions.push_back(int(kind));
     for (auto kind : d.policy.capabilities)
         capabilities.push_back(int(kind));
-    return {
-        {"request_id", d.request_id},
-        {"device_id", d.policy.device_id},
-        {"game_id", d.policy.game_id},
-        {"application_id", d.policy.application_id},
-        {"pack_revision", d.policy.pack_revision},
-        {"viewport", d.policy.viewport_id},
-        {"recognition_size", {d.policy.recognition_size.width, d.policy.recognition_size.height}},
-        {"max_frame_age_ms", d.policy.max_frame_age.count()},
-        {"permissions", permissions},
-        {"capabilities", capabilities},
-        {"allowed_scenes", d.policy.allowed_scenes},
-        {"entry", d.initial.entry},
-        {"terminal", d.initial.terminal_node},
-        {"time_limit_ms", d.initial.time_limit.count()},
-        {"stop_timeout_ms", d.initial.stop_timeout.count()},
-        {"custom_actions", actions},
-        {"files", files},
-        {"recovery_limit", d.recovery_limit},
-        {"recovery_enabled", bool(d.recover)}};
+    auto result = session_definition_json(d.initial);
+    result.update(
+        {{"definition_version", 2},
+         {"registry", registry.manifest()},
+         {"request_id", d.request_id},
+         {"device_id", d.policy.device_id},
+         {"game_id", d.policy.game_id},
+         {"application_id", d.policy.application_id},
+         {"viewport", d.policy.viewport_id},
+         {"observed_read_only_viewport", d.policy.observed_read_only_viewport},
+         {"recognition_size", {d.policy.recognition_size.width, d.policy.recognition_size.height}},
+         {"max_frame_age_ms", d.policy.max_frame_age.count()},
+         {"permissions", permissions},
+         {"capabilities", capabilities},
+         {"allowed_scenes", d.policy.allowed_scenes},
+         {"recovery_limit", d.recovery_limit},
+         {"recovery", d.recover ? binding_json(*d.recover) : J(nullptr)},
+         {"event_capacity", capacity}});
+    return result;
+}
+void remember_secondary(RunSnapshot &state, const std::string &reason) {
+    if (reason.empty() || reason == state.reason ||
+        std::find(state.secondary_errors.begin(), state.secondary_errors.end(), reason) !=
+            state.secondary_errors.end())
+        return;
+    if (state.secondary_errors.size() < 32)
+        state.secondary_errors.push_back(reason);
 }
 } // namespace
-RunCoordinator::RunCoordinator(std::filesystem::path root)
-    : data_root_(std::move(root)), instance_id_(platform::unique_id()) {}
+RunCoordinator::RunCoordinator(std::filesystem::path root,
+                               std::shared_ptr<const BehaviorRegistry> registry,
+                               std::size_t event_capacity)
+    : data_root_(std::move(root)), instance_id_(platform::unique_id()),
+      registry_(std::move(registry)), event_capacity_(event_capacity) {
+    if (!registry_ || !registry_->sealed())
+        throw std::runtime_error("REGISTRY_NOT_SEALED");
+    if (event_capacity < 8 || event_capacity > 65536)
+        throw std::runtime_error("EVENT_CAPACITY_INVALID");
+}
 RunCoordinator::~RunCoordinator() {
     request_stop();
     if (supervisor_.joinable())
         supervisor_.join();
 }
-void RunCoordinator::validate(const RunDefinition &d, const devices::DeviceBackend &backend) {
-    if (!backend.offline())
+void RunCoordinator::validate(const RunDefinition &d, const devices::DeviceBackend &backend) const {
+    if (!backend.offline() && !backend.verified_access())
         throw std::runtime_error("REAL_DEVICE_NOT_ENABLED");
     const auto &p = d.policy;
+    if (p.observed_read_only_viewport &&
+        (!p.permissions.empty() || !p.capabilities.empty() || !p.allowed_scenes.empty()))
+        throw std::runtime_error("READ_ONLY_VIEWPORT_WITH_INPUT_POLICY");
     if (d.request_id.empty() || d.request_id.size() > 128 || p.device_id.empty() ||
         p.game_id.empty() || p.application_id.empty() || p.viewport_id.empty() ||
         p.pack_revision != d.initial.bundle.revision || p.recognition_size.width <= 0 ||
@@ -55,13 +71,17 @@ void RunCoordinator::validate(const RunDefinition &d, const devices::DeviceBacke
         d.initial.terminal_node.empty() || d.initial.time_limit <= 0ms ||
         d.initial.stop_timeout <= 0ms || d.recovery_limit > 16)
         throw std::runtime_error("RUN_DEFINITION_INVALID");
+    registry_->validate(d.initial);
+    if (d.recover)
+        registry_->validate_recovery(*d.recover);
 }
 RunSnapshot RunCoordinator::start(RunDefinition definition,
                                   std::shared_ptr<devices::DeviceBackend> backend) {
+    std::lock_guard starting(start_mutex_);
     if (!backend)
         throw std::runtime_error("DEVICE_BACKEND_REQUIRED");
     validate(definition, *backend);
-    auto immutable = frozen(definition);
+    auto immutable = frozen(definition, *registry_, event_capacity_);
     std::unique_lock lock(mutex_);
     if (auto previous = requests_.find(definition.request_id); previous != requests_.end()) {
         if (previous->second.definition != immutable)
@@ -70,16 +90,21 @@ RunSnapshot RunCoordinator::start(RunDefinition definition,
     }
     if (active_)
         throw std::runtime_error("RUN_BUSY");
-    // 不静默淘汰旧请求，否则迟到重发会变成新运行。达到显式有界上限后拒绝新增。
     if (requests_.size() >= 256)
         throw std::runtime_error("REQUEST_HISTORY_CAPACITY_EXCEEDED");
+    // start 单独串行化；等待上一监督线程退出时不占用停止/快照命令锁。
+    lock.unlock();
     if (supervisor_.joinable())
         supervisor_.join();
+    lock.lock();
+    const auto id = snapshot_.run_id + 1;
+    // 目录尚未建立时 start 未成立；文件 I/O 不阻塞快照和停止命令。
+    lock.unlock();
     auto lease = std::make_unique<platform::DeviceLease>(definition.policy.device_id);
-    auto id = snapshot_.run_id + 1;
-    auto store = std::make_unique<storage::RunStore>(data_root_, instance_id_, id, immutable);
-    auto journal = std::make_unique<storage::EventJournal>(instance_id_, id);
+    auto journal = std::make_shared<storage::EventJournal>(instance_id_, id, event_capacity_);
     journal->emit(1, "run.preparing", {}, true);
+    auto store = std::make_unique<storage::RunStore>(data_root_, instance_id_, id, immutable);
+    lock.lock();
     lease_ = std::move(lease);
     store_ = std::move(store);
     journal_ = std::move(journal);
@@ -89,20 +114,37 @@ RunSnapshot RunCoordinator::start(RunDefinition definition,
     stop_ = false;
     active_ = true;
     stopped_at_.reset();
+    collected_generation_ = 0;
+    last_result_ = {};
+    current_definition_ = definition.initial;
     try {
         supervisor_ = std::thread(
             [this, definition = std::move(definition), backend = std::move(backend)]() mutable {
                 drive(std::move(definition), std::move(backend));
             });
+    } catch (const std::exception &e) {
+        lock.unlock();
+        record_failure("RUN_THREAD_START_FAILED");
+        record_failure(e.what());
+        finish();
+        return snapshot();
     } catch (...) {
-        active_ = false;
-        lease_.reset();
-        snapshot_.state = RunState::Failed;
-        snapshot_.quiescent = true;
-        requests_.at(last_request_).result = snapshot_;
-        throw;
+        lock.unlock();
+        record_failure("RUN_THREAD_START_FAILED");
+        finish();
+        return snapshot();
     }
     return snapshot_;
+}
+void RunCoordinator::record_failure(const std::string &reason) {
+    std::lock_guard lock(mutex_);
+    if (snapshot_.reason.empty())
+        snapshot_.reason = reason;
+    else
+        remember_secondary(snapshot_, reason);
+    if (reason.starts_with("STORAGE_"))
+        snapshot_.storage_error = reason;
+    snapshot_.state = RunState::Failed;
 }
 void RunCoordinator::request_stop() {
     std::lock_guard lock(mutex_);
@@ -111,19 +153,24 @@ void RunCoordinator::request_stop() {
     stopped_at_ = std::chrono::steady_clock::now();
     if (session_)
         session_->request_stop();
-    if (snapshot_.reason != "STOP_TIMEOUT")
+    if (snapshot_.reason.empty())
         snapshot_.state = RunState::StopRequested;
+    // 仅追加内存事件，与终态快照串行；这里不进行磁盘写入。
     try {
         journal_->emit(snapshot_.generation, "run.stop_requested", {}, true);
-    } catch (...) {
-        snapshot_.reason = "CRITICAL_EVENT_CAPACITY_EXCEEDED";
+    } catch (const std::exception &e) {
+        if (snapshot_.reason.empty())
+            snapshot_.reason = e.what();
+        else
+            remember_secondary(snapshot_, e.what());
+        snapshot_.state = RunState::Failed;
     }
 }
 RunSnapshot RunCoordinator::snapshot() const {
     std::lock_guard lock(mutex_);
     auto result = snapshot_;
-    if (session_) {
-        auto current = session_->counts();
+    if (session_ && collected_generation_ != snapshot_.generation) {
+        const auto current = session_->counts();
         result.inputs.attempted += current.attempted;
         result.inputs.accepted += current.accepted;
         result.inputs.rejected += current.rejected;
@@ -137,154 +184,206 @@ bool RunCoordinator::wait_for(std::chrono::milliseconds duration) {
     return cv_.wait_for(lock, duration, [this] { return !active_; });
 }
 nlohmann::json RunCoordinator::events(std::uint64_t after) const {
-    std::lock_guard lock(mutex_);
-    return journal_ ? journal_->read(after) : nlohmann::json::object();
+    std::shared_ptr<storage::EventJournal> journal;
+    {
+        std::lock_guard lock(mutex_);
+        journal = journal_;
+    }
+    return journal ? journal->read(after) : nlohmann::json::object();
 }
 std::filesystem::path RunCoordinator::run_directory() const {
     std::lock_guard lock(mutex_);
     return store_ ? store_->directory() : std::filesystem::path{};
 }
+void RunCoordinator::wait_session(const std::shared_ptr<ExecutionSession> &session,
+                                  const SessionDefinition &definition, bool report_events) {
+    const auto started = std::chrono::steady_clock::now();
+    bool timeout_reported = false;
+    while (!session->wait_for(5ms)) {
+        bool deadline = false, timed_out = false;
+        std::uint64_t generation{};
+        {
+            std::lock_guard lock(mutex_);
+            generation = snapshot_.generation;
+            const auto now = std::chrono::steady_clock::now();
+            if (!stop_ && now - started > definition.time_limit) {
+                stop_ = true;
+                stopped_at_ = now;
+                session->request_stop();
+                if (snapshot_.reason.empty())
+                    snapshot_.reason = "SESSION_TIME_LIMIT";
+                snapshot_.state = RunState::StopRequested;
+                deadline = true;
+            }
+            if (stop_ && stopped_at_ && now - *stopped_at_ > definition.stop_timeout &&
+                !timeout_reported) {
+                // 超时是未能正常静止，不以稍后的成功或 UserStopped 覆盖它。
+                if (snapshot_.reason.empty() || snapshot_.reason == "SESSION_TIME_LIMIT") {
+                    const auto previous = snapshot_.reason;
+                    snapshot_.reason = "STOP_TIMEOUT";
+                    remember_secondary(snapshot_, previous);
+                } else
+                    remember_secondary(snapshot_, "STOP_TIMEOUT");
+                snapshot_.state = RunState::Failed;
+                snapshot_.quiescent = false;
+                timeout_reported = true;
+                timed_out = true;
+            } else if (!stop_ && snapshot_.reason.empty() && session->running())
+                snapshot_.state = RunState::Running;
+        }
+        if (report_events && deadline)
+            journal_->emit(generation, "run.deadline_stop", {}, true);
+        if (report_events && timed_out) {
+            journal_->emit(generation, "run.stop_timeout", {{"quiescent", false}}, true);
+            store_->save_events(*journal_);
+        }
+    }
+}
+void RunCoordinator::collect_session(const std::shared_ptr<ExecutionSession> &session) {
+    const auto result = session->join();
+    if (!result.quiescent)
+        throw std::runtime_error("SESSION_NOT_QUIESCENT");
+    {
+        std::lock_guard lock(mutex_);
+        if (collected_generation_ != snapshot_.generation) {
+            snapshot_.inputs.attempted += result.inputs.attempted;
+            snapshot_.inputs.accepted += result.inputs.accepted;
+            snapshot_.inputs.rejected += result.inputs.rejected;
+            snapshot_.inputs.backend_called += result.inputs.backend_called;
+            snapshot_.inputs.cleanup_called += result.inputs.cleanup_called;
+            collected_generation_ = snapshot_.generation;
+            last_result_ = result;
+            snapshot_.engine_status = result.engine_status;
+            snapshot_.sessions.push_back(
+                {{"generation", snapshot_.generation},
+                 {"definition", session_definition_json(current_definition_, false)},
+                 {"engine_status", result.engine_status},
+                 {"reason", result.reason},
+                 {"quiescent", result.quiescent}});
+        }
+        session_.reset();
+    }
+    if (result.end == SessionEnd::Failed)
+        record_failure(result.reason);
+}
 void RunCoordinator::drive(RunDefinition definition,
                            std::shared_ptr<devices::DeviceBackend> backend) noexcept {
-    SessionResult result;
     try {
         auto next = definition.initial;
         std::size_t recovered = 0;
         while (true) {
-            std::shared_ptr<ExecutionSession> session;
+            auto policy = definition.policy;
+            policy.pack_revision = next.bundle.revision;
+            auto session = std::make_shared<ExecutionSession>(
+                next, *backend, std::move(policy), snapshot().run_id, snapshot().generation,
+                *journal_, registry_);
             {
                 std::lock_guard lock(mutex_);
-                auto policy = definition.policy;
-                policy.pack_revision = next.bundle.revision;
-                session = std::make_shared<ExecutionSession>(next, *backend, std::move(policy),
-                                                             snapshot_.run_id, snapshot_.generation,
-                                                             *journal_);
+                current_definition_ = next;
                 session_ = session;
                 if (stop_)
                     session->request_stop();
                 else
                     snapshot_.state = RunState::Preparing;
-                session->start();
             }
-            const auto started = std::chrono::steady_clock::now();
-            while (!session->wait_for(5ms)) {
-                std::unique_lock lock(mutex_);
-                const auto now = std::chrono::steady_clock::now();
-                if (!stop_ && now - started > next.time_limit) {
-                    stop_ = true;
-                    stopped_at_ = now;
-                    session->request_stop();
-                    snapshot_.reason = "SESSION_TIME_LIMIT";
-                    snapshot_.state = RunState::StopRequested;
-                    journal_->emit(snapshot_.generation, "run.deadline_stop", {}, true);
-                }
-                if (stop_ && stopped_at_ && now - *stopped_at_ > next.stop_timeout &&
-                    snapshot_.reason != "STOP_TIMEOUT") {
-                    snapshot_.state = RunState::Failed;
-                    snapshot_.reason = "STOP_TIMEOUT";
-                    snapshot_.quiescent = false;
-                    journal_->emit(snapshot_.generation, "run.stop_timeout", {{"quiescent", false}},
-                                   true);
-                    lock.unlock();
-                    store_->save_events(*journal_);
-                } else if (!stop_ && session->running())
-                    snapshot_.state = RunState::Running;
-            }
-            result = session->join();
-            session.reset();
-            {
-                std::lock_guard lock(mutex_);
-                session_.reset();
-                snapshot_.engine_status = result.engine_status;
-                snapshot_.inputs.attempted += result.inputs.attempted;
-                snapshot_.inputs.accepted += result.inputs.accepted;
-                snapshot_.inputs.rejected += result.inputs.rejected;
-                snapshot_.inputs.backend_called += result.inputs.backend_called;
-                snapshot_.inputs.cleanup_called += result.inputs.cleanup_called;
-                journal_->emit(snapshot_.generation, "session.quiescent",
-                               {{"quiescent", result.quiescent}}, true);
-            }
+            session->start();
+            wait_session(session, next, true);
+            collect_session(session);
+            journal_->emit(snapshot().generation, "session.quiescent", {{"quiescent", true}}, true);
             store_->save_events(*journal_);
-            if (!stop_ && result.end == SessionEnd::RecoveryRequired && definition.recover &&
+            if (!stop_ && last_result_.end == SessionEnd::RecoveryRequired && definition.recover &&
                 recovered < definition.recovery_limit) {
                 {
                     std::lock_guard lock(mutex_);
                     snapshot_.state = RunState::Recovering;
                 }
-                auto decision = definition.recover(result);
+                auto decision = registry_->recover(*definition.recover, last_result_, next);
                 if (decision) {
                     if (decision->entry.empty() || decision->terminal_node.empty() ||
                         decision->time_limit <= 0ms || decision->stop_timeout <= 0ms)
                         throw std::runtime_error("RECOVERY_DEFINITION_INVALID");
                     next = std::move(*decision);
                     ++recovered;
-                    std::lock_guard lock(mutex_);
-                    ++snapshot_.generation;
-                    journal_->emit(snapshot_.generation, "session.recovery_boundary", {}, true);
+                    std::uint64_t generation;
+                    {
+                        std::lock_guard lock(mutex_);
+                        generation = ++snapshot_.generation;
+                    }
+                    journal_->emit(generation, "session.recovery_boundary",
+                                   {{"definition", session_definition_json(next, false)}}, true);
                     continue;
                 }
             }
             break;
         }
-        std::unique_lock lock(mutex_);
-        // 原生侧已经静止，但结果尚未提交。磁盘刷新不占控制锁，也不提前发布 Completed。
-        snapshot_.quiescent = result.quiescent;
-        auto committed = snapshot_;
-        committed.quiescent = result.quiescent;
-        if (!committed.reason.empty())
-            committed.state = RunState::Failed;
-        else if (stop_) {
-            committed.state = RunState::UserStopped;
-            committed.reason = "USER_STOP";
-        } else if (result.end == SessionEnd::Completed)
-            committed.state = RunState::Completed;
-        else if (result.end == SessionEnd::RecoveryRequired) {
-            committed.state = RunState::Interrupted;
-            committed.reason = "RECOVERY_REQUIRED";
-        } else {
-            committed.state = RunState::Failed;
-            committed.reason = result.reason;
-        }
-        committed.result_saved = true;
-        lock.unlock();
-        journal_->commit_terminal(committed.generation, storage::snapshot_json(committed),
-                                  [&](const nlohmann::json &events) {
-                                      store_->save_terminal(committed, result, events);
-                                  });
-        lock.lock();
-        snapshot_ = std::move(committed);
-    } catch (const std::exception &error) {
-        // 若后台会话仍未静止，保持所有权并继续等待；异常绝不能绕过 join 释放设备。
-        std::shared_ptr<ExecutionSession> pending;
+    } catch (const std::exception &e) {
+        record_failure(e.what());
+    } catch (...) {
+        record_failure("COORDINATOR_EXCEPTION");
+    }
+    finish();
+}
+void RunCoordinator::finish() noexcept {
+    // 所有正常/异常出口只到这里一次。先真实静止，再按 generation 汇总，最后只提交一次。
+    std::shared_ptr<ExecutionSession> pending;
+    {
+        std::lock_guard lock(mutex_);
+        pending = session_;
+    }
+    if (pending) {
         {
             std::lock_guard lock(mutex_);
-            snapshot_.state = RunState::Failed;
-            snapshot_.reason = error.what();
-            pending = session_;
+            stop_ = true;
+            if (!stopped_at_)
+                stopped_at_ = std::chrono::steady_clock::now();
         }
-        if (pending) {
-            pending->request_stop();
-            result = pending->join();
+        pending->request_stop();
+        wait_session(pending, current_definition_, false);
+        try {
+            collect_session(pending);
+        } catch (const std::exception &error) {
+            record_failure(error.what());
+            // 无法证明静止时保留所有权，不提交一个假终态。
+            return;
         }
+        pending.reset();
+    }
+    RunSnapshot candidate;
+    {
         std::lock_guard lock(mutex_);
-        session_.reset();
         snapshot_.quiescent = true;
+        candidate = snapshot_;
+        if (!candidate.reason.empty())
+            candidate.state = RunState::Failed;
+        else if (stop_) {
+            candidate.state = RunState::UserStopped;
+            candidate.reason = "USER_STOP";
+        } else if (last_result_.end == SessionEnd::Completed)
+            candidate.state = RunState::Completed;
+        else if (last_result_.end == SessionEnd::RecoveryRequired) {
+            candidate.state = RunState::Interrupted;
+            candidate.reason = "RECOVERY_REQUIRED";
+        } else {
+            candidate.state = RunState::Failed;
+            candidate.reason = last_result_.reason;
+        }
+        candidate.result_saved = true;
+    }
+    try {
+        journal_->commit_terminal(candidate.generation, storage::snapshot_json(candidate),
+                                  [&](const nlohmann::json &events) {
+                                      store_->save_terminal(candidate, last_result_, events);
+                                  });
+        std::lock_guard lock(mutex_);
+        snapshot_ = std::move(candidate);
+    } catch (const std::exception &e) {
+        record_failure(e.what());
+        std::lock_guard lock(mutex_);
         snapshot_.result_saved = false;
     } catch (...) {
-        std::shared_ptr<ExecutionSession> pending;
-        {
-            std::lock_guard lock(mutex_);
-            snapshot_.state = RunState::Failed;
-            snapshot_.reason = "COORDINATOR_EXCEPTION";
-            pending = session_;
-        }
-        if (pending) {
-            pending->request_stop();
-            result = pending->join();
-        }
+        record_failure("STORAGE_TERMINAL_COMMIT_FAILED");
         std::lock_guard lock(mutex_);
-        session_.reset();
-        snapshot_.quiescent = true;
+        snapshot_.result_saved = false;
     }
     {
         std::lock_guard lock(mutex_);

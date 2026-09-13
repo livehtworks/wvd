@@ -4,12 +4,13 @@
 **只做旁路工程与完整功能基线，不是可挂机的新版本。** 旧 Python 仍是唯一生产入口。
 
 已实现：原生服务正常启停、API 版本/能力查询、基线项搜索与详情、资源大小写核对及真实模板预览。
-未实现：真实设备连接、游戏点击、WVD 任务执行、配置导入、流程编辑和生产替换。
+另有显式 M3 本地只读设备检查和 WVD 专用视觉；这不是工作台的在线执行功能。
+未实现：完整 WVD 任务、配置导入、流程编辑和生产替换。
 尚未启用的工作包目录只放职责说明，不提供伪实现，不进入构建。
 
 M1 收尾 R01/R02/R03 已完成。M2 核心已实现独立 RunCoordinator、有限 ExecutionSession、
 统一 MaaGateway、模板/OCR 三态、受控动作/输入门禁及原子运行结果存储。
-`wvd_core` 只在显式构建时加载 Maa，不链接进工作台服务；真实后端在 connect 前拒绝。
+`wvd_core` 只在显式构建时加载 Maa，不链接进工作台服务；默认离线路线仍在 connect 前拒绝真实后端。
 验收范围与证据见 [M2 核心验证](docs/m2-core-validation.md)，架构说明见下方导航。
 
 ## 构建与验证
@@ -81,3 +82,28 @@ SDK 与模型会校验 hash 后复制到被 Git 忽略的 `next/.local`，原有
 模型目录须含锁定的 `det.onnx`、`rec.onnx`、`keys.txt`。依赖版本不变，不自动降级或换模型。
 测试使用既有隔离构建环境中的 OpenCV/NumPy 生成合成图片；不是新原生库的发布依赖。
 默认 build/validate 仍只做 M1；显式选项额外启用离线目标，不启动游戏或新运行接口。
+
+## M3 设备与视觉
+
+```powershell
+.venv-build/Scripts/python.exe next/tools/build.py --m3
+.venv-build/Scripts/python.exe next/tools/validate.py --m3
+```
+
+新增 OpenCV 直接编译依赖来自固定 MaaDeps 归档，准备工具核对 archive SHA256、头/库及与 SDK
+同 hash 的 DLL；不升级 Maa 或 OCR。构建/离线验收不连接设备。生产配置和 mod 不导入。
+
+在当前授权允许设备检查时，先只读发现，再显式启动受限检查：
+
+```powershell
+.venv-build/Scripts/python.exe next/tools/validate_m3_device.py --discover <旧配置路径> --binding <新建私有绑定文件>
+.venv-build/Scripts/python.exe next/tools/validate_m3_device.py --binding <私有绑定文件> --capture-only
+```
+
+实例关闭且本轮授权允许启动时才加 `--start-instance`。程序会重新核对目标元数据和控制者，
+不是信任历史编号。截图采用实测系统 viewport，零输入权限，不启动游戏/VPN、不领取任务。
+`--safe-system-navigation` 尚无已确认的无副作用场景适配，明确返回 BLOCKED，不试点页面。
+结果、原图和设备地址只写新建的 `next/.local` 私有目录；检查退出后不关闭用户实例。
+
+修复与阶段边界见 [M2 收尾](docs/m2-fix-validation.md)、[M3 验收](docs/m3-device-vision-validation.md)。
+**真实 NEXT/Pause 质量、长期资源归因和生产运行不因离线 PASS 自动放行。**

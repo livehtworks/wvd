@@ -59,7 +59,7 @@ def run(name, command, cwd=ROOT):
     print("  OK", flush=True)
 
 
-def build(m2_offline=False):
+def build(m2_offline=False, m3=False):
     npm = shutil.which("npm.cmd")
     if npm is None:
         raise RuntimeError("需要固定 Node/npm 工具链，见 dependencies.lock.json")
@@ -76,6 +76,8 @@ def build(m2_offline=False):
             raise RuntimeError(f"{name} 需要 {lock['toolchain'][name]}，实际 {version}")
     cmake = cmake_path()
     run("dependencies", [sys.executable, str(ROOT / "tools/dependencies.py")])
+    if m3:
+        run("m3-prepare", [sys.executable, str(ROOT / "tools/prepare_m3.py")])
     run("inventory", [sys.executable, str(ROOT / "tools/inventory/generate.py")])
     run(
         "npm-ci",
@@ -89,7 +91,8 @@ def build(m2_offline=False):
             cmake,
             "--preset",
             "windows-x64",
-            "-DWVD_BUILD_M2_OFFLINE=" + ("ON" if m2_offline else "OFF"),
+            "-DWVD_BUILD_M2_OFFLINE=" + ("ON" if m2_offline or m3 else "OFF"),
+            "-DWVD_BUILD_M3=" + ("ON" if m3 else "OFF"),
         ],
     )
     run("native-build", [cmake, "--build", "--preset", "windows-release"])
@@ -103,9 +106,12 @@ if __name__ == "__main__":
         action="store_true",
         help="额外构建已准备固定 SDK 的离线识别目标",
     )
+    parser.add_argument(
+        "--m3", action="store_true", help="构建 M2/M3 离线目标，不连接设备"
+    )
     args = parser.parse_args()
     try:
-        build(args.m2_offline)
+        build(args.m2_offline, args.m3)
     except (OSError, RuntimeError, subprocess.SubprocessError) as error:
         print(str(error), file=sys.stderr)
         sys.exit(1)

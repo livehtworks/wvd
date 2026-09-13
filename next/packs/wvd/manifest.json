@@ -1,0 +1,4235 @@
+{
+  "schema_version": 1,
+  "source_commit": "6585f4075f5714ab522aa582993860c09af912c1",
+  "revision": "35e2151250ad2994e43bdfea2d069dae6482623efa523039484a9d6f4ba75a2a",
+  "files": [
+    {
+      "path": "image/7000G/icantagreewithU.png",
+      "source": "resources/images/7000G/icantagreewithU.png",
+      "sha256": "912ccd00fa225fe59546ffc54112f89dad0b4635b42d71284baf32efd1f8a33e",
+      "bytes": 17393,
+      "source_refs": []
+    },
+    {
+      "path": "image/7000G/illgo.png",
+      "source": "resources/images/7000G/illgo.png",
+      "sha256": "c2617481eed12401428d7e0f844c45cfb9bf1e4af3e21aa5a8616d944f4a8999",
+      "bytes": 5995,
+      "source_refs": []
+    },
+    {
+      "path": "image/7000G/illgonow.png",
+      "source": "resources/images/7000G/illgonow.png",
+      "sha256": "6485d6a1784a582e561035994a5f770b372343f8029dbc88cc66116309ba6c38",
+      "bytes": 7763,
+      "source_refs": []
+    },
+    {
+      "path": "image/7000G/iminhungry.png",
+      "source": "resources/images/7000G/iminhungry.png",
+      "sha256": "50132447c20ff9a0e66b12eb9debf33af002863973069ace54f238602b3526ee",
+      "bytes": 14471,
+      "source_refs": [
+        "src/script.py:3509"
+      ]
+    },
+    {
+      "path": "image/7000G/leavethechild.png",
+      "source": "resources/images/7000G/leavethechild.png",
+      "sha256": "a575eb782633b8948b6feab2c7d36a9903098ab368545df00cd628e08b0f98d1",
+      "bytes": 11669,
+      "source_refs": []
+    },
+    {
+      "path": "image/7000G/noeasytask.png",
+      "source": "resources/images/7000G/noeasytask.png",
+      "sha256": "f81259adc7633be60f8df6c24066b177fa58e517b4296a110292fe0403769440",
+      "bytes": 14120,
+      "source_refs": []
+    },
+    {
+      "path": "image/7000G/olddist.png",
+      "source": "resources/images/7000G/olddist.png",
+      "sha256": "c6fd3636c299ef105d031a44c84b7cbfd03fbec43a51c61e4b9228fd80aaf703",
+      "bytes": 16549,
+      "source_refs": [
+        "src/script.py:3506"
+      ]
+    },
+    {
+      "path": "image/7000G/royalcapital.png",
+      "source": "resources/images/7000G/royalcapital.png",
+      "sha256": "a05f92899d62a205b217664ab0458e8bd5054bb19e6c39a209a5d3449ac98f42",
+      "bytes": 18254,
+      "source_refs": []
+    },
+    {
+      "path": "image/7000G/why.png",
+      "source": "resources/images/7000G/why.png",
+      "sha256": "caa59c2dd1ef926ab3c445f0bdd72109b7cbf30e3b889233fc3b2e5586742af3",
+      "bytes": 5940,
+      "source_refs": []
+    },
+    {
+      "path": "image/7thDist.png",
+      "source": "resources/images/7thDist.png",
+      "sha256": "cad6744d42f41a999e7814c2363231d7f3d9fc4d44430482f7a9b083969ae04c",
+      "bytes": 24272,
+      "source_refs": []
+    },
+    {
+      "path": "image/AWD/AWD.png",
+      "source": "resources/images/AWD/AWD.png",
+      "sha256": "ed4f94cf158fa250141c695f728c359018ee4bff3296ee5b2bb0aab3b60e4908",
+      "bytes": 86238,
+      "source_refs": [
+        "resources/quest/quest.json#/AWD/_preEOTcheck",
+        "resources/quest/quest.json#/AWD/_EOT/0/2/0",
+        "resources/quest/quest.json#/AWD-noGorgon/_preEOTcheck",
+        "resources/quest/quest.json#/AWD-noGorgon/_EOT/0/2/0"
+      ]
+    },
+    {
+      "path": "image/AWD/AWD1F.png",
+      "source": "resources/images/AWD/AWD1F.png",
+      "sha256": "75d6e55d43c466ebd4dbcb9ef5d8f5e28f3bca193325791abe89ec0bc22c7408",
+      "bytes": 16348,
+      "source_refs": [
+        "resources/quest/quest.json#/AWD-noGorgon/_EOT/1/1"
+      ]
+    },
+    {
+      "path": "image/AWD/AWD2F.png",
+      "source": "resources/images/AWD/AWD2F.png",
+      "sha256": "a1fff3d6ba8dbff591eea5d4680a573fa9ce9f1270a0335c9b3a4e930d25476b",
+      "bytes": 38400,
+      "source_refs": [
+        "resources/quest/quest.json#/AWD/_EOT/1/1"
+      ]
+    },
+    {
+      "path": "image/AssembleParty.png",
+      "source": "resources/images/AssembleParty.png",
+      "sha256": "ef47fe786f61fd3e1468b5473624180d5814f2d31ad1d49aa5c0137537c3d652",
+      "bytes": 29716,
+      "source_refs": []
+    },
+    {
+      "path": "image/AutoMove.png",
+      "source": "resources/images/AutoMove.png",
+      "sha256": "0e8a6d365649ff65d328f0b412e3fb9539cc1170ced02397d8994c9c67466cf9",
+      "bytes": 30530,
+      "source_refs": [
+        "src/script.py:2902"
+      ]
+    },
+    {
+      "path": "image/B2FTemple.png",
+      "source": "resources/images/B2FTemple.png",
+      "sha256": "bf6d6967531204d134dfd848763cf2abadd3178e0aa18b145d2056e7d17d86f8",
+      "bytes": 14160,
+      "source_refs": []
+    },
+    {
+      "path": "image/B4FLabyrinth.png",
+      "source": "resources/images/B4FLabyrinth.png",
+      "sha256": "159ec692010c7b2401d454d9d23347fde92a41bdd5daf4a01e52607d22d600e3",
+      "bytes": 19018,
+      "source_refs": []
+    },
+    {
+      "path": "image/B5FWarpedOnesNest.png",
+      "source": "resources/images/B5FWarpedOnesNest.png",
+      "sha256": "77b553206643f2187b8d57c03f58295cbe12f7ba8cfaa702a3e9a2cdfb9834f7",
+      "bytes": 19857,
+      "source_refs": []
+    },
+    {
+      "path": "image/BeautifulOre.png",
+      "source": "resources/images/BeautifulOre.png",
+      "sha256": "ea179e6eaff4b2d65a112906ba89f568573f246c95bedee4b75ef6a5a961205d",
+      "bytes": 34964,
+      "source_refs": []
+    },
+    {
+      "path": "image/Bharken.png",
+      "source": "resources/images/Bharken.png",
+      "sha256": "d55e1f8f87e34cd9ab6326226960b6970041a8c235e856a6eec67b3f00aef5b6",
+      "bytes": 3800,
+      "source_refs": [
+        "resources/quest/quest.json#/DH-Church-upper/_TARGETINFOLIST/3/0",
+        "resources/quest/quest.json#/DH-Church-auto/_TARGETINFOLIST/2/0"
+      ]
+    },
+    {
+      "path": "image/Bharken2.png",
+      "source": "resources/images/Bharken2.png",
+      "sha256": "7ac9c5ce64ae039d880c0a2c8b5ce6be5a790641287bdd284152469c0dd61495",
+      "bytes": 2527,
+      "source_refs": [
+        "resources/quest/quest.json#/fortress-10F/_TARGETINFOLIST/1/0"
+      ]
+    },
+    {
+      "path": "image/Bounties.png",
+      "source": "resources/images/Bounties.png",
+      "sha256": "6c8b2562e17282975b6742cadf6474657b679ff475e4dcbb4c7304d6470d4163",
+      "bytes": 5468,
+      "source_refs": []
+    },
+    {
+      "path": "image/COS/ArnasPast.png",
+      "source": "resources/images/COS/ArnasPast.png",
+      "sha256": "06562992739cd7916ca623d83371c181e487ffbb36da4f142bcedbe1247cad9f",
+      "bytes": 64228,
+      "source_refs": []
+    },
+    {
+      "path": "image/COS/COS.png",
+      "source": "resources/images/COS/COS.png",
+      "sha256": "8e5dd3814feb34f2b3bc350acc628b679e147010c20ccadf4018be0d27d07d5e",
+      "bytes": 23747,
+      "source_refs": [
+        "resources/quest/quest.json#/COS_chest/_EOT/0/1",
+        "resources/quest/quest.json#/COS_chest_short/_EOT/0/1"
+      ]
+    },
+    {
+      "path": "image/COS/COSB2F.png",
+      "source": "resources/images/COS/COSB2F.png",
+      "sha256": "ade04b9dccc687ca0340e30a99a64a1dd2efb964d81c4be1407f5e1c7b513d59",
+      "bytes": 30446,
+      "source_refs": [
+        "resources/quest/quest.json#/COS_chest/_EOT/1/1",
+        "resources/quest/quest.json#/COS_chest_short/_EOT/1/1"
+      ]
+    },
+    {
+      "path": "image/COS/COSENT.png",
+      "source": "resources/images/COS/COSENT.png",
+      "sha256": "301d59d07be23db1e9d81826025f9d67da84cf3524b04a6868e9884946550db9",
+      "bytes": 17424,
+      "source_refs": []
+    },
+    {
+      "path": "image/COS/EnaTheAdventurer.png",
+      "source": "resources/images/COS/EnaTheAdventurer.png",
+      "sha256": "d3b6c919264051966a9b7ccc34dcfcd9a0712e315da63cfec685ab213640cac6",
+      "bytes": 21526,
+      "source_refs": []
+    },
+    {
+      "path": "image/COS/Okay.png",
+      "source": "resources/images/COS/Okay.png",
+      "sha256": "4c8ac0c573c92dfa5b6d6788f14a12cc9575b95e1f3a3431f3a23da635fef65c",
+      "bytes": 5389,
+      "source_refs": []
+    },
+    {
+      "path": "image/COS/b2fentrance.png",
+      "source": "resources/images/COS/b2fentrance.png",
+      "sha256": "aa9e229b1bedce4e89475c0e91113e5190413030f98c3adbc556ddc72e62d3b5",
+      "bytes": 58971,
+      "source_refs": []
+    },
+    {
+      "path": "image/COS/requestwasfor.png",
+      "source": "resources/images/COS/requestwasfor.png",
+      "sha256": "d37de5f3f3e0e49ffc72d8d52658bf6e8e678eb7ff9a154f46d79011056524f3",
+      "bytes": 30409,
+      "source_refs": []
+    },
+    {
+      "path": "image/COS/takehimwithyou.png",
+      "source": "resources/images/COS/takehimwithyou.png",
+      "sha256": "e9d9e60027f86a46ea753e29d3b09ff94849222da3b7da9775f8f9aff80eba37",
+      "bytes": 13016,
+      "source_refs": []
+    },
+    {
+      "path": "image/COS/替换-凯旋.png",
+      "source": "resources/images/COS/替换-凯旋.png",
+      "sha256": "1fcf3b08ca06e4c1a740a3e857a3df209f761cca75b20b68e349781cd8a1c948",
+      "bytes": 36449,
+      "source_refs": []
+    },
+    {
+      "path": "image/CSC.png",
+      "source": "resources/images/CSC.png",
+      "sha256": "c4bc080e528b4d0260330b3966836abd62c464f4f44fb51019db309859f21033",
+      "bytes": 38818,
+      "source_refs": []
+    },
+    {
+      "path": "image/City_DHI.png",
+      "source": "resources/images/City_DHI.png",
+      "sha256": "9015fe974b4e736d3dfe6dce5048ac8427434f595a43c198ab04e6d63e4fa954",
+      "bytes": 74527,
+      "source_refs": []
+    },
+    {
+      "path": "image/City_RoyalCityLuknalia.png",
+      "source": "resources/images/City_RoyalCityLuknalia.png",
+      "sha256": "609ee4dafdf5ba7f2b9ca5197e6fa39229bd321cc8ebcf207dca4e2aa97ab324",
+      "bytes": 24362,
+      "source_refs": [
+        "resources/quest/quest.json#/FFXI-Org/_RTT/0"
+      ]
+    },
+    {
+      "path": "image/City_fortress.png",
+      "source": "resources/images/City_fortress.png",
+      "sha256": "0a286bdfcff2b7da7d7812ab29342a853ab9174a9769624ce6c28512f75dae95",
+      "bytes": 23775,
+      "source_refs": []
+    },
+    {
+      "path": "image/City_portTownGrandLegion.png",
+      "source": "resources/images/City_portTownGrandLegion.png",
+      "sha256": "52e7e81661c5dbc70660815838407a42a6bcc65e8b81f98357de02bdfcfc417c",
+      "bytes": 98332,
+      "source_refs": [
+        "resources/quest/quest.json#/IWO/_RTT/0",
+        "resources/quest/quest.json#/IWO_2/_RTT/0"
+      ]
+    },
+    {
+      "path": "image/CompletionReported.png",
+      "source": "resources/images/CompletionReported.png",
+      "sha256": "497c75ceac10505bcc53747862d0eac3caabe55469e3543910e0bd3ec7ed7119",
+      "bytes": 28798,
+      "source_refs": []
+    },
+    {
+      "path": "image/DH-Church.png",
+      "source": "resources/images/DH-Church.png",
+      "sha256": "5258fa6b18503ba16e11d593a75f26ce4b7e78fa4ebb3d76837be3fc71066edd",
+      "bytes": 19288,
+      "source_refs": [
+        "resources/quest/quest.json#/DH-Church-upper/_EOT/1/1",
+        "resources/quest/quest.json#/DH-Church-auto/_EOT/1/1",
+        "resources/quest/quest.json#/White-G-v2/_EOT/1/1"
+      ]
+    },
+    {
+      "path": "image/DH-R4.png",
+      "source": "resources/images/DH-R4.png",
+      "sha256": "e06cf4c47e9848ff32783411469a41f259e1e503a46097c57cd176b9323a7ead",
+      "bytes": 11481,
+      "source_refs": [
+        "resources/quest/quest.json#/DH-4f/_EOT/1/1"
+      ]
+    },
+    {
+      "path": "image/DH-R5.png",
+      "source": "resources/images/DH-R5.png",
+      "sha256": "45a832948b3a16ec823fdcb23a2c30af79be77f912887716b7b326f15788d382",
+      "bytes": 21087,
+      "source_refs": []
+    },
+    {
+      "path": "image/DH-R6.png",
+      "source": "resources/images/DH-R6.png",
+      "sha256": "f23942e688ab66aeedfe009c2b91503100599c849d45b3178ee7508e3b8627e7",
+      "bytes": 12425,
+      "source_refs": [
+        "resources/quest/quest.json#/DH-6f/_EOT/1/1"
+      ]
+    },
+    {
+      "path": "image/DH-R7.png",
+      "source": "resources/images/DH-R7.png",
+      "sha256": "71c7552238112e616fbbad094047278582650712538cc0f6a6bacce78ef2b9c1",
+      "bytes": 10862,
+      "source_refs": [
+        "resources/quest/quest.json#/DH-7f-right/_EOT/1/1",
+        "resources/quest/quest.json#/DH-7f-auto/_EOT/1/1"
+      ]
+    },
+    {
+      "path": "image/DH-R9.png",
+      "source": "resources/images/DH-R9.png",
+      "sha256": "4c483deb8d1ca8a763ca17b04121a42f2d9b510b5ca5af9cb577760b2537cc4a",
+      "bytes": 18875,
+      "source_refs": [
+        "resources/quest/quest.json#/DH-10f-test/_EOT/1/1",
+        "resources/quest/quest.json#/DH-10f-JR/_EOT/1/1"
+      ]
+    },
+    {
+      "path": "image/DH-entrance.png",
+      "source": "resources/images/DH-entrance.png",
+      "sha256": "1818707f0deb77f22dac516f6d2e7c2b39f5a8ee12d12e98b85499d0e90c549d",
+      "bytes": 20982,
+      "source_refs": []
+    },
+    {
+      "path": "image/DH.png",
+      "source": "resources/images/DH.png",
+      "sha256": "62607445cc1b67346ad5f0c3fcceebc7cfb7b54ab9ba239e8b45339253191d99",
+      "bytes": 17800,
+      "source_refs": [
+        "resources/quest/quest.json#/DH-4f/_EOT/0/1",
+        "resources/quest/quest.json#/DH-6f/_EOT/0/1",
+        "resources/quest/quest.json#/DH-7f-right/_EOT/0/1",
+        "resources/quest/quest.json#/DH-7f-auto/_EOT/0/1",
+        "resources/quest/quest.json#/DH-10f-test/_EOT/0/1",
+        "resources/quest/quest.json#/DH-10f-JR/_EOT/0/1",
+        "resources/quest/quest.json#/DH-Church-upper/_EOT/0/1",
+        "resources/quest/quest.json#/DH-Church-auto/_EOT/0/1",
+        "resources/quest/quest.json#/White-G-v2/_EOT/0/1"
+      ]
+    },
+    {
+      "path": "image/DOE.png",
+      "source": "resources/images/DOE.png",
+      "sha256": "5612ee537db7dfe0cb1b8758c335e63cca4191402f61367c5bd0f8197765a4cb",
+      "bytes": 16491,
+      "source_refs": [
+        "resources/quest/quest.json#/DOE/_EOT/0/1"
+      ]
+    },
+    {
+      "path": "image/DOEB1F.png",
+      "source": "resources/images/DOEB1F.png",
+      "sha256": "fdc874779d1ab406ef38f76fdd0d31356155615f5ae7c24d61ccead1bb610d28",
+      "bytes": 16115,
+      "source_refs": [
+        "resources/quest/quest.json#/DOE/_EOT/1/1"
+      ]
+    },
+    {
+      "path": "image/DOE_quit.png",
+      "source": "resources/images/DOE_quit.png",
+      "sha256": "8eeafb58841c8d986707165c110a8972a6e9caa8c2773b5e40da2b1386635571",
+      "bytes": 8282,
+      "source_refs": [
+        "resources/quest/quest.json#/DOE/_TARGETINFOLIST/2/0"
+      ]
+    },
+    {
+      "path": "image/DOF.png",
+      "source": "resources/images/DOF.png",
+      "sha256": "5a86284d77d443a4c5a6d642688e41522cfd2ee20ab525e0c4c0e66e9031ee9e",
+      "bytes": 13202,
+      "source_refs": [
+        "resources/quest/quest.json#/DOF/_EOT/0/1",
+        "resources/quest/quest.json#/DOF_Plus/_EOT/0/1"
+      ]
+    },
+    {
+      "path": "image/DOFB1F.png",
+      "source": "resources/images/DOFB1F.png",
+      "sha256": "abc1bbc4044f879764a19305e1219039af0480424ec5ec833919a5afeff6c9f0",
+      "bytes": 15805,
+      "source_refs": [
+        "resources/quest/quest.json#/DOF/_EOT/1/1",
+        "resources/quest/quest.json#/DOF_Plus/_EOT/1/1"
+      ]
+    },
+    {
+      "path": "image/DOF_quit.png",
+      "source": "resources/images/DOF_quit.png",
+      "sha256": "9abed48e2bf821bdde8b5d3617392d4d31d48d6bf8292babc20b9cec7dc2dd6c",
+      "bytes": 7217,
+      "source_refs": []
+    },
+    {
+      "path": "image/DOL.png",
+      "source": "resources/images/DOL.png",
+      "sha256": "c5aad7b48ca4b0cdb84172c970ef995e9313c103853bc7e65cceab8885e5bb75",
+      "bytes": 14628,
+      "source_refs": [
+        "resources/quest/quest.json#/DOL/_EOT/0/1",
+        "resources/quest/quest.json#/DOL_PLUS/_EOT/0/1"
+      ]
+    },
+    {
+      "path": "image/DOLB1F.png",
+      "source": "resources/images/DOLB1F.png",
+      "sha256": "bca272a7cecefb020b9c826fa5bc05f0a5feaba3290a67173ae8b95762c6e6f1",
+      "bytes": 19409,
+      "source_refs": [
+        "resources/quest/quest.json#/DOL/_EOT/1/1",
+        "resources/quest/quest.json#/DOL_PLUS/_EOT/1/1"
+      ]
+    },
+    {
+      "path": "image/DOL_quit.png",
+      "source": "resources/images/DOL_quit.png",
+      "sha256": "8e83e47e9d30aba5fd035ba6c9f774b0e248116c80f4cff168406ca442a59d78",
+      "bytes": 7229,
+      "source_refs": []
+    },
+    {
+      "path": "image/DOLtarget1.png",
+      "source": "resources/images/DOLtarget1.png",
+      "sha256": "70e9f227b650a40bcb26c122dda793879bc82b5ebb00591272162044ad8c2df4",
+      "bytes": 62047,
+      "source_refs": []
+    },
+    {
+      "path": "image/DOLtarget2.png",
+      "source": "resources/images/DOLtarget2.png",
+      "sha256": "60ed12e3a145926adc7c6ec5b4c0f2296ee287fd5c3e9bbbc1cf081c6ec83dce",
+      "bytes": 46449,
+      "source_refs": []
+    },
+    {
+      "path": "image/DOS.png",
+      "source": "resources/images/DOS.png",
+      "sha256": "ce84012ecea8a9d59396ecc33a020ad239b96870d35015cb7469e98c9eab9d7a",
+      "bytes": 15140,
+      "source_refs": [
+        "resources/quest/quest.json#/DOS/_EOT/0/1"
+      ]
+    },
+    {
+      "path": "image/DOSB1F.png",
+      "source": "resources/images/DOSB1F.png",
+      "sha256": "cf6fdcdbe802d75adbd763a07968f4e076a4c9db7b97aa5d3bd7a507948fd811",
+      "bytes": 21078,
+      "source_refs": [
+        "resources/quest/quest.json#/DOS/_EOT/1/1"
+      ]
+    },
+    {
+      "path": "image/DOS_quit.png",
+      "source": "resources/images/DOS_quit.png",
+      "sha256": "555f8acb306dafe4d4d94aed8e13ea9126a2dda4f5bccd91a878be19914d3234",
+      "bytes": 5772,
+      "source_refs": [
+        "resources/quest/quest.json#/DOS/_TARGETINFOLIST/3/0"
+      ]
+    },
+    {
+      "path": "image/DOW.png",
+      "source": "resources/images/DOW.png",
+      "sha256": "a6f5f2a35cfeb708c8acc9627ddbe35c01cd8807becac55fb39434b4d2096f0a",
+      "bytes": 13615,
+      "source_refs": [
+        "resources/quest/quest.json#/DOW/_EOT/0/1",
+        "resources/quest/quest.json#/DOW_Plus/_EOT/0/1"
+      ]
+    },
+    {
+      "path": "image/DOWB1F.png",
+      "source": "resources/images/DOWB1F.png",
+      "sha256": "23324461cc770a9cc892eb309dd70cfe3d3292e1a2cd102a97847d527afcadfd",
+      "bytes": 16813,
+      "source_refs": [
+        "resources/quest/quest.json#/DOW/_EOT/1/1",
+        "resources/quest/quest.json#/DOW_Plus/_EOT/1/1"
+      ]
+    },
+    {
+      "path": "image/DOW_quit.png",
+      "source": "resources/images/DOW_quit.png",
+      "sha256": "ca3c4d298aaecea14f4f0f278695d1c88981acc36b00d6701690e96ab5f454df",
+      "bytes": 6182,
+      "source_refs": [
+        "resources/quest/quest.json#/DOW/_TARGETINFOLIST/1/0"
+      ]
+    },
+    {
+      "path": "image/Dist.png",
+      "source": "resources/images/Dist.png",
+      "sha256": "4583dc16980039e3e01d8f7901957604eae52fbc860416f66365a09e177771df",
+      "bytes": 30684,
+      "source_refs": [
+        "resources/quest/quest.json#/Dist/_EOT/1/1"
+      ]
+    },
+    {
+      "path": "image/EVENT.png",
+      "source": "resources/images/EVENT.png",
+      "sha256": "d2bed6dd65e37bf32183d0b93dc497a27c9dfc94f6e1d0cccc1dc560c406ef8d",
+      "bytes": 5522,
+      "source_refs": [
+        "resources/quest/quest.json#/FFXI-2F/_EOT/0/1",
+        "resources/quest/quest.json#/FFXI-2F-elite/_EOT/0/1",
+        "resources/quest/quest.json#/FFXI-5F-4Elite/_EOT/0/1",
+        "resources/quest/quest.json#/FFXI-5F-2Elite-mid/_EOT/0/1",
+        "resources/quest/quest.json#/FFXI-5F-2Elite-bottom/_EOT/0/1",
+        "resources/quest/quest.json#/FFXI-5F-2Elite-left/_EOT/0/1",
+        "resources/quest/quest.json#/FFXI-5F-Elite/_EOT/0/1",
+        "resources/quest/quest.json#/FFXI-Org/_EOT/0/1"
+      ]
+    },
+    {
+      "path": "image/Economy.png",
+      "source": "resources/images/Economy.png",
+      "sha256": "e3e7954a6029f3261ebf50d6bcca811a92ee43883fc0729ad19785d9070bf305",
+      "bytes": 13286,
+      "source_refs": []
+    },
+    {
+      "path": "image/Economy_替换.png",
+      "source": "resources/images/Economy_替换.png",
+      "sha256": "2a532dda7579fb695132ecfaea6b6ffeaffe470c4b63b650bf2954a34f3c8166",
+      "bytes": 14706,
+      "source_refs": []
+    },
+    {
+      "path": "image/EdgeOfTown.png",
+      "source": "resources/images/EdgeOfTown.png",
+      "sha256": "4fb0d0461c312a828c919902042016481cd6c59e17e7f8ae922592e575dd8e56",
+      "bytes": 13857,
+      "source_refs": [
+        "resources/quest/quest.json#/Dist/_EOT/0/2/0",
+        "resources/quest/quest.json#/lounge/_EOT/0/2/0",
+        "resources/quest/quest.json#/fortress-B1F/_EOT/0/2/0",
+        "resources/quest/quest.json#/fortress-B8F_entrance/_EOT/0/2/0",
+        "resources/quest/quest.json#/fortress-10F/_EOT/0/2/0",
+        "resources/quest/quest.json#/DH-4f/_EOT/0/2/0",
+        "resources/quest/quest.json#/DH-6f/_EOT/0/2/0",
+        "resources/quest/quest.json#/DH-7f-right/_EOT/0/2/0",
+        "resources/quest/quest.json#/DH-7f-auto/_EOT/0/2/0",
+        "resources/quest/quest.json#/DH-10f-test/_EOT/0/2/0",
+        "resources/quest/quest.json#/DH-10f-JR/_EOT/0/2/0",
+        "resources/quest/quest.json#/DH-Church-upper/_EOT/0/2/0",
+        "resources/quest/quest.json#/DH-Church-auto/_EOT/0/2/0",
+        "resources/quest/quest.json#/White-G-v2/_EOT/0/2/0",
+        "resources/quest/quest.json#/malice-B3F/_EOT/0/2/0",
+        "resources/quest/quest.json#/COS_chest/_EOT/0/2/0",
+        "resources/quest/quest.json#/COS_chest_short/_EOT/0/2/0",
+        "resources/quest/quest.json#/DOE/_EOT/0/2/0",
+        "resources/quest/quest.json#/DOF/_EOT/0/2/0",
+        "resources/quest/quest.json#/DOF_Plus/_EOT/0/2/0",
+        "resources/quest/quest.json#/DOW/_EOT/0/2/0",
+        "resources/quest/quest.json#/DOW_Plus/_EOT/0/2/0",
+        "resources/quest/quest.json#/DOL/_EOT/0/2/0",
+        "resources/quest/quest.json#/DOL_PLUS/_EOT/0/2/0",
+        "resources/quest/quest.json#/DOS/_EOT/0/2/0"
+      ]
+    },
+    {
+      "path": "image/Edit.png",
+      "source": "resources/images/Edit.png",
+      "sha256": "2fbfb6ea55db5827de1b957ca551ef58f3b327dddc6aa9179c841ef426497df2",
+      "bytes": 8631,
+      "source_refs": []
+    },
+    {
+      "path": "image/FFXI/City_VNH.png",
+      "source": "resources/images/FFXI/City_VNH.png",
+      "sha256": "6c902625b7a2cff5de9bcc644ec188b41f2bf5cb9605c4bc89dc4ee43e21df71",
+      "bytes": 38428,
+      "source_refs": []
+    },
+    {
+      "path": "image/FFXI/EVENT_GCN.png",
+      "source": "resources/images/FFXI/EVENT_GCN.png",
+      "sha256": "afad47f2e502fbf60356d69fc990b6b63b381fa100fb772d102ae4e2a2ab4f37",
+      "bytes": 28830,
+      "source_refs": [
+        "resources/quest/quest.json#/FFXI-2F/_EOT/0/2",
+        "resources/quest/quest.json#/FFXI-2F-elite/_EOT/0/2",
+        "resources/quest/quest.json#/FFXI-5F-4Elite/_EOT/0/2",
+        "resources/quest/quest.json#/FFXI-5F-2Elite-mid/_EOT/0/2",
+        "resources/quest/quest.json#/FFXI-5F-2Elite-bottom/_EOT/0/2",
+        "resources/quest/quest.json#/FFXI-5F-2Elite-left/_EOT/0/2",
+        "resources/quest/quest.json#/FFXI-5F-Elite/_EOT/0/2",
+        "resources/quest/quest.json#/FFXI-Org/_EOT/0/2"
+      ]
+    },
+    {
+      "path": "image/FFXI/EVENT_VNH.png",
+      "source": "resources/images/FFXI/EVENT_VNH.png",
+      "sha256": "f3b6593e3bdaa047a0c728753746050adfc94e0aa78d94afeec210b61de024a6",
+      "bytes": 30353,
+      "source_refs": [
+        "resources/quest/quest.json#/FFXI-2F/_RTT/0",
+        "resources/quest/quest.json#/FFXI-2F-elite/_RTT/0",
+        "resources/quest/quest.json#/FFXI-5F-4Elite/_RTT/0",
+        "resources/quest/quest.json#/FFXI-5F-2Elite-mid/_RTT/0",
+        "resources/quest/quest.json#/FFXI-5F-2Elite-bottom/_RTT/0",
+        "resources/quest/quest.json#/FFXI-5F-2Elite-left/_RTT/0",
+        "resources/quest/quest.json#/FFXI-5F-Elite/_RTT/0"
+      ]
+    },
+    {
+      "path": "image/FFXI/FFXIStone.png",
+      "source": "resources/images/FFXI/FFXIStone.png",
+      "sha256": "617d18e80ff2bfe3acdc0de3326fd3771dd8a3fbd065dee743f8ebe27c794e05",
+      "bytes": 9385,
+      "source_refs": []
+    },
+    {
+      "path": "image/FFXI/GCN.png",
+      "source": "resources/images/FFXI/GCN.png",
+      "sha256": "3ae8c131ac0e3ff994754cdfd9e9d0272d4aefbaa77820e161e943f0fff97326",
+      "bytes": 49762,
+      "source_refs": [
+        "resources/quest/quest.json#/FFXI-2F/_preEOTcheck",
+        "resources/quest/quest.json#/FFXI-2F-elite/_preEOTcheck",
+        "resources/quest/quest.json#/FFXI-Org/_preEOTcheck"
+      ]
+    },
+    {
+      "path": "image/FFXI/ZONE2.png",
+      "source": "resources/images/FFXI/ZONE2.png",
+      "sha256": "61daec1ea13d8e2cfd467301db79d0e7666b448401b6bfeb05b1d79975baa868",
+      "bytes": 18121,
+      "source_refs": [
+        "resources/quest/quest.json#/FFXI-2F/_EOT/1/1",
+        "resources/quest/quest.json#/FFXI-2F-elite/_EOT/1/1",
+        "resources/quest/quest.json#/FFXI-Org/_EOT/1/1"
+      ]
+    },
+    {
+      "path": "image/FFXI/diggable.png",
+      "source": "resources/images/FFXI/diggable.png",
+      "sha256": "0143bc5bd2ff046657a32cdef2b0568babcd62ecaeb4483d696e22e988d565b3",
+      "bytes": 24736,
+      "source_refs": []
+    },
+    {
+      "path": "image/FFXI/entrance.png",
+      "source": "resources/images/FFXI/entrance.png",
+      "sha256": "b51a0848584d5978e1dc136d6a6dc20dadd7b249d2e5c759a736ca0914366199",
+      "bytes": 8957,
+      "source_refs": []
+    },
+    {
+      "path": "image/FFXI/needpickaxe.png",
+      "source": "resources/images/FFXI/needpickaxe.png",
+      "sha256": "b72e30076eb9d8e59f4a056bc922ad17a632c6c283d975d2cb61d6f24c36d0ed",
+      "bytes": 40915,
+      "source_refs": [
+        "src/script.py:4454"
+      ]
+    },
+    {
+      "path": "image/FFXI/nothingToDig.png",
+      "source": "resources/images/FFXI/nothingToDig.png",
+      "sha256": "4fdd4fc24cf25f6dca8679a90bfbe8a1a24e6f0272eb867cfe8ec6700c2e297c",
+      "bytes": 21119,
+      "source_refs": [
+        "src/script.py:4452"
+      ]
+    },
+    {
+      "path": "image/FFXI/nothingToDig2.png",
+      "source": "resources/images/FFXI/nothingToDig2.png",
+      "sha256": "7447939e5a78a1438c7175b68531d68175b29f6ad5699649cfa5925b56f34186",
+      "bytes": 18566,
+      "source_refs": [
+        "src/script.py:4452"
+      ]
+    },
+    {
+      "path": "image/FFXI/nothingToDig3.png",
+      "source": "resources/images/FFXI/nothingToDig3.png",
+      "sha256": "80fd0c99c0e2977c0d9d479bd57e67698d868c11db3b9a8ae4465a914f6ffa63",
+      "bytes": 18957,
+      "source_refs": []
+    },
+    {
+      "path": "image/FFXI/org_alter.png",
+      "source": "resources/images/FFXI/org_alter.png",
+      "sha256": "b852879ffedaef2db9acfbd6b4e8fb73e815b76ec328092eabf1e3df4bedcd24",
+      "bytes": 15145,
+      "source_refs": [
+        "src/script.py:4433"
+      ]
+    },
+    {
+      "path": "image/FFXI/org_fine.png",
+      "source": "resources/images/FFXI/org_fine.png",
+      "sha256": "cdcfd2cb93ff2cec9d9518651e3b63f6cc794b9c93b085862b6ba39e32ad9364",
+      "bytes": 4179,
+      "source_refs": [
+        "src/script.py:4428"
+      ]
+    },
+    {
+      "path": "image/FFXI/org_full.png",
+      "source": "resources/images/FFXI/org_full.png",
+      "sha256": "39983e76ab0b1fb832f62366f7faa3bee8f76b290fe1af0635f67417e7ce1606",
+      "bytes": 32608,
+      "source_refs": [
+        "src/script.py:4437"
+      ]
+    },
+    {
+      "path": "image/FFXI/org_high.png",
+      "source": "resources/images/FFXI/org_high.png",
+      "sha256": "1203624c09435514f32c00998ada2ce0adc70894f53d3b705da9b7aed04317aa",
+      "bytes": 5925,
+      "source_refs": [
+        "src/script.py:4429"
+      ]
+    },
+    {
+      "path": "image/FFXI/org_lesser_full.png",
+      "source": "resources/images/FFXI/org_lesser_full.png",
+      "sha256": "90924bf50e8aec8595a250a09d26e7d4641f996616098497252060be069515f3",
+      "bytes": 9677,
+      "source_refs": [
+        "src/script.py:4436"
+      ]
+    },
+    {
+      "path": "image/FFXI/org_low.png",
+      "source": "resources/images/FFXI/org_low.png",
+      "sha256": "7114b0e5e669f6998575351613b96fe8a1df309059b84a4bc55fd3ffceb58831",
+      "bytes": 4512,
+      "source_refs": [
+        "src/script.py:4431"
+      ]
+    },
+    {
+      "path": "image/FFXI/org_mid.png",
+      "source": "resources/images/FFXI/org_mid.png",
+      "sha256": "87ce5cdd0fd8889b8a43b0a2bdb61f269a461a12fa35adb6858fa98d5beaf98b",
+      "bytes": 4191,
+      "source_refs": [
+        "src/script.py:4430"
+      ]
+    },
+    {
+      "path": "image/FFXI/org_ouro.png",
+      "source": "resources/images/FFXI/org_ouro.png",
+      "sha256": "81fae5f4a2a9843d24dc0e31bf09ec4cabe804aa6382f58fe8bf2b29691e1c16",
+      "bytes": 9369,
+      "source_refs": [
+        "src/script.py:4435"
+      ]
+    },
+    {
+      "path": "image/FFXI/org_position.png",
+      "source": "resources/images/FFXI/org_position.png",
+      "sha256": "274bfb2e93537d3de76a1590a155320d6ade5febd2f4a3df50c6d96358de6a11",
+      "bytes": 8604,
+      "source_refs": [
+        "src/script.py:4418"
+      ]
+    },
+    {
+      "path": "image/FFXI/org_refine.png",
+      "source": "resources/images/FFXI/org_refine.png",
+      "sha256": "55a67b48a8b86fbe8ae69987993c5f67291505e2b878be63174568344fb7863f",
+      "bytes": 11274,
+      "source_refs": [
+        "src/script.py:4432"
+      ]
+    },
+    {
+      "path": "image/FFXI/org_sliver.png",
+      "source": "resources/images/FFXI/org_sliver.png",
+      "sha256": "d7e32a86ae6faaab3b3ac3e9cdd129031eb50ad97131bb8cddaf2593371c3a8c",
+      "bytes": 5389,
+      "source_refs": [
+        "src/script.py:4434"
+      ]
+    },
+    {
+      "path": "image/FFXI/receive.png",
+      "source": "resources/images/FFXI/receive.png",
+      "sha256": "2ee64738a67d19cea0f05dfb61d005c6c9f86d69a2bbbbd68f473247fb780c30",
+      "bytes": 11954,
+      "source_refs": [
+        "src/script.py:4426"
+      ]
+    },
+    {
+      "path": "image/FFXI/zone5.png",
+      "source": "resources/images/FFXI/zone5.png",
+      "sha256": "c71c484880d99bfced6d597b896579c8bf8f9a0b1b9dc749d18badcd1cd998a4",
+      "bytes": 18153,
+      "source_refs": [
+        "resources/quest/quest.json#/FFXI-5F-4Elite/_EOT/1/1",
+        "resources/quest/quest.json#/FFXI-5F-2Elite-mid/_EOT/1/1",
+        "resources/quest/quest.json#/FFXI-5F-2Elite-bottom/_EOT/1/1",
+        "resources/quest/quest.json#/FFXI-5F-2Elite-left/_EOT/1/1",
+        "resources/quest/quest.json#/FFXI-5F-Elite/_EOT/1/1"
+      ]
+    },
+    {
+      "path": "image/FortressArrival.png",
+      "source": "resources/images/FortressArrival.png",
+      "sha256": "994570fd5c5f01127084c74656a6ffa6c44bcf34621ee4ef3b0effb522e8e5bd",
+      "bytes": 33423,
+      "source_refs": []
+    },
+    {
+      "path": "image/GHB/GHB.png",
+      "source": "resources/images/GHB/GHB.png",
+      "sha256": "c6f6a047e739fd4041f0477dd11003dcb287851c0626dd0a29fc32792ff8f369",
+      "bytes": 47057,
+      "source_refs": [
+        "resources/quest/quest.json#/GHB/_preEOTcheck",
+        "resources/quest/quest.json#/GHB/_EOT/0/2/0"
+      ]
+    },
+    {
+      "path": "image/GHB/GHB_quit.png",
+      "source": "resources/images/GHB/GHB_quit.png",
+      "sha256": "cca53acbd3fbc2fd6b0bcee7237383d698302286ec719dc206a968755e70aa11",
+      "bytes": 5655,
+      "source_refs": [
+        "resources/quest/quest.json#/GHB/_TARGETINFOLIST/9/0"
+      ]
+    },
+    {
+      "path": "image/GhostsOfYore.png",
+      "source": "resources/images/GhostsOfYore.png",
+      "sha256": "4ca02de3f267c0ec8eb55d13169b780b5afe3584f36ab530aa36357eb2e32736",
+      "bytes": 233491,
+      "source_refs": []
+    },
+    {
+      "path": "image/GotoDung.png",
+      "source": "resources/images/GotoDung.png",
+      "sha256": "f7be5f958537213160d5e6faf8f76afba12807e614a95a07c79adeefdc59c33e",
+      "bytes": 13396,
+      "source_refs": [
+        "src/script.py:2500"
+      ]
+    },
+    {
+      "path": "image/HSR/AGMM1F.png",
+      "source": "resources/images/HSR/AGMM1F.png",
+      "sha256": "52c36657e9ab8b4f1b0c2e1690f7d34829c54caac4a0a42e94e901900456dbe8",
+      "bytes": 8280,
+      "source_refs": [
+        "resources/quest/quest.json#/HSR-1F/_EOT/1/1"
+      ]
+    },
+    {
+      "path": "image/HSR/HSR.png",
+      "source": "resources/images/HSR/HSR.png",
+      "sha256": "2afb7fd5b0ac03845032e8cf75e030e6f0cba36c89dee106d3037dd60d70e149",
+      "bytes": 56928,
+      "source_refs": [
+        "resources/quest/quest.json#/HSR-1F/_preEOTcheck",
+        "resources/quest/quest.json#/HSR-1F/_EOT/0/2/0"
+      ]
+    },
+    {
+      "path": "image/IWO/IWO.png",
+      "source": "resources/images/IWO/IWO.png",
+      "sha256": "ddffd3ff985b39b5a784eeb09b64cb4f5630c56998dc5d25fc23d6185595a524",
+      "bytes": 77402,
+      "source_refs": [
+        "resources/quest/quest.json#/IWO/_preEOTcheck",
+        "resources/quest/quest.json#/IWO/_EOT/0/2/0",
+        "resources/quest/quest.json#/IWO/_EOT/1/2/0",
+        "resources/quest/quest.json#/IWO_2/_preEOTcheck",
+        "resources/quest/quest.json#/IWO_2/_EOT/0/2/0",
+        "resources/quest/quest.json#/IWO_2/_EOT/1/2/0"
+      ]
+    },
+    {
+      "path": "image/IWO/IWOB1F.png",
+      "source": "resources/images/IWO/IWOB1F.png",
+      "sha256": "5fc91372b81e123e4f440c444b1d52649186382afc78e04ffcf3fe2c5edc863d",
+      "bytes": 22320,
+      "source_refs": [
+        "resources/quest/quest.json#/IWO/_EOT/1/1"
+      ]
+    },
+    {
+      "path": "image/IWO/IWOB2F.png",
+      "source": "resources/images/IWO/IWOB2F.png",
+      "sha256": "09e300a75cc341f4a939b22f82052a7b7338bd03fc304d6c173c2b364e8b187b",
+      "bytes": 5826,
+      "source_refs": [
+        "resources/quest/quest.json#/IWO_2/_EOT/1/1"
+      ]
+    },
+    {
+      "path": "image/Inn.png",
+      "source": "resources/images/Inn.png",
+      "sha256": "d11ddb587c3d33bdc634a67c56db917d3a4ac5bbdc49e1fa350c489600816f69",
+      "bytes": 15272,
+      "source_refs": [
+        "src/script.py:2203",
+        "src/script.py:2208"
+      ]
+    },
+    {
+      "path": "image/LBC.png",
+      "source": "resources/images/LBC.png",
+      "sha256": "f1063d2f80288a04f09057c75de851777bff4a44505c7c019a6d7667664a531b",
+      "bytes": 10488,
+      "source_refs": []
+    },
+    {
+      "path": "image/LBC/EnaWasSaved.png",
+      "source": "resources/images/LBC/EnaWasSaved.png",
+      "sha256": "793882137c4833a4c2d5a3e909468c0fd748e18732f1ae74e16b5baef2dc73a4",
+      "bytes": 21463,
+      "source_refs": []
+    },
+    {
+      "path": "image/LBC/LBC.png",
+      "source": "resources/images/LBC/LBC.png",
+      "sha256": "8904748be13d23f5fe0e496b546b208df546adb6d4f22c8d1dc47c7db26de6d4",
+      "bytes": 62721,
+      "source_refs": [
+        "resources/quest/quest.json#/LBC/_preEOTcheck",
+        "resources/quest/quest.json#/LBC/_EOT/0/2/0"
+      ]
+    },
+    {
+      "path": "image/LBC/LBC_quit.png",
+      "source": "resources/images/LBC/LBC_quit.png",
+      "sha256": "87b73d00fe030eb3bdfd8377c8a86dac64600057eaa3926736117ae924bfc2b4",
+      "bytes": 10829,
+      "source_refs": [
+        "resources/quest/quest.json#/LBC/_TARGETINFOLIST/1/0"
+      ]
+    },
+    {
+      "path": "image/LBC/request.png",
+      "source": "resources/images/LBC/request.png",
+      "sha256": "5b8b131e8aba992bbb2a6a121d1acec8a48900fe2fe2e62c33bbcf640c88f387",
+      "bytes": 363801,
+      "source_refs": []
+    },
+    {
+      "path": "image/LBC/symbolofalliance.png",
+      "source": "resources/images/LBC/symbolofalliance.png",
+      "sha256": "e4c3173128f7136bb0d277d41611e600bed24d424adda10a44d6d8c813459d16",
+      "bytes": 75041,
+      "source_refs": []
+    },
+    {
+      "path": "image/LBC_quit.png",
+      "source": "resources/images/LBC_quit.png",
+      "sha256": "87b73d00fe030eb3bdfd8377c8a86dac64600057eaa3926736117ae924bfc2b4",
+      "bytes": 10829,
+      "source_refs": []
+    },
+    {
+      "path": "image/LMG/FTB1F.png",
+      "source": "resources/images/LMG/FTB1F.png",
+      "sha256": "86ecc9c88149fa4c425badad4b52bfcf670d6548ea2535252ec508fd6f1069fe",
+      "bytes": 18543,
+      "source_refs": [
+        "resources/quest/quest.json#/LMG-FT/_EOT/1/1"
+      ]
+    },
+    {
+      "path": "image/LMG/LMG.png",
+      "source": "resources/images/LMG/LMG.png",
+      "sha256": "435f5e4f4e4d1c29313d1de65485eb896d2299a97d865e1bc8821c8d4be54934",
+      "bytes": 52174,
+      "source_refs": [
+        "resources/quest/quest.json#/LMG-GT/_preEOTcheck",
+        "resources/quest/quest.json#/LMG-GT/_EOT/0/2/0",
+        "resources/quest/quest.json#/LMG-FT/_preEOTcheck",
+        "resources/quest/quest.json#/LMG-FT/_EOT/0/2/0"
+      ]
+    },
+    {
+      "path": "image/LMG/LMG1F.png",
+      "source": "resources/images/LMG/LMG1F.png",
+      "sha256": "6fc7b9b85da5795ffcc92e4bd5645a421f688c1d1a1544e22c563f52f276f878",
+      "bytes": 21320,
+      "source_refs": [
+        "resources/quest/quest.json#/LMG-GT/_EOT/1/1"
+      ]
+    },
+    {
+      "path": "image/NoChestCanBeFound.png",
+      "source": "resources/images/NoChestCanBeFound.png",
+      "sha256": "5c1dcb559b36a3585a50b1f64cada890880d1bc321c5b5562e6543c867f6374c",
+      "bytes": 25831,
+      "source_refs": [
+        "src/script.py:3348",
+        "src/script.py:3353"
+      ]
+    },
+    {
+      "path": "image/OK.png",
+      "source": "resources/images/OK.png",
+      "sha256": "6a06109ef2df56dad27cd78251a9d6c0fc1507d3b9f3476198c90541244f4508",
+      "bytes": 10876,
+      "source_refs": [
+        "src/script.py:1476",
+        "src/script.py:2520",
+        "src/script.py:2734"
+      ]
+    },
+    {
+      "path": "image/PartyManagement.png",
+      "source": "resources/images/PartyManagement.png",
+      "sha256": "2c3d2a5c2b272eb3ea5602df6f5b6a4e5bd52cd9ce0dfe2bf5cb6931e24ab7f6",
+      "bytes": 23756,
+      "source_refs": []
+    },
+    {
+      "path": "image/PartyManagementTitle.png",
+      "source": "resources/images/PartyManagementTitle.png",
+      "sha256": "c3bcc205d5c0b37cf18e915168f194263dfa58b79f4f1eed067e1f6b11613b21",
+      "bytes": 62554,
+      "source_refs": []
+    },
+    {
+      "path": "image/ReturnText.png",
+      "source": "resources/images/ReturnText.png",
+      "sha256": "3f16a6e1bc730e25ead8045f1421d914246791a154aef47712a7c8d5b1bd7d22",
+      "bytes": 7243,
+      "source_refs": [
+        "src/script.py:2159"
+      ]
+    },
+    {
+      "path": "image/RiseAgain.png",
+      "source": "resources/images/RiseAgain.png",
+      "sha256": "003cf46a57ce4017befe651450fdfc4b55ff0660bd22af74e4be1caa0b3ef6b3",
+      "bytes": 11045,
+      "source_refs": [
+        "src/script.py:2233",
+        "src/script.py:3006",
+        "src/script.py:3093"
+      ]
+    },
+    {
+      "path": "image/SC/SC.png",
+      "source": "resources/images/SC/SC.png",
+      "sha256": "cb54a85f7cd6e571ad38aa7cf47ccfa6b784daf79ffd50bbd9c563371cc2c1f7",
+      "bytes": 16643,
+      "source_refs": []
+    },
+    {
+      "path": "image/SC/SCB1F.png",
+      "source": "resources/images/SC/SCB1F.png",
+      "sha256": "c313446a9e21b75b82ad88433cd8adbd8ce0dcf238395f2db98844a7e66e5d59",
+      "bytes": 23907,
+      "source_refs": []
+    },
+    {
+      "path": "image/SC/SCB2F.png",
+      "source": "resources/images/SC/SCB2F.png",
+      "sha256": "fd7d386121d26df19b2432831d37d9bf15cabc03d9062798b2ec5af712080aba",
+      "bytes": 28341,
+      "source_refs": []
+    },
+    {
+      "path": "image/SH_B2F.png",
+      "source": "resources/images/SH_B2F.png",
+      "sha256": "818fd6e96d15b819d53f3503138c6475212648db510d416c1e90bffe4a767710",
+      "bytes": 25149,
+      "source_refs": []
+    },
+    {
+      "path": "image/SH_cave.png",
+      "source": "resources/images/SH_cave.png",
+      "sha256": "db66da995255a283d6879ea4842b64193c8a94bc9e408d1b8029a3507d177a2d",
+      "bytes": 18075,
+      "source_refs": []
+    },
+    {
+      "path": "image/SSC/Leap.png",
+      "source": "resources/images/SSC/Leap.png",
+      "sha256": "4d2efa375c7f44547423ff9db984306bfe0102344559bb8d905b310aa2fa3eef",
+      "bytes": 182301,
+      "source_refs": []
+    },
+    {
+      "path": "image/SSC/Request.png",
+      "source": "resources/images/SSC/Request.png",
+      "sha256": "a63b604e04f9248eec036b99b9ee347c3c00352f323745ec0b95302e4ea3149c",
+      "bytes": 389887,
+      "source_refs": [
+        "src/script.py:3921"
+      ]
+    },
+    {
+      "path": "image/SSC/SSC.png",
+      "source": "resources/images/SSC/SSC.png",
+      "sha256": "6441d14be2016bb727ce5e9c3bb7e1e5e4ba5d1f2a35e764047d07f43f502253",
+      "bytes": 48003,
+      "source_refs": [
+        "resources/quest/quest.json#/SSC_chest/_preEOTcheck",
+        "resources/quest/quest.json#/SSC_chest/_EOT/0/2/0"
+      ]
+    },
+    {
+      "path": "image/SSC/SSC1F_left_1_once.png",
+      "source": "resources/images/SSC/SSC1F_left_1_once.png",
+      "sha256": "31ab9d9cf60b6cfb9a0c9f0399fc137760e01a8b10fa5fbb34cf7fa694009f98",
+      "bytes": 51922,
+      "source_refs": []
+    },
+    {
+      "path": "image/SSC/SSC1F_left_2_once.png",
+      "source": "resources/images/SSC/SSC1F_left_2_once.png",
+      "sha256": "14643d731e090d7f7cd587110c13d743f43e640e6ea58a05dc6efed211a6d07a",
+      "bytes": 60187,
+      "source_refs": []
+    },
+    {
+      "path": "image/SSC/SSC1F_left_3_once.png",
+      "source": "resources/images/SSC/SSC1F_left_3_once.png",
+      "sha256": "be6bbdfa0e3be2aa6813f04d66d2d367515cd245f20b24f2bf6955a5bf3025c5",
+      "bytes": 47793,
+      "source_refs": []
+    },
+    {
+      "path": "image/SSC/SSC1F_left_once.png",
+      "source": "resources/images/SSC/SSC1F_left_once.png",
+      "sha256": "6901aa64db4514dac5c44353a6d08aaea68e742e26be56104e1540d7582fd08b",
+      "bytes": 59159,
+      "source_refs": []
+    },
+    {
+      "path": "image/SSC/SSC1F_right_once.png",
+      "source": "resources/images/SSC/SSC1F_right_once.png",
+      "sha256": "a0c87fdd79cd0fbf2be5a1e9b265e68aacd0aea97a80a04fe472e5bb15ac4f7b",
+      "bytes": 47980,
+      "source_refs": []
+    },
+    {
+      "path": "image/SSC/SSC_quit.png",
+      "source": "resources/images/SSC/SSC_quit.png",
+      "sha256": "cca53acbd3fbc2fd6b0bcee7237383d698302286ec719dc206a968755e70aa11",
+      "bytes": 5655,
+      "source_refs": [
+        "resources/quest/quest.json#/SSC_chest/_TARGETINFOLIST/1/0"
+      ]
+    },
+    {
+      "path": "image/SSC/dotdotdot.png",
+      "source": "resources/images/SSC/dotdotdot.png",
+      "sha256": "bbeee6bddc2fd50283c43a13aba91361318197ba31de22060e83b2d8f7900914",
+      "bytes": 13509,
+      "source_refs": []
+    },
+    {
+      "path": "image/SSC/goldenchest_1.png",
+      "source": "resources/images/SSC/goldenchest_1.png",
+      "sha256": "176450527fa4703489f8dcb326581b5fadb3496d689dbcf59f02d6fea79ac6e0",
+      "bytes": 69951,
+      "source_refs": []
+    },
+    {
+      "path": "image/SSC/shadow.png",
+      "source": "resources/images/SSC/shadow.png",
+      "sha256": "4d13f3a3c6c81d07cee4a52860973a850f4ae87da50ae156b84965cfae4dcbf9",
+      "bytes": 7326,
+      "source_refs": []
+    },
+    {
+      "path": "image/SSC/trapdeactived.png",
+      "source": "resources/images/SSC/trapdeactived.png",
+      "sha256": "1524d444fb5511300571a473103629e8ea2ad6cbce960e5d8a86837734e4f708",
+      "bytes": 30157,
+      "source_refs": []
+    },
+    {
+      "path": "image/Stay.png",
+      "source": "resources/images/Stay.png",
+      "sha256": "da8467abe4eaed804359e78f64f6db2d320e7f6adc37ff7ccc7c8b13a0fc0c3f",
+      "bytes": 7696,
+      "source_refs": []
+    },
+    {
+      "path": "image/TWC/TWC.png",
+      "source": "resources/images/TWC/TWC.png",
+      "sha256": "9b89cc1ebfcfa1872f33514a3f912e9931617167affaabffe63ac86bb45a8d9b",
+      "bytes": 20940,
+      "source_refs": []
+    },
+    {
+      "path": "image/TWC/TWCB1F.png",
+      "source": "resources/images/TWC/TWCB1F.png",
+      "sha256": "52b22dec6148e184f9abf8646573a7a54a323a03a5e897dacf4dd741b97f4d82",
+      "bytes": 26474,
+      "source_refs": []
+    },
+    {
+      "path": "image/TradeWaterway.png",
+      "source": "resources/images/TradeWaterway.png",
+      "sha256": "161bc140a8f46b980dc05acc9989c30d5848b6eb6146126882fd5bdcee0006df",
+      "bytes": 13324,
+      "source_refs": [
+        "resources/quest/quest.json#/Dist/_EOT/0/1",
+        "resources/quest/quest.json#/lounge/_EOT/0/1"
+      ]
+    },
+    {
+      "path": "image/Triumph.png",
+      "source": "resources/images/Triumph.png",
+      "sha256": "1e04ba3437c31dba104de472cdf44688d356a4bd2c92f045ae8a1eab3dd52f5f",
+      "bytes": 42394,
+      "source_refs": []
+    },
+    {
+      "path": "image/ambush.png",
+      "source": "resources/images/ambush.png",
+      "sha256": "5e6b565fafec0c38aa087f22d4285c1e557eb91449c24efa6c27a9ea45f54096",
+      "bytes": 6501,
+      "source_refs": [
+        "src/script.py:2246",
+        "src/script.py:2248",
+        "src/script.py:2251",
+        "src/script.py:3009",
+        "src/script.py:3101"
+      ]
+    },
+    {
+      "path": "image/autoBattleEnable.png",
+      "source": "resources/images/autoBattleEnable.png",
+      "sha256": "f83106de9f631ed676224d45ce34289b4f4f710f43d10cf86c48503d925b949f",
+      "bytes": 12301,
+      "source_refs": []
+    },
+    {
+      "path": "image/bag.png",
+      "source": "resources/images/bag.png",
+      "sha256": "f40d8bafa50d89eadc25aac8f92074dfec7310c23f8a5d39d53d97f0a0a726a8",
+      "bytes": 10879,
+      "source_refs": []
+    },
+    {
+      "path": "image/beginningAbyss.png",
+      "source": "resources/images/beginningAbyss.png",
+      "sha256": "dcdba0141324e0c943ddaadf1488c9c4ea991c4e22daff4f09af16fd619b9ec9",
+      "bytes": 19832,
+      "source_refs": []
+    },
+    {
+      "path": "image/blackScreen.png",
+      "source": "resources/images/blackScreen.png",
+      "sha256": "53c158b4c74e22bc7b48160929f53ea2df608fbfce468c50cc7eed1fab2f9f12",
+      "bytes": 4308,
+      "source_refs": []
+    },
+    {
+      "path": "image/blessing.png",
+      "source": "resources/images/blessing.png",
+      "sha256": "6cc050302a284cd74a12cbb01397d5f0331bf505dfad878dd1824dbf58309c29",
+      "bytes": 5834,
+      "source_refs": [
+        "src/script.py:2276"
+      ]
+    },
+    {
+      "path": "image/bondmate_close.png",
+      "source": "resources/images/bondmate_close.png",
+      "sha256": "2c4fbf4fa81ddd2ed5d6b213c1a02303abca1864424526c3611275474c7f8fc5",
+      "bytes": 17280,
+      "source_refs": [
+        "src/script.py:2219"
+      ]
+    },
+    {
+      "path": "image/boot_attention.png",
+      "source": "resources/images/boot_attention.png",
+      "sha256": "aae17564ddc7ef5e9f051a82efa42bef21ff1f558fc00954c768d373e7863c06",
+      "bytes": 24182,
+      "source_refs": [
+        "src/script.py:1366"
+      ]
+    },
+    {
+      "path": "image/boot_title_logo.png",
+      "source": "resources/images/boot_title_logo.png",
+      "sha256": "66924aca3c2695e36866045195d8d3bfefcee0e6ee5303a89856ac614824224a",
+      "bytes": 198463,
+      "source_refs": [
+        "src/script.py:1374"
+      ]
+    },
+    {
+      "path": "image/bounty/Slayhim.png",
+      "source": "resources/images/bounty/Slayhim.png",
+      "sha256": "6da1234fa7e586306fb57c4f226e8d26f5bd357a8e711746515409f1cb2f22fd",
+      "bytes": 6010,
+      "source_refs": []
+    },
+    {
+      "path": "image/bounty/cuthimdown.png",
+      "source": "resources/images/bounty/cuthimdown.png",
+      "sha256": "0c729d902c09f1b934d9427d3ecd4d474aca39a807992f2a931538147cbf136f",
+      "bytes": 8897,
+      "source_refs": []
+    },
+    {
+      "path": "image/bounty/lethimgo.png",
+      "source": "resources/images/bounty/lethimgo.png",
+      "sha256": "a16544a1013228c66ef709c272eaa3620613c0e09fb6298ba2c355be2ab3a084",
+      "bytes": 7524,
+      "source_refs": []
+    },
+    {
+      "path": "image/caveinZone.png",
+      "source": "resources/images/caveinZone.png",
+      "sha256": "0230c14aa2213f732fed83b34c3a33a69573118f4431d0333f59a977626a00a9",
+      "bytes": 18323,
+      "source_refs": []
+    },
+    {
+      "path": "image/chest.png",
+      "source": "resources/images/chest.png",
+      "sha256": "956163541b542824ce0f0a346c897c953febec918ec68383d1f81c6bba38af7c",
+      "bytes": 2669,
+      "source_refs": [
+        "resources/quest/quest.json#/Dist/_TARGETINFOLIST/0/0",
+        "resources/quest/quest.json#/fortress-B1F/_TARGETINFOLIST/0/0",
+        "resources/quest/quest.json#/DH-6f/_TARGETINFOLIST/2/0",
+        "resources/quest/quest.json#/DH-7f-right/_TARGETINFOLIST/3/0",
+        "resources/quest/quest.json#/DH-7f-right/_TARGETINFOLIST/7/0",
+        "resources/quest/quest.json#/DH-10f-test/_TARGETINFOLIST/6/0",
+        "resources/quest/quest.json#/DH-10f-test/_TARGETINFOLIST/7/0",
+        "resources/quest/quest.json#/DH-10f-test/_TARGETINFOLIST/9/0",
+        "resources/quest/quest.json#/DH-10f-test/_TARGETINFOLIST/10/0",
+        "resources/quest/quest.json#/DH-Church-upper/_TARGETINFOLIST/0/0",
+        "resources/quest/quest.json#/DH-Church-upper/_TARGETINFOLIST/1/0",
+        "resources/quest/quest.json#/LBC/_TARGETINFOLIST/0/0",
+        "resources/quest/quest.json#/GHB/_TARGETINFOLIST/5/0",
+        "resources/quest/quest.json#/GHB/_TARGETINFOLIST/6/0",
+        "resources/quest/quest.json#/GHB/_TARGETINFOLIST/7/0",
+        "resources/quest/quest.json#/GHB/_TARGETINFOLIST/8/0",
+        "resources/quest/quest.json#/COS_chest/_TARGETINFOLIST/0/0",
+        "resources/quest/quest.json#/COS_chest/_TARGETINFOLIST/1/0",
+        "resources/quest/quest.json#/COS_chest/_TARGETINFOLIST/3/0",
+        "resources/quest/quest.json#/COS_chest/_TARGETINFOLIST/4/0",
+        "resources/quest/quest.json#/DOE/_TARGETINFOLIST/1/0",
+        "resources/quest/quest.json#/DOF/_TARGETINFOLIST/2/0",
+        "resources/quest/quest.json#/DOW/_TARGETINFOLIST/0/0",
+        "resources/quest/quest.json#/DOL/_TARGETINFOLIST/0/0",
+        "resources/quest/quest.json#/DOS/_TARGETINFOLIST/2/0"
+      ]
+    },
+    {
+      "path": "image/chestFlag.png",
+      "source": "resources/images/chestFlag.png",
+      "sha256": "2deeba247c8c213de61a6c6cd8438cfc812ee342612b819ac3c550c6845bd709",
+      "bytes": 14501,
+      "source_refs": [
+        "src/script.py:3022",
+        "src/script.py:3035"
+      ]
+    },
+    {
+      "path": "image/chestOpening.png",
+      "source": "resources/images/chestOpening.png",
+      "sha256": "f59cd0976f8e36842e9c97cfaab2b8b2a3e2568953397230b2d30aada740727d",
+      "bytes": 3276,
+      "source_refs": [
+        "src/script.py:3022",
+        "src/script.py:3085"
+      ]
+    },
+    {
+      "path": "image/chestStone.png",
+      "source": "resources/images/chestStone.png",
+      "sha256": "83fed3306c2b3acb30b4021d746bc31c3da4826f17f26a06d65cd226d3e3423f",
+      "bytes": 2365,
+      "source_refs": []
+    },
+    {
+      "path": "image/chest_auto.png",
+      "source": "resources/images/chest_auto.png",
+      "sha256": "60428e2743ce116e09086544c8c80a43f3e201bd89730a7a15572fa013bce9d2",
+      "bytes": 3481,
+      "source_refs": [
+        "resources/quest/quest.json#/lounge/_TARGETINFOLIST/1/0",
+        "resources/quest/quest.json#/DH-7f-auto/_TARGETINFOLIST/0/0",
+        "resources/quest/quest.json#/DH-Church-auto/_TARGETINFOLIST/0/0",
+        "resources/quest/quest.json#/FFXI-2F/_TARGETINFOLIST/0/0",
+        "resources/quest/quest.json#/HSR-1F/_TARGETINFOLIST/0/0",
+        "resources/quest/quest.json#/IWO/_TARGETINFOLIST/0/0",
+        "resources/quest/quest.json#/IWO_2/_TARGETINFOLIST/0/0",
+        "resources/quest/quest.json#/fordraig-B3F/_TARGETINFOLIST/0/0",
+        "resources/quest/quest.json#/SSC_chest/_TARGETINFOLIST/0/0",
+        "resources/quest/quest.json#/AWD/_TARGETINFOLIST/0/0",
+        "resources/quest/quest.json#/AWD-noGorgon/_TARGETINFOLIST/0/0",
+        "resources/quest/quest.json#/COS_chest_short/_TARGETINFOLIST/0/0",
+        "resources/quest/quest.json#/DOF_Plus/_TARGETINFOLIST/0/0",
+        "resources/quest/quest.json#/DOW_Plus/_TARGETINFOLIST/0/0",
+        "resources/quest/quest.json#/DOL_PLUS/_TARGETINFOLIST/0/0"
+      ]
+    },
+    {
+      "path": "image/chest_auto_minus.png",
+      "source": "resources/images/chest_auto_minus.png",
+      "sha256": "e99b34e03f53c40fe481d98788cfd8cd4ecf093288366b4d65030e584b50ce72",
+      "bytes": 1696,
+      "source_refs": [
+        "src/script.py:3343"
+      ]
+    },
+    {
+      "path": "image/chestfear.png",
+      "source": "resources/images/chestfear.png",
+      "sha256": "27718ea31faa8fae9f87562ab4ed1cbf8f265cc68745000e63d53765a05cf079",
+      "bytes": 3300,
+      "source_refs": [
+        "src/script.py:3070"
+      ]
+    },
+    {
+      "path": "image/close.png",
+      "source": "resources/images/close.png",
+      "sha256": "667facff026f3d9894b69b376c67e640f4ad6852da195ae3c91126da1874f8a4",
+      "bytes": 12869,
+      "source_refs": [
+        "src/script.py:1470",
+        "src/script.py:1815",
+        "src/script.py:2516"
+      ]
+    },
+    {
+      "path": "image/closePartyInfo.png",
+      "source": "resources/images/closePartyInfo.png",
+      "sha256": "2bc642dad5bbcf41e9efdcf801a56342dd0f3e11d1d1160b06d0e93fad4ac234",
+      "bytes": 18876,
+      "source_refs": []
+    },
+    {
+      "path": "image/closePartyInfo_fortress.png",
+      "source": "resources/images/closePartyInfo_fortress.png",
+      "sha256": "11f54d1d37b10a541d7fb71162790b898f5e11b7a24d3edee0b11d323968f974",
+      "bytes": 26960,
+      "source_refs": []
+    },
+    {
+      "path": "image/closePartyInfo_waterway.png",
+      "source": "resources/images/closePartyInfo_waterway.png",
+      "sha256": "8f43e2d0ff2a21078edfd17c5a26bab22d95301bad0a27216c7e784d1ccd5bce",
+      "bytes": 11059,
+      "source_refs": []
+    },
+    {
+      "path": "image/combatActive.png",
+      "source": "resources/images/combatActive.png",
+      "sha256": "99d270a603f3d793d60e5f8213358d56d18e9e4c91d7823ebd7e8b45a80eb552",
+      "bytes": 3080,
+      "source_refs": []
+    },
+    {
+      "path": "image/combatActive_2.png",
+      "source": "resources/images/combatActive_2.png",
+      "sha256": "2e28ac79ec86d98b7f06043deb9c7678470ae7cbe6c19b953a82dd89c61e318e",
+      "bytes": 4675,
+      "source_refs": []
+    },
+    {
+      "path": "image/combatActive_3.png",
+      "source": "resources/images/combatActive_3.png",
+      "sha256": "6cfe1289835b8a6b29d6fa16ba641624ccfb6db8193fa90846c172927d38bb87",
+      "bytes": 3276,
+      "source_refs": []
+    },
+    {
+      "path": "image/combatActive_4.png",
+      "source": "resources/images/combatActive_4.png",
+      "sha256": "ab130d1a9a528db89657124b082b8802804117a72cfb2173463adc2564191d56",
+      "bytes": 3537,
+      "source_refs": []
+    },
+    {
+      "path": "image/combatAuto.png",
+      "source": "resources/images/combatAuto.png",
+      "sha256": "1e1bd076b4d469f64c39c9360946ab8c0f952393d4c7160f0b1993c32e5c68bc",
+      "bytes": 3294,
+      "source_refs": []
+    },
+    {
+      "path": "image/combatAuto_2.png",
+      "source": "resources/images/combatAuto_2.png",
+      "sha256": "94a95b77c4e79da1e3dbb76f953a1de5e85c9d0f83e7619f4ff016a72e44126d",
+      "bytes": 3727,
+      "source_refs": []
+    },
+    {
+      "path": "image/combatClose.png",
+      "source": "resources/images/combatClose.png",
+      "sha256": "16c058ee5fbcdbb872fa626d04cbcfcd94a211c9e0a6f56060e07029a540315e",
+      "bytes": 12213,
+      "source_refs": [
+        "src/script.py:2277"
+      ]
+    },
+    {
+      "path": "image/combatSpd.png",
+      "source": "resources/images/combatSpd.png",
+      "sha256": "554acb613b58eaeee7d1c77901dad4aefae8fe7b82adca3de953cacb06b51d19",
+      "bytes": 7375,
+      "source_refs": [
+        "src/script.py:2776"
+      ]
+    },
+    {
+      "path": "image/combatSpd_DHI.png",
+      "source": "resources/images/combatSpd_DHI.png",
+      "sha256": "1c6e0fa6476d26f1d185cf4a78632425fcc04251580b11fbf408e35b2a35032b",
+      "bytes": 8785,
+      "source_refs": [
+        "src/script.py:2776"
+      ]
+    },
+    {
+      "path": "image/combatTarget.png",
+      "source": "resources/images/combatTarget.png",
+      "sha256": "5ae9e771373067f774990b59dd73694e07aac5d80b0a1d6db764a725733f37af",
+      "bytes": 3872,
+      "source_refs": []
+    },
+    {
+      "path": "image/cropped.png",
+      "source": "resources/images/cropped.png",
+      "sha256": "dd51140693135caf29b9c76918f9bd2b28b7e16daee11ab4cb51b81a6ece8713",
+      "bytes": 33468,
+      "source_refs": []
+    },
+    {
+      "path": "image/cursedWheel.png",
+      "source": "resources/images/cursedWheel.png",
+      "sha256": "87cb5d8c232c9f72f6568eb2e84edd5085c08805a7453eee40789bda321cb8c3",
+      "bytes": 19484,
+      "source_refs": []
+    },
+    {
+      "path": "image/cursedWheelTapLeft.png",
+      "source": "resources/images/cursedWheelTapLeft.png",
+      "sha256": "3e5fba09eb4641408014f6e2473eedeb97bb9ce5a4e93de4c0946902c30be328",
+      "bytes": 3788,
+      "source_refs": []
+    },
+    {
+      "path": "image/cursedWheelTapRight.png",
+      "source": "resources/images/cursedWheelTapRight.png",
+      "sha256": "fd7498211d2c51284603133d6673af874d7126eef735f33bc3135727b77fc049",
+      "bytes": 5949,
+      "source_refs": []
+    },
+    {
+      "path": "image/cursedWheelTitle.png",
+      "source": "resources/images/cursedWheelTitle.png",
+      "sha256": "42452f59fabd224dccdc7e9f096e78ffd2654594b2eb2cc4454f2b08c15a8bd6",
+      "bytes": 35513,
+      "source_refs": []
+    },
+    {
+      "path": "image/cursedWheel_timeLeap.png",
+      "source": "resources/images/cursedWheel_timeLeap.png",
+      "sha256": "eed974b19417beb8bd7b249f55fad2b9d5ac65ea05f9813ea65221fa09de3728",
+      "bytes": 23565,
+      "source_refs": [
+        "src/script.py:2238"
+      ]
+    },
+    {
+      "path": "image/cursedwheel_dhi.png",
+      "source": "resources/images/cursedwheel_dhi.png",
+      "sha256": "447f0e13bae22b41a4118a137fe6d752abf822f01bc6e6759d97ead722065cfc",
+      "bytes": 36062,
+      "source_refs": []
+    },
+    {
+      "path": "image/cursedwheel_impregnableFortress.png",
+      "source": "resources/images/cursedwheel_impregnableFortress.png",
+      "sha256": "2ec65d1c58930ea0bd3497f92b185da59d5d847b1557f8773c9e3856ef9214c7",
+      "bytes": 29347,
+      "source_refs": []
+    },
+    {
+      "path": "image/cursewheel.png",
+      "source": "resources/images/cursewheel.png",
+      "sha256": "14fafcf487745b10d08ad582cb794c09f91b514eafcecc154b83aede7f167d1b",
+      "bytes": 21046,
+      "source_refs": []
+    },
+    {
+      "path": "image/cursor.png",
+      "source": "resources/images/cursor.png",
+      "sha256": "f443940702e7bb1a41c4b4d612f1a3635adeeecd963d29a2776b3d1e9a21873b",
+      "bytes": 605,
+      "source_refs": []
+    },
+    {
+      "path": "image/cursor_0.png",
+      "source": "resources/images/cursor_0.png",
+      "sha256": "e3d2e0c3b424df84c7cd6057126c8218a90fe7c58a8d36e5e5c66fd2abb42ce9",
+      "bytes": 2147,
+      "source_refs": []
+    },
+    {
+      "path": "image/cursor_1.png",
+      "source": "resources/images/cursor_1.png",
+      "sha256": "509b43111055b5b8da76df55bd131a1990fa6868774e499b740519ad58a9d514",
+      "bytes": 2438,
+      "source_refs": []
+    },
+    {
+      "path": "image/cursor_2.png",
+      "source": "resources/images/cursor_2.png",
+      "sha256": "e1ff7c58e22666f976fe276b3798d4fcd4435f87b16717e5ec69cda6e291bfaf",
+      "bytes": 2074,
+      "source_refs": []
+    },
+    {
+      "path": "image/cursor_3.png",
+      "source": "resources/images/cursor_3.png",
+      "sha256": "a998fe36e4ff49ab37c579a80a5daa0515d243bbc9d80668e58544f44046c7be",
+      "bytes": 2171,
+      "source_refs": []
+    },
+    {
+      "path": "image/darklight.png",
+      "source": "resources/images/darklight.png",
+      "sha256": "bab8c14b6481e43f1db0ee8e037e1e3796efa804e1366acfa24783196ab36f81",
+      "bytes": 21867,
+      "source_refs": []
+    },
+    {
+      "path": "image/darklight_lightIt.png",
+      "source": "resources/images/darklight_lightIt.png",
+      "sha256": "3ce5f4f55d0e8e82a7119aa8c67c521d3c0c3ee50effb72f1a8dac35a00f7e2a",
+      "bytes": 7136,
+      "source_refs": []
+    },
+    {
+      "path": "image/dialogueChoices/!adventurersbones.png",
+      "source": "resources/images/dialogueChoices/!adventurersbones.png",
+      "sha256": "0696a14b3bfe6bee494cabe9ab9bdff8b6b4aa66a17ad6326eb83de79557cb3b",
+      "bytes": 26573,
+      "source_refs": []
+    },
+    {
+      "path": "image/dialogueChoices/!halfBone.png",
+      "source": "resources/images/dialogueChoices/!halfBone.png",
+      "sha256": "e6f07d79bc28db7a86885a6ff67f02f98d85c8c0ef512845cf4981d4b54e5d2d",
+      "bytes": 26131,
+      "source_refs": []
+    },
+    {
+      "path": "image/dialogueChoices/#hammer.png",
+      "source": "resources/images/dialogueChoices/#hammer.png",
+      "sha256": "7dffe7a22a5a400dc53f9fed066cd3fe029d9b4287accaa924cc9660aa6d8774",
+      "bytes": 5828,
+      "source_refs": []
+    },
+    {
+      "path": "image/dialogueChoices/DontBuyIt.png",
+      "source": "resources/images/dialogueChoices/DontBuyIt.png",
+      "sha256": "14552793def312743aefccc153b833488106d23485b97d24d8560b7d8e944bd5",
+      "bytes": 10403,
+      "source_refs": []
+    },
+    {
+      "path": "image/dialogueChoices/buyNothing.png",
+      "source": "resources/images/dialogueChoices/buyNothing.png",
+      "sha256": "4587d0b86eb0da07d2814af4f05893faa8481e9175253e44feca8c027e66e7a4",
+      "bytes": 10370,
+      "source_refs": []
+    },
+    {
+      "path": "image/dialogueChoices/dontGiveAntitoxin.png",
+      "source": "resources/images/dialogueChoices/dontGiveAntitoxin.png",
+      "sha256": "246b0109c0182a635871e87578e78c1d914d2fbf0162000c511ee9b49d182819",
+      "bytes": 14603,
+      "source_refs": []
+    },
+    {
+      "path": "image/dialogueChoices/donthelp.png",
+      "source": "resources/images/dialogueChoices/donthelp.png",
+      "sha256": "e4542e7071ab68777ff4edc6d6b8b34bd388a8df987d1379bfead7e1c4775d7d",
+      "bytes": 6715,
+      "source_refs": []
+    },
+    {
+      "path": "image/dialogueChoices/givehimnothing.png",
+      "source": "resources/images/dialogueChoices/givehimnothing.png",
+      "sha256": "420148659721120b12631ef116ec67710d40be0b380aae1ee7b5aa6a86b8c09d",
+      "bytes": 14630,
+      "source_refs": []
+    },
+    {
+      "path": "image/dialogueChoices/idonthaveany.png",
+      "source": "resources/images/dialogueChoices/idonthaveany.png",
+      "sha256": "0630d231126592ab9be2076d18daff3f272bfab30fdb2726fdfae1016274e40b",
+      "bytes": 10294,
+      "source_refs": []
+    },
+    {
+      "path": "image/dialogueChoices/ignorethequest.png",
+      "source": "resources/images/dialogueChoices/ignorethequest.png",
+      "sha256": "274d2ff10d34bbefb734e7e735e4600a95efbb42d93fb35f5f81723b45f00c04",
+      "bytes": 14414,
+      "source_refs": []
+    },
+    {
+      "path": "image/dialogueChoices/nope.png",
+      "source": "resources/images/dialogueChoices/nope.png",
+      "sha256": "573e8e90bfcaad0416b6a9bfb3bc860cf3335919ca61804d14c23bf6c0490f68",
+      "bytes": 6330,
+      "source_refs": []
+    },
+    {
+      "path": "image/dialogueChoices/nothanks.png",
+      "source": "resources/images/dialogueChoices/nothanks.png",
+      "sha256": "829f45d44e8334fab79871ac2d8e2db288bda7315d571a03156baf16f18f360c",
+      "bytes": 9019,
+      "source_refs": []
+    },
+    {
+      "path": "image/dialogueChoices/spareit.png",
+      "source": "resources/images/dialogueChoices/spareit.png",
+      "sha256": "c1597f9db50560d1b5c5fd82cfbcff0627d63e0f4fba52b6efeb54def19669e1",
+      "bytes": 7344,
+      "source_refs": []
+    },
+    {
+      "path": "image/dialogueChoices/strange_things.png",
+      "source": "resources/images/dialogueChoices/strange_things.png",
+      "sha256": "e2e384cdbc0bb5e59fb539d9428ebc81bf693490f350d914c299b609e857e87d",
+      "bytes": 23435,
+      "source_refs": []
+    },
+    {
+      "path": "image/didnottakethequest.png",
+      "source": "resources/images/didnottakethequest.png",
+      "sha256": "79b29e54a2f99caa9e61b84847cd184736e00c6e2e71e9d096e76937f118c850",
+      "bytes": 15934,
+      "source_refs": [
+        "src/script.py:2054"
+      ]
+    },
+    {
+      "path": "image/donothing.png",
+      "source": "resources/images/donothing.png",
+      "sha256": "2f21182bc52a98f57563273c2094ba30c6c0c309891b28d9a3fca79561b135ce",
+      "bytes": 6396,
+      "source_refs": []
+    },
+    {
+      "path": "image/dungFlag.png",
+      "source": "resources/images/dungFlag.png",
+      "sha256": "65dfe7f91adfffd8923d3236a10d73d452b006583aa4cfb9c870eb711fbecce6",
+      "bytes": 7628,
+      "source_refs": [
+        "src/script.py:1939",
+        "src/script.py:2205",
+        "src/script.py:2949",
+        "src/script.py:3002",
+        "src/script.py:3099",
+        "src/script.py:3251",
+        "src/script.py:4733",
+        "src/script.py:4749"
+      ]
+    },
+    {
+      "path": "image/fastforward.png",
+      "source": "resources/images/fastforward.png",
+      "sha256": "e98c6a2e0517583d3413fcc7e019926ebee896a85c1f3f36dd4d1492bf3af05a",
+      "bytes": 1738,
+      "source_refs": []
+    },
+    {
+      "path": "image/fastforward_off.png",
+      "source": "resources/images/fastforward_off.png",
+      "sha256": "f5239e1c58a68960843a3e4d5942dbadbca58fb885bdc9cb3c7a02057084a2e3",
+      "bytes": 1195,
+      "source_refs": []
+    },
+    {
+      "path": "image/fishing/8bait.png",
+      "source": "resources/images/fishing/8bait.png",
+      "sha256": "573be9d51ae2236b477b0e35fe64bc0718b493c8ad2bbc2386e08c5b4ade6ac0",
+      "bytes": 3762,
+      "source_refs": [
+        "src/script.py:4644"
+      ]
+    },
+    {
+      "path": "image/fishing/CloseFishInfo.png",
+      "source": "resources/images/fishing/CloseFishInfo.png",
+      "sha256": "a1003d918c210c82667ef2d4cb220d5fcb22e41acfc6958fa3de0bbc0a99d4bd",
+      "bytes": 8263,
+      "source_refs": [
+        "src/script.py:4721"
+      ]
+    },
+    {
+      "path": "image/fishing/FISHBait.png",
+      "source": "resources/images/fishing/FISHBait.png",
+      "sha256": "0f9a2b8c6ca390387516bd62f31b775afdc076df05c0a8a1a9c1d7714a710be2",
+      "bytes": 9258,
+      "source_refs": []
+    },
+    {
+      "path": "image/fishing/baitbox.png",
+      "source": "resources/images/fishing/baitbox.png",
+      "sha256": "028c9c50c51a0882d68aad20c2bcb3ecebcab902d248276317f16b11a3980c2d",
+      "bytes": 3295,
+      "source_refs": []
+    },
+    {
+      "path": "image/fishing/bobber.png",
+      "source": "resources/images/fishing/bobber.png",
+      "sha256": "99982a952e22d0b219a6514db7f6415fa5436cbaa4668c8cd5a470af18abb7cc",
+      "bytes": 1469,
+      "source_refs": [
+        "src/utils.py:522"
+      ]
+    },
+    {
+      "path": "image/fishing/cast.png",
+      "source": "resources/images/fishing/cast.png",
+      "sha256": "e6811eb0cc0253d73b018e0d84c81235679592d948670d96c1ab0b12a7fdb125",
+      "bytes": 14866,
+      "source_refs": [
+        "src/script.py:4641"
+      ]
+    },
+    {
+      "path": "image/fishing/iconbait.png",
+      "source": "resources/images/fishing/iconbait.png",
+      "sha256": "eefd072a66fbf811fc7e87fbb9fabdf4a98687a23793db65c43463aa293239bb",
+      "bytes": 3679,
+      "source_refs": []
+    },
+    {
+      "path": "image/fishing/nobait.png",
+      "source": "resources/images/fishing/nobait.png",
+      "sha256": "40312e7338de2d5d7aa9c345e46b55c9dfc5920d18595c0253cfbf055f8db0b4",
+      "bytes": 3746,
+      "source_refs": [
+        "src/script.py:4642",
+        "src/script.py:4643"
+      ]
+    },
+    {
+      "path": "image/fishing/quit.png",
+      "source": "resources/images/fishing/quit.png",
+      "sha256": "15d948cad0e6d58c9f2bdd38c65c27010ca7dfea7591209b6dcdc4f124753f3a",
+      "bytes": 15486,
+      "source_refs": []
+    },
+    {
+      "path": "image/fishing/size_average.png",
+      "source": "resources/images/fishing/size_average.png",
+      "sha256": "d7921c1844f78cc36a36a8db548b87b9dca52fd3e2756669a0029f57225764fe",
+      "bytes": 6128,
+      "source_refs": [
+        "src/script.py:4591"
+      ]
+    },
+    {
+      "path": "image/fishing/size_large.png",
+      "source": "resources/images/fishing/size_large.png",
+      "sha256": "a5f5fa26daee8173b9270a6a434c1d020c41b8ba919f39da41df14c741d44641",
+      "bytes": 4728,
+      "source_refs": [
+        "src/script.py:4592"
+      ]
+    },
+    {
+      "path": "image/fishing/size_small.png",
+      "source": "resources/images/fishing/size_small.png",
+      "sha256": "cb8f15e62c50f9cb86ff9ebffaddc236d990dc8b8ef18806864abd52bcd1ab33",
+      "bytes": 4514,
+      "source_refs": [
+        "src/script.py:4590"
+      ]
+    },
+    {
+      "path": "image/fishing/startfishing.png",
+      "source": "resources/images/fishing/startfishing.png",
+      "sha256": "22234d2c73bc5f999cc71ba712eddcdbc67cff4da72601801bf5a5be21821b70",
+      "bytes": 16011,
+      "source_refs": []
+    },
+    {
+      "path": "image/fishing/striking.png",
+      "source": "resources/images/fishing/striking.png",
+      "sha256": "c2eb4f5b8b5bdb5d91387c4ee49519320c96350153721c8b6ba2ebcb222d1066",
+      "bytes": 13289,
+      "source_refs": [
+        "src/script.py:4700"
+      ]
+    },
+    {
+      "path": "image/fishing/三文鱼.png",
+      "source": "resources/images/fishing/三文鱼.png",
+      "sha256": "cd42484b530b51c9f8e5637158090d26af6893386854611afd4bf07d1a81bdd2",
+      "bytes": 18705,
+      "source_refs": [
+        "src/script.py:4600"
+      ]
+    },
+    {
+      "path": "image/fishing/杂鱼.png",
+      "source": "resources/images/fishing/杂鱼.png",
+      "sha256": "362fb1d6fa092eeb48b2c8321ea0c940dce720df7f64921d0a5bcf495ef5a1e7",
+      "bytes": 10282,
+      "source_refs": [
+        "src/script.py:4601"
+      ]
+    },
+    {
+      "path": "image/fishing/雅罗.png",
+      "source": "resources/images/fishing/雅罗.png",
+      "sha256": "9bc4e02e2a6cf5f2e2a7345d4dbc83d8d99a2ba9d72d7ba9c682a26faf58aea4",
+      "bytes": 13360,
+      "source_refs": [
+        "src/script.py:4596"
+      ]
+    },
+    {
+      "path": "image/fishing/鲈鱼.png",
+      "source": "resources/images/fishing/鲈鱼.png",
+      "sha256": "860c6b4b9a5da84acb9979d299da5f12d5b2bb34c6341a3896abfd0beb48d9f7",
+      "bytes": 13490,
+      "source_refs": [
+        "src/script.py:4595"
+      ]
+    },
+    {
+      "path": "image/fishing/鲶鱼.png",
+      "source": "resources/images/fishing/鲶鱼.png",
+      "sha256": "418c3f19207bd902b632236ba4b34256f3ce45912e7a7a76238562c9ff1200de",
+      "bytes": 16861,
+      "source_refs": [
+        "src/script.py:4597"
+      ]
+    },
+    {
+      "path": "image/fishing/鳗鱼.png",
+      "source": "resources/images/fishing/鳗鱼.png",
+      "sha256": "f7975fe5913861a10ed3d8ffa7f03420545eb4f9d9168b3381afc7bc8d0ae9cc",
+      "bytes": 9885,
+      "source_refs": [
+        "src/script.py:4599"
+      ]
+    },
+    {
+      "path": "image/fishing/鳟鱼.png",
+      "source": "resources/images/fishing/鳟鱼.png",
+      "sha256": "3cad017d09bb104ebd2bc1ba558173cfb3d9673850791abea6512b88bae3a7b0",
+      "bytes": 11850,
+      "source_refs": [
+        "src/script.py:4598"
+      ]
+    },
+    {
+      "path": "image/flee.png",
+      "source": "resources/images/flee.png",
+      "sha256": "3207d75d1273f61639984d13b584aae8f99106e852e4323826b3ea54aa10cd7e",
+      "bytes": 5524,
+      "source_refs": []
+    },
+    {
+      "path": "image/fordraig/AskDagger.png",
+      "source": "resources/images/fordraig/AskDagger.png",
+      "sha256": "c0acd60bd085044f41c18ce92d3ab5f8f7a38f16068bdcfcc6f24344706bd46f",
+      "bytes": 16070,
+      "source_refs": []
+    },
+    {
+      "path": "image/fordraig/B2Fentrance.png",
+      "source": "resources/images/fordraig/B2Fentrance.png",
+      "sha256": "9fe54fbadf8e82a96584754ba85c876c15e15af7ed1409a3f86b33536c8839d5",
+      "bytes": 18314,
+      "source_refs": []
+    },
+    {
+      "path": "image/fordraig/B2Fquit.png",
+      "source": "resources/images/fordraig/B2Fquit.png",
+      "sha256": "467ac80d000d4d976d9ffccedeaa022f22f36ee74a4feee43765661ee8bb7549",
+      "bytes": 36928,
+      "source_refs": []
+    },
+    {
+      "path": "image/fordraig/B3F.png",
+      "source": "resources/images/fordraig/B3F.png",
+      "sha256": "cd3711c3dc10da956737622f70eae26782cc81db8d4658b4bb1c8f935c0853e1",
+      "bytes": 16216,
+      "source_refs": [
+        "resources/quest/quest.json#/fordraig-B3F/_preEOTcheck",
+        "resources/quest/quest.json#/fordraig-B3F/_EOT/1/1"
+      ]
+    },
+    {
+      "path": "image/fordraig/B3F_teleport.png",
+      "source": "resources/images/fordraig/B3F_teleport.png",
+      "sha256": "61788dda904f90ec393eebed63656082477c053f18c17613248c8b3540a63d28",
+      "bytes": 92848,
+      "source_refs": []
+    },
+    {
+      "path": "image/fordraig/B3fentrance.png",
+      "source": "resources/images/fordraig/B3fentrance.png",
+      "sha256": "c3d4e43381eb553c8aeaab7c3c0eaa8de2337fbd5c397551dcaa2906bed600b5",
+      "bytes": 20902,
+      "source_refs": []
+    },
+    {
+      "path": "image/fordraig/B4F.png",
+      "source": "resources/images/fordraig/B4F.png",
+      "sha256": "ced2132912cd685c3d76b325e78e2cce53d6a56d9c7ec9dd4a7a1da3edc43e76",
+      "bytes": 71999,
+      "source_refs": []
+    },
+    {
+      "path": "image/fordraig/B4Fquit.png",
+      "source": "resources/images/fordraig/B4Fquit.png",
+      "sha256": "96ec4d21e51eda715df2ff2b5957817ae588cd4f49890cc6ae75fdd97d94dc57",
+      "bytes": 33176,
+      "source_refs": []
+    },
+    {
+      "path": "image/fordraig/Entrance.png",
+      "source": "resources/images/fordraig/Entrance.png",
+      "sha256": "f482d8cdd9980d28cf75c458e7e09039282631c97697921a69e043b9f376da95",
+      "bytes": 17414,
+      "source_refs": []
+    },
+    {
+      "path": "image/fordraig/FirstBoss.png",
+      "source": "resources/images/fordraig/FirstBoss.png",
+      "sha256": "e53987fd84389cb819269e09eb76b059c7fd46c050b1a322b2d0bcb5337e6378",
+      "bytes": 10509,
+      "source_refs": []
+    },
+    {
+      "path": "image/fordraig/FirstTrap.png",
+      "source": "resources/images/fordraig/FirstTrap.png",
+      "sha256": "68b396202ce734b3df4ce2e2c274a7d1ce0ff639b160f6fcb6f058333455b5d9",
+      "bytes": 48367,
+      "source_refs": []
+    },
+    {
+      "path": "image/fordraig/InsertTheDagger.png",
+      "source": "resources/images/fordraig/InsertTheDagger.png",
+      "sha256": "978d807103a47958f44ada404dac6330d294cf011df575d1d1bf2ec25d11ad18",
+      "bytes": 12007,
+      "source_refs": []
+    },
+    {
+      "path": "image/fordraig/Leap.png",
+      "source": "resources/images/fordraig/Leap.png",
+      "sha256": "9098a03f315e6510d2fb23a12133312e359591dd1dc718a3705cb6a2fa2d0716",
+      "bytes": 71401,
+      "source_refs": []
+    },
+    {
+      "path": "image/fordraig/RequestAccept.png",
+      "source": "resources/images/fordraig/RequestAccept.png",
+      "sha256": "a78cf4e1044474b39ae41b6630bf7fb1b3e323db5f36c78f6de22e1b68a63282",
+      "bytes": 437522,
+      "source_refs": []
+    },
+    {
+      "path": "image/fordraig/SecondBoss.png",
+      "source": "resources/images/fordraig/SecondBoss.png",
+      "sha256": "7db526470c60d50e1b2f965bcbb2c33d87f31ce1d0679f6e6d40e31b0107856e",
+      "bytes": 41659,
+      "source_refs": []
+    },
+    {
+      "path": "image/fordraig/SecondTrap.png",
+      "source": "resources/images/fordraig/SecondTrap.png",
+      "sha256": "0fd9b001b7b08ab1bd468601d536e92cf267d987cfbc68ea7b05dabd6d33ce86",
+      "bytes": 80691,
+      "source_refs": []
+    },
+    {
+      "path": "image/fordraig/TryPushingIt.png",
+      "source": "resources/images/fordraig/TryPushingIt.png",
+      "sha256": "5b479ea255f1b1c607991466682d6aa7b8bd3e6eb1cf31ae426415b5425ef0da",
+      "bytes": 9790,
+      "source_refs": []
+    },
+    {
+      "path": "image/fordraig/b1fquit.png",
+      "source": "resources/images/fordraig/b1fquit.png",
+      "sha256": "85139aaff950417efff8cf8b70b1c198e7f68a74ff25a562e212cdad502c6d1d",
+      "bytes": 37720,
+      "source_refs": []
+    },
+    {
+      "path": "image/fordraig/labyrinthOfFordraig.png",
+      "source": "resources/images/fordraig/labyrinthOfFordraig.png",
+      "sha256": "cb30e206eb2607b52fb9ab8a4bb5e9e1557335f0cc4cd1d3292ddd364c5ef76f",
+      "bytes": 36492,
+      "source_refs": [
+        "resources/quest/quest.json#/fordraig-B3F/_EOT/0/2/0",
+        "resources/quest/quest.json#/fordraig-B3F/_EOT/1/2/0"
+      ]
+    },
+    {
+      "path": "image/fordraig/readytoBoss.png",
+      "source": "resources/images/fordraig/readytoBoss.png",
+      "sha256": "3eb059ce3f5072c26ff24e90ed40544f5c9303420715a35d0081da898c5984ee",
+      "bytes": 74824,
+      "source_refs": []
+    },
+    {
+      "path": "image/fordraig/thedagger.png",
+      "source": "resources/images/fordraig/thedagger.png",
+      "sha256": "6b016a9f271d3725327c4e371adf58d931242a5b2b33dcf6c1d8d1aff91edbee",
+      "bytes": 7948,
+      "source_refs": []
+    },
+    {
+      "path": "image/fordraig/thirdMach.png",
+      "source": "resources/images/fordraig/thirdMach.png",
+      "sha256": "f4dc41cb74b03267fa25b3c1a2d929e6f48dfffc47407c49c64306787d9ec6e7",
+      "bytes": 28575,
+      "source_refs": []
+    },
+    {
+      "path": "image/fortressEntrance.png",
+      "source": "resources/images/fortressEntrance.png",
+      "sha256": "8255352a6750ca781891567c77a44d730bac6c1fc11ce89245edcec6f173d302",
+      "bytes": 21913,
+      "source_refs": [
+        "resources/quest/quest.json#/fortress-B8F_entrance/_EOT/1/1"
+      ]
+    },
+    {
+      "path": "image/fortressb10f.png",
+      "source": "resources/images/fortressb10f.png",
+      "sha256": "21ae0a17d375eced8f0ca1f2a2c9bf88af7240080109c3949ad194e1fd76de62",
+      "bytes": 26396,
+      "source_refs": [
+        "resources/quest/quest.json#/fortress-10F/_EOT/1/1"
+      ]
+    },
+    {
+      "path": "image/fortressb1f.png",
+      "source": "resources/images/fortressb1f.png",
+      "sha256": "878c792016f81405a45d5ccfb9f45a69b2e674f3194854fd1be2423f43213789",
+      "bytes": 33103,
+      "source_refs": [
+        "resources/quest/quest.json#/fortress-B1F/_EOT/1/1"
+      ]
+    },
+    {
+      "path": "image/fortressb3f.png",
+      "source": "resources/images/fortressb3f.png",
+      "sha256": "970a272362aa5735a8442547aa74576fb679c0cd521dd0cafe1fcd359bb394f4",
+      "bytes": 29894,
+      "source_refs": []
+    },
+    {
+      "path": "image/fortressb7f.png",
+      "source": "resources/images/fortressb7f.png",
+      "sha256": "b3633709622611bb908fe02ec9f7e25872555b7b8651a2c9b153a1d5ef9ce4f0",
+      "bytes": 24417,
+      "source_refs": []
+    },
+    {
+      "path": "image/gaint_candelabra_1.png",
+      "source": "resources/images/gaint_candelabra_1.png",
+      "sha256": "105b7a1430e6b95b4fa3192782f73c7ab8497a518e23556fd7c11423fffaf70f",
+      "bytes": 13856,
+      "source_refs": []
+    },
+    {
+      "path": "image/gaint_candelabra_2.png",
+      "source": "resources/images/gaint_candelabra_2.png",
+      "sha256": "1e548bd73f82e6643eb19fc4c5621758b95a9afba0ceb89f6b9a2f5b40dc1391",
+      "bytes": 14228,
+      "source_refs": []
+    },
+    {
+      "path": "image/give.png",
+      "source": "resources/images/give.png",
+      "sha256": "e7e03d0f9acae389bd26fbe0d0c2d4e72c487d336e2734bac77737b1dc9f6869",
+      "bytes": 5886,
+      "source_refs": []
+    },
+    {
+      "path": "image/gradeexam.png",
+      "source": "resources/images/gradeexam.png",
+      "sha256": "96f02200616c0875a84950def2803c105629a985f76cfa86c88cabb2708c13fc",
+      "bytes": 7832,
+      "source_refs": []
+    },
+    {
+      "path": "image/gradeup.png",
+      "source": "resources/images/gradeup.png",
+      "sha256": "ea10bf447a13646bf8a33c3d22ed0ac6ebbb600b4cf3cf48ce6635206e9c3e42",
+      "bytes": 9973,
+      "source_refs": []
+    },
+    {
+      "path": "image/guild.png",
+      "source": "resources/images/guild.png",
+      "sha256": "cba04b11dea5ca21b90615f512f98e3f0e1a9db5c6356daac824fe2a566bee32",
+      "bytes": 9577,
+      "source_refs": []
+    },
+    {
+      "path": "image/guildFeatured.png",
+      "source": "resources/images/guildFeatured.png",
+      "sha256": "2155353c53a1d18367c9df4a8127efe4103e79b00f3cd5cdb30469eefd5b7980",
+      "bytes": 5479,
+      "source_refs": []
+    },
+    {
+      "path": "image/guildRequest.png",
+      "source": "resources/images/guildRequest.png",
+      "sha256": "4d724a16fefe027b8d15528681ca3c1b14572e3c876e5ba70a21df92f6f4ba3a",
+      "bytes": 11943,
+      "source_refs": []
+    },
+    {
+      "path": "image/harken.png",
+      "source": "resources/images/harken.png",
+      "sha256": "510a9c36c9bce77437fc2db10b3302338735f8f6be66c6efe63c368fd0c91c97",
+      "bytes": 1567,
+      "source_refs": [
+        "resources/quest/quest.json#/Dist/_TARGETINFOLIST/1/0",
+        "resources/quest/quest.json#/lounge/_TARGETINFOLIST/3/0",
+        "resources/quest/quest.json#/fortress-B1F/_TARGETINFOLIST/1/0",
+        "resources/quest/quest.json#/DH-4f/_TARGETINFOLIST/3/0",
+        "resources/quest/quest.json#/DH-6f/_TARGETINFOLIST/4/0",
+        "resources/quest/quest.json#/DH-7f-right/_TARGETINFOLIST/8/0",
+        "resources/quest/quest.json#/DH-7f-auto/_TARGETINFOLIST/1/0",
+        "resources/quest/quest.json#/DH-10f-test/_TARGETINFOLIST/12/0",
+        "resources/quest/quest.json#/DH-10f-JR/_TARGETINFOLIST/4/0",
+        "resources/quest/quest.json#/fordraig-B3F/_TARGETINFOLIST/1/0",
+        "resources/quest/quest.json#/AWD-noGorgon/_TARGETINFOLIST/2/0",
+        "resources/quest/quest.json#/COS_chest/_TARGETINFOLIST/6/0",
+        "resources/quest/quest.json#/COS_chest_short/_TARGETINFOLIST/1/0"
+      ]
+    },
+    {
+      "path": "image/harken2.png",
+      "source": "resources/images/harken2.png",
+      "sha256": "f690d98b8408f4988f4530245836a8ab0494c408135e806dbad126478f72c27a",
+      "bytes": 3079,
+      "source_refs": [
+        "resources/quest/quest.json#/malice-B3F/_TARGETINFOLIST/1/0"
+      ]
+    },
+    {
+      "path": "image/icanstillgo.png",
+      "source": "resources/images/icanstillgo.png",
+      "sha256": "c0061f4615651953af4c46d9b45e768ced20fdaa6c03258d963f77a9f7846a32",
+      "bytes": 17286,
+      "source_refs": [
+        "src/script.py:3652",
+        "src/script.py:3661"
+      ]
+    },
+    {
+      "path": "image/ignore.png",
+      "source": "resources/images/ignore.png",
+      "sha256": "1057ab19e5e1ae86d544368f877ecd3b3fcb1b1e75bc76f157ff0231d5b4d435",
+      "bytes": 6008,
+      "source_refs": [
+        "src/script.py:2246",
+        "src/script.py:2256"
+      ]
+    },
+    {
+      "path": "image/impregnableFortress.png",
+      "source": "resources/images/impregnableFortress.png",
+      "sha256": "9406ad2a0b139c2a044dce965c5551617bba323634d70bdfe02296f5862e9448",
+      "bytes": 17209,
+      "source_refs": [
+        "resources/quest/quest.json#/fortress-B1F/_EOT/0/1",
+        "resources/quest/quest.json#/fortress-B8F_entrance/_EOT/0/1",
+        "resources/quest/quest.json#/fortress-10F/_EOT/0/1"
+      ]
+    },
+    {
+      "path": "image/intoWorldMap.png",
+      "source": "resources/images/intoWorldMap.png",
+      "sha256": "58f86415e44371ac4c8c775130c1cc4b5e54784677d849131060c22d62862c36",
+      "bytes": 7549,
+      "source_refs": [
+        "src/script.py:1949",
+        "src/script.py:4654",
+        "resources/quest/quest.json#/HSR-1F/_EOT/0/1",
+        "resources/quest/quest.json#/IWO/_EOT/0/1",
+        "resources/quest/quest.json#/IWO_2/_EOT/0/1",
+        "resources/quest/quest.json#/fordraig-B3F/_EOT/0/1",
+        "resources/quest/quest.json#/SSC_chest/_EOT/0/1",
+        "resources/quest/quest.json#/LBC/_EOT/0/1",
+        "resources/quest/quest.json#/AWD/_EOT/0/1",
+        "resources/quest/quest.json#/AWD-noGorgon/_EOT/0/1",
+        "resources/quest/quest.json#/GHB/_EOT/0/1",
+        "resources/quest/quest.json#/LMG-GT/_EOT/0/1",
+        "resources/quest/quest.json#/LMG-FT/_EOT/0/1"
+      ]
+    },
+    {
+      "path": "image/itemIcon.png",
+      "source": "resources/images/itemIcon.png",
+      "sha256": "77f9d5f50bc1e2e4da6b2637ec9a415630a5ce2a96c101a7b5ec3be2525677b2",
+      "bytes": 4802,
+      "source_refs": [
+        "src/script.py:1809"
+      ]
+    },
+    {
+      "path": "image/itemList.png",
+      "source": "resources/images/itemList.png",
+      "sha256": "24f40cfc7014bc47e17424ab25218adc86dacceb7e6651da07945b09e28c8928",
+      "bytes": 10009,
+      "source_refs": [
+        "src/script.py:1803"
+      ]
+    },
+    {
+      "path": "image/leap.png",
+      "source": "resources/images/leap.png",
+      "sha256": "aa987c0d73e4deaed7b483657642b31a44e4af6fe33aac9a3855aa403afa405f",
+      "bytes": 37371,
+      "source_refs": [
+        "src/script.py:2027",
+        "src/script.py:2029",
+        "src/script.py:2048",
+        "src/script.py:2080"
+      ]
+    },
+    {
+      "path": "image/leaveDung.png",
+      "source": "resources/images/leaveDung.png",
+      "sha256": "7f863af2dbe1df7f6a6a05e4388268e315b377d09f82841eef951be522e5a114",
+      "bytes": 6126,
+      "source_refs": []
+    },
+    {
+      "path": "image/letswithdraw.png",
+      "source": "resources/images/letswithdraw.png",
+      "sha256": "1631ac35f50f7be5c843c0df124cd84e6951d321dfefacafcd26c96c9007fc06",
+      "bytes": 14963,
+      "source_refs": [
+        "src/script.py:3664"
+      ]
+    },
+    {
+      "path": "image/lounge.png",
+      "source": "resources/images/lounge.png",
+      "sha256": "c0eee70c814156287ff231d8322033399516e3a123813c9b9eff96cdc61040c7",
+      "bytes": 5712,
+      "source_refs": []
+    },
+    {
+      "path": "image/malice_b3f.png",
+      "source": "resources/images/malice_b3f.png",
+      "sha256": "39e1d9efe7df767a65819121067439cd1b332685d2403de8ad1be3ab1a1a899e",
+      "bytes": 10066,
+      "source_refs": [
+        "resources/quest/quest.json#/malice-B3F/_EOT/1/1"
+      ]
+    },
+    {
+      "path": "image/malice_malice.png",
+      "source": "resources/images/malice_malice.png",
+      "sha256": "c261634f89ef1181953387aa3efa0841dc15663fad01753552f5c9a9b6224f15",
+      "bytes": 10155,
+      "source_refs": [
+        "resources/quest/quest.json#/malice-B3F/_EOT/0/1"
+      ]
+    },
+    {
+      "path": "image/mapFlag.png",
+      "source": "resources/images/mapFlag.png",
+      "sha256": "848c3acde203dcf6c57366cb07d6672ec229be8c5d5103ee9295443f33b4e503",
+      "bytes": 11211,
+      "source_refs": [
+        "src/script.py:2869",
+        "src/script.py:2952",
+        "src/script.py:3251",
+        "src/script.py:3335"
+      ]
+    },
+    {
+      "path": "image/mark_auto.png",
+      "source": "resources/images/mark_auto.png",
+      "sha256": "bbc3e7cf4d30636f675e46ca19817288239cf04ff576b1b0954a5e598915fbd5",
+      "bytes": 7398,
+      "source_refs": [
+        "resources/quest/quest.json#/White-G-v2/_TARGETINFOLIST/0/0"
+      ]
+    },
+    {
+      "path": "image/marker.png",
+      "source": "resources/images/marker.png",
+      "sha256": "b115623c910b31a9735bbe1c2505e8e1fea48630071fb87fdefac44585c0f799",
+      "bytes": 3114,
+      "source_refs": []
+    },
+    {
+      "path": "image/markspot.png",
+      "source": "resources/images/markspot.png",
+      "sha256": "73db482d7fe8daa1e396306500f538fb7a84dbf67956ee00ab319e2401b3c4e5",
+      "bytes": 6206,
+      "source_refs": []
+    },
+    {
+      "path": "image/multipeopledead.png",
+      "source": "resources/images/multipeopledead.png",
+      "sha256": "1ba60d79cce05026a56bdc7a8cedd4152b51e67745104ea170d444f7a5a8ac8e",
+      "bytes": 79687,
+      "source_refs": [
+        "src/script.py:2282"
+      ]
+    },
+    {
+      "path": "image/next.png",
+      "source": "resources/images/next.png",
+      "sha256": "56bdf4cfde9ad0e3ed0a5da0a7ca1d50e16b7f86f0997b2eb1bbf55a4f683cff",
+      "bytes": 4000,
+      "source_refs": []
+    },
+    {
+      "path": "image/noneed.png",
+      "source": "resources/images/noneed.png",
+      "sha256": "60552a88b1b323f05ee2d7002e1d29b6ff34e85ca447a45d98c0087efaa3a806",
+      "bytes": 7306,
+      "source_refs": []
+    },
+    {
+      "path": "image/notenough_close.png",
+      "source": "resources/images/notenough_close.png",
+      "sha256": "da5d013f4235bdefeb01bd42c56169af730910d743d980e63efd9e56e44cc4ce",
+      "bytes": 6469,
+      "source_refs": []
+    },
+    {
+      "path": "image/notenoughmp.png",
+      "source": "resources/images/notenoughmp.png",
+      "sha256": "fc9039707c5d8047955780c76f2daf301c51e42163eb714c270418dac6295019",
+      "bytes": 71264,
+      "source_refs": [
+        "src/script.py:2764"
+      ]
+    },
+    {
+      "path": "image/notenoughsp.png",
+      "source": "resources/images/notenoughsp.png",
+      "sha256": "ab13a8ebc5bcce7cc31653f79b8c5010fb956d89974d892c11de65331324845f",
+      "bytes": 81711,
+      "source_refs": [
+        "src/script.py:2764"
+      ]
+    },
+    {
+      "path": "image/openworldmap.png",
+      "source": "resources/images/openworldmap.png",
+      "sha256": "a8d4f8e1669b3ab007bdc9c140d498d791c65e1b9a20b76c0f33907d5eadc2eb",
+      "bytes": 14011,
+      "source_refs": [
+        "src/script.py:1944",
+        "src/script.py:1989",
+        "src/script.py:2190",
+        "src/script.py:4418"
+      ]
+    },
+    {
+      "path": "image/output.png",
+      "source": "resources/images/output.png",
+      "sha256": "305a3713eeb27e29d7efce4c4ea2544c9e64e1e40fcd2d683155843cd5aac604",
+      "bytes": 20829,
+      "source_refs": []
+    },
+    {
+      "path": "image/press!!!.png",
+      "source": "resources/images/press!!!.png",
+      "sha256": "e98ce4c8d356082b31afa063c0183b4abef3f559dca8b54810636ec4bb791ccb",
+      "bytes": 1741027,
+      "source_refs": []
+    },
+    {
+      "path": "image/putinstorage.png",
+      "source": "resources/images/putinstorage.png",
+      "sha256": "f35e185cee6db67f9537c830c582e13d789cce193d035d7c2e3588a979160409",
+      "bytes": 13924,
+      "source_refs": [
+        "src/script.py:1811"
+      ]
+    },
+    {
+      "path": "image/quit.png",
+      "source": "resources/images/quit.png",
+      "sha256": "0a554b89978196a889c94cae22c3d37357c06f189bcd00717d1dbbdce961b0e2",
+      "bytes": 4262,
+      "source_refs": []
+    },
+    {
+      "path": "image/ready.png",
+      "source": "resources/images/ready.png",
+      "sha256": "7d5115582b2e5da5b6d97b87493732d8fe917b794ce8bff61dc40e237a483ad3",
+      "bytes": 7452,
+      "source_refs": []
+    },
+    {
+      "path": "image/recover.png",
+      "source": "resources/images/recover.png",
+      "sha256": "e5d245dd7dd8fd48f4618d77d89b6a91dfb9dd18ac1852e2070081414c59c41e",
+      "bytes": 9459,
+      "source_refs": [
+        "src/script.py:3262",
+        "src/script.py:3785"
+      ]
+    },
+    {
+      "path": "image/requestToRescueTheDuke.png",
+      "source": "resources/images/requestToRescueTheDuke.png",
+      "sha256": "16472114566d275971c1f9e57a75724b937101a74c6a682859805bc121a1c8e9",
+      "bytes": 56522,
+      "source_refs": []
+    },
+    {
+      "path": "image/request_accepted.png",
+      "source": "resources/images/request_accepted.png",
+      "sha256": "de1ac53460d0fa6995948ae368d84e6261a1022e6723f15024aca32820cd5af9",
+      "bytes": 27905,
+      "source_refs": [
+        "src/script.py:3407"
+      ]
+    },
+    {
+      "path": "image/resume.png",
+      "source": "resources/images/resume.png",
+      "sha256": "4b3a08bae89e7965bf2cb03df4090d696f86074937851fdb47e08cc91b51bae0",
+      "bytes": 7034,
+      "source_refs": [
+        "src/script.py:1362",
+        "src/script.py:3289",
+        "src/script.py:3360"
+      ]
+    },
+    {
+      "path": "image/retry.png",
+      "source": "resources/images/retry.png",
+      "sha256": "070b6e1335e47e93da7e8b54a9f32ed6e56a0084012199dd48e8508657b0c59d",
+      "bytes": 7464,
+      "source_refs": [
+        "src/script.py:1343",
+        "src/script.py:1346"
+      ]
+    },
+    {
+      "path": "image/retry_blank.png",
+      "source": "resources/images/retry_blank.png",
+      "sha256": "f50a4357d5773e010da4e2e660e3bdc29191eda37aa5a2a812c5456d4db968f0",
+      "bytes": 172614,
+      "source_refs": [
+        "src/script.py:1338"
+      ]
+    },
+    {
+      "path": "image/returntotown.png",
+      "source": "resources/images/returntotown.png",
+      "sha256": "d541934b9b2d7f79fa8d05ae73705d001ae48812863acb1d09320511725611e9",
+      "bytes": 10035,
+      "source_refs": [
+        "src/script.py:2163"
+      ]
+    },
+    {
+      "path": "image/rowFlag.png",
+      "source": "resources/images/rowFlag.png",
+      "sha256": "9270547641899af599c99f1a62bd00ccebc603fd5a91c7ed38a5d33133a26e93",
+      "bytes": 18487,
+      "source_refs": []
+    },
+    {
+      "path": "image/royalsuite.png",
+      "source": "resources/images/royalsuite.png",
+      "sha256": "4343f3b661a482f5f3579ae09cadf5e1f19f9b3d7ca9c1bc60685f506e9335c2",
+      "bytes": 11991,
+      "source_refs": [
+        "src/script.py:2465"
+      ]
+    },
+    {
+      "path": "image/ruins.png",
+      "source": "resources/images/ruins.png",
+      "sha256": "2b024169b9cb14e45b5afd6d277932891282c62afe83608a7867f56bb214a20e",
+      "bytes": 6248,
+      "source_refs": []
+    },
+    {
+      "path": "image/sandman/sandman_1.png",
+      "source": "resources/images/sandman/sandman_1.png",
+      "sha256": "1be8f36d143f7c9183f965af93ba445f7445f6ca74249b58423007e376ae7804",
+      "bytes": 19633,
+      "source_refs": []
+    },
+    {
+      "path": "image/sandman/sandman_2.png",
+      "source": "resources/images/sandman/sandman_2.png",
+      "sha256": "4f8c51b1d094765a3e1465eb43fed3795b5ccbc3e51ab5589d96944cb6c95271",
+      "bytes": 9560,
+      "source_refs": []
+    },
+    {
+      "path": "image/sandman/sandman_bondmate.png",
+      "source": "resources/images/sandman/sandman_bondmate.png",
+      "sha256": "e39225712b07acb3ad6c139470ed3ee27842f38bf63aae37387a4f152a4998e9",
+      "bytes": 763525,
+      "source_refs": []
+    },
+    {
+      "path": "image/sandman_recover.png",
+      "source": "resources/images/sandman_recover.png",
+      "sha256": "7008bf2eb5d8b75b84a673d152befc43df018aadd837ae227ee49b28eca7e3ef",
+      "bytes": 11737,
+      "source_refs": [
+        "src/script.py:2236"
+      ]
+    },
+    {
+      "path": "image/shiphold.png",
+      "source": "resources/images/shiphold.png",
+      "sha256": "faa2af72a6893e2242f0d64c0732184b9e331caf0afcb7b175483933223d43ee",
+      "bytes": 15673,
+      "source_refs": [
+        "resources/quest/quest.json#/lounge/_EOT/1/1"
+      ]
+    },
+    {
+      "path": "image/skull.png",
+      "source": "resources/images/skull.png",
+      "sha256": "7fa58ed5b0898a83c09aa1c15c362113f6d953a7bbf71487ac3b68261b24dec8",
+      "bytes": 3606,
+      "source_refs": [
+        "src/script.py:2286"
+      ]
+    },
+    {
+      "path": "image/someonedead.png",
+      "source": "resources/images/someonedead.png",
+      "sha256": "575628f0e56ee38863d51227f209f84a903135275c035e5f85a925c0b79d5107",
+      "bytes": 20069,
+      "source_refs": [
+        "src/script.py:2151"
+      ]
+    },
+    {
+      "path": "image/specialRequest.png",
+      "source": "resources/images/specialRequest.png",
+      "sha256": "c48897aa15ee31296055c21f402641710060b5b067587d21840786b8ba010249",
+      "bytes": 25111,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/CombatAutoDisable.png",
+      "source": "resources/images/spellskill/CombatAutoDisable.png",
+      "sha256": "c837aa0a7608d64627957719e787aa0befb916229cccfe6923da66eb0fac40bb",
+      "bytes": 1377,
+      "source_refs": [
+        "src/script.py:2550"
+      ]
+    },
+    {
+      "path": "image/spellskill/CombatAutoEnable.png",
+      "source": "resources/images/spellskill/CombatAutoEnable.png",
+      "sha256": "e7d763dc2f8912235891de50b7bec8eaacd579de2191825b14425b2125b4de74",
+      "bytes": 1214,
+      "source_refs": [
+        "src/script.py:2551"
+      ]
+    },
+    {
+      "path": "image/spellskill/char/0 面具.png",
+      "source": "resources/images/spellskill/char/0 面具.png",
+      "sha256": "364ed00a0b66081f5de9026ddfaa4a83f2ec7a4bf82e151aabde9a116f8550c7",
+      "bytes": 6146,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/F 伊亚玛斯.png",
+      "source": "resources/images/spellskill/char/F 伊亚玛斯.png",
+      "sha256": "394c210a72a3272788db8de7bbebddfb350e86289ce342eb20cbbedb7a309aeb",
+      "bytes": 7066,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/F 凛音.png",
+      "source": "resources/images/spellskill/char/F 凛音.png",
+      "sha256": "6c54adb7d104200ce2a80c50cb2d7cb48341589c7ee19328841bae8a646f7b8d",
+      "bytes": 7850,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/F 凛音_sp.png",
+      "source": "resources/images/spellskill/char/F 凛音_sp.png",
+      "sha256": "c95b80b39fd86989ba0715e259a1c5cf77bace8a483d7744e6de80e2ae8ec51e",
+      "bytes": 8105,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/F 吉拉德.png",
+      "source": "resources/images/spellskill/char/F 吉拉德.png",
+      "sha256": "1717fde679a7e8ed279198978c096a57dd05b946d9e256fb157deb210ea4418c",
+      "bytes": 7697,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/F 吉拉德_sp.png",
+      "source": "resources/images/spellskill/char/F 吉拉德_sp.png",
+      "sha256": "be3fad8b63bd131b277d97a2760596997a3c62b8e5c64353e9951361b9acd11c",
+      "bytes": 7407,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/F 基利昂.png",
+      "source": "resources/images/spellskill/char/F 基利昂.png",
+      "sha256": "a1e36fca3b6535aea71c57b754f4bdeac380cd4fab7b0abedac4a683807bd8f4",
+      "bytes": 7198,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/F 夏莉莉妮雅.png",
+      "source": "resources/images/spellskill/char/F 夏莉莉妮雅.png",
+      "sha256": "fdbaa4e17581b365d61bb1d3cbfa2fc529afe6e33cdf5dd3c38e36544f72e122",
+      "bytes": 7852,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/F 奥尔德里科.png",
+      "source": "resources/images/spellskill/char/F 奥尔德里科.png",
+      "sha256": "24364135cd8970ac3923fd7c4d40cb786c0d29444c78e51504baa6111398a85e",
+      "bytes": 8311,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/F 尤尔萨.png",
+      "source": "resources/images/spellskill/char/F 尤尔萨.png",
+      "sha256": "d8a3c03700263a7681af252d70a36bc1e959f9212b0b9c4afcd17d7b70458059",
+      "bytes": 7671,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/F 影狼.png",
+      "source": "resources/images/spellskill/char/F 影狼.png",
+      "sha256": "892c2fa079611e8b23c46912933582fcda689699f0bfab4617bca6a8599aa86a",
+      "bytes": 7239,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/F 普修利.png",
+      "source": "resources/images/spellskill/char/F 普修利.png",
+      "sha256": "90c1b7cfa5bf951b920eb785aec6102606813fc60ab8a3861c2c410a87a1cd01",
+      "bytes": 8297,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/F 柚奈壬姬.png",
+      "source": "resources/images/spellskill/char/F 柚奈壬姬.png",
+      "sha256": "f61626fe3426b3876b3ffe5caf58f4e10722e56e767b62fd663815d3f7ff5798",
+      "bytes": 7788,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/F 狮樱.png",
+      "source": "resources/images/spellskill/char/F 狮樱.png",
+      "sha256": "ce0aae9746b3d39b5f1688bb854a314159fb0fdb74c7533df30d3ddebb645253",
+      "bytes": 7454,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/F 艾妮琪.png",
+      "source": "resources/images/spellskill/char/F 艾妮琪.png",
+      "sha256": "681b72d2fbde588466d59353cf76b4f42ee5c96e443efa59b3561ff9475b849b",
+      "bytes": 8438,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/F 艾尔文.png",
+      "source": "resources/images/spellskill/char/F 艾尔文.png",
+      "sha256": "9b0092778743db7c3e89f2d795db23271965775157848369769db708cb4133b2",
+      "bytes": 8596,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/F 莉娜莉亚.png",
+      "source": "resources/images/spellskill/char/F 莉娜莉亚.png",
+      "sha256": "5b993891ed44780a6f327b33a88d26be2ea825b35bf88d13d07c5ed584c66485",
+      "bytes": 7864,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/F 莉瓦娜.png",
+      "source": "resources/images/spellskill/char/F 莉瓦娜.png",
+      "sha256": "68b42c4f43f15dc63b578b83f6c6156e4ff90fdd784917382d247a6162401a3a",
+      "bytes": 7963,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/F 莉瓦娜_sp.png",
+      "source": "resources/images/spellskill/char/F 莉瓦娜_sp.png",
+      "sha256": "9af4f7d1e6d0a08ec981a77905fb1e1686ebfadd086424bdad31fd5893db0037",
+      "bytes": 8049,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/F 萨维亚.png",
+      "source": "resources/images/spellskill/char/F 萨维亚.png",
+      "sha256": "a5e4b99e4a219956f21908f917fc09d1e4213059482de901de7dc85bfa50dfd4",
+      "bytes": 7929,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/F 萨维亚_sp.png",
+      "source": "resources/images/spellskill/char/F 萨维亚_sp.png",
+      "sha256": "699c3981e74a6ead1467629ec8be2469acb80b1afa83e53654452056ce8e9041",
+      "bytes": 8453,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/F 贝卡南.png",
+      "source": "resources/images/spellskill/char/F 贝卡南.png",
+      "sha256": "9dbb05dab49ff2a205aa47f97b081ea3b86e68e02db1ed7c041f422b3ce482b6",
+      "bytes": 7672,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/F 贝卡南_sp.png",
+      "source": "resources/images/spellskill/char/F 贝卡南_sp.png",
+      "sha256": "6cc4a5cfded0bb32712b5ebaf1ffede8d6c07b5023a4ebd703ca63a06952b095",
+      "bytes": 8171,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/F 赛德.png",
+      "source": "resources/images/spellskill/char/F 赛德.png",
+      "sha256": "d80acdd0a6f7f3f1eb386e68778efd8df3de2a17373f46fb3bf2485b7c3a7ebd",
+      "bytes": 6989,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/F 迦鲁巴多斯.png",
+      "source": "resources/images/spellskill/char/F 迦鲁巴多斯.png",
+      "sha256": "0eb0bb663c108af194fe51a913168ec809d3443d86c6f6cc0f3d2b1464a5fae4",
+      "bytes": 7644,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/F 银莲.png",
+      "source": "resources/images/spellskill/char/F 银莲.png",
+      "sha256": "d1203e136c5657b98eb9da3b10453b2b3594b20d90e45a175543ac5d608bf56a",
+      "bytes": 8112,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/F 阿尔博里斯.png",
+      "source": "resources/images/spellskill/char/F 阿尔博里斯.png",
+      "sha256": "496c059974976ffbb1bb2a522bce5a32f869eb777e20b7ed450c1f1c8318cb13",
+      "bytes": 7803,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/F 雅蓓妮斯.png",
+      "source": "resources/images/spellskill/char/F 雅蓓妮斯.png",
+      "sha256": "b2ae3621c572e6e9f18c4613a9b7744279d9639562cd6508cf9ffae13c354a41",
+      "bytes": 7998,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/F 雅蓓妮斯_alt.png",
+      "source": "resources/images/spellskill/char/F 雅蓓妮斯_alt.png",
+      "sha256": "3e3a91f4605cc38fc6e9d5818356913d81336eab96f46798fc7b6db9657a09fe",
+      "bytes": 8234,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/F 雅蓓妮斯_sp.png",
+      "source": "resources/images/spellskill/char/F 雅蓓妮斯_sp.png",
+      "sha256": "2d6252eab675c946da2a4040ff9a93ab23bcd64318b0e28ed2c6a0ca523902e4",
+      "bytes": 8578,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/G 亚沙.png",
+      "source": "resources/images/spellskill/char/G 亚沙.png",
+      "sha256": "787d549d8b586accab4629b70485a64de750d8228e77aecc70fc75dd7b976feb",
+      "bytes": 7831,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/G 亚沙_sp.png",
+      "source": "resources/images/spellskill/char/G 亚沙_sp.png",
+      "sha256": "8291446cbc8de6dbe72e68004bdf175e352448a92f38c181c6ec9b5c520c75e1",
+      "bytes": 7972,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/G 克拉丽莎.png",
+      "source": "resources/images/spellskill/char/G 克拉丽莎.png",
+      "sha256": "2c1a5033f6ab3a79674814168bfce7c4f18b8832a613cbef88a393bf9e4b5e9e",
+      "bytes": 8657,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/G 克洛艾.png",
+      "source": "resources/images/spellskill/char/G 克洛艾.png",
+      "sha256": "63dadc4a23a6018bc734de5a64fc219424d2b52db1d8c50f6793c16a43e3f0f0",
+      "bytes": 7529,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/G 克洛艾_sp.png",
+      "source": "resources/images/spellskill/char/G 克洛艾_sp.png",
+      "sha256": "c23daf7ef8cf1b18d86002fd6ed9b68f8adb3fdb2b5108d7899f8a892fd1e1c6",
+      "bytes": 7804,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/G 切羽.png",
+      "source": "resources/images/spellskill/char/G 切羽.png",
+      "sha256": "04355c069e81abeb98d37a5a2448b574225e39aa8d31b2a1dd9f12377f1a5f9e",
+      "bytes": 6959,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/G 加斯顿.png",
+      "source": "resources/images/spellskill/char/G 加斯顿.png",
+      "sha256": "72b0299a737dbfb729b085a63b58499279196013be9c4d735225631fa5c88a73",
+      "bytes": 8038,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/G 卡米尔.png",
+      "source": "resources/images/spellskill/char/G 卡米尔.png",
+      "sha256": "47049499ec4d6ae989a03c224752fa39642b0315c71f98de71499dfe328056ed",
+      "bytes": 11618,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/G 奥利芙.png",
+      "source": "resources/images/spellskill/char/G 奥利芙.png",
+      "sha256": "b3e9ba19207025f8ac4fe6a70f12d832b74d84aff9b928d8c4f07e82dcdb23ff",
+      "bytes": 8040,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/G 奥菲莉亚.png",
+      "source": "resources/images/spellskill/char/G 奥菲莉亚.png",
+      "sha256": "36c088bf8744f99f0a1ea5f343897a1c4bfcd7488489061d2bfc5121565dddb4",
+      "bytes": 7819,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/G 巴克什.png",
+      "source": "resources/images/spellskill/char/G 巴克什.png",
+      "sha256": "e4700e3443c3fab53d1d7c4e9b6cb6ebeef1cf290fbb97d99302affe7539a05a",
+      "bytes": 8082,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/G 本杰明.png",
+      "source": "resources/images/spellskill/char/G 本杰明.png",
+      "sha256": "900da96e11e6af262790beae96cfe9e1317fb5ecace925059b9c8a75168241f9",
+      "bytes": 7759,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/G 海因里科.png",
+      "source": "resources/images/spellskill/char/G 海因里科.png",
+      "sha256": "a7aa643a4da107b744ccefdafa56f26bcab655b6c4e2e46edf37db562e4a580b",
+      "bytes": 7928,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/G 玛丽安娜.png",
+      "source": "resources/images/spellskill/char/G 玛丽安娜.png",
+      "sha256": "fb08291e4959eeae4d922d885407a2987e634fa02b5b97c9cd952c2ffeaf28c6",
+      "bytes": 8164,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/G 甘道夫.png",
+      "source": "resources/images/spellskill/char/G 甘道夫.png",
+      "sha256": "89fecfa2df8b2eb1dc46be2795a318692488f5cc510eb21d90712a8299cb882d",
+      "bytes": 7557,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/G 米拉娜.png",
+      "source": "resources/images/spellskill/char/G 米拉娜.png",
+      "sha256": "0aa92e70d161ca26df442d4b5c6d5eb02fc09ad1ccd82e8a656818c51faf0fbd",
+      "bytes": 8058,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/G 米拉娜_sp.png",
+      "source": "resources/images/spellskill/char/G 米拉娜_sp.png",
+      "sha256": "42a46035cc82577f80bc7a5a297a8c4b31d4ce9f09730d48b70c87e7ce94ead1",
+      "bytes": 8374,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/G 艾莉赛.png",
+      "source": "resources/images/spellskill/char/G 艾莉赛.png",
+      "sha256": "210aa1eef25967be584bc478cab1b548117b620dda24f0ea8c583e42678db9d0",
+      "bytes": 7825,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/G 芙尔特.png",
+      "source": "resources/images/spellskill/char/G 芙尔特.png",
+      "sha256": "07e8c496b3480fcafc0821b85cea7e29075d43d3655689e1dbeefc36a6e46e4b",
+      "bytes": 8072,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/G 芙尔特_sp.png",
+      "source": "resources/images/spellskill/char/G 芙尔特_sp.png",
+      "sha256": "28fe5d7befe672767b20125c966a40e01f6d26f01e5e2995d7d9fcf0247399af",
+      "bytes": 7895,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/G 阿米莉娅.png",
+      "source": "resources/images/spellskill/char/G 阿米莉娅.png",
+      "sha256": "457c5a6dcc424177e70612c9796bc85b83ebe8d3d9d2fd71dbbc1cd1ea324e44",
+      "bytes": 7508,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/N 人类忍者.png",
+      "source": "resources/images/spellskill/char/N 人类忍者.png",
+      "sha256": "6ed4596fcdbfeed77b545645b51b795a0ec7768f57707bd85805212779e84ce7",
+      "bytes": 6092,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/N 无名人类女僧侣.png",
+      "source": "resources/images/spellskill/char/N 无名人类女僧侣.png",
+      "sha256": "4b30dce802c83de43418465c095c682a695d796c57e0fa6c1dadb4b0859b2a48",
+      "bytes": 6829,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/N 无名兽人女盗贼.png",
+      "source": "resources/images/spellskill/char/N 无名兽人女盗贼.png",
+      "sha256": "f23ce5564acd5dbf250a83b8445e5fd591a014744531f4258dac8e50c1a8648c",
+      "bytes": 6413,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/N 无名妖精女法师.png",
+      "source": "resources/images/spellskill/char/N 无名妖精女法师.png",
+      "sha256": "39464dc33a1917230d0e262108ac52566ca26c11848971237533e0da24032f44",
+      "bytes": 7887,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/P 亚当.png",
+      "source": "resources/images/spellskill/char/P 亚当.png",
+      "sha256": "5c3808a849492adba308b61adb7a0fc7f66c2d3e4d13c73d126dc6d1a24eb773",
+      "bytes": 8051,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/P 亚当_sp.png",
+      "source": "resources/images/spellskill/char/P 亚当_sp.png",
+      "sha256": "674452252bf890a8221c627eb6de08ad8531f4d5a511333fe3eca505beaa883e",
+      "bytes": 7578,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/P 叶卡捷琳娜.png",
+      "source": "resources/images/spellskill/char/P 叶卡捷琳娜.png",
+      "sha256": "c885d0ca0e9cd002e39c99e1c19f963ebc9cf99ab70cca7be709114fb27433d5",
+      "bytes": 8383,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/P 叶卡捷琳娜_alt.png",
+      "source": "resources/images/spellskill/char/P 叶卡捷琳娜_alt.png",
+      "sha256": "b76e5e5e3df9dadc13d7abd5cb83bf0415b245e25615ab42421b52ff190065db",
+      "bytes": 7752,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/P 叶卡捷琳娜_sp.png",
+      "source": "resources/images/spellskill/char/P 叶卡捷琳娜_sp.png",
+      "sha256": "a722268b985f346fe352638d3a5651941ae91ba0feab5960185d4aec9434c84f",
+      "bytes": 8429,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/P 哲鲁夫_alt.png",
+      "source": "resources/images/spellskill/char/P 哲鲁夫_alt.png",
+      "sha256": "bff30ee9ac13b6c51ef6eec411cceb7913a2c3bb84e028c942226d1a787384d8",
+      "bytes": 8304,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/P 拉纳维尔.png",
+      "source": "resources/images/spellskill/char/P 拉纳维尔.png",
+      "sha256": "e65abf39c84cb275073f039585de582ed7b5d9157ca553a2bf8a105c8f0abbb2",
+      "bytes": 7865,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/P 拉纳维尔_alt.png",
+      "source": "resources/images/spellskill/char/P 拉纳维尔_alt.png",
+      "sha256": "69670652a2bc7fefc8e6da95a774c0c5d9efcbe80eaeae889ef1de8c78f6b2fc",
+      "bytes": 7623,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/P 拉纳维尔_sp.png",
+      "source": "resources/images/spellskill/char/P 拉纳维尔_sp.png",
+      "sha256": "ed95c795c4116a26771cda1188833299abb829ddf2251a88b8bde886b57885fe",
+      "bytes": 8319,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/P 爱丽丝.png",
+      "source": "resources/images/spellskill/char/P 爱丽丝.png",
+      "sha256": "e26260449d7dd76f1a33fee965e5a05054d12501f3d6bf232b6b06b8d1dd9e1b",
+      "bytes": 8630,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/P 爱丽丝_alt.png",
+      "source": "resources/images/spellskill/char/P 爱丽丝_alt.png",
+      "sha256": "301eb9caa974f510806106f5ae4f9fd1d1c83e96fda5dce2f42983db9f6f279a",
+      "bytes": 8210,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/P 爱丽丝_sp.png",
+      "source": "resources/images/spellskill/char/P 爱丽丝_sp.png",
+      "sha256": "0992875d129f83f6429f1d377289cdc15dfa214f70f23a06d04ad7fa3ca34040",
+      "bytes": 8525,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/P 黛波拉.png",
+      "source": "resources/images/spellskill/char/P 黛波拉.png",
+      "sha256": "c01cd92900ba007a830e74748bb2b21b75c9716a68a0b089d689ef47be491df1",
+      "bytes": 6962,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/P 黛波拉_alt.png",
+      "source": "resources/images/spellskill/char/P 黛波拉_alt.png",
+      "sha256": "38d9f3ce0b3a47e13a03acd9d07f97644bfdf03d7c2bc504697d00ae49ac5195",
+      "bytes": 7497,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/char/P 黛波拉_sp.png",
+      "source": "resources/images/spellskill/char/P 黛波拉_sp.png",
+      "sha256": "96d23cb4d7e1e3d6f66f59cd518fe0a696d28a221ccbf11c7308524549edb9b4",
+      "bytes": 8390,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/skillDetail.png",
+      "source": "resources/images/spellskill/skillDetail.png",
+      "sha256": "aa001fdbdf43bd0472bebf63bbb0fee26b424d311d57dc79d55edb4e897abe70",
+      "bytes": 10252,
+      "source_refs": [
+        "src/script.py:1468",
+        "src/script.py:2686"
+      ]
+    },
+    {
+      "path": "image/spellskill/skillLvl/lv1.png",
+      "source": "resources/images/spellskill/skillLvl/lv1.png",
+      "sha256": "bade151d501342e6f9b5fb7c313fe742de7b274c05e87c45c299eed64701350f",
+      "bytes": 2268,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/skillLvl/lv2.png",
+      "source": "resources/images/spellskill/skillLvl/lv2.png",
+      "sha256": "97e3e261c616ce7dc41020b2cacc801d3f67bce1351b2547eacc6f535c36dfe0",
+      "bytes": 2441,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/skillLvl/lv3.png",
+      "source": "resources/images/spellskill/skillLvl/lv3.png",
+      "sha256": "07d5e5d93e726fc9f455ff9fbe6f6ebb7339e57b1945ea070e05fae6939193b0",
+      "bytes": 2101,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/skillLvl/lv4.png",
+      "source": "resources/images/spellskill/skillLvl/lv4.png",
+      "sha256": "c4e3dbaa26e5da510f0505737ad5648901decac7ceb09139203370551823c1b0",
+      "bytes": 2054,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/skillLvl/lv5.png",
+      "source": "resources/images/spellskill/skillLvl/lv5.png",
+      "sha256": "816188ac588e62b635474a2826d0facb31c5b1a531948949b431ac8323e4d7df",
+      "bytes": 2069,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/skillLvl/lv6.png",
+      "source": "resources/images/spellskill/skillLvl/lv6.png",
+      "sha256": "7a1c82a2d1162e173847587c7334a064def53e380dc99186b8ea406c1ef49135",
+      "bytes": 2114,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/skillLvl/lv7.png",
+      "source": "resources/images/spellskill/skillLvl/lv7.png",
+      "sha256": "bd464b0c8c287d51b803a75e64e8303b4ab87ee1f799716ea1e87462cc347f63",
+      "bytes": 2399,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/skillLvl/s_lv1.png",
+      "source": "resources/images/spellskill/skillLvl/s_lv1.png",
+      "sha256": "bccb03998ef1b658ef585fa471e157029797f6a1287093f527152d9abfda07da",
+      "bytes": 2796,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/skillLvl/s_lv2.png",
+      "source": "resources/images/spellskill/skillLvl/s_lv2.png",
+      "sha256": "317ac4ce70b8637f19c6298f9e0b0ff90a5ac871f345cfb83219a746795dd745",
+      "bytes": 3055,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/skillLvl/s_lv3.png",
+      "source": "resources/images/spellskill/skillLvl/s_lv3.png",
+      "sha256": "eca81e4af7350c158390081d155b5beb54c6584d908035f92287d030e02dea87",
+      "bytes": 3054,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/skillLvl/s_lv4.png",
+      "source": "resources/images/spellskill/skillLvl/s_lv4.png",
+      "sha256": "c2389d4be83bd45f329bcbe77e3d622e9983ab4e2ec800476744fa037951485b",
+      "bytes": 3001,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/skillLvl/s_lv5.png",
+      "source": "resources/images/spellskill/skillLvl/s_lv5.png",
+      "sha256": "ebfdc4eee8e304a5bcdf2e08d9215d9a027348a0f7179f211945087d81d8b987",
+      "bytes": 2836,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/skillLvl/s_lv6.png",
+      "source": "resources/images/spellskill/skillLvl/s_lv6.png",
+      "sha256": "cf2971a6f95f98aaf54758e766c78005fef67aa578afc3767c6187586bfd40ab",
+      "bytes": 2746,
+      "source_refs": []
+    },
+    {
+      "path": "image/spellskill/skillLvl/s_lv7.png",
+      "source": "resources/images/spellskill/skillLvl/s_lv7.png",
+      "sha256": "d9a06244b554d3e3e1273babdd2d6e87450cc8f55e13d36e7c18122414d270d8",
+      "bytes": 2836,
+      "source_refs": []
+    },
+    {
+      "path": "image/stair_1.png",
+      "source": "resources/images/stair_1.png",
+      "sha256": "34f20109214bfbe700f0688f6b880e806569a3fd863ec69e4f193fa7c9894fe0",
+      "bytes": 2490,
+      "source_refs": []
+    },
+    {
+      "path": "image/stair_2.png",
+      "source": "resources/images/stair_2.png",
+      "sha256": "9ee6e677670d602ff59e0c277a34e97ed733062475cd9f998f104742e04999a7",
+      "bytes": 3402,
+      "source_refs": [
+        "resources/quest/quest.json#/COS_chest/_TARGETINFOLIST/5/0"
+      ]
+    },
+    {
+      "path": "image/stair_3.png",
+      "source": "resources/images/stair_3.png",
+      "sha256": "334114bf9d3ee68cbfb89f2c44ab5e1e71a894b850c0ba91e7b240b8b965db9f",
+      "bytes": 3831,
+      "source_refs": [
+        "resources/quest/quest.json#/COS_chest/_TARGETINFOLIST/2/0"
+      ]
+    },
+    {
+      "path": "image/stair_DH_Church.png",
+      "source": "resources/images/stair_DH_Church.png",
+      "sha256": "bc2eaedcfbe0601eed66e1eb106cdc4976e3c66cb55ed33d6496a3e10ac48a7d",
+      "bytes": 15364,
+      "source_refs": [
+        "resources/quest/quest.json#/DH-Church-upper/_TARGETINFOLIST/3/2",
+        "resources/quest/quest.json#/DH-Church-auto/_TARGETINFOLIST/2/2"
+      ]
+    },
+    {
+      "path": "image/stair_DH_R10.png",
+      "source": "resources/images/stair_DH_R10.png",
+      "sha256": "893e1dc39920cdd0852d73d89c59d3e0805efbb581e31036024be162674d9fcf",
+      "bytes": 41173,
+      "source_refs": [
+        "resources/quest/quest.json#/DH-10f-test/_TARGETINFOLIST/0/0",
+        "resources/quest/quest.json#/DH-10f-JR/_TARGETINFOLIST/0/0"
+      ]
+    },
+    {
+      "path": "image/stair_DH_R4.png",
+      "source": "resources/images/stair_DH_R4.png",
+      "sha256": "fea9be972f369d54567f438cd2a4371f89ba128302823b211f160f449d7caee8",
+      "bytes": 48951,
+      "source_refs": [
+        "resources/quest/quest.json#/DH-4f/_TARGETINFOLIST/3/2"
+      ]
+    },
+    {
+      "path": "image/stair_DH_R5.png",
+      "source": "resources/images/stair_DH_R5.png",
+      "sha256": "9547ae8696bd5f6705207f7b85f3fb401fc2035340a621d80863e3090ecaa898",
+      "bytes": 30768,
+      "source_refs": [
+        "resources/quest/quest.json#/DH-6f/_TARGETINFOLIST/3/0"
+      ]
+    },
+    {
+      "path": "image/stair_DH_R6.png",
+      "source": "resources/images/stair_DH_R6.png",
+      "sha256": "1d3d3593b5ee4ab5640d84070d5603b43150b8f0fdd8813b77a38eed31cdb707",
+      "bytes": 49082,
+      "source_refs": [
+        "resources/quest/quest.json#/DH-6f/_TARGETINFOLIST/0/0"
+      ]
+    },
+    {
+      "path": "image/stair_DH_R7.png",
+      "source": "resources/images/stair_DH_R7.png",
+      "sha256": "310917bb8e444f1b4e919a88c01483d6204cafd22c4a6de96436935b6db81694",
+      "bytes": 25759,
+      "source_refs": []
+    },
+    {
+      "path": "image/stair_DH_R9.png",
+      "source": "resources/images/stair_DH_R9.png",
+      "sha256": "bdb0954461f824f14e8bb8fcfc8d5ffa5ef2c43c9603fe8dc12d8650d0f77375",
+      "bytes": 39104,
+      "source_refs": [
+        "resources/quest/quest.json#/DH-10f-test/_TARGETINFOLIST/11/0",
+        "resources/quest/quest.json#/DH-10f-JR/_TARGETINFOLIST/3/0"
+      ]
+    },
+    {
+      "path": "image/stair_down.png",
+      "source": "resources/images/stair_down.png",
+      "sha256": "747d1e160c2ea0c04cf7b9803999153b53ed97fd277d50a41a7f6ce154885f40",
+      "bytes": 3135,
+      "source_refs": []
+    },
+    {
+      "path": "image/stair_fortress1f.png",
+      "source": "resources/images/stair_fortress1f.png",
+      "sha256": "d41cbce1c0e9b8796e6cce403720814b9cafc6bc5de6935e810b1c40e35c3307",
+      "bytes": 43818,
+      "source_refs": [
+        "resources/quest/quest.json#/fortress-B8F_entrance/_TARGETINFOLIST/0/0"
+      ]
+    },
+    {
+      "path": "image/stair_fortress3f.png",
+      "source": "resources/images/stair_fortress3f.png",
+      "sha256": "43f693f72374cb59716a9bda80fa33d4a826cf5304bc5eba9716741a129c18c0",
+      "bytes": 45434,
+      "source_refs": []
+    },
+    {
+      "path": "image/stair_fortressGate.png",
+      "source": "resources/images/stair_fortressGate.png",
+      "sha256": "af17a0fa71dddf00f8935a4d4708a7250a752d97ac0d63f2d48f5a5536a4e9ea",
+      "bytes": 41445,
+      "source_refs": [
+        "resources/quest/quest.json#/fortress-B8F_entrance/_TARGETINFOLIST/3/0"
+      ]
+    },
+    {
+      "path": "image/stair_goblinsNest.png",
+      "source": "resources/images/stair_goblinsNest.png",
+      "sha256": "00063d81fe2ed10c8735badf16988fd775d08ca3f7faa13ded5427d50f1903cd",
+      "bytes": 22060,
+      "source_refs": []
+    },
+    {
+      "path": "image/stair_lounge.png",
+      "source": "resources/images/stair_lounge.png",
+      "sha256": "e1fbe473a3e714b43c3c12d2d3aafb49691d7027ef795e76493e7c06fb0bee2b",
+      "bytes": 47709,
+      "source_refs": [
+        "resources/quest/quest.json#/lounge/_TARGETINFOLIST/0/0"
+      ]
+    },
+    {
+      "path": "image/stair_shiphold.png",
+      "source": "resources/images/stair_shiphold.png",
+      "sha256": "7e3e050b313addd59f06061c1daa198f56cd4be3f4efb9bcb496ae054da39327",
+      "bytes": 58130,
+      "source_refs": [
+        "resources/quest/quest.json#/lounge/_TARGETINFOLIST/2/0"
+      ]
+    },
+    {
+      "path": "image/stair_teleport.png",
+      "source": "resources/images/stair_teleport.png",
+      "sha256": "03128653f82dc8536c7e141e07ba52bbd3528671f7aae97c82ee0229b9107850",
+      "bytes": 4219,
+      "source_refs": []
+    },
+    {
+      "path": "image/stair_up.png",
+      "source": "resources/images/stair_up.png",
+      "sha256": "25ff286f22f4ec1c4d08677b9a84b6078c0b10ed7a8e84b09e19e4f50c21bb46",
+      "bytes": 3479,
+      "source_refs": []
+    },
+    {
+      "path": "image/startdownload.png",
+      "source": "resources/images/startdownload.png",
+      "sha256": "63b655fd6de4e07ea5e94021eea1eb6cb2f2a07a0c5de4d5584415132cb5b052",
+      "bytes": 13678,
+      "source_refs": [
+        "src/script.py:1333",
+        "src/script.py:2116"
+      ]
+    },
+    {
+      "path": "image/steel.png",
+      "source": "resources/images/steel.png",
+      "sha256": "acb6fc9ba85196735db90d4126651c68030c4e7bfe36f05c4c31f0f25dae054f",
+      "bytes": 7390,
+      "source_refs": [
+        "src/script.py:4269"
+      ]
+    },
+    {
+      "path": "image/story.png",
+      "source": "resources/images/story.png",
+      "sha256": "ed0efb0fa4886603a34b14f3315890254606be1d02cdcb7c32d57636ac222aac",
+      "bytes": 3799,
+      "source_refs": [
+        "src/script.py:3256"
+      ]
+    },
+    {
+      "path": "image/supportSkillCheck.png",
+      "source": "resources/images/supportSkillCheck.png",
+      "sha256": "febed7e3a725681521b4e397011f05df4c8bceed467b122380b6a4dc14ea5122",
+      "bytes": 4531,
+      "source_refs": [
+        "src/script.py:2727"
+      ]
+    },
+    {
+      "path": "image/theRouteToTheDestinationCannotBeFound.png",
+      "source": "resources/images/theRouteToTheDestinationCannotBeFound.png",
+      "sha256": "bd436b94266838cdf0e4af33b1cce63390b865a69cd626b63f4186f0972f6b2a",
+      "bytes": 45542,
+      "source_refs": [
+        "src/script.py:3348",
+        "src/script.py:3353"
+      ]
+    },
+    {
+      "path": "image/tooPoorToReadTheMap.png",
+      "source": "resources/images/tooPoorToReadTheMap.png",
+      "sha256": "4d1a39004fb18242c2cfe5634b5d7dbfcf99c20492a254ce71bbd6d78c8bcb26",
+      "bytes": 32058,
+      "source_refs": [
+        "src/script.py:2947"
+      ]
+    },
+    {
+      "path": "image/totitle.png",
+      "source": "resources/images/totitle.png",
+      "sha256": "da5d98b11910933d2287c10899fd836e51fd9132c3b2044b58232bb7b27b1ac9",
+      "bytes": 7545,
+      "source_refs": [
+        "src/script.py:1358",
+        "src/script.py:2289"
+      ]
+    },
+    {
+      "path": "image/trait.png",
+      "source": "resources/images/trait.png",
+      "sha256": "6262f86bea1908d84197a98f1b7609ea4ab7427e80a0b10298e6cdf26bfde1d4",
+      "bytes": 5542,
+      "source_refs": [
+        "src/script.py:3255",
+        "src/script.py:3777"
+      ]
+    },
+    {
+      "path": "image/transfer.png",
+      "source": "resources/images/transfer.png",
+      "sha256": "715d9aa178d7a58fee40bf587b217621d0ea07b476e687106b1cd972a5d2da6b",
+      "bytes": 8786,
+      "source_refs": []
+    },
+    {
+      "path": "image/whowillopenit.png",
+      "source": "resources/images/whowillopenit.png",
+      "sha256": "aeb948ccb8475593331a5cb37ff0370ce4cf7f213bcf2f2d34ba10a637820700",
+      "bytes": 12884,
+      "source_refs": [
+        "src/script.py:3022",
+        "src/script.py:3061"
+      ]
+    },
+    {
+      "path": "image/whowillyougiveitto.png",
+      "source": "resources/images/whowillyougiveitto.png",
+      "sha256": "c78592d1230e78960ce233878b2a3e6df3440c8623e0701e85299d7b5352ed82",
+      "bytes": 29868,
+      "source_refs": []
+    },
+    {
+      "path": "image/worldmapflag.png",
+      "source": "resources/images/worldmapflag.png",
+      "sha256": "19815b7a5779d414f23933ec2cdb0eb8c76871a500b15aad1cb45e864144748c",
+      "bytes": 9489,
+      "source_refs": [
+        "src/script.py:1891",
+        "src/script.py:1906",
+        "src/script.py:1953",
+        "src/script.py:1992",
+        "src/script.py:2179"
+      ]
+    },
+    {
+      "path": "image/wraped.png",
+      "source": "resources/images/wraped.png",
+      "sha256": "b7321c53950a4289ba2bf02c00518338bc69f479d8039acff73d30adb5ac5058",
+      "bytes": 25292,
+      "source_refs": []
+    }
+  ],
+  "aliases": {
+    "dungflag.png": "dungFlag.png",
+    "returnText.png": "ReturnText.png",
+    "returntoTown.png": "returntotown.png",
+    "mapflag.png": "mapFlag.png",
+    "Steel.png": "steel.png",
+    "Mark_auto.png": "mark_auto.png",
+    "malice_B3F.png": "malice_b3f.png"
+  },
+  "case_reference_count": 8,
+  "dynamic_references": [
+    {
+      "reference": "shortPathOfTarget",
+      "source_ref": "src/script.py:1116",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver",
+      "classification": "NEEDS_BUSINESS_DATA",
+      "candidates": [],
+      "reason": "通用参数或任务字段：M4 调用方须提供具体资源；不据此批准输入。",
+      "blocks": "M4 调用参数绑定"
+    },
+    {
+      "reference": "shortPathOfTarget",
+      "source_ref": "src/script.py:1145",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver",
+      "classification": "NEEDS_BUSINESS_DATA",
+      "candidates": [],
+      "reason": "通用参数或任务字段：M4 调用方须提供具体资源；不据此批准输入。",
+      "blocks": "M4 调用参数绑定"
+    },
+    {
+      "reference": "shortPathOfTarget",
+      "source_ref": "src/script.py:1148",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver",
+      "classification": "NEEDS_BUSINESS_DATA",
+      "candidates": [],
+      "reason": "通用参数或任务字段：M4 调用方须提供具体资源；不据此批准输入。",
+      "blocks": "M4 调用参数绑定"
+    },
+    {
+      "reference": "shortPathOfTarget",
+      "source_ref": "src/script.py:1165",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver",
+      "classification": "NEEDS_BUSINESS_DATA",
+      "candidates": [],
+      "reason": "通用参数或任务字段：M4 调用方须提供具体资源；不据此批准输入。",
+      "blocks": "M4 调用参数绑定"
+    },
+    {
+      "reference": "shortPathOfTarget",
+      "source_ref": "src/script.py:1168",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver",
+      "classification": "NEEDS_BUSINESS_DATA",
+      "candidates": [],
+      "reason": "通用参数或任务字段：M4 调用方须提供具体资源；不据此批准输入。",
+      "blocks": "M4 调用参数绑定"
+    },
+    {
+      "reference": "shortPathOfTarget",
+      "source_ref": "src/script.py:1173",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver",
+      "classification": "NEEDS_BUSINESS_DATA",
+      "candidates": [],
+      "reason": "通用参数或任务字段：M4 调用方须提供具体资源；不据此批准输入。",
+      "blocks": "M4 调用参数绑定"
+    },
+    {
+      "reference": "shortPathOfTarget",
+      "source_ref": "src/script.py:1196",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver",
+      "classification": "NEEDS_BUSINESS_DATA",
+      "candidates": [],
+      "reason": "通用参数或任务字段：M4 调用方须提供具体资源；不据此批准输入。",
+      "blocks": "M4 调用参数绑定"
+    },
+    {
+      "reference": "f'cursor_{i}'",
+      "source_ref": "src/script.py:1232",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver",
+      "classification": "BOUNDED_CANDIDATES",
+      "candidates": [
+        "cursor_0.png",
+        "cursor_1.png",
+        "cursor_2.png",
+        "cursor_3.png"
+      ],
+      "reason": "候选集来自固定源码/资源；具体选择仍由业务参数确定。",
+      "blocks": "M4 调用参数绑定"
+    },
+    {
+      "reference": "targetInfo.target",
+      "source_ref": "src/script.py:1248",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver",
+      "classification": "NEEDS_BUSINESS_DATA",
+      "candidates": [],
+      "reason": "通用参数或任务字段：M4 调用方须提供具体资源；不据此批准输入。",
+      "blocks": "M4 调用参数绑定"
+    },
+    {
+      "reference": "targetInfo.target",
+      "source_ref": "src/script.py:1257",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver",
+      "classification": "NEEDS_BUSINESS_DATA",
+      "candidates": [],
+      "reason": "通用参数或任务字段：M4 调用方须提供具体资源；不据此批准输入。",
+      "blocks": "M4 调用参数绑定"
+    },
+    {
+      "reference": "correctStair",
+      "source_ref": "src/script.py:1273",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver",
+      "classification": "BOUNDED_CANDIDATES",
+      "candidates": [
+        "stair_1.png",
+        "stair_2.png",
+        "stair_3.png",
+        "stair_DH_Church.png",
+        "stair_DH_R10.png",
+        "stair_DH_R4.png",
+        "stair_DH_R5.png",
+        "stair_DH_R6.png",
+        "stair_DH_R7.png",
+        "stair_DH_R9.png",
+        "stair_down.png",
+        "stair_fortress1f.png",
+        "stair_fortress3f.png",
+        "stair_fortressGate.png",
+        "stair_goblinsNest.png",
+        "stair_lounge.png",
+        "stair_shiphold.png",
+        "stair_teleport.png",
+        "stair_up.png"
+      ],
+      "reason": "候选集来自固定源码/资源；具体选择仍由业务参数确定。",
+      "blocks": "M4 调用参数绑定"
+    },
+    {
+      "reference": "target",
+      "source_ref": "src/script.py:1289",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver",
+      "classification": "NEEDS_BUSINESS_DATA",
+      "candidates": [],
+      "reason": "通用参数或任务字段：M4 调用方须提供具体资源；不据此批准输入。",
+      "blocks": "M4 调用参数绑定"
+    },
+    {
+      "reference": "f'fastforward_off'",
+      "source_ref": "src/script.py:1299",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver",
+      "classification": "RESOLVED",
+      "candidates": [
+        "fastforward_off.png"
+      ],
+      "reason": "无插值的 f-string，等价于字面量。",
+      "blocks": null
+    },
+    {
+      "reference": "pattern",
+      "source_ref": "src/script.py:1412",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver",
+      "classification": "NEEDS_BUSINESS_DATA",
+      "candidates": [],
+      "reason": "通用参数或任务字段：M4 调用方须提供具体资源；不据此批准输入。",
+      "blocks": "M4 调用参数绑定"
+    },
+    {
+      "reference": "target",
+      "source_ref": "src/script.py:1493",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver",
+      "classification": "NEEDS_BUSINESS_DATA",
+      "candidates": [],
+      "reason": "通用参数或任务字段：M4 调用方须提供具体资源；不据此批准输入。",
+      "blocks": "M4 调用参数绑定"
+    },
+    {
+      "reference": "pattern",
+      "source_ref": "src/script.py:1499",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver",
+      "classification": "NEEDS_BUSINESS_DATA",
+      "candidates": [],
+      "reason": "通用参数或任务字段：M4 调用方须提供具体资源；不据此批准输入。",
+      "blocks": "M4 调用参数绑定"
+    },
+    {
+      "reference": "pattern",
+      "source_ref": "src/script.py:1619",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver",
+      "classification": "NEEDS_BUSINESS_DATA",
+      "candidates": [],
+      "reason": "通用参数或任务字段：M4 调用方须提供具体资源；不据此批准输入。",
+      "blocks": "M4 调用参数绑定"
+    },
+    {
+      "reference": "pattern",
+      "source_ref": "src/script.py:1855",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver",
+      "classification": "NEEDS_BUSINESS_DATA",
+      "candidates": [],
+      "reason": "通用参数或任务字段：M4 调用方须提供具体资源；不据此批准输入。",
+      "blocks": "M4 调用参数绑定"
+    },
+    {
+      "reference": "target_patterns",
+      "source_ref": "src/script.py:1858",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver",
+      "classification": "NEEDS_BUSINESS_DATA",
+      "candidates": [],
+      "reason": "通用参数或任务字段：M4 调用方须提供具体资源；不据此批准输入。",
+      "blocks": "M4 调用参数绑定"
+    },
+    {
+      "reference": "target",
+      "source_ref": "src/script.py:1910",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver",
+      "classification": "NEEDS_BUSINESS_DATA",
+      "candidates": [],
+      "reason": "通用参数或任务字段：M4 调用方须提供具体资源；不据此批准输入。",
+      "blocks": "M4 调用参数绑定"
+    },
+    {
+      "reference": "target",
+      "source_ref": "src/script.py:2025",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver",
+      "classification": "NEEDS_BUSINESS_DATA",
+      "candidates": [],
+      "reason": "通用参数或任务字段：M4 调用方须提供具体资源；不据此批准输入。",
+      "blocks": "M4 调用参数绑定"
+    },
+    {
+      "reference": "target",
+      "source_ref": "src/script.py:2037",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver",
+      "classification": "NEEDS_BUSINESS_DATA",
+      "candidates": [],
+      "reason": "通用参数或任务字段：M4 调用方须提供具体资源；不据此批准输入。",
+      "blocks": "M4 调用参数绑定"
+    },
+    {
+      "reference": "option",
+      "source_ref": "src/script.py:2068",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver",
+      "classification": "NEEDS_BUSINESS_DATA",
+      "candidates": [],
+      "reason": "通用参数或任务字段：M4 调用方须提供具体资源；不据此批准输入。",
+      "blocks": "M4 调用参数绑定"
+    },
+    {
+      "reference": "target",
+      "source_ref": "src/script.py:2082",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver",
+      "classification": "NEEDS_BUSINESS_DATA",
+      "candidates": [],
+      "reason": "通用参数或任务字段：M4 调用方须提供具体资源；不据此批准输入。",
+      "blocks": "M4 调用参数绑定"
+    },
+    {
+      "reference": "pattern",
+      "source_ref": "src/script.py:2143",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver",
+      "classification": "NEEDS_BUSINESS_DATA",
+      "candidates": [],
+      "reason": "通用参数或任务字段：M4 调用方须提供具体资源；不据此批准输入。",
+      "blocks": "M4 调用参数绑定"
+    },
+    {
+      "reference": "city",
+      "source_ref": "src/script.py:2201",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver",
+      "classification": "NEEDS_BUSINESS_DATA",
+      "candidates": [],
+      "reason": "通用参数或任务字段：M4 调用方须提供具体资源；不据此批准输入。",
+      "blocks": "M4 调用参数绑定"
+    },
+    {
+      "reference": "symbol",
+      "source_ref": "src/script.py:2213",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver",
+      "classification": "NEEDS_BUSINESS_DATA",
+      "candidates": [],
+      "reason": "通用参数或任务字段：M4 调用方须提供具体资源；不据此批准输入。",
+      "blocks": "M4 调用参数绑定"
+    },
+    {
+      "reference": "option",
+      "source_ref": "src/script.py:2218",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver",
+      "classification": "NEEDS_BUSINESS_DATA",
+      "candidates": [],
+      "reason": "通用参数或任务字段：M4 调用方须提供具体资源；不据此批准输入。",
+      "blocks": "M4 调用参数绑定"
+    },
+    {
+      "reference": "'dialogueChoices/' + op",
+      "source_ref": "src/script.py:2268",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver",
+      "classification": "BOUNDED_CANDIDATES",
+      "candidates": [
+        "dialogueChoices/!adventurersbones.png",
+        "dialogueChoices/!halfBone.png",
+        "dialogueChoices/#hammer.png",
+        "dialogueChoices/DontBuyIt.png",
+        "dialogueChoices/buyNothing.png",
+        "dialogueChoices/dontGiveAntitoxin.png",
+        "dialogueChoices/donthelp.png",
+        "dialogueChoices/givehimnothing.png",
+        "dialogueChoices/idonthaveany.png",
+        "dialogueChoices/ignorethequest.png",
+        "dialogueChoices/nope.png",
+        "dialogueChoices/nothanks.png",
+        "dialogueChoices/spareit.png",
+        "dialogueChoices/strange_things.png"
+      ],
+      "reason": "候选集来自固定源码/资源；具体选择仍由业务参数确定。",
+      "blocks": "M4 调用参数绑定"
+    },
+    {
+      "reference": "combat",
+      "source_ref": "src/script.py:2460",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver",
+      "classification": "BOUNDED_CANDIDATES",
+      "candidates": [
+        "combatActive.png",
+        "combatActive_2.png",
+        "combatActive_3.png",
+        "combatActive_4.png"
+      ],
+      "reason": "候选集来自固定源码/资源；具体选择仍由业务参数确定。",
+      "blocks": "M4 调用参数绑定"
+    },
+    {
+      "reference": "quest._preEOTcheck",
+      "source_ref": "src/script.py:2475",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver",
+      "classification": "NEEDS_BUSINESS_DATA",
+      "candidates": [],
+      "reason": "通用参数或任务字段：M4 调用方须提供具体资源；不据此批准输入。",
+      "blocks": "M4 调用参数绑定"
+    },
+    {
+      "reference": "quest._EOT[-1][1]",
+      "source_ref": "src/script.py:2498",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver",
+      "classification": "NEEDS_BUSINESS_DATA",
+      "candidates": [],
+      "reason": "通用参数或任务字段：M4 调用方须提供具体资源；不据此批准输入。",
+      "blocks": "M4 调用参数绑定"
+    },
+    {
+      "reference": "target",
+      "source_ref": "src/script.py:2612",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver",
+      "classification": "NEEDS_BUSINESS_DATA",
+      "candidates": [],
+      "reason": "通用参数或任务字段：M4 调用方须提供具体资源；不据此批准输入。",
+      "blocks": "M4 调用参数绑定"
+    },
+    {
+      "reference": "shortPathOfTarget",
+      "source_ref": "src/script.py:2630",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver",
+      "classification": "NEEDS_BUSINESS_DATA",
+      "candidates": [],
+      "reason": "通用参数或任务字段：M4 调用方须提供具体资源；不据此批准输入。",
+      "blocks": "M4 调用参数绑定"
+    },
+    {
+      "reference": "f'spellskill/skillLvl/lv1'",
+      "source_ref": "src/script.py:2704",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver",
+      "classification": "RESOLVED",
+      "candidates": [
+        "spellskill/skillLvl/lv1.png"
+      ],
+      "reason": "无插值的 f-string，等价于字面量。",
+      "blocks": null
+    },
+    {
+      "reference": "f'spellskill/skillLvl/s_lv1'",
+      "source_ref": "src/script.py:2704",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver",
+      "classification": "RESOLVED",
+      "candidates": [
+        "spellskill/skillLvl/s_lv1.png"
+      ],
+      "reason": "无插值的 f-string，等价于字面量。",
+      "blocks": null
+    },
+    {
+      "reference": "f'spellskill/skillLvl/lv{skilllvl}'",
+      "source_ref": "src/script.py:2712",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver",
+      "classification": "BOUNDED_CANDIDATES",
+      "candidates": [
+        "spellskill/skillLvl/lv1.png",
+        "spellskill/skillLvl/lv2.png",
+        "spellskill/skillLvl/lv3.png",
+        "spellskill/skillLvl/lv4.png",
+        "spellskill/skillLvl/lv5.png",
+        "spellskill/skillLvl/lv6.png",
+        "spellskill/skillLvl/lv7.png"
+      ],
+      "reason": "候选集来自固定源码/资源；具体选择仍由业务参数确定。",
+      "blocks": "M4 调用参数绑定"
+    },
+    {
+      "reference": "f'spellskill/skillLvl/s_lv{skilllvl}'",
+      "source_ref": "src/script.py:2712",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver",
+      "classification": "BOUNDED_CANDIDATES",
+      "candidates": [
+        "spellskill/skillLvl/s_lv1.png",
+        "spellskill/skillLvl/s_lv2.png",
+        "spellskill/skillLvl/s_lv3.png",
+        "spellskill/skillLvl/s_lv4.png",
+        "spellskill/skillLvl/s_lv5.png",
+        "spellskill/skillLvl/s_lv6.png",
+        "spellskill/skillLvl/s_lv7.png"
+      ],
+      "reason": "候选集来自固定源码/资源；具体选择仍由业务参数确定。",
+      "blocks": "M4 调用参数绑定"
+    },
+    {
+      "reference": "f'spellskill/skillLvl/lv{skilllvl}'",
+      "source_ref": "src/script.py:2721",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver",
+      "classification": "BOUNDED_CANDIDATES",
+      "candidates": [
+        "spellskill/skillLvl/lv1.png",
+        "spellskill/skillLvl/lv2.png",
+        "spellskill/skillLvl/lv3.png",
+        "spellskill/skillLvl/lv4.png",
+        "spellskill/skillLvl/lv5.png",
+        "spellskill/skillLvl/lv6.png",
+        "spellskill/skillLvl/lv7.png"
+      ],
+      "reason": "候选集来自固定源码/资源；具体选择仍由业务参数确定。",
+      "blocks": "M4 调用参数绑定"
+    },
+    {
+      "reference": "f'spellskill/skillLvl/s_lv{skilllvl}'",
+      "source_ref": "src/script.py:2722",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver",
+      "classification": "BOUNDED_CANDIDATES",
+      "candidates": [
+        "spellskill/skillLvl/s_lv1.png",
+        "spellskill/skillLvl/s_lv2.png",
+        "spellskill/skillLvl/s_lv3.png",
+        "spellskill/skillLvl/s_lv4.png",
+        "spellskill/skillLvl/s_lv5.png",
+        "spellskill/skillLvl/s_lv6.png",
+        "spellskill/skillLvl/s_lv7.png"
+      ],
+      "reason": "候选集来自固定源码/资源；具体选择仍由业务参数确定。",
+      "blocks": "M4 调用参数绑定"
+    },
+    {
+      "reference": "target",
+      "source_ref": "src/script.py:2890",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver",
+      "classification": "NEEDS_BUSINESS_DATA",
+      "candidates": [],
+      "reason": "通用参数或任务字段：M4 调用方须提供具体资源；不据此批准输入。",
+      "blocks": "M4 调用参数绑定"
+    },
+    {
+      "reference": "quest._FloorCheck",
+      "source_ref": "src/script.py:2957",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver",
+      "classification": "NEEDS_BUSINESS_DATA",
+      "candidates": [],
+      "reason": "通用参数或任务字段：M4 调用方须提供具体资源；不据此批准输入。",
+      "blocks": "M4 调用参数绑定"
+    },
+    {
+      "reference": "tar",
+      "source_ref": "src/script.py:3334",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver",
+      "classification": "NEEDS_BUSINESS_DATA",
+      "candidates": [],
+      "reason": "通用参数或任务字段：M4 调用方须提供具体资源；不据此批准输入。",
+      "blocks": "M4 调用参数绑定"
+    },
+    {
+      "reference": "tar",
+      "source_ref": "src/script.py:3339",
+      "context": "动态模板表达式",
+      "status": "DYNAMIC_REVIEW",
+      "matches": [],
+      "migration_owner": "native/games/wvd/vision/WvdAssetResolver",
+      "classification": "NEEDS_BUSINESS_DATA",
+      "candidates": [],
+      "reason": "通用参数或任务字段：M4 调用方须提供具体资源；不据此批准输入。",
+      "blocks": "M4 调用参数绑定"
+    }
+  ]
+}

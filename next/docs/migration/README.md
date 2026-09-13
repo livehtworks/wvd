@@ -25,6 +25,10 @@
 **MAPPED_NOT_IMPLEMENTED 仅表示登记去向，不表示已迁移或可切换。** 拟定入口是逻辑责任，
 不是已存在的 C++ 方法；资产/任务条目由其原 ID 指定查表参数。
 
+M3 的实际纯视觉/资源去向叠加在 [m3-implementation-map.json](m3-implementation-map.json)，
+由 `tools/m3_implementation_map.py` 生成，不修改本静态索引。实现存在、离线断言通过和真实质量
+分开记录；完整任务、配置和状态消费仍待 M4。资源的显式别名与动态上下文见 `packs/wvd/manifest.json`。
+
 静态调用记录共 4304 条：1346 条按限定作用域解析，2958 条保留外部/动态表达式。
 没有用跨文件“只存在一个同名函数”猜测调用绑定；没有运行时追踪或游戏可达性证明。
 所有 quest 类型任务 ID 都在真实 FARM_TARGET 模式分发中找到，其他源码分支也完整登记。

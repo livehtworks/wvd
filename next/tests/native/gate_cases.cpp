@@ -42,6 +42,99 @@ J gate_case(const std::string &name, Setup &s) {
     input.x = 374;
     input.y = 437;
     ActionIntent intent{1, 1, 1, observation, input, "battle", "postcondition", {0, 0, 900, 900}};
+    if (name.starts_with("gate-edges-")) {
+        s.device->change_frame = false;
+        J sent = J::array();
+        auto dispatch = [&](Command command, bool valid = true, Box area = {0, 0, 900, 1600}) {
+            auto fresh = gateway.capture();
+            auto observed = gateway.recognize(fresh, gate.frame_identity(), scene());
+            require(observed.outcome == RecognitionOutcome::Hit, "mapping fixture scene missing");
+            gate.confirm_scene(observed, "battle");
+            gate.authorize({1, 1, 1, observed, command, "battle", "mapping-only", area});
+            auto before = s.device->calls.load();
+            // 直接检查门禁后的真实记录，避免 SDK 自身的手势展开混淆端点映射断言。
+            require(gate.execute(command) == valid, "edge dispatch outcome");
+            if (!valid) {
+                require(s.device->calls == before, "invalid baseline was clamped into screen");
+                return;
+            }
+            auto raw = s.device->sent.back();
+            sent.push_back({{"kind", int(raw.kind)},
+                            {"x", raw.x},
+                            {"y", raw.y},
+                            {"x2", raw.x2},
+                            {"y2", raw.y2}});
+            if (command.kind == ActionKind::Click || command.kind == ActionKind::Swipe ||
+                command.kind == ActionKind::TouchDown || command.kind == ActionKind::TouchMove) {
+                require(raw.x >= 0 && raw.x < s.device->size.width && raw.y >= 0 &&
+                            raw.y < s.device->size.height,
+                        "raw edge out of bounds");
+                if (command.x == 0)
+                    require(raw.x == 0, "left edge changed");
+                if (command.y == 0)
+                    require(raw.y == 0, "top edge changed");
+                if (command.x == 899)
+                    require(raw.x == s.device->size.width - 1, "right edge changed");
+                if (command.y == 1599)
+                    require(raw.y == s.device->size.height - 1, "bottom edge changed");
+                if (command.kind == ActionKind::Swipe)
+                    require(raw.x2 >= 0 && raw.x2 < s.device->size.width && raw.y2 >= 0 &&
+                                raw.y2 < s.device->size.height,
+                            "swipe end outside raw image");
+            } else
+                require(raw == command, "delta/key/text/release was scaled");
+        };
+        for (auto [x, y] : std::vector<std::pair<int, int>>{
+                 {0, 0}, {899, 0}, {0, 1599}, {899, 1599}, {1, 1}, {898, 1598}}) {
+            Command c;
+            c.x = x;
+            c.y = y;
+            c.x2 = 899 - x;
+            c.y2 = 1599 - y;
+            c.duration = 20;
+            for (auto kind : {ActionKind::Click, ActionKind::Swipe, ActionKind::TouchDown,
+                              ActionKind::TouchMove}) {
+                c.kind = kind;
+                dispatch(c);
+            }
+            c.kind = ActionKind::TouchUp;
+            dispatch(c);
+        }
+        for (auto [x, y] :
+             std::vector<std::pair<int, int>>{{-1, 10}, {10, -1}, {900, 10}, {10, 1600}}) {
+            Command c;
+            c.x = x;
+            c.y = y;
+            for (auto kind : {ActionKind::Click, ActionKind::Swipe, ActionKind::TouchDown,
+                              ActionKind::TouchMove}) {
+                c.kind = kind;
+                dispatch(c, false);
+            }
+            c.kind = ActionKind::Swipe;
+            c.x2 = x;
+            c.y2 = y;
+            c.x = 10;
+            c.y = 10;
+            dispatch(c, false);
+        }
+        Command c;
+        c.x = 899;
+        c.y = 1599;
+        dispatch(c, false, {0, 0, 899, 1599});
+        for (auto kind : {ActionKind::Scroll, ActionKind::RelativeMove, ActionKind::ClickKey,
+                          ActionKind::Text}) {
+            c.kind = kind;
+            c.x = -20;
+            c.y = 120;
+            c.text = "test";
+            c.key = 32;
+            dispatch(c);
+        }
+        gate.close();
+        gateway.close();
+        return {
+            {"raw_width", s.device->size.width}, {"commands", sent}, {"events", journal.read()}};
+    }
     if (name == "gate-bare-all") {
         J routed = J::array();
         auto initial = gate.counts();
@@ -153,8 +246,10 @@ J storage_case(const std::string &name, Setup &s) {
             journal.emit(1, "critical", {}, true);
         auto before = journal.read();
         try {
-            journal.commit_terminal(1, {{"state", "Completed"}},
-                                    [](const J &) { throw std::runtime_error("WRITE_FAILED"); });
+            journal.commit_terminal(1, {{"state", "Completed"}}, [&](const J &) {
+                require(journal.read() == before, "uncommitted journal changed");
+                throw std::runtime_error("WRITE_FAILED");
+            });
         } catch (const std::runtime_error &e) {
             require(std::string(e.what()) == "WRITE_FAILED", e.what());
         }

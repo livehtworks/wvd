@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <cstdint>
+#include <json.hpp>
 #include <optional>
 #include <string>
 #include <vector>
@@ -26,6 +27,8 @@ struct FrameIdentity {
     Size raw_size, recognition_size;
     std::chrono::steady_clock::time_point captured_at;
     std::string color_format{"BGR8"};
+    std::uint64_t connection_generation{};
+    std::string backend, foreground_application;
 };
 struct FrameEnvelope {
     FrameIdentity identity;
@@ -46,5 +49,7 @@ struct Observation {
     std::int64_t engine_task_id{}, engine_reco_id{};
     int engine_status{};
     std::string error_code, error_stage;
+    nlohmann::json evidence = nlohmann::json::object();
+    nlohmann::json timing_ms = nlohmann::json::object();
 };
 } // namespace wvd::contracts

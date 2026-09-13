@@ -6,9 +6,14 @@ using namespace contracts;
 using namespace std::chrono_literals;
 ExecutionSession::ExecutionSession(SessionDefinition definition, devices::DeviceBackend &backend,
                                    InputPolicy policy, std::uint64_t run, std::uint64_t generation,
-                                   storage::EventJournal &events)
-    : definition_(std::move(definition)), events_(events),
-      gate_(backend, std::move(policy), run, generation, events) {}
+                                   storage::EventJournal &events,
+                                   std::shared_ptr<const BehaviorRegistry> registry)
+    : definition_(std::move(definition)), registry_(std::move(registry)), events_(events),
+      gate_(backend, std::move(policy), run, generation, events) {
+    if (!registry_)
+        throw std::runtime_error("REGISTRY_REQUIRED");
+    registry_->validate(definition_);
+}
 ExecutionSession::~ExecutionSession() {
     request_stop();
     if (worker_.joinable())
@@ -18,7 +23,16 @@ void ExecutionSession::start() {
     // join 后线程不再 joinable，但会话的历史/门禁不能因此重新用于另一轮执行。
     if (started_.exchange(true))
         throw std::runtime_error("SESSION_ALREADY_STARTED");
-    worker_ = std::thread([this] { execute(); });
+    try {
+        worker_ = std::thread([this] { execute(); });
+    } catch (...) {
+        std::lock_guard lock(mutex_);
+        result_.reason = "SESSION_THREAD_START_FAILED";
+        result_.quiescent = true;
+        done_ = true;
+        cv_.notify_all();
+        throw;
+    }
 }
 void ExecutionSession::request_stop() {
     user_stop_ = true;
@@ -58,7 +72,7 @@ void ExecutionSession::execute() noexcept {
             if (!child.valid || child.status != MaaStatus_Succeeded)
                 fail("CHILD_FAILED");
         };
-        auto actions = definition_.actions;
+        auto actions = registry_->bind(definition_.actions);
         auto add = [&](const std::string &name, maafw::CustomAction action) {
             if (!actions.emplace(name, std::move(action)).second)
                 throw std::runtime_error("RESERVED_ACTION_OVERRIDE");
@@ -91,7 +105,8 @@ void ExecutionSession::execute() noexcept {
         add("GuardedAction", [this](maafw::Context &context, const auto &parameters) {
             return GuardedAction::execute(context, gate_, events_, parameters);
         });
-        maafw::MaaGateway gateway(definition_.bundle, &gate_, std::move(hooks), std::move(actions));
+        maafw::MaaGateway gateway(definition_.bundle, &gate_, std::move(hooks), std::move(actions),
+                                  registry_->bind_recognitions(definition_.recognitions));
         gateway.initialize();
         running_ = true;
         auto id = gateway.post(definition_.entry);
@@ -140,6 +155,7 @@ void ExecutionSession::execute() noexcept {
         }
         std::this_thread::sleep_for(100ms);
     }
+    gate_.disconnect_backend();
     running_ = false;
     {
         std::lock_guard lock(mutex_);

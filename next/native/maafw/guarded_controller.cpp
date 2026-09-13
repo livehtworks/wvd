@@ -21,7 +21,7 @@ GuardedController::GuardedController(devices::InputGate &gate, CallbackActivity 
     callbacks_.get_features = [](void *) -> MaaControllerFeature { return 0; };
     callbacks_.get_info = [](void *p, MaaStringBuffer *out) -> MaaBool {
         return invoke(p, [&](auto &) {
-            return MaaStringBufferSet(out, R"({"type":"guarded","offline_only":true})");
+            return MaaStringBufferSet(out, R"({"type":"guarded","input_gate_required":true})");
         });
     };
     callbacks_.screencap = [](void *p, MaaImageBuffer *out) -> MaaBool {
@@ -33,7 +33,7 @@ GuardedController::GuardedController(devices::InputGate &gate, CallbackActivity 
                 MaaImageBufferWidth(out) != raw.size.width ||
                 MaaImageBufferHeight(out) != raw.size.height)
                 throw std::runtime_error("CAPTURE_DECODE_INVALID");
-            auto size = s.gate_.policy().recognition_size;
+            auto size = s.gate_.frame_identity().recognition_size;
             // 外层提供统一识别尺寸；SDK 再看到的比例是 1，只有 InputGate 对内层映射原始坐标。
             return MaaImageBufferResize(out, size.width, size.height);
         });

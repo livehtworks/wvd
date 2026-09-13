@@ -1,6 +1,12 @@
 # WVD 业务层（M3 / M4）
 
-当前只有迁移归属，不包含可执行业务。不得把 Python Factory 整体翻译成一个 C++ 类。
+当前 `vision/` 已实现纯视觉并经同一 MaaGateway 注册，其他业务仍只有迁移归属。
+没有可挂机的任务链；不得把 Python Factory 整体翻译成一个 C++ 类。
+
+视觉分工：`asset_resolver` 处理来源/hash/显式别名与基线优先；`recognizers` 处理版本化模式、
+模板、ROI、mask、Pause、战斗和地图纯判断；`image_ops` 保留旧通道预处理的截断语义；
+`bobber` 保留方向场与去重算法。均不创建 Maa 句柄、不点击或重启。
+完整盘点与验收缺口见 `next/docs/migration/m3-implementation-map.json` 及 M3 报告。
 
 | 子职责 | 输入与结果 | 不负责 |
 | --- | --- | --- |

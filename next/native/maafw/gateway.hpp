@@ -1,5 +1,6 @@
 #pragma once
 #include "buffers.hpp"
+#include "custom_recognition.hpp"
 #include "guarded_controller.hpp"
 #include "recognition.hpp"
 #include <map>
@@ -52,7 +53,7 @@ struct GatewayHooks {
 class MaaGateway {
   public:
     MaaGateway(Bundle bundle, devices::InputGate *gate = nullptr, GatewayHooks hooks = {},
-               ActionRegistry actions = {});
+               ActionRegistry actions = {}, RecognitionHandlers recognitions = {});
     ~MaaGateway();
     MaaGateway(const MaaGateway &) = delete;
     MaaGateway &operator=(const MaaGateway &) = delete;
@@ -77,10 +78,16 @@ class MaaGateway {
     static MaaBool action_callback(MaaContext *, MaaTaskId, const char *, const char *,
                                    const char *, MaaRecoId, const MaaRect *, void *) noexcept;
     static void event_callback(void *, const char *, const char *, void *) noexcept;
+    static MaaBool recognition_callback(MaaContext *, MaaTaskId, const char *, const char *,
+                                        const char *, const MaaImageBuffer *, const MaaRect *,
+                                        void *, MaaRect *, MaaStringBuffer *) noexcept;
     Bundle bundle_;
     devices::InputGate *gate_;
     GatewayHooks hooks_;
     ActionRegistry actions_;
+    RecognitionHandlers recognitions_;
+    RecognitionCache recognition_cache_;
+    std::mutex recognition_mutex_;
     CallbackActivity activity_;
     std::atomic<int> depth_{};
     Handle<MaaResource, MaaResourceDestroy> resource_{nullptr, MaaResourceDestroy};

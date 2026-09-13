@@ -1,5 +1,6 @@
 #pragma once
 #include "action.hpp"
+#include <json.hpp>
 #include <string_view>
 
 namespace wvd::contracts {
@@ -60,5 +61,8 @@ struct RunSnapshot {
     bool quiescent{true}, result_saved{};
     int engine_status{};
     InputCounts inputs;
+    std::string storage_error;
+    std::vector<std::string> secondary_errors;
+    nlohmann::json sessions = nlohmann::json::array();
 };
 } // namespace wvd::contracts

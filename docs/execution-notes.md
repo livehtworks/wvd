@@ -54,3 +54,14 @@
 - 坐标映射合成样本为模板外围保留平滑边缘，避免两次缩放将随机背景混入模板。阈值仍为 0.99；该测试仅证明映射链，不证明真实 NEXT 小尺度或遮挡识别。
 - STOP_TIMEOUT 后仍保持原生对象与设备租约；工作线程真实返回并释放按住输入后才报告 quiescent。不要用 kill/detach“解决”测试等待或伪造正常停止。
 - M2 的结果与终态事件共同提交到 result.json；events.json 只是较早的活动诊断快照。历史审查优先读 result.json，数据权威详见 `../next/docs/data-authority.md`。
+
+## Next M3 受限验证
+
+- `--m3` 只构建或运行离线测试；设备检查必须另行显式指定私有绑定。固定 OpenCV 4.12.0 来自 MaaDeps v2.12.6，与 Maa 5.13.0 的 DLL hash 相同，不安装第二份运行时。
+- 固定 Maa 的 CustomRecognition 详情位于 `all[0].detail`；模板的 filtered/score 结构不能照搬。实际 Pipeline 的入口节点不一定先识别自身，应通过 next 候选验证真正调用了自定义识别，不能只看任务成功。
+- 固定 Maa ADB 截图重试内部会调用 KillServer。M3 通过公开 command.KillServer 覆盖为目标设备 get-state，禁止全局服务重启；内部重试和阻塞等待仍保留，不能写成已彻底禁用 SDK 自动重连。
+- Maa 原始图像指针为 void*，构造只读 BGR span 必须明确转换类型并验证尺寸/通道。C++20 与固定 nlohmann JSON 比较字符串时显式 `.get<std::string>()`，避免 MSVC 重写比较运算歧义。
+- 动态临时 JSON 不得被 AssetResolver 保存为引用；别名表由解析器持有自己的不可变值。不同 Bundle 同名资源必须按 revision 与规范路径隔离。
+- M3 真设备检查遇到未知场景不打开 VPN/游戏、不试点找按钮。系统导航没有前置安全证明时单列 BLOCKED；真实截图不得冒充 NEXT/Pause 质量样本。
+- Android 15 的 `dumpsys window windows` 子段可能只有窗口列表而无 mCurrentFocus，前台观测应使用完整 `dumpsys window` 并验证焦点字段。不能将字段缺失当成默认游戏前台；本轮实际导致安全 Failed，修正后通过。
+- 模拟器启动后出现过一次未知 Python 控制者阻断，具体进程身份未归因；保留严格拒绝。后续排查应记录被拒 PID/来源，不可直接加宽白名单或杀未知进程。

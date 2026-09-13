@@ -1,6 +1,7 @@
 """真实 Maa Pipeline/CustomController 的有限生命周期回归；设备实现只存在于测试驱动。"""
 
 import json
+import ctypes
 import os
 import shutil
 from pathlib import Path
@@ -97,6 +98,43 @@ def pipeline():
     return nodes
 
 
+def native_resize(frame, sdk):
+    """使用被测固定 SDK 的图像重采样构建映射夹具，不复制坐标映射公式。"""
+    with os.add_dll_directory(str(sdk / "bin")):
+        dll = ctypes.CDLL(str(sdk / "bin/MaaFramework.dll"))
+    ptr = ctypes.c_void_p
+    dll.MaaImageBufferCreate.restype = ptr
+    dll.MaaImageBufferSetRawData.argtypes = [
+        ptr,
+        ptr,
+        ctypes.c_int32,
+        ctypes.c_int32,
+        ctypes.c_int32,
+    ]
+    dll.MaaImageBufferResize.argtypes = [ptr, ctypes.c_int32, ctypes.c_int32]
+    dll.MaaImageBufferGetRawData.argtypes = [ptr]
+    dll.MaaImageBufferGetRawData.restype = ptr
+    dll.MaaImageBufferDestroy.argtypes = [ptr]
+    image = dll.MaaImageBufferCreate()
+    try:
+        if not dll.MaaImageBufferSetRawData(
+            image, frame.ctypes.data, frame.shape[1], frame.shape[0], 16
+        ):
+            raise AssertionError("native mapping fixture set failed")
+        if not dll.MaaImageBufferResize(image, 900, 1600):
+            raise AssertionError("native mapping fixture resize failed")
+        data = dll.MaaImageBufferGetRawData(image)
+        if not data:
+            raise AssertionError("native mapping fixture empty")
+        return (
+            np.frombuffer(ctypes.string_at(data, 900 * 1600 * 3), dtype=np.uint8)
+            .reshape(1600, 900, 3)
+            .copy()
+        )
+    finally:
+        dll.MaaImageBufferDestroy(image)
+
+
 class RuntimeTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -158,6 +196,19 @@ class RuntimeTests(unittest.TestCase):
         if name == "large-frame":
             frame = cv2.resize(frame, (1080, 1920), interpolation=cv2.INTER_LINEAR)
             after = cv2.resize(after, (1080, 1920), interpolation=cv2.INTER_LINEAR)
+        if name.startswith("gate-edges-"):
+            width = int(name.rsplit("-", 1)[1])
+            frame = cv2.resize(frame, (width, width * 16 // 9))
+            after = frame.copy()
+            # 本例验证坐标，不以降阈值掩盖重采样差异；模板取自实际归一化的合成帧。
+            normalized = native_resize(frame, self.sdk)
+            for key, crop in (
+                ("scene", normalized[80:140, 40:130]),
+                ("target", normalized[417:457, 334:414]),
+            ):
+                (bundle / f"image/{key}.png").write_bytes(
+                    cv2.imencode(".png", crop)[1].tobytes()
+                )
         for key, image in (("before", frame), ("after", after)):
             (root / f"{key}.png").write_bytes(cv2.imencode(".png", image)[1].tobytes())
         config = {
@@ -168,6 +219,7 @@ class RuntimeTests(unittest.TestCase):
             "output": str(root / "run-data"),
             "device_id": "m2-offline-" + uuid.uuid4().hex,
             "large": name == "large-frame",
+            "width": frame.shape[1],
             "files": [
                 {"path": p.relative_to(bundle).as_posix(), "sha256": sha(p)}
                 for p in sorted(bundle.rglob("*"))
@@ -259,6 +311,21 @@ class RuntimeTests(unittest.TestCase):
 
 
 CASES = [
+    "gate-edges-900",
+    "gate-edges-1080",
+    "gate-edges-720",
+    "gate-edges-450",
+    "gate-edges-360",
+    "recover-throw",
+    "recover-invalid",
+    "recover-storage",
+    "critical-full",
+    "identity-action-revision",
+    "identity-action-params",
+    "identity-recovery-revision",
+    "identity-recovery-params",
+    "registry-sealed",
+    "definition-copy",
     "normal",
     "large-frame",
     "duplicate-start",

@@ -37,6 +37,8 @@ std::uint64_t EventJournal::emit(std::uint64_t generation, std::string type, J p
     std::lock_guard lock(mutex_);
     if (terminal_)
         throw std::runtime_error("JOURNAL_ALREADY_TERMINAL");
+    if (committing_)
+        throw std::runtime_error("JOURNAL_COMMIT_IN_PROGRESS");
     const auto sequence = ++sequence_;
     if (events_.size() == capacity_) {
         auto discard = std::find_if(events_.begin(), events_.end(),
@@ -66,9 +68,11 @@ J EventJournal::read(std::uint64_t after) const {
 }
 void EventJournal::commit_terminal(std::uint64_t generation, J payload,
                                    const std::function<void(const J &)> &persist) {
-    std::lock_guard lock(mutex_);
+    std::unique_lock lock(mutex_);
     if (terminal_)
         throw std::runtime_error("JOURNAL_ALREADY_TERMINAL");
+    if (committing_)
+        throw std::runtime_error("JOURNAL_COMMIT_IN_PROGRESS");
     // 额外保留一个终态槽位；先构造完整提交内容，原子落盘成功后才发布到可读事件流。
     // 因而常规事件挤满、写盘失败或进程中断都不会产生未提交的 Completed 事件。
     auto committed = events_;
@@ -79,17 +83,31 @@ void EventJournal::commit_terminal(std::uint64_t generation, J payload,
     J rows = J::array();
     for (const auto &event : committed)
         rows.push_back(event.value);
-    persist(J{
-        {"last_seq", seq}, {"resync_required", dropped_through_ > 0}, {"events", std::move(rows)}});
+    J pending{
+        {"last_seq", seq}, {"resync_required", dropped_through_ > 0}, {"events", std::move(rows)}};
+    committing_ = true;
+    lock.unlock();
+    try {
+        persist(pending);
+    } catch (...) {
+        lock.lock();
+        committing_ = false;
+        throw;
+    }
+    lock.lock();
     events_.swap(committed);
     sequence_ = seq;
     terminal_ = true;
+    committing_ = false;
 }
 J snapshot_json(const contracts::RunSnapshot &s) {
     return {{"run_id", s.run_id},
             {"generation", s.generation},
             {"state", contracts::name(s.state)},
             {"reason", s.reason},
+            {"storage_error", s.storage_error},
+            {"secondary_errors", s.secondary_errors},
+            {"sessions", s.sessions},
             {"quiescent", s.quiescent},
             {"result_saved", s.result_saved},
             {"engine_status", s.engine_status},

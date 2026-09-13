@@ -32,6 +32,8 @@ struct InputPolicy {
     std::set<ActionKind> capabilities, permissions;
     std::set<std::string> allowed_scenes;
     std::chrono::milliseconds max_frame_age{2000};
+    // 仅用于 M3 无输入的系统观察；采用实测尺寸，不把横屏强制变成 WVD 竖屏。
+    bool observed_read_only_viewport{false};
 };
 struct ActionIntent {
     std::uint64_t id{}, run_id{}, generation{};

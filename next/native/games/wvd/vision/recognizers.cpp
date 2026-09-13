@@ -1,0 +1,369 @@
+#include "recognizers.hpp"
+#include "asset_resolver.hpp"
+#include "bobber.hpp"
+#include "image_ops.hpp"
+#include <cmath>
+#include <opencv2/imgproc.hpp>
+#include <opencv2/objdetect.hpp>
+
+namespace wvd::games::vision {
+using J = nlohmann::json;
+namespace {
+void check(bool ok, const char *error) {
+    if (!ok)
+        throw std::runtime_error(error);
+}
+cv::Rect rect(const J &value, cv::Size size) {
+    auto v = value.get<std::vector<int>>();
+    check(v.size() == 4, "WVD_ROI_INVALID");
+    check(v[0] >= 0 && v[1] >= 0 && v[2] > 0 && v[3] > 0 && v[2] <= size.width &&
+              v[3] <= size.height && v[0] <= size.width - v[2] && v[1] <= size.height - v[3],
+          "WVD_ROI_INVALID");
+    return {v[0], v[1], v[2], v[3]};
+}
+J box(cv::Rect value) {
+    return {value.x, value.y, value.width, value.height};
+}
+J decision(bool hit, cv::Rect area, J evidence, bool target = false) {
+    return {{"schema", 1},
+            {"outcome", hit ? "Hit" : "NoHit"},
+            {"box", hit ? box(area) : J(nullptr)},
+            {"target", target},
+            {"evidence", std::move(evidence)}};
+}
+J match(const cv::Mat &source, cv::Mat templ, J p, maafw::RecognitionCache &cache,
+        const std::string &key) {
+    cv::Rect main(0, 0, source.cols, source.rows);
+    if (p.contains("roi"))
+        main = rect(p["roi"], source.size());
+    auto search = source(main);
+    if (p.contains("exclude")) {
+        search = search.clone();
+        for (const auto &value : p["exclude"]) {
+            auto excluded = rect(value, source.size()) & main;
+            if (!excluded.empty()) {
+                excluded.x -= main.x;
+                excluded.y -= main.y;
+                search(excluded).setTo(0);
+            }
+        }
+    }
+    double scale = p.value("scale", 1.0), threshold = p.value("threshold", 0.8);
+    check(std::isfinite(scale) && scale >= 0.3 && scale <= 2.0, "WVD_SCALE_INVALID");
+    check(std::isfinite(threshold) && threshold >= 0 && threshold <= 1, "THRESHOLD_INVALID");
+    if (scale != 1.0)
+        cv::resize(templ, templ, {}, scale, scale, cv::INTER_LINEAR);
+    if (p.contains("crop"))
+        templ = templ(rect(p["crop"], templ.size()));
+    check(templ.cols <= search.cols && templ.rows <= search.rows, "TEMPLATE_EXCEEDS_ROI");
+    cv::Mat scores;
+    const bool bright = p.value("bright_mask", false);
+    if (bright) {
+        int minimum = p.value("min_brightness", 145);
+        check(minimum >= 0 && minimum <= 255, "WVD_MASK_INVALID");
+        auto mask_key = "mask:" + key + ":" + p.dump();
+        cv::Mat mask;
+        if (auto found = cache.assets.find(mask_key); found != cache.assets.end())
+            mask = std::any_cast<cv::Mat>(found->second);
+        else {
+            cv::Mat gray;
+            cv::cvtColor(templ, gray, cv::COLOR_BGR2GRAY);
+            cv::inRange(gray, minimum, 255, mask);
+            cv::dilate(mask, mask, cv::Mat::ones(2, 2, CV_8U));
+            check(cv::countNonZero(mask) > 0, "WVD_MASK_EMPTY");
+            check(cache.assets.size() < 2048, "WVD_SESSION_ASSET_CAPACITY");
+            cache.assets.emplace(mask_key, mask);
+        }
+        cv::matchTemplate(search, templ, scores, cv::TM_CCORR_NORMED, mask);
+    } else
+        cv::matchTemplate(search, templ, scores, cv::TM_CCOEFF_NORMED);
+    for (int y = 0; y < scores.rows; ++y)
+        for (int x = 0; x < scores.cols; ++x)
+            if (!std::isfinite(scores.at<float>(y, x)))
+                scores.at<float>(y, x) = -1;
+    double maximum{};
+    cv::Point location;
+    cv::minMaxLoc(scores, nullptr, &maximum, nullptr, &location);
+    cv::Rect found(main.x + location.x, main.y + location.y, templ.cols, templ.rows);
+    J evidence{{"best_score", maximum},
+               {"best_box", box(found)},
+               {"threshold", threshold},
+               {"scale", scale},
+               {"method", bright ? "CCORR_NORMED_BRIGHT_MASK" : "CCOEFF_NORMED"}};
+    if (p.value("multiple", false)) {
+        std::vector<cv::Rect> rectangles;
+        for (int y = 0; y < scores.rows; ++y)
+            for (int x = 0; x < scores.cols; ++x)
+                if (scores.at<float>(y, x) >= threshold) {
+                    check(rectangles.size() < 200000, "WVD_MATCH_CANDIDATE_CAPACITY");
+                    rectangles.emplace_back(x + main.x, y + main.y, templ.cols, templ.rows);
+                    rectangles.push_back(rectangles.back());
+                }
+        cv::groupRectangles(rectangles, 1, 0.5);
+        evidence["boxes"] = J::array();
+        for (auto value : rectangles)
+            evidence["boxes"].push_back(box(value));
+    }
+    return decision(maximum >= threshold, found, std::move(evidence), true);
+}
+J layout(const cv::Mat &source) {
+    cv::Mat gray, mask, labels, stats, centers;
+    cv::cvtColor(source, gray, cv::COLOR_BGR2GRAY);
+    cv::inRange(gray, 120, 255, mask);
+    cv::morphologyEx(mask, mask, cv::MORPH_CLOSE, cv::Mat::ones(2, 2, CV_8U));
+    int count = cv::connectedComponentsWithStats(mask, labels, stats, centers, 8);
+    std::vector<cv::Rect> components;
+    for (int i = 1; i < count; ++i) {
+        auto area = stats.at<int>(i, cv::CC_STAT_AREA);
+        cv::Rect r(stats.at<int>(i, 0), stats.at<int>(i, 1), stats.at<int>(i, 2),
+                   stats.at<int>(i, 3));
+        if (area >= 6 && area <= 700 && r.width >= 2 && r.width <= 80 && r.height >= 8 &&
+            r.height <= 70)
+            components.push_back(r);
+    }
+    cv::Rect bounds;
+    for (auto r : components)
+        bounds = bounds.empty() ? r : bounds | r;
+    bool hit = components.size() >= 3 && components.size() <= 8 && bounds.width >= 55 &&
+               bounds.width <= 190 && bounds.height >= 18 && bounds.height <= 70 && bounds.y >= 5 &&
+               bounds.y <= 80;
+    return decision(hit, bounds,
+                    {{"components", components.size()},
+                     {"text_width", bounds.width},
+                     {"text_height", bounds.height}},
+                    false);
+}
+J evaluate(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels, const J &p, const J &bound,
+           maafw::RecognitionCache &cache) {
+    check(pixels.size.width > 0 && pixels.size.height > 0 &&
+              pixels.bgr.size() == std::size_t(pixels.size.width) * pixels.size.height * 3,
+          "WVD_PIXELS_INVALID");
+    cv::Mat image(pixels.size.height, pixels.size.width, CV_8UC3,
+                  const_cast<std::uint8_t *>(pixels.bgr.data()));
+    if (p.contains("preprocess")) {
+        const auto &transform = p["preprocess"];
+        const auto operation = transform.at("operation").get<std::string>();
+        check(operation == "multiply" || operation == "subtract", "WVD_COLOR_OPERATION_INVALID");
+        image = transform_rgb(image, transform.at("rgb").get<std::array<double, 3>>(),
+                              operation == "subtract");
+    }
+    const J aliases = bound.value("aliases", J::object());
+    AssetResolver assets(bundle, aliases, cache);
+    auto mode = p.at("mode").get<std::string>();
+    if (mode == "bobber")
+        return detect_bobber(image, assets.load("fishing/bobber"));
+    auto one = [&](const std::string &name, J parameters) {
+        return match(image, assets.load(name), std::move(parameters), cache,
+                     bundle.revision + ":" + name);
+    };
+    if (mode == "template" || mode == "bright_mask" || mode == "multiple") {
+        auto parameters = p;
+        if (!p.contains("roi") && p.value("default_roi", false)) {
+            const auto name = p.at("image").get<std::string>();
+            if (name == "next" || name == "combatTarget")
+                parameters["roi"] = {80, 220, 819, 680};
+            else if (name == "flee")
+                parameters["roi"] = {720, 1120, 180, 130};
+            else if (name == "combatActive" || name == "combatActive_2" ||
+                     name == "combatActive_3" || name == "combatActive_4")
+                parameters["roi"] = {0, 0, 150, 80};
+        }
+        parameters["bright_mask"] = mode == "bright_mask" || p.value("bright_mask", false);
+        parameters["multiple"] = mode == "multiple";
+        return one(p.at("image"), parameters);
+    }
+    if (mode == "fast_forward_off") {
+        auto result = one("fastforward_off", {{"roi", {190, 1440, 100, 100}}});
+        const auto &candidate = result["evidence"]["best_box"];
+        result["evidence"]["legacy_position"] = {candidate[0], candidate[1]};
+        if (result["evidence"]["best_score"].get<double>() <= 0.8)
+            return decision(false, {}, result["evidence"]);
+        return result;
+    }
+    if (mode == "harken_stair") {
+        if (p.contains("stair") && p["stair"].is_string() &&
+            p["stair"].get<std::string>().starts_with("stair_")) {
+            auto result = one(p.at("stair"), J::object());
+            if (result["evidence"]["best_score"].get<double>() <= 0.8)
+                return decision(
+                    false, {},
+                    {{"wrong_stair", true}, {"match", result}, {"navigation", "M4_NOT_EXECUTED"}});
+        }
+        auto result = one(p.at("image"), J::object());
+        if (result["evidence"]["best_score"].get<double>() <= 0.8)
+            return decision(false, {}, result["evidence"]);
+        return result;
+    }
+    // 低置信结果只供已限定阶段的调用者判断；本纯识别器从不触发点击/自动战斗。
+    if (mode == "next_low_confidence" || mode == "target_marker")
+        return one(
+            mode == "target_marker" ? "combatTarget" : "next",
+            {{"roi", {80, 220, 819, 680}}, {"threshold", mode == "target_marker" ? 0.86 : 0.60}});
+    if (mode == "next") {
+        J attempts = J::array();
+        for (const auto &name : {"next", "combatTarget"}) {
+            for (double scale : p.value("scales", std::vector<double>{1.0})) {
+                auto result = one(name, {{"roi", {80, 220, 819, 680}},
+                                         {"threshold", p.value("threshold", 0.86)},
+                                         {"scale", scale}});
+                attempts.push_back({{"image", name}, {"result", result}});
+                if (result["outcome"] == "Hit") {
+                    result["attempts"] = attempts;
+                    return result;
+                }
+            }
+        }
+        return decision(false, {}, {{"attempts", attempts}});
+    }
+    if (mode == "pause_layout") {
+        auto area = rect(p.at("roi"), image.size());
+        auto result = layout(image(area));
+        if (result["outcome"] == "Hit")
+            result["box"] = box(area);
+        return result;
+    }
+    if (mode == "pause_ocr")
+        throw std::runtime_error("PAUSE_TESSERACT_NOT_MIGRATED");
+    if (mode == "pause" || mode == "pause_negative") {
+        check(image.cols == 900 && image.rows == 1600, "WVD_VIEWPORT_INVALID");
+        cv::Rect area(330, 740, 240, 110);
+        cv::Mat gray;
+        cv::cvtColor(image(area), gray, cv::COLOR_BGR2GRAY);
+        double dark = double(cv::countNonZero(gray < 70)) / gray.total(),
+               white = double(cv::countNonZero(gray > 120)) / gray.total(), maximum{};
+        cv::minMaxLoc(gray, nullptr, &maximum);
+        J detail{{"dark_ratio", dark},
+                 {"white_ratio", white},
+                 {"max_brightness", maximum},
+                 {"ocr_status", "UNVERIFIED_TESSERACT_NOT_MIGRATED"}};
+        if (mode == "pause" && !(dark > 0.65 && white > 0.015 && white < 0.09 && maximum > 135))
+            return decision(false, {}, detail);
+        for (const auto &name : {"trait", "recover", "spellskill/skillDetail", "close"}) {
+            J args = J::object();
+            if (std::string_view(name) == "close")
+                args["roi"] = {250, 1420, 420, 150};
+            auto evidence = one(name, args);
+            if (evidence["outcome"] == "Hit") {
+                detail["negative"] = name;
+                detail["match"] = evidence;
+                return decision(mode == "pause_negative", area, detail);
+            }
+        }
+        if (mode == "pause_negative")
+            return decision(false, {}, detail);
+        auto result = layout(image(area));
+        detail["layout"] = result;
+        return decision(result["outcome"] == "Hit", area, detail);
+    }
+    if (mode == "combat_active") {
+        J attempts = J::array();
+        for (const auto &name :
+             {"combatActive", "combatActive_2", "combatActive_3", "combatActive_4"}) {
+            auto result = one(name, {{"roi", {0, 0, 150, 80}}});
+            attempts.push_back(result);
+            if (result["outcome"] == "Hit") {
+                result["attempts"] = attempts;
+                return result;
+            }
+        }
+        return decision(false, {}, {{"attempts", attempts}});
+    }
+    if (mode == "portrait") {
+        auto name = p.at("image").get<std::string>();
+        auto templ = assets.load(name);
+        int w = templ.cols, h = templ.rows;
+        std::vector<cv::Point> bases{{87, 55}, {24, 55}, {24, 63}, {32, 55}};
+        if (p.contains("active"))
+            bases.push_back(
+                {int(p["active"][0].get<int>() - w * 0.35), p["active"][1].get<int>() + 35});
+        std::vector<cv::Rect> crops{{0, 0, w, h},
+                                    {w * 40 / 100, 0, w - w * 40 / 100, h},
+                                    {w * 33 / 100, 0, w - w * 33 / 100, h * 80 / 100},
+                                    {0, 0, w, h * 70 / 100}};
+        J best;
+        double score = -2;
+        for (auto base : bases)
+            for (auto crop : crops) {
+                auto result =
+                    match(image, templ,
+                          {{"roi", {base.x + crop.x, base.y + crop.y, crop.width, crop.height}},
+                           {"crop", box(crop)},
+                           {"threshold", p.value("threshold", 0.8)}},
+                          cache, bundle.revision + name);
+                if (result["evidence"]["best_score"].get<double>() > score) {
+                    score = result["evidence"]["best_score"];
+                    best = result;
+                    best["evidence"]["base"] = {base.x, base.y};
+                    best["evidence"]["crop"] = box(crop);
+                }
+            }
+        return best;
+    }
+    if (mode == "skill_level") {
+        int level = p.at("level");
+        check(level >= 1 && level <= 9, "WVD_SKILL_LEVEL_INVALID");
+        J attempts = J::array();
+        for (auto prefix : {"lv", "s_lv"}) {
+            auto args = p;
+            args["roi"] = {0, 0, image.cols, image.rows};
+            auto result =
+                one(std::string("spellskill/skillLvl/") + prefix + std::to_string(level), args);
+            attempts.push_back(result);
+            if (result["outcome"] == "Hit") {
+                result["attempts"] = attempts;
+                return result;
+            }
+        }
+        return decision(false, {}, {{"attempts", attempts}});
+    }
+    if (mode == "focus_cursor") {
+        auto name = p.at("image").get<std::string>();
+        auto templ = assets.load(name);
+        auto result = one(name, p);
+        if (result["outcome"] != "Hit")
+            return result;
+        check(templ.cols >= 15 && templ.rows >= 15, "WVD_CURSOR_TEMPLATE_SMALL");
+        auto found = rect(result["box"], image.size());
+        cv::Rect center((templ.cols - 15) / 2, (templ.rows - 15) / 2, 15, 15);
+        cv::Mat a, b, diff;
+        cv::cvtColor(image(found)(center), a, cv::COLOR_BGR2GRAY);
+        cv::cvtColor(templ(center), b, cv::COLOR_BGR2GRAY);
+        cv::absdiff(a, b, diff);
+        double difference = cv::mean(diff)[0] / 255;
+        return decision(difference < 0.2, found,
+                        {{"match", result}, {"center_difference", difference}}, false);
+    }
+    if (mode == "reached" || mode == "through_stair") {
+        int x = p.at("position")[0], y = p.at("position")[1];
+        if (mode == "reached") {
+            x = std::clamp(x, 33, 866);
+            y = std::clamp(y, 33, 1566);
+        }
+        cv::Rect area(x - 33, y - 33, 66, 66);
+        rect(box(area), image.size());
+        J attempts = J::array();
+        if (mode == "reached") {
+            for (int i = 0; i < 4; ++i) {
+                auto result = one("cursor_" + std::to_string(i), {{"roi", box(area)}});
+                attempts.push_back(result);
+                if (result["evidence"]["best_score"].get<double>() > 0.8)
+                    return decision(true, area, {{"attempts", attempts}});
+            }
+            return decision(false, {}, {{"attempts", attempts}});
+        }
+        auto name = p.at("image").get<std::string>();
+        bool stair = name == "stair_up" || name == "stair_down" || name == "stair_teleport";
+        auto result = one(name, stair ? J{{"roi", box(area)}} : J::object());
+        bool present = result["evidence"]["best_score"].get<double>() > 0.8;
+        return decision(stair ? !present : present, area, {{"template", result}, {"stair", stair}});
+    }
+    throw std::runtime_error("WVD_RECOGNIZER_UNKNOWN");
+}
+} // namespace
+void register_wvd(runtime::BehaviorRegistry &registry) {
+    registry.add_recognition({"wvd.vision", "1"}, evaluate);
+}
+contracts::BehaviorBinding binding(const J &aliases) {
+    return {"WvdVision", {"wvd.vision", "1"}, {{"aliases", aliases}}};
+}
+} // namespace wvd::games::vision

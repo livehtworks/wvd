@@ -15,9 +15,9 @@ bool pending(int status) {
 }
 } // namespace
 MaaGateway::MaaGateway(Bundle bundle, devices::InputGate *gate, GatewayHooks hooks,
-                       ActionRegistry actions)
+                       ActionRegistry actions, RecognitionHandlers recognitions)
     : bundle_(std::move(bundle)), gate_(gate), hooks_(std::move(hooks)),
-      actions_(std::move(actions)) {
+      actions_(std::move(actions)), recognitions_(std::move(recognitions)) {
     activity_.failure = hooks_.failure;
 }
 MaaGateway::~MaaGateway() {
@@ -53,6 +53,10 @@ void MaaGateway::initialize() {
             MaaResourceRegisterCustomAction(resource_.get(), name.c_str(), action_callback, this),
             "CUSTOM_REGISTRATION_FAILED");
     }
+    for (const auto &[name, recognition] : recognitions_)
+        require(MaaResourceRegisterCustomRecognition(resource_.get(), name.c_str(),
+                                                     recognition_callback, this),
+                "CUSTOM_RECO_REGISTRATION_FAILED");
     if (gate_) {
         controller_callbacks_ = std::make_unique<GuardedController>(*gate_, activity_);
         controller_.reset(MaaCustomControllerCreate(controller_callbacks_->callbacks(),
@@ -60,7 +64,7 @@ void MaaGateway::initialize() {
         require(bool(controller_), "CONTROLLER_CREATE_FAILED");
         int32_t short_side = std::min(gate_->policy().recognition_size.width,
                                       gate_->policy().recognition_size.height);
-        bool raw = false;
+        bool raw = gate_->policy().observed_read_only_viewport;
         require(MaaControllerSetOption(controller_.get(), MaaCtrlOption_ScreenshotTargetShortSide,
                                        &short_side, sizeof(short_side)) &&
                     MaaControllerSetOption(controller_.get(), MaaCtrlOption_ScreenshotUseRawSize,
@@ -82,6 +86,74 @@ void MaaGateway::initialize() {
     sink_ = MaaTaskerAddSink(tasker_.get(), event_callback, this);
     context_sink_ = MaaTaskerAddContextSink(tasker_.get(), event_callback, this);
     initialized_ = true;
+}
+MaaBool MaaGateway::recognition_callback(MaaContext *, MaaTaskId, const char *, const char *name,
+                                         const char *parameters, const MaaImageBuffer *image,
+                                         const MaaRect *roi, void *argument, MaaRect *output,
+                                         MaaStringBuffer *detail) noexcept {
+    auto &self = *static_cast<MaaGateway *>(argument);
+    CallbackScope activity(self.activity_);
+    std::lock_guard recognition_lock(self.recognition_mutex_);
+    nlohmann::json result;
+    try {
+        require(!self.hooks_.cancelled(), "SESSION_CANCELLED");
+        verify_bundle(self.bundle_);
+        require(image && MaaImageBufferGetRawData(image) && MaaImageBufferType(image) == 16,
+                "CUSTOM_IMAGE_INVALID");
+        auto size = contracts::Size{MaaImageBufferWidth(image), MaaImageBufferHeight(image)};
+        auto params = nlohmann::json::parse(parameters);
+        if (!params.contains("roi") && roi)
+            params["roi"] = {roi->x, roi->y, roi->width, roi->height};
+        auto impl = self.recognitions_.find(name);
+        require(impl != self.recognitions_.end(), "CUSTOM_RECO_NOT_REGISTERED");
+        if (self.gate_) {
+            auto frame = self.gate_->frame_identity();
+            auto key = frame.device_id + ":" + frame.pack_revision + ":" +
+                       std::to_string(frame.generation) + ":" + std::to_string(frame.frame_id) +
+                       ":" + std::to_string(frame.action_epoch) + ":" +
+                       std::to_string(frame.connection_generation);
+            if (key != self.recognition_cache_.frame_key) {
+                self.recognition_cache_.frame_key = key;
+                self.recognition_cache_.results.clear();
+            }
+        }
+        auto key = std::string(name) + ":" + params.dump();
+        auto cached = self.recognition_cache_.results.find(key);
+        if (self.gate_ && cached != self.recognition_cache_.results.end())
+            result = cached->second;
+        else {
+            result =
+                impl->second(self.bundle_,
+                             {{static_cast<const std::uint8_t *>(MaaImageBufferGetRawData(image)),
+                               std::size_t(size.width) * size.height * 3},
+                              size},
+                             params, self.recognition_cache_);
+            if (self.gate_ && self.recognition_cache_.results.size() < 512)
+                self.recognition_cache_.results.emplace(key, result);
+        }
+        require(result.value("schema", 0) == 1 && result.contains("outcome"),
+                "CUSTOM_DETAIL_INVALID");
+        if (result["outcome"] == "Hit") {
+            auto box = result.at("box").get<std::vector<int>>();
+            require(box.size() == 4 && box[0] >= 0 && box[1] >= 0 && box[2] > 0 && box[3] > 0 &&
+                        box[0] <= size.width - box[2] && box[1] <= size.height - box[3],
+                    "CUSTOM_BOX_INVALID");
+            *output = {box[0], box[1], box[2], box[3]};
+        }
+    } catch (const std::exception &error) {
+        result = {{"schema", 1}, {"outcome", "Error"}, {"error", error.what()}};
+    } catch (...) {
+        result = {{"schema", 1}, {"outcome", "Error"}, {"error", "CUSTOM_RECO_EXCEPTION"}};
+    }
+    try {
+        MaaStringBufferSet(detail, result.dump().c_str());
+        self.hooks_.event("recognition.custom", result);
+        if (result["outcome"] == "Error")
+            self.hooks_.failure(result.value("error", std::string("CUSTOM_RECO_ERROR")));
+        return result["outcome"] == "Hit";
+    } catch (...) {
+        return false;
+    }
 }
 std::int64_t MaaGateway::post(const std::string &entry) {
     require(initialized_ && !hooks_.cancelled(), "SESSION_NOT_RUNNING");

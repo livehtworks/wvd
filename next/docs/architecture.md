@@ -41,8 +41,40 @@ OfflineRecognizer -> 同一 MaaGateway / preflight / RecognitionDetail 三态转
 ```
 
 `wvd_core` 是单独的原生库，构建选项默认关闭；M1 `automationd` 不链接该库。
-所有运行请求在连接前拒绝真实后端；测试提供离线设备，Maa Pipeline/识别/回调本身不是 Mock。
-只启用固定 CPU OCR 模型；没有 WVD 业务或第二套节点调度器。迁移清单仍未宣称业务已迁移。
+默认离线请求仍在连接前拒绝真实后端；仅显式 M3 本地入口可组装经重新核实的 MuMu 后端。
+测试提供隔离设备，Maa Pipeline/识别/回调本身不是 Mock。M1 服务不连接设备。
+只启用固定 CPU OCR 模型；WVD 专用视觉见下节，没有任务业务或第二套节点调度器。
+
+## M3 设备与视觉
+
+`wvd_m3_check` 是有限本地诊断入口，不是新的常驻服务。它通过封存 BehaviorRegistry
+绑定只读 CaptureBatch，仍由 RunCoordinator → ExecutionSession → MaaGateway 管理。
+HTTP 没有启动任务、任意 shell 或输入 API。捕获检查的 permissions/capabilities 均为空。
+
+内层 `maafw/AdbBackend` 只持有 Maa 原始 Controller，不创建 Tasker/Resource；外层
+GuardedController、唯一 InputGate 和 Session 生命周期不变。会话释放外层对象、按住输入及
+内层 Controller 后才报告 quiescent。停止超时不会换控制者或释放租约。
+MuMu EmulatorExtras 与 ADB Encode 分别创建，降级前销毁旧 Controller，记录原因和连接代次；
+同一连接不每帧重试 IPC。固定 SDK 的 KillServer 命令配置被替换为指定设备的只读 get-state，
+不允许内部恢复杀全局 ADB；SDK 内部重试等待仍存在，不声称任意阻塞可中断。
+
+Windows 绑定层交叉核对只读旧配置线索、管理器的实例创建标识、安装根、ADB 路径/端口与进程。
+无法排除旧控制者时拒绝，不杀进程。租约仍仅保证同一 Windows 登录会话内遵守协议的参与者。
+每帧记录实测原始尺寸、前台应用、采集时刻、后端和连接代次。输入前重新检查上下文；
+检查与底层输入之间仍非设备端原子操作，不宣称消除了所有竞争窗口。
+系统捕获显式使用 observed_read_only_viewport，保留原始方向/尺寸，不执行游戏 ROI。
+该模式若携带权限、能力或场景许可，连接前即拒绝；所有输入始终拒绝。
+普通 WVD 策略不启用此模式，仍检查固定 viewport、9:16 和唯一坐标映射。
+
+`games/wvd/vision` 不含 Maa C ABI、设备点击、策略消费、游戏恢复。版本化纯算法由同一
+Gateway 注册为 CustomRecognition，直接识别与 Pipeline 共享实现和三态转换。
+Custom 详情 schema=1 保存真实证据和候选分数；NoHit 无可执行中心，boolean-only 也不编造中心。
+Session 缓存由包 revision/规范路径/参数及帧身份定位；完整包校验仍在识别前执行。
+OpenCV 头文件/导入库来自固定 MaaDeps，运行时复用与 SDK 同 hash 的 DLL，不装第二套 ABI。
+
+基线图片由固定 Git 对象生成到 `packs/wvd/image`，作者 manifest 不加入运行 Bundle 内容树。
+完整业务迁移仍未开始；静态索引保持原状，实际纯视觉实现与缺口见
+`docs/migration/m3-implementation-map.json` 和 `docs/m3-device-vision-validation.md`。
 
 ### 所有权与停止
 
@@ -77,7 +109,7 @@ RunCoordinator 的监督线程不调用 SDK 阻塞等待；会话工作线程持
 | --- | --- | --- |
 | native/runtime | 已实现运行、有限 Session、业务终态；不含游戏知识 | M2 |
 | native/maafw | 已实现统一 Gateway、三态识别、回调和停止映射 | M2 |
-| native/devices | 已实现门禁与后端契约；真实 MuMu/ADB 适配未接 | M2/M3 |
+| native/devices | 门禁、帧身份、单次原始坐标转换；真实 Controller 适配在 maafw | M2/M3 |
 | native/platform | Windows / Linux 平台机制 | 分平台验收 |
 | native/storage | 已实现运行快照、原子结果、有界事件；配置迁移另做 | M2/M4 |
 | native/games/wvd | 视觉、战斗、路线、补给、恢复和任务业务 | M3/M4 |

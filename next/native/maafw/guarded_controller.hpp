@@ -34,8 +34,16 @@ class GuardedController {
         CallbackScope scope(self.activity_);
         try {
             return function(self);
+        } catch (const std::exception &error) {
+            try {
+                self.gate_.invalidate_frame();
+                self.activity_.failure(error.what());
+            } catch (...) {
+            }
+            return false;
         } catch (...) {
             try {
+                self.gate_.invalidate_frame();
                 self.activity_.failure("CONTROLLER_CALLBACK_EXCEPTION");
             } catch (...) {
             }

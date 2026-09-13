@@ -47,6 +47,31 @@ void read_detail(MaaTasker *tasker, contracts::Observation &result) {
                                           nullptr),
             "RECO_DETAIL_UNAVAILABLE");
     auto parsed = nlohmann::json::parse(MaaStringBufferGet(details.get()));
+    if (std::string(MaaStringBufferGet(algorithm.get())) == "Custom") {
+        // 固定 SDK 将回调详情放在 detail 字段；三态来自我们声明的版本契约。
+        require(parsed.contains("all") && parsed["all"].is_array() && parsed["all"].size() == 1,
+                "CUSTOM_DETAIL_INVALID");
+        auto custom = parsed["all"][0].at("detail");
+        if (custom.is_string())
+            custom = nlohmann::json::parse(custom.get<std::string>());
+        require(custom.is_object() && custom.value("schema", 0) == 1, "CUSTOM_DETAIL_INVALID");
+        result.evidence = custom;
+        const auto outcome = custom.at("outcome").get<std::string>();
+        if (outcome == "Error")
+            throw std::runtime_error(custom.value("error", std::string("CUSTOM_RECO_ERROR")));
+        require((outcome == "Hit" || outcome == "NoHit") && bool(hit) == (outcome == "Hit"),
+                "CUSTOM_DETAIL_INCONSISTENT");
+        result.outcome = hit ? RecognitionOutcome::Hit : RecognitionOutcome::NoHit;
+        if (hit) {
+            contracts::Box found{box.x, box.y, box.width, box.height};
+            require(valid_box(found, result.basis.recognition_size), "CUSTOM_BOX_INVALID");
+            result.box = found;
+            if (custom.value("target", false))
+                result.center =
+                    contracts::Point{found.x + found.width / 2, found.y + found.height / 2};
+        }
+        return;
+    }
     require(parsed.is_object() && !parsed.contains("error") && parsed.contains("all") &&
                 parsed["all"].is_array() && parsed.contains("filtered") &&
                 parsed["filtered"].is_array(),
@@ -121,18 +146,29 @@ contracts::Observation MaaGateway::recognize(const contracts::FrameEnvelope &fra
     result.parameter_revision = request.parameter_revision;
     result.error_stage = "initialization";
     try {
+        auto checkpoint = std::chrono::steady_clock::now();
+        auto stage = [&](const char *name) {
+            auto now = std::chrono::steady_clock::now();
+            result.timing_ms[name] =
+                std::chrono::duration<double, std::milli>(now - checkpoint).count();
+            checkpoint = now;
+        };
         require(initialized_ && !hooks_.cancelled(), "SESSION_NOT_RUNNING");
         result.error_stage = "frame_preflight";
         auto image = validate_frame(frame, current, bundle_.revision);
+        stage("frame_decode_preflight");
         result.error_stage = "resource_preflight";
         // 资源是发布快照，不允许运行期间替换磁盘文件后继续沿用引擎缓存。
         verify_bundle(bundle_);
+        stage("bundle_verification");
         result.error_stage = "parameter_preflight";
         auto parameters = validate_parameters(bundle_, request, frame.identity.recognition_size);
+        stage("parameter_preflight");
         result.error_stage = "native_recognition";
         const char *type = std::holds_alternative<TemplateParameters>(request.parameters)
                                ? "TemplateMatch"
-                               : "OCR";
+                           : std::holds_alternative<OcrParameters>(request.parameters) ? "OCR"
+                                                                                       : "Custom";
         if (context) {
             result.engine_task_id = MaaContextGetTaskId(context);
             result.engine_reco_id = MaaContextRunRecognitionDirect(
@@ -147,7 +183,9 @@ contracts::Observation MaaGateway::recognize(const contracts::FrameEnvelope &fra
             require(result.engine_status == MaaStatus_Succeeded, "RECO_NATIVE_FAILED");
         }
         result.error_stage = "recognition_detail";
+        stage("native_recognition_including_custom_preflight");
         read_detail(tasker_.get(), result);
+        stage("detail_conversion");
         result.error_stage.clear();
     } catch (const std::filesystem::filesystem_error &) {
         result.error_code = "RESOURCE_IO_ERROR";

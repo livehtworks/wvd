@@ -1,6 +1,8 @@
 """M1 服务验收与可选 M2 真实 SDK 离线核心验收；不接入生产链。"""
 
 import argparse
+import hashlib
+import json
 import os
 from pathlib import Path
 import shutil
@@ -14,7 +16,10 @@ sys.path.insert(0, str(ROOT / "tests"))
 from service_process import NativeService
 
 
-def validate(m2_offline=False):
+def validate(m2_offline=False, m3=False):
+    gate = ROOT / ".local/m3-gate-b.json"
+    if m3:
+        gate.write_text(json.dumps({"offline_result": "RUNNING"}), encoding="utf-8")
     npm = shutil.which("npm.cmd")
     if not npm:
         raise RuntimeError("找不到 npm.cmd")
@@ -22,7 +27,7 @@ def validate(m2_offline=False):
         "native-inventory-tests",
         [sys.executable, "-m", "unittest", "discover", "-s", str(ROOT / "tests"), "-v"],
     )
-    if m2_offline:
+    if m2_offline or m3:
         run(
             "m2-core-tests",
             [
@@ -32,6 +37,19 @@ def validate(m2_offline=False):
                 "discover",
                 "-s",
                 str(ROOT / "tests/m2"),
+                "-v",
+            ],
+        )
+    if m3:
+        run(
+            "m3-offline-tests",
+            [
+                sys.executable,
+                "-m",
+                "unittest",
+                "discover",
+                "-s",
+                str(ROOT / "tests/m3"),
                 "-v",
             ],
         )
@@ -49,6 +67,25 @@ def validate(m2_offline=False):
             service.stop()
         finally:
             service.cleanup()
+    if m3:
+        binaries = [
+            ROOT / "build/m3/Release" / name
+            for name in ("test_m3.exe", "wvd_m3_check.exe")
+        ]
+        gate.write_text(
+            json.dumps(
+                {
+                    "schema": 1,
+                    "offline_result": "PASS",
+                    "binaries": {
+                        p.name: hashlib.sha256(p.read_bytes()).hexdigest()
+                        for p in binaries
+                    },
+                },
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
     print(
         "M1 validation complete"
         + ("; M2 offline core validated" if m2_offline else "")
@@ -63,9 +100,12 @@ if __name__ == "__main__":
         action="store_true",
         help="额外执行真实 Maa 识别、运行与门禁离线测试",
     )
+    parser.add_argument(
+        "--m3", action="store_true", help="执行 M1/M2/M3 离线验收，不连接设备"
+    )
     args = parser.parse_args()
     try:
-        validate(args.m2_offline)
+        validate(args.m2_offline, args.m3)
     except (OSError, RuntimeError, AssertionError, subprocess.SubprocessError) as error:
         print(str(error), file=sys.stderr)
         sys.exit(1)
