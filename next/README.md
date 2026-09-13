@@ -1,11 +1,16 @@
-# WVD Next · M1
+# WVD Next · 迁移工作台与独立核心
 
 独立 C++20 / CMake、Boost.Beast HTTP 服务与 Vue / TypeScript 迁移工作台。
 **只做旁路工程与完整功能基线，不是可挂机的新版本。** 旧 Python 仍是唯一生产入口。
 
 已实现：原生服务正常启停、API 版本/能力查询、基线项搜索与详情、资源大小写核对及真实模板预览。
-未实现：设备连接、游戏点击、任务执行、Maa 生命周期、配置导入、流程编辑和生产替换。
+未实现：真实设备连接、游戏点击、WVD 任务执行、配置导入、流程编辑和生产替换。
 尚未启用的工作包目录只放职责说明，不提供伪实现，不进入构建。
+
+M1 收尾 R01/R02/R03 已完成。M2 核心已实现独立 RunCoordinator、有限 ExecutionSession、
+统一 MaaGateway、模板/OCR 三态、受控动作/输入门禁及原子运行结果存储。
+`wvd_core` 只在显式构建时加载 Maa，不链接进工作台服务；真实后端在 connect 前拒绝。
+验收范围与证据见 [M2 核心验证](docs/m2-core-validation.md)，架构说明见下方导航。
 
 ## 构建与验证
 
@@ -57,6 +62,22 @@ UI 开发可在 `next/web` 执行 `npm run dev`；同源完整验收以原生服
 - [完整迁移基线与差异](docs/migration/README.md)
 - [M1 验收报告](docs/m1-validation.md)
 - [依赖与来源](docs/dependencies.md)
+- [数据与运行文件权威](docs/data-authority.md)
 
 M0 的 `RESOURCE_UNRESOLVED`、真实 NEXT/Pause 与原生阻塞取消边界仍保留；
-M1 完成不消除这些限制，也不授权生产切换。结束本阶段后停在 M2 之前。
+M1 完成不消除这些限制，也不授权生产切换。
+
+## M2 离线核心
+
+先提供固定版本 SDK 压缩包和英文 OCR 模型目录；参数是本机显式输入，不内置任何用户目录。
+SDK 与模型会校验 hash 后复制到被 Git 忽略的 `next/.local`，原有 M0 文件只读。
+
+```powershell
+.venv-build/Scripts/python.exe next/tools/prepare_maafw.py --sdk-archive <SDK压缩包> --ocr-source <英文模型目录>
+.venv-build/Scripts/python.exe next/tools/build.py --m2-offline
+.venv-build/Scripts/python.exe next/tools/validate.py --m2-offline
+```
+
+模型目录须含锁定的 `det.onnx`、`rec.onnx`、`keys.txt`。依赖版本不变，不自动降级或换模型。
+测试使用既有隔离构建环境中的 OpenCV/NumPy 生成合成图片；不是新原生库的发布依赖。
+默认 build/validate 仍只做 M1；显式选项额外启用离线目标，不启动游戏或新运行接口。

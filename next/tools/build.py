@@ -1,5 +1,6 @@
 """独立 M1 构建入口，只写 next 构建产物与专用依赖缓存。"""
 
+import argparse
 import json
 import os
 from pathlib import Path
@@ -58,7 +59,7 @@ def run(name, command, cwd=ROOT):
     print("  OK", flush=True)
 
 
-def build():
+def build(m2_offline=False):
     npm = shutil.which("npm.cmd")
     if npm is None:
         raise RuntimeError("需要固定 Node/npm 工具链，见 dependencies.lock.json")
@@ -82,14 +83,29 @@ def build():
         ROOT / "web",
     )
     run("web-build", [npm, "run", "build"], ROOT / "web")
-    run("native-configure", [cmake, "--preset", "windows-x64"])
+    run(
+        "native-configure",
+        [
+            cmake,
+            "--preset",
+            "windows-x64",
+            "-DWVD_BUILD_M2_OFFLINE=" + ("ON" if m2_offline else "OFF"),
+        ],
+    )
     run("native-build", [cmake, "--build", "--preset", "windows-release"])
     print("M1 build complete; production wvd.exe/config/mod untouched.")
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--m2-offline",
+        action="store_true",
+        help="额外构建已准备固定 SDK 的离线识别目标",
+    )
+    args = parser.parse_args()
     try:
-        build()
+        build(args.m2_offline)
     except (OSError, RuntimeError, subprocess.SubprocessError) as error:
         print(str(error), file=sys.stderr)
         sys.exit(1)

@@ -26,3 +26,8 @@ Boost 遵循 Boost Software License 1.0，下载时保留 LICENSE_1_0.txt；JSON
 许可证声明。Web 各包的许可证保留于锁定安装包，发布阶段还需生成完整第三方声明。
 WVD 源码和模板来自仓库固定基线，沿用根目录 LICENSE/FORK_NOTICE.md，不声明这些原始资源为本轮创作。
 本轮不分发游戏、SDK、OCR 模型或生产安装包。
+
+M2 的显式离线目标延续同一 Maa/英文模型锁定版本，准备工具只从指定的已下载文件校验复制，
+不向 PATH 或用户 Python 环境安装组件；M1 服务仍不加载 Maa。SDK 压缩包自带的许可证保留在隔离目录。
+Windows 原生库只使用 SDK C ABI 和系统 BCrypt；测试样本由既有 `.venv-build` 的 OpenCV/NumPy 生成，
+它们不变成新原生程序的运行依赖。M2 当前范围与未验证边界见 `m2-core-validation.md`。

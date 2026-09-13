@@ -37,3 +37,20 @@
 - 盘点必须同时扫描 if 和 match/case、无 command 的可操作控件、bind_class，以及策略嵌套字典字段；不能只数函数/按钮就宣布完整覆盖。
 - 改盘点规则后先生成再构建 Web 静态镜像，否则原生服务会托管旧报告。验收会逐字节比较服务返回的 JSON 与盘点源产物。
 - 浏览器验收安装固定 Playwright 的 Chromium，使用原生同源服务；`NO_COLOR/FORCE_COLOR` 提示不等于测试失败。截图与结果只留 `next/web/test-results`。
+- HEAD 必须在实际发送边界统一去除正文，包括提前返回和异常响应；以原始 TCP 数据核对正文为 0，不能只用会主动隐藏 HEAD 正文的 HTTP 客户端证明。
+- 清单刷新保留正在使用的筛选条件；按响应应用时的 selectedId 重绑新对象，并裁剪有效页码。不能捕获请求发出时的选择覆盖用户在等待期间的新选择。
+
+## Next M2 离线核心
+
+- 只在 `prepare_maafw.py` 校验固定 SDK/模型后用 `--m2-offline` 显式构建和验收；未准备不是跳过测试的理由。默认构建明确关闭该 CMake 选项，避免继承缓存 ON 状态。
+- SDK/模型缓存、完整日志和合成样本在 `next/.local`，不提交私人路径或二进制。M1 服务不链接离线识别库；不能根据离线测试通过而连接游戏。
+- Maa 5.13.0 的 `MaaSetGlobalOption` 会先向 stdout 输出弃用日志；使用 `MaaGlobalSetOption`，结构化测试结果单独落盘，不混用 SDK stdout 作为 JSON 协议。
+- C++20 中文路径用 `std::u8string` 构造 filesystem::path，配合进程 UTF-8 manifest；不使用已弃用的 u8path，也不关闭警告掩盖问题。
+- `bcrypt.h` 和 `objbase.h` 必须在 `windows.h` 之后。将其单独 include 分组，防止 clang-format 字母排序导致基础类型缺失；不修改系统头文件或关闭编译检查。
+- 独立识别不绑定 Controller；完整运行测试绑定真实 Maa CustomController，但具体设备仅为测试离线实现。每轮新目录包含合成资源、配置和专属 run-data，不连接实机。测试外部超时只算失败，不能作为生产停止方案。
+- 必须等构建进程退出并确认成功，才能启动该 exe 的测试；边编译边测试会导致 LNK1104 或误跑旧产物。本轮发生过一次，相关混合轮次不计入验收；测试增加了 exe 哈希核对。
+- Maa 5.13.0 完成部分识别/清理时会额外调用 Inactive；Scroll 会先尝试 TouchMove 定位光标，即使失败仍调用 Scroll。门禁必须记录并拒绝未授权调用；逐动作断言用调用前后增量，仍要求底层未授权输入为零。
+- 过期帧测试从真实 captured_at 加策略有效期等待，不能将有效期缩得比识别耗时还短、然后把准备阶段偶发失败当作过期准入测试。
+- 坐标映射合成样本为模板外围保留平滑边缘，避免两次缩放将随机背景混入模板。阈值仍为 0.99；该测试仅证明映射链，不证明真实 NEXT 小尺度或遮挡识别。
+- STOP_TIMEOUT 后仍保持原生对象与设备租约；工作线程真实返回并释放按住输入后才报告 quiescent。不要用 kill/detach“解决”测试等待或伪造正常停止。
+- M2 的结果与终态事件共同提交到 result.json；events.json 只是较早的活动诊断快照。历史审查优先读 result.json，数据权威详见 `../next/docs/data-authority.md`。

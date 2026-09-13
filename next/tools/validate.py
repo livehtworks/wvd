@@ -1,5 +1,6 @@
-"""一键 M1 验收：真实 native 服务 + 只读盘点 + 浏览器；不接入生产链。"""
+"""M1 服务验收与可选 M2 真实 SDK 离线核心验收；不接入生产链。"""
 
+import argparse
 import os
 from pathlib import Path
 import shutil
@@ -13,7 +14,7 @@ sys.path.insert(0, str(ROOT / "tests"))
 from service_process import NativeService
 
 
-def validate():
+def validate(m2_offline=False):
     npm = shutil.which("npm.cmd")
     if not npm:
         raise RuntimeError("找不到 npm.cmd")
@@ -21,6 +22,19 @@ def validate():
         "native-inventory-tests",
         [sys.executable, "-m", "unittest", "discover", "-s", str(ROOT / "tests"), "-v"],
     )
+    if m2_offline:
+        run(
+            "m2-core-tests",
+            [
+                sys.executable,
+                "-m",
+                "unittest",
+                "discover",
+                "-s",
+                str(ROOT / "tests/m2"),
+                "-v",
+            ],
+        )
     service = NativeService()
     previous = os.environ.get("WVD_NEXT_URL")
     try:
@@ -35,12 +49,23 @@ def validate():
             service.stop()
         finally:
             service.cleanup()
-    print("M1 validation complete; no device or production task was opened.")
+    print(
+        "M1 validation complete"
+        + ("; M2 offline core validated" if m2_offline else "")
+        + "; no device or production task was opened."
+    )
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--m2-offline",
+        action="store_true",
+        help="额外执行真实 Maa 识别、运行与门禁离线测试",
+    )
+    args = parser.parse_args()
     try:
-        validate()
+        validate(args.m2_offline)
     except (OSError, RuntimeError, AssertionError, subprocess.SubprocessError) as error:
         print(str(error), file=sys.stderr)
         sys.exit(1)

@@ -27,3 +27,7 @@ target_link_options(automationd PRIVATE "/MANIFEST:EMBED" "/MANIFESTINPUT:${CMAK
 add_executable(test_head_response tests/native/test_head_response.cpp)
 target_link_libraries(test_head_response PRIVATE wvd_http)
 target_compile_options(test_head_response PRIVATE /utf-8 /W4 /EHsc)
+option(WVD_BUILD_M2_OFFLINE "Build isolated Maa recognition library and native tests" OFF)
+if(WVD_BUILD_M2_OFFLINE)
+  add_subdirectory(native/maafw)
+endif()
