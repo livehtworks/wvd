@@ -58,3 +58,8 @@ dependencies、inventory、npm-ci、web-build、native-configure、native-build�
 - 没有读取或改写权威 config/mod，没有打包/替换旧 dist/wvd，没有自动更新或启动器切换。
 - 所有迁移项仍是 MAPPED_NOT_IMPLEMENTED；目录职责说明不是可用业务实现。
 - 验收完成后，用户另行授权提交并推送个人 fork；提交状态以 Git 历史为准。此授权不包括推进 M2 或生产切换。
+
+## M1 收尾复验入口
+
+审核确认的 R01 / R02 / R03 修复及最终证据见 [M1 收尾验收报告](m1-fix-validation.md)。
+该报告单独记录修正后的测试和用户最新阶段授权；本文件以上内容保留为 a03f15d 时的历史实测快照。

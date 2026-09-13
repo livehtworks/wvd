@@ -48,6 +48,8 @@ struct HttpServer::Impl {
                         self->reply.body() = "{\"error_code\":\"INTERNAL_ERROR\"}";
                         self->reply.prepare_payload();
                     }
+                    // HEAD 收口必须位于路由早返回和异常构造之后；长度代表对应 GET 内容。
+                    finalize_response_for_send(self->parser.get(), self->reply);
                     self->stream.expires_after(std::chrono::seconds(5));
                     http::async_write(self->stream, self->reply,
                                       [self](beast::error_code, std::size_t) { self->close(); });

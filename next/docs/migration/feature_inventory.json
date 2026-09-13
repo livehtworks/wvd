@@ -1845,10 +1845,10 @@
       "original_semantics": "声明 StateCombatCheck(screen)；直接调用：CheckIf",
       "source_ref": "src/script.py:2452",
       "new_owner": "native/games/wvd/vision",
-      "new_entry": "WvdPauseRecognizer::StateCombatCheck",
+      "new_entry": "WvdBattleRecognizer::StateCombatCheck",
       "data_mapping": "保留原值及既有优先级；字段映射见本条结构化详情；尚未执行导入",
       "acceptance_ids": [
-        "M3-PAUSE"
+        "M3-VISION"
       ],
       "status": "MAPPED_NOT_IMPLEMENTED",
       "signature": "screen",
@@ -39776,10 +39776,10 @@
       "original_semantics": "条件分支，保留判断顺序与真假出口",
       "source_ref": "src/script.py:2460",
       "new_owner": "native/games/wvd/vision",
-      "new_entry": "WvdPauseRecognizer::StateCombatCheck",
+      "new_entry": "WvdBattleRecognizer::StateCombatCheck",
       "data_mapping": "保留原值及既有优先级；字段映射见本条结构化详情；尚未执行导入",
       "acceptance_ids": [
-        "M3-PAUSE"
+        "M3-VISION"
       ],
       "status": "MAPPED_NOT_IMPLEMENTED",
       "condition": "(pos := CheckIf(screen, combat, [[0, 0, 150, 80]]))",

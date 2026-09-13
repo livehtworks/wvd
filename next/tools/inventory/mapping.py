@@ -6,6 +6,7 @@ BASELINE = "6585f4075f5714ab522aa582993860c09af912c1"
 # 会跨层命名的函数显式登记：PressWorldMapTargetArea 是业务动作，不能因 Press
 # 一词就归入底层输入；截图获取与图像识别也必须分别拥有职责。
 SCRIPT_EXACT = {
+    "StateCombatCheck": ("native/games/wvd/vision", "WvdBattleRecognizer", "M3-VISION"),
     "CaptureScreen": ("native/devices", "GuardedAdbController", "M3-CAPTURE"),
     "ScreenShot": ("native/devices", "GuardedAdbController", "M3-CAPTURE"),
     "ResetScreenshotBackend": ("native/devices", "GuardedAdbController", "M3-CAPTURE"),
@@ -61,7 +62,7 @@ RULES = [
         "M3-VISION",
     ),
     (
-        r"Pause|Ocr|StateCombatCheck",
+        r"Pause|Ocr",
         "native/games/wvd/vision",
         "WvdPauseRecognizer",
         "M3-PAUSE",

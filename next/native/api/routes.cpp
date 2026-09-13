@@ -115,8 +115,10 @@ Response route(const Request &request, const fs::path &root, unsigned short port
                                                   : "application/octet-stream";
         result = response(http::status::ok, std::move(body), mime);
     }
-    if (request.method() == http::verb::head)
-        result.body().clear();
     return result;
+}
+void finalize_response_for_send(const Request &request, Response &response) {
+    if (request.method() == http::verb::head)
+        response.body().clear();
 }
 } // namespace wvd::api

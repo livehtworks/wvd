@@ -209,6 +209,6 @@ onMounted(load);
   </main>
   <footer class="page-footer">
     <span>MaaFramework 5.13.0 · 尚未加载</span
-    ><span>资源稳定性待确认 · M2 未启动</span>
+    ><span>资源稳定性待确认 · 任务执行未接入</span>
   </footer>
 </template>

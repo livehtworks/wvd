@@ -2,6 +2,7 @@
 
 import ast
 import hashlib
+import importlib.util
 import json
 from pathlib import Path
 import subprocess
@@ -324,6 +325,93 @@ class InventoryTests(unittest.TestCase):
             self.assertIn(call["resolution"], {"STATIC", "EXTERNAL_OR_DYNAMIC"})
             self.assertTrue(set(call["targets"]) <= functions)
             self.assertEqual(bool(call["targets"]), call["resolution"] == "STATIC")
+
+    def test_combat_pause_and_recovery_ownership(self):
+        spec = importlib.util.spec_from_file_location(
+            "inventory_mapping", NEXT / "tools/inventory/mapping.py"
+        )
+        mapping = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mapping)
+        vision = "native/games/wvd/vision"
+        cases = {
+            "StateCombatCheck": (vision, "WvdBattleRecognizer", "M3-VISION"),
+            "CheckPauseOverlay": (vision, "WvdPauseRecognizer", "M3-PAUSE"),
+            "CheckPauseTextLayout": (vision, "WvdPauseRecognizer", "M3-PAUSE"),
+            "GetPauseNegativeEvidence": (vision, "WvdPauseRecognizer", "M3-PAUSE"),
+            "TryReadPauseTextByOcr": (vision, "WvdPauseRecognizer", "M3-PAUSE"),
+            "TryResumePauseOverlay": (
+                "native/games/wvd/recovery",
+                "WvdRecovery",
+                "M4-RECOVERY",
+            ),
+        }
+        functions = {r["legacy_symbol"]: r for r in self.rows("function")}
+        for name, expected in cases.items():
+            with self.subTest(name=name):
+                symbol = "Factory." + name
+                self.assertEqual(mapping.owner("src/script.py", symbol), expected)
+                row = functions[symbol]
+                self.assertEqual(row["new_owner"], expected[0])
+                self.assertEqual(row["new_entry"], expected[1] + "::" + name)
+                self.assertEqual(row["acceptance_ids"], [expected[2]])
+
+    def test_review_baseline_only_changes_combat_ownership(self):
+        review = "a03f15d0c331232b0c25334115aa793b0833252b"
+
+        def read_review(path):
+            return json.loads(
+                subprocess.check_output(
+                    ["git", "-C", str(REPO), "show", review + ":" + path]
+                )
+            )
+
+        before = read_review("next/docs/migration/feature_inventory.json")
+        self.assertEqual(
+            {k: v for k, v in before.items() if k != "items"},
+            {k: v for k, v in self.report.items() if k != "items"},
+        )
+        old_rows = {r["id"]: r for r in before["items"]}
+        new_rows = {r["id"]: r for r in self.items}
+        self.assertEqual(old_rows.keys(), new_rows.keys())
+        changes = []
+        for identifier, row in new_rows.items():
+            previous = old_rows[identifier]
+            if previous == row:
+                continue
+            self.assertEqual(row["legacy_symbol"], "Factory.StateCombatCheck")
+            changed_keys = {
+                key
+                for key in previous.keys() | row.keys()
+                if previous.get(key) != row.get(key)
+            }
+            self.assertTrue(
+                changed_keys <= {"new_owner", "new_entry", "acceptance_ids"}
+            )
+            changes.append(
+                {
+                    "id": identifier,
+                    "source_ref": row["source_ref"],
+                    "before": {
+                        key: previous[key]
+                        for key in ("new_owner", "new_entry", "acceptance_ids")
+                    },
+                    "after": {
+                        key: row[key]
+                        for key in ("new_owner", "new_entry", "acceptance_ids")
+                    },
+                }
+            )
+        self.assertTrue(changes)
+        print("R02_CHANGES " + json.dumps(changes, ensure_ascii=False))
+        assets = json.loads(
+            (NEXT / "docs/migration/asset_case_report.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(
+            assets, read_review("next/docs/migration/asset_case_report.json")
+        )
+        self.assertEqual(
+            sum(r["status"] == "DYNAMIC_REVIEW" for r in assets["references"]), 44
+        )
 
     def test_production_sources_unchanged(self):
         self.assertEqual(self.report["working_source_differences"], [])

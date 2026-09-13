@@ -51,10 +51,14 @@ export function useInventory() {
         readInventory(),
         readAssets(),
       ]);
+      // 请求期间仍可改变选择；应用新数据时才取 ID，不能把等待前的旧选择写回来。
+      const selectedId = selected.value?.id;
       version.value = v;
       capabilities.value = c;
       inventory.value = i;
       assets.value = a;
+      selected.value = i.items.find((item) => item.id === selectedId);
+      page.value = Math.max(1, Math.min(page.value, pageCount.value));
     } catch (e) {
       version.value = undefined;
       error.value = e instanceof Error ? e.message : "连接失败";
