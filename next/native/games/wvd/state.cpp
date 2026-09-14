@@ -18,7 +18,7 @@ WvdRunState::WvdRunState(J profile, const contracts::StateCreationContext &creat
 bool WvdRunState::setting_is(const char *name, const char *zh, const char *en) const {
     return profile_.at(name) == (profile_.at("LANGUAGE") == "en_US" ? en : zh);
 }
-void WvdRunState::on_segment(contracts::SegmentBoundary, std::uint64_t generation,
+void WvdRunState::on_segment(contracts::SegmentBoundary boundary, std::uint64_t generation,
                              std::size_t unit) {
     if (generation <= generation_)
         throw std::runtime_error("WVD_STATE_GENERATION_REUSED");
@@ -26,7 +26,13 @@ void WvdRunState::on_segment(contracts::SegmentBoundary, std::uint64_t generatio
     unit_index_ = unit;
     prepared_.reset();
     prepared_portrait_.clear();
-    // 正常段续接不补满策略；恢复边界也不等于游戏已重启，具体业务调用 restart_game。
+    // 普通恢复不等于重启游戏。系统生命周期恢复按旧 restartGame 在首次请求时
+    // 重置一次；同一请求的应用/重连/实例升级不重复增加崩溃计数或重装策略。
+    if (boundary == contracts::SegmentBoundary::LifecycleRecovery && !lifecycle_recovery_active_) {
+        lifecycle_recovery_active_ = true;
+        ++lifecycle_recovery_sequence_;
+        restart_game();
+    }
 }
 void WvdRunState::enter_dungeon() {
     prepared_.reset();
@@ -171,6 +177,8 @@ std::string WvdRunState::confirmation_id(const std::string &operation, const std
     else if (event == "dungeon_resumed")
         id += ":resume:" + std::to_string(combats_ + (pending_combat_ ? 1 : 0)) + ":" +
               std::to_string(chests_ + (pending_chest_ ? 1 : 0));
+    else if (event == "game_restarted")
+        id += ":restart:" + std::to_string(lifecycle_recovery_sequence_);
     return id;
 }
 bool WvdRunState::confirm_event(const std::string &operation, const std::string &event,
@@ -204,6 +212,11 @@ bool WvdRunState::confirm_event(const std::string &operation, const std::string 
         dungeon_completed();
     else if (event == "resurrected")
         resurrected();
+    else if (event == "game_restarted") {
+        if (!lifecycle_recovery_active_)
+            throw std::runtime_error("GAME_RESTART_NOT_REQUESTED");
+        lifecycle_recovery_active_ = false;
+    }
     else
         throw std::runtime_error("BUSINESS_EVENT_UNKNOWN");
     confirmations_.emplace(operation, effect);
@@ -226,6 +239,8 @@ J WvdRunState::summarize() const {
             {"combats", combats_},
             {"chests", chests_},
             {"crashes", crashes_},
+            {"lifecycle_recovery_sequence", lifecycle_recovery_sequence_},
+            {"lifecycle_recovery_active", lifecycle_recovery_active_},
             {"elapsed_seconds", std::chrono::duration<double>(clock_->now() - started_).count()},
             {"combat_seconds", combat_seconds_},
             {"total_seconds", total_seconds_},

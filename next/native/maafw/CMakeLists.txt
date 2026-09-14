@@ -35,7 +35,7 @@ file(CONFIGURE OUTPUT "${PROJECT_BINARY_DIR}/generated/core_build_id.hpp" CONTEN
 add_library(wvd_core recognition.cpp preflight.cpp gateway.cpp guarded_controller.cpp
   ../platform/windows/file_digest.cpp ../platform/windows/runtime_files.cpp
   ../storage/run_store.cpp ../storage/runtime_bundle.cpp ../platform/windows/bundle_lease.cpp
-  ../devices/input_gate.cpp ../runtime/guarded_action.cpp
+  ../devices/input_gate.cpp ../devices/lifecycle_execution.cpp ../runtime/guarded_action.cpp
   ../runtime/execution_session.cpp ../runtime/run_coordinator.cpp ../runtime/behavior_registry.cpp)
 target_include_directories(wvd_core PUBLIC "${PROJECT_SOURCE_DIR}/native" "${PROJECT_BINARY_DIR}/generated")
 target_include_directories(wvd_core PUBLIC "${WVD_MAA_SDK}/include")
@@ -67,6 +67,7 @@ if(WVD_BUILD_M4)
     ../games/wvd/combat/auto_combat.cpp
     ../games/wvd/combat/turn.cpp
     ../games/wvd/combat/encounter.cpp
+    ../games/wvd/recovery/boot.cpp
     ../games/wvd/state.cpp ../games/wvd/combat/strategy.cpp ../storage/legacy_import.cpp ../storage/profile_store.cpp)
   target_link_libraries(wvd_business PUBLIC wvd_core)
   target_compile_options(wvd_business PRIVATE /utf-8 /W4 /EHsc)

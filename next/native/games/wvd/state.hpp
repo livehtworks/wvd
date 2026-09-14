@@ -54,6 +54,8 @@ class WvdRunState final : public contracts::BusinessRunState {
     std::optional<SkillSelection> prepared_;
     std::size_t prepared_index_{};
     std::string prepared_portrait_;
+    bool lifecycle_recovery_active_{};
+    std::size_t lifecycle_recovery_sequence_{};
 };
 void register_wvd_state(runtime::BehaviorRegistry &registry);
 contracts::BehaviorBinding wvd_state_binding(const nlohmann::json &profile);

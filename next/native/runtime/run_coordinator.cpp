@@ -80,6 +80,8 @@ void RunCoordinator::validate(const RunDefinition &d, const devices::DeviceBacke
         d.initial.stop_timeout <= 0ms || d.recovery_limit > 16)
         throw std::runtime_error("RUN_DEFINITION_INVALID");
     registry_->validate(d.initial);
+    if (d.initial.lifecycle)
+        throw std::runtime_error("LIFECYCLE_REQUIRES_RECOVERY_BOUNDARY");
     if (d.recover)
         registry_->validate_recovery(*d.recover);
     if (!d.max_business_units || d.max_business_units > 256 ||
@@ -90,6 +92,8 @@ void RunCoordinator::validate(const RunDefinition &d, const devices::DeviceBacke
     if (d.state_factory) {
         registry_->validate_state_factory(*d.state_factory);
         auto validate_unit = [&](const SessionDefinition &unit) {
+            if (unit.lifecycle)
+                throw std::runtime_error("LIFECYCLE_REQUIRES_RECOVERY_BOUNDARY");
             if (unit.checkpoint_node.empty() || unit.entry.empty() || unit.terminal_node.empty() ||
                 unit.time_limit <= 0ms || unit.stop_timeout <= 0ms ||
                 unit.bundle.revision != d.initial.bundle.revision)
@@ -289,6 +293,7 @@ void RunCoordinator::collect_session(const std::shared_ptr<ExecutionSession> &se
                  {"quiescent", result.quiescent}});
             if (business_) {
                 snapshot_.business = business_->summary();
+                last_result_.business = snapshot_.business;
                 snapshot_.sessions.back()["business"] = snapshot_.business;
                 snapshot_.sessions.back()["checkpoint"] = {
                     {"task_id", result.checkpoint.task_id},
@@ -321,7 +326,7 @@ void RunCoordinator::drive(RunDefinition definition,
             policy.pack_revision = next.bundle.revision;
             auto session = std::make_shared<ExecutionSession>(
                 next, *backend, std::move(policy), snapshot().run_id, snapshot().generation,
-                *journal_, registry_, business_.get());
+                *journal_, registry_, business_.get(), boundary);
             {
                 std::lock_guard lock(mutex_);
                 current_definition_ = next;
@@ -372,7 +377,7 @@ void RunCoordinator::drive(RunDefinition definition,
                     if (business_ && (next.bundle.revision != definition.initial.bundle.revision ||
                                       next.checkpoint_node.empty()))
                         throw std::runtime_error("BUSINESS_RECOVERY_DEFINITION_INVALID");
-                    boundary = SegmentBoundary::Recovery;
+                    boundary = next.lifecycle ? SegmentBoundary::LifecycleRecovery : SegmentBoundary::Recovery;
                     ++recovered;
                     std::uint64_t generation;
                     {

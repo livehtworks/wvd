@@ -1,19 +1,30 @@
 #include "execution_session.hpp"
 #include "guarded_action.hpp"
+#include "devices/lifecycle_execution.hpp"
 
 namespace wvd::runtime {
 using namespace contracts;
 using namespace std::chrono_literals;
+namespace {
+struct LifecycleNotReady {};
+}
 ExecutionSession::ExecutionSession(SessionDefinition definition, devices::DeviceBackend &backend,
                                    InputPolicy policy, std::uint64_t run, std::uint64_t generation,
                                    storage::EventJournal &events,
                                    std::shared_ptr<const BehaviorRegistry> registry,
-                                   contracts::BusinessRunState *business)
+                                   contracts::BusinessRunState *business, contracts::SegmentBoundary boundary)
     : definition_(std::move(definition)), registry_(std::move(registry)), business_(business),
-      events_(events), gate_(backend, std::move(policy), run, generation, events) {
+      events_(events), gate_(backend, policy, run, generation, events), backend_(backend) {
     if (!registry_)
         throw std::runtime_error("REGISTRY_REQUIRED");
     registry_->validate(definition_);
+    if (definition_.lifecycle) {
+        const auto &target = definition_.lifecycle->target;
+        if (boundary != contracts::SegmentBoundary::LifecycleRecovery || !backend.offline() ||
+            policy.observed_read_only_viewport || target.device_id != policy.device_id ||
+            target.application_id != policy.application_id || !backend.lifecycle_port())
+            throw std::runtime_error("LIFECYCLE_NOT_AUTHORIZED");
+    }
 }
 ExecutionSession::~ExecutionSession() {
     request_stop();
@@ -57,8 +68,30 @@ SessionResult ExecutionSession::join() {
     std::lock_guard lock(mutex_);
     return result_;
 }
+void ExecutionSession::prepare_lifecycle() {
+    if (!definition_.lifecycle)
+        return;
+    auto *port = backend_.lifecycle_port();
+    if (!port)
+        throw std::runtime_error("LIFECYCLE_PORT_UNAVAILABLE");
+    const auto outcome = devices::execute_lifecycle_plan(*definition_.lifecycle, *port,
+        [this] { return cancelled(); }, [this](const auto &type, const auto &payload) {
+            events_.emit(gate_.generation(), type, payload, true);
+        });
+    if (outcome == devices::LifecycleEnd::ReadyForBoot)
+        return;
+    if (outcome == devices::LifecycleEnd::RetryRequired) {
+        recovery_ = true;
+        std::lock_guard lock(mutex_);
+        result_.reason = "LIFECYCLE_RETRY_REQUIRED";
+    }
+    throw LifecycleNotReady{};
+}
 void ExecutionSession::execute() noexcept {
     try {
+        // 上一代次由协调器 join 后才创建本段；此处尚未创建 SDK Controller。
+        // 生命周期成功只允许进入启动识别图，不能直接形成根终态。
+        prepare_lifecycle();
         maafw::GatewayHooks hooks;
         hooks.cancelled = [this] { return cancelled(); };
         hooks.failure = [this](const auto &reason) { fail(reason); };
@@ -116,6 +149,10 @@ void ExecutionSession::execute() noexcept {
                 throw std::runtime_error("RECOVERY_REASON_INVALID");
             recovery_ = true;
             gate_.close();
+            {
+                std::lock_guard lock(mutex_);
+                result_.reason = reason;
+            }
             events_.emit(gate_.generation(), "session.recovery_required", {{"reason", reason}},
                          true);
             return false;
@@ -152,6 +189,8 @@ void ExecutionSession::execute() noexcept {
             std::this_thread::sleep_for(100ms);
         }
         gateway.close();
+    } catch (const LifecycleNotReady &) {
+        // 仍走下面的统一收尾与真实静止检查，不能在准备阶段提前 return。
     } catch (const std::exception &error) {
         try {
             fail(error.what());

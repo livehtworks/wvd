@@ -30,6 +30,8 @@
 | 显式新目的目录/legacy-config.json | 旧配置的私有只读复制结果，含用户数据，不可公开 | LegacyConfigImporter::import_copy | 从副本解析并验证源 hash；没有向旧配置写回的路径 |
 | 显式新目录中的 profile JSON / 同名 .lock | 新版离线配置副本及写者互斥锁；完整字段、来源和 passthrough 是副本权威 | ProfileStore | 新副本读写及 CAS；Run 只接收显式冻结的 values，不监视或重读文件；没有 GUI/生产写入者 |
 | run.json definition.state_factory、continuation_units | 新版有限运行的冻结定义，含状态工厂身份、配置值、段顺序和预算 | RunCoordinator / RunStore | 非捕获工厂创建本 Run 独占状态；修改调用者原对象不改变已启动 Run |
+| 恢复 Session 的 lifecycle 计划及 lifecycle.* 事件 | 本 Run 授权目标、有限操作和实际调用证据；不是任意 shell 或重放许可 | WVD 纯策略生成冻结计划，ExecutionSession 验证并调用离线 LifecyclePort | 每步核对身份/时效/连接代次和后置状态；停止仍由原 Run 持有资源 |
+| snapshot.business.lifecycle_recovery_active/sequence | 本 Run 恢复请求边界，不是跨进程检查点 | WvdRunState 在 LifecycleRecovery 边界和新帧 game_restarted 确认时更新 | 区分同次升级与启动成功后的新故障；不以曾有 lifecycle 计划推断当前仍在恢复 |
 | result.json snapshot.business、sessions[].business/checkpoint | 静止边界的业务摘要及根检查点证据，不是崩溃后自动续跑许可 | RunCoordinator 在 Session join 后拷贝 | 历史审查与离线验收；completed_business_units 单独计数，不把一个段当整条任务 |
 | WvdRunState 确认签名、business.confirmed 事件、snapshot.business.last_confirmation | 本 Run 的操作去重与确认诊断；不是跨进程恢复数据库 | WvdConfirm 在实际新帧识别后生成；状态最多保存 4096 个签名，EventJournal 有界 | 任务步/宝箱计数与终态审查；摘要不等于持久化 profile 回执，不允许据此启动实机重放 |
 | WvdRunState prepared 选择及 business.combat 事件 | 本代次未完成技能意图和已确认消费诊断；不是恢复许可 | WvdCombat 在同帧头像匹配后选择；新帧后置确认后消费 | 技能图读取只读摘要并重新识别原角色；不保存旧帧/坐标，段边界清除未完成选择 |

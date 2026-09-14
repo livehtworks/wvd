@@ -1,4 +1,5 @@
 #include "pipeline_compiler.hpp"
+#include "games/wvd/vision/boot_probes.hpp"
 #include <functional>
 #include <set>
 #include <stdexcept>
@@ -14,6 +15,8 @@ void collect_images(const J &value, std::set<std::string> &images) {
     if (value.is_object()) {
         // 专用识别器内部加载的资源也必须进入发布清单，不能等运行才发现缺图。
         const auto mode = value.value("mode", "");
+        if (mode == "boot_ready" || mode == "boot_post")
+            collect_images(vision::boot_probes(mode == "boot_post"), images);
         if (mode == "reached")
             for (int i = 0; i < 4; ++i)
                 images.insert("cursor_" + std::to_string(i) + ".png");
@@ -290,7 +293,7 @@ void PipelineCompiler::recovery(const std::string &name, const std::string &reas
 void PipelineCompiler::confirm(const std::string &name, const std::string &operation,
                                const std::string &event, const J &condition, J next, J step) {
     const std::set<std::string> events{"target_completed", "dungeon_entered", "combat_observed",
-                                      "chest_observed", "dungeon_resumed", "dungeon_completed", "resurrected"};
+                                      "chest_observed", "dungeon_resumed", "dungeon_completed", "resurrected", "game_restarted"};
     require(events.contains(event) && !operation.empty() && operation.size() <= 128,
             "COMPILE_BUSINESS_EVENT_INVALID");
     require(step.is_null() || (step.is_number_integer() && step >= 0 && step <= 4096),

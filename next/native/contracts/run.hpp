@@ -54,6 +54,7 @@ struct SessionResult {
     InputCounts inputs;
     bool quiescent{};
     RootEvidence checkpoint;
+    nlohmann::json business;
 };
 struct RunSnapshot {
     std::uint64_t run_id{}, generation{};

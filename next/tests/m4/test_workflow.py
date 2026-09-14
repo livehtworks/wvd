@@ -56,6 +56,11 @@ class WorkflowTests(unittest.TestCase):
                       "chest_auto", "mark_auto", "chest_auto_minus", "resume"]
         if options.get("workflow") == "entry":
             names += ["GotoDung", "openworldmap", "intoWorldMap", "TradeWaterway", "Dist", "EVENT", "FFXI/EVENT_GCN", "FFXI/zone5", "preGate"]
+        if options.get("workflow") == "recover":
+            names += ["dungFlag", "openworldmap", "returnText", "returntoTown", "mapFlag", "chestFlag", "whowillopenit",
+                      "fishing/cast", "fishing/striking", "fishing/CloseFishInfo", "combatActive", "combatActive_2",
+                      "combatActive_3", "combatActive_4", "boot_title_logo", "boot_attention", "startdownload",
+                      "retry", "retry_blank", "totitle", "resume"]
         rng = np.random.default_rng(90614)
         patterns = {name: rng.integers(30, 255, (24, 40, 3), dtype=np.uint8) for name in names}
         if "chest_auto_minus" in patterns:
@@ -90,7 +95,7 @@ class WorkflowTests(unittest.TestCase):
                           {"path": p.relative_to(bundle).as_posix(), "sha256": digest(p)}
                           for p in sorted(bundle.rglob("*.png"))])
         config.update(options)
-        if options.get("workflow") in ("chest", "map-confirm", "state-route", "turn", "encounter"):
+        if options.get("workflow") in ("chest", "map-confirm", "state-route", "turn", "encounter", "recover"):
             config.update(with_state=True, descriptor=str(ROOT / "packs/wvd/parameters/legacy-config-fields.json"))
         if "omit_image" in options:
             config["files"] = [f for f in config["files"] if f["path"] != "image/" + options["omit_image"]]
@@ -726,6 +731,134 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(len(r["snapshot"]["business"]["strategy"]["current"]["skill_settings"]), 2)
         self.assertEqual(r["backend_calls"], 2)
         self.assertFalse(r["mismatch"])
+
+    @staticmethod
+    def recovery_scenario():
+        screens = [{}, {"boot_title_logo": (200, 400)}, {"boot_attention": (300, 500)},
+                   {"startdownload": (300, 920)}, {"Inn": (100, 400)}, {"Stay": (100, 600)},
+                   {"Economy": (100, 500)}, {"OK": (500, 800)}, {"Stay": (100, 600)}, {"Inn": (100, 400)}]
+        actions = [dict(kind=0, x=450, y=1450), dict(kind=0, x=450, y=1450), dict(kind=0, x=320, y=932),
+                   dict(kind=0, x=120, y=412), dict(kind=0, x=120, y=612), dict(kind=0, x=120, y=512),
+                   dict(kind=0, x=520, y=812), dict(kind=5, key=4)]
+        return screens, actions
+
+    def test_recovery_boot_is_followed_by_original_task_not_root_completion(self):
+        screens, actions = self.recovery_scenario()
+        r = self.execute("recovery-boot-rest", screens, actions, workflow="recover")
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["snapshot"]["generation"], 2)
+        self.assertEqual(r["lifecycle_calls"], ["EnsureVpn", "StopApplication", "StartApplication"])
+        self.assertEqual(r["backend_calls"], 8)
+        self.assertFalse(r["mismatch"])
+        self.assertEqual(r["cursor"], 9)
+        self.assertEqual(r["snapshot"]["business"]["crashes"], 1)
+        self.assertFalse(r["snapshot"]["business"]["lifecycle_recovery_active"])
+
+    def test_recovery_escalates_only_after_confirmed_failure(self):
+        screens, actions = self.recovery_scenario()
+        for failures, expected in [
+            (1, ["EnsureVpn", "StopApplication", "StartApplication", "Reconnect", "StartApplication"]),
+            (2, ["EnsureVpn", "StopApplication", "StartApplication", "Reconnect", "StartApplication",
+                 "RestartInstance", "EnsureVpn", "StartApplication"]),
+        ]:
+            r = self.execute("recovery-escalate-" + str(failures), screens, actions, workflow="recover", fail_starts=failures)
+            self.assertEqual(r["snapshot"]["state"], "Completed", r)
+            self.assertEqual(r["snapshot"]["generation"], failures + 2)
+            self.assertEqual(r["lifecycle_calls"], expected)
+            self.assertEqual(r["backend_calls"], 8)
+            self.assertFalse(r["mismatch"])
+            self.assertEqual(r["snapshot"]["business"]["crashes"], 1)
+            self.assertEqual(r["snapshot"]["business"]["lifecycle_recovery_sequence"], 1)
+
+    def test_recovery_unknown_boot_and_failed_start_are_bounded(self):
+        for name, options in [("unknown", {}), ("cannot-start", {"fail_starts": 3})]:
+            r = self.execute("recovery-" + name, [{}, {}], [], workflow="recover", **options)
+            self.assertEqual(r["snapshot"]["state"], "Interrupted", r)
+            self.assertEqual(r["snapshot"]["generation"], 4)
+            self.assertEqual(r["backend_calls"], 0)
+            self.assertEqual(r["lifecycle_calls"].count("StartApplication"), 3)
+            self.assertFalse(r["mismatch"])
+
+    def test_recovery_rejects_missing_or_wrong_lifecycle_authority(self):
+        screens, actions = self.recovery_scenario()
+        for name, options, reason in [
+            ("no-port", {"no_lifecycle_port": True}, "LIFECYCLE_NOT_AUTHORIZED"),
+            ("other-app", {"other_lifecycle_app": True}, "LIFECYCLE_NOT_AUTHORIZED"),
+            ("other-instance", {"other_lifecycle_instance": True}, "LIFECYCLE_OBSERVATION_INVALID"),
+            ("stale", {"stale_lifecycle": True}, "LIFECYCLE_OBSERVATION_INVALID"),
+        ]:
+            r = self.execute("recovery-" + name, screens, actions, workflow="recover", **options)
+            self.assertEqual(r["snapshot"]["state"], "Failed", r)
+            self.assertEqual(r["snapshot"]["reason"], reason, r)
+            self.assertEqual(r["lifecycle_calls"], [])
+            self.assertEqual(r["backend_calls"], 0)
+
+    def test_recovery_stop_during_lifecycle_never_starts_game(self):
+        screens, actions = self.recovery_scenario()
+        r = self.execute("recovery-stop", screens, actions, workflow="recover", stop_during_lifecycle=True)
+        self.assertEqual(r["snapshot"]["state"], "UserStopped", r)
+        self.assertTrue(r["snapshot"]["quiescent"])
+        self.assertEqual(r["lifecycle_calls"], ["EnsureVpn"])
+        self.assertEqual(r["backend_calls"], 0)
+
+    def test_recovery_download_missing_permission_does_not_restart_again(self):
+        screens, actions = self.recovery_scenario()
+        r = self.execute("recovery-no-download", screens[:4], actions[:2], workflow="recover", allow_download=False)
+        self.assertEqual(r["snapshot"]["state"], "Interrupted", r)
+        self.assertEqual(r["snapshot"]["generation"], 2)
+        self.assertEqual(r["snapshot"]["sessions"][-1]["reason"], "boot.download_permission_missing")
+        self.assertEqual(r["backend_calls"], 2)
+        self.assertEqual(r["lifecycle_calls"].count("StartApplication"), 1)
+
+    def test_recovery_missing_boot_asset_rejected_before_connection(self):
+        r = self.execute("recovery-missing-asset", [{}], [], workflow="recover", omit_image="boot_attention.png")
+        self.assertEqual(r["publish_error"], "COMPILE_IMAGE_NOT_IN_MANIFEST:image/boot_attention.png", r)
+        self.assertEqual(r["connections"], 0)
+        self.assertEqual(r["backend_calls"], 0)
+
+    def test_recovery_late_native_return_retains_ownership(self):
+        screens, actions = self.recovery_scenario()
+        r = self.execute("recovery-late-release", screens, actions, workflow="recover", late_lifecycle_release=True)
+        self.assertEqual(r["lifecycle_stop"]["reason"], "STOP_TIMEOUT", r)
+        self.assertFalse(r["lifecycle_stop"]["quiescent"])
+        self.assertEqual(r["lifecycle_stop"]["new_run_error"], "RUN_BUSY")
+        self.assertEqual(r["snapshot"]["state"], "Failed")
+        self.assertEqual(r["snapshot"]["reason"], "STOP_TIMEOUT")
+        self.assertTrue(r["snapshot"]["quiescent"])
+        self.assertEqual(r["backend_calls"], 0)
+        self.assertEqual(r["lifecycle_calls"], ["EnsureVpn"])
+
+    def test_recovery_crash_threshold_forces_instance_once(self):
+        screens, actions = self.recovery_scenario()
+        r = self.execute("recovery-crash-threshold", screens, actions, workflow="recover", max_crashes=0)
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["lifecycle_calls"], ["RestartInstance", "EnsureVpn", "StartApplication"])
+        self.assertEqual(r["snapshot"]["business"]["crashes"], 0)
+        self.assertEqual(r["snapshot"]["business"]["lifecycle_recovery_sequence"], 1)
+        self.assertFalse(r["mismatch"])
+
+    def test_recovery_boot_input_failure_is_not_retried_as_lifecycle(self):
+        screens, actions = self.recovery_scenario()
+        r = self.execute("recovery-input-failed", screens[:2], [{**actions[0], "reject": True}], workflow="recover")
+        self.assertEqual(r["snapshot"]["state"], "Failed", r)
+        self.assertEqual(r["snapshot"]["generation"], 2)
+        self.assertEqual(r["backend_calls"], 1)
+        self.assertEqual(r["lifecycle_calls"].count("StartApplication"), 1)
+        self.assertTrue(r["snapshot"]["business"]["lifecycle_recovery_active"])
+
+    def test_recovery_new_failure_after_ready_starts_at_application_level(self):
+        # 启动已完成，但原住宿业务仍不在城内；这是新恢复请求，不是旧请求第二级。
+        r = self.execute("recovery-new-request", [{}, {"dungFlag": (50, 150)}], [], workflow="recover")
+        self.assertEqual(r["snapshot"]["state"], "Interrupted", r)
+        self.assertEqual(r["snapshot"]["generation"], 4)
+        self.assertEqual(r["lifecycle_calls"], ["EnsureVpn", "StopApplication", "StartApplication",
+                                               "StopApplication", "StartApplication", "StopApplication", "StartApplication"])
+        self.assertEqual(r["snapshot"]["business"]["crashes"], 3)
+        self.assertEqual(r["snapshot"]["business"]["lifecycle_recovery_sequence"], 3)
+        self.assertFalse(r["snapshot"]["business"]["lifecycle_recovery_active"])
+        self.assertEqual(r["backend_calls"], 0)
+
+    def test_encounter_auto_ends_into_dungeon_without_another_toggle(self):
         # 外层确认返回地下城可结束遭遇，不把未确认的 Auto 误报为开启。
         r = self.execute("encounter-auto-ended", [self.turn_screen(**{"spellskill/CombatAutoDisable": (800, 1070)}),
                           {"dungFlag": (50, 150)}], [dict(kind=0, x=850, y=1100)],

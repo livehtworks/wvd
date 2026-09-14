@@ -14,6 +14,7 @@
 #include "games/wvd/combat/auto_combat.hpp"
 #include "games/wvd/combat/turn.hpp"
 #include "games/wvd/combat/encounter.hpp"
+#include "games/wvd/recovery/boot.hpp"
 #include "games/wvd/tasks/workflow_session.hpp"
 #include "games/wvd/vision/recognizers.hpp"
 #include "platform/windows/file_digest.hpp"
@@ -21,26 +22,89 @@
 
 using namespace fixture;
 // 场景是因果图，不是随 capture 次数前进的录像。额外输入、错误坐标和错误按键都会失败。
-class WorkflowDevice final : public OfflineDevice {
+class WorkflowDevice final : public OfflineDevice, public devices::LifecyclePort {
   public:
     std::vector<std::vector<std::uint8_t>> frames;
     J transitions;
     std::size_t cursor{};
+    std::size_t action_cursor{};
     bool mismatch{};
+    bool allow_lifecycle{}, stale_lifecycle{}, wrong_instance{}, hold_lifecycle{}, ignore_lifecycle_cancel{};
+    std::atomic<bool> release_lifecycle{};
+    int failed_starts{}, start_attempts{};
+    std::atomic<unsigned> lifecycle_count{};
+    J lifecycle_calls = J::array();
+    devices::LifecycleObservation lifecycle_state{
+        {"m2-offline", "fixture-instance", "fixture.app", "fixture.vpn", true}, true, true, true, false, 1, {}, true};
+    devices::LifecyclePort *lifecycle_port() override { return allow_lifecycle ? this : nullptr; }
+    std::optional<devices::LifecycleObservation> observe_lifecycle() override {
+        std::lock_guard lock(mutex);
+        auto result = lifecycle_state;
+        result.observed_at = std::chrono::steady_clock::now() - (stale_lifecycle ? 3s : 0s);
+        if (wrong_instance)
+            result.target.instance_id = "different-instance";
+        return result;
+    }
+    bool execute_lifecycle(devices::LifecycleOperation operation, const devices::LifecycleTarget &target,
+                           const std::function<bool()> &cancelled) override {
+        using O = devices::LifecycleOperation;
+        static const std::map<O, std::string> names{{O::StopApplication, "StopApplication"},
+            {O::StartApplication, "StartApplication"}, {O::Reconnect, "Reconnect"},
+            {O::RestartInstance, "RestartInstance"}, {O::EnsureVpn, "EnsureVpn"}};
+        {
+            std::lock_guard lock(mutex);
+            require(target.application_id == "fixture.app" && target.instance_id == "fixture-instance", "FIXTURE_LIFECYCLE_WRONG_TARGET");
+            lifecycle_calls.push_back(names.at(operation));
+            ++lifecycle_count;
+        }
+        if (hold_lifecycle) {
+            while (!release_lifecycle && (ignore_lifecycle_cancel || !cancelled()))
+                std::this_thread::sleep_for(5ms);
+            return false;
+        }
+        std::lock_guard lock(mutex);
+        if (cancelled())
+            return false;
+        if (operation == O::EnsureVpn)
+            lifecycle_state.vpn_ready = true;
+        else if (operation == O::StopApplication) {
+            lifecycle_state.application_running = false;
+            lifecycle_state.application_foreground = false;
+        }
+        else if (operation == O::StartApplication) {
+            if (++start_attempts <= failed_starts)
+                return false;
+            lifecycle_state.application_running = true;
+            lifecycle_state.application_foreground = true;
+            cursor = 1; // 只有确认的启动操作切换到标题；capture 不推进状态。
+            action_cursor = 0;
+        } else {
+            ++lifecycle_state.connection_generation;
+            lifecycle_state.instance_running = true;
+            lifecycle_state.connected = true;
+            if (operation == O::RestartInstance) {
+                lifecycle_state.application_running = false;
+                lifecycle_state.application_foreground = false;
+                lifecycle_state.vpn_ready = false;
+            }
+        }
+        return true;
+    }
     devices::RawFrame capture() override {
         std::lock_guard lock(mutex);
         ++captures;
-        return {frames.at(cursor), size, identity, viewport, application};
+        return {frames.at(cursor), size, identity, viewport, application, {}, "fixture",
+                allow_lifecycle ? lifecycle_state.connection_generation : 0};
     }
     bool execute(const contracts::Command &c) override {
         std::lock_guard lock(mutex);
         ++calls;
         sent.push_back(c);
-        if (cursor >= transitions.size()) {
+        if (action_cursor >= transitions.size()) {
             mismatch = true;
             return false;
         }
-        const auto &expected = transitions.at(cursor);
+        const auto &expected = transitions.at(action_cursor);
         if (int(c.kind) != expected.at("kind").get<int>() || c.x != expected.value("x", 0) ||
             c.y != expected.value("y", 0) || c.key != expected.value("key", 0) ||
             c.x2 != expected.value("x2", 0) || c.y2 != expected.value("y2", 0) ||
@@ -50,8 +114,10 @@ class WorkflowDevice final : public OfflineDevice {
         }
         if (expected.value("reject", false))
             return false;
-        if (!expected.value("stay", false))
+        if (!expected.value("stay", false)) {
             ++cursor;
+            ++action_cursor;
+        }
         return true;
     }
 };
@@ -67,6 +133,8 @@ int main(int argc, char **argv) {
             storage::LegacyConfigImporter importer(descriptor);
             profile = importer.parse({{"GENERAL", J::object()}}).values;
             profile.update(config.value("profile", J::object()));
+            if (config.contains("max_crashes"))
+                profile["MAX_CRASH_LIMIT"] = config.at("max_crashes");
         }
         auto workflow = [&] {
             const auto kind = config.at("workflow").get<std::string>();
@@ -76,6 +144,9 @@ int main(int argc, char **argv) {
                 return games::supply::rest_at_inn(config.value("royal", false));
             if (kind == "auto")
                 return games::combat::enable_auto();
+            if (kind == "recover")
+                return games::recovery::with_boot_recovery(games::supply::rest_at_inn(false),
+                    config.value("allow_download", true));
             if (kind == "auto-route")
                 return games::navigation::auto_route(config.value("auto_target", "chest_auto"));
             if (kind == "entry") {
@@ -204,12 +275,20 @@ int main(int argc, char **argv) {
         for (const auto &frame : config.at("frames"))
             device->frames.push_back(bytes(maafw::path_from_utf8(frame)));
         device->transitions = config.at("transitions");
+        const bool recovering = config.at("workflow") == "recover";
+        device->allow_lifecycle = recovering && !config.value("no_lifecycle_port", false);
+        device->stale_lifecycle = config.value("stale_lifecycle", false);
+        device->wrong_instance = config.value("other_lifecycle_instance", false);
+        device->failed_starts = config.value("fail_starts", 0);
+        device->hold_lifecycle = config.value("stop_during_lifecycle", false) || config.value("late_lifecycle_release", false);
+        device->ignore_lifecycle_cancel = config.value("late_lifecycle_release", false);
         auto registry = std::make_shared<runtime::BehaviorRegistry>("m4-workflows-1");
         if (!config.value("missing_binding", false))
             games::vision::register_wvd(*registry);
         games::register_wvd_state(*registry);
         games::register_wvd_confirmations(*registry);
         games::combat::register_combat(*registry);
+        games::recovery::register_recovery(*registry);
         registry->seal();
         runtime::SessionDefinition session;
         if (config.value("destination_exists", false))
@@ -247,9 +326,39 @@ int main(int argc, char **argv) {
         definition.request_id = "m4-causal";
         definition.policy = policy;
         definition.initial = std::move(session);
+        if (recovering) {
+            auto target = device->lifecycle_state.target;
+            if (config.value("other_lifecycle_app", false))
+                target.application_id = "not-the-game";
+            definition.recover = games::recovery::recovery_binding(target, config.value("force_restart", false),
+                config.value("max_crashes", std::int64_t(10)));
+            definition.recovery_limit = 3;
+        }
         if (config.value("with_state", false))
             definition.state_factory = games::wvd_state_binding(profile);
         coordinator.start(definition, device);
+        J lifecycle_stop;
+        if (device->hold_lifecycle) {
+            until([&] { return device->lifecycle_count > 0 || coordinator.snapshot().quiescent; }, 15000ms);
+            coordinator.request_stop();
+            if (device->ignore_lifecycle_cancel) {
+                // 专属测试端口故意迟到返回；无论断言结果如何，都释放本测试持有的阻塞。
+                struct Release {
+                    WorkflowDevice &device;
+                    ~Release() { device.release_lifecycle = true; }
+                } release{*device};
+                until([&] { return coordinator.snapshot().reason == "STOP_TIMEOUT"; }, 5000ms);
+                lifecycle_stop = storage::snapshot_json(coordinator.snapshot());
+                auto other = definition;
+                other.request_id = "late-lifecycle-other";
+                try {
+                    coordinator.start(other, device);
+                    lifecycle_stop["new_run_error"] = "";
+                } catch (const std::exception &e) {
+                    lifecycle_stop["new_run_error"] = e.what();
+                }
+            }
+        }
         if (config.value("stop_after_first", false)) {
             until([&] { return device->calls.load() > 0 || coordinator.snapshot().quiescent; });
             coordinator.request_stop();
@@ -268,6 +377,8 @@ int main(int argc, char **argv) {
                  {"images", workflow.images},
                  {"required_actions", workflow.required_actions},
                  {"kind", workflow.kind},
+                 {"lifecycle_calls", device->lifecycle_calls},
+                 {"lifecycle_stop", lifecycle_stop},
                  {"loaded_modules", loaded_vision_modules()}};
         std::ofstream(maafw::path_from_utf8(config.at("output"))) << output.dump(2);
         return 0;

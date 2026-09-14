@@ -1,5 +1,6 @@
 #pragma once
 #include "contracts/action.hpp"
+#include "lifecycle.hpp"
 
 namespace wvd::devices {
 struct RawFrame {
@@ -19,6 +20,7 @@ class DeviceBackend {
         return false;
     }
     virtual void disconnect() {}
+    virtual LifecyclePort *lifecycle_port() { return nullptr; }
     virtual bool context_matches(const contracts::FrameIdentity &, const std::string &) {
         return offline();
     }

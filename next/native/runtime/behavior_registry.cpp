@@ -1,4 +1,5 @@
 #include "behavior_registry.hpp"
+#include "devices/lifecycle_execution.hpp"
 #include "core_build_id.hpp"
 #include <set>
 
@@ -112,6 +113,8 @@ J BehaviorRegistry::manifest() const {
             {"entries", entries}};
 }
 void BehaviorRegistry::validate(const SessionDefinition &definition) const {
+    if (definition.lifecycle)
+        devices::validate_lifecycle_plan(*definition.lifecycle);
     if (!sealed_)
         throw std::runtime_error("REGISTRY_NOT_SEALED");
     std::set<std::string> names;
@@ -182,6 +185,8 @@ J session_definition_json(const SessionDefinition &definition, bool include_file
              {"stop_timeout_ms", definition.stop_timeout.count()},
              {"custom_actions", actions}};
     result["custom_recognitions"] = J::array();
+    if (definition.lifecycle)
+        result["lifecycle"] = devices::lifecycle_plan_json(*definition.lifecycle);
     for (const auto &binding : definition.recognitions)
         result["custom_recognitions"].push_back(binding_json(binding));
     if (include_files) {

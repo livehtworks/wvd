@@ -1,6 +1,7 @@
 #include "recognizers.hpp"
 #include "asset_resolver.hpp"
 #include "bobber.hpp"
+#include "boot_probes.hpp"
 #include "image_ops.hpp"
 #include "games/wvd/business_condition.hpp"
 #include <cmath>
@@ -184,6 +185,18 @@ J evaluate_uncached(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels
                                {"comparison", p.value("comparison", "eq")}, {"expected", p.at("value")}}, false);
         result["action_eligible"] = false;
         return result;
+    }
+    if (mode == "boot_ready" || mode == "boot_post") {
+        check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");
+        // 旧 WaitGameBootReady 是顺序候选，不是把全部条件都求完的 boolean any。
+        // 只省去命中后的无关检查；实际执行探针的 Error 仍直接传播，未知仍 NoHit。
+        for (const auto &probe : boot_probes(mode == "boot_post")) {
+            auto result = evaluate_impl(bundle, pixels, probe, bound, scope, cache, depth + 1, memo);
+            check(result.at("outcome") != "Error", "WVD_BOOT_RECOGNITION_ERROR");
+            if (result.at("outcome") == "Hit")
+                return decision(true, allowed_rect, {{"stage", probe.value("image", "combat_active")}, {"matched", result}});
+        }
+        return decision(false, {}, {{"stage", "unknown"}});
     }
     if (mode == "all" || mode == "any" || mode == "not") {
         check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");

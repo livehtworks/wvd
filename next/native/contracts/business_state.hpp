@@ -16,7 +16,7 @@ class SteadyClock final : public MonotonicClock {
   public:
     TimePoint now() const noexcept override { return std::chrono::steady_clock::now(); }
 };
-enum class SegmentBoundary { Initial, Continuation, Recovery };
+enum class SegmentBoundary { Initial, Continuation, Recovery, LifecycleRecovery };
 struct StateCreationContext {
     std::string instance_id;
     std::uint64_t run_id;
