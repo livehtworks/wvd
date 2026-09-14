@@ -25,6 +25,12 @@ void collect_images(const J &value, std::set<std::string> &images) {
                 images.insert(std::string(name) + ".png");
         if (mode == "harken_stair" && value.contains("stair"))
             images.insert(value.at("stair").get<std::string>() + ".png");
+        if (mode == "skill_level")
+            for (const auto *prefix : {"lv", "s_lv"})
+                images.insert(std::string("spellskill/skillLvl/") + prefix + std::to_string(value.at("level").get<int>()) + ".png");
+        if (mode == "skill_target")
+            for (const auto *name : {"next", "combatTarget", "spellskill/skillDetail", "OK", "supportSkillCheck"})
+                images.insert(std::string(name) + ".png");
         for (const auto &[key, child] : value.items()) {
             if (key == "image") {
                 const auto path = child.get<std::string>();
@@ -77,6 +83,7 @@ void CompiledWorkflow::validate() const {
                     (action == "Custom" && (node.value("custom_action", "") == "GuardedAction" ||
                                             node.value("custom_action", "") == "RootTerminal" ||
                                             node.value("custom_action", "") == "WvdConfirm" ||
+                                            node.value("custom_action", "") == "WvdCombat" ||
                                             node.value("custom_action", "") == "BusinessCheckpoint" ||
                                             node.value("custom_action", "") == "RequireRecovery")),
                 "COMPILE_UNGUARDED_ACTION");
@@ -201,6 +208,25 @@ void PipelineCompiler::postcondition_budget(const std::string &name, int millise
             "COMPILE_POSTCONDITION_BUDGET_INVALID");
     workflow_.nodes[name]["custom_action_param"]["postcondition_timeout_ms"] = milliseconds;
 }
+void PipelineCompiler::allowed_area(const std::string &name, J area) {
+    require(workflow_.nodes.contains(name) && workflow_.nodes.at(name).value("custom_action", "") == "GuardedAction",
+            "COMPILE_ACTION_AREA_INVALID");
+    require(area.is_array() && area.size() == 4, "COMPILE_ACTION_AREA_INVALID");
+    for (const auto &part : area)
+        require(part.is_number_integer(), "COMPILE_ACTION_AREA_INVALID");
+    require(area[0] >= 0 && area[1] >= 0 && area[2] > 0 && area[3] > 0 &&
+                area[0].get<int>() <= 900 - area[2].get<int>() &&
+                area[1].get<int>() <= 1600 - area[3].get<int>(), "COMPILE_ACTION_AREA_INVALID");
+    workflow_.nodes[name]["custom_action_param"]["allowed_area"] = std::move(area);
+}
+void PipelineCompiler::combat_step(const std::string &name, const J &condition, J parameters, J next) {
+    require(parameters.is_object(), "COMPILE_COMBAT_PARAMETERS_INVALID");
+    parameters["confirmation"] = request(condition);
+    add(name, {{"recognition", "Custom"}, {"custom_recognition", "WvdVision"},
+               {"custom_recognition_param", condition}, {"roi", {0, 0, 900, 1600}},
+               {"action", "Custom"}, {"custom_action", "WvdCombat"},
+               {"custom_action_param", std::move(parameters)}, {"next", std::move(next)}});
+}
 void PipelineCompiler::swipe(const std::string &name, const J &scene, const J &post,
                              J coordinates, J next) {
     require(coordinates.is_array() && coordinates.size() == 4, "COMPILE_SWIPE_INVALID");
@@ -281,7 +307,7 @@ void PipelineCompiler::confirm(const std::string &name, const std::string &opera
 CompiledWorkflow PipelineCompiler::finish() {
     bool business = false;
     for (const auto &node : workflow_.nodes)
-        business = business || node.value("custom_action", "") == "WvdConfirm";
+        business = business || node.value("custom_action", "") == "WvdConfirm" || node.value("custom_action", "") == "WvdCombat";
     if (business) {
         workflow_.checkpoint = "Checkpoint";
         for (auto &node : workflow_.nodes)

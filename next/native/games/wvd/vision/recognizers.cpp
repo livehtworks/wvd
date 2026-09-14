@@ -362,6 +362,41 @@ J evaluate_impl(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels, co
         }
         return decision(false, {}, {{"attempts", attempts}});
     }
+    if (mode == "prepared_actor" || mode == "skill_target") {
+        const auto summary = scope.business_summary();
+        if (!summary.at("has_prepared_skill").get<bool>())
+            return decision(false, {}, {{"reason", "no_prepared_skill"}});
+        const auto name = "spellskill/char/" + summary.at("prepared_portrait").get<std::string>();
+        const auto &portraits = p.at("portraits");
+        check(portraits.is_array() && portraits.size() <= 384, "COMBAT_PORTRAITS_INVALID");
+        bool declared = false;
+        for (const auto &entry : portraits)
+            declared = declared || entry.at("image") == name;
+        check(declared, "COMBAT_PORTRAIT_NOT_COMPILED");
+        auto actor = evaluate_impl(bundle, pixels, {{"mode", "portrait"}, {"image", name}}, bound, scope, cache, depth + 1);
+        if (mode == "prepared_actor" || actor.at("outcome") != "Hit")
+            return actor;
+        // 0.60 只在已选技能、同一角色、详情仍开且没有友方/OK 确认的单体阶段生效。
+        // 普通 next_low_confidence 的低信任契约不变，不能用组合条件直接抬升它。
+        auto detail = one("spellskill/skillDetail", J::object());
+        auto ok = one("OK", J::object());
+        auto support = one("supportSkillCheck", {{"roi", {677, 1475, 189, 80}}});
+        if (detail.at("outcome") != "Hit" || ok.at("outcome") == "Hit" || support.at("outcome") == "Hit")
+            return decision(false, {}, {{"reason", "not_enemy_selection"}});
+        J attempts = J::array();
+        for (const auto &candidate : {std::pair{"next", .86}, std::pair{"combatTarget", .86}, std::pair{"next", .60}}) {
+            auto result = one(candidate.first, {{"roi", {80, 220, 819, 680}}, {"threshold", candidate.second}});
+            attempts.push_back(result);
+            if (result.at("outcome") == "Hit") {
+                result["evidence"]["attempts"] = attempts;
+                result["evidence"]["selection_index"] = summary.at("prepared_skill_index");
+                result["evidence"]["actor"] = actor;
+                result["evidence"]["phase"] = "confirmed_single_target_detail";
+                return result;
+            }
+        }
+        return decision(false, {}, {{"attempts", attempts}});
+    }
     if (mode == "portrait") {
         auto name = p.at("image").get<std::string>();
         auto templ = assets.load(name);

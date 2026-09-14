@@ -10,6 +10,7 @@
 #include "storage/legacy_import.hpp"
 #include "games/wvd/supply/inn.hpp"
 #include "games/wvd/combat/auto_combat.hpp"
+#include "games/wvd/combat/turn.hpp"
 #include "games/wvd/tasks/workflow_session.hpp"
 #include "games/wvd/vision/recognizers.hpp"
 #include "platform/windows/file_digest.hpp"
@@ -56,6 +57,14 @@ int main(int argc, char **argv) {
         require(argc == 2, "CONFIG_REQUIRED");
         J config;
         std::ifstream(maafw::path_from_utf8(argv[1])) >> config;
+        J profile;
+        if (config.value("with_state", false)) {
+            J descriptor;
+            std::ifstream(maafw::path_from_utf8(config.at("descriptor"))) >> descriptor;
+            storage::LegacyConfigImporter importer(descriptor);
+            profile = importer.parse({{"GENERAL", J::object()}}).values;
+            profile.update(config.value("profile", J::object()));
+        }
         auto workflow = [&] {
             const auto kind = config.at("workflow").get<std::string>();
             if (kind == "city")
@@ -64,6 +73,15 @@ int main(int argc, char **argv) {
                 return games::supply::rest_at_inn(config.value("royal", false));
             if (kind == "auto")
                 return games::combat::enable_auto();
+            if (kind == "turn") {
+                std::set<std::string> images;
+                for (const auto &file : config.at("files")) {
+                    const auto path = file.at("path").get<std::string>();
+                    if (path.starts_with("image/"))
+                        images.insert(path.substr(6));
+                }
+                return games::combat::take_turn(profile, images);
+            }
             if (kind == "chest")
                 return games::chest::open_chest(config.value("preferred", 1), config.value("quick", false), 42);
             if (kind == "travel") {
@@ -178,6 +196,7 @@ int main(int argc, char **argv) {
             games::vision::register_wvd(*registry);
         games::register_wvd_state(*registry);
         games::register_wvd_confirmations(*registry);
+        games::combat::register_combat(*registry);
         registry->seal();
         runtime::SessionDefinition session;
         if (config.value("destination_exists", false))
@@ -215,13 +234,8 @@ int main(int argc, char **argv) {
         definition.request_id = "m4-causal";
         definition.policy = policy;
         definition.initial = std::move(session);
-        if (config.value("with_state", false)) {
-            J descriptor;
-            std::ifstream(maafw::path_from_utf8(config.at("descriptor"))) >> descriptor;
-            storage::LegacyConfigImporter importer(descriptor);
-            auto profile = importer.parse({{"GENERAL", J::object()}});
-            definition.state_factory = games::wvd_state_binding(profile.values);
-        }
+        if (config.value("with_state", false))
+            definition.state_factory = games::wvd_state_binding(profile);
         coordinator.start(definition, device);
         if (config.value("stop_after_first", false)) {
             until([&] { return device->calls.load() > 0 || coordinator.snapshot().quiescent; });

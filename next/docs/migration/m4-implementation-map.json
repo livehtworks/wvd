@@ -2099,16 +2099,16 @@
         "M4-COMBAT"
       ],
       "planned_owner_from_baseline": "native/games/wvd/combat",
-      "implementation": "native/games/wvd/combat/strategy.cpp",
-      "entry": "CombatStrategy::select / consume",
+      "implementation": "native/games/wvd/combat/turn.cpp",
+      "entry": "combat::take_turn",
       "implementation_status": "PARTIAL",
       "offline_status": "PASS",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "remaining": "状态消费/重置已迁移，实际导航/战斗/恢复输入及完整业务出口尚未承接。",
-      "implementation_extent": "STATE_ONLY",
-      "verification_scope": "状态 API 与真实 Maa 有限段，不是游戏动作",
-      "evidence_report": "../m4-state-validation.md"
+      "remaining": "外层战斗循环、Pause/复活/死亡恢复及完整任务仍待承接；真实目标质量未验。",
+      "implementation_extent": "FINITE_COMBAT_TURN",
+      "verification_scope": "真实 Maa 的单角色有限动作及策略消费，不是整场战斗或完整任务",
+      "evidence_report": "../m4-combat-turn-validation.md"
     },
     {
       "inventory_id": "function:src/script.py:Factory.StateCombat.DismissSkillPopupBeforeAuto:2505",
@@ -2143,13 +2143,16 @@
         "M4-COMBAT"
       ],
       "planned_owner_from_baseline": "native/games/wvd/combat",
-      "implementation": null,
-      "entry": null,
-      "implementation_status": "NOT_STARTED",
-      "offline_status": "NOT_RUN",
+      "implementation": "native/games/wvd/combat/turn.cpp",
+      "entry": "combat::take_turn",
+      "implementation_status": "PARTIAL",
+      "offline_status": "PASS",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "remaining": "本轮未承接此完整业务；固定旧入口仍为唯一生产实现。"
+      "remaining": "外层战斗循环、Pause/复活/死亡恢复及完整任务仍待承接；真实目标质量未验。",
+      "implementation_extent": "FINITE_COMBAT_TURN",
+      "verification_scope": "真实 Maa 的单角色有限动作及策略消费，不是整场战斗或完整任务",
+      "evidence_report": "../m4-combat-turn-validation.md"
     },
     {
       "inventory_id": "function:src/script.py:Factory.StateCombat.AutoThisCharAfterTargetFailure:2539",
@@ -2162,13 +2165,16 @@
         "M4-COMBAT"
       ],
       "planned_owner_from_baseline": "native/games/wvd/combat",
-      "implementation": null,
-      "entry": null,
-      "implementation_status": "NOT_STARTED",
-      "offline_status": "NOT_RUN",
+      "implementation": "native/games/wvd/combat/turn.cpp",
+      "entry": "combat::take_turn",
+      "implementation_status": "PARTIAL",
+      "offline_status": "PASS",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "remaining": "本轮未承接此完整业务；固定旧入口仍为唯一生产实现。"
+      "remaining": "外层战斗循环、Pause/复活/死亡恢复及完整任务仍待承接；真实目标质量未验。",
+      "implementation_extent": "FINITE_COMBAT_TURN",
+      "verification_scope": "真实 Maa 的单角色有限动作及策略消费，不是整场战斗或完整任务",
+      "evidence_report": "../m4-combat-turn-validation.md"
     },
     {
       "inventory_id": "function:src/script.py:Factory.StateCombat.ActiveAutoCombat:2545",
@@ -2241,13 +2247,16 @@
         "M4-COMBAT"
       ],
       "planned_owner_from_baseline": "native/games/wvd/combat",
-      "implementation": null,
-      "entry": null,
-      "implementation_status": "NOT_STARTED",
-      "offline_status": "NOT_RUN",
+      "implementation": "native/games/wvd/combat/turn.cpp",
+      "entry": "combat::take_turn",
+      "implementation_status": "PARTIAL",
+      "offline_status": "PASS",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "remaining": "本轮未承接此完整业务；固定旧入口仍为唯一生产实现。"
+      "remaining": "外层战斗循环、Pause/复活/死亡恢复及完整任务仍待承接；真实目标质量未验。",
+      "implementation_extent": "FINITE_COMBAT_TURN",
+      "verification_scope": "真实 Maa 的单角色有限动作及策略消费，不是整场战斗或完整任务",
+      "evidence_report": "../m4-combat-turn-validation.md"
     },
     {
       "inventory_id": "function:src/script.py:Factory.StateCombat.PressEnemyTargetFallback:2603",
@@ -2389,16 +2398,17 @@
         "M4-COMBAT"
       ],
       "planned_owner_from_baseline": "native/games/wvd/combat",
-      "implementation": "native/games/wvd/vision/recognizers.cpp",
-      "entry": "skill_level: pure recognition only",
+      "implementation": "native/games/wvd/combat/turn.cpp",
+      "entry": "combat::take_turn",
       "implementation_status": "PARTIAL",
-      "offline_status": "NOT_RUN",
+      "offline_status": "PASS",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "remaining": "完整调用者、动作与任务消费归 M4",
-      "implementation_extent": "M3_VISUAL_ONLY",
+      "remaining": "外层战斗循环、Pause/复活/死亡恢复及完整任务仍待承接；真实目标质量未验。",
+      "implementation_extent": "FINITE_COMBAT_TURN",
       "quality_status": "UNVERIFIED_REAL_QUALITY",
-      "evidence_report": "../m3-fix-validation.md"
+      "evidence_report": "../m4-combat-turn-validation.md",
+      "verification_scope": "真实 Maa 的单角色有限动作及策略消费，不是整场战斗或完整任务"
     },
     {
       "inventory_id": "function:src/script.py:Factory.StateMap_FindSwipeClick:2862",

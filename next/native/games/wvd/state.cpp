@@ -1,4 +1,5 @@
 #include "state.hpp"
+#include <algorithm>
 
 namespace wvd::games {
 using J = nlohmann::json;
@@ -23,15 +24,19 @@ void WvdRunState::on_segment(contracts::SegmentBoundary, std::uint64_t generatio
         throw std::runtime_error("WVD_STATE_GENERATION_REUSED");
     generation_ = generation;
     unit_index_ = unit;
+    prepared_.reset();
+    prepared_portrait_.clear();
     // 正常段续接不补满策略；恢复边界也不等于游戏已重启，具体业务调用 restart_game。
 }
 void WvdRunState::enter_dungeon() {
+    prepared_.reset();
     task_step_ = 0;
     need_initial_recover_ = true;
     if (setting_is("RELOAD_STRATEGY_WHEN", "每次副本开始", "Dungeon start"))
         strategy_.reload(task_step_);
 }
 void WvdRunState::target_point_completed() {
+    prepared_.reset();
     ++task_step_;
     if (strategy_.uses_task_points())
         strategy_.reload(task_step_);
@@ -47,6 +52,7 @@ void WvdRunState::observe_chest() {
     pending_chest_ = true;
 }
 void WvdRunState::resume_dungeon() {
+    prepared_.reset();
     auto now = clock_->now();
     const double combat =
         combat_started_ ? std::chrono::duration<double>(now - *combat_started_).count() : 0;
@@ -73,10 +79,12 @@ void WvdRunState::resume_dungeon() {
     }
 }
 void WvdRunState::resurrected() {
+    prepared_.reset();
     recover_after_rez_ = true;
     strategy_.reload(task_step_);
 }
 void WvdRunState::restart_game() {
+    prepared_.reset();
     combat_speed_ = false;
     zoom_world_map_ = false;
     bypass_after_restart_ = false;
@@ -121,6 +129,36 @@ bool WvdRunState::confirm_skill(const SkillSelection &selection, SkillOutcome ou
     if (selection.run_identity != identity_ || selection.generation != generation_)
         throw std::runtime_error("STALE_BUSINESS_SELECTION");
     return strategy_.consume(selection, outcome);
+}
+void WvdRunState::prepare_skill(const std::vector<PortraitScore> &scores, const J &catalog) {
+    if (!catalog.is_array() || catalog.size() > 128)
+        throw std::runtime_error("COMBAT_SKILL_CATALOG_INVALID");
+    auto selected = select_skill(scores);
+    prepared_.reset();
+    prepared_portrait_.clear();
+    if (!selected)
+        return;
+    auto found = std::find(catalog.begin(), catalog.end(), selected->skill);
+    if (found == catalog.end())
+        throw std::runtime_error("COMBAT_SKILL_NOT_COMPILED");
+    const auto role = selected->skill.at("role_var").get<std::string>();
+    double best = -1;
+    for (const auto &candidate : {role, role + "_sp", role + "_alt"})
+        for (const auto &score : scores)
+            if (score.portrait == candidate && score.score > best) {
+                best = score.score;
+                prepared_portrait_ = candidate;
+            }
+    prepared_index_ = static_cast<std::size_t>(std::distance(catalog.begin(), found));
+    prepared_ = std::move(selected);
+}
+bool WvdRunState::finish_prepared_skill(std::size_t index, SkillOutcome outcome) {
+    if (!prepared_ || index != prepared_index_)
+        throw std::runtime_error("COMBAT_PREPARED_SELECTION_MISSING");
+    const bool consumed = confirm_skill(*prepared_, outcome);
+    if (consumed)
+        prepared_.reset();
+    return consumed;
 }
 bool WvdRunState::confirm_event(const std::string &operation, const std::string &event,
                                  std::uint64_t generation, std::uint64_t frame_id,
@@ -168,6 +206,9 @@ J WvdRunState::summarize() const {
             {"unit_index", unit_index_},
             {"task_step", task_step_},
             {"strategy", strategy_.summary()},
+            {"has_prepared_skill", prepared_.has_value()},
+            {"prepared_skill_index", prepared_ ? J(prepared_index_) : J(nullptr)},
+            {"prepared_portrait", prepared_ ? prepared_portrait_ : ""},
             {"dungeons", dungeons_},
             {"combats", combats_},
             {"chests", chests_},

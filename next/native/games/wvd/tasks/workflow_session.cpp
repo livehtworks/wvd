@@ -1,6 +1,7 @@
 #include "workflow_session.hpp"
 #include "games/wvd/vision/recognizers.hpp"
 #include "games/wvd/diagnostics.hpp"
+#include "games/wvd/combat/turn.hpp"
 #include "platform/windows/bundle_lease.hpp"
 #include "platform/windows/file_digest.hpp"
 #include "maafw/preflight.hpp"
@@ -23,11 +24,15 @@ runtime::SessionDefinition publish_workflow(const CompiledWorkflow &workflow,
     session.terminal_node = workflow.terminal;
     session.checkpoint_node = workflow.checkpoint;
     session.recognitions = {vision::binding(aliases)};
-    for (const auto &node : workflow.nodes)
+    std::set<std::string> bound_actions;
+    for (const auto &node : workflow.nodes) {
         if (node.value("custom_action", "") == "WvdConfirm") {
-            session.actions = {wvd_confirmation_binding()};
-            break;
+            if (bound_actions.insert("WvdConfirm").second)
+                session.actions.push_back(wvd_confirmation_binding());
         }
+        if (node.value("custom_action", "") == "WvdCombat" && bound_actions.insert("WvdCombat").second)
+            session.actions.push_back(combat::combat_binding());
+    }
     // 缺失或不同修订的 binding 在连接前拒绝，不等候 SDK 首次执行才暴露。
     registry.bind_recognitions(session.recognitions);
     registry.validate(session);

@@ -67,7 +67,7 @@ CombatStrategy::select(const std::vector<PortraitScore> &scores) const {
     return highest >= .80 ? selected : std::nullopt;
 }
 bool CombatStrategy::consume(const SkillSelection &selection, SkillOutcome outcome) {
-    if (outcome != SkillOutcome::Succeeded)
+    if (outcome != SkillOutcome::Succeeded && outcome != SkillOutcome::AutoFallbackConfirmed)
         return false;
     if (selection.strategy_epoch != epoch_ || !current_.contains("skill_settings"))
         throw std::runtime_error("STALE_STRATEGY_SELECTION");

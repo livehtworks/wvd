@@ -45,6 +45,10 @@ class PipelineCompiler {
     void hit_limit(const std::string &name, int limit);
     void delay_after(const std::string &name, int milliseconds);
     void postcondition_budget(const std::string &name, int milliseconds);
+    void allowed_area(const std::string &name, nlohmann::json area);
+    // 固定游戏行为 binding；不开放任意动作/任意实现名称。
+    void combat_step(const std::string &name, const nlohmann::json &condition,
+                     nlohmann::json parameters, nlohmann::json next);
     CompiledWorkflow finish();
 
   private:

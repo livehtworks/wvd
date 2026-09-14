@@ -32,6 +32,7 @@
 | run.json definition.state_factory、continuation_units | 新版有限运行的冻结定义，含状态工厂身份、配置值、段顺序和预算 | RunCoordinator / RunStore | 非捕获工厂创建本 Run 独占状态；修改调用者原对象不改变已启动 Run |
 | result.json snapshot.business、sessions[].business/checkpoint | 静止边界的业务摘要及根检查点证据，不是崩溃后自动续跑许可 | RunCoordinator 在 Session join 后拷贝 | 历史审查与离线验收；completed_business_units 单独计数，不把一个段当整条任务 |
 | WvdRunState 确认签名、business.confirmed 事件、snapshot.business.last_confirmation | 本 Run 的操作去重与确认诊断；不是跨进程恢复数据库 | WvdConfirm 在实际新帧识别后生成；状态最多保存 4096 个签名，EventJournal 有界 | 任务步/宝箱计数与终态审查；摘要不等于持久化 profile 回执，不允许据此启动实机重放 |
+| WvdRunState prepared 选择及 business.combat 事件 | 本代次未完成技能意图和已确认消费诊断；不是恢复许可 | WvdCombat 在同帧头像匹配后选择；新帧后置确认后消费 | 技能图读取只读摘要并重新识别原角色；不保存旧帧/坐标，段边界清除未完成选择 |
 | docs/migration/m4-implementation-map.json、m4-task-status.json | 当前实现叠加和完整任务分母；不是执行计划 | m4_inventory.py 对照固定索引与实际数据测试结果 | 审核；DATA_BOUND_ONLY 不能解释为任务已运行 |
 | .local/m3fix-m4-*、m3-fixes-*、m4-data-* | 本轮隔离配置、合成图、失败复现与测试结果 | 工作包执行脚本、原生检查入口 | 私有审核证据；公开包仅收脱敏报告/索引，不包含配置原文或真实图片 |
 

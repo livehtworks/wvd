@@ -22,6 +22,8 @@ class WvdRunState final : public contracts::BusinessRunState {
     supply::RestDecision rest_decision(bool pickaxes_exhausted = false) const;
     std::optional<SkillSelection> select_skill(const std::vector<PortraitScore> &scores) const;
     bool confirm_skill(const SkillSelection &, SkillOutcome);
+    void prepare_skill(const std::vector<PortraitScore> &, const nlohmann::json &catalog);
+    bool finish_prepared_skill(std::size_t index, SkillOutcome);
     // 回放同一操作不重复修改业务；相同 ID 的不同效果拒绝。观察仍须来自当前代次。
     bool confirm_event(const std::string &operation, const std::string &event,
                        std::uint64_t generation, std::uint64_t frame_id,
@@ -48,6 +50,9 @@ class WvdRunState final : public contracts::BusinessRunState {
     bool setting_is(const char *name, const char *zh, const char *en) const;
     std::map<std::string, nlohmann::json> confirmations_;
     nlohmann::json last_confirmation_;
+    std::optional<SkillSelection> prepared_;
+    std::size_t prepared_index_{};
+    std::string prepared_portrait_;
 };
 void register_wvd_state(runtime::BehaviorRegistry &registry);
 contracts::BehaviorBinding wvd_state_binding(const nlohmann::json &profile);

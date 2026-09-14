@@ -30,9 +30,13 @@ class WorkflowTests(unittest.TestCase):
         bundle = folder / "bundle"
         (bundle / "image").mkdir(parents=True)
         names = ["worldmapflag", "City_RoyalCityLuknalia", "Inn", "Stay", "Economy", "royalsuite", "OK"]
-        if options.get("workflow") == "auto":
+        if options.get("workflow") in ("auto", "turn"):
             names += ["combatActive", "combatActive_2", "combatActive_3", "combatActive_4", "close",
                       "spellskill/skillDetail", "spellskill/CombatAutoEnable", "spellskill/CombatAutoDisable"]
+        if options.get("workflow") == "turn":
+            names += ["spellskill/char/A", "spellskill/char/A_sp", "spellskill/char/B", "flee", "dungFlag", "chestFlag",
+                      "RiseAgain", "supportSkillCheck", "notenoughsp", "notenoughmp", "next", "combatTarget", "combatSpd", "combatSpd_DHI"]
+            names += [f"spellskill/skillLvl/{prefix}{level}" for prefix in ("lv", "s_lv") for level in range(1, 10)]
         if options.get("workflow") in ("map", "map-confirm", "state-route"):
             names += ["mapFlag", "dungFlag", "chest", "chestFlag", "chestOpening", "whowillopenit",
                       "AutoMove", "EdgeOfTown", "combatActive", "combatActive_2", "combatActive_3", "combatActive_4",
@@ -56,7 +60,15 @@ class WorkflowTests(unittest.TestCase):
         for i, screen in enumerate(screens):
             pixels = np.zeros((1600, 900, 3), dtype=np.uint8)
             for key, (x, y) in screen.items():
-                pixels[y:y+24, x:x+40] = patterns[key.split("@", 1)[0]]
+                pattern = patterns[key.split("@", 1)[0]]
+                if key == "next" and i in options.get("degraded_next_frames", []):
+                    noise = rng.integers(30, 255, pattern.shape, dtype=np.uint8)
+                    degraded = ((pattern.astype(np.uint16) + noise) // 2).astype(np.uint8)
+                    score = float(cv2.matchTemplate(degraded, pattern, cv2.TM_CCOEFF_NORMED)[0, 0])
+                    self.assertGreater(score, .60)
+                    self.assertLess(score, .86)
+                    pattern = degraded
+                pixels[y:y+24, x:x+40] = pattern
             frame = folder / f"frame-{i}.png"
             write(frame, pixels)
             frames.append(str(frame))
@@ -66,7 +78,7 @@ class WorkflowTests(unittest.TestCase):
                           {"path": p.relative_to(bundle).as_posix(), "sha256": digest(p)}
                           for p in sorted(bundle.rglob("*.png"))])
         config.update(options)
-        if options.get("workflow") in ("chest", "map-confirm", "state-route"):
+        if options.get("workflow") in ("chest", "map-confirm", "state-route", "turn"):
             config.update(with_state=True, descriptor=str(ROOT / "packs/wvd/parameters/legacy-config-fields.json"))
         if "omit_image" in options:
             config["files"] = [f for f in config["files"] if f["path"] != "image/" + options["omit_image"]]
@@ -85,6 +97,140 @@ class WorkflowTests(unittest.TestCase):
             self.assertEqual(Path(module["path"]).resolve(), (self.sdk / "bin" / module["name"]).resolve())
             self.assertEqual(module["sha256"], digest(self.sdk / "bin" / module["name"]))
         return output
+
+    @staticmethod
+    def turn_profile(level=1, target="next", defend=False):
+        return dict(DEFAULT_OVERALL_STRATEGY="Manual", TASK_SPECIFIC_CONFIG=False,
+                    STRATEGY=[dict(group_name="Manual", skill_settings=[
+                        dict(role_var=role, skill_var="防御" if defend else "左下技能", skill_lvl=level,
+                             target_var=target, freq_var="保留原值") for role in ("A", "B")])])
+
+    @staticmethod
+    def turn_screen(role="A", **extra):
+        return {"combatActive": (10, 5), f"spellskill/char/{role}": (24, 55), "flee": (750, 1150), **extra}
+
+    def test_turn_enemy_stops_after_detail_closes(self):
+        menu = self.turn_screen()
+        detail = self.turn_screen(**{"spellskill/skillDetail": (350, 950), "next": (500, 300)})
+        r = self.execute("turn-enemy", [menu, detail, detail, self.turn_screen("B")],
+                         [dict(kind=0, x=266, y=1054), dict(kind=0, x=440, y=392), dict(kind=0, x=520, y=392)],
+                         workflow="turn", profile=self.turn_profile())
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 3)
+        self.assertFalse(r["mismatch"])
+        rows = r["snapshot"]["business"]["strategy"]["current"]["skill_settings"]
+        self.assertEqual([row["role_var"] for row in rows], ["B"])
+
+    def test_turn_level_and_area_confirmation(self):
+        detail = self.turn_screen(**{"spellskill/skillDetail": (350, 950), "OK": (500, 1480),
+                                    "spellskill/skillLvl/lv1": (250, 1320), "spellskill/skillLvl/s_lv2": (400, 1320)})
+        r = self.execute("turn-aoe", [self.turn_screen(), detail, detail, self.turn_screen("B")],
+                         [dict(kind=0, x=266, y=1054), dict(kind=0, x=420, y=1332), dict(kind=0, x=520, y=1492)],
+                         workflow="turn", profile=self.turn_profile(level=2))
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 3)
+        self.assertFalse(r["mismatch"])
+
+    def test_turn_missing_target_closes_popup_before_auto(self):
+        detail = self.turn_screen(**{"spellskill/skillDetail": (350, 950), "close": (350, 1490)})
+        disabled = self.turn_screen(**{"spellskill/CombatAutoDisable": (810, 1060)})
+        enabled = self.turn_screen(**{"spellskill/CombatAutoEnable": (810, 1060)})
+        r = self.execute("turn-auto", [self.turn_screen(), detail, disabled, enabled, disabled],
+                         [dict(kind=0, x=266, y=1054), dict(kind=0, x=370, y=1502),
+                          dict(kind=0, x=850, y=1100), dict(kind=0, x=850, y=1100)],
+                         workflow="turn", profile=self.turn_profile())
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 4)
+        self.assertFalse(r["mismatch"])
+        self.assertEqual(len(r["snapshot"]["business"]["strategy"]["current"]["skill_settings"]), 1)
+
+    def test_turn_failed_input_and_stop_do_not_consume(self):
+        for stopped in (False, True):
+            commands = [dict(kind=0, x=266, y=1054, **({"stay": True} if stopped else {"reject": True}))]
+            r = self.execute(f"turn-fail-{stopped}", [self.turn_screen()], commands,
+                             workflow="turn", profile=self.turn_profile(), stop_after_first=stopped)
+            self.assertNotEqual(r["snapshot"]["state"], "Completed", r)
+            self.assertEqual(r["backend_calls"], 1)
+            self.assertEqual(len(r["snapshot"]["business"]["strategy"]["current"]["skill_settings"]), 2)
+
+    def test_turn_low_confidence_and_edge_clipping(self):
+        detail = self.turn_screen(**{"spellskill/skillDetail": (350, 950), "next": (850, 850)})
+        r = self.execute("turn-low-edge", [self.turn_screen(), detail, detail, self.turn_screen("B")],
+                         [dict(kind=0, x=266, y=1054), dict(kind=0, x=790, y=900), dict(kind=0, x=870, y=900)],
+                         workflow="turn", profile=self.turn_profile(), degraded_next_frames=[1, 2])
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 3)
+        self.assertFalse(r["mismatch"])
+
+    def test_turn_ally_selection_precedes_ok(self):
+        detail = self.turn_screen(**{"spellskill/skillDetail": (350, 950), "supportSkillCheck": (720, 1500)})
+        selected = {**detail, "OK": (500, 1480)}
+        r = self.execute("turn-support", [self.turn_screen(), detail, selected, self.turn_screen("B")],
+                         [dict(kind=0, x=266, y=1054), dict(kind=0, x=450, y=1400), dict(kind=0, x=520, y=1492)],
+                         workflow="turn", profile=self.turn_profile(target="中下角色"))
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 3)
+        self.assertFalse(r["mismatch"])
+
+    def test_turn_unmatched_actor_does_not_consume(self):
+        profile = self.turn_profile()
+        profile["STRATEGY"][0]["skill_settings"] = profile["STRATEGY"][0]["skill_settings"][:1]
+        disabled = self.turn_screen("B", **{"spellskill/CombatAutoDisable": (810, 1060)})
+        enabled = self.turn_screen("B", **{"spellskill/CombatAutoEnable": (810, 1060)})
+        r = self.execute("turn-unmatched", [disabled, enabled, disabled],
+                         [dict(kind=0, x=850, y=1100), dict(kind=0, x=850, y=1100)], workflow="turn", profile=profile)
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 2)
+        self.assertFalse(r["mismatch"])
+        self.assertEqual(len(r["snapshot"]["business"]["strategy"]["current"]["skill_settings"]), 1)
+
+    def test_turn_uses_best_actor_and_defend_waits_for_change(self):
+        menu = self.turn_screen("B")
+        r = self.execute("turn-defend", [menu, menu, self.turn_screen()],
+                         [dict(kind=0, x=513, y=1200), dict(kind=0, x=513, y=1200)],
+                         workflow="turn", profile=self.turn_profile(defend=True))
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 2)
+        self.assertFalse(r["mismatch"])
+        self.assertEqual([v["role_var"] for v in r["snapshot"]["business"]["strategy"]["current"]["skill_settings"]], ["A"])
+
+    def test_turn_speed_and_three_open_attempts(self):
+        menu = self.turn_screen()
+        detail = self.turn_screen(**{"spellskill/skillDetail": (350, 950), "next": (500, 300)})
+        r = self.execute("turn-three-open", [{**menu, "combatSpd_DHI": (20, 1050)}, menu, menu, menu, detail, self.turn_screen("B")],
+                         [dict(kind=0, x=40, y=1062)] + [dict(kind=0, x=266, y=1054)] * 3 + [dict(kind=0, x=440, y=392)],
+                         workflow="turn", profile=self.turn_profile())
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 5)
+        self.assertFalse(r["mismatch"])
+
+    def test_turn_resource_shortage_retries_level_one_once(self):
+        initial = self.turn_screen(**{"spellskill/skillDetail": (350, 950), "OK": (500, 1480),
+                                     "spellskill/skillLvl/lv1": (250, 1320), "spellskill/skillLvl/lv2": (400, 1320)})
+        low = self.turn_screen(**{"spellskill/skillDetail": (350, 950), "OK": (500, 1480),
+                                 "spellskill/skillLvl/lv1": (250, 1320)})
+        error = self.turn_screen(**{"notenoughmp": (300, 800)})
+        screens = [self.turn_screen(), initial, initial, error, self.turn_screen(), low, low]
+        commands = [dict(kind=0, x=266, y=1054), dict(kind=0, x=420, y=1332), dict(kind=0, x=520, y=1492),
+                    dict(kind=5, key=4), dict(kind=0, x=266, y=1054), dict(kind=0, x=270, y=1332), dict(kind=0, x=520, y=1492)]
+        for exhausted in (False, True):
+            r = self.execute(f"turn-resource-{exhausted}", screens + [error if exhausted else self.turn_screen("B")],
+                             commands, workflow="turn", profile=self.turn_profile(level=2))
+            self.assertEqual(r["snapshot"]["state"], "Interrupted" if exhausted else "Completed", r)
+            self.assertEqual(r["backend_calls"], 7)
+            self.assertFalse(r["mismatch"])
+            self.assertEqual(len(r["snapshot"]["business"]["strategy"]["current"]["skill_settings"]), 2 if exhausted else 1)
+
+    def test_turn_changed_actor_with_detail_does_not_receive_old_clicks(self):
+        detail = self.turn_screen(**{"spellskill/skillDetail": (350, 950), "next": (500, 300)})
+        wrong_actor = self.turn_screen("B", **{"spellskill/skillDetail": (350, 950), "next": (500, 300)})
+        r = self.execute("turn-stale-actor", [self.turn_screen(), detail, wrong_actor],
+                         [dict(kind=0, x=266, y=1054), dict(kind=0, x=440, y=392)],
+                         workflow="turn", profile=self.turn_profile())
+        self.assertNotEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 2)
+        self.assertFalse(r["mismatch"])
+        self.assertEqual(len(r["snapshot"]["business"]["strategy"]["current"]["skill_settings"]), 2)
 
     def test_city_stops_at_arrival(self):
         world = {"worldmapflag": (80, 100), "City_RoyalCityLuknalia": (132, 1352)}

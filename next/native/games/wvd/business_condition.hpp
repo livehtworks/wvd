@@ -8,13 +8,16 @@ namespace wvd::games {
 inline bool business_condition(const nlohmann::json &summary, const nlohmann::json &parameters) {
     static const std::set<std::string> fields{
         "/task_step", "/pending_combat", "/pending_chest", "/need_initial_recover",
-        "/recover_after_rez", "/met_encounter", "/dungeons", "/combats", "/chests", "/strategy/automatic"};
+        "/recover_after_rez", "/met_encounter", "/dungeons", "/combats", "/chests", "/strategy/automatic",
+        "/has_prepared_skill", "/prepared_skill_index"};
     const auto path = parameters.at("field").get<std::string>();
     if (!fields.contains(path))
         throw std::runtime_error("BUSINESS_CONDITION_FIELD_INVALID");
     const auto &actual = summary.at(nlohmann::json::json_pointer(path));
     const auto &expected = parameters.at("value");
     const auto comparison = parameters.value("comparison", "eq");
+    if (path == "/prepared_skill_index" && actual.is_null())
+        return false;
     if (actual.is_boolean()) {
         if (!expected.is_boolean() || comparison != "eq")
             throw std::runtime_error("BUSINESS_CONDITION_TYPE_INVALID");

@@ -15,7 +15,8 @@ struct SkillSelection {
     std::size_t row{};
     nlohmann::json skill;
 };
-enum class SkillOutcome { Succeeded, TargetFailed, Cancelled, AutoFallback };
+// 发起自动兜底不等于成功；只有后置画面已确认，才按旧逻辑消费已选条目。
+enum class SkillOutcome { Succeeded, TargetFailed, Cancelled, AutoFallback, AutoFallbackConfirmed };
 class CombatStrategy {
   public:
     explicit CombatStrategy(nlohmann::json profile);

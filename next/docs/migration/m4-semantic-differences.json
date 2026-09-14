@@ -6,10 +6,11 @@
     {"id": "CONFIG_STRICT_PARSE", "scope": "M4 离线导入", "before": "旧 Python/Tkinter 读取配置", "after": "已知字段坏类型、重复键和坏 JSON 明确拒绝，未知值原树保留；状态工厂参数随 Run 冻结", "authority": "工作包 M4.1/M4.2", "remaining": "未接入生产和完整任务配置消费"},
     {"id": "PROFILE_CAS", "scope": "新版副本保存", "before": "旧文件保存接口", "after": "新目录和完整字段契约，内容 revision 冲突拒绝，不覆盖旧配置", "authority": "工作包 M4.1", "remaining": "业务 operation_id 写回与最终一致性未实现"},
     {"id": "BOOLEAN_CONDITION", "scope": "GuardedAction", "before": "场景与后置 Hit 也要求 center", "after": "条件 Hit 无需坐标；位置动作仍要求有可执行位置，低置信目标不得直接授权", "authority": "工作包 FIX-CUSTOM", "remaining": "真实场景质量未验"},
-    {"id": "FREQ_VAR_PRESERVED", "scope": "WVD 策略", "before": "字段可存在，但固定旧源 StateCombat 未读取 freq_var", "after": "CombatStrategy 保留原值，成功按原规则消费，不发明频次执行", "authority": "固定旧源 ReloadStrategy / StateCombat", "remaining": "实际技能输入尚未迁移，状态测试不等于战斗通过"},
+    {"id": "FREQ_VAR_PRESERVED", "scope": "WVD 策略", "before": "字段可存在，但固定旧源 StateCombat 未读取 freq_var", "after": "CombatStrategy 保留原值，成功按原规则消费，不发明频次执行", "authority": "固定旧源 ReloadStrategy / StateCombat", "remaining": "有限单角色输入已验证；外层整场战斗和完整任务仍未接齐"},
+    {"id": "CONFIRMED_SKILL_FALLBACK", "scope": "已选技能的自动兜底", "before": "旧技能函数自动兜底返回 True 后调用者移除行；原阶段报告过宽地写成兜底不消费", "after": "区分未确认 AutoFallback 与已确认 AutoFallbackConfirmed；只有后置确认才消费，未匹配角色仍不消费", "authority": "固定旧源 StateCombat 与工作包 M4.2/M4.5", "remaining": "真实角色动作质量和整场战斗未验"},
     {"id": "MONOTONIC_BUSINESS_TIME", "scope": "WVD 状态", "before": "time.time 与数值 0 标记未开始", "after": "注入单调时钟与可空起点；保留旧 lap 和战斗/宝箱重叠统计口径", "authority": "工作包 M4.2", "remaining": "完整任务/补给消费者及最终业务对账待后续接入"},
     {"id": "FRESH_WORLD_MAP_CANDIDATES", "scope": "目标可见的入城子流程", "before": "旧候选点来自首次位置，入城/离开地图后停止本批次", "after": "每个旧偏移点重新识别；Inn 确认前不算到达，未知转场不盲点，最多五轮候选", "authority": "工作包 M4.4 的新帧、门禁和入城停止约束", "remaining": "开图/缩放/拖动、其他目的地和对话尚未全部承接"},
-    {"id": "AUTO_CONFIRMATION", "scope": "Auto 有限子流程", "before": "未知开关三次后允许双击保底，未要求明确开启证据", "after": "先关闭覆盖层，保底单击后必须识别开启；关闭覆盖层总预算三次，失败要求恢复", "authority": "工作包 M4.5 必须确认 Auto 状态、不能在覆盖层下盲点", "remaining": "单角色临时 Auto、完整技能/战斗链尚未承接，真实质量未验"},
+    {"id": "AUTO_CONFIRMATION", "scope": "Auto 有限子流程", "before": "未知开关三次后允许双击保底，未要求明确开启证据", "after": "先关闭覆盖层，保底单击后必须识别开启；单角色 Auto 还需确认关闭；关闭覆盖层总预算三次，失败要求恢复", "authority": "工作包 M4.5 必须确认 Auto 状态、不能在覆盖层下盲点", "remaining": "外层战斗/Pause/复活与完整任务尚未承接，真实质量未验"},
     {"id": "NO_BUSINESS_REPLACEMENT", "scope": "58 个任务", "before": "Python 是唯一完整生产实现", "after": "仍是 Python；新版有数据、状态和部分离线子流程，没有完整任务入口", "authority": "不得以局部结果替代完整迁移", "remaining": "完整 M4 业务实现和离线因果验收"}
   ]
 }

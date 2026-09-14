@@ -174,11 +174,52 @@ def generate(data_evidence, state_evidence=None, plan_evidence=None, workflow_ev
     print("341 entries retained; 58 task data bindings verified; 0 task executions claimed.")
 
 
+def update_combat(combat_evidence):
+    """只覆盖已验证的战斗子流程行，保留其他阶段证据及全部任务分母。"""
+    expected = {
+        "turn-enemy": ("Completed", 3), "turn-aoe": ("Completed", 3), "turn-support": ("Completed", 3),
+        "turn-auto": ("Completed", 4), "turn-unmatched": ("Completed", 2), "turn-low-edge": ("Completed", 3),
+        "turn-fail-False": ("Failed", 1), "turn-fail-True": ("UserStopped", 1), "turn-stale-actor": ("Failed", 2),
+        "turn-defend": ("Completed", 2), "turn-resource-False": ("Completed", 7),
+        "turn-resource-True": ("Interrupted", 7), "turn-three-open": ("Completed", 5),
+    }
+    executable_hash = hashlib.sha256((ROOT / "build/m4/Release/test_m4_workflow.exe").read_bytes()).hexdigest()
+    for name, (state, calls) in expected.items():
+        result = read(combat_evidence / name / "output.json")
+        execution = read(combat_evidence / name / "execution.json")
+        if (execution != {"exe_sha256": executable_hash, "exit": 0} or result["snapshot"]["state"] != state
+                or result["backend_calls"] != calls or result["mismatch"] or not result["snapshot"]["quiescent"]):
+            raise ValueError("M4_COMBAT_EVIDENCE_MISMATCH:" + name)
+    path = ROOT / "docs/migration/m4-implementation-map.json"
+    document = read(path)
+    targets = {"Factory.StateCombat", "Factory.StateCombat.AutoThisChar", "Factory.StateCombat.AutoThisCharAfterTargetFailure",
+               "Factory.StateCombat.PressCombatTargetArea", "Factory.StateCombat.SkillLvlSelectAndDoubleCheck"}
+    found = set()
+    for row in document["entries"]:
+        if row["legacy_symbol"] in targets:
+            found.add(row["legacy_symbol"])
+            row.update(implementation="native/games/wvd/combat/turn.cpp", entry="combat::take_turn",
+                       implementation_status="PARTIAL", implementation_extent="FINITE_COMBAT_TURN",
+                       offline_status="PASS", verification_scope="真实 Maa 的单角色有限动作及策略消费，不是整场战斗或完整任务",
+                       evidence_report="../m4-combat-turn-validation.md",
+                       remaining="外层战斗循环、Pause/复活/死亡恢复及完整任务仍待承接；真实目标质量未验。")
+    if found != targets or document["counts"] != {"function": 250, "config": 33, "task": 58}:
+        raise ValueError("M4_COMBAT_INVENTORY_MISMATCH")
+    write(path, document)
+    print("5 combat entries updated; 58 complete task statuses unchanged.")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data-evidence", type=Path, required=True)
+    parser.add_argument("--data-evidence", type=Path)
     parser.add_argument("--state-evidence", type=Path)
     parser.add_argument("--plan-evidence", type=Path)
     parser.add_argument("--workflow-evidence", type=Path)
+    parser.add_argument("--combat-evidence", type=Path)
     args = parser.parse_args()
-    generate(args.data_evidence, args.state_evidence, args.plan_evidence, args.workflow_evidence)
+    if not args.data_evidence and not args.combat_evidence:
+        parser.error("--data-evidence or --combat-evidence is required")
+    if args.data_evidence:
+        generate(args.data_evidence, args.state_evidence, args.plan_evidence, args.workflow_evidence)
+    if args.combat_evidence:
+        update_combat(args.combat_evidence)

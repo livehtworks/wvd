@@ -108,6 +108,13 @@ class StateTests(unittest.TestCase):
         self.assertEqual(r["snapshot"]["state"], "Completed", r)
         self.assertTrue(r["snapshot"]["business"]["strategy"]["automatic"])
 
+    def test_confirmed_auto_consumes_only_prepared_entry(self):
+        r = self.run_case("confirmed-auto")["direct"]
+        self.assertEqual(len(r["fallback_before_confirmation"]["strategy"]["current"]["skill_settings"]), 2)
+        self.assertEqual(len(r["fallback_confirmed"]["strategy"]["current"]["skill_settings"]), 1)
+        self.assertFalse(r["fallback_confirmed"]["has_prepared_skill"])
+        self.assertTrue(r["prepared_cleared_at_boundary"])
+
     def test_supply_conditions_keep_forced_rest_separate(self):
         cases, expected = [], []
         # 预期来自旧 IdentifyState/强制补镐子条件，逐项列出而非调用被测函数生成。

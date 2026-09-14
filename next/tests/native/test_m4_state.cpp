@@ -74,6 +74,16 @@ J direct_contract(const J &profile) {
     result["after_failures"] = state.summary();
     state.confirm_skill(*selection, games::SkillOutcome::Succeeded);
     result["after_success"] = state.summary();
+    games::WvdRunState fallback(profile, {"fallback", 1, clock});
+    fallback.enter_segment(contracts::SegmentBoundary::Initial, 1, 0);
+    fallback.prepare_skill({{"A", .91}}, profile.at("STRATEGY")[0].at("skill_settings"));
+    require(!fallback.finish_prepared_skill(0, games::SkillOutcome::AutoFallback), "UNCONFIRMED_AUTO_CONSUMED");
+    result["fallback_before_confirmation"] = fallback.summary();
+    fallback.finish_prepared_skill(0, games::SkillOutcome::AutoFallbackConfirmed);
+    result["fallback_confirmed"] = fallback.summary();
+    fallback.prepare_skill({{"B", .91}}, profile.at("STRATEGY")[0].at("skill_settings"));
+    fallback.enter_segment(contracts::SegmentBoundary::Continuation, 2, 1);
+    result["prepared_cleared_at_boundary"] = !fallback.summary().at("has_prepared_skill").get<bool>();
     try {
         state.confirm_skill(*selection, games::SkillOutcome::Succeeded);
         result["duplicate_rejected"] = false;
