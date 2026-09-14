@@ -2,6 +2,7 @@
 #include "asset_resolver.hpp"
 #include "bobber.hpp"
 #include "boot_probes.hpp"
+#include "navigation_probes.hpp"
 #include "image_ops.hpp"
 #include "games/wvd/business_condition.hpp"
 #include <cmath>
@@ -228,6 +229,28 @@ J evaluate_uncached(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels
                 return decision(true, allowed_rect, {{"stage", probe.value("image", probe.value("mode", "unknown"))}});
         }
         return decision(false, {}, {{"stage", "unknown"}});
+    }
+    if (mode == "auto_route_post") {
+        check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");
+        auto observe = [&](const J &probe) {
+            auto result = evaluate_impl(bundle, pixels, probe, bound, scope, cache, depth + 1, memo);
+            check(result.at("outcome") != "Error", "WVD_NAVIGATION_RECOGNITION_ERROR");
+            return result.at("outcome") == "Hit";
+        };
+        const bool map = observe({{"mode", "template"}, {"image", "mapFlag"}, {"threshold", .8}});
+        // 原式 moving|encounter|outside|no_target 中，!map && dungFlag 足以证明结果；
+        // 即使同时出现遭遇/退场图标也属于允许返回状态，不必重算所有排除条件。
+        // 这里只作后置分类，绝不授权下一次输入；通用 any/all 的 Error 传播不变。
+        if (!map && observe({{"mode", "template"}, {"image", "dungFlag"}, {"threshold", .8}}))
+            return decision(true, allowed_rect, {{"stage", "dungeon"}});
+        for (const auto &probe : auto_route_probes())
+            if (observe(probe))
+                return decision(true, allowed_rect, {{"stage", probe.value("image", "combat_active")}});
+        if (!map)
+            for (const auto &probe : auto_route_outside_probes())
+                if (observe(probe))
+                    return decision(true, allowed_rect, {{"stage", probe.at("image")}});
+        return decision(false, {}, {{"stage", "unknown_or_map_only"}});
     }
     if (mode == "boot_ready" || mode == "boot_post" || mode == "blocking_screen") {
         check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");

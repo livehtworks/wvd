@@ -79,6 +79,58 @@ class FixTests(unittest.TestCase):
             (folder / (key + ".png")).write_bytes(cv2.imencode(".png", image)[1].tobytes())
         return folder
 
+    def test_auto_route_post_matches_legacy_boolean_layouts(self):
+        def image(name):
+            return {"mode": "template", "image": name, "threshold": .8}
+        def any_of(*values):
+            return {"mode": "any", "conditions": list(values)}
+        def all_of(*values):
+            return {"mode": "all", "conditions": list(values)}
+        def absent(value):
+            return {"mode": "not", "conditions": [value]}
+        encounter = any_of({"mode": "combat_active"}, image("chestFlag"), image("chestOpening"),
+                           image("whowillopenit"), image("RiseAgain"))
+        outside = all_of(any_of(*(image(name) for name in ("Inn", "EdgeOfTown", "returnText", "returntoTown",
+                                                          "openworldmap", "worldmapflag"))),
+                         absent(image("mapFlag")), absent(encounter))
+        moving = all_of(image("dungFlag"), absent(image("mapFlag")), absent(encounter), absent(outside))
+        original = any_of(moving, encounter, outside,
+                          any_of(image("NoChestCanBeFound"), image("theRouteToTheDestinationCannotBeFound")))
+        names = ["mapFlag", "dungFlag", "combatActive", "combatActive_2", "combatActive_3", "combatActive_4",
+                 "chestFlag", "chestOpening", "whowillopenit", "RiseAgain", "NoChestCanBeFound",
+                 "theRouteToTheDestinationCannotBeFound", "Inn", "EdgeOfTown", "returnText", "returntoTown",
+                 "openworldmap", "worldmapflag"]
+        for dungeon in (False, True):
+            for on_map in (False, True):
+                for marker in (None, "Inn", "chestFlag", "NoChestCanBeFound"):
+                    with self.subTest(dungeon=dungeon, on_map=on_map, marker=marker):
+                        folder = self.images(f"auto-post-{dungeon}-{on_map}-{marker}")
+                        rng = np.random.default_rng(92514)
+                        frame = np.zeros((1600, 900, 3), dtype=np.uint8)
+                        present = ({"dungFlag"} if dungeon else set()) | ({"mapFlag"} if on_map else set())
+                        if marker:
+                            present.add(marker)
+                        for i, name in enumerate(names):
+                            template = rng.integers(30, 255, (24, 40, 3), dtype=np.uint8)
+                            (folder / "bundle/image" / (name + ".png")).write_bytes(cv2.imencode(".png", template)[1].tobytes())
+                            if name in present:
+                                frame[300+i*35:324+i*35, 400:440] = template
+                        (folder / "before.png").write_bytes(cv2.imencode(".png", frame)[1].tobytes())
+                        nodes, cases = {}, []
+                        for key, parameters in (("legacy", original), ("classified", {"mode": "auto_route_post"})):
+                            request = {**reco(key), "parameters": parameters}
+                            cases.append({"id": key, "request": request})
+                            nodes[key] = {"next": [key + "_candidate"], "timeout": 50}
+                            nodes[key + "_candidate"] = {"recognition": "Custom", "custom_recognition": "WvdVision",
+                                "roi": request["roi"], "custom_recognition_param": parameters, "action": "DoNothing"}
+                        r = self.execute(folder, {"mode": "roi", "cases": cases}, nodes)
+                        expected = (not on_map and (dungeon or marker == "Inn")) or marker in ("chestFlag", "NoChestCanBeFound")
+                        self.assertEqual([v["outcome"] for v in r["cases"]], [0 if expected else 1] * 2)
+                        for pipeline in r["pipelines"]:
+                            self.assertTrue(pipeline["events"])
+                            self.assertTrue(all(e["outcome"] == ("Hit" if expected else "NoHit") for e in pipeline["events"]))
+                        self.assertEqual(r["backend_calls"], 0)
+
     def test_roi_direct_and_pipeline(self):
         for position, expected in [((334, 417), "Hit"), ((334, 1000), "NoHit")]:
             with self.subTest(position=position):

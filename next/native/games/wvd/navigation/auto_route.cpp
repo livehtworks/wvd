@@ -17,7 +17,7 @@ tasks::CompiledWorkflow auto_route(const std::string &target) {
                                  C::absent(map), C::absent(encounter)});
     const auto moving = C::all({dungeon, C::absent(map), C::absent(encounter), C::absent(outside)});
     const auto no_target = C::any({C::image("NoChestCanBeFound"), C::image("theRouteToTheDestinationCannotBeFound")});
-    const auto post = C::any({moving, encounter, outside, no_target});
+    const J post{{"mode", "auto_route_post"}};
     graph.observe("Encounter", encounter, {"EncounterExit"});
     graph.recovery("EncounterExit", "navigation.auto_encounter_requires_dispatch");
     graph.recovery("StoppedExit", "navigation.auto_stopped_requires_dispatch");

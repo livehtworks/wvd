@@ -1,5 +1,6 @@
 #include "pipeline_compiler.hpp"
 #include "games/wvd/vision/boot_probes.hpp"
+#include "games/wvd/vision/navigation_probes.hpp"
 #include <algorithm>
 #include <functional>
 #include <map>
@@ -21,6 +22,12 @@ void collect_images(const J &value, std::set<std::string> &images) {
             collect_images(vision::boot_probes(mode == "boot_post"), images);
         if (mode == "blocking_screen")
             collect_images(vision::blocking_probes(), images);
+        if (mode == "auto_route_post") {
+            images.insert("mapFlag.png");
+            images.insert("dungFlag.png");
+            collect_images(vision::auto_route_probes(), images);
+            collect_images(vision::auto_route_outside_probes(), images);
+        }
         if (mode == "party_death" || mode == "party_defeat") {
             images.insert("someonedead.png");
             if (mode == "party_defeat")
