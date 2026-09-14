@@ -276,6 +276,13 @@
     },
     {
       "task_id": "fortress-B8F_trap",
+      "iteration_implementation": {
+        "status": "AWAITING_NATIVE_VALIDATION",
+        "entry": "tasks::fortress_trap_iteration",
+        "file": "native/games/wvd/tasks/fortress_trap.cpp",
+        "evidence_report": "../m4-fortress-trap-validation.md",
+        "scope": "FINITE_ITERATION_NOT_FULL_TASK_ACCEPTANCE"
+      },
       "legacy_type": "quest",
       "legacy_title": "[妖精]要塞八层陷阱",
       "source_ref": "resources/quest/quest.json#/fortress-B8F_trap",
