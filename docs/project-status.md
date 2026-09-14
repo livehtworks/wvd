@@ -11,8 +11,10 @@
 
 ## 当前阶段
 
+- 普通/快速开箱完整有限链已通过：状态 14、流程 9 方法/18 场景；原 240 秒预算失败同例修后完成 40 次输入，见 `../next/docs/m4-chest-selection-validation.md`。实现检查点 `2912988`，不将此子流程记为完整 TaskID 通过。队友死亡提示与资源封存负例正在继续实现验证，未计通过。
+
 - Pause 覆盖层先于底层就绪图标处理，六次无效点击后新帧仍 Pause 才请求恢复；首次/第六次成功和角色/详情负例通过，补验及普通阻塞/启动恢复 21 方法通过，见 `../next/docs/m4-pause-validation.md`，实现提交 `a8b1bd1`。
-- 复活消费者与失败遭遇独立编号已接入正常路线：状态 13、复活流程 5 方法/9 场景、计划 6 方法通过，见 `../next/docs/m4-revival-validation.md`，提交 `04999ca`。包括失败后复活、恢复角色并继续到任务点；不计失败战斗为胜场。当前产物 Pause 4 方法回归通过，未混用不同 EXE 身份。快速开箱完整重试链正在补齐，未计通过。
+- 复活消费者与失败遭遇独立编号已接入正常路线：状态 13、复活流程 5 方法/9 场景、计划 6 方法通过，见 `../next/docs/m4-revival-validation.md`，提交 `04999ca`。包括失败后复活、恢复角色并继续到任务点；不计失败战斗为胜场。该阶段产物 Pause 4 方法回归通过，未混用不同 EXE 身份。
 
 - 地图/Auto/角色回合/遭遇/宝箱/角色恢复已接通普通阻塞中断与外层重识别，5 方法/6 场景通过，见 `../next/docs/m4-interruption-validation.md`，阶段提交 `6e24743`。前阶段共用回归 64 方法中 63 通过，唯一恢复子图总预算失败已修后同例通过。入城/住宿/专项和全局事件仍未齐。
 - 副作用动作后覆盖层的独立“结果未确认”出口及恢复策略拒绝已通过定点验证，见 `../next/docs/m4-effect-interruption-validation.md`；不把此状态记为成功，不自动重放或重启。该批 11 方法全部通过（含 5 项图片来源及恢复预算复验），同产物 M2 102、M3 定点 9、计划 6 方法回归通过；完整逐任务验收仍未齐。
@@ -22,7 +24,7 @@
 - M4 已接入配置副本/profile-CAS、58 项类型化任务数据、运行级状态工厂、策略消费、正常续段、43 项入本/路线图。回城普通/强制补给、角色面板恢复、住宿回执和退场新帧确认已组合；证据见 `../next/docs/m4-departure-validation.md`、`../next/docs/m4-dungeon-route-validation.md`、`../next/docs/m4-healing-validation.md`。
 - 战斗已有头像/技能/等级/敌我目标、防跨角色连点、Auto 确认及有界持续等待、有限多角色遭遇和宝箱转战斗。原生子作用域仅清理局部命中预算，不清父预算/策略；证据见 `../next/docs/m4-combat-turn-validation.md`、`../next/docs/m4-auto-wait-validation.md`、`../next/docs/m4-encounter-validation.md`、`../next/docs/m4-native-child-validation.md`。
 - 类型化恢复已有应用优先、重连/实例升级、启动后继续原任务的离线链，见 `../next/docs/m4-lifecycle-validation.md`。首次连接失败冷启动、完整任务恢复位置、全部全局事件和真实端口未齐。
-- 当前主要剩余：全局启动阻塞/死亡/复活/Pause/对话，旧开箱全部重试，15 项专项，副作用确认/保存间的对账与新版 profile 写回，配置/mod 剩余组合及资源导入，逐任务离线成功/失败/停止/恢复和最终完整性矩阵。分项事实见 `../next/docs/m4-business-validation.md` 与 `../next/docs/migration/m4-task-status.json`；不把子图、静态编译或正常迭代通过改成完整 TaskID 通过。
+- 当前主要剩余：死亡/其它全局对话及普通插入全链连接，15 项专项，副作用确认/保存间的对账与新版 profile 写回，配置/mod 剩余组合及资源导入，逐任务离线成功/失败/停止/恢复和最终完整性矩阵。已通过的开箱、Pause 和复活子链仍须全任务组合验收。分项事实见 `../next/docs/m4-business-validation.md` 与 `../next/docs/migration/m4-task-status.json`；不把子图、静态编译或正常迭代通过改成完整 TaskID 通过。
 - 阶段历史、失败修正和 EXE/SDK 身份以各专题报告为准，不累计旧测试数量冒充当前全量复测；早期私有证据和原审核包保持不变。输入帧 TTL 未放宽，Session 总预算随编译定义封存。
 
 - 当前 `WVD_MaaFramework_M3_Fix_and_M4_Pack_20260914` 整体未完成：FIXES_INCOMPLETE；M4 为 M4_PARTIAL_IMPLEMENTATION。起点 `4d7c4fa`，初始干净；本次按用户最新授权将累计实现保存为本地检查点，后续每个阶段验证后及时 commit。提交不代表整包验收通过；没有真实设备查询/连接/输入、旧版打包、push/PR 或生产切换，不进入 M5。

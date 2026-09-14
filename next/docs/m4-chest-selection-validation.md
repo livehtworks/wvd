@@ -14,6 +14,8 @@
 
 三个原生目标构建通过；首次测试源变量与既有技能选择变量重名，限定局部作用域后重新构建通过。状态 14 方法通过（4.456 秒），覆盖候选池优先权/排除持久/空池/新箱重置与稳定操作 ID。
 
-真实 Maa 完整开箱批次正在执行，含正常八次后继续、两轮保留恐惧池、停止/底层拒绝及新帧确认。未取得本批终态前不记通过。私有证据根 `m4-workflow-k7fpwe69`；构建日志 `m4-chest-selection-build-retry.log`，状态日志 `m4-chest-selection-state.log`。
+真实 Maa 完整开箱批次 9 方法/18 场景全部通过（963.129 秒），含正常八次后继续、两轮保留恐惧池、停止/底层拒绝及新帧确认。私有证据根 `m4-workflow-k7fpwe69`；构建日志 `m4-chest-selection-build-retry.log`，状态日志 `m4-chest-selection-state.log`，流程日志 `m4-chest-selection-workflow.log`。
+
+对应实现检查点 `2912988`；流程 EXE SHA256 为 `0f2816cb211f6b93ac341b199994dc3c2b3e29101d9f26c341e5611e541380fa`。运行期间后续死亡提示源码尚未构建，不混入本批通过结论。完整 TaskID 仍为 0/58；父路线有限总预算和未知画面盲点退路仍需结合完整任务核对。
 
 已知 quick 长路径预算失败保留在 `m4-quick-chest-validation.md`，修后复验不能删除其证据。全部 58 个完整任务状态尚未改变。

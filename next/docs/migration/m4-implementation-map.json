@@ -2553,18 +2553,21 @@
         "M4-CHEST"
       ],
       "planned_owner_from_baseline": "native/games/wvd/chest",
-      "implementation": null,
-      "entry": null,
-      "implementation_status": "NOT_STARTED",
-      "offline_status": "NOT_RUN",
+      "implementation": "native/games/wvd/chest/chest.cpp",
+      "entry": "chest::open_chest",
+      "implementation_status": "PARTIAL",
+      "offline_status": "PASS",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "remaining": "本轮未承接此完整业务；固定旧入口仍为唯一生产实现。",
+      "remaining": "未知界面旧盲点退路未照搬，完整任务/转场组合与真实质量尚未验。",
       "boundary_validation": {
         "status": "PASS",
         "evidence_report": "../m4-effect-interruption-validation.md",
         "scope": "明确副作用后覆盖层停止，不重放、不消费，不是全部恢复窗口已闭合"
-      }
+      },
+      "implementation_extent": "NORMAL_AND_QUICK_CHEST_BOUNDED_CHAIN",
+      "evidence_report": "../m4-chest-selection-validation.md",
+      "verification_scope": "真实 Maa 合成宝箱候选池、八次续轮、完整快速链和停止拒绝；非完整任务"
     },
     {
       "inventory_id": "function:src/script.py:Factory.StateChest.CheckChestExitState:3001",

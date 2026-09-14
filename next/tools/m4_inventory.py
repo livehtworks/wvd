@@ -584,6 +584,28 @@ def update_revival(evidence, pause_evidence, pause_retry_evidence):
     print("Pause and revival evidence recorded; complete task counts unchanged.")
 
 
+def update_chest(evidence):
+    verify_workflows(evidence, {
+        **{f"chest-character-{i}": ("Completed", 3) for i in range(1, 7)},
+        "chest-fear": ("Interrupted", 0), "chest-failed": ("Failed", 1), "chest-stop": ("UserStopped", 1),
+        "chest-persistent-fear": ("Completed", 11), "chest-opening-retry": ("Completed", 9),
+        "chest-quick-full": ("Completed", 40), "chest-quick-fast": ("Completed", 3),
+        **{f"chest-quick-interrupt-{value}": ("Interrupted", 3) for value in (False, True)},
+        **{"chest-" + name: ("Interrupted", 1) for name in ("combat", "revive", "ambush")},
+    })
+    path = ROOT / "docs/migration/m4-implementation-map.json"
+    document = read(path)
+    for row in document["entries"]:
+        if row["legacy_symbol"] == "Factory.StateChest":
+            row.update(implementation="native/games/wvd/chest/chest.cpp", entry="chest::open_chest",
+                implementation_status="PARTIAL", implementation_extent="NORMAL_AND_QUICK_CHEST_BOUNDED_CHAIN",
+                offline_status="PASS", evidence_report="../m4-chest-selection-validation.md",
+                verification_scope="真实 Maa 合成宝箱候选池、八次续轮、完整快速链和停止拒绝；非完整任务",
+                remaining="未知界面旧盲点退路未照搬，完整任务/转场组合与真实质量尚未验。")
+    write(path, document)
+    print("Chest evidence recorded; complete task counts unchanged.")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--data-evidence", type=Path)
@@ -603,8 +625,9 @@ if __name__ == "__main__":
     parser.add_argument("--revival-evidence", type=Path)
     parser.add_argument("--pause-evidence", type=Path)
     parser.add_argument("--pause-retry-evidence", type=Path)
+    parser.add_argument("--chest-evidence", type=Path)
     args = parser.parse_args()
-    if not any((args.data_evidence, args.combat_evidence, args.navigation_evidence, args.encounter_evidence, args.healing_evidence, args.dungeon_route_evidence, args.departure_evidence, args.iteration_evidence, args.common_evidence, args.interruption_evidence, args.boundaries_evidence, args.revival_evidence)):
+    if not any((args.data_evidence, args.combat_evidence, args.navigation_evidence, args.encounter_evidence, args.healing_evidence, args.dungeon_route_evidence, args.departure_evidence, args.iteration_evidence, args.common_evidence, args.interruption_evidence, args.boundaries_evidence, args.revival_evidence, args.chest_evidence)):
         parser.error("an evidence group is required")
     if args.data_evidence:
         generate(args.data_evidence, args.state_evidence, args.plan_evidence, args.workflow_evidence)
@@ -630,6 +653,8 @@ if __name__ == "__main__":
         update_interruption(args.interruption_evidence)
     if args.boundaries_evidence:
         update_boundaries(args.boundaries_evidence)
+    if args.chest_evidence:
+        update_chest(args.chest_evidence)
     if args.revival_evidence:
         if not args.pause_evidence or not args.pause_retry_evidence:
             parser.error("--revival-evidence requires both Pause evidence directories")
