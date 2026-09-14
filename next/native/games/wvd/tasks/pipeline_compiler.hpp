@@ -23,6 +23,8 @@ class PipelineCompiler {
     static nlohmann::json any(nlohmann::json conditions);
     static nlohmann::json all(nlohmann::json conditions);
     static nlohmann::json absent(nlohmann::json condition);
+    static nlohmann::json business(const std::string &field, nlohmann::json value,
+                                   const std::string &comparison = "eq");
     void route(const std::string &name, nlohmann::json next);
     void observe(const std::string &name, const nlohmann::json &condition, nlohmann::json next);
     void click(const std::string &name, const nlohmann::json &scene, const nlohmann::json &target,
@@ -35,7 +37,7 @@ class PipelineCompiler {
                const nlohmann::json &post, nlohmann::json coordinates, nlohmann::json next);
     // 内联的是 Maa 图，不是第二个执行器；子终点只能进入调用者指定后继。
     std::string append(const std::string &prefix, const CompiledWorkflow &child,
-                       nlohmann::json next);
+                       nlohmann::json next, const nlohmann::json &normal_exits = nlohmann::json::object());
     void recovery(const std::string &name, const std::string &reason);
     void confirm(const std::string &name, const std::string &operation, const std::string &event,
                  const nlohmann::json &condition, nlohmann::json next,

@@ -36,6 +36,8 @@ class StateTests(unittest.TestCase):
             nodes[f"Terminal{index}"] = {"action": "Custom", "custom_action": "RootTerminal"}
         if options.get("missing_checkpoint"):
             nodes["Unit0"]["next"] = ["Terminal0"]
+        if options.get("cache_check"):
+            nodes["Unit0"]["custom_action_param"]["cache_check"] = True
         if options.get("child_checkpoint"):
             nodes["Unit0"]["next"] = ["ChildCall"]
             nodes["ChildCall"] = {"action": "Custom", "custom_action": "RunChild",
@@ -140,6 +142,12 @@ class StateTests(unittest.TestCase):
             self.assertEqual(r["snapshot"]["reason"], "BUSINESS_CHECKPOINT_MISSING", r)
             self.assertEqual(r["snapshot"]["completed_business_units"], 0)
             self.assertEqual(r["snapshot"]["generation"], 1)
+
+    def test_same_frame_business_condition_observes_state_change(self):
+        r = self.run_case("state-cache", cache_check=True)
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["snapshot"]["business"]["task_step"], 3)
+        self.assertEqual(r["backend_inputs"], 0)
 
     def test_stop_does_not_start_next_unit(self):
         r = self.run_case("stop", stop=True)

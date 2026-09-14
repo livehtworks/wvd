@@ -2,6 +2,7 @@
 #include "asset_resolver.hpp"
 #include "bobber.hpp"
 #include "image_ops.hpp"
+#include "games/wvd/business_condition.hpp"
 #include <cmath>
 #include <chrono>
 #include <opencv2/imgproc.hpp>
@@ -162,6 +163,14 @@ J evaluate_impl(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels, co
         check((explicit_roi & allowed_rect) == explicit_roi, "WVD_ROI_OUTSIDE_SCOPE");
     }
     auto mode = p.at("mode").get<std::string>();
+    if (mode == "business") {
+        check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");
+        const auto hit = games::business_condition(scope.business_summary(), p);
+        auto result = decision(hit, allowed_rect, {{"field", p.at("field")},
+                               {"comparison", p.value("comparison", "eq")}, {"expected", p.at("value")}}, false);
+        result["action_eligible"] = false;
+        return result;
+    }
     if (mode == "all" || mode == "any" || mode == "not") {
         check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");
         const auto &children = p.at("conditions");

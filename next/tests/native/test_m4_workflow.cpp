@@ -105,6 +105,33 @@ int main(int argc, char **argv) {
                 graph.confirm("Replay", "point.0", "target_completed", done, {"Terminal"}, 0);
                 return graph.finish();
             }
+            if (kind == "state-route") {
+                using C = games::tasks::PipelineCompiler;
+                C graph("navigation.state_routing");
+                const auto map = C::image("mapFlag");
+                const auto dungeon = C::image("dungFlag");
+                const J combat{{"mode", "combat_active"}};
+                graph.route("Entry", {"Begin"});
+                graph.confirm("Begin", "route.begin", "dungeon_entered", map, {"Dispatch"});
+                graph.route("Dispatch", {"Done", "Step0", "Step1"});
+                graph.observe("Done", C::all({map, C::business("/task_step", 2)}), {"Terminal"});
+                for (int i = 0; i < 2; ++i) {
+                    games::MapTarget target{"position", {std::nullopt}, games::MapTarget::Hint::Position,
+                        games::TaskPoint{i == 0 ? 500 : 700, i == 0 ? 600 : 700}, {}, {}};
+                    const auto suffix = std::to_string(i);
+                    const auto start = graph.append("Point" + suffix,
+                        games::navigation::reach_map_target(target), {"Confirm" + suffix},
+                        {{"EncounterExit", {"Encounter"}}});
+                    graph.observe("Step" + suffix, C::business("/task_step", i), {start});
+                    graph.confirm("Confirm" + suffix, "point." + suffix, "target_completed",
+                        C::all({map, J{{"mode", "reached"}, {"position", *target.position}}}), {"Dispatch"}, i);
+                }
+                graph.confirm("Encounter", "combat.observed", "combat_observed", combat, {"FixtureCombat"});
+                // 这是普通插入边的合成业务夹具，不宣称此单动作就是完整 WVD 战斗。
+                graph.fixed_click("FixtureCombat", combat, dungeon, {850, 1100}, {"Resume"});
+                graph.confirm("Resume", "combat.resumed", "dungeon_resumed", dungeon, {"Dispatch"});
+                return graph.finish();
+            }
             throw std::runtime_error("WORKFLOW_UNKNOWN");
         }();
         if (config.contains("invalid")) {

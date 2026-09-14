@@ -33,7 +33,7 @@ class WorkflowTests(unittest.TestCase):
         if options.get("workflow") == "auto":
             names += ["combatActive", "combatActive_2", "combatActive_3", "combatActive_4", "close",
                       "spellskill/skillDetail", "spellskill/CombatAutoEnable", "spellskill/CombatAutoDisable"]
-        if options.get("workflow") in ("map", "map-confirm"):
+        if options.get("workflow") in ("map", "map-confirm", "state-route"):
             names += ["mapFlag", "dungFlag", "chest", "chestFlag", "chestOpening", "whowillopenit",
                       "AutoMove", "EdgeOfTown", "combatActive", "combatActive_2", "combatActive_3", "combatActive_4",
                       "cursor_0", "cursor_1", "cursor_2", "cursor_3", "stair_up", "stair_floor"]
@@ -66,7 +66,7 @@ class WorkflowTests(unittest.TestCase):
                           {"path": p.relative_to(bundle).as_posix(), "sha256": digest(p)}
                           for p in sorted(bundle.rglob("*.png"))])
         config.update(options)
-        if options.get("workflow") in ("chest", "map-confirm"):
+        if options.get("workflow") in ("chest", "map-confirm", "state-route"):
             config.update(with_state=True, descriptor=str(ROOT / "packs/wvd/parameters/legacy-config-fields.json"))
         if "omit_image" in options:
             config["files"] = [f for f in config["files"] if f["path"] != "image/" + options["omit_image"]]
@@ -398,6 +398,20 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(result["snapshot"]["state"], "Failed", result)
         self.assertEqual(result["cursor"], 2)
         self.assertEqual(result["backend_calls"], 3)
+
+    def test_state_routes_resume_same_step_after_normal_insertion(self):
+        base = {"mapFlag": (100, 100)}
+        screens = [{**base, "cursor_0": (480, 588)}, {"combatActive": (20, 20)},
+                   {"dungFlag": (100, 1400)}, {**base, "cursor_0": (680, 688)}]
+        result = self.execute("state-routing", screens,
+                              [dict(kind=0, x=700, y=700), dict(kind=0, x=850, y=1100),
+                               dict(kind=0, x=777, y=150)], workflow="state-route")
+        self.assertEqual(result["snapshot"]["state"], "Completed", result)
+        self.assertEqual(result["snapshot"]["generation"], 1)
+        self.assertEqual(result["snapshot"]["business"]["task_step"], 2)
+        self.assertEqual(result["snapshot"]["business"]["combats"], 1)
+        self.assertEqual(result["backend_calls"], 3)
+        self.assertFalse(result["mismatch"])
 
 
 if __name__ == "__main__":

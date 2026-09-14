@@ -126,7 +126,8 @@ MaaBool MaaGateway::recognition_callback(MaaContext *, MaaTaskId, const char *, 
             verify_bundle(self.bundle_);
             invocation = ++self.recognition_invocation_;
         }
-        const CustomRecognitionScope scope({roi->x, roi->y, roi->width, roi->height}, invocation);
+        const CustomRecognitionScope scope({roi->x, roi->y, roi->width, roi->height}, invocation,
+                                            self.business_);
         auto impl = self.recognitions_.find(name);
         require(impl != self.recognitions_.end(), "CUSTOM_RECO_NOT_REGISTERED");
         if (self.gate_) {
@@ -141,7 +142,8 @@ MaaBool MaaGateway::recognition_callback(MaaContext *, MaaTaskId, const char *, 
             }
         }
         auto key = std::string(name) + ":" + params.dump() + ":" +
-                   nlohmann::json({roi->x, roi->y, roi->width, roi->height}).dump();
+                   nlohmann::json({roi->x, roi->y, roi->width, roi->height}).dump() + ":" +
+                   std::to_string(self.business_ ? self.business_->version() : 0);
         auto cached = self.recognition_cache_.results.find(key);
         if (self.gate_ && cached != self.recognition_cache_.results.end())
             result = cached->second;

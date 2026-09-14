@@ -30,15 +30,24 @@ class BusinessRunState {
     virtual ~BusinessRunState() = default;
     bool apply(const std::function<bool(BusinessRunState &)> &operation) {
         std::lock_guard lock(mutex_);
+        struct Changed {
+            std::uint64_t &version;
+            ~Changed() { ++version; }
+        } changed{version_};
         return operation(*this);
     }
     void enter_segment(SegmentBoundary boundary, std::uint64_t generation, std::size_t unit) {
         std::lock_guard lock(mutex_);
         on_segment(boundary, generation, unit);
+        ++version_;
     }
     nlohmann::json summary() const {
         std::lock_guard lock(mutex_);
         return summarize();
+    }
+    std::uint64_t version() const {
+        std::lock_guard lock(mutex_);
+        return version_;
     }
 
   protected:
@@ -47,5 +56,6 @@ class BusinessRunState {
 
   private:
     mutable std::recursive_mutex mutex_;
+    std::uint64_t version_{};
 };
 } // namespace wvd::contracts

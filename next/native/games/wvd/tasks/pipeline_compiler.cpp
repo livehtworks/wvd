@@ -118,6 +118,9 @@ J PipelineCompiler::all(J c) { return {{"mode", "all"}, {"conditions", std::move
 J PipelineCompiler::absent(J c) {
     return {{"mode", "not"}, {"conditions", J::array({std::move(c)})}};
 }
+J PipelineCompiler::business(const std::string &field, J value, const std::string &comparison) {
+    return {{"mode", "business"}, {"field", field}, {"value", std::move(value)}, {"comparison", comparison}};
+}
 J PipelineCompiler::request(const J &condition) const {
     return {{"id", workflow_.kind},   {"revision", "1"},          {"type", "custom"},
             {"binding", "WvdVision"}, {"roi", {0, 0, 900, 1600}}, {"parameters", condition}};
@@ -210,11 +213,15 @@ void PipelineCompiler::swipe(const std::string &name, const J &scene, const J &p
            std::move(next), nullptr);
 }
 std::string PipelineCompiler::append(const std::string &prefix, const CompiledWorkflow &child,
-                                    J next) {
+                                    J next, const J &normal_exits) {
     require(!prefix.empty() && prefix.find_first_not_of(
                 "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_") == std::string::npos,
             "COMPILE_PREFIX_INVALID");
     child.validate();
+    require(normal_exits.is_object(), "COMPILE_EXIT_BINDINGS_INVALID");
+    for (const auto &[name, successors] : normal_exits.items())
+        require(child.nodes.contains(name) && child.nodes.at(name).value("custom_action", "") == "RequireRecovery" &&
+                    successors.is_array() && !successors.empty(), "COMPILE_EXIT_BINDING_INVALID");
     for (const auto &[name, node] : child.nodes.items()) {
         (void)node;
         require(!workflow_.nodes.contains(prefix + "_" + name), "COMPILE_NODE_DUPLICATE");
@@ -235,6 +242,14 @@ std::string PipelineCompiler::append(const std::string &prefix, const CompiledWo
             node.erase("custom_action_param");
             node["action"] = "DoNothing";
             node["next"] = next;
+            node["on_error"] = {"RecoveryRequired"};
+        }
+        if (normal_exits.contains(name)) {
+            // 只有调用者显式绑定的普通插入出口改为外层后继；真正恢复出口仍保持 RequireRecovery。
+            node.erase("custom_action");
+            node.erase("custom_action_param");
+            node["action"] = "DoNothing";
+            node["next"] = normal_exits.at(name);
             node["on_error"] = {"RecoveryRequired"};
         }
         workflow_.nodes[prefix + "_" + name] = std::move(node);

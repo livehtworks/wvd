@@ -1,5 +1,6 @@
 #include "runtime_fixture.hpp"
 #include "games/wvd/state.hpp"
+#include "games/wvd/vision/recognizers.hpp"
 #include "storage/legacy_import.hpp"
 #include <iostream>
 
@@ -14,6 +15,22 @@ class TestClock final : public contracts::MonotonicClock {
 
 // 测试绑定只驱动真实状态 API；不代替技能输入、识别或完整任务完成的验收。
 bool state_probe(maafw::Context &context, const J &node, const J &) {
+    if (node.value("cache_check", false)) {
+        const auto frame = context.capture();
+        const auto request = maafw::parse_recognition_request(
+            {{"id", "state-cache"}, {"revision", "1"}, {"type", "custom"}, {"binding", "WvdVision"},
+             {"roi", {0, 0, 900, 1600}}, {"parameters", {{"mode", "business"}, {"field", "/task_step"}, {"value", 0}}}});
+        const auto before = context.recognize(frame, request);
+        context.with_business_state([](contracts::BusinessRunState &base) {
+            dynamic_cast<games::WvdRunState &>(base).target_point_completed();
+            return true;
+        });
+        // 故意复用同一帧和参数；不能因图片未变而命中旧业务条件缓存。
+        const auto after = context.recognize(frame, request);
+        require(before.outcome == contracts::RecognitionOutcome::Hit &&
+                    after.outcome == contracts::RecognitionOutcome::NoHit, "BUSINESS_CONDITION_CACHE_STALE");
+        require(!before.action_eligible && !before.center, "BUSINESS_CONDITION_GRANTED_INPUT");
+    }
     return context.with_business_state([&](contracts::BusinessRunState &base) {
         auto &state = dynamic_cast<games::WvdRunState &>(base);
         auto before = state.summary();
@@ -168,6 +185,7 @@ int main(int argc, char **argv) {
         }
         auto registry = std::make_shared<runtime::BehaviorRegistry>("m4-state-tests-1");
         games::register_wvd_state(*registry);
+        games::vision::register_wvd(*registry);
         registry->add_action({"test.state", "1"}, state_probe);
         registry->add_action({"test.wait", "1"}, [](maafw::Context &context, const J &, const J &) {
             while (!context.cancelled())
@@ -197,6 +215,7 @@ int main(int argc, char **argv) {
                                          5000ms,
                                          200ms};
             d.checkpoint_node = "Checkpoint" + std::to_string(index);
+            d.recognitions = {games::vision::binding(J::object())};
             return d;
         };
         definition.initial = session(0);
