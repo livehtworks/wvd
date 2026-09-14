@@ -584,6 +584,26 @@ def update_revival(evidence, pause_evidence, pause_retry_evidence):
     print("Pause and revival evidence recorded; complete task counts unchanged.")
 
 
+def update_party_death(evidence):
+    verify_workflows(evidence, {
+        "death-clears-1": ("Completed", 1), "death-clears-5": ("Completed", 5),
+        **{"death-negative-" + name: ("Completed", 0) for name in ("worldmapflag", "Inn", "mapFlag", "dungFlag", "trait")},
+        "death-stuck": ("Interrupted", 5), "death-stop": ("UserStopped", 1), "death-reject": ("Failed", 1),
+        "death-retry": ("Completed", 2), "death-iteration": ("Completed", 1),
+    })
+    path = ROOT / "docs/migration/m4-implementation-map.json"
+    document = read(path)
+    for row in document["entries"]:
+        if row["legacy_symbol"] == "Factory.IdentifyState":
+            row["party_death_validation"] = {
+                "status": "PASS", "implementation": "native/games/wvd/recovery/party_death.cpp",
+                "entry": "recovery::dismiss_party_death", "evidence_report": "../m4-party-death-validation.md",
+                "scope": "someonedead 受控提示处理；保留正常场景优先，不等于全局事件全部完成"}
+            row["remaining"] = "多人死亡/SUICIDE、其它全局对话、完整任务与真实质量未齐。"
+    write(path, document)
+    print("Party death evidence recorded; complete task counts unchanged.")
+
+
 def update_chest(evidence):
     verify_workflows(evidence, {
         **{f"chest-character-{i}": ("Completed", 3) for i in range(1, 7)},
@@ -626,8 +646,9 @@ if __name__ == "__main__":
     parser.add_argument("--pause-evidence", type=Path)
     parser.add_argument("--pause-retry-evidence", type=Path)
     parser.add_argument("--chest-evidence", type=Path)
+    parser.add_argument("--party-death-evidence", type=Path)
     args = parser.parse_args()
-    if not any((args.data_evidence, args.combat_evidence, args.navigation_evidence, args.encounter_evidence, args.healing_evidence, args.dungeon_route_evidence, args.departure_evidence, args.iteration_evidence, args.common_evidence, args.interruption_evidence, args.boundaries_evidence, args.revival_evidence, args.chest_evidence)):
+    if not any((args.data_evidence, args.combat_evidence, args.navigation_evidence, args.encounter_evidence, args.healing_evidence, args.dungeon_route_evidence, args.departure_evidence, args.iteration_evidence, args.common_evidence, args.interruption_evidence, args.boundaries_evidence, args.revival_evidence, args.chest_evidence, args.party_death_evidence)):
         parser.error("an evidence group is required")
     if args.data_evidence:
         generate(args.data_evidence, args.state_evidence, args.plan_evidence, args.workflow_evidence)
@@ -655,6 +676,8 @@ if __name__ == "__main__":
         update_boundaries(args.boundaries_evidence)
     if args.chest_evidence:
         update_chest(args.chest_evidence)
+    if args.party_death_evidence:
+        update_party_death(args.party_death_evidence)
     if args.revival_evidence:
         if not args.pause_evidence or not args.pause_retry_evidence:
             parser.error("--revival-evidence requires both Pause evidence directories")

@@ -69,7 +69,7 @@ class WorkflowTests(unittest.TestCase):
             names += ["dungFlag", "openworldmap", "returnText", "returntoTown", "mapFlag", "chestFlag", "whowillopenit",
                       "fishing/cast", "fishing/striking", "fishing/CloseFishInfo", "combatActive", "combatActive_2",
                       "combatActive_3", "combatActive_4", "boot_title_logo", "boot_attention", "startdownload",
-                      "retry", "retry_blank", "totitle", "resume", "trait", "recover", "spellskill/skillDetail", "close"]
+                      "retry", "retry_blank", "totitle", "resume", "trait", "recover", "spellskill/skillDetail", "close", "someonedead", "RiseAgain"]
         names += options.get("extra_images", [])
         if options.get("workflow") == "revival":
             names.append("RiseAgain")
@@ -135,7 +135,7 @@ class WorkflowTests(unittest.TestCase):
             if options.get("corrupt_mod_before_publish"):
                 for path in mod.rglob("*.png"):
                     path.write_bytes(b"changed before publication")
-        if options.get("workflow") in ("chest", "map-confirm", "state-route", "turn", "encounter", "recover", "heal", "dungeon-route", "departure", "inn-tracked", "iteration", "revival"):
+        if options.get("workflow") in ("chest", "map-confirm", "state-route", "turn", "encounter", "recover", "common", "heal", "dungeon-route", "departure", "inn-tracked", "iteration", "revival"):
             config.update(with_state=True, descriptor=str(ROOT / "packs/wvd/parameters/legacy-config-fields.json"))
         if "omit_image" in options:
             config["files"] = [f for f in config["files"] if f["path"] != "image/" + options["omit_image"]]
@@ -1504,6 +1504,64 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(r["snapshot"]["business"]["healing_sequence"], 1)
         self.assertFalse(r["snapshot"]["business"]["healing_required"])
         self.assertFalse(r["mismatch"])
+
+    def test_party_death_clears_after_first_or_fifth_without_followup_click(self):
+        for attempts in (1, 5):
+            dead = {"someonedead": (350, 600)}
+            r = self.execute(f"death-clears-{attempts}", [dead] * attempts + [{"dungFlag": (50, 150)}],
+                [dict(kind=0, x=450, y=800)] * attempts, workflow="common")
+            self.assertEqual(r["snapshot"]["state"], "Completed", r)
+            self.assertEqual(r["backend_calls"], attempts)
+            self.assertFalse(r["mismatch"])
+            business = r["snapshot"]["business"]
+            self.assertEqual(business["death_prompt_sequence"], 1)
+            self.assertFalse(business["death_prompt_pending"])
+            self.assertEqual(business["revivals"], 0)
+            self.assertEqual(business["combats"], 0)
+
+    def test_party_death_map_city_and_character_symbols_never_authorize_center(self):
+        for symbol in ("worldmapflag", "Inn", "mapFlag", "dungFlag", "trait"):
+            r = self.execute("death-negative-" + symbol,
+                [{symbol: (50, 150), "someonedead": (350, 600)}], [], workflow="common")
+            self.assertEqual(r["snapshot"]["state"], "Completed", r)
+            self.assertEqual(r["backend_calls"], 0)
+            self.assertEqual(r["snapshot"]["business"]["death_prompt_sequence"], 0)
+
+    def test_party_death_stuck_stop_and_rejected_input_preserve_pending(self):
+        dead = {"someonedead": (350, 600)}
+        for mode in ("stuck", "stop", "reject"):
+            attempts = 5 if mode == "stuck" else 1
+            r = self.execute("death-" + mode, [dead] * (attempts + 1),
+                [dict(kind=0, x=450, y=800, reject=mode == "reject")] * attempts,
+                workflow="common", stop_after_first=mode == "stop")
+            self.assertEqual(r["snapshot"]["state"],
+                {"stuck": "Interrupted", "stop": "UserStopped", "reject": "Failed"}[mode], r)
+            self.assertEqual(r["backend_calls"], attempts)
+            self.assertFalse(r["mismatch"])
+            self.assertTrue(r["snapshot"]["business"]["death_prompt_pending"])
+            self.assertEqual(r["snapshot"]["business"]["revivals"], 0)
+            if mode == "stuck":
+                self.assertEqual(r["snapshot"]["sessions"][-1]["reason"], "party.death_prompt_unchanged")
+
+    def test_party_death_retry_overlay_returns_without_second_death_click(self):
+        r = self.execute("death-retry", [{"someonedead": (350, 600)}, {"retry": (300, 700)},
+            {"dungFlag": (50, 150)}], [dict(kind=0, x=450, y=800), dict(kind=0, x=320, y=712)], workflow="common")
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 2)
+        self.assertFalse(r["mismatch"])
+        # 普通插入后到达已知正常场景，补齐清除回执，但不重复执行死亡点击。
+        self.assertFalse(r["snapshot"]["business"]["death_prompt_pending"])
+
+    def test_party_death_iteration_resumes_the_original_task(self):
+        r = self.execute("death-iteration", [{"someonedead": (350, 600)},
+            {"mapFlag": (100, 100), "cursor_0": (480, 588)}], [dict(kind=0, x=450, y=800)],
+            workflow="iteration", profile=self.turn_profile(defend=True), route_targets=[["position", [None], [500, 600]]])
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 1)
+        self.assertFalse(r["mismatch"])
+        self.assertEqual(r["snapshot"]["business"]["task_step"], 1)
+        self.assertEqual(r["snapshot"]["business"]["death_prompt_sequence"], 1)
+        self.assertEqual(r["lifecycle_calls"], [])
 
     def test_pause_precedes_ready_and_accepts_the_sixth_resume(self):
         ready = {"dungFlag": (50, 150)}

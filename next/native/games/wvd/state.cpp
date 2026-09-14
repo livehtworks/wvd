@@ -219,6 +219,10 @@ std::string WvdRunState::confirmation_id(const std::string &operation, const std
         id += ":revival:" + std::to_string(revival_sequence_ + (revival_pending_ ? 0 : 1));
     else if (event == "resurrected")
         id += ":revival:" + std::to_string(revival_sequence_);
+    else if (event == "party_death_observed")
+        id += ":death_prompt:" + std::to_string(death_prompt_sequence_ + (death_prompt_pending_ ? 0 : 1));
+    else if (event == "party_death_cleared")
+        id += ":death_prompt:" + std::to_string(death_prompt_sequence_);
     else if (event == "chest_character_attempted")
         id += ":chest:" + std::to_string(chest_sequence_) + ":selection:" +
               std::to_string(chest_selection_.attempts() + (chest_selection_.selected() ? 1 : 0));
@@ -280,6 +284,19 @@ bool WvdRunState::confirm_event(const std::string &operation, const std::string 
     }
     else if (event == "party_reassembled")
         bag_clear_completed();
+    else if (event == "party_death_observed") {
+        if (!death_prompt_pending_) {
+            ++death_prompt_sequence_;
+            prepared_.reset();
+            strategy_.reload(task_step_);
+        }
+        death_prompt_pending_ = true;
+    }
+    else if (event == "party_death_cleared") {
+        if (!death_prompt_pending_)
+            throw std::runtime_error("PARTY_DEATH_NOT_OBSERVED");
+        death_prompt_pending_ = false;
+    }
     else if (event == "inn_rest_completed") {
         // 换 generation 或换普通段均保留已住宿事实；真正再次入本才开始新补给周期。
         if (!inn_rest_completed_)
@@ -360,6 +377,8 @@ J WvdRunState::summarize() const {
             {"revival_sequence", revival_sequence_},
             {"revival_pending", revival_pending_},
             {"revivals", revivals_},
+            {"death_prompt_sequence", death_prompt_sequence_},
+            {"death_prompt_pending", death_prompt_pending_},
             {"met_encounter", met_encounter_},
             {"need_initial_recover", need_initial_recover_},
             {"recover_after_rez", recover_after_rez_},

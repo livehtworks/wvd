@@ -186,6 +186,22 @@ J evaluate_uncached(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels
         result["action_eligible"] = false;
         return result;
     }
+    if (mode == "party_death") {
+        check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");
+        // 保持旧 IdentifyState 的正常状态优先级。先排除无死亡模板的绝大多数帧；
+        // 命中后才核对正常场景与 Pause/角色详情，不能仅凭一个骷髅授权点击。
+        auto marker = evaluate_impl(bundle, pixels, {{"mode", "template"}, {"image", "someonedead"}}, bound, scope, cache, depth + 1, memo);
+        check(marker.at("outcome") != "Error", "WVD_DEATH_RECOGNITION_ERROR");
+        if (marker.at("outcome") != "Hit")
+            return decision(false, {}, {{"reason", "no_death_marker"}});
+        for (const auto &guard : J::array({J{{"mode", "boot_ready"}}, J{{"mode", "pause"}}, J{{"mode", "pause_negative"}}})) {
+            auto result = evaluate_impl(bundle, pixels, guard, bound, scope, cache, depth + 1, memo);
+            check(result.at("outcome") != "Error", "WVD_DEATH_RECOGNITION_ERROR");
+            if (result.at("outcome") == "Hit")
+                return decision(false, {}, {{"reason", "known_scene_precedes_death"}, {"guard", guard}});
+        }
+        return decision(true, allowed_rect, {{"marker", marker}}, false);
+    }
     if (mode == "boot_ready" || mode == "boot_post" || mode == "blocking_screen") {
         check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");
         // 旧 WaitGameBootReady 是顺序候选，不是把全部条件都求完的 boolean any。
@@ -194,7 +210,7 @@ J evaluate_uncached(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels
             auto result = evaluate_impl(bundle, pixels, probe, bound, scope, cache, depth + 1, memo);
             check(result.at("outcome") != "Error", "WVD_BOOT_RECOGNITION_ERROR");
             if (result.at("outcome") == "Hit")
-                return decision(true, allowed_rect, {{"stage", probe.value("image", "combat_active")}, {"matched", result}});
+                return decision(true, allowed_rect, {{"stage", probe.value("image", probe.value("mode", "unknown"))}, {"matched", result}});
         }
         return decision(false, {}, {{"stage", "unknown"}});
     }

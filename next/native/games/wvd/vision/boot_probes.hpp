@@ -22,6 +22,8 @@ inline nlohmann::json blocking_probes() {
     add("boot_title_logo", {100, 300, 700, 470}, .86);
     // Pause 可能保留底层战斗/地图图标，必须先作为覆盖层处理。
     probes.push_back({{"mode", "pause"}});
+    // 死亡提示只有在正常场景全部不成立时才生效，不能让王城/地图骷髅抢占导航。
+    probes.push_back({{"mode", "party_death"}});
     return probes;
 }
 // 启动就绪只看稳定游戏场景；动作后置还接受已知的中间阻塞页。

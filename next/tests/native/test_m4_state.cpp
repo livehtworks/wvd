@@ -278,26 +278,45 @@ J direct_contract(const J &profile) {
         require(unobserved_rejected, "UNOBSERVED_REVIVAL_ACCEPTED");
     }
     result["revival_contract"] = revival_results;
+    games::WvdRunState party_death(profile, {"party-death", 10, clock});
+    party_death.enter_segment(contracts::SegmentBoundary::Initial, 1, 0);
+    party_death.observe_combat();
+    auto death_skill = party_death.select_skill({{"A", .99}});
+    require(death_skill.has_value(), "DEATH_TEST_SKILL_MISSING");
+    party_death.confirm_skill(*death_skill, games::SkillOutcome::Succeeded);
+    const auto death_id = party_death.confirmation_id("party.death", "party_death_observed");
+    party_death.confirm_event(death_id, "party_death_observed", 1, 1);
+    require(party_death.confirmation_id("party.death", "party_death_observed") == death_id, "DEATH_ID_CHANGED");
+    require(party_death.select_skill({{"A", .99}}).has_value(), "DEATH_STRATEGY_NOT_RESET");
+    death_skill = party_death.select_skill({{"A", .99}});
+    party_death.confirm_skill(*death_skill, games::SkillOutcome::Succeeded);
+    require(!party_death.confirm_event(death_id, "party_death_observed", 1, 2), "DEATH_REPLAYED");
+    require(!party_death.select_skill({{"A", .99}}), "DEATH_REPLAY_RESET_STRATEGY");
+    party_death.enter_segment(contracts::SegmentBoundary::Continuation, 2, 1);
+    const auto clear_id = party_death.confirmation_id("party.death.clear", "party_death_cleared");
+    party_death.confirm_event(clear_id, "party_death_cleared", 2, 3);
+    require(!party_death.confirm_event(clear_id, "party_death_cleared", 2, 4), "DEATH_CLEAR_REPLAYED");
+    result["party_death_contract"] = party_death.summary();
     {
-    games::chest::Selection selection;
-    selection.prepare({true, false, true, true, true, true}, 1, 42);
-    require(selection.selected() == 1, "FEAR_SELECTED");
-    selection.attempted();
-    selection.prepare({}, 1, 42);
-    require(selection.selected() == 1 && selection.available_mask() == 2, "FEAR_POOL_RESET_IN_SAME_CHEST");
-    selection.reset();
-    selection.prepare({}, 6, 42);
-    require(selection.selected() == 5 && selection.available_mask() == 63, "PREFERRED_FIRST_MISSING");
-    bool other_role = false;
-    for (unsigned i = 0; i < 16; ++i) {
+        games::chest::Selection selection;
+        selection.prepare({true, false, true, true, true, true}, 1, 42);
+        require(selection.selected() == 1, "FEAR_SELECTED");
         selection.attempted();
+        selection.prepare({}, 1, 42);
+        require(selection.selected() == 1 && selection.available_mask() == 2, "FEAR_POOL_RESET_IN_SAME_CHEST");
+        selection.reset();
         selection.prepare({}, 6, 42);
-        require(selection.selected().has_value(), "AVAILABLE_ROLE_MISSING");
-        other_role = other_role || selection.selected() != 5;
-    }
-    require(other_role, "PREFERRED_FORCED_AFTER_FIRST_TRY");
-    selection.prepare({true, true, true, true, true, true}, 6, 42);
-    require(!selection.selected() && !selection.available_mask(), "EMPTY_POOL_SELECTED");
+        require(selection.selected() == 5 && selection.available_mask() == 63, "PREFERRED_FIRST_MISSING");
+        bool other_role = false;
+        for (unsigned i = 0; i < 16; ++i) {
+            selection.attempted();
+            selection.prepare({}, 6, 42);
+            require(selection.selected().has_value(), "AVAILABLE_ROLE_MISSING");
+            other_role = other_role || selection.selected() != 5;
+        }
+        require(other_role, "PREFERRED_FORCED_AFTER_FIRST_TRY");
+        selection.prepare({true, true, true, true, true, true}, 6, 42);
+        require(!selection.selected() && !selection.available_mask(), "EMPTY_POOL_SELECTED");
     }
     games::WvdRunState chest_state(profile, {"chest-selection", 10, clock});
     chest_state.enter_segment(contracts::SegmentBoundary::Initial, 1, 0);

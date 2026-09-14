@@ -103,6 +103,15 @@ class StateTests(unittest.TestCase):
         self.assertEqual(len(r["frozen_definition"]["state_factory"]["parameters"]["profile"]["STRATEGY"]), 1)
         self.assertEqual(len(r["frozen_definition"]["continuation_units"]), 1)
 
+    def test_party_death_resets_strategy_once_without_claiming_revival(self):
+        result = self.run_case("party-death")["direct"]["party_death_contract"]
+        self.assertEqual(result["death_prompt_sequence"], 1)
+        self.assertFalse(result["death_prompt_pending"])
+        self.assertTrue(result["pending_combat"])
+        self.assertEqual(result["combats"], 0)
+        self.assertEqual(result["revivals"], 0)
+        self.assertFalse(result["recover_after_rez"])
+
     def test_complete_one_as_all(self):
         r = self.run_case("all", all_at_once=True)
         self.assertEqual(r["snapshot"]["state"], "Completed", r)

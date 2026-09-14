@@ -1,4 +1,5 @@
 #include "boot.hpp"
+#include "party_death.hpp"
 
 namespace wvd::games::recovery {
 namespace {
@@ -61,7 +62,7 @@ namespace {
 tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common) {
     C graph(common ? "recovery.common_screens" : "recovery.boot_ready", std::chrono::seconds{120});
     const auto panel = C::any({C::image("trait"), C::image("recover")});
-    const J ready = C::all({common ? C::any({J{{"mode", "boot_ready"}}, panel}) : J{{"mode", "boot_ready"}},
+    const J ready = C::all({common ? C::any({J{{"mode", "boot_ready"}}, panel, C::image("RiseAgain")}) : J{{"mode", "boot_ready"}},
                            C::absent(J{{"mode", "blocking_screen"}})});
     const auto title = scoped("boot_title_logo", {100, 300, 700, 470}, .86);
     const auto attention = scoped("boot_attention", {250, 430, 420, 220}, .86);
@@ -73,9 +74,20 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common) {
     low_retry["threshold"] = .60;
     const auto to_title = C::image("totitle"), resume = C::image("resume");
     const J recognized = common ? C::any({J{{"mode", "boot_post"}}, panel}) : J{{"mode", "boot_post"}};
-    graph.route("Entry", common ? J{"Download", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title", "Pause", "Ready"}
+    graph.route("Entry", common ? J{"Download", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title", "Pause", "Death", "Ready"}
                                  : J{"Ready", "Download", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title", "Pause"});
-    graph.observe("Ready", ready, {"Terminal"});
+    if (common) {
+        const auto death = graph.define_child("PartyDeath", dismiss_party_death(), {"BlockedExit"});
+        graph.observe("Death", {{"mode", "party_death"}}, {"DismissDeath"});
+        graph.call_child("DismissDeath", death, {"Entry"});
+        graph.hit_limit("Death", 6);
+        graph.hit_limit("DismissDeath", 6);
+    }
+    graph.observe("Ready", ready, common ? J{"PendingDeathCleared", "Terminal"} : J{"Terminal"});
+    if (common) {
+        graph.observe("PendingDeathCleared", C::business("/death_prompt_pending", true), {"ConfirmDeathCleared"});
+        graph.confirm("ConfirmDeathCleared", "party.death.clear", "party_death_cleared", ready, {"Terminal"});
+    }
     if (allow_download)
         graph.click("Download", download, download, recognized, {"Entry"});
     else {

@@ -67,6 +67,9 @@ class WvdRunState final : public contracts::BusinessRunState {
     // 遭遇编号不等于成功次数：复活取消一次待计数事件后仍不能重用其幂等 ID。
     std::size_t combat_sequence_{}, chest_sequence_{}, revival_sequence_{}, revivals_{};
     bool revival_pending_{};
+    // 队友死亡提示不等于全队复活：只重置策略，不撤销遭遇计数或设置战后恢复。
+    std::size_t death_prompt_sequence_{};
+    bool death_prompt_pending_{};
     chest::Selection chest_selection_;
 };
 void register_wvd_state(runtime::BehaviorRegistry &registry);
