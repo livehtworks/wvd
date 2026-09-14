@@ -1867,13 +1867,16 @@
         "M4-RECOVERY"
       ],
       "planned_owner_from_baseline": "native/games/wvd/recovery",
-      "implementation": null,
-      "entry": null,
-      "implementation_status": "NOT_STARTED",
-      "offline_status": "NOT_RUN",
+      "implementation": "native/games/wvd/recovery/revival.cpp",
+      "entry": "recovery::revive_after_defeat",
+      "implementation_status": "PARTIAL",
+      "offline_status": "PASS",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "remaining": "本轮未承接此完整业务；固定旧入口仍为唯一生产实现。"
+      "remaining": "多人死亡、其它全局对话、完整任务与真实质量未齐；失败遭遇使用独立序号，不复用成功次数。",
+      "implementation_extent": "GLOBAL_PAUSE_REVIVAL_SUBSET",
+      "evidence_report": "../m4-revival-validation.md",
+      "verification_scope": "真实 Maa 合成场景的 Pause/复活与正常路线连接，不是全部全局事件或完整任务"
     },
     {
       "inventory_id": "function:src/script.py:Factory.IdentifyState:2100",
@@ -1886,13 +1889,16 @@
         "M4-TASKS"
       ],
       "planned_owner_from_baseline": "native/games/wvd/tasks",
-      "implementation": null,
-      "entry": null,
-      "implementation_status": "NOT_STARTED",
-      "offline_status": "NOT_RUN",
+      "implementation": "native/games/wvd/tasks/dungeon_route.cpp",
+      "entry": "tasks::traverse_dungeon / recovery::clear_common_screens",
+      "implementation_status": "PARTIAL",
+      "offline_status": "PASS",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "remaining": "本轮未承接此完整业务；固定旧入口仍为唯一生产实现。"
+      "remaining": "多人死亡、其它全局对话、完整任务与真实质量未齐；失败遭遇使用独立序号，不复用成功次数。",
+      "implementation_extent": "GLOBAL_PAUSE_REVIVAL_SUBSET",
+      "evidence_report": "../m4-revival-validation.md",
+      "verification_scope": "真实 Maa 合成场景的 Pause/复活与正常路线连接，不是全部全局事件或完整任务"
     },
     {
       "inventory_id": "function:src/script.py:Factory.GameFrozenCheck:2315",
@@ -2012,13 +2018,16 @@
         "M4-RECOVERY"
       ],
       "planned_owner_from_baseline": "native/games/wvd/recovery",
-      "implementation": null,
-      "entry": null,
-      "implementation_status": "NOT_STARTED",
-      "offline_status": "NOT_RUN",
+      "implementation": "native/games/wvd/recovery/boot.cpp",
+      "entry": "recovery::clear_common_screens",
+      "implementation_status": "PARTIAL",
+      "offline_status": "PASS",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "remaining": "本轮未承接此完整业务；固定旧入口仍为唯一生产实现。"
+      "remaining": "多人死亡、其它全局对话、完整任务与真实质量未齐；失败遭遇使用独立序号，不复用成功次数。",
+      "implementation_extent": "GLOBAL_PAUSE_REVIVAL_SUBSET",
+      "evidence_report": "../m4-pause-validation.md",
+      "verification_scope": "真实 Maa 合成场景的 Pause/复活与正常路线连接，不是全部全局事件或完整任务"
     },
     {
       "inventory_id": "function:src/script.py:Factory.StateCombatCheck:2452",
