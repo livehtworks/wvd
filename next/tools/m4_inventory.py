@@ -372,6 +372,49 @@ def update_dungeon_route(evidence, plan_evidence):
     print("43 dungeon route graphs recorded; complete task execution statuses unchanged.")
 
 
+def update_iteration(evidence, plan_evidence):
+    verify_workflows(evidence, {"auto-return-prompt": ("Completed", 1), "iteration-entry": ("Completed", 4),
+        "iteration-fail": ("Failed", 1), "iteration-stop": ("UserStopped", 1), "iteration-two": ("Completed", 10),
+        **{"position-exit-" + name: ("Completed", 2) for name in ("openworldmap", "worldmapflag", "returnText")}})
+    snapshot = read(evidence / "iteration-two/output.json")["snapshot"]
+    state = snapshot["business"]
+    if (snapshot["generation"] != 2 or snapshot["completed_business_units"] != 2 or
+            state["combats"] != 2 or state["dungeons"] != 1 or state["task_step"] != 1 or state["supply_cycle"] != 2):
+        raise ValueError("M4_ITERATION_STATE_MISMATCH")
+    compiled = read(plan_evidence / "iterations/result.json")
+    execution = read(plan_evidence / "iterations/execution.json")
+    exe_hash = hashlib.sha256((ROOT / "build/m4/Release/wvd_m4_check.exe").read_bytes()).hexdigest()
+    source = read(ROOT / "packs/wvd/parameters/legacy-quests.json")
+    rows = {row["task_id"]: row for row in compiled["compiled_iterations"]}
+    if (execution != {"exe_sha256": exe_hash, "exit": 0} or compiled["outcome"] != "PASS"
+            or set(rows) != {key for key, value in source.items() if value["_TYPE"] == "dungeon"}
+            or any(row["executed"] or row["missing_images"] or row["scope"] != "NORMAL_FARM_ITERATION_NOT_FULL_TASK" for row in rows.values())):
+        raise ValueError("M4_ITERATION_COMPILATION_MISMATCH")
+    folder = ROOT / "docs/migration"
+    document = read(folder / "m4-implementation-map.json")
+    for row in document["entries"]:
+        if row["legacy_symbol"] == "Factory.DungeonFarm":
+            row.update(implementation="native/games/wvd/tasks/dungeon_iteration.cpp", entry="tasks::dungeon_iteration",
+                supporting_implementations=["native/games/wvd/tasks/departure.cpp", "native/games/wvd/tasks/dungeon_route.cpp"],
+                implementation_extent="NORMAL_FARM_ITERATION", implementation_status="PARTIAL", offline_status="PASS",
+                verification_scope="正常入口/路线/出本及两段续接，不是全部43任务执行或全局事件完整迁移",
+                evidence_report="../m4-iteration-validation.md",
+                remaining="全局阻塞/死亡/复活/对话、完整任务恢复与逐任务离线证据未齐。")
+    tasks = read(folder / "m4-task-status.json")
+    if document["counts"] != {"function": 250, "config": 33, "task": 58} or {row["task_id"] for row in tasks["items"]} != set(source):
+        raise ValueError("M4_ITERATION_DENOMINATOR_MISMATCH")
+    for row in tasks["items"]:
+        if row["task_id"] in rows:
+            row["iteration_compilation"] = {"status": "PASS", "entry": "tasks::dungeon_iteration", "executed": False,
+                "scope": "NORMAL_FARM_ITERATION_NOT_FULL_TASK", "evidence_report": "../m4-iteration-validation.md"}
+            if "native/games/wvd/tasks/dungeon_iteration.cpp" not in row["new_files"]:
+                row["new_files"].append("native/games/wvd/tasks/dungeon_iteration.cpp")
+            row["implementation_extent"] = "NORMAL_FARM_ITERATION_PARTIAL"
+    write(folder / "m4-implementation-map.json", document)
+    write(folder / "m4-task-status.json", tasks)
+    print("43 finite Farm iterations compiled; complete task execution statuses unchanged.")
+
+
 def update_departure(evidence):
     expected = {"inn-receipt": ("Completed", 5), "inn-paid-exit-failed": ("Failed", 5),
         "departure-forced": ("Completed", 5), "departure-return-town": ("Completed", 6),
@@ -416,8 +459,9 @@ if __name__ == "__main__":
     parser.add_argument("--healing-evidence", type=Path)
     parser.add_argument("--dungeon-route-evidence", type=Path)
     parser.add_argument("--departure-evidence", type=Path)
+    parser.add_argument("--iteration-evidence", type=Path)
     args = parser.parse_args()
-    if not any((args.data_evidence, args.combat_evidence, args.navigation_evidence, args.encounter_evidence, args.healing_evidence, args.dungeon_route_evidence, args.departure_evidence)):
+    if not any((args.data_evidence, args.combat_evidence, args.navigation_evidence, args.encounter_evidence, args.healing_evidence, args.dungeon_route_evidence, args.departure_evidence, args.iteration_evidence)):
         parser.error("an evidence group is required")
     if args.data_evidence:
         generate(args.data_evidence, args.state_evidence, args.plan_evidence, args.workflow_evidence)
@@ -433,6 +477,10 @@ if __name__ == "__main__":
         update_healing(args.healing_evidence)
     if args.departure_evidence:
         update_departure(args.departure_evidence)
+    if args.iteration_evidence:
+        if not args.plan_evidence:
+            parser.error("--iteration-evidence requires --plan-evidence")
+        update_iteration(args.iteration_evidence, args.plan_evidence)
     if args.dungeon_route_evidence:
         if not args.plan_evidence:
             parser.error("--dungeon-route-evidence requires --plan-evidence")

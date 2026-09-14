@@ -30,7 +30,8 @@ tasks::CompiledWorkflow reach_map_target(const MapTarget &target,
     const bool exit_target = target.target == "harken" || target.target == "Bharken" ||
                              target.target == "leaveDung" || target.target.ends_with("_quit");
     const auto outside = C::all({C::any({C::image("Inn"), C::image("EdgeOfTown"), C::image("returnText"),
-                                        C::image("returntoTown"), C::image("openworldmap")}), C::absent(map)});
+                                        C::image("returntoTown"), C::image("openworldmap"), C::image("worldmapflag")}),
+                                 C::absent(map), C::absent(encounter)});
     J done;
     if (positional) {
         if (!target.position)
@@ -102,13 +103,12 @@ tasks::CompiledWorkflow reach_map_target(const MapTarget &target,
     }
     if (!positional && target.target != "chest")
         graph.recovery("MissingExit", "navigation.target_missing");
-    J after_move = {"Encounter", "Frozen", "CloseStaleMap", "Moving"};
-    if (exit_target) {
-        after_move.insert(after_move.begin(), "Exited");
-        graph.observe("Exited", outside, {"Terminal"});
-    }
+    // 坐标和普通资源目标也可能跨越副本出口。退场由新画面证明，不按目标名称猜测；
+    // 父路线先检查 Outside，不能把提前离开误计为当前坐标已到达。
+    J after_move = {"Exited", "Encounter", "Frozen", "CloseStaleMap", "Moving"};
+    graph.observe("Exited", outside, {"Terminal"});
     graph.fixed_click("AutoMove", correct_map,
-                      exit_target ? C::any({map, moving, encounter, outside}) : C::any({map, moving, encounter}),
+                      C::any({map, moving, encounter, outside}),
                       {136, 1431}, {"WaitAfterMove"});
     graph.route("WaitAfterMove", after_move);
     graph.delay_after("AutoMove", 3000);
@@ -118,9 +118,7 @@ tasks::CompiledWorkflow reach_map_target(const MapTarget &target,
     graph.recovery("FrozenExit", "navigation.automove_physics_frozen");
     graph.back("CloseStaleMap", C::all({map_scene, C::absent(hint)}),
                C::any({moving, encounter}), {"Encounter", "Moving"});
-    J during_move = {"Encounter", "Stopped", "Moving"};
-    if (exit_target)
-        during_move.insert(during_move.begin(), "Exited");
+    J during_move = {"Exited", "Encounter", "Stopped", "Moving"};
     graph.observe("Moving", moving, during_move);
     graph.observe("Stopped", C::all({moving, J{{"mode", "movement_stopped"}}}), {"OpenMap"});
     // 多次采样不产生输入；时间和节点数均有界，预算耗尽交给恢复。

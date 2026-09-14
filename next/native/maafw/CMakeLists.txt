@@ -59,6 +59,7 @@ if(WVD_BUILD_M4)
     ../games/wvd/tasks/pipeline_compiler.cpp ../games/wvd/navigation/world_map.cpp ../games/wvd/supply/inn.cpp
     ../games/wvd/tasks/dungeon_route.cpp
     ../games/wvd/tasks/departure.cpp
+    ../games/wvd/tasks/dungeon_iteration.cpp
     ../games/wvd/navigation/map_route.cpp
     ../games/wvd/navigation/auto_route.cpp
     ../games/wvd/navigation/dungeon_entry.cpp

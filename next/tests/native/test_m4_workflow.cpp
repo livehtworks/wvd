@@ -19,6 +19,7 @@
 #include "games/wvd/tasks/workflow_session.hpp"
 #include "games/wvd/tasks/dungeon_route.hpp"
 #include "games/wvd/tasks/departure.hpp"
+#include "games/wvd/tasks/dungeon_iteration.hpp"
 #include "games/wvd/vision/recognizers.hpp"
 #include "platform/windows/file_digest.hpp"
 #include <iostream>
@@ -177,18 +178,23 @@ int main(int argc, char **argv) {
             }
             if (kind == "heal")
                 return games::supply::recover_in_dungeon();
-            if (kind == "dungeon-route") {
+            if (kind == "dungeon-route" || kind == "iteration") {
                 games::WvdQuestDefinition definition{"route-fixture", "dungeon",
                     {{"_EOT", {{"press", "Dist", {1, 1}, 1}}}, {"_TARGETINFOLIST", config.at("route_targets")}}};
                 if (config.contains("floor"))
                     definition.source["_FloorCheck"] = config.at("floor");
+                if (config.contains("entry_steps"))
+                    definition.source["_EOT"] = config.at("entry_steps");
+                if (config.contains("return_destination"))
+                    definition.source["_RTT"] = config.at("return_destination");
                 std::set<std::string> images;
                 for (const auto &file : config.at("files")) {
                     const auto path = file.at("path").get<std::string>();
                     if (path.starts_with("image/"))
                         images.insert(path.substr(6));
                 }
-                return games::tasks::traverse_dungeon(games::WvdTaskPlan::parse(definition), profile, images);
+                return kind == "iteration" ? games::tasks::dungeon_iteration(games::WvdTaskPlan::parse(definition), profile, images)
+                                           : games::tasks::traverse_dungeon(games::WvdTaskPlan::parse(definition), profile, images);
             }
             if (kind == "child") {
                 using C = games::tasks::PipelineCompiler;
@@ -430,6 +436,11 @@ int main(int argc, char **argv) {
         definition.request_id = "m4-causal";
         definition.policy = policy;
         definition.initial = std::move(session);
+        const auto units = config.value("normal_units", 1u);
+        require(units > 0 && units <= 4, "FIXTURE_NORMAL_UNITS_INVALID");
+        definition.max_business_units = units;
+        for (unsigned i = 1; i < units; ++i)
+            definition.continuation_units.push_back(definition.initial);
         if (recovering) {
             auto target = device->lifecycle_state.target;
             if (config.value("other_lifecycle_app", false))
@@ -486,7 +497,7 @@ int main(int argc, char **argv) {
                 auto s = coordinator.snapshot();
                 return s.quiescent && s.result_saved;
             },
-            definition.initial.time_limit * (definition.recovery_limit + 1) + 10000ms);
+            definition.initial.time_limit * (definition.recovery_limit + units) + 10000ms);
         J output{{"snapshot", storage::snapshot_json(coordinator.snapshot())},
                  {"backend_calls", device->calls.load()},
                  {"cursor", device->cursor},

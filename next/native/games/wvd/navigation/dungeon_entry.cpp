@@ -36,7 +36,7 @@ tasks::CompiledWorkflow enter_dungeon(const WvdTaskPlan &plan) {
     C graph("navigation.dungeon_entry");
     const auto inside = C::any({C::image("dungFlag"), C::image("mapFlag"), C::image("chestFlag"), J{{"mode", "combat_active"}}});
     const auto enter = C::image("GotoDung");
-    J anchors{C::image("Inn"), C::image("EdgeOfTown"), C::image("openworldmap"), enter};
+    J anchors{C::image("Inn"), C::image("EdgeOfTown"), C::image("openworldmap"), C::image("returntoTown"), enter};
     for (const auto &step : steps) {
         if (step.kind != EntryStep::Kind::WorldMap)
             anchors.push_back(C::image(step.target));

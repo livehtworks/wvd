@@ -12,7 +12,9 @@ tasks::CompiledWorkflow auto_route(const std::string &target) {
     const J combat{{"mode", "combat_active"}};
     const auto chest = C::any({C::image("chestFlag"), C::image("chestOpening"), C::image("whowillopenit")});
     const auto encounter = C::any({combat, chest, C::image("RiseAgain")});
-    const auto outside = C::all({C::any({C::image("Inn"), C::image("EdgeOfTown")}), C::absent(map)});
+    const auto outside = C::all({C::any({C::image("Inn"), C::image("EdgeOfTown"), C::image("returnText"),
+                                        C::image("returntoTown"), C::image("openworldmap"), C::image("worldmapflag")}),
+                                 C::absent(map), C::absent(encounter)});
     const auto moving = C::all({dungeon, C::absent(map), C::absent(encounter), C::absent(outside)});
     const auto no_target = C::any({C::image("NoChestCanBeFound"), C::image("theRouteToTheDestinationCannotBeFound")});
     const auto post = C::any({moving, encounter, outside, no_target});

@@ -2673,16 +2673,20 @@
         "M4-TASKS"
       ],
       "planned_owner_from_baseline": "native/games/wvd/tasks",
-      "implementation": "native/games/wvd/tasks/departure.cpp",
-      "entry": "tasks::prepare_departure",
+      "implementation": "native/games/wvd/tasks/dungeon_iteration.cpp",
+      "entry": "tasks::dungeon_iteration",
       "implementation_status": "PARTIAL",
       "offline_status": "PASS",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "remaining": "完整入本/路线循环、其他全局事件、逐任务成功/失败/停止/恢复证据未齐。",
-      "implementation_extent": "DEPARTURE_SUPPLY_SUBFLOW",
-      "evidence_report": "../m4-departure-validation.md",
-      "verification_scope": "回城补给子流程，不是 DungeonFarm 完整运行"
+      "remaining": "全局阻塞/死亡/复活/对话、完整任务恢复与逐任务离线证据未齐。",
+      "implementation_extent": "NORMAL_FARM_ITERATION",
+      "evidence_report": "../m4-iteration-validation.md",
+      "verification_scope": "正常入口/路线/出本及两段续接，不是全部43任务执行或全局事件完整迁移",
+      "supporting_implementations": [
+        "native/games/wvd/tasks/departure.cpp",
+        "native/games/wvd/tasks/dungeon_route.cpp"
+      ]
     },
     {
       "inventory_id": "function:src/script.py:Factory.DungeonFarm._identifyState:3426",

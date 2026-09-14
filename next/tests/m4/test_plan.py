@@ -116,6 +116,30 @@ class PlanTests(unittest.TestCase):
                         self.assertEqual(params["image"], target[0])
                 self.assertEqual(nodes["Finished"]["custom_recognition_param"]["value"], len(self.source[task_id]["_TARGETINFOLIST"]))
 
+    def test_all_43_iterations_bind_entry_supply_and_route(self):
+        result = self.inspect("iterations", compile_iterations_manifest=str(ROOT / "packs/wvd/manifest.json"))
+        self.assertEqual(result["outcome"], "PASS", result)
+        rows = {row["task_id"]: row for row in result["compiled_iterations"]}
+        self.assertEqual(set(rows), {key for key, value in self.source.items() if value["_TYPE"] == "dungeon"})
+        for task_id, row in rows.items():
+            with self.subTest(task_id=task_id):
+                self.assertFalse(row["executed"])
+                self.assertEqual(row["missing_images"], [])
+                self.assertEqual(row["scope"], "NORMAL_FARM_ITERATION_NOT_FULL_TASK")
+                nodes = row["nodes"]
+                self.assertEqual(nodes["CountDeparture"]["custom_action_param"]["event"], "dungeon_completed")
+                self.assertEqual(nodes["Traverse"]["custom_action"], "RunChild")
+                self.assertIn("Departure_Inn_Paid", nodes)
+                self.assertIn("Enter_EnterNow", nodes)
+                for i, target in enumerate(self.source[task_id]["_TARGETINFOLIST"]):
+                    self.assertEqual(nodes[f"Dungeon_Point{i}"]["custom_recognition_param"]["value"], i)
+                    if target[0] == "position" or target[0].startswith("stair"):
+                        command = nodes[f"Dungeon_Route{i}_Select0"]["custom_action_param"]["command"]
+                        self.assertEqual([command["x"], command["y"]], target[2])
+                if self.source[task_id].get("_RTT"):
+                    params = nodes["Departure_ReturnCity_Click0"]["custom_action_param"]["target_recognition"]["parameters"]
+                    self.assertEqual(params["image"], self.source[task_id]["_RTT"][0])
+
     def test_typed_target_hint_and_chest_exclusions(self):
         r = self.inspect("hints", self.task(_TARGETINFOLIST=[
             ["chest"], ["position", "左下", [133, 814]], ["stair_2", "右上", [827, 547]],
