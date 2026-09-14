@@ -186,11 +186,11 @@ J evaluate_uncached(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels
         result["action_eligible"] = false;
         return result;
     }
-    if (mode == "boot_ready" || mode == "boot_post") {
+    if (mode == "boot_ready" || mode == "boot_post" || mode == "blocking_screen") {
         check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");
         // 旧 WaitGameBootReady 是顺序候选，不是把全部条件都求完的 boolean any。
         // 只省去命中后的无关检查；实际执行探针的 Error 仍直接传播，未知仍 NoHit。
-        for (const auto &probe : boot_probes(mode == "boot_post")) {
+        for (const auto &probe : mode == "blocking_screen" ? blocking_probes() : boot_probes(mode == "boot_post")) {
             auto result = evaluate_impl(bundle, pixels, probe, bound, scope, cache, depth + 1, memo);
             check(result.at("outcome") != "Error", "WVD_BOOT_RECOGNITION_ERROR");
             if (result.at("outcome") == "Hit")

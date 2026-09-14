@@ -50,9 +50,11 @@ std::optional<runtime::SessionDefinition> decide(const contracts::SessionResult 
     return next;
 }
 }
-tasks::CompiledWorkflow wait_boot_ready(bool allow_download) {
-    C graph("recovery.boot_ready", std::chrono::seconds{120});
-    const J ready{{"mode", "boot_ready"}};
+namespace {
+tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common) {
+    C graph(common ? "recovery.common_screens" : "recovery.boot_ready", std::chrono::seconds{120});
+    const J ready = common ? C::all({J{{"mode", "boot_ready"}}, C::absent(J{{"mode", "blocking_screen"}})})
+                           : J{{"mode", "boot_ready"}};
     const auto title = scoped("boot_title_logo", {100, 300, 700, 470}, .86);
     const auto attention = scoped("boot_attention", {250, 430, 420, 220}, .86);
     const auto download = scoped("startdownload", {222, 901, 465, 84}, .8);
@@ -63,7 +65,8 @@ tasks::CompiledWorkflow wait_boot_ready(bool allow_download) {
     low_retry["threshold"] = .60;
     const auto to_title = C::image("totitle"), resume = C::image("resume");
     const J recognized{{"mode", "boot_post"}};
-    graph.route("Entry", {"Ready", "Download", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title"});
+    graph.route("Entry", common ? J{"Download", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title", "Ready"}
+                                 : J{"Ready", "Download", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title"});
     graph.observe("Ready", ready, {"Terminal"});
     if (allow_download)
         graph.click("Download", download, download, recognized, {"Entry"});
@@ -87,6 +90,13 @@ tasks::CompiledWorkflow wait_boot_ready(bool allow_download) {
         graph.postcondition_budget(name, 10000);
     }
     return graph.finish();
+}
+}
+tasks::CompiledWorkflow wait_boot_ready(bool allow_download) {
+    return boot_workflow(allow_download, false);
+}
+tasks::CompiledWorkflow clear_common_screens(bool allow_download) {
+    return boot_workflow(allow_download, true);
 }
 tasks::CompiledWorkflow with_boot_recovery(const tasks::CompiledWorkflow &task, bool allow_download) {
     task.validate();

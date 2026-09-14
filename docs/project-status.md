@@ -11,6 +11,7 @@
 
 ## 当前阶段
 
+- 普通启动阻塞已在迭代入口/路线分派接通：8 方法/12 场景、M3 定点 3、启动恢复 11、计划 6 方法通过，见 `../next/docs/m4-common-screen-validation.md`。正常迭代 5 方法中 1 项自动退场因输入前帧过期失败，已定位内部原生 Click 默认约 200ms 延迟，待修正并补验；其余 4 项通过。子动作中途弹窗打断仍待接齐。
 - 正常 Farm 迭代图已接入入口/补给/EOT/路线及正常续段：43 项静态编译绑定核对、5 方法/8 场景通过；导航 12、状态 11、核心定点 15 方法回归通过，见 `../next/docs/m4-iteration-validation.md`。两段共享统计且再次入本按配置重置策略。全局事件和完整逐任务验收尚未齐，仍 0/58。
 - M4 已接入配置副本/profile-CAS、58 项类型化任务数据、运行级状态工厂、策略消费、正常续段、43 项入本/路线图。回城普通/强制补给、角色面板恢复、住宿回执和退场新帧确认已组合；证据见 `../next/docs/m4-departure-validation.md`、`../next/docs/m4-dungeon-route-validation.md`、`../next/docs/m4-healing-validation.md`。
 - 战斗已有头像/技能/等级/敌我目标、防跨角色连点、Auto 确认及有界持续等待、有限多角色遭遇和宝箱转战斗。原生子作用域仅清理局部命中预算，不清父预算/策略；证据见 `../next/docs/m4-combat-turn-validation.md`、`../next/docs/m4-auto-wait-validation.md`、`../next/docs/m4-encounter-validation.md`、`../next/docs/m4-native-child-validation.md`。

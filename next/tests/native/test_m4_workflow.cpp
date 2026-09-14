@@ -178,6 +178,8 @@ int main(int argc, char **argv) {
             }
             if (kind == "heal")
                 return games::supply::recover_in_dungeon();
+            if (kind == "common")
+                return games::recovery::clear_common_screens(config.value("allow_download", true));
             if (kind == "dungeon-route" || kind == "iteration") {
                 games::WvdQuestDefinition definition{"route-fixture", "dungeon",
                     {{"_EOT", {{"press", "Dist", {1, 1}, 1}}}, {"_TARGETINFOLIST", config.at("route_targets")}}};
@@ -193,8 +195,8 @@ int main(int argc, char **argv) {
                     if (path.starts_with("image/"))
                         images.insert(path.substr(6));
                 }
-                return kind == "iteration" ? games::tasks::dungeon_iteration(games::WvdTaskPlan::parse(definition), profile, images)
-                                           : games::tasks::traverse_dungeon(games::WvdTaskPlan::parse(definition), profile, images);
+                return kind == "iteration" ? games::tasks::dungeon_iteration(games::WvdTaskPlan::parse(definition), profile, images, config.value("allow_download", true))
+                                           : games::tasks::traverse_dungeon(games::WvdTaskPlan::parse(definition), profile, images, config.value("allow_download", true));
             }
             if (kind == "child") {
                 using C = games::tasks::PipelineCompiler;

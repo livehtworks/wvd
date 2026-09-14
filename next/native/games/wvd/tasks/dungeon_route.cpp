@@ -4,6 +4,7 @@
 #include "games/wvd/navigation/auto_route.hpp"
 #include "games/wvd/navigation/map_route.hpp"
 #include "games/wvd/supply/dungeon_recover.hpp"
+#include "games/wvd/recovery/boot.hpp"
 
 namespace wvd::games::tasks {
 using J = nlohmann::json;
@@ -38,7 +39,7 @@ J point_confirmation(const MapTarget &target, const J &map) {
 }
 }
 CompiledWorkflow traverse_dungeon(const WvdTaskPlan &plan, const J &profile,
-                                 const std::set<std::string> &available_images) {
+                                 const std::set<std::string> &available_images, bool allow_download) {
     if (plan.route().empty() || plan.route().size() > 64)
         throw std::runtime_error("DUNGEON_ROUTE_SIZE_INVALID");
     // 组合段不能继承短子流程默认的 60 秒。400 秒取自旧无进展检测窗口，
@@ -57,7 +58,12 @@ CompiledWorkflow traverse_dungeon(const WvdTaskPlan &plan, const J &profile,
     const auto inside = C::any({map, dungeon, encounter});
     graph.route("Entry", {"Outside", "Entered"});
     graph.confirm("Entered", "dungeon.enter", "dungeon_entered", inside, {"Dispatch"});
-    graph.route("Dispatch", {"Combat", "Chest", "Revive", "Outside", "Resume", "Map"});
+    graph.route("Dispatch", {"Blocked", "Combat", "Chest", "Revive", "Outside", "Resume", "Map"});
+    const auto common = graph.define_child("Common", recovery::clear_common_screens(allow_download));
+    graph.observe("Blocked", {{"mode", "blocking_screen"}}, {"ClearBlocking"});
+    graph.call_child("ClearBlocking", common, {"Dispatch"});
+    graph.hit_limit("Blocked", 32);
+    graph.hit_limit("ClearBlocking", 32);
     graph.hit_limit("Dispatch", 128);
     graph.observe("Outside", outside, {"Terminal"});
     graph.observe("Revive", revive, {"ReviveExit"});

@@ -1306,13 +1306,19 @@
         "M4-RECOVERY"
       ],
       "planned_owner_from_baseline": "native/games/wvd/recovery",
-      "implementation": null,
-      "entry": null,
-      "implementation_status": "NOT_STARTED",
-      "offline_status": "NOT_RUN",
+      "implementation": "native/games/wvd/recovery/boot.cpp",
+      "entry": "recovery::clear_common_screens",
+      "implementation_status": "PARTIAL",
+      "offline_status": "PASS",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "remaining": "本轮未承接此完整业务；固定旧入口仍为唯一生产实现。"
+      "remaining": "子动作中途弹窗打断、死亡/Pause/对话及全任务恢复仍待接齐。",
+      "supporting_implementations": [
+        "native/games/wvd/vision/boot_probes.hpp"
+      ],
+      "implementation_extent": "COMMON_SCREEN_DISPATCH",
+      "evidence_report": "../m4-common-screen-validation.md",
+      "verification_scope": "正常迭代/路线分派点的同代次阻塞处理，不是所有子动作中途插入"
     },
     {
       "inventory_id": "function:src/script.py:Factory.TryHandleCommonBlockingScreen:1353",
@@ -1325,13 +1331,19 @@
         "M4-RECOVERY"
       ],
       "planned_owner_from_baseline": "native/games/wvd/recovery",
-      "implementation": null,
-      "entry": null,
-      "implementation_status": "NOT_STARTED",
-      "offline_status": "NOT_RUN",
+      "implementation": "native/games/wvd/recovery/boot.cpp",
+      "entry": "recovery::clear_common_screens",
+      "implementation_status": "PARTIAL",
+      "offline_status": "PASS",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "remaining": "本轮未承接此完整业务；固定旧入口仍为唯一生产实现。"
+      "remaining": "子动作中途弹窗打断、死亡/Pause/对话及全任务恢复仍待接齐。",
+      "supporting_implementations": [
+        "native/games/wvd/vision/boot_probes.hpp"
+      ],
+      "implementation_extent": "COMMON_SCREEN_DISPATCH",
+      "evidence_report": "../m4-common-screen-validation.md",
+      "verification_scope": "正常迭代/路线分派点的同代次阻塞处理，不是所有子动作中途插入"
     },
     {
       "inventory_id": "function:src/script.py:Factory.AddImportantInfo:1382",

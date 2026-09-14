@@ -64,7 +64,7 @@ class WorkflowTests(unittest.TestCase):
                       "chest_auto", "mark_auto", "chest_auto_minus", "resume", "returnText", "returntoTown", "openworldmap"]
         if options.get("workflow") in ("entry", "iteration"):
             names += ["GotoDung", "openworldmap", "returntoTown", "intoWorldMap", "TradeWaterway", "Dist", "EVENT", "FFXI/EVENT_GCN", "FFXI/zone5", "preGate"]
-        if options.get("workflow") == "recover":
+        if options.get("workflow") in ("recover", "common", "iteration", "dungeon-route"):
             names += ["dungFlag", "openworldmap", "returnText", "returntoTown", "mapFlag", "chestFlag", "whowillopenit",
                       "fishing/cast", "fishing/striking", "fishing/CloseFishInfo", "combatActive", "combatActive_2",
                       "combatActive_3", "combatActive_4", "boot_title_logo", "boot_attention", "startdownload",
@@ -93,6 +93,13 @@ class WorkflowTests(unittest.TestCase):
                     self.assertGreater(score, .60)
                     self.assertLess(score, .86)
                     pattern = degraded
+                if key == "retry" and i in options.get("degraded_retry_frames", []):
+                    noise = rng.integers(30, 255, pattern.shape, dtype=np.uint8)
+                    degraded = ((pattern.astype(np.uint16) + noise) // 2).astype(np.uint8)
+                    score = float(cv2.matchTemplate(degraded, pattern, cv2.TM_CCOEFF_NORMED)[0, 0])
+                    self.assertGreater(score, .60)
+                    self.assertLess(score, .80)
+                    pattern = degraded
                 pixels[y:y+24, x:x+40] = pattern
             frame = folder / f"frame-{i}.png"
             write(frame, pixels)
@@ -113,7 +120,8 @@ class WorkflowTests(unittest.TestCase):
         before_hash = digest(exe)
         with (folder / "native.log").open("wb") as log:
             result = subprocess.run([str(exe), str(source)], cwd=folder, env=self.env,
-                                    stdout=log, stderr=log, timeout={"dungeon-route": 420, "recover": 750, "departure": 200, "iteration": 1400}.get(options.get("workflow"), 90))
+                                    stdout=log, stderr=log, timeout={"dungeon-route": 420, "recover": 750, "departure": 200,
+                                        "common": 140, "iteration": 780 * options.get("normal_units", 1)}.get(options.get("workflow"), 90))
         self.assertEqual(digest(exe), before_hash)
         (folder / "execution.json").write_text(json.dumps({"exe_sha256": before_hash, "exit": result.returncode}), encoding="utf-8")
         self.assertEqual(result.returncode, 0, (folder / "native.log").read_text(encoding="utf-8", errors="replace")[-3000:])
@@ -1287,6 +1295,81 @@ class WorkflowTests(unittest.TestCase):
             self.assertEqual(r["backend_calls"], 1)
             self.assertEqual(r["snapshot"]["completed_business_units"], 0)
             self.assertEqual(r["snapshot"]["generation"], 1)
+
+
+    def test_common_resume_overlay_precedes_ready_game(self):
+        r = self.execute("common-resume", [{"dungFlag": (50, 150), "resume": (400, 800)}, {"dungFlag": (50, 150)}],
+                         [dict(kind=0, x=420, y=812)], workflow="common")
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 1)
+        self.assertEqual(r["lifecycle_calls"], [])
+
+    def test_common_title_attention_download_are_normal_inputs(self):
+        frames = [{"boot_title_logo": (200, 350)}, {"boot_attention": (300, 450)},
+                  {"startdownload": (230, 910)}, {"Inn": (400, 700)}]
+        r = self.execute("common-title", frames,
+                         [dict(kind=0, x=450, y=1450), dict(kind=0, x=450, y=1450), dict(kind=0, x=250, y=922)], workflow="common")
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 3)
+        self.assertEqual(r["snapshot"]["generation"], 1)
+        self.assertEqual(r["lifecycle_calls"], [])
+
+    def test_common_retry_uses_old_blank_and_low_confidence_rules(self):
+        r = self.execute("common-retry-blank", [{"retry_blank": (400, 700)}, {"Inn": (400, 700)}],
+                         [dict(kind=0, x=420, y=815)], workflow="common")
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        r = self.execute("common-retry-low", [{"retry": (400, 700)}, {"retry": (400, 700)}, {"Inn": (400, 700)}],
+                         [dict(kind=0, x=450, y=900)] * 2, workflow="common", degraded_retry_frames=[0, 1])
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 2)
+
+    def test_common_download_permission_stop_and_reject(self):
+        r = self.execute("common-download-blocked", [{"startdownload": (230, 910)}], [],
+                         workflow="common", allow_download=False)
+        self.assertEqual(r["snapshot"]["state"], "Interrupted", r)
+        self.assertEqual(r["backend_calls"], 0)
+        for stop in (False, True):
+            r = self.execute("common-stop" if stop else "common-reject", [{"resume": (400, 800)}, {"Inn": (400, 700)}],
+                             [dict(kind=0, x=420, y=812, reject=not stop)], workflow="common", stop_after_first=stop)
+            self.assertEqual(r["snapshot"]["state"], "UserStopped" if stop else "Failed", r)
+            self.assertEqual(r["backend_calls"], 1)
+
+    def test_common_stuck_resume_has_finite_input_budget(self):
+        r = self.execute("common-stuck", [{"resume": (400, 800), "dungFlag": (50, 150)}],
+                         [dict(kind=0, x=420, y=812, stay=True)], workflow="common")
+        self.assertEqual(r["snapshot"]["state"], "Interrupted", r)
+        self.assertEqual(r["backend_calls"], 6)
+        self.assertEqual(r["lifecycle_calls"], [])
+
+    def test_common_route_insert_returns_to_same_point(self):
+        base = {"mapFlag": (100, 100), "cursor_0": (480, 588)}
+        r = self.execute("common-route", [{**base, "resume": (400, 800)}, base],
+                         [dict(kind=0, x=420, y=812)], workflow="dungeon-route", profile=self.turn_profile(defend=True),
+                         route_targets=[["position", [None], [500, 600]]])
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 1)
+        self.assertEqual(r["snapshot"]["generation"], 1)
+        self.assertEqual(r["snapshot"]["business"]["task_step"], 1)
+        self.assertEqual(r["snapshot"]["business"]["crashes"], 0)
+
+    def test_common_iteration_boot_does_not_request_restart(self):
+        r = self.execute("common-iteration", [{"boot_title_logo": (200, 350)}, {"Inn": (400, 700), "Dist": (300, 500)},
+            {"GotoDung": (400, 700)}, {"mapFlag": (100, 100), "cursor_0": (480, 588)}],
+            [dict(kind=0, x=450, y=1450), dict(kind=0, x=320, y=512), dict(kind=0, x=420, y=712)],
+            workflow="iteration", profile=self.turn_profile(defend=True), route_targets=[["position", [None], [500, 600]]])
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 3)
+        self.assertEqual(r["snapshot"]["business"]["crashes"], 0)
+        self.assertEqual(r["lifecycle_calls"], [])
+
+    def test_common_unknown_and_missing_asset_never_grant_input(self):
+        r = self.execute("common-unknown", [{}], [], workflow="common")
+        self.assertEqual(r["snapshot"]["state"], "Interrupted", r)
+        self.assertEqual(r["backend_calls"], 0)
+        r = self.execute("common-missing", [{"Inn": (400, 700)}], [], workflow="common", omit_image="boot_title_logo.png")
+        self.assertIn("COMPILE_IMAGE_NOT_IN_MANIFEST", r["publish_error"])
+        self.assertEqual(r["connections"], 0)
+        self.assertEqual(r["backend_calls"], 0)
 
 
 if __name__ == "__main__":

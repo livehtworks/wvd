@@ -372,6 +372,37 @@ def update_dungeon_route(evidence, plan_evidence):
     print("43 dungeon route graphs recorded; complete task execution statuses unchanged.")
 
 
+def update_common(evidence):
+    verify_workflows(evidence, {"common-download-blocked": ("Interrupted", 0), "common-iteration": ("Completed", 3),
+        "common-reject": ("Failed", 1), "common-resume": ("Completed", 1), "common-retry-blank": ("Completed", 1),
+        "common-retry-low": ("Completed", 2), "common-route": ("Completed", 1), "common-stop": ("UserStopped", 1),
+        "common-stuck": ("Interrupted", 6), "common-title": ("Completed", 3), "common-unknown": ("Interrupted", 0)})
+    missing = read(evidence / "common-missing/output.json")
+    if not missing["publish_error"].startswith("COMPILE_IMAGE_NOT_IN_MANIFEST") or missing["connections"] or missing["backend_calls"]:
+        raise ValueError("M4_COMMON_ASSET_REJECTION_MISMATCH")
+    for name in ("common-iteration", "common-route"):
+        output = read(evidence / name / "output.json")
+        if output["lifecycle_calls"] or output["snapshot"]["generation"] != 1 or output["snapshot"]["business"]["crashes"]:
+            raise ValueError("M4_COMMON_NOT_ORDINARY_INSERT:" + name)
+    path = ROOT / "docs/migration/m4-implementation-map.json"
+    document = read(path)
+    symbols = {"Factory.TryHandleCommonBlockingScreen", "Factory.TryPressRetry"}
+    found = set()
+    for row in document["entries"]:
+        if row["legacy_symbol"] in symbols:
+            found.add(row["legacy_symbol"])
+            row.update(implementation="native/games/wvd/recovery/boot.cpp", entry="recovery::clear_common_screens",
+                supporting_implementations=["native/games/wvd/vision/boot_probes.hpp"],
+                implementation_status="PARTIAL", implementation_extent="COMMON_SCREEN_DISPATCH",
+                offline_status="PASS", evidence_report="../m4-common-screen-validation.md",
+                verification_scope="正常迭代/路线分派点的同代次阻塞处理，不是所有子动作中途插入",
+                remaining="子动作中途弹窗打断、死亡/Pause/对话及全任务恢复仍待接齐。")
+    if found != symbols or document["counts"] != {"function": 250, "config": 33, "task": 58}:
+        raise ValueError("M4_COMMON_INVENTORY_MISMATCH")
+    write(path, document)
+    print("Common blocking screens recorded; complete task execution statuses unchanged.")
+
+
 def update_iteration(evidence, plan_evidence):
     verify_workflows(evidence, {"auto-return-prompt": ("Completed", 1), "iteration-entry": ("Completed", 4),
         "iteration-fail": ("Failed", 1), "iteration-stop": ("UserStopped", 1), "iteration-two": ("Completed", 10),
@@ -460,8 +491,9 @@ if __name__ == "__main__":
     parser.add_argument("--dungeon-route-evidence", type=Path)
     parser.add_argument("--departure-evidence", type=Path)
     parser.add_argument("--iteration-evidence", type=Path)
+    parser.add_argument("--common-evidence", type=Path)
     args = parser.parse_args()
-    if not any((args.data_evidence, args.combat_evidence, args.navigation_evidence, args.encounter_evidence, args.healing_evidence, args.dungeon_route_evidence, args.departure_evidence, args.iteration_evidence)):
+    if not any((args.data_evidence, args.combat_evidence, args.navigation_evidence, args.encounter_evidence, args.healing_evidence, args.dungeon_route_evidence, args.departure_evidence, args.iteration_evidence, args.common_evidence)):
         parser.error("an evidence group is required")
     if args.data_evidence:
         generate(args.data_evidence, args.state_evidence, args.plan_evidence, args.workflow_evidence)
@@ -481,6 +513,8 @@ if __name__ == "__main__":
         if not args.plan_evidence:
             parser.error("--iteration-evidence requires --plan-evidence")
         update_iteration(args.iteration_evidence, args.plan_evidence)
+    if args.common_evidence:
+        update_common(args.common_evidence)
     if args.dungeon_route_evidence:
         if not args.plan_evidence:
             parser.error("--dungeon-route-evidence requires --plan-evidence")
