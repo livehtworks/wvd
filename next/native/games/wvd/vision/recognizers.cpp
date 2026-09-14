@@ -7,6 +7,7 @@
 #include "games/wvd/business_condition.hpp"
 #include <cmath>
 #include <chrono>
+#include <exception>
 #include <opencv2/imgproc.hpp>
 #include <opencv2/objdetect.hpp>
 
@@ -63,6 +64,7 @@ J match(const cv::Mat &source, cv::Mat templ, J p, maafw::RecognitionCache &cach
         templ = templ(rect(p["crop"], templ.size()));
     check(templ.cols <= search.cols && templ.rows <= search.rows, "TEMPLATE_EXCEEDS_ROI");
     cv::Mat scores;
+    const auto match_started = std::chrono::steady_clock::now();
     const bool bright = p.value("bright_mask", false);
     if (bright) {
         int minimum = p.value("min_brightness", 145);
@@ -83,19 +85,29 @@ J match(const cv::Mat &source, cv::Mat templ, J p, maafw::RecognitionCache &cach
         cv::matchTemplate(search, templ, scores, cv::TM_CCORR_NORMED, mask);
     } else
         cv::matchTemplate(search, templ, scores, cv::TM_CCOEFF_NORMED);
+    const auto match_finished = std::chrono::steady_clock::now();
     for (int y = 0; y < scores.rows; ++y)
         for (int x = 0; x < scores.cols; ++x)
             if (!std::isfinite(scores.at<float>(y, x)))
                 scores.at<float>(y, x) = -1;
+    const auto sanitize_finished = std::chrono::steady_clock::now();
     double maximum{};
     cv::Point location;
     cv::minMaxLoc(scores, nullptr, &maximum, nullptr, &location);
+    const auto reduce_finished = std::chrono::steady_clock::now();
+    auto milliseconds = [](auto begin, auto end) {
+        return std::chrono::duration<double, std::milli>(end - begin).count();
+    };
     cv::Rect found(main.x + location.x, main.y + location.y, templ.cols, templ.rows);
     J evidence{{"best_score", maximum},
                {"best_box", box(found)},
                {"threshold", threshold},
                {"scale", scale},
-               {"method", bright ? "CCORR_NORMED_BRIGHT_MASK" : "CCOEFF_NORMED"}};
+               {"method", bright ? "CCORR_NORMED_BRIGHT_MASK" : "CCOEFF_NORMED"},
+               // 只保存有界标量诊断，不保存像素，也不把耗时参与识别结果或缓存身份。
+               {"timing_ms", {{"match", milliseconds(match_started, match_finished)},
+                              {"sanitize", milliseconds(match_finished, sanitize_finished)},
+                              {"reduce", milliseconds(sanitize_finished, reduce_finished)}}}};
     if (p.value("multiple", false)) {
         std::vector<cv::Rect> rectangles;
         for (int y = 0; y < scores.rows; ++y)
@@ -140,6 +152,23 @@ J layout(const cv::Mat &source) {
                     false);
 }
 using EvaluationMemo = std::map<std::string, J>;
+bool pure_condition(const J &p, unsigned depth = 0) {
+    if (depth > 8 || !p.is_object() || !p.contains("mode") || !p.at("mode").is_string())
+        return false;
+    const auto mode = p.at("mode").get<std::string>();
+    if (mode == "all" || mode == "any" || mode == "not") {
+        if (!p.contains("conditions") || !p.at("conditions").is_array())
+            return false;
+        return std::all_of(p.at("conditions").begin(), p.at("conditions").end(),
+                           [&](const J &child) { return pure_condition(child, depth + 1); });
+    }
+    // 只有已核对不读写时序状态的视觉模式可并行。business、movement_stopped、
+    // 浮标历史等仍在原线程执行；未登记的新模式默认不并行。
+    return mode == "template" || mode == "combat_active" || mode == "boot_ready" ||
+           mode == "boot_post" || mode == "blocking_screen" || mode == "party_death" ||
+           mode == "party_defeat" || mode == "party_death_post" || mode == "pause" ||
+           mode == "pause_negative" || mode == "auto_route_post";
+}
 J evaluate_uncached(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels, const J &p,
                     const J &bound, const maafw::CustomRecognitionScope &scope,
                     maafw::RecognitionCache &cache, unsigned depth, EvaluationMemo &memo);
@@ -272,9 +301,45 @@ J evaluate_uncached(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels
               "WVD_CONDITIONS_INVALID");
         bool all = true, any = false, action_eligible = true;
         J evidence = J::array();
+        std::vector<J> evaluated(children.size());
+        const bool parallel_conditions = depth == 0 && children.size() > 1 && pure_condition(p);
+        if (parallel_conditions) {
+            // OpenCV 的两条同步工作分片，不创建新执行器、不 detach、不更改全局线程数。
+            // 每路独占临时 memo/模板索引，只共享只读像素和不可变 lease；合流后才写回
+            // 资源缓存。不会把历史观察或 stateful 特征带入另一条线程。
+            std::array<maafw::RecognitionCache, 2> workers;
+            std::array<EvaluationMemo, 2> worker_memos;
+            std::vector<std::exception_ptr> errors(children.size());
+            for (auto &worker : workers)
+                for (const auto &[key, value] : cache.assets)
+                    if (key.starts_with("template:") || key.starts_with("mask:"))
+                        worker.assets.emplace(key, value);
+            cv::parallel_for_(cv::Range(0, 2), [&](const cv::Range &range) {
+                for (int worker = range.start; worker < range.end; ++worker)
+                    for (std::size_t i = static_cast<std::size_t>(worker); i < children.size(); i += 2) {
+                        try {
+                            evaluated[i] = evaluate_impl(bundle, pixels, children[i], bound, scope,
+                                workers[worker], depth + 1, worker_memos[worker]);
+                        } catch (...) {
+                            errors[i] = std::current_exception();
+                        }
+                    }
+            }, 2);
+            // 按原条件顺序报告异常。不能因另一分片 Hit 就掩盖缺图或非法范围。
+            for (const auto &error : errors)
+                if (error)
+                    std::rethrow_exception(error);
+            for (const auto &worker : workers)
+                for (const auto &[key, value] : worker.assets) {
+                    check(cache.assets.contains(key) || cache.assets.size() < 2048, "WVD_SESSION_ASSET_CAPACITY");
+                    cache.assets.try_emplace(key, value);
+                }
+        } else {
+            for (std::size_t i = 0; i < children.size(); ++i)
+                evaluated[i] = evaluate_impl(bundle, pixels, children[i], bound, scope, cache, depth + 1, memo);
+        }
         // 组合只产生布尔条件，不赋予坐标许可；所有子项都检查，不能短路掩盖缺图/Error。
-        for (const auto &child : children) {
-            auto result = evaluate_impl(bundle, pixels, child, bound, scope, cache, depth + 1, memo);
+        for (auto &result : evaluated) {
             check(result.at("outcome") != "Error", "WVD_CONDITION_ERROR");
             bool hit = result.at("outcome") == "Hit";
             all = all && hit;
@@ -286,7 +351,8 @@ J evaluate_uncached(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels
         auto result = decision(mode == "all"   ? all
                                : mode == "any" ? any
                                                : !any,
-                               allowed_rect, {{"conditions", evidence}}, false);
+                               allowed_rect, {{"conditions", evidence},
+                                              {"evaluation", parallel_conditions ? "opencv_two_way" : "sequential"}}, false);
         result["action_eligible"] = action_eligible;
         return result;
     }

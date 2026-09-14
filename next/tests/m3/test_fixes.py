@@ -223,6 +223,8 @@ class FixTests(unittest.TestCase):
         for _ in range(10):
             deep = {"mode": "not", "conditions": [deep]}
         cases.append(("depth", deep, "Error"))
+        cases.append(("parallel-depth", {"mode": "all", "conditions": [hit, deep]}, "Error"))
+        cases.append(("first-error-not-hidden", {"mode": "all", "conditions": [invalid, hit]}, "Error"))
         nodes, requests = {}, []
         for name, parameters, _ in cases:
             request = {**reco(name), "parameters": parameters}
@@ -237,6 +239,9 @@ class FixTests(unittest.TestCase):
             self.assertTrue(pipeline["events"], pipeline)
             self.assertTrue(all(e["outcome"] == outcome for e in pipeline["events"]), pipeline)
         self.assertEqual(result["backend_calls"], 0)
+
+        for value in result["cases"][:3]:
+            self.assertEqual(value["evidence"]["evidence"]["evaluation"], "opencv_two_way")
 
     def test_metadata_helper_only(self):
         folder = self.root / "metadata-中文 空格"
