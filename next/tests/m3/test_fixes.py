@@ -42,6 +42,13 @@ class FixTests(unittest.TestCase):
                                                   for f in sorted(bundle.rglob("*")) if f.is_file()],
                       before=str(folder / "before.png"), after=str(folder / "after.png"),
                       run_root=str(folder / "run-data"), output=str(folder / "output.json"))
+        if config.get("scenario") == "junction":
+            destination = folder / "junction-destination"
+            destination.mkdir()
+            # Junction 不需要符号链接特权；目标和链接都属于本用例目录。
+            created = subprocess.run(["cmd.exe", "/c", "mklink", "/J", str(bundle / "linked"), str(destination)],
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, creationflags=subprocess.CREATE_NO_WINDOW)
+            self.assertEqual(created.returncode, 0, created.stdout.decode(errors="replace"))
         (folder / "input.json").write_text(json.dumps(config), encoding="utf-8")
         exe = ROOT / "build/m3/Release/test_m3_fixes.exe"
         with (folder / "native.log").open("wb") as log:
@@ -211,6 +218,22 @@ class FixTests(unittest.TestCase):
         self.assertEqual(result["reused_revision_error"], "BUNDLE_REVISION_REUSED")
         self.assertFalse(result["closed"]["active"])
         self.assertEqual(result["backend_calls"], 0)
+
+    def test_integrity_negative_matrix_and_failed_initialization_release(self):
+        expected = {"valid": None, "writer-held": "INTEGRITY_SHARING_CONFLICT",
+                    "bad-hash": "RESOURCE_HASH_MISMATCH", "bad-manifest": "BUNDLE_MANIFEST_INVALID",
+                    "case-collision": "BUNDLE_CASE_COLLISION", "missing-member": "INTEGRITY_SHARING_CONFLICT",
+                    "directory-rename": None, "directory-added": "BUNDLE_DIRECTORY_CHANGED", "junction": "BUNDLE_LINK_REJECTED"}
+        for case, error in expected.items():
+            with self.subTest(case=case):
+                folder = self.images("lease-" + case)
+                result = self.execute(folder, {"mode": "lease-matrix", "scenario": case}, {"Entry": {"action": "DoNothing"}})
+                self.assertEqual(result.get("error"), error, result)
+                self.assertTrue(result["all_locks_released"], result)
+                self.assertTrue(result["target_unchanged"], result)
+                self.assertEqual(result["backend_calls"], 0)
+                if case == "directory-rename":
+                    self.assertTrue(result["rename_blocked"])
 
 
 if __name__ == "__main__":

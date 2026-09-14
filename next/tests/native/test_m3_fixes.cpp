@@ -3,6 +3,7 @@
 #include "platform/windows/file_digest.hpp"
 #include "platform/windows/bundle_lease.hpp"
 #include "loaded_modules.hpp"
+#include "integrity_lease_cases.hpp"
 #include <iostream>
 
 using namespace fixture;
@@ -48,7 +49,10 @@ int main(int argc, char **argv) {
             {"battle"},
             2000ms};
         J output;
-        if (config.at("mode") == "guarded") {
+        if (config.at("mode") == "lease-matrix") {
+            output = integrity_lease_case(bundle, config.at("scenario"));
+            output["backend_calls"] = device->calls.load();
+        } else if (config.at("mode") == "guarded") {
             runtime::RunCoordinator coordinator(maafw::path_from_utf8(config.at("run_root")),
                                                 registry);
             runtime::RunDefinition definition;
