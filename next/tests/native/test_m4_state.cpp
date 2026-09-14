@@ -2,7 +2,13 @@
 #include "games/wvd/state.hpp"
 #include "games/wvd/vision/recognizers.hpp"
 #include "storage/legacy_import.hpp"
+#include "storage/profile_store.hpp"
+#include <algorithm>
+#include <array>
+#include <barrier>
 #include <iostream>
+#include <thread>
+#include <windows.h>
 
 using namespace fixture;
 class TestClock final : public contracts::MonotonicClock {
@@ -239,6 +245,81 @@ J direct_contract(const J &profile) {
     result["missing_group_unchanged"] = missing.summary() == empty_before;
     return result;
 }
+J profile_storage_contract(const J &descriptor, const J &source, const std::filesystem::path &directory) {
+    // 路径来自本用例私有根；不存在的目录是隔离前提，绝不落到旧 config.json。
+    require(!std::filesystem::exists(directory), "PROFILE_TEST_DIRECTORY_EXISTS");
+    std::filesystem::create_directory(directory);
+    const auto path = directory / "profile.json";
+    storage::LegacyConfigImporter importer(descriptor);
+    storage::ProfileStore store(path, descriptor);
+    const auto original = store.create(importer.parse(source));
+    const auto original_bytes = bytes(path);
+    auto draft = original;
+    draft["values"]["KARMA_ADJUST"] = "+1";
+    auto attempt = [&](const J &value) {
+        try {
+            store.compare_exchange(original.at("revision"), value);
+            return std::string("SAVED");
+        } catch (const std::exception &e) {
+            return std::string(e.what());
+        }
+    };
+    struct HeldFile {
+        HANDLE handle;
+        HeldFile(const std::filesystem::path &p, DWORD access, DWORD sharing, DWORD disposition)
+            : handle(CreateFileW(p.c_str(), access, sharing, nullptr, disposition, FILE_ATTRIBUTE_NORMAL, nullptr)) {
+            require(handle != INVALID_HANDLE_VALUE, "PROFILE_TEST_LOCK_FAILED");
+        }
+        ~HeldFile() { CloseHandle(handle); }
+    };
+    J result;
+    {
+        HeldFile lock(path.wstring() + L".lock", GENERIC_READ | GENERIC_WRITE, 0, OPEN_EXISTING);
+        result["busy_error"] = attempt(draft);
+        require(result["busy_error"] == "PROFILE_BUSY" && bytes(path) == original_bytes, "PROFILE_BUSY_LOST_DATA");
+    }
+    {
+        // 允许读取旧 profile，但不给删除共享，实际 Windows 原子替换必须失败。
+        HeldFile prevent_replace(path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, OPEN_EXISTING);
+        result["replace_error"] = attempt(draft);
+        require(result["replace_error"] == "STORAGE_COMMIT_FAILED" && bytes(path) == original_bytes,
+                "PROFILE_FAILED_REPLACE_LOST_DATA");
+    }
+    result["failure_preserved"] = store.load() == original;
+    std::array<std::string, 2> outcomes;
+    std::array<J, 2> saved;
+    std::barrier ready(3);
+    std::array<std::jthread, 2> writers;
+    for (std::size_t i = 0; i < writers.size(); ++i)
+        writers[i] = std::jthread([&, i] {
+            ready.arrive_and_wait();
+            try {
+                storage::ProfileStore competing(path, descriptor);
+                auto proposed = original;
+                proposed["values"]["KARMA_ADJUST"] = i ? "+2" : "+1";
+                saved[i] = competing.compare_exchange(original.at("revision"), proposed);
+                outcomes[i] = "SAVED";
+            } catch (const std::exception &e) {
+                outcomes[i] = e.what();
+            }
+        });
+    ready.arrive_and_wait();
+    for (auto &writer : writers)
+        writer.join();
+    const auto winners = std::count(outcomes.begin(), outcomes.end(), "SAVED");
+    require(winners == 1, "PROFILE_CONCURRENT_WRITERS_BOTH_COMMITTED");
+    for (const auto &outcome : outcomes)
+        require(outcome == "SAVED" || outcome == "PROFILE_BUSY" || outcome == "PROFILE_CONFLICT",
+                "PROFILE_CONCURRENT_UNEXPECTED_ERROR");
+    const auto winner = outcomes[0] == "SAVED" ? 0 : 1;
+    require(store.load() == saved[winner], "PROFILE_CONCURRENT_PARTIAL_FILE");
+    result["writers"] = outcomes;
+    result["winner"] = saved[winner];
+    result["stale_error"] = attempt(original);
+    require(result["stale_error"] == "PROFILE_CONFLICT" && store.load() == saved[winner], "PROFILE_STALE_OVERWROTE_WINNER");
+    result["after_stale"] = store.load();
+    return result;
+}
 int main(int argc, char **argv) {
     try {
         require(argc == 2, "PRIVATE_CONFIG_REQUIRED");
@@ -247,6 +328,13 @@ int main(int argc, char **argv) {
         J descriptor;
         std::ifstream(maafw::path_from_utf8(config.at("descriptor"))) >> descriptor;
         storage::LegacyConfigImporter importer(descriptor);
+        if (config.value("profile_storage", false)) {
+            const auto root = maafw::path_from_utf8(config.at("output")).parent_path() / "profile-storage";
+            const J output{{"profile_storage", profile_storage_contract(descriptor, config.at("source"), root)},
+                           {"backend_inputs", 0}, {"offline_connections", 0}, {"real_connections", 0}, {"real_inputs", 0}};
+            std::ofstream(maafw::path_from_utf8(config.at("output"))) << output.dump(2);
+            return 0;
+        }
         auto profile = importer.parse(config.at("source")).values;
         J output{{"direct", direct_contract(profile)}};
         if (config.contains("supply_cases")) {

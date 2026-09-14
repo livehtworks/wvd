@@ -108,6 +108,17 @@ class StateTests(unittest.TestCase):
         self.assertEqual(r["snapshot"]["state"], "Completed", r)
         self.assertTrue(r["snapshot"]["business"]["strategy"]["automatic"])
 
+    def test_profile_lock_replace_failure_and_concurrent_cas(self):
+        result = self.run_case("profile-storage", profile_storage=True)
+        self.assertEqual(result["offline_connections"], 0)
+        storage = result["profile_storage"]
+        self.assertEqual(storage["busy_error"], "PROFILE_BUSY")
+        self.assertEqual(storage["replace_error"], "STORAGE_COMMIT_FAILED")
+        self.assertTrue(storage["failure_preserved"])
+        self.assertEqual(storage["writers"].count("SAVED"), 1)
+        self.assertEqual(storage["stale_error"], "PROFILE_CONFLICT")
+        self.assertEqual(storage["winner"], storage["after_stale"])
+
     def test_confirmed_auto_consumes_only_prepared_entry(self):
         r = self.run_case("confirmed-auto")["direct"]
         self.assertEqual(len(r["fallback_before_confirmation"]["strategy"]["current"]["skill_settings"]), 2)

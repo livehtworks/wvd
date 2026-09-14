@@ -26,7 +26,8 @@ class DataTests(unittest.TestCase):
     def run_data(self, name, source=None, **kwargs):
         folder = self.root / name
         folder.mkdir()
-        cfg = {"descriptor": str(self.descriptor), "source": source or {}, "output": str(folder / "result.json"), **kwargs}
+        cfg = {"descriptor": str(self.descriptor), "source": {} if source is None else source,
+               "output": str(folder / "result.json"), **kwargs}
         if cfg.pop("save_profile", False):
             cfg["profile_path"] = str(folder / "new-profile.json")
         (folder / "input.json").write_text(json.dumps(cfg, ensure_ascii=False), encoding="utf-8")
@@ -69,6 +70,70 @@ class DataTests(unittest.TestCase):
             self.assertEqual(result["export"], source)
             self.assertIn("/GENERAL/extra", result["legacy_passthrough"])
             self.assertIn("/Dist/TASK_POINT_STRATEGY/unknown", result["legacy_passthrough"])
+
+    def test_all_fields_section_precedence_and_missing_target(self):
+        def values(mark, number):
+            result = {}
+            for field in self.fields:
+                name, kind = field["name"], field["type"]
+                if kind == "boolean":
+                    result[name] = bool(number % 2)
+                elif kind == "integer":
+                    result[name] = number
+                elif kind == "string":
+                    result[name] = mark + ":" + name
+                elif kind == "array":
+                    result[name] = [{"group_name": mark, "skill_settings": [], "complete_one_as_all": True}]
+                else:
+                    result[name] = {"overall_strategy": mark, "task_point": {"0": mark, "11": mark}}
+            result["LANGUAGE"] = "en_US" if number % 2 else "zh_CN"
+            result["KARMA_ADJUST"] = "+2" if number % 2 else "-2"
+            result["DEFAULT_OVERALL_STRATEGY"] = mark
+            return result
+
+        general, default, task = values("通用", 1), values("默认", 2), values("任务", 3)
+        for specific in (False, True):
+            for target in (None, "未登记任务", "目标/甲"):
+                with self.subTest(specific=specific, target=target):
+                    source = {"GENERAL": {**general, "TASK_SPECIFIC_CONFIG": specific, "FARM_TARGET": target},
+                              "DEFAULT": default, "目标/甲": task, "未知区段": {"空": [], "空值": None}}
+                    r = self.run_data("precedence-" + str(specific) + "-" + str(target).replace("/", "_"), source)
+                    selected = "目标/甲" if specific and target == "目标/甲" else "DEFAULT"
+                    self.assertEqual(r["outcome"], "PASS", r)
+                    self.assertEqual(r["selected_section"], selected)
+                    self.assertEqual(r["values"], source[selected])
+                    self.assertEqual(r["sources"], {field["name"]: selected for field in self.fields})
+                    self.assertEqual(r["export"], source)
+                    self.assertEqual(r["legacy_passthrough"]["/未知区段/空"], [])
+                    self.assertIsNone(r["legacy_passthrough"]["/未知区段/空值"])
+
+    def test_empty_containers_are_not_replaced_by_defaults(self):
+        source = {"GENERAL": {"STRATEGY": [], "TASK_POINT_STRATEGY": {}}, "DEFAULT": {},
+                  "unused": {"list": [], "object": {}, "null": None}}
+        r = self.run_data("empty-fields", source, save_profile=True)
+        self.assertEqual(r["outcome"], "PASS", r)
+        self.assertEqual(r["values"]["STRATEGY"], [])
+        self.assertEqual(r["values"]["TASK_POINT_STRATEGY"], {})
+        self.assertEqual(r["export"], source)
+        for index, value in enumerate(([], "", False, 0)):
+            r = self.run_data("empty-root-" + str(index), value)
+            self.assertEqual(r["outcome"], "Error", r)
+        r = self.run_data("null-root", raw_json="null")
+        self.assertEqual(r["outcome"], "Error", r)
+
+    def test_duplicate_nested_keys_are_rejected_without_losing_siblings(self):
+        for name, raw in (
+            ("unknown", '{"GENERAL":{"未知":{"x":1,"x":2}}}'),
+            ("task-point", '{"GENERAL":{"TASK_POINT_STRATEGY":{"task_point":{"0":"a","0":"b"}}}}'),
+            ("skill", '{"GENERAL":{"STRATEGY":[{"group_name":"a","skill_settings":[{"skill_lvl":1,"skill_lvl":2}]}]}}'),
+        ):
+            r = self.run_data("nested-duplicate-" + name, raw_json=raw)
+            self.assertEqual(r["outcome"], "Error", r)
+            self.assertIn("LEGACY_DUPLICATE_KEY", r["error"])
+        source = {"GENERAL": {"未知": [{"x": 1}, {"x": 2}]}}
+        r = self.run_data("nested-independent-objects", source)
+        self.assertEqual(r["outcome"], "PASS", r)
+        self.assertEqual(r["export"], source)
 
     def test_strategy_and_cas(self):
         source = {"GENERAL": {"KARMA_ADJUST": "-7", "STRATEGY": [{"group_name": "中文", "complete_one_as_all": True,
