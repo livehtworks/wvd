@@ -56,6 +56,7 @@ tasks::CompiledWorkflow recover_in_dungeon() {
     }
     graph.recovery("ReturnFailed", "supply.recover_panel_not_closed");
     graph.confirm("Recovered", "heal.complete", "healing_completed", dungeon, {"Terminal"});
+    graph.interrupt_on({{"mode", "blocking_screen"}}, "supply.common_screen_requires_dispatch");
     return graph.finish();
 }
 }

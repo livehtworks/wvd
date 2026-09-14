@@ -117,7 +117,7 @@ tasks::CompiledWorkflow take_turn(const J &profile, const std::set<std::string> 
     const auto support = roi_image("supportSkillCheck", {677, 1475, 189, 80});
     const auto errors = C::any({C::image("notenoughsp"), C::image("notenoughmp")});
     const auto finished = C::all({C::any({clear, ended}), C::absent(errors), C::absent(popup)});
-    const J auto_exits{{"BattleEndedExit", {"Terminal"}}};
+    const J auto_exits{{"BattleEndedExit", {"Terminal"}}, {"BlockedExit", {"BlockedExit"}}};
     const auto full_auto = graph.append("FullAuto", enable_auto(), {"Terminal"}, auto_exits);
     const auto char_auto = graph.append("CharAuto", enable_auto(), {"DisableCharAuto", "AutoEnded"}, auto_exits);
     graph.fixed_click("DisableCharAuto", C::all({clear, enabled}), C::any({C::all({clear, disabled}), ended}),
@@ -215,6 +215,7 @@ tasks::CompiledWorkflow take_turn(const J &profile, const std::set<std::string> 
             }
         }
     }
+    graph.interrupt_on({{"mode", "blocking_screen"}}, "combat.common_screen_requires_dispatch");
     return graph.finish();
 }
 }

@@ -11,6 +11,7 @@
 
 ## 当前阶段
 
+- 地图/Auto/角色回合/遭遇/宝箱/角色恢复已接通普通阻塞中断与外层重识别，5 方法/6 场景通过，见 `../next/docs/m4-interruption-validation.md`。首轮固定点位重复识别导致的安全拒绝已修正；共用子图回归正在执行。入城/住宿/专项、全局事件和副作用确认窗口仍未齐。
 - 普通启动阻塞已在迭代入口/路线分派接通：8 方法/12 场景、M3 定点 3、启动恢复 11、计划 6 方法通过，见 `../next/docs/m4-common-screen-validation.md`。正常迭代曾有 1 项自动退场因输入前帧过期失败；内部原生动作默认延迟已改为本次节点显式时序，该用例补验通过，完整 M2 102 项及 M3 定点 3 项通过，见 `../next/docs/m4-native-action-timing-validation.md`。子动作中途弹窗打断仍待接齐。
 - 正常 Farm 迭代图已接入入口/补给/EOT/路线及正常续段：43 项静态编译绑定核对、5 方法/8 场景通过；导航 12、状态 11、核心定点 15 方法回归通过，见 `../next/docs/m4-iteration-validation.md`。两段共享统计且再次入本按配置重置策略。全局事件和完整逐任务验收尚未齐，仍 0/58。
 - M4 已接入配置副本/profile-CAS、58 项类型化任务数据、运行级状态工厂、策略消费、正常续段、43 项入本/路线图。回城普通/强制补给、角色面板恢复、住宿回执和退场新帧确认已组合；证据见 `../next/docs/m4-departure-validation.md`、`../next/docs/m4-dungeon-route-validation.md`、`../next/docs/m4-healing-validation.md`。

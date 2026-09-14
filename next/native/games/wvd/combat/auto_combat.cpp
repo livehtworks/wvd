@@ -50,6 +50,7 @@ tasks::CompiledWorkflow enable_auto() {
     // 保留旧三次未知后的保底点位，但点击后仍须正向确认，失败进入有界恢复出口。
     graph.fixed_click("Fallback", unknown, recognizable, {850, 1100}, {"BattleEnded", "Enabled"});
     graph.hit_limit("Fallback", 1);
+    graph.interrupt_on({{"mode", "blocking_screen"}}, "combat.common_screen_requires_dispatch");
     return graph.finish();
 }
 } // namespace wvd::games::combat

@@ -28,7 +28,7 @@ tasks::CompiledWorkflow fight_encounter(const nlohmann::json &profile,
     const auto popup = C::any({C::image("spellskill/skillDetail"), C::image("OK"), C::image("close")});
     const auto clear = C::all({battle, C::absent(popup)});
     const auto full_auto = C::all({clear, enabled, C::business("/strategy/automatic", true)});
-    const auto turn = graph.define_child("Actor", take_turn(profile, available_images));
+    const auto turn = graph.define_child("Actor", take_turn(profile, available_images), {"BlockedExit"});
     // 每次真实 Maa 子任务拥有独立的节点预算；共享的是只读图而不是旧帧/动作许可。
     // 返回后先重新观察遭遇终点，再允许下一角色。根回合预算仍是显式有限链。
     for (unsigned index = 0; index < max_turns; ++index) {
@@ -45,6 +45,7 @@ tasks::CompiledWorkflow fight_encounter(const nlohmann::json &profile,
         graph.observe(name + "AutoOff", C::all({clear, disabled, C::absent(enabled)}), {after});
         graph.route(name, {"Dungeon", "Chest", "Revive", name + "Action"});
     }
+    graph.interrupt_on({{"mode", "blocking_screen"}}, "combat.common_screen_requires_dispatch");
     return graph.finish();
 }
 }

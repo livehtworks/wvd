@@ -403,6 +403,29 @@ def update_common(evidence):
     print("Common blocking screens recorded; complete task execution statuses unchanged.")
 
 
+def update_interruption(evidence):
+    verify_workflows(evidence, {"interrupt-map": ("Completed", 2), "interrupt-skill": ("Interrupted", 1),
+        "interrupt-stop": ("UserStopped", 1), "interrupt-reject": ("Failed", 1),
+        "interrupt-chest": ("Completed", 5), "interrupt-heal": ("Completed", 6)})
+    for name in ("interrupt-map", "interrupt-chest", "interrupt-heal"):
+        result = read(evidence / name / "output.json")
+        if result["lifecycle_calls"] or result["snapshot"]["generation"] != 1 or result["snapshot"]["business"]["task_step"] != 1:
+            raise ValueError("M4_INTERRUPTION_NOT_ORDINARY_RETURN:" + name)
+    if not read(evidence / "interrupt-skill/output.json")["snapshot"]["business"]["has_prepared_skill"]:
+        raise ValueError("M4_INTERRUPTION_CONSUMED_SKILL")
+    path = ROOT / "docs/migration/m4-implementation-map.json"
+    document = read(path)
+    for row in document["entries"]:
+        if row["legacy_symbol"] in {"Factory.TryHandleCommonBlockingScreen", "Factory.TryPressRetry"}:
+            row.update(implementation_extent="COMMON_SCREEN_DISPATCH_AND_SUBFLOW_INTERRUPTION",
+                supporting_implementations=["native/games/wvd/vision/boot_probes.hpp", "native/games/wvd/tasks/pipeline_compiler.cpp"],
+                evidence_report="../m4-interruption-validation.md",
+                verification_scope="路线及地图/战斗/开箱/角色恢复子作用域中途插入，6 个离线场景；不是完整任务迁移",
+                remaining="其余入城/住宿/专项的中途插入、死亡/Pause/对话及副作用未确认窗口对账仍待接齐。")
+    write(path, document)
+    print("Ordinary subflow interruption recorded; complete task statuses unchanged.")
+
+
 def update_iteration(evidence, plan_evidence):
     verify_workflows(evidence, {"auto-return-prompt": ("Completed", 1), "iteration-entry": ("Completed", 4),
         "iteration-fail": ("Failed", 1), "iteration-stop": ("UserStopped", 1), "iteration-two": ("Completed", 10),
@@ -492,8 +515,9 @@ if __name__ == "__main__":
     parser.add_argument("--departure-evidence", type=Path)
     parser.add_argument("--iteration-evidence", type=Path)
     parser.add_argument("--common-evidence", type=Path)
+    parser.add_argument("--interruption-evidence", type=Path)
     args = parser.parse_args()
-    if not any((args.data_evidence, args.combat_evidence, args.navigation_evidence, args.encounter_evidence, args.healing_evidence, args.dungeon_route_evidence, args.departure_evidence, args.iteration_evidence, args.common_evidence)):
+    if not any((args.data_evidence, args.combat_evidence, args.navigation_evidence, args.encounter_evidence, args.healing_evidence, args.dungeon_route_evidence, args.departure_evidence, args.iteration_evidence, args.common_evidence, args.interruption_evidence)):
         parser.error("an evidence group is required")
     if args.data_evidence:
         generate(args.data_evidence, args.state_evidence, args.plan_evidence, args.workflow_evidence)
@@ -515,6 +539,8 @@ if __name__ == "__main__":
         update_iteration(args.iteration_evidence, args.plan_evidence)
     if args.common_evidence:
         update_common(args.common_evidence)
+    if args.interruption_evidence:
+        update_interruption(args.interruption_evidence)
     if args.dungeon_route_evidence:
         if not args.plan_evidence:
             parser.error("--dungeon-route-evidence requires --plan-evidence")

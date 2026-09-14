@@ -53,7 +53,8 @@ std::optional<runtime::SessionDefinition> decide(const contracts::SessionResult 
 namespace {
 tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common) {
     C graph(common ? "recovery.common_screens" : "recovery.boot_ready", std::chrono::seconds{120});
-    const J ready = common ? C::all({J{{"mode", "boot_ready"}}, C::absent(J{{"mode", "blocking_screen"}})})
+    const auto panel = C::any({C::image("trait"), C::image("recover")});
+    const J ready = common ? C::all({C::any({J{{"mode", "boot_ready"}}, panel}), C::absent(J{{"mode", "blocking_screen"}})})
                            : J{{"mode", "boot_ready"}};
     const auto title = scoped("boot_title_logo", {100, 300, 700, 470}, .86);
     const auto attention = scoped("boot_attention", {250, 430, 420, 220}, .86);
@@ -64,7 +65,7 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common) {
     auto low_retry = retry;
     low_retry["threshold"] = .60;
     const auto to_title = C::image("totitle"), resume = C::image("resume");
-    const J recognized{{"mode", "boot_post"}};
+    const J recognized = common ? C::any({J{{"mode", "boot_post"}}, panel}) : J{{"mode", "boot_post"}};
     graph.route("Entry", common ? J{"Download", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title", "Ready"}
                                  : J{"Ready", "Download", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title"});
     graph.observe("Ready", ready, {"Terminal"});

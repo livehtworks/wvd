@@ -58,7 +58,7 @@ CompiledWorkflow traverse_dungeon(const WvdTaskPlan &plan, const J &profile,
     const auto inside = C::any({map, dungeon, encounter});
     graph.route("Entry", {"Outside", "Entered"});
     graph.confirm("Entered", "dungeon.enter", "dungeon_entered", inside, {"Dispatch"});
-    graph.route("Dispatch", {"Blocked", "Combat", "Chest", "Revive", "Outside", "Resume", "Map"});
+    graph.route("Dispatch", {"Blocked", "Combat", "Chest", "Revive", "Outside", "HealingPanel", "Resume", "Map"});
     const auto common = graph.define_child("Common", recovery::clear_common_screens(allow_download));
     graph.observe("Blocked", {{"mode", "blocking_screen"}}, {"ClearBlocking"});
     graph.call_child("ClearBlocking", common, {"Dispatch"});
@@ -69,19 +69,22 @@ CompiledWorkflow traverse_dungeon(const WvdTaskPlan &plan, const J &profile,
     graph.observe("Revive", revive, {"ReviveExit"});
     graph.recovery("ReviveExit", "dungeon.revival_required");
 
-    const auto battle = graph.define_child("Battle", wvd::games::combat::fight_encounter(profile, available_images, 16));
+    const auto battle = graph.define_child("Battle", wvd::games::combat::fight_encounter(profile, available_images, 16), {"BlockedExit"});
     graph.observe("Combat", combat, {"Fight"});
     graph.call_child("Fight", battle, {"Dispatch"});
     graph.hit_limit("Combat", 128);
     graph.hit_limit("Fight", 128);
     const auto box = graph.define_child("Box", wvd::games::chest::open_chest(profile.at("WHO_WILL_OPEN_IT").get<int>(),
-        profile.at("QUICK_DISARM_CHEST").get<bool>(), 0), {"CombatExit", "ReviveExit", "AmbushExit"});
+        profile.at("QUICK_DISARM_CHEST").get<bool>(), 0), {"CombatExit", "ReviveExit", "AmbushExit", "BlockedExit"});
     graph.observe("Chest", chest, {"OpenChest"});
     graph.call_child("OpenChest", box, {"Dispatch"});
     graph.hit_limit("Chest", 128);
     graph.hit_limit("OpenChest", 128);
 
-    const auto heal = graph.define_child("Heal", supply::recover_in_dungeon(), {"EncounterExit"});
+    const auto heal = graph.define_child("Heal", supply::recover_in_dungeon(), {"EncounterExit", "BlockedExit"});
+    graph.observe("HealingPanel", C::all({C::any({C::image("trait"), C::image("recover")}),
+        C::absent(encounter), C::business("/healing_required", true)}), {"Heal"});
+    graph.hit_limit("HealingPanel", 128);
     graph.confirm("Resume", "dungeon.resume", "dungeon_resumed", dungeon, {"Heal"});
     graph.hit_limit("Resume", 128);
     graph.call_child("Heal", heal, {"SelectPoint"});
@@ -90,7 +93,7 @@ CompiledWorkflow traverse_dungeon(const WvdTaskPlan &plan, const J &profile,
     graph.observe("Map", map, {"SelectPoint"});
     graph.hit_limit("Map", 128);
 
-    J points{"Combat", "Chest", "Revive", "Outside", "Finished"};
+    J points{"Blocked", "Combat", "Chest", "Revive", "Outside", "Finished"};
     for (std::size_t i = 0; i < plan.route().size(); ++i)
         points.push_back("Point" + std::to_string(i));
     graph.route("SelectPoint", points);
@@ -102,22 +105,22 @@ CompiledWorkflow traverse_dungeon(const WvdTaskPlan &plan, const J &profile,
         const bool automatic = automatic_target(target);
         auto child = automatic ? navigation::auto_route(target.target)
                                : navigation::reach_map_target(target, plan.floor());
-        J normal{{"EncounterExit", {"Dispatch"}}};
+        J normal{{"EncounterExit", {"Dispatch"}}, {"BlockedExit", {"Dispatch"}}};
         if (automatic) {
             normal["StoppedExit"] = {"Dispatch"};
             if (target.target == "chest_auto")
                 normal["UnavailableExit"] = {"Dispatch"};
         } else if (plan.floor())
             normal["FloorExit"] = {"Retreat"};
-        const auto route = graph.append("Route" + suffix, child, {"Outside", "Confirm" + suffix}, normal);
+        const auto route = graph.append("Route" + suffix, child, {"Blocked", "Outside", "Confirm" + suffix}, normal);
         graph.observe("Point" + suffix, C::business("/task_step", i), {route});
         graph.hit_limit("Point" + suffix, 128);
         graph.confirm("Confirm" + suffix, "point." + suffix, "target_completed",
-            point_confirmation(target, map), {"Dispatch"}, i);
+            C::all({C::absent(J{{"mode", "blocking_screen"}}), point_confirmation(target, map)}), {"Dispatch"}, i);
     }
     if (plan.floor()) {
         const auto retreat = graph.append("WrongFloor", navigation::auto_route("dungFlag"), {"Outside", "Dispatch"},
-            {{"EncounterExit", {"Dispatch"}}, {"StoppedExit", {"Dispatch"}}});
+            {{"EncounterExit", {"Dispatch"}}, {"StoppedExit", {"Dispatch"}}, {"BlockedExit", {"Dispatch"}}});
         graph.route("Retreat", {retreat});
     }
     return graph.finish();

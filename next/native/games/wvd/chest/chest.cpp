@@ -52,6 +52,7 @@ tasks::CompiledWorkflow open_chest(int preferred_character, bool quick, std::uin
                       {515, 934}, {"Combat", "Revive", "Ambush", "Done", "Disarm", "Dispatch"});
     graph.delay_after("Disarm", quick ? 200 : 300);
     graph.hit_limit("Disarm", quick ? 30 : 8);
+    graph.interrupt_on({{"mode", "blocking_screen"}}, "chest.common_screen_requires_dispatch");
     return graph.finish();
 }
 }

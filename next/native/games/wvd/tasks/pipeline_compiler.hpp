@@ -53,6 +53,9 @@ class PipelineCompiler {
     void delay_after(const std::string &name, int milliseconds);
     void postcondition_budget(const std::string &name, int milliseconds);
     void allowed_area(const std::string &name, nlohmann::json area);
+    // 显式启用本作用域的普通插入出口；不改子图、不吞掉错误或伪造业务完成。
+    // 调用者必须把 BlockedExit 绑定到重新观察入口；独立运行则报告需要外层处理。
+    void interrupt_on(nlohmann::json condition, std::string reason);
     // 固定游戏行为 binding；不开放任意动作/任意实现名称。
     void combat_step(const std::string &name, const nlohmann::json &condition,
                      nlohmann::json parameters, nlohmann::json next);
@@ -60,6 +63,10 @@ class PipelineCompiler {
 
   private:
     CompiledWorkflow workflow_;
+    std::vector<std::string> local_nodes_;
+    nlohmann::json interruption_;
+    std::string interruption_reason_;
+    void compile_interruption();
     void add(const std::string &name, nlohmann::json node);
     nlohmann::json request(const nlohmann::json &condition) const;
     void action(const std::string &name, const nlohmann::json &scene, const nlohmann::json &target,

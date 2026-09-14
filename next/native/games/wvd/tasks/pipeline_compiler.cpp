@@ -219,6 +219,7 @@ void PipelineCompiler::add(const std::string &name, J node) {
     if (name != "Terminal" && name != "RecoveryRequired")
         node["on_error"] = {"RecoveryRequired"};
     workflow_.nodes[name] = std::move(node);
+    local_nodes_.push_back(name);
 }
 void PipelineCompiler::route(const std::string &name, J next) {
     add(name, {{"action", "DoNothing"}, {"next", std::move(next)}});
@@ -295,6 +296,48 @@ void PipelineCompiler::allowed_area(const std::string &name, J area) {
                 area[0].get<int>() <= 900 - area[2].get<int>() &&
                 area[1].get<int>() <= 1600 - area[3].get<int>(), "COMPILE_ACTION_AREA_INVALID");
     workflow_.nodes[name]["custom_action_param"]["allowed_area"] = std::move(area);
+}
+void PipelineCompiler::interrupt_on(J condition, std::string reason) {
+    require(interruption_.is_null() && condition.is_object() && !reason.empty(), "COMPILE_INTERRUPTION_INVALID");
+    interruption_ = std::move(condition);
+    interruption_reason_ = std::move(reason);
+}
+void PipelineCompiler::compile_interruption() {
+    if (interruption_.is_null())
+        return;
+    require(!workflow_.nodes.contains("Interrupt") && !workflow_.nodes.contains("BlockedExit"),
+            "COMPILE_INTERRUPTION_NAME_CONFLICT");
+    const auto clear = absent(interruption_);
+    // 仅改此构建器声明的节点。append/define_child 的节点已有自己的出口和作用域，
+    // 不能跨进去重写，更不能把 Common 处理器也拦在自己要关闭的弹窗之前。
+    for (const auto &name : local_nodes_) {
+        auto &node = workflow_.nodes[name];
+        const auto action = node.value("custom_action", "");
+        if (action == "RequireRecovery")
+            continue;
+        if (node.value("recognition", "") == "Custom")
+            node["custom_recognition_param"] = all({clear, node.at("custom_recognition_param")});
+        if (action == "GuardedAction") {
+            auto &p = node["custom_action_param"];
+            p["scene_recognition"]["parameters"] = all({clear, p.at("scene_recognition").at("parameters")});
+            // 固定点位/返回键原本就以同一条件证明场景和目标，包装后仍须保持一致。
+            // 否则同一帧会先查完整 guarded scene，再把未包装的原场景重查一遍。
+            if (!p.at("use_target_center").get<bool>())
+                p["target_recognition"] = p.at("scene_recognition");
+            // 弹窗只是动作后的普通插入，不是业务成功。后继先返回外层；下面所有
+            // WvdConfirm/WvdCombat 的新帧确认也排除弹窗，不能因此消费技能或任务点。
+            p["postcondition"]["parameters"] = any({interruption_, p.at("postcondition").at("parameters")});
+        } else if (action == "WvdConfirm" || action == "WvdCombat") {
+            auto &confirmation = node["custom_action_param"]["confirmation"]["parameters"];
+            confirmation = all({clear, confirmation});
+        }
+        if (node.contains("next") && !node.at("next").empty())
+            node["next"].insert(node["next"].begin(), "Interrupt");
+        // on_error 不作正常返回：原生输入拒绝、识别 Error 和预算失败仍须失败/恢复。
+    }
+    observe("Interrupt", interruption_, {"BlockedExit"});
+    hit_limit("Interrupt", 128);
+    recovery("BlockedExit", interruption_reason_);
 }
 void PipelineCompiler::combat_step(const std::string &name, const J &condition, J parameters, J next) {
     require(parameters.is_object(), "COMPILE_COMBAT_PARAMETERS_INVALID");
@@ -422,6 +465,7 @@ void PipelineCompiler::confirm(const std::string &name, const std::string &opera
                {"custom_action_param", parameters}, {"next", std::move(next)}});
 }
 CompiledWorkflow PipelineCompiler::finish() {
+    compile_interruption();
     bool business = false;
     for (const auto &node : workflow_.nodes)
         business = business || node.value("custom_action", "") == "WvdConfirm" || node.value("custom_action", "") == "WvdCombat";

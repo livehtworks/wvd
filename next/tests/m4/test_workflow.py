@@ -64,11 +64,12 @@ class WorkflowTests(unittest.TestCase):
                       "chest_auto", "mark_auto", "chest_auto_minus", "resume", "returnText", "returntoTown", "openworldmap"]
         if options.get("workflow") in ("entry", "iteration"):
             names += ["GotoDung", "openworldmap", "returntoTown", "intoWorldMap", "TradeWaterway", "Dist", "EVENT", "FFXI/EVENT_GCN", "FFXI/zone5", "preGate"]
-        if options.get("workflow") in ("recover", "common", "iteration", "dungeon-route"):
+        if options.get("workflow") in ("recover", "common", "iteration", "dungeon-route", "map", "map-confirm", "state-route",
+                                      "auto-route", "auto", "turn", "encounter", "chest", "heal"):
             names += ["dungFlag", "openworldmap", "returnText", "returntoTown", "mapFlag", "chestFlag", "whowillopenit",
                       "fishing/cast", "fishing/striking", "fishing/CloseFishInfo", "combatActive", "combatActive_2",
                       "combatActive_3", "combatActive_4", "boot_title_logo", "boot_attention", "startdownload",
-                      "retry", "retry_blank", "totitle", "resume"]
+                      "retry", "retry_blank", "totitle", "resume", "trait", "recover"]
         rng = np.random.default_rng(90614)
         patterns = {name: rng.integers(30, 255, (24, 40, 3), dtype=np.uint8) for name in names}
         if "chest_auto_minus" in patterns:
@@ -1296,6 +1297,67 @@ class WorkflowTests(unittest.TestCase):
             self.assertEqual(r["snapshot"]["completed_business_units"], 0)
             self.assertEqual(r["snapshot"]["generation"], 1)
 
+
+    def test_interruption_map_selection_never_sends_stale_automove(self):
+        base = {"mapFlag": (100, 100)}
+        r = self.execute("interrupt-map", [base, {**base, "retry": (400, 800)},
+            {**base, "cursor_0": (480, 588)}], [dict(kind=0, x=500, y=600), dict(kind=0, x=420, y=812)],
+            workflow="dungeon-route", profile=self.turn_profile(defend=True),
+            route_targets=[["position", [None], [500, 600]]])
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 2)
+        self.assertFalse(r["mismatch"])
+        self.assertEqual(r["snapshot"]["business"]["task_step"], 1)
+        self.assertEqual(r["snapshot"]["generation"], 1)
+        self.assertEqual(r["lifecycle_calls"], [])
+
+    def test_interruption_skill_overlay_is_not_consumed_as_success(self):
+        # 即使旧完成锚点同时可见，阻塞覆盖层也不能让一次开面板被当成技能成功。
+        r = self.execute("interrupt-skill", [self.turn_screen(), {"dungFlag": (50, 150), "retry": (400, 800)}],
+            [dict(kind=0, x=266, y=1054)], workflow="turn", profile=self.turn_profile())
+        self.assertEqual(r["snapshot"]["state"], "Interrupted", r)
+        self.assertEqual(r["snapshot"]["sessions"][-1]["reason"], "combat.common_screen_requires_dispatch")
+        self.assertEqual(r["backend_calls"], 1)
+        self.assertTrue(r["snapshot"]["business"]["has_prepared_skill"])
+        self.assertFalse(r["mismatch"])
+
+    def test_interruption_stop_and_backend_reject_are_not_normal_returns(self):
+        base = {"mapFlag": (100, 100)}
+        for stop in (False, True):
+            r = self.execute("interrupt-stop" if stop else "interrupt-reject", [base, {**base, "retry": (400, 800)}],
+                [dict(kind=0, x=500, y=600, reject=not stop)], workflow="dungeon-route", stop_after_first=stop,
+                profile=self.turn_profile(defend=True), route_targets=[["position", [None], [500, 600]]])
+            self.assertEqual(r["snapshot"]["state"], "UserStopped" if stop else "Failed", r)
+            self.assertEqual(r["backend_calls"], 1)
+            self.assertEqual(r["snapshot"]["business"]["task_step"], 0)
+
+    def test_interruption_chest_reenters_choice_not_old_disarm(self):
+        choose = {"whowillopenit": (330, 450)}
+        r = self.execute("interrupt-chest", [{"chestFlag": (330, 450)}, {**choose, "retry": (400, 800)}, choose,
+            {"chestOpening": (330, 450)}, {"dungFlag": (50, 150)}, {"mapFlag": (100, 100), "cursor_0": (480, 588)}],
+            [dict(kind=0, x=350, y=462), dict(kind=0, x=420, y=812), dict(kind=0, x=258, y=1161),
+             dict(kind=0, x=515, y=934), dict(kind=0, x=777, y=150)], workflow="dungeon-route",
+            profile={**self.turn_profile(defend=True), "WHO_WILL_OPEN_IT": 1, "SKIP_CHEST_RECOVER": True},
+            route_targets=[["position", [None], [500, 600]]])
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 5)
+        self.assertEqual(r["snapshot"]["business"]["chests"], 1)
+        self.assertFalse(r["mismatch"])
+
+    def test_interruption_heal_reenters_existing_character_panel(self):
+        trait = {"trait": (200, 300)}
+        r = self.execute("interrupt-heal", [{"dungFlag": (50, 150)}, {**trait, "retry": (400, 800)}, trait,
+            {"recover": (250, 850)}, trait, {"dungFlag": (50, 150)},
+            {"mapFlag": (100, 100), "cursor_0": (480, 588)}],
+            [dict(kind=0, x=36, y=1425), dict(kind=0, x=420, y=812), dict(kind=0, x=830, y=850),
+             dict(kind=0, x=600, y=1200), dict(kind=5, key=4), dict(kind=0, x=777, y=150)], workflow="dungeon-route",
+            profile={**self.turn_profile(defend=True), "RECOVER_WHEN_BEGINNING": True},
+            route_targets=[["position", [None], [500, 600]]])
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 6)
+        self.assertEqual(r["snapshot"]["business"]["healing_sequence"], 1)
+        self.assertFalse(r["snapshot"]["business"]["healing_required"])
+        self.assertFalse(r["mismatch"])
 
     def test_common_resume_overlay_precedes_ready_game(self):
         r = self.execute("common-resume", [{"dungFlag": (50, 150), "resume": (400, 800)}, {"dungFlag": (50, 150)}],
