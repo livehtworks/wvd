@@ -126,8 +126,12 @@ bool GuardedAction::execute(maafw::Context &context, devices::InputGate &gate,
                                                {"duration", input.duration}});
     else
         sent = context.controller_action(input);
-    if (!sent)
+    if (!sent) {
+        // 子任务普通 false 可以被 SDK 的 on_error 消费；真实输入失败不能因此变成可重试恢复。
+        if (!context.cancelled())
+            throw std::runtime_error("CUSTOM_ACTION_FAILED");
         return false;
+    }
     gate.revoke();
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(budget);
     do {

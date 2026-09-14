@@ -142,6 +142,27 @@ int main(int argc, char **argv) {
                 return games::navigation::enter_city(config.at("city"));
             if (kind == "inn")
                 return games::supply::rest_at_inn(config.value("royal", false));
+            if (kind == "child") {
+                using C = games::tasks::PipelineCompiler;
+                auto inn = games::supply::rest_at_inn(false);
+                for (auto &node : inn.nodes)
+                    node["max_hit"] = 1;
+                C graph("fixture.native_children");
+                auto entry = graph.define_child("Inn", inn);
+                graph.route("Entry", {"Call0"});
+                for (int i = 0; i < 3; ++i)
+                    graph.call_child("Call" + std::to_string(i), entry,
+                        {i == 2 ? "Terminal" : "Call" + std::to_string(i + 1)});
+                auto result = graph.finish();
+                if (config.value("nested_child", false)) {
+                    C outer("fixture.nested_native_children");
+                    const auto nested = outer.define_child("Nested", result);
+                    outer.route("Entry", {"Invoke"});
+                    outer.call_child("Invoke", nested, {"Terminal"});
+                    return outer.finish();
+                }
+                return result;
+            }
             if (kind == "auto")
                 return games::combat::enable_auto();
             if (kind == "recover")
@@ -253,6 +274,28 @@ int main(int argc, char **argv) {
                 workflow.nodes["Click0"]["custom_action_param"]["command"]["kind"] = "Shell";
             else if (config["invalid"] == "unknown-recognition")
                 workflow.nodes["Click0"]["custom_recognition"] = "Missing";
+            else if (config["invalid"] == "child-unknown")
+                workflow.nodes["Call0"]["custom_action_param"]["entry"] = "Missing";
+            else if (config["invalid"] == "child-recursive")
+                workflow.nodes["Call0"]["custom_action_param"]["entry"] = "Entry";
+            else if (config["invalid"] == "child-override")
+                workflow.nodes["Call0"]["custom_action_param"]["overrides"] = J::object();
+            else if (config["invalid"] == "child-crossing")
+                workflow.nodes["Call0"]["next"] = {"Inn_Entry", "Call1"};
+            else if (config["invalid"] == "child-reset-parent")
+                workflow.nodes["Call0"]["custom_action_param"]["reset_hit_counts"].push_back("Call0");
+            else if (config["invalid"] == "child-shared-depth") {
+                workflow.nodes["Call1"]["custom_action_param"]["entry"] = "Deep0_Entry";
+                for (int i = 0; i < 7; ++i) {
+                    const auto prefix = "Deep" + std::to_string(i);
+                    const auto target = i == 6 ? "Inn_Entry" : "Deep" + std::to_string(i + 1) + "_Entry";
+                    workflow.nodes[prefix + "_Entry"] = {{"action", "DoNothing"}, {"max_hit", 1}, {"next", {prefix + "_Call"}}};
+                    workflow.nodes[prefix + "_Call"] = {{"action", "Custom"}, {"max_hit", 1}, {"custom_action", "RunChild"},
+                        {"custom_action_param", {{"entry", target}, {"clone", false}, {"reset_hit_counts", J::array()}}},
+                        {"next", {prefix + "_End"}}};
+                    workflow.nodes[prefix + "_End"] = {{"action", "DoNothing"}, {"max_hit", 1}};
+                }
+            }
             else
                 throw std::runtime_error("UNKNOWN_INVALID_CASE");
             J output;
@@ -377,6 +420,7 @@ int main(int argc, char **argv) {
                  {"images", workflow.images},
                  {"required_actions", workflow.required_actions},
                  {"kind", workflow.kind},
+                 {"node_count", workflow.nodes.size()},
                  {"lifecycle_calls", device->lifecycle_calls},
                  {"lifecycle_stop", lifecycle_stop},
                  {"loaded_modules", loaded_vision_modules()}};

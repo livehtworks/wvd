@@ -394,6 +394,38 @@ class WorkflowTests(unittest.TestCase):
             self.assertEqual(result["error"], error)
             self.assertEqual(result["backend_calls"], 0)
 
+    def test_child_repeated_calls_reset_native_hit_budget(self):
+        leg = [{"Inn": (100, 400)}, {"Stay": (100, 600)}, {"Economy": (100, 500)},
+               {"OK": (500, 800)}, {"Stay": (100, 600)}]
+        actions = [dict(kind=0, x=120, y=412), dict(kind=0, x=120, y=612), dict(kind=0, x=120, y=512),
+                   dict(kind=0, x=520, y=812), dict(kind=5, key=4)]
+        for nested in (False, True):
+            r = self.execute(f"child-repeat-{nested}", leg * 3 + [leg[0]], actions * 3,
+                             workflow="child", nested_child=nested)
+            self.assertEqual(r["snapshot"]["state"], "Completed", r)
+            self.assertEqual(r["backend_calls"], 15)
+            self.assertEqual(r["cursor"], 15)
+            self.assertFalse(r["mismatch"])
+
+    def test_child_failure_and_stop_do_not_start_later_calls(self):
+        for stop in (False, True):
+            r = self.execute(f"child-stop-{stop}", [{"Inn": (100, 400)}, {"Stay": (100, 600)}],
+                [dict(kind=0, x=120, y=412, reject=not stop)], workflow="child", stop_after_first=stop)
+            self.assertEqual(r["snapshot"]["state"], "UserStopped" if stop else "Failed", r)
+            self.assertEqual(r["backend_calls"], 1)
+            self.assertTrue(r["snapshot"]["quiescent"])
+
+    def test_child_compiler_rejects_undeclared_recursion_and_crossing(self):
+        for case, error in [("child-unknown", "COMPILE_NEXT_UNKNOWN"),
+                            ("child-recursive", "COMPILE_CHILD_RECURSIVE"),
+                            ("child-override", "COMPILE_CHILD_PARAMETERS_INVALID"),
+                            ("child-crossing", "COMPILE_CHILD_BOUNDARY_CROSSED"),
+                            ("child-reset-parent", "COMPILE_CHILD_RESET_SCOPE_INVALID"),
+                            ("child-shared-depth", "COMPILE_CHILD_DEPTH_LIMIT")]:
+            r = self.execute(case, [{}], [], workflow="child", invalid=case)
+            self.assertEqual(r["error"], error)
+            self.assertEqual(r["backend_calls"], 0)
+
     def test_publish_rejects_missing_assets_and_binding_before_connect(self):
         for name, options, error in [
             ("missing-image", {"omit_image": "Inn.png"}, "COMPILE_IMAGE_NOT_IN_MANIFEST:image/Inn.png"),
@@ -700,6 +732,19 @@ class WorkflowTests(unittest.TestCase):
             self.assertTrue(r["snapshot"]["business"]["pending_combat"])
             self.assertEqual(r["backend_calls"], 1)
             self.assertFalse(r["mismatch"])
+
+    def test_encounter_shared_turn_budget_does_not_reset_strategy(self):
+        profile = self.turn_profile(defend=True)
+        rows = profile["STRATEGY"][0]["skill_settings"]
+        rows.append(dict(rows[0]))
+        r = self.execute("encounter-three-turns", [self.turn_screen(), self.turn_screen("B"),
+            self.turn_screen(), {"dungFlag": (50, 150)}], [dict(kind=0, x=513, y=1200)] * 3,
+            workflow="encounter", profile=profile, max_turns=16)
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 3)
+        self.assertEqual(r["snapshot"]["business"]["strategy"]["current"]["skill_settings"], [])
+        self.assertEqual(r["snapshot"]["business"]["combats"], 1)
+        self.assertLess(r["node_count"], 1024)
 
     def test_auto_battle_end_is_not_auto_enabled(self):
         disabled = {"combatActive": (20, 20), "spellskill/CombatAutoDisable": (800, 1070)}

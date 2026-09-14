@@ -20,14 +20,14 @@ tasks::CompiledWorkflow fight_encounter(const nlohmann::json &profile,
     graph.observe("Revive", C::image("RiseAgain"), {"ReviveExit"});
     graph.recovery("ReviveExit", "combat.revival_required");
     graph.recovery("BudgetExit", "combat.turn_budget_exhausted");
-    const auto turn = take_turn(profile, available_images);
-    // 展开有限回合，使每个角色拥有独立的节点重试预算；不放大全图 max_hit，
-    // 也不在 Custom 里重新实现 while 战斗调度。最终仍受 4096 节点/Session 时限约束。
+    const auto turn = graph.define_child("Actor", take_turn(profile, available_images));
+    // 每次真实 Maa 子任务拥有独立的节点预算；共享的是只读图而不是旧帧/动作许可。
+    // 返回后先重新观察遭遇终点，再允许下一角色。根回合预算仍是显式有限链。
     for (unsigned index = 0; index < max_turns; ++index) {
         const auto name = "Turn" + std::to_string(index);
         const auto after = index + 1 < max_turns ? "Turn" + std::to_string(index + 1) : "BudgetExit";
-        const auto child = graph.append(name + "Action", turn, {"Dungeon", "Chest", "Revive", after});
-        graph.route(name, {"Dungeon", "Chest", "Revive", child});
+        graph.call_child(name + "Action", turn, {"Dungeon", "Chest", "Revive", after});
+        graph.route(name, {"Dungeon", "Chest", "Revive", name + "Action"});
     }
     return graph.finish();
 }

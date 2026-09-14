@@ -2111,10 +2111,13 @@
       "offline_status": "PASS",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "remaining": "外层战斗循环、Pause/复活/死亡恢复及完整任务仍待承接；真实目标质量未验。",
-      "implementation_extent": "FINITE_COMBAT_TURN",
-      "verification_scope": "真实 Maa 的单角色有限动作及策略消费，不是整场战斗或完整任务",
-      "evidence_report": "../m4-combat-turn-validation.md"
+      "remaining": "Pause/复活/死亡恢复、完整副本与专项仍未接齐；真实目标质量未验。",
+      "implementation_extent": "FINITE_COMBAT_TURN_AND_ENCOUNTER",
+      "verification_scope": "真实 Maa 单角色动作、有界遭遇组合和连续计数；不是完整副本",
+      "evidence_report": "../m4-native-child-validation.md",
+      "supporting_implementations": [
+        "native/games/wvd/combat/encounter.cpp"
+      ]
     },
     {
       "inventory_id": "function:src/script.py:Factory.StateCombat.DismissSkillPopupBeforeAuto:2505",

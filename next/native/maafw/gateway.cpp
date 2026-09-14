@@ -377,7 +377,7 @@ contracts::Observation Context::recognize(const contracts::FrameEnvelope &frame,
     return gateway_.recognize(frame, gateway_.gate_->frame_identity(), request, context_);
 }
 ChildResult Context::run_child(const std::string &entry, const nlohmann::json &overrides,
-                               bool clone) {
+                               bool clone, const std::vector<std::string> &reset_hit_counts) {
     storage::validate_bundle_references(gateway_.bundle_, overrides);
     struct Depth {
         std::atomic<int> &depth;
@@ -386,6 +386,13 @@ ChildResult Context::run_child(const std::string &entry, const nlohmann::json &o
     } depth(gateway_.depth_);
     auto native = clone ? MaaContextClone(context_) : context_;
     require(native != nullptr, "CONTEXT_CLONE_FAILED");
+    require(reset_hit_counts.size() <= 4096, "CHILD_RESET_LIMIT");
+    // SDK 的上下文共享命中计数。只清理编译器封存的被调用作用域，
+    // 不清外层次数、业务状态、观察缓存或输入许可；下一次动作仍需新帧。
+    for (const auto &name : reset_hit_counts) {
+        require(!name.empty() && name != node_, "CHILD_RESET_SCOPE_INVALID");
+        require(MaaContextClearHitCount(native, name.c_str()), "CHILD_RESET_FAILED");
+    }
     auto id = MaaContextRunTask(native, entry.c_str(), overrides.dump().c_str());
     auto name = string_buffer();
     MaaSize count{};

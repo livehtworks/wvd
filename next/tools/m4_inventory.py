@@ -264,6 +264,32 @@ def update_combat(combat_evidence):
     print("5 combat entries updated; 58 complete task statuses unchanged.")
 
 
+def update_encounter(evidence):
+    """记录有界遭遇的实际调用/计数证据，不将组合子流程升级为完整任务。"""
+    verify_workflows(evidence, {
+        "encounter-two-actors": ("Completed", 4), "encounter-three-turns": ("Completed", 3),
+        "encounter-budget": ("Interrupted", 1), "encounter-reject": ("Failed", 1),
+        "encounter-to-chest": ("Completed", 1), "encounter-ended-before-auto": ("Completed", 2),
+        "encounter-auto-ended": ("Completed", 1), "state-two-encounters": ("Completed", 6),
+    })
+    repeated = read(evidence / "encounter-three-turns/output.json")["snapshot"]["business"]
+    if repeated["combats"] != 1 or repeated["strategy"]["current"]["skill_settings"]:
+        raise ValueError("M4_ENCOUNTER_STATE_MISMATCH")
+    path = ROOT / "docs/migration/m4-implementation-map.json"
+    document = read(path)
+    rows = [row for row in document["entries"] if row["legacy_symbol"] == "Factory.StateCombat"]
+    if len(rows) != 1 or document["counts"] != {"function": 250, "config": 33, "task": 58}:
+        raise ValueError("M4_ENCOUNTER_INVENTORY_MISMATCH")
+    rows[0].update(implementation="native/games/wvd/combat/turn.cpp", entry="combat::take_turn",
+                  supporting_implementations=["native/games/wvd/combat/encounter.cpp"],
+                  implementation_status="PARTIAL", implementation_extent="FINITE_COMBAT_TURN_AND_ENCOUNTER",
+                  offline_status="PASS", verification_scope="真实 Maa 单角色动作、有界遭遇组合和连续计数；不是完整副本",
+                  evidence_report="../m4-native-child-validation.md",
+                  remaining="Pause/复活/死亡恢复、完整副本与专项仍未接齐；真实目标质量未验。")
+    write(path, document)
+    print("Finite encounter evidence updated; 58 complete task statuses unchanged.")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--data-evidence", type=Path)
@@ -272,8 +298,9 @@ if __name__ == "__main__":
     parser.add_argument("--workflow-evidence", type=Path)
     parser.add_argument("--combat-evidence", type=Path)
     parser.add_argument("--navigation-evidence", type=Path)
+    parser.add_argument("--encounter-evidence", type=Path)
     args = parser.parse_args()
-    if not args.data_evidence and not args.combat_evidence and not args.navigation_evidence:
+    if not args.data_evidence and not args.combat_evidence and not args.navigation_evidence and not args.encounter_evidence:
         parser.error("an evidence group is required")
     if args.data_evidence:
         generate(args.data_evidence, args.state_evidence, args.plan_evidence, args.workflow_evidence)
@@ -283,3 +310,5 @@ if __name__ == "__main__":
         if not args.plan_evidence:
             parser.error("--navigation-evidence requires --plan-evidence")
         update_navigation(args.navigation_evidence, args.plan_evidence)
+    if args.encounter_evidence:
+        update_encounter(args.encounter_evidence)

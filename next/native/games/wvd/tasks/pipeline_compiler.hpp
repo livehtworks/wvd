@@ -38,6 +38,9 @@ class PipelineCompiler {
     // 内联的是 Maa 图，不是第二个执行器；子终点只能进入调用者指定后继。
     std::string append(const std::string &prefix, const CompiledWorkflow &child,
                        nlohmann::json next, const nlohmann::json &normal_exits = nlohmann::json::object());
+    // 原生子任务独立持有命中预算；定义一次、有限调用，不复制整份战斗图。
+    std::string define_child(const std::string &prefix, const CompiledWorkflow &child);
+    void call_child(const std::string &name, const std::string &entry, nlohmann::json next);
     void recovery(const std::string &name, const std::string &reason);
     void confirm(const std::string &name, const std::string &operation, const std::string &event,
                  const nlohmann::json &condition, nlohmann::json next,

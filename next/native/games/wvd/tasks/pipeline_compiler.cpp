@@ -1,6 +1,8 @@
 #include "pipeline_compiler.hpp"
 #include "games/wvd/vision/boot_probes.hpp"
+#include <algorithm>
 #include <functional>
+#include <map>
 #include <set>
 #include <stdexcept>
 
@@ -85,6 +87,7 @@ void CompiledWorkflow::validate() const {
         require(action == "DoNothing" ||
                     (action == "Custom" && (node.value("custom_action", "") == "GuardedAction" ||
                                             node.value("custom_action", "") == "RootTerminal" ||
+                                            node.value("custom_action", "") == "RunChild" ||
                                             node.value("custom_action", "") == "WvdConfirm" ||
                                             node.value("custom_action", "") == "WvdCombat" ||
                                             node.value("custom_action", "") == "BusinessCheckpoint" ||
@@ -97,6 +100,13 @@ void CompiledWorkflow::validate() const {
         if (node.value("custom_action", "") == "RootTerminal")
             require(name == terminal && node.value("next", J::array()).empty(),
                     "COMPILE_TERMINAL_INVALID");
+        if (node.value("custom_action", "") == "RunChild") {
+            const auto &p = node.at("custom_action_param");
+            require(p.is_object() && p.size() == 3 && p.contains("entry") && p.at("entry").is_string() &&
+                        p.contains("clone") && p.at("clone") == false && p.contains("reset_hit_counts") &&
+                        p.at("reset_hit_counts").is_array(), "COMPILE_CHILD_PARAMETERS_INVALID");
+            visit(p.at("entry").get<std::string>());
+        }
         for (const auto &next : node.value("next", J::array()))
             visit(next.get<std::string>());
         for (const auto &next : node.value("on_error", J::array()))
@@ -107,6 +117,63 @@ void CompiledWorkflow::validate() const {
     require(reached.size() == nodes.size(), "COMPILE_ORPHAN_NODE");
     require(nodes.at(terminal).value("custom_action", "") == "RootTerminal",
             "COMPILE_TERMINAL_INVALID");
+    // next/on_error 不能越过子任务边界；只有 RunChild 可进入子任务，只有根图可到根终点。
+    // 每个作用域独立检查，普通图循环由 max_hit/Session 预算约束；调用递归则直接拒绝。
+    std::map<std::string, std::string> owners;
+    std::map<std::string, unsigned> scope_heights;
+    std::set<std::string> checked_scopes, active_scopes;
+    std::function<void(const std::string &)> check_scope = [&](const std::string &scope) {
+        require(!active_scopes.contains(scope), "COMPILE_CHILD_RECURSIVE");
+        if (checked_scopes.contains(scope))
+            return;
+        require(active_scopes.size() < 8, "COMPILE_CHILD_DEPTH_LIMIT");
+        active_scopes.insert(scope);
+        std::set<std::string> local;
+        bool has_terminal = false;
+        unsigned height = 1;
+        std::function<void(const std::string &)> walk = [&](const std::string &name) {
+            if (!local.insert(name).second)
+                return;
+            const auto &node = nodes.at(name);
+            const auto action = node.value("custom_action", "");
+            // RequireRecovery 只关闭整个 Session，没有正常返回边，可以共享失败出口。
+            if (action == "RequireRecovery")
+                return;
+            const auto [owner, inserted] = owners.emplace(name, scope);
+            require(inserted || owner->second == scope, "COMPILE_CHILD_BOUNDARY_CROSSED");
+            if (action == "RootTerminal")
+                require(scope == entry, "COMPILE_CHILD_ROOT_TERMINAL");
+            if (action == "RunChild") {
+                const auto target = node.at("custom_action_param").at("entry").get<std::string>();
+                check_scope(target);
+                height = std::max(height, 1 + scope_heights.at(target));
+            }
+            const auto next = node.value("next", J::array());
+            if (next.empty() && (action == "RootTerminal" || node.value("action", "DoNothing") == "DoNothing"))
+                has_terminal = true;
+            for (const auto *key : {"next", "on_error"})
+                for (const auto &edge : node.value(key, J::array()))
+                    walk(edge.get<std::string>());
+        };
+        walk(scope);
+        require(has_terminal, "COMPILE_CHILD_TERMINAL_MISSING");
+        // 已从浅层验证过的共享子图，也要计入当前调用链的最长深度。
+        require(height <= 8, "COMPILE_CHILD_DEPTH_LIMIT");
+        scope_heights.emplace(scope, height);
+        active_scopes.erase(scope);
+        checked_scopes.insert(scope);
+    };
+    check_scope(entry);
+    for (const auto &node : nodes) {
+        if (node.value("custom_action", "") != "RunChild")
+            continue;
+        const auto &p = node.at("custom_action_param");
+        std::vector<std::string> expected;
+        for (const auto &[name, scope] : owners)
+            if (scope == p.at("entry").get<std::string>())
+                expected.push_back(name);
+        require(p.at("reset_hit_counts") == expected, "COMPILE_CHILD_RESET_SCOPE_INVALID");
+    }
     if (!checkpoint.empty())
         require(nodes.contains(checkpoint) && nodes.at(checkpoint).value("custom_action", "") == "BusinessCheckpoint",
                 "COMPILE_CHECKPOINT_INVALID");
@@ -262,6 +329,12 @@ std::string PipelineCompiler::append(const std::string &prefix, const CompiledWo
             operation = prefix + ":" + operation.get<std::string>();
             require(operation.get<std::string>().size() <= 128, "COMPILE_BUSINESS_EVENT_INVALID");
         }
+        if (node.value("custom_action", "") == "RunChild") {
+            auto &entry = node["custom_action_param"]["entry"];
+            entry = prefix + "_" + entry.get<std::string>();
+            for (auto &reset_name : node["custom_action_param"]["reset_hit_counts"])
+                reset_name = prefix + "_" + reset_name.get<std::string>();
+        }
         for (const auto *key : {"next", "on_error"})
             if (node.contains(key))
                 for (auto &edge : node[key])
@@ -284,6 +357,28 @@ std::string PipelineCompiler::append(const std::string &prefix, const CompiledWo
         workflow_.nodes[prefix + "_" + name] = std::move(node);
     }
     return prefix + "_" + child.entry;
+}
+std::string PipelineCompiler::define_child(const std::string &prefix, const CompiledWorkflow &child) {
+    return append(prefix, child, J::array());
+}
+void PipelineCompiler::call_child(const std::string &name, const std::string &entry, J next) {
+    require(!entry.empty(), "COMPILE_CHILD_ENTRY_INVALID");
+    std::set<std::string> local;
+    std::function<void(const std::string &)> collect = [&](const std::string &n) {
+        if (n == "RecoveryRequired")
+            return;
+        require(workflow_.nodes.contains(n), "COMPILE_CHILD_ENTRY_INVALID");
+        const auto &node = workflow_.nodes.at(n);
+        if (node.value("custom_action", "") == "RequireRecovery" || !local.insert(n).second)
+            return;
+        for (const auto *key : {"next", "on_error"})
+            for (const auto &edge : node.value(key, J::array()))
+                collect(edge.get<std::string>());
+    };
+    collect(entry);
+    add(name, {{"action", "Custom"}, {"custom_action", "RunChild"},
+               {"custom_action_param", {{"entry", entry}, {"clone", false}, {"reset_hit_counts", local}}},
+               {"next", std::move(next)}});
 }
 void PipelineCompiler::recovery(const std::string &name, const std::string &reason) {
     require(!reason.empty(), "COMPILE_RECOVERY_REASON_EMPTY");

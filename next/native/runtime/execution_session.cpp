@@ -138,7 +138,8 @@ void ExecutionSession::execute() noexcept {
         add("RunChild", [](maafw::Context &context, const auto &parameters) {
             auto child = context.run_child(parameters.at("entry"),
                                            parameters.value("overrides", nlohmann::json::object()),
-                                           parameters.value("clone", false));
+                                           parameters.value("clone", false),
+                                           parameters.value("reset_hit_counts", std::vector<std::string>{}));
             return child.valid && child.status == MaaStatus_Succeeded;
         });
         add("RequireRecovery", [this](maafw::Context &, const auto &parameters) {

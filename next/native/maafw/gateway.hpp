@@ -5,6 +5,7 @@
 #include "recognition.hpp"
 #include "contracts/business_state.hpp"
 #include <map>
+#include <vector>
 
 namespace wvd::maafw {
 class MaaGateway;
@@ -24,7 +25,7 @@ class Context {
                                      const RecognitionRequest &request);
     ChildResult run_child(const std::string &entry,
                           const nlohmann::json &overrides = nlohmann::json::object(),
-                          bool clone = false);
+                          bool clone = false, const std::vector<std::string> &reset_hit_counts = {});
     bool native_action(const std::string &type, const nlohmann::json &parameters);
     bool controller_action(const contracts::Command &command);
     nlohmann::json node_data(const std::string &name) const;
