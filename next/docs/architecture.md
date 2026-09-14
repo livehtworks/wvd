@@ -92,6 +92,10 @@ OpenCV 头文件/导入库来自固定 MaaDeps，运行时复用与 SDK 同 hash
 工厂 revision 和参数随 RunDefinition 冻结；RunCoordinator 创建并独占状态，Session/Gateway
 仅借用，Context 在受锁保护的回调范围内访问。观察者取得段结束时的 JSON 值副本，不拿可变指针。
 `WvdRunState` 负责策略消费、任务步和旧统计口径，`CombatStrategy` 不直接截图或输入。
+`state_factory` 单独承担状态与持久化端口装配。善恶选择的纯规则在 `games/wvd/karma`，
+提示图在 `recovery/karma_prompt`，业务经 `KarmaCommitPort` 提交已确认效果，
+`storage/karma_writer` 才读取显式新版 profile 绑定并执行 CAS。未绑定时禁止善恶输入，
+确认后保存失败保留事实并结束，不用恢复或重发动作补偿文件失败。
 正常续段必须同时满足 Completed、真正静止和本根任务检查点；新段更新 generation、保留业务事实，
 不复用帧、识别缓存或目标。正常续段不借用 RecoveryRequired；停止与创建工作线程有唯一先后顺序。
 M4 状态测试使用真实 Maa 离线 Controller。WvdTaskPlan 已解析旧任务的顺序动作、目标提示和地图参数，

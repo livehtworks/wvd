@@ -70,7 +70,7 @@ class WorkflowTests(unittest.TestCase):
                       "fishing/cast", "fishing/striking", "fishing/CloseFishInfo", "combatActive", "combatActive_2",
                       "combatActive_3", "combatActive_4", "boot_title_logo", "boot_attention", "startdownload",
                       "retry", "retry_blank", "totitle", "resume", "trait", "recover", "spellskill/skillDetail", "close", "someonedead", "RiseAgain",
-                      "multipeopledead", "skull", "sandman_recover", "blessing", "combatClose"]
+                      "multipeopledead", "skull", "sandman_recover", "blessing", "combatClose", "ambush", "ignore"]
         names += options.get("extra_images", [])
         if options.get("workflow") == "revival":
             names.append("RiseAgain")
@@ -1598,6 +1598,77 @@ class WorkflowTests(unittest.TestCase):
     def wall_profile(enabled=True):
         return {**WorkflowTests.turn_profile(defend=True), "BYPASS_THE_WALL": enabled,
                 "RECOVER_WHEN_BEGINNING": False, "SKIP_CHEST_RECOVER": True, "SKIP_COMBAT_RECOVER": True}
+
+    def test_karma_confirmed_updates_only_new_profile_and_revises_once(self):
+        for value, symbol, after in [("+0", "ambush", "+2"), ("-1", "ambush", "1"), ("+1", "ignore", "+0")]:
+            r = self.execute("karma-" + value, [{"ambush": (300, 700), "ignore": (500, 700)},
+                {"Inn": (400, 700)}], [dict(kind=0, x=320 if symbol == "ambush" else 520, y=712)],
+                workflow="common", profile={"KARMA_ADJUST": value}, karma_profile=True)
+            self.assertEqual(r["snapshot"]["state"], "Completed", r)
+            self.assertEqual(r["backend_calls"], 1)
+            self.assertFalse(r["mismatch"])
+            self.assertEqual(r["profile_after"]["values"]["KARMA_ADJUST"], after)
+            self.assertEqual(r["profile_before"]["legacy_document"], r["profile_after"]["legacy_document"])
+            effect = r["snapshot"]["business"]["karma_effect"]
+            self.assertEqual((effect["before"], effect["after"], effect["save_status"]), (value, after, "Saved"))
+            self.assertEqual(effect["operation_id"], r["profile_after"]["last_business_update"]["operation_id"])
+            self.assertEqual(effect["profile_revision"], r["profile_after"]["revision"])
+            self.assertNotEqual(r["profile_before"]["revision"], r["profile_after"]["revision"])
+
+    def test_karma_save_failure_keeps_effect_and_never_replays_input(self):
+        for fault in ("conflict", "lock", "replace"):
+            r = self.execute("karma-save-" + fault, [{"ambush": (300, 700)}, {"Inn": (400, 700)}],
+                [dict(kind=0, x=320, y=712)], workflow="common", karma_profile=True, karma_save_fault=fault)
+            self.assertEqual(r["snapshot"]["state"], "Failed", r)
+            self.assertIn("PROFILE_SAVE_FAILED", r["snapshot"]["reason"])
+            self.assertEqual(r["backend_calls"], 1)
+            self.assertEqual(r["cursor"], 1)
+            self.assertFalse(r["mismatch"])
+            effect = r["snapshot"]["business"]["karma_effect"]
+            self.assertEqual((effect["before"], effect["after"], effect["save_status"]), ("+0", "+2", "Failed"))
+            self.assertGreater(effect["frame_id"], 0)
+            self.assertEqual(r["profile_after"]["values"]["KARMA_ADJUST"], "+9" if fault == "conflict" else "+0")
+            self.assertNotIn("last_business_update", r["profile_after"])
+
+    def test_karma_missing_writer_or_invalid_value_never_inputs(self):
+        for name, binding, value, error in [("unbound", False, "+0", "KARMA_PROFILE_NOT_BOUND"),
+                                            ("invalid", True, "bad", "KARMA_VALUE_INVALID")]:
+            r = self.execute("karma-" + name, [{"ambush": (300, 700)}], [], workflow="common",
+                karma_profile=binding, profile={"KARMA_ADJUST": value})
+            self.assertEqual(r["snapshot"]["state"], "Failed", r)
+            self.assertIn(error, r["snapshot"]["reason"])
+            self.assertEqual(r["backend_calls"], 0)
+            self.assertIsNone(r["snapshot"]["business"]["karma_effect"])
+
+    def test_karma_stop_or_rejected_input_never_saves(self):
+        for stop in (False, True):
+            r = self.execute("karma-stop-" + str(stop), [{"ambush": (300, 700)}, {"Inn": (400, 700)}],
+                [dict(kind=0, x=320, y=712, reject=not stop)], workflow="common", karma_profile=True, stop_after_first=stop)
+            self.assertEqual(r["snapshot"]["state"], "UserStopped" if stop else "Failed", r)
+            self.assertEqual(r["backend_calls"], 1)
+            self.assertEqual(r["profile_before"], r["profile_after"])
+            self.assertIsNone(r["snapshot"]["business"]["karma_effect"])
+
+    def test_karma_unchanged_or_unknown_result_is_not_automatically_retried(self):
+        for name, after in [("unchanged", {"ambush": (300, 700)}), ("unknown", {})]:
+            r = self.execute("karma-" + name, [{"ambush": (300, 700)}, after],
+                [dict(kind=0, x=320, y=712)], workflow="common", karma_profile=True, attach_recovery=True)
+            self.assertEqual(r["snapshot"]["state"], "Interrupted", r)
+            self.assertEqual(r["snapshot"]["reason"], "RECOVERY_REQUIRED")
+            self.assertEqual(r["snapshot"]["sessions"][-1]["reason"], "karma.choice_outcome_unconfirmed")
+            self.assertEqual(r["backend_calls"], 1)
+            self.assertEqual(r["lifecycle_calls"], [])
+            self.assertEqual(r["profile_before"], r["profile_after"])
+
+    def test_karma_retry_overlay_is_not_evidence_of_success(self):
+        r = self.execute("karma-retry", [{"ambush": (300, 700)}, {"retry": (300, 700), "dungFlag": (50, 150)}],
+            [dict(kind=0, x=320, y=712)], workflow="common", karma_profile=True, attach_recovery=True)
+        self.assertEqual(r["snapshot"]["state"], "Interrupted", r)
+        self.assertEqual(r["backend_calls"], 1)
+        self.assertEqual(r["lifecycle_calls"], [])
+        self.assertEqual(r["profile_before"], r["profile_after"])
+        self.assertIsNone(r["snapshot"]["business"]["karma_effect"])
+        self.assertEqual(r["snapshot"]["sessions"][-1]["reason"], "karma.choice_outcome_unconfirmed")
 
     def test_wall_bypass_runs_three_actions_once_after_restart_then_reaches_target(self):
         dungeon = {"dungFlag": (50, 150)}

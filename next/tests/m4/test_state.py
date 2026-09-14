@@ -69,6 +69,23 @@ class StateTests(unittest.TestCase):
         self.assertEqual(result["backend_inputs"], 0)
         return result
 
+    def test_karma_rules_and_confirmed_profile_idempotency(self):
+        values = ["0", "+0", "-0", "-1", "-2", "-3", "+1", "+2", "3", "+0002", "-0003",
+                  "+99999999999999999999999999999", " 2 ", "1_000", "", "bad", "+-2", "1__0", "_1"]
+        r = self.run_case("karma-contract", karma_cases=values)
+        expected = []
+        for value in values:
+            try:
+                number = int(value)
+                expected.append(dict(ambush=number == 0 or value.startswith("-"),
+                    after="+2" if number == 0 else str(number + 2) if value.startswith("-") else f"+{number - 1}"))
+            except ValueError:
+                expected.append(dict(error="KARMA_VALUE_INVALID"))
+        self.assertEqual(r["karma_cases"], expected)
+        self.assertEqual(r["karma_receipt"]["save_status"], "Saved")
+        self.assertEqual(r["karma_second"]["after"], "+1")
+        self.assertNotEqual(r["karma_receipt"]["operation_id"], r["karma_second"]["operation_id"])
+
     def test_strategy_consumption_and_run_isolation(self):
         r = self.run_case("normal", new_run=True, mutate_definition=True)
         for key in ("snapshot", "second"):

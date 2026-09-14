@@ -3,10 +3,12 @@
 
 namespace wvd::games {
 using J = nlohmann::json;
-WvdRunState::WvdRunState(J profile, const contracts::StateCreationContext &creation)
+WvdRunState::WvdRunState(J profile, const contracts::StateCreationContext &creation,
+                       std::unique_ptr<KarmaCommitPort> karma_writer)
     : profile_(std::move(profile)),
       identity_(creation.instance_id + ":" + std::to_string(creation.run_id)),
-      clock_(creation.clock), strategy_(profile_) {
+      clock_(creation.clock), strategy_(profile_), karma_writer_(std::move(karma_writer)),
+      karma_value_(profile_.at("KARMA_ADJUST").get<std::string>()) {
     if (!clock_ || creation.instance_id.empty() || !creation.run_id)
         throw std::runtime_error("WVD_STATE_CONTEXT_INVALID");
     if (!profile_.at("RELOAD_STRATEGY_WHEN").is_string() || !profile_.at("LANGUAGE").is_string() ||
@@ -242,6 +244,10 @@ std::string WvdRunState::confirmation_id(const std::string &operation, const std
         id += ":supply:" + std::to_string(supply_cycle_);
     else if (event == "party_reassembled")
         id += ":party:" + std::to_string(static_cast<std::size_t>(total_seconds_ / 21600));
+    else if (event == "karma_observed")
+        id += ":karma:" + std::to_string(karma_sequence_ + (karma_choice_ ? 0 : 1));
+    else if (event == "karma_completed")
+        id += ":karma:" + std::to_string(karma_sequence_);
     return id;
 }
 bool WvdRunState::confirm_event(const std::string &operation, const std::string &event,
@@ -250,6 +256,8 @@ bool WvdRunState::confirm_event(const std::string &operation, const std::string 
     if (operation.empty() || operation.size() > 256 || generation != generation_ || !frame_id)
         throw std::runtime_error("BUSINESS_CONFIRMATION_IDENTITY_INVALID");
     const J effect{{"event", event}, {"expected_step", expected_step ? J(*expected_step) : J(nullptr)}};
+    if (karma_effect_.is_object() && karma_effect_.value("save_status", "") == "Failed")
+        throw std::runtime_error("PROFILE_SAVE_FAILED");
     if (auto old = confirmations_.find(operation); old != confirmations_.end()) {
         if (old->second != effect)
             throw std::runtime_error("BUSINESS_OPERATION_CONFLICT");
@@ -259,7 +267,22 @@ bool WvdRunState::confirm_event(const std::string &operation, const std::string 
         throw std::runtime_error("BUSINESS_CONFIRMATION_CAPACITY");
     if (expected_step && *expected_step != task_step_)
         throw std::runtime_error("BUSINESS_TASK_STEP_MISMATCH");
-    if (event == "target_completed") {
+    if (event == "karma_observed") {
+        if (!karma_writer_)
+            throw std::runtime_error("KARMA_PROFILE_NOT_BOUND");
+        if (!karma_choice_) {
+            karma_choice_ = choose_karma(karma_value_);
+            ++karma_sequence_;
+        }
+    } else if (event == "karma_completed") {
+        if (!karma_choice_)
+            throw std::runtime_error("KARMA_NOT_OBSERVED");
+        karma_effect_ = {{"operation_id", operation}, {"field", "KARMA_ADJUST"},
+            {"before", karma_choice_->before}, {"after", karma_choice_->after},
+            {"frame_id", frame_id}, {"generation", generation}, {"save_status", "Pending"}};
+        karma_value_ = karma_choice_->after;
+        karma_choice_.reset();
+    } else if (event == "target_completed") {
         if (!expected_step)
             throw std::runtime_error("BUSINESS_TASK_STEP_REQUIRED");
         target_point_completed();
@@ -346,6 +369,17 @@ bool WvdRunState::confirm_event(const std::string &operation, const std::string 
     confirmations_.emplace(operation, effect);
     last_confirmation_ = {{"operation_id", operation}, {"event", event},
                            {"generation", generation}, {"frame_id", frame_id}};
+    if (event == "karma_completed") {
+        // 先记录确认事实，再持久化；保存失败不是游戏动作失败，不能再次点击。
+        try {
+            karma_effect_["profile_revision"] = karma_writer_->save(karma_effect_);
+            karma_effect_["save_status"] = "Saved";
+        } catch (const std::exception &error) {
+            karma_effect_["save_status"] = "Failed";
+            karma_effect_["error"] = error.what();
+            throw std::runtime_error("PROFILE_SAVE_FAILED");
+        }
+    }
     return true;
 }
 J WvdRunState::summarize() const {
@@ -354,6 +388,9 @@ J WvdRunState::summarize() const {
     const bool party = supply::decide_rest(profile_, facts).reassemble;
     return {{"kind", "wvd"},
             {"state_revision", "1"},
+            {"karma_value", karma_value_}, {"karma_pending", karma_choice_.has_value()},
+            {"karma_ambush", karma_choice_ && karma_choice_->ambush},
+            {"karma_sequence", karma_sequence_}, {"karma_effect", karma_effect_},
             {"run_identity", identity_},
             {"generation", generation_},
             {"unit_index", unit_index_},
@@ -408,17 +445,5 @@ J WvdRunState::summarize() const {
             {"zoom_world_map", zoom_world_map_},
             {"bypass_after_restart", wall_bypass_step_ == 3},
             {"wall_bypass_step", wall_bypass_step_}, {"wall_bypass_sequence", wall_bypass_sequence_}};
-}
-namespace {
-std::unique_ptr<contracts::BusinessRunState>
-create_state(const J &parameters, const contracts::StateCreationContext &creation) {
-    return std::make_unique<WvdRunState>(parameters.at("profile"), creation);
-}
-} // namespace
-void register_wvd_state(runtime::BehaviorRegistry &registry) {
-    registry.add_state_factory({"wvd.state", "1"}, create_state);
-}
-contracts::BehaviorBinding wvd_state_binding(const J &profile) {
-    return {"WvdState", {"wvd.state", "1"}, {{"profile", profile}}};
 }
 } // namespace wvd::games

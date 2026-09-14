@@ -3,6 +3,7 @@
 #include "games/wvd/vision/recognizers.hpp"
 #include "storage/legacy_import.hpp"
 #include "storage/profile_store.hpp"
+#include "storage/karma_writer.hpp"
 #include <algorithm>
 #include <array>
 #include <barrier>
@@ -469,6 +470,48 @@ int main(int argc, char **argv) {
             return 0;
         }
         auto profile = importer.parse(config.at("source")).values;
+        if (config.contains("karma_cases")) {
+            J output{{"karma_cases", J::array()}, {"backend_inputs", 0}};
+            for (const auto &value : config.at("karma_cases")) {
+                try {
+                    const auto choice = games::choose_karma(value);
+                    output["karma_cases"].push_back({{"ambush", choice.ambush}, {"after", choice.after}});
+                } catch (const std::exception &e) {
+                    output["karma_cases"].push_back({{"error", e.what()}});
+                }
+            }
+            const auto path = maafw::path_from_utf8(config.at("output")).parent_path() / "karma-profile.json";
+            storage::ProfileStore store(path, descriptor);
+            auto original = store.create(importer.parse(config.at("source")));
+            const auto encoded = path.u8string();
+            J binding{{"path", std::string(encoded.begin(), encoded.end())}, {"descriptor", descriptor},
+                      {"revision", original.at("revision")}};
+            auto clock = std::make_shared<TestClock>();
+            games::WvdRunState state(profile, {"karma-state", 1, clock}, storage::make_karma_writer(binding, profile));
+            state.enter_segment(contracts::SegmentBoundary::Initial, 1, 0);
+            bool premature = false;
+            try { state.confirm_event("early", "karma_completed", 1, 1); }
+            catch (const std::runtime_error &e) { premature = std::string(e.what()) == "KARMA_NOT_OBSERVED"; }
+            require(premature && store.load() == original, "KARMA_SAVED_WITHOUT_OBSERVATION");
+            state.confirm_event(state.confirmation_id("observe", "karma_observed"), "karma_observed", 1, 2);
+            require(store.load() == original, "KARMA_OBSERVATION_WROTE_PROFILE");
+            const auto operation = state.confirmation_id("complete", "karma_completed");
+            state.confirm_event(operation, "karma_completed", 1, 3);
+            const auto saved = store.load();
+            require(saved.at("values").at("KARMA_ADJUST") == "+2", "KARMA_WRONG_UPDATE");
+            require(!state.confirm_event(operation, "karma_completed", 1, 4) && store.load() == saved,
+                    "KARMA_DUPLICATE_WRITE");
+            state.enter_segment(contracts::SegmentBoundary::Continuation, 2, 1);
+            require(!state.confirm_event(operation, "karma_completed", 2, 5) && store.load() == saved,
+                    "KARMA_GENERATION_DUPLICATE_WRITE");
+            output["karma_receipt"] = state.summary().at("karma_effect");
+            state.confirm_event(state.confirmation_id("observe", "karma_observed"), "karma_observed", 2, 6);
+            state.confirm_event(state.confirmation_id("complete", "karma_completed"), "karma_completed", 2, 7);
+            require(store.load().at("values").at("KARMA_ADJUST") == "+1", "KARMA_REUSED_FROZEN_VALUE");
+            output["karma_second"] = state.summary().at("karma_effect");
+            std::ofstream(maafw::path_from_utf8(config.at("output"))) << output.dump(2);
+            return 0;
+        }
         J output{{"direct", direct_contract(profile)}};
         if (config.contains("supply_cases")) {
             output["supply_cases"] = J::array();

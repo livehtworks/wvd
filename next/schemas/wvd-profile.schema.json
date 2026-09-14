@@ -188,6 +188,41 @@
     },
     "selected_section": {
       "type": "string"
+    },
+    "last_business_update": {
+      "type": "object",
+      "required": [
+        "operation_id",
+        "field",
+        "before",
+        "after",
+        "frame_id",
+        "generation"
+      ],
+      "properties": {
+        "operation_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "field": {
+          "const": "KARMA_ADJUST"
+        },
+        "before": {
+          "type": "string"
+        },
+        "after": {
+          "type": "string"
+        },
+        "frame_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "generation": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "additionalProperties": false
     }
   },
   "$comment": "由固定旧源码生成；生产副本读写的类型和嵌套语义校验由 ProfileStore/LegacyConfigImporter 执行。"

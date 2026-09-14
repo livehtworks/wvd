@@ -4,13 +4,15 @@
 #include "contracts/business_state.hpp"
 #include "runtime/behavior_registry.hpp"
 #include "supply/policy.hpp"
+#include "karma.hpp"
 #include <map>
 
 namespace wvd::games {
 // 游戏层仅存业务事实，不保存 Controller、图像、坐标或识别结果。
 class WvdRunState final : public contracts::BusinessRunState {
   public:
-    WvdRunState(nlohmann::json profile, const contracts::StateCreationContext &creation);
+    WvdRunState(nlohmann::json profile, const contracts::StateCreationContext &creation,
+                std::unique_ptr<KarmaCommitPort> karma_writer = {});
     void enter_dungeon();
     void target_point_completed();
     void observe_combat();
@@ -74,6 +76,11 @@ class WvdRunState final : public contracts::BusinessRunState {
     bool suicide_requested_{};
     std::size_t party_defeat_sequence_{};
     chest::Selection chest_selection_;
+    std::unique_ptr<KarmaCommitPort> karma_writer_;
+    std::string karma_value_;
+    std::optional<KarmaChoice> karma_choice_;
+    std::size_t karma_sequence_{};
+    nlohmann::json karma_effect_;
 };
 void register_wvd_state(runtime::BehaviorRegistry &registry);
 contracts::BehaviorBinding wvd_state_binding(const nlohmann::json &profile);

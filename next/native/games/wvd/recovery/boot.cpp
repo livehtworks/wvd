@@ -1,6 +1,7 @@
 #include "boot.hpp"
 #include "party_death.hpp"
 #include "global_prompt.hpp"
+#include "karma_prompt.hpp"
 
 namespace wvd::games::recovery {
 namespace {
@@ -24,7 +25,8 @@ std::optional<runtime::SessionDefinition> decide(const contracts::SessionResult 
         result.reason == "chest.disarm_outcome_unconfirmed" ||
         result.reason == "chest.retry_pending" ||
         result.reason == "revival.outcome_unconfirmed" ||
-        result.reason == "departure.inn_payment_unconfirmed")
+        result.reason == "departure.inn_payment_unconfirmed" ||
+        result.reason == "karma.choice_outcome_unconfirmed")
         return std::nullopt;
     if (!result.business.is_object() || result.business.value("kind", "") != "wvd" ||
         !result.business.at("lifecycle_recovery_active").is_boolean())
@@ -75,8 +77,13 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common) {
     low_retry["threshold"] = .60;
     const auto to_title = C::image("totitle"), resume = C::image("resume");
     const J recognized = common ? C::any({J{{"mode", "boot_post"}}, panel}) : J{{"mode", "boot_post"}};
-    graph.route("Entry", common ? J{"Download", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title", "Pause", "Death", "Defeat", "Sandman", "Blessing", "Ready"}
-                                 : J{"Ready", "Download", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title", "Pause", "Sandman", "Blessing"});
+    graph.route("Entry", common ? J{"Download", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title", "Pause", "Death", "Defeat", "Sandman", "Blessing", "Karma", "Ready"}
+                                 : J{"Ready", "Download", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title", "Pause", "Sandman", "Blessing", "Karma"});
+    const auto karma = graph.define_child("KarmaPrompt", choose_karma_prompt());
+    graph.observe("Karma", C::any({C::image("ambush"), C::image("ignore")}), {"ChooseKarma"});
+    graph.call_child("ChooseKarma", karma, {"Entry"});
+    graph.hit_limit("Karma", 6);
+    graph.hit_limit("ChooseKarma", 6);
     for (const auto &[prefix, prompt] : {std::pair{"Sandman", GlobalPrompt::SandmanRecovery},
                                          std::pair{"Blessing", GlobalPrompt::Blessing}}) {
         const std::string name = prefix;

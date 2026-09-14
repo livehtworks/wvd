@@ -29,7 +29,8 @@
 | packs/wvd/parameters/legacy-config-fields.json、legacy-quests.json | 固定旧 Git 的配置描述与任务字节副本，非用户配置 | prepare_m4.py | LegacyConfigImporter、WvdQuestCatalog；只为离线数据检查使用 |
 | schemas/wvd-profile.schema.json | 新版副本的公开结构契约 | prepare_m4.py | 审核与工具；原生解析器同时执行类型及嵌套业务校验，不代表已接入运行配置 |
 | 显式新目的目录/legacy-config.json | 旧配置的私有只读复制结果，含用户数据，不可公开 | LegacyConfigImporter::import_copy | 从副本解析并验证源 hash；没有向旧配置写回的路径 |
-| 显式新目录中的 profile JSON / 同名 .lock | 新版离线配置副本及写者互斥锁；完整字段、来源和 passthrough 是副本权威 | ProfileStore | 新副本读写及 CAS；Run 只接收显式冻结的 values，不监视或重读文件；没有 GUI/生产写入者 |
+| 显式新目录中的 profile JSON / 同名 .lock | 新版离线配置副本及写者互斥锁；完整字段、来源和 passthrough 是副本权威 | ProfileStore | Run 接收显式冻结 values；善恶值另需显式路径/revision 绑定，仅确认后 CAS，不监视文件、不回写旧 config；没有 GUI/生产写入者 |
+| profile.last_business_update（schema1 可选）、snapshot.business.karma_effect | 最新一次善恶值确认与保存回执；历史完整回执以各 RunStore 结果为准 | WvdConfirm 生成带操作编号、原值/新值、代次/帧的事实；KarmaCommitPort 的存储适配原子保存新 profile | 旧 schema1 缺此字段表示未记录，不补造已确认；保存失败保留 Run 内 Failed 和已确认新值，不重发输入、不自动恢复 |
 | run.json definition.state_factory、continuation_units | 新版有限运行的冻结定义，含状态工厂身份、配置值、段顺序和预算 | RunCoordinator / RunStore | 非捕获工厂创建本 Run 独占状态；修改调用者原对象不改变已启动 Run |
 | 恢复 Session 的 lifecycle 计划及 lifecycle.* 事件 | 本 Run 授权目标、有限操作和实际调用证据；不是任意 shell 或重放许可 | WVD 纯策略生成冻结计划，ExecutionSession 验证并调用离线 LifecyclePort | 每步核对身份/时效/连接代次和后置状态；停止仍由原 Run 持有资源 |
 | snapshot.business.lifecycle_recovery_active/sequence | 本 Run 恢复请求边界，不是跨进程检查点 | WvdRunState 在 LifecycleRecovery 边界和新帧 game_restarted 确认时更新 | 区分同次升级与启动成功后的新故障；不以曾有 lifecycle 计划推断当前仍在恢复 |

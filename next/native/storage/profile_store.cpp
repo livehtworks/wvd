@@ -32,11 +32,20 @@ void validate(const J &document) {
         !document.at("selected_section").is_string())
         throw std::runtime_error("PROFILE_SCHEMA_INVALID");
     games::validate_strategy(document.at("values").at("STRATEGY"));
+    if (document.contains("last_business_update")) {
+        const auto &effect = document.at("last_business_update");
+        if (!effect.is_object() || effect.size() != 6 || !effect.at("operation_id").is_string() ||
+            effect.at("operation_id").get<std::string>().empty() || effect.at("field") != "KARMA_ADJUST" ||
+            !effect.at("before").is_string() || !effect.at("after").is_string() ||
+            !effect.at("frame_id").is_number_integer() || effect.at("frame_id") <= 0 ||
+            !effect.at("generation").is_number_integer() || effect.at("generation") <= 0)
+            throw std::runtime_error("PROFILE_EFFECT_SCHEMA_INVALID");
+    }
 }
 } // namespace
 ProfileStore::ProfileStore(std::filesystem::path path, J descriptor)
     : path_(std::move(path)), importer_(std::move(descriptor)) {
-    if (!path_.is_absolute() || path_.filename() == "config.json")
+    if (!path_.is_absolute() || _wcsicmp(path_.filename().c_str(), L"config.json") == 0)
         throw std::runtime_error("PROFILE_PATH_INVALID");
 }
 J ProfileStore::create(const games::WvdProfile &profile) {

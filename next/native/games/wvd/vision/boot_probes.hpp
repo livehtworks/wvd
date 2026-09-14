@@ -24,6 +24,8 @@ inline nlohmann::json blocking_probes(bool include_party_prompts = true) {
     probes.push_back({{"mode", "pause"}});
     add("sandman_recover");
     add("blessing");
+    add("ambush");
+    add("ignore");
     // 死亡提示只有在正常场景全部不成立时才生效，不能让王城/地图骷髅抢占导航。
     if (include_party_prompts) {
         probes.push_back({{"mode", "party_death"}});

@@ -10,6 +10,7 @@
 #include "games/wvd/diagnostics.hpp"
 #include "games/wvd/state.hpp"
 #include "storage/legacy_import.hpp"
+#include "storage/profile_store.hpp"
 #include "games/wvd/supply/inn.hpp"
 #include "games/wvd/supply/dungeon_recover.hpp"
 #include "games/wvd/combat/auto_combat.hpp"
@@ -31,6 +32,7 @@ class WorkflowDevice final : public OfflineDevice, public devices::LifecyclePort
   public:
     std::vector<std::vector<std::uint8_t>> frames;
     J transitions;
+    std::function<void()> after_input;
     std::size_t cursor{};
     std::size_t action_cursor{};
     bool mismatch{};
@@ -139,6 +141,8 @@ class WorkflowDevice final : public OfflineDevice, public devices::LifecyclePort
         }
         if (expected.value("reject", false))
             return false;
+        if (after_input)
+            after_input();
         if (!expected.value("stay", false)) {
             ++cursor;
             ++action_cursor;
@@ -493,6 +497,42 @@ int main(int argc, char **argv) {
         }
         if (config.value("with_state", false))
             definition.state_factory = games::wvd_state_binding(profile);
+        std::unique_ptr<storage::ProfileStore> karma_store;
+        J original_profile;
+        struct HeldFile {
+            HANDLE value{INVALID_HANDLE_VALUE};
+            ~HeldFile() { if (value != INVALID_HANDLE_VALUE) CloseHandle(value); }
+        } profile_handle;
+        if (config.value("karma_profile", false)) {
+            J descriptor;
+            std::ifstream(maafw::path_from_utf8(config.at("descriptor"))) >> descriptor;
+            storage::LegacyConfigImporter importer(descriptor);
+            const auto path = maafw::path_from_utf8(config.at("output")).parent_path() / "private-profile.json";
+            karma_store = std::make_unique<storage::ProfileStore>(path, descriptor);
+            original_profile = karma_store->create(importer.parse({{"GENERAL", profile}}));
+            const auto path_utf8 = path.u8string();
+            definition.state_factory->parameters["profile_store"] = {
+                {"path", std::string(path_utf8.begin(), path_utf8.end())}, {"descriptor", descriptor}, {"revision", original_profile.at("revision")}};
+            const auto fault = config.value("karma_save_fault", "");
+            if (!fault.empty())
+                device->after_input = [&, path, fault] {
+                    if (device->calls != 1)
+                        return;
+                    if (fault == "conflict") {
+                        auto external = original_profile;
+                        external["values"]["KARMA_ADJUST"] = "+9";
+                        karma_store->compare_exchange(original_profile.at("revision"), external);
+                    } else {
+                        auto locked_path = path;
+                        if (fault == "lock")
+                            locked_path += ".lock";
+                        profile_handle.value = CreateFileW(locked_path.c_str(), GENERIC_READ,
+                            fault == "lock" ? 0 : FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_ALWAYS,
+                            FILE_ATTRIBUTE_NORMAL, nullptr);
+                        require(profile_handle.value != INVALID_HANDLE_VALUE, "FIXTURE_PROFILE_LOCK_FAILED");
+                    }
+                };
+        }
         coordinator.start(definition, device);
         J lifecycle_stop;
         if (device->hold_lifecycle) {
@@ -556,6 +596,10 @@ int main(int argc, char **argv) {
                  {"time_event_count", device->time_event_count},
                  {"stop_node_observed", stop_node_observed},
                  {"loaded_modules", loaded_vision_modules()}};
+        if (karma_store) {
+            output["profile_before"] = original_profile;
+            output["profile_after"] = karma_store->load();
+        }
         std::ofstream(maafw::path_from_utf8(config.at("output"))) << output.dump(2);
         return 0;
     } catch (const std::exception &e) {

@@ -55,7 +55,13 @@ def prepare():
                   "values": {"type": "object", "required": list(properties), "properties": properties,
                              "additionalProperties": False},
                   "legacy_document": {"type": "object"}, "legacy_passthrough": {"type": "object"},
-                  "sources": {"type": "object"}, "selected_section": {"type": "string"}},
+                  "sources": {"type": "object"}, "selected_section": {"type": "string"},
+                  "last_business_update": {"type": "object",
+                      "required": ["operation_id", "field", "before", "after", "frame_id", "generation"],
+                      "properties": {"operation_id": {"type": "string", "minLength": 1},
+                          "field": {"const": "KARMA_ADJUST"}, "before": {"type": "string"}, "after": {"type": "string"},
+                          "frame_id": {"type": "integer", "minimum": 1}, "generation": {"type": "integer", "minimum": 1}},
+                      "additionalProperties": False}},
               "$comment": "由固定旧源码生成；生产副本读写的类型和嵌套语义校验由 ProfileStore/LegacyConfigImporter 执行。"}
     (ROOT / "schemas/wvd-profile.schema.json").write_text(json.dumps(schema, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print("33 frozen config fields; 58 source tasks; no business execution.")
