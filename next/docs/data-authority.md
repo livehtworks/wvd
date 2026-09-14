@@ -25,6 +25,7 @@
 | 私有 snapshot_parent/unique_id/ | 活动 SDK 资源快照及结束后的诊断副本；源清单/hash 绑定 | materialize_bundle 从持有的源句柄复制 | MaaGateway 与 AssetResolver 只读消费；BundleLease 覆盖原生生命周期，不与源共享文件对象 |
 | snapshot_parent/revisions/identity_hash.json | 作者路径/revision 对应清单的一次性索引，不是业务数据库 | materialize_bundle 原子首次创建 | 同一身份不同清单拒绝；不自动覆盖或清理 |
 | publish_workflow 显式新目录中的 image/、pipeline/workflow.json | 新版有限子流程的作者资源派生包，不是旧资源或完整任务权威 | 编译器校验后从持锁源复制；只创建新目录，不覆盖既存目录 | SessionDefinition 绑定文件 hash、图、所需权限、源 revision、别名及注册表构建身份；运行再物化为活动快照 |
+| 同一发布目录 parameters/image-sources.json（显式提供 mod 时） | 本次派生图片的来源记录，不含私人绝对路径 | publish_workflow 从基线与 mod 的显式 manifest 持锁复制，记录逻辑名、所选相对路径、来源和 hash | 随 Session Bundle 封存供诊断；运行只读派生包，不再扫描或读取用户 mod |
 | packs/wvd/parameters/legacy-config-fields.json、legacy-quests.json | 固定旧 Git 的配置描述与任务字节副本，非用户配置 | prepare_m4.py | LegacyConfigImporter、WvdQuestCatalog；只为离线数据检查使用 |
 | schemas/wvd-profile.schema.json | 新版副本的公开结构契约 | prepare_m4.py | 审核与工具；原生解析器同时执行类型及嵌套业务校验，不代表已接入运行配置 |
 | 显式新目的目录/legacy-config.json | 旧配置的私有只读复制结果，含用户数据，不可公开 | LegacyConfigImporter::import_copy | 从副本解析并验证源 hash；没有向旧配置写回的路径 |

@@ -70,6 +70,7 @@ class WorkflowTests(unittest.TestCase):
                       "fishing/cast", "fishing/striking", "fishing/CloseFishInfo", "combatActive", "combatActive_2",
                       "combatActive_3", "combatActive_4", "boot_title_logo", "boot_attention", "startdownload",
                       "retry", "retry_blank", "totitle", "resume", "trait", "recover"]
+        names += options.get("extra_images", [])
         rng = np.random.default_rng(90614)
         patterns = {name: rng.integers(30, 255, (24, 40, 3), dtype=np.uint8) for name in names}
         if "chest_auto_minus" in patterns:
@@ -77,9 +78,13 @@ class WorkflowTests(unittest.TestCase):
         def write(path, pixels):
             path.write_bytes(cv2.imencode(".png", pixels)[1].tobytes())
         for key, pixels in patterns.items():
+            if key in options.get("mod_only_images", []):
+                continue
             path = bundle / "image" / (key + ".png")
             path.parent.mkdir(parents=True, exist_ok=True)
             write(path, pixels)
+            if key in options.get("bad_base_images", []):
+                path.write_bytes(b"invalid base fixture image")
         frames = []
         for i, screen in enumerate(screens):
             pixels = np.zeros((1600, 900, 3), dtype=np.uint8)
@@ -111,6 +116,18 @@ class WorkflowTests(unittest.TestCase):
                           {"path": p.relative_to(bundle).as_posix(), "sha256": digest(p)}
                           for p in sorted(bundle.rglob("*.png"))])
         config.update(options)
+        if "mod_images" in options:
+            mod = folder / "private-mod"
+            (mod / "image").mkdir(parents=True)
+            for key, source_key in options["mod_images"].items():
+                path = mod / "image" / (key + ".png")
+                path.parent.mkdir(parents=True, exist_ok=True)
+                write(path, patterns[source_key])
+            config["mod_bundle"] = dict(root=str(mod), files=[
+                dict(path=p.relative_to(mod).as_posix(), sha256=digest(p)) for p in sorted(mod.rglob("*.png"))])
+            if options.get("corrupt_mod_before_publish"):
+                for path in mod.rglob("*.png"):
+                    path.write_bytes(b"changed before publication")
         if options.get("workflow") in ("chest", "map-confirm", "state-route", "turn", "encounter", "recover", "heal", "dungeon-route", "departure", "inn-tracked", "iteration"):
             config.update(with_state=True, descriptor=str(ROOT / "packs/wvd/parameters/legacy-config-fields.json"))
         if "omit_image" in options:
@@ -121,7 +138,7 @@ class WorkflowTests(unittest.TestCase):
         before_hash = digest(exe)
         with (folder / "native.log").open("wb") as log:
             result = subprocess.run([str(exe), str(source)], cwd=folder, env=self.env,
-                                    stdout=log, stderr=log, timeout={"dungeon-route": 420, "recover": 750, "departure": 200,
+                                    stdout=log, stderr=log, timeout={"dungeon-route": 420, "recover": 750, "departure": 200, "heal": 260,
                                         "common": 140, "iteration": 780 * options.get("normal_units", 1)}.get(options.get("workflow"), 90))
         self.assertEqual(digest(exe), before_hash)
         (folder / "execution.json").write_text(json.dumps({"exe_sha256": before_hash, "exit": result.returncode}), encoding="utf-8")
@@ -1365,6 +1382,115 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(r["snapshot"]["state"], "Completed", r)
         self.assertEqual(r["backend_calls"], 1)
         self.assertEqual(r["lifecycle_calls"], [])
+
+    def assert_uncertain_effect(self, result, reason, calls):
+        self.assertEqual(result["snapshot"]["state"], "Interrupted", result)
+        self.assertEqual(result["snapshot"]["sessions"][-1]["reason"], reason)
+        self.assertEqual(result["backend_calls"], calls)
+        self.assertEqual(result["snapshot"]["generation"], 1)
+        self.assertEqual(result["lifecycle_calls"], [])
+        self.assertFalse(result["mismatch"])
+
+    def test_image_source_baseline_precedes_alias_and_mod(self):
+        city = "City_RoyalCityLuknalia"
+        result = self.execute("image-base-first", [{"worldmapflag": (80, 100), city: (132, 1352)}, {"Inn": (100, 400)}],
+            [dict(kind=0, x=152, y=1364)], aliases={city + ".png": "Alternate.png"},
+            extra_images=["Alternate"], mod_images={city: "Inn"})
+        self.assertEqual(result["snapshot"]["state"], "Completed", result)
+        self.assertEqual(result["backend_calls"], 1)
+        selected = result["image_sources"]["images"][city + ".png"]
+        self.assertEqual((selected["source"], selected["path"]), ("baseline", "image/" + city + ".png"))
+
+    def test_image_source_alias_precedes_mod_original(self):
+        city = "City_RoyalCityLuknalia"
+        result = self.execute("image-alias-first", [{"worldmapflag": (80, 100), "Alternate": (132, 1352)}, {"Inn": (100, 400)}],
+            [dict(kind=0, x=152, y=1364)], aliases={city + ".png": "Alternate.png"},
+            extra_images=["Alternate"], mod_only_images=[city], mod_images={city: city})
+        self.assertEqual(result["snapshot"]["state"], "Completed", result)
+        self.assertEqual(result["backend_calls"], 1)
+        selected = result["image_sources"]["images"][city + ".png"]
+        self.assertEqual((selected["source"], selected["path"]), ("baseline", "image/Alternate.png"))
+
+    def test_image_source_mod_is_copied_before_runtime(self):
+        city = "City_RoyalCityLuknalia"
+        result = self.execute("image-mod-snapshot", [{"worldmapflag": (80, 100), city: (132, 1352)}, {"Inn": (100, 400)}],
+            [dict(kind=0, x=152, y=1364)], mod_only_images=[city], mod_images={city: city}, mutate_mod_after_publish=True)
+        self.assertEqual(result["snapshot"]["state"], "Completed", result)
+        self.assertEqual(result["backend_calls"], 1)
+        self.assertFalse(result["mismatch"])
+        selected = result["image_sources"]["images"][city + ".png"]
+        self.assertEqual(selected["source"], "mod")
+        self.assertEqual(selected["sha256"], digest(self.root / "image-mod-snapshot/compiled/image" / (city + ".png")))
+        self.assertNotEqual(selected["sha256"], digest(self.root / "image-mod-snapshot/private-mod/image" / (city + ".png")))
+
+    def test_image_source_corrupt_baseline_is_not_hidden_by_mod(self):
+        city = "City_RoyalCityLuknalia"
+        result = self.execute("image-base-corrupt", [{"worldmapflag": (80, 100), city: (132, 1352)}], [],
+            bad_base_images=[city], mod_images={city: city})
+        self.assertEqual(result["snapshot"]["state"], "Failed", result)
+        self.assertEqual(result["backend_calls"], 0)
+        self.assertIn("WVD_TEMPLATE_DECODE_INVALID", str(result["snapshot"]))
+
+    def test_image_source_changed_mod_is_rejected_before_connect(self):
+        city = "City_RoyalCityLuknalia"
+        result = self.execute("image-mod-changed", [{"worldmapflag": (80, 100), city: (132, 1352)}], [],
+            mod_only_images=[city], mod_images={city: city}, corrupt_mod_before_publish=True)
+        self.assertEqual(result["connections"], 0)
+        self.assertEqual(result["backend_calls"], 0)
+        self.assertIn("HASH", result["publish_error"])
+
+    def test_uncertain_enemy_input_never_restarts_or_consumes(self):
+        detail = self.turn_screen(**{"spellskill/skillDetail": (350, 950), "next": (500, 300)})
+        result = self.execute("uncertain-enemy", [self.turn_screen(), detail,
+            {"dungFlag": (50, 150), "retry": (400, 800)}],
+            [dict(kind=0, x=266, y=1054), dict(kind=0, x=440, y=392)],
+            workflow="turn", profile=self.turn_profile(), attach_recovery=True, force_restart=True, max_crashes=0)
+        self.assert_uncertain_effect(result, "combat.skill_outcome_unconfirmed", 2)
+        business = result["snapshot"]["business"]
+        self.assertTrue(business["has_prepared_skill"])
+        self.assertEqual(len(business["strategy"]["current"]["skill_settings"]), 2)
+
+    def test_uncertain_defend_is_not_a_normal_return(self):
+        result = self.execute("uncertain-defend", [self.turn_screen(),
+            {**self.turn_screen("B"), "retry": (400, 800)}], [dict(kind=0, x=513, y=1200)],
+            workflow="turn", profile=self.turn_profile(defend=True), attach_recovery=True)
+        self.assert_uncertain_effect(result, "combat.skill_outcome_unconfirmed", 1)
+        self.assertTrue(result["snapshot"]["business"]["has_prepared_skill"])
+
+    def test_uncertain_heal_and_return_do_not_repeat_recover(self):
+        trait = {"trait": (200, 300)}
+        for during_back in (False, True):
+            with self.subTest(during_back=during_back):
+                frames = [{"dungFlag": (50, 150)}, trait, {"recover": (250, 850)}]
+                inputs = [dict(kind=0, x=36, y=1425), dict(kind=0, x=830, y=850), dict(kind=0, x=600, y=1200)]
+                if during_back:
+                    frames.append(trait)
+                    inputs.append(dict(kind=5, key=4))
+                frames.append({"dungFlag": (50, 150), "retry": (400, 800)})
+                result = self.execute("uncertain-heal-" + str(during_back), frames, inputs,
+                    workflow="heal", profile={"RECOVER_WHEN_BEGINNING": True}, attach_recovery=True,
+                    force_restart=True, max_crashes=0)
+                self.assert_uncertain_effect(result, "supply.healing_outcome_unconfirmed", len(inputs))
+                self.assertTrue(result["snapshot"]["business"]["healing_required"])
+                self.assertEqual(result["snapshot"]["business"]["healing_sequence"], 1)
+
+    def test_uncertain_disarm_does_not_count_or_restart(self):
+        result = self.execute("uncertain-disarm", [{"whowillopenit": (330, 450)},
+            {"chestOpening": (330, 450)}, {"dungFlag": (50, 150), "retry": (400, 800)}],
+            [dict(kind=0, x=258, y=1161), dict(kind=0, x=515, y=934)],
+            workflow="chest", character=1, attach_recovery=True, force_restart=True, max_crashes=0)
+        self.assert_uncertain_effect(result, "chest.disarm_outcome_unconfirmed", 2)
+        self.assertEqual(result["snapshot"]["business"]["chests"], 0)
+
+    def test_uncertain_backend_reject_remains_failed(self):
+        detail = self.turn_screen(**{"spellskill/skillDetail": (350, 950), "next": (500, 300)})
+        result = self.execute("uncertain-reject", [self.turn_screen(), detail],
+            [dict(kind=0, x=266, y=1054), dict(kind=0, x=440, y=392, reject=True)],
+            workflow="turn", profile=self.turn_profile(), attach_recovery=True)
+        self.assertEqual(result["snapshot"]["state"], "Failed", result)
+        self.assertEqual(result["backend_calls"], 2)
+        self.assertEqual(result["lifecycle_calls"], [])
+        self.assertTrue(result["snapshot"]["business"]["has_prepared_skill"])
 
     def test_common_title_attention_download_are_normal_inputs(self):
         frames = [{"boot_title_logo": (200, 350)}, {"boot_attention": (300, 450)},

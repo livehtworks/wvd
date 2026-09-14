@@ -501,6 +501,48 @@ def update_departure(evidence):
     print("Departure and inn receipt subflow recorded; complete task execution statuses unchanged.")
 
 
+def update_boundaries(evidence):
+    """只登记本轮实际链路，保留已存在的任务/子流程范围，不重建整张历史叠加表。"""
+    expected = {
+        "heal-rotate-seek": ("Completed", 7), "image-base-first": ("Completed", 1),
+        "image-alias-first": ("Completed", 1), "image-mod-snapshot": ("Completed", 1),
+        "image-base-corrupt": ("Failed", 0), "uncertain-reject": ("Failed", 2),
+        "uncertain-defend": ("Interrupted", 1), "uncertain-enemy": ("Interrupted", 2),
+        "uncertain-disarm": ("Interrupted", 2), "uncertain-heal-False": ("Interrupted", 3),
+        "uncertain-heal-True": ("Interrupted", 4),
+    }
+    verify_workflows(evidence, expected)
+    for name in expected:
+        result = read(evidence / name / "output.json")
+        if result["lifecycle_calls"] or result["snapshot"]["generation"] != 1:
+            raise ValueError("M4_BOUNDARY_UNEXPECTED_RECOVERY:" + name)
+    changed = read(evidence / "image-mod-changed/output.json")
+    if changed["connections"] or changed["backend_calls"] or "HASH" not in changed["publish_error"]:
+        raise ValueError("M4_MOD_CHANGED_NOT_REJECTED")
+    for name, owner in (("image-base-first", "baseline"), ("image-alias-first", "baseline"), ("image-mod-snapshot", "mod")):
+        selected = read(evidence / name / "output.json")["image_sources"]["images"]["City_RoyalCityLuknalia.png"]
+        if selected["source"] != owner:
+            raise ValueError("M4_IMAGE_SOURCE_MISMATCH:" + name)
+    path = ROOT / "docs/migration/m4-implementation-map.json"
+    document = read(path)
+    if document["counts"] != {"function": 250, "config": 33, "task": 58}:
+        raise ValueError("M4_BOUNDARY_INVENTORY_MISMATCH")
+    for row in document["entries"]:
+        if row["legacy_symbol"] == "LoadTemplateImage":
+            row.update(implementation="native/games/wvd/vision/asset_resolver.cpp",
+                entry="vision::resolve_image_source / AssetResolver::load",
+                supporting_implementations=["native/games/wvd/tasks/workflow_session.cpp"],
+                implementation_status="PARTIAL", implementation_extent="FROZEN_IMAGE_IMPORT_AND_RESOLUTION",
+                offline_status="PASS", evidence_report="../m4-image-import-validation.md",
+                verification_scope="基线/别名/mod 来源与封存后真实 Maa 输入；不是用户 mod 或真实图片质量验收",
+                remaining="真实用户图片 mod 未导入验证；完整任务验收未齐。坏图按本包 Error 契约处理，不隐式后备。")
+        if row["legacy_symbol"] in ("Factory.StateCombat", "Factory.StateChest", "Factory.StateDungeon"):
+            row["boundary_validation"] = {"status": "PASS", "evidence_report": "../m4-effect-interruption-validation.md",
+                "scope": "明确副作用后覆盖层停止，不重放、不消费，不是全部恢复窗口已闭合"}
+    write(path, document)
+    print("Effect and image-source boundaries recorded; complete task statuses unchanged.")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--data-evidence", type=Path)
@@ -516,8 +558,9 @@ if __name__ == "__main__":
     parser.add_argument("--iteration-evidence", type=Path)
     parser.add_argument("--common-evidence", type=Path)
     parser.add_argument("--interruption-evidence", type=Path)
+    parser.add_argument("--boundaries-evidence", type=Path)
     args = parser.parse_args()
-    if not any((args.data_evidence, args.combat_evidence, args.navigation_evidence, args.encounter_evidence, args.healing_evidence, args.dungeon_route_evidence, args.departure_evidence, args.iteration_evidence, args.common_evidence, args.interruption_evidence)):
+    if not any((args.data_evidence, args.combat_evidence, args.navigation_evidence, args.encounter_evidence, args.healing_evidence, args.dungeon_route_evidence, args.departure_evidence, args.iteration_evidence, args.common_evidence, args.interruption_evidence, args.boundaries_evidence)):
         parser.error("an evidence group is required")
     if args.data_evidence:
         generate(args.data_evidence, args.state_evidence, args.plan_evidence, args.workflow_evidence)
@@ -541,6 +584,8 @@ if __name__ == "__main__":
         update_common(args.common_evidence)
     if args.interruption_evidence:
         update_interruption(args.interruption_evidence)
+    if args.boundaries_evidence:
+        update_boundaries(args.boundaries_evidence)
     if args.dungeon_route_evidence:
         if not args.plan_evidence:
             parser.error("--dungeon-route-evidence requires --plan-evidence")

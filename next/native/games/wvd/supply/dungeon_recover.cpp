@@ -4,7 +4,9 @@ namespace wvd::games::supply {
 tasks::CompiledWorkflow recover_in_dungeon() {
     using C = tasks::PipelineCompiler;
     using J = nlohmann::json;
-    C graph("supply.dungeon_recover");
+    // 旧 31 次开角色每次已等待 2 秒，尚未计入识别、寻恢复和返回，不能继承 60 秒默认。
+    // 四分钟是本子图总预算，不延长输入帧 TTL；每个节点次数和取消门禁仍独立生效。
+    C graph("supply.dungeon_recover", std::chrono::seconds{240});
     const J combat{{"mode", "combat_active"}};
     const auto chest = C::any({C::image("chestFlag"), C::image("whowillopenit"), C::image("chestOpening")});
     const auto interrupted = C::any({combat, chest, C::image("RiseAgain")});
@@ -46,12 +48,15 @@ tasks::CompiledWorkflow recover_in_dungeon() {
     graph.fixed_click("Recover", C::all({panel, recover}), post, {600, 1200},
         {"Encounter", "Recovered", "Back0"});
     graph.hit_limit("Recover", 1);
+    graph.stop_if_interrupted_after("Recover", "supply.healing_outcome_unconfirmed");
     graph.delay_after("Recover", 1000);
     // 返回只在仍有角色面板证据时执行；已回地下城则立即停，最多五次返回。
     for (int i = 0; i < 5; ++i) {
         graph.back("Back" + std::to_string(i), panel, post,
             {"Encounter", "Recovered", i < 4 ? "Back" + std::to_string(i + 1) : "ReturnFailed"});
         graph.hit_limit("Back" + std::to_string(i), 1);
+        // Recover 已经点过，返回途中同样不能清弹窗后从 Recover 再来一次。
+        graph.stop_if_interrupted_after("Back" + std::to_string(i), "supply.healing_outcome_unconfirmed");
         graph.delay_after("Back" + std::to_string(i), 300);
     }
     graph.recovery("ReturnFailed", "supply.recover_panel_not_closed");

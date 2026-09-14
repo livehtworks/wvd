@@ -2131,7 +2131,12 @@
       "evidence_report": "../m4-native-child-validation.md",
       "supporting_implementations": [
         "native/games/wvd/combat/encounter.cpp"
-      ]
+      ],
+      "boundary_validation": {
+        "status": "PASS",
+        "evidence_report": "../m4-effect-interruption-validation.md",
+        "scope": "明确副作用后覆盖层停止，不重放、不消费，不是全部恢复窗口已闭合"
+      }
     },
     {
       "inventory_id": "function:src/script.py:Factory.StateCombat.DismissSkillPopupBeforeAuto:2505",
@@ -2545,7 +2550,12 @@
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "remaining": "本轮未承接此完整业务；固定旧入口仍为唯一生产实现。"
+      "remaining": "本轮未承接此完整业务；固定旧入口仍为唯一生产实现。",
+      "boundary_validation": {
+        "status": "PASS",
+        "evidence_report": "../m4-effect-interruption-validation.md",
+        "scope": "明确副作用后覆盖层停止，不重放、不消费，不是全部恢复窗口已闭合"
+      }
     },
     {
       "inventory_id": "function:src/script.py:Factory.StateChest.CheckChestExitState:3001",
@@ -2611,7 +2621,12 @@
         "native/games/wvd/supply/dungeon_recover.cpp",
         "native/games/wvd/combat/encounter.cpp",
         "native/games/wvd/chest/chest.cpp"
-      ]
+      ],
+      "boundary_validation": {
+        "status": "PASS",
+        "evidence_report": "../m4-effect-interruption-validation.md",
+        "scope": "明确副作用后覆盖层停止，不重放、不消费，不是全部恢复窗口已闭合"
+      }
     },
     {
       "inventory_id": "function:src/script.py:Factory.StateDungeon.TargetPointComplete:3120",
@@ -4621,13 +4636,19 @@
         "M4-IMPORT"
       ],
       "planned_owner_from_baseline": "native/storage",
-      "implementation": null,
-      "entry": null,
-      "implementation_status": "NOT_STARTED",
-      "offline_status": "NOT_RUN",
+      "implementation": "native/games/wvd/vision/asset_resolver.cpp",
+      "entry": "vision::resolve_image_source / AssetResolver::load",
+      "implementation_status": "PARTIAL",
+      "offline_status": "PASS",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "remaining": "本轮未承接此完整业务；固定旧入口仍为唯一生产实现。"
+      "remaining": "真实用户图片 mod 未导入验证；完整任务验收未齐。坏图按本包 Error 契约处理，不隐式后备。",
+      "supporting_implementations": [
+        "native/games/wvd/tasks/workflow_session.cpp"
+      ],
+      "implementation_extent": "FROZEN_IMAGE_IMPORT_AND_RESOLUTION",
+      "evidence_report": "../m4-image-import-validation.md",
+      "verification_scope": "基线/别名/mod 来源与封存后真实 Maa 输入；不是用户 mod 或真实图片质量验收"
     },
     {
       "inventory_id": "function:src/utils.py:reflectImage:455",

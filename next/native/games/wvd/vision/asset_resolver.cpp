@@ -1,25 +1,40 @@
 #include "asset_resolver.hpp"
 #include "maafw/preflight.hpp"
 #include "platform/windows/bundle_lease.hpp"
+#include <algorithm>
 #include <fstream>
 #include <opencv2/imgcodecs.hpp>
 
 namespace wvd::games::vision {
+ImageSource resolve_image_source(const maafw::Bundle &baseline, const nlohmann::json &aliases,
+                                 const std::string &name, const maafw::Bundle *mod) {
+    if (!aliases.is_object())
+        throw std::runtime_error("WVD_ALIASES_INVALID");
+    const auto original = name.ends_with(".png") ? name : name + ".png";
+    platform::BundleLease::checked_relative("image/" + original);
+    auto exists = [](const maafw::Bundle &bundle, const std::string &path) {
+        return std::any_of(bundle.files.begin(), bundle.files.end(),
+                           [&](const auto &file) { return file.relative_path == "image/" + path; });
+    };
+    if (exists(baseline, original))
+        return {&baseline, "image/" + original};
+    const auto alternate = aliases.contains(original) ? aliases.at(original).get<std::string>() : original;
+    platform::BundleLease::checked_relative("image/" + alternate);
+    if (exists(baseline, alternate))
+        return {&baseline, "image/" + alternate};
+    // mod 原名沿用旧扩展目录的含义；显式别名只在该原名也缺失时作为后备。
+    if (mod && exists(*mod, original))
+        return {mod, "image/" + original};
+    if (mod && exists(*mod, alternate))
+        return {mod, "image/" + alternate};
+    // 缺图仍交给统一 manifest 校验报告，不降级成 NoHit。
+    return {&baseline, "image/" + alternate};
+}
 AssetResolver::AssetResolver(const maafw::Bundle &baseline, const nlohmann::json &aliases,
                              maafw::RecognitionCache &cache, const maafw::Bundle *mod)
     : baseline_(baseline), aliases_(aliases), cache_(cache), mod_(mod) {}
 cv::Mat AssetResolver::load(const std::string &name) {
-    auto path = name.ends_with(".png") ? name : name + ".png";
-    if (aliases_.contains(path))
-        path = aliases_.at(path).get<std::string>();
-    const auto relative = "image/" + path;
-    const maafw::Bundle *owner = &baseline_;
-    auto exists = [&](const maafw::Bundle &bundle) {
-        return std::any_of(bundle.files.begin(), bundle.files.end(),
-                           [&](const auto &file) { return file.relative_path == relative; });
-    };
-    if (!exists(*owner) && mod_ && exists(*mod_))
-        owner = mod_;
+    const auto [owner, relative] = resolve_image_source(baseline_, aliases_, name, mod_);
     // 即使有缓存也复核当前快照。缺图、坏图或修改后文件不能成为正常 NoHit。
     maafw::verify_file(*owner, relative);
     if (!owner->lease)

@@ -314,6 +314,8 @@ int main(int argc, char **argv) {
             }
             throw std::runtime_error("WORKFLOW_UNKNOWN");
         }();
+        if (config.value("attach_recovery", false))
+            workflow = games::recovery::with_boot_recovery(workflow, config.value("allow_download", true));
         if (config.contains("invalid")) {
             if (config["invalid"] == "raw-input")
                 workflow.nodes["Entry"]["action"] = "Click";
@@ -375,6 +377,13 @@ int main(int argc, char **argv) {
         maafw::Bundle bundle{root, "m4-causal-1", {}};
         for (const auto &file : config.at("files"))
             bundle.files.push_back({file.at("path"), file.at("sha256")});
+        std::optional<maafw::Bundle> mod;
+        if (config.contains("mod_bundle")) {
+            const auto &input = config.at("mod_bundle");
+            mod.emplace(maafw::Bundle{maafw::path_from_utf8(input.at("root")), "private-mod-fixture", {}});
+            for (const auto &file : input.at("files"))
+                mod->files.push_back({file.at("path"), file.at("sha256")});
+        }
         auto device = std::make_shared<WorkflowDevice>();
         for (const auto &frame : config.at("frames"))
             device->frames.push_back(bytes(maafw::path_from_utf8(frame)));
@@ -387,7 +396,7 @@ int main(int argc, char **argv) {
                         device->time_event.at("delay_ms").get<int>() > 0 &&
                         device->time_event.at("delay_ms").get<int>() <= 10000, "FIXTURE_TIME_EVENT_INVALID");
         }
-        const bool recovering = config.at("workflow") == "recover";
+        const bool recovering = config.at("workflow") == "recover" || config.value("attach_recovery", false);
         device->allow_lifecycle = recovering && !config.value("no_lifecycle_port", false);
         device->stale_lifecycle = config.value("stale_lifecycle", false);
         device->wrong_instance = config.value("other_lifecycle_instance", false);
@@ -408,7 +417,7 @@ int main(int argc, char **argv) {
         try {
             session = games::tasks::publish_workflow(workflow, bundle, *registry,
                                                      root.parent_path() / "compiled",
-                                                     config.value("aliases", J::object()));
+                                                     config.value("aliases", J::object()), mod ? &*mod : nullptr);
         } catch (const std::exception &e) {
             J output{{"publish_error", e.what()},
                      {"backend_calls", device->calls.load()},
@@ -416,6 +425,13 @@ int main(int argc, char **argv) {
                      {"loaded_modules", loaded_vision_modules()}};
             std::ofstream(maafw::path_from_utf8(config.at("output"))) << output.dump(2);
             return 0;
+        }
+        J image_sources;
+        if (mod) {
+            std::ifstream(session.bundle.root / "parameters/image-sources.json") >> image_sources;
+            if (config.value("mutate_mod_after_publish", false))
+                for (const auto &file : mod->files)
+                    std::ofstream(mod->root / maafw::path_from_utf8(file.relative_path), std::ios::binary) << "changed fixture";
         }
         contracts::InputPolicy policy{
             "m2-offline",
@@ -510,6 +526,7 @@ int main(int argc, char **argv) {
                  {"kind", workflow.kind},
                  {"node_count", workflow.nodes.size()},
                  {"time_limit_ms", workflow.time_limit.count()},
+                 {"image_sources", image_sources},
                  {"lifecycle_calls", device->lifecycle_calls},
                  {"lifecycle_stop", lifecycle_stop},
                  {"time_event_count", device->time_event_count},

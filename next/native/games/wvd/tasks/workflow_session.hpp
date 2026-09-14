@@ -8,5 +8,6 @@ runtime::SessionDefinition publish_workflow(const CompiledWorkflow &workflow,
                                             const maafw::Bundle &source,
                                             const runtime::BehaviorRegistry &registry,
                                             const std::filesystem::path &destination,
-                                            const nlohmann::json &aliases);
+                                            const nlohmann::json &aliases,
+                                            const maafw::Bundle *mod = nullptr);
 } // namespace wvd::games::tasks

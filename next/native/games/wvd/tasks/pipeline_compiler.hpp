@@ -1,5 +1,6 @@
 #pragma once
 #include <chrono>
+#include <map>
 #include <json.hpp>
 #include <string>
 #include <vector>
@@ -56,6 +57,8 @@ class PipelineCompiler {
     // 显式启用本作用域的普通插入出口；不改子图、不吞掉错误或伪造业务完成。
     // 调用者必须把 BlockedExit 绑定到重新观察入口；独立运行则报告需要外层处理。
     void interrupt_on(nlohmann::json condition, std::string reason);
+    // 此节点已可能产生副作用。后继遇覆盖层只能报告结果未确认，不能正常返回后重放。
+    void stop_if_interrupted_after(const std::string &name, std::string reason);
     // 固定游戏行为 binding；不开放任意动作/任意实现名称。
     void combat_step(const std::string &name, const nlohmann::json &condition,
                      nlohmann::json parameters, nlohmann::json next);
@@ -66,6 +69,7 @@ class PipelineCompiler {
     std::vector<std::string> local_nodes_;
     nlohmann::json interruption_;
     std::string interruption_reason_;
+    std::map<std::string, std::string> uncertain_actions_;
     void compile_interruption();
     void add(const std::string &name, nlohmann::json node);
     nlohmann::json request(const nlohmann::json &condition) const;

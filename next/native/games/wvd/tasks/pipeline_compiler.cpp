@@ -302,9 +302,18 @@ void PipelineCompiler::interrupt_on(J condition, std::string reason) {
     interruption_ = std::move(condition);
     interruption_reason_ = std::move(reason);
 }
+void PipelineCompiler::stop_if_interrupted_after(const std::string &name, std::string reason) {
+    require(workflow_.nodes.contains(name) &&
+                std::find(local_nodes_.begin(), local_nodes_.end(), name) != local_nodes_.end() &&
+                workflow_.nodes.at(name).value("custom_action", "") == "GuardedAction" && !reason.empty(),
+            "COMPILE_UNCERTAIN_ACTION_INVALID");
+    require(uncertain_actions_.emplace(name, std::move(reason)).second, "COMPILE_UNCERTAIN_ACTION_DUPLICATE");
+}
 void PipelineCompiler::compile_interruption() {
-    if (interruption_.is_null())
+    if (interruption_.is_null()) {
+        require(uncertain_actions_.empty(), "COMPILE_INTERRUPTION_REQUIRED");
         return;
+    }
     require(!workflow_.nodes.contains("Interrupt") && !workflow_.nodes.contains("BlockedExit"),
             "COMPILE_INTERRUPTION_NAME_CONFLICT");
     const auto clear = absent(interruption_);
@@ -331,9 +340,18 @@ void PipelineCompiler::compile_interruption() {
             auto &confirmation = node["custom_action_param"]["confirmation"]["parameters"];
             confirmation = all({clear, confirmation});
         }
-        if (node.contains("next") && !node.at("next").empty())
-            node["next"].insert(node["next"].begin(), "Interrupt");
+        if (node.contains("next") && !node.at("next").empty()) {
+            // 已点出技能/恢复等动作时，不把覆盖层当成可重新入场的普通中断。
+            // 专属出口保留动作事件和未消费状态；调用者不会将它绑定为正常子返回。
+            node["next"].insert(node["next"].begin(),
+                uncertain_actions_.contains(name) ? name + "OutcomeBlocked" : "Interrupt");
+        }
         // on_error 不作正常返回：原生输入拒绝、识别 Error 和预算失败仍须失败/恢复。
+    }
+    for (const auto &[name, reason] : uncertain_actions_) {
+        observe(name + "OutcomeBlocked", interruption_, {name + "OutcomeUnconfirmed"});
+        hit_limit(name + "OutcomeBlocked", 128);
+        recovery(name + "OutcomeUnconfirmed", reason);
     }
     observe("Interrupt", interruption_, {"BlockedExit"});
     hit_limit("Interrupt", 128);

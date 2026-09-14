@@ -5,6 +5,7 @@
 #include "games/wvd/tasks/dungeon_route.hpp"
 #include "games/wvd/tasks/dungeon_iteration.hpp"
 #include "games/wvd/navigation/dungeon_entry.hpp"
+#include "games/wvd/vision/asset_resolver.hpp"
 #include "maafw/buffers.hpp"
 #include <fstream>
 #include <iostream>
@@ -78,8 +79,10 @@ int main(int argc, char **argv) {
                     throw std::runtime_error("M4_COMPILE_SCOPE_AMBIGUOUS");
                 const auto manifest = read(maafw::path_from_utf8(config.at(iterations ? "compile_iterations_manifest" : routes ? "compile_routes_manifest" : "compile_entries_manifest")));
                 std::set<std::string> files, images;
+                maafw::Bundle manifest_bundle;
                 for (const auto &file : manifest.at("files")) {
                     const auto path = file.at("path").get<std::string>();
+                    manifest_bundle.files.push_back({path, file.at("sha256")});
                     files.insert(path);
                     if (path.starts_with("image/"))
                         images.insert(path.substr(6));
@@ -96,8 +99,8 @@ int main(int argc, char **argv) {
                                               : games::navigation::enter_dungeon(plan);
                     J missing = J::array();
                     for (const auto &image : graph.images) {
-                        const auto selected = aliases.contains(image) ? aliases.at(image).get<std::string>() : image;
-                        if (!files.contains("image/" + selected))
+                        const auto selected = games::vision::resolve_image_source(manifest_bundle, aliases, image);
+                        if (!files.contains(selected.relative_path))
                             missing.push_back(image);
                     }
                     result[key].push_back({{"task_id", task.id}, {"nodes", graph.nodes},

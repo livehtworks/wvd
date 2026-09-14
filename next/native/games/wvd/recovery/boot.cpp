@@ -15,7 +15,12 @@ std::optional<runtime::SessionDefinition> decide(const contracts::SessionResult 
                                                 const runtime::SessionDefinition &previous, const J &p) {
     if (result.end != contracts::SessionEnd::RecoveryRequired || !result.quiescent)
         return std::nullopt;
-    if (result.reason == "boot.download_permission_missing")
+    // 重启无法判断刚才的副作用是否已生效。对此类明确的业务歧义，不升级、不重发。
+    if (result.reason == "boot.download_permission_missing" ||
+        result.reason == "combat.skill_outcome_unconfirmed" ||
+        result.reason == "supply.healing_outcome_unconfirmed" ||
+        result.reason == "chest.disarm_outcome_unconfirmed" ||
+        result.reason == "departure.inn_payment_unconfirmed")
         return std::nullopt;
     if (!result.business.is_object() || result.business.value("kind", "") != "wvd" ||
         !result.business.at("lifecycle_recovery_active").is_boolean())

@@ -147,6 +147,8 @@ tasks::CompiledWorkflow take_turn(const J &profile, const std::set<std::string> 
             graph.fixed_click(prefix + "Defend", C::all({menu, actor}), C::any({clear, ended}), {513, 1200},
                               {prefix + "Success", prefix + "DefendConfirm"});
             graph.fixed_click(prefix + "DefendConfirm", C::all({menu, actor}), advanced, {513, 1200}, {prefix + "Success"});
+            graph.stop_if_interrupted_after(prefix + "Defend", "combat.skill_outcome_unconfirmed");
+            graph.stop_if_interrupted_after(prefix + "DefendConfirm", "combat.skill_outcome_unconfirmed");
             graph.combat_step(prefix + "Success", advanced, {{"operation", "success"}, {"index", index}}, {"Terminal"});
             continue;
         }
@@ -184,13 +186,15 @@ tasks::CompiledWorkflow take_turn(const J &profile, const std::set<std::string> 
             graph.click(s + "Level1", C::all({casting, lv1, C::absent(wanted)}), lv1, casting, target_choices);
             graph.observe(s + "DefaultLevel", C::all({casting, C::absent(lv1)}), target_choices);
             const auto recipient = support_position(skill.value("target_var", ""));
-            if (!recipient.is_null())
+            if (!recipient.is_null()) {
                 graph.fixed_click(s + "Support", C::all({casting, support}), C::any({casting, finished, errors}), recipient,
                                   {prefix + "Success", s + "Confirm", s + "ResourceError"});
-            else
+                graph.stop_if_interrupted_after(s + "Support", "combat.skill_outcome_unconfirmed");
+            } else
                 graph.observe(s + "Support", C::all({casting, support}), {s + "Confirm", automatic});
             graph.click(s + "Confirm", casting, ok, C::any({casting, finished, errors}),
                         {prefix + "Success", s + "ResourceError", s + "StillDetail"});
+            graph.stop_if_interrupted_after(s + "Confirm", "combat.skill_outcome_unconfirmed");
             const auto target = J{{"mode", "skill_target"}, {"portraits", portraits}};
             const auto enemy = C::all({casting, C::absent(ok), C::absent(support)});
             const std::vector<J> offsets{{-80,80}, {0,80}, {80,80}, {-120,140}, {-40,140}, {40,140}, {120,140},
@@ -203,6 +207,7 @@ tasks::CompiledWorkflow take_turn(const J &profile, const std::set<std::string> 
                 graph.click(name, enemy, target, C::any({casting, finished, errors}), next, offsets[point]);
                 graph.allowed_area(name, {1, 260, 898, 641});
                 graph.hit_limit(name, 1);
+                graph.stop_if_interrupted_after(name, "combat.skill_outcome_unconfirmed");
                 graph.delay_after(name, 200);
             }
             graph.observe(s + "Missing", C::all({enemy, C::absent(target)}), {automatic});
