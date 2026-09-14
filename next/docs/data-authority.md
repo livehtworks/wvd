@@ -40,6 +40,7 @@
 | snapshot.business.combat_sequence/chest_sequence、revival_sequence/pending/revivals | 本 Run 遭遇身份与复活确认；序号不是成功统计，也不授权重放 | WvdRunState 根据新帧 WvdConfirm 事件更新 | 失败遭遇不重用 ID；复活图和外层恢复读取，已有成功计数不倒扣；不是跨进程断点 |
 | WvdRunState 的 chest::Selection、snapshot.business.chest_character/available_mask/character_attempts | 当前宝箱候选池与选择意图，不含坐标或图片 | WvdChest 同帧恐惧观察更新候选池，受控输入后由 WvdConfirm 登记尝试 | 开箱图只读选路；切换代次清意图，新箱重置候选池；编号不能代替新帧点击许可 |
 | snapshot.business.death_prompt_sequence/death_prompt_pending | 本 Run 队友死亡提示的观察/清除回执，不等于复活结果 | 通用阻塞消费者经新帧 WvdConfirm 更新；首次观察重置策略，重复观察不重置 | 普通插入返回后核对清除；不修改胜场、复活或持久化配置 |
+| snapshot.business.suicide_requested/party_defeat_sequence | 对应旧 _SUICIDE 置位事实及其观察序号；不是新的自杀动作策略 | 多人死亡提示 WvdConfirm 置位，RiseAgain 的已确认复活复位；游戏重启保留 | 仅摘要/诊断消费；固定旧源未读取此字段来决定战斗动作，新版同样不凭它新增输入 |
 | docs/migration/m4-implementation-map.json、m4-task-status.json | 当前实现叠加和完整任务分母；不是执行计划 | m4_inventory.py 对照固定索引与实际数据测试结果 | 审核；DATA_BOUND_ONLY 不能解释为任务已运行 |
 | .local/m3fix-m4-*、m3-fixes-*、m4-data-* | 本轮隔离配置、合成图、失败复现与测试结果 | 工作包执行脚本、原生检查入口 | 私有审核证据；公开包仅收脱敏报告/索引，不包含配置原文或真实图片 |
 

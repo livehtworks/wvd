@@ -122,6 +122,7 @@ void WvdRunState::resurrected() {
         pending_chest_ = false;
     last_encounter_ = Encounter::None;
     revival_pending_ = false;
+    suicide_requested_ = false;
     ++revivals_;
     recover_after_rez_ = true;
     healing_active_ = false;
@@ -223,6 +224,8 @@ std::string WvdRunState::confirmation_id(const std::string &operation, const std
         id += ":death_prompt:" + std::to_string(death_prompt_sequence_ + (death_prompt_pending_ ? 0 : 1));
     else if (event == "party_death_cleared")
         id += ":death_prompt:" + std::to_string(death_prompt_sequence_);
+    else if (event == "party_defeat_observed")
+        id += ":party_defeat:" + std::to_string(party_defeat_sequence_ + (suicide_requested_ ? 0 : 1));
     else if (event == "chest_character_attempted")
         id += ":chest:" + std::to_string(chest_sequence_) + ":selection:" +
               std::to_string(chest_selection_.attempts() + (chest_selection_.selected() ? 1 : 0));
@@ -296,6 +299,11 @@ bool WvdRunState::confirm_event(const std::string &operation, const std::string 
         if (!death_prompt_pending_)
             throw std::runtime_error("PARTY_DEATH_NOT_OBSERVED");
         death_prompt_pending_ = false;
+    }
+    else if (event == "party_defeat_observed") {
+        if (!suicide_requested_)
+            ++party_defeat_sequence_;
+        suicide_requested_ = true;
     }
     else if (event == "inn_rest_completed") {
         // 换 generation 或换普通段均保留已住宿事实；真正再次入本才开始新补给周期。
@@ -379,6 +387,8 @@ J WvdRunState::summarize() const {
             {"revivals", revivals_},
             {"death_prompt_sequence", death_prompt_sequence_},
             {"death_prompt_pending", death_prompt_pending_},
+            {"suicide_requested", suicide_requested_},
+            {"party_defeat_sequence", party_defeat_sequence_},
             {"met_encounter", met_encounter_},
             {"need_initial_recover", need_initial_recover_},
             {"recover_after_rez", recover_after_rez_},

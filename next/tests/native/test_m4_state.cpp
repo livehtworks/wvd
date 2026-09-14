@@ -297,6 +297,17 @@ J direct_contract(const J &profile) {
     party_death.confirm_event(clear_id, "party_death_cleared", 2, 3);
     require(!party_death.confirm_event(clear_id, "party_death_cleared", 2, 4), "DEATH_CLEAR_REPLAYED");
     result["party_death_contract"] = party_death.summary();
+    const auto defeat_id = party_death.confirmation_id("party.defeat", "party_defeat_observed");
+    party_death.confirm_event(defeat_id, "party_defeat_observed", 2, 5);
+    require(party_death.confirmation_id("party.defeat", "party_defeat_observed") == defeat_id, "DEFEAT_ID_CHANGED");
+    require(!party_death.confirm_event(defeat_id, "party_defeat_observed", 2, 6), "DEFEAT_OBSERVATION_REPLAYED");
+    party_death.restart_game();
+    require(party_death.summary().at("suicide_requested").get<bool>(), "RESTART_INVENTED_SUICIDE_RESET");
+    party_death.confirm_event(party_death.confirmation_id("revival.observe", "revival_observed"), "revival_observed", 2, 7);
+    party_death.confirm_event(party_death.confirmation_id("revival.complete", "resurrected"), "resurrected", 2, 8);
+    require(!party_death.confirm_event(defeat_id, "party_defeat_observed", 2, 9), "OLD_DEFEAT_REOPENED");
+    require(party_death.confirmation_id("party.defeat", "party_defeat_observed") != defeat_id, "NEXT_DEFEAT_REUSED_ID");
+    result["party_defeat_after_revival"] = party_death.summary();
     {
         games::chest::Selection selection;
         selection.prepare({true, false, true, true, true, true}, 1, 42);

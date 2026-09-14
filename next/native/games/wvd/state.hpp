@@ -70,6 +70,8 @@ class WvdRunState final : public contracts::BusinessRunState {
     // 队友死亡提示不等于全队复活：只重置策略，不撤销遭遇计数或设置战后恢复。
     std::size_t death_prompt_sequence_{};
     bool death_prompt_pending_{};
+    bool suicide_requested_{};
+    std::size_t party_defeat_sequence_{};
     chest::Selection chest_selection_;
 };
 void register_wvd_state(runtime::BehaviorRegistry &registry);

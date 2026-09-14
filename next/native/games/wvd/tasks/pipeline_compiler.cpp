@@ -21,14 +21,17 @@ void collect_images(const J &value, std::set<std::string> &images) {
             collect_images(vision::boot_probes(mode == "boot_post"), images);
         if (mode == "blocking_screen")
             collect_images(vision::blocking_probes(), images);
-        if (mode == "party_death") {
+        if (mode == "party_death" || mode == "party_defeat") {
             images.insert("someonedead.png");
+            if (mode == "party_defeat")
+                images.insert("multipeopledead.png");
             collect_images(vision::boot_probes(false), images);
             collect_images(J{{"mode", "pause"}}, images);
             collect_images(vision::blocking_probes(false), images);
         }
         if (mode == "party_death_post") {
             collect_images(J{{"mode", "party_death"}}, images);
+            collect_images(J{{"mode", "party_defeat"}}, images);
             images.insert("RiseAgain.png");
             collect_images(vision::boot_probes(true), images);
         }
@@ -493,7 +496,7 @@ void PipelineCompiler::confirm(const std::string &name, const std::string &opera
     const std::set<std::string> events{"target_completed", "dungeon_entered", "combat_observed",
                                       "chest_observed", "dungeon_resumed", "dungeon_completed", "revival_observed", "resurrected", "game_restarted",
                                       "healing_requested", "healing_completed", "inn_rest_completed", "party_reassembled", "chest_character_attempted",
-                                      "party_death_observed", "party_death_cleared"};
+                                      "party_death_observed", "party_death_cleared", "party_defeat_observed"};
     require(events.contains(event) && !operation.empty() && operation.size() <= 128,
             "COMPILE_BUSINESS_EVENT_INVALID");
     require(step.is_null() || (step.is_number_integer() && step >= 0 && step <= 4096),

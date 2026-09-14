@@ -28,4 +28,25 @@ tasks::CompiledWorkflow dismiss_party_death() {
     graph.recovery("UnchangedExit", "party.death_prompt_unchanged");
     return graph.finish();
 }
+tasks::CompiledWorkflow acknowledge_party_defeat() {
+    using C = tasks::PipelineCompiler;
+    using J = nlohmann::json;
+    C graph("recovery.party_defeat", std::chrono::seconds{90});
+    const J defeat{{"mode", "party_defeat"}}, known{{"mode", "party_death_post"}};
+    graph.route("Entry", {"Observed"});
+    // 旧 _SUICIDE 只有观察置位与 RiseAgainReset 复位，没有战斗消费者。
+    // 保存该事实即可，不能凭变量名擅自新增战斗/死亡操作。
+    graph.confirm("Observed", "party.defeat", "party_defeat_observed", defeat, {"Acknowledge0"});
+    for (unsigned i = 0; i < 6; ++i) {
+        const auto name = "Acknowledge" + std::to_string(i);
+        graph.click(name, defeat, C::image("skull"), known,
+            {"Changed", i < 5 ? "Acknowledge" + std::to_string(i + 1) : "Unchanged"});
+        graph.delay_after(name, 2000);
+        graph.postcondition_budget(name, 10000);
+    }
+    graph.observe("Changed", C::all({known, C::absent(defeat)}), {"Terminal"});
+    graph.observe("Unchanged", defeat, {"UnchangedExit"});
+    graph.recovery("UnchangedExit", "party.defeat_prompt_unchanged");
+    return graph.finish();
+}
 }

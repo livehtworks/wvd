@@ -69,7 +69,8 @@ class WorkflowTests(unittest.TestCase):
             names += ["dungFlag", "openworldmap", "returnText", "returntoTown", "mapFlag", "chestFlag", "whowillopenit",
                       "fishing/cast", "fishing/striking", "fishing/CloseFishInfo", "combatActive", "combatActive_2",
                       "combatActive_3", "combatActive_4", "boot_title_logo", "boot_attention", "startdownload",
-                      "retry", "retry_blank", "totitle", "resume", "trait", "recover", "spellskill/skillDetail", "close", "someonedead", "RiseAgain"]
+                      "retry", "retry_blank", "totitle", "resume", "trait", "recover", "spellskill/skillDetail", "close", "someonedead", "RiseAgain",
+                      "multipeopledead", "skull"]
         names += options.get("extra_images", [])
         if options.get("workflow") == "revival":
             names.append("RiseAgain")
@@ -1519,6 +1520,53 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(r["snapshot"]["business"]["healing_sequence"], 1)
         self.assertFalse(r["snapshot"]["business"]["healing_required"])
         self.assertFalse(r["mismatch"])
+
+    def test_party_defeat_acknowledges_marker_without_inventing_combat_behavior(self):
+        r = self.execute("defeat-to-revival", [{"multipeopledead": (300, 500), "skull": (400, 900)},
+            {"RiseAgain": (350, 450)}], [dict(kind=0, x=420, y=912)], workflow="common")
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 1)
+        self.assertFalse(r["mismatch"])
+        self.assertTrue(r["snapshot"]["business"]["suicide_requested"])
+        self.assertEqual(r["snapshot"]["business"]["revivals"], 0)
+
+    def test_party_defeat_marker_on_world_map_never_clicks_skull(self):
+        r = self.execute("defeat-world-negative", [{"worldmapflag": (50, 150),
+            "multipeopledead": (300, 500), "skull": (400, 900)}], [], workflow="common")
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 0)
+        self.assertFalse(r["snapshot"]["business"]["suicide_requested"])
+
+    def test_party_defeat_stops_or_rejects_and_never_claims_revival(self):
+        scene = {"multipeopledead": (300, 500), "skull": (400, 900)}
+        for stopped in (False, True):
+            r = self.execute(f"defeat-stop-{stopped}", [scene, scene],
+                [dict(kind=0, x=420, y=912, reject=not stopped)], workflow="common", stop_after_first=stopped)
+            self.assertEqual(r["snapshot"]["state"], "UserStopped" if stopped else "Failed", r)
+            self.assertEqual(r["backend_calls"], 1)
+            self.assertFalse(r["mismatch"])
+            self.assertTrue(r["snapshot"]["business"]["suicide_requested"])
+            self.assertEqual(r["snapshot"]["business"]["revivals"], 0)
+
+    def test_party_defeat_six_unchanged_clicks_have_a_finite_exit(self):
+        scene = {"multipeopledead": (300, 500), "skull": (400, 900)}
+        r = self.execute("defeat-unchanged", [scene] * 7, [dict(kind=0, x=420, y=912)] * 6, workflow="common")
+        self.assertEqual(r["snapshot"]["state"], "Interrupted", r)
+        self.assertEqual(r["backend_calls"], 6)
+        self.assertFalse(r["mismatch"])
+        self.assertEqual(r["snapshot"]["sessions"][-1]["reason"], "party.defeat_prompt_unchanged")
+
+    def test_party_defeat_preserves_single_prompt_priority_and_overlay_handoff(self):
+        multiple = {"multipeopledead": (300, 500), "skull": (400, 900)}
+        r = self.execute("defeat-single-retry", [{**multiple, "someonedead": (350, 600)}, multiple,
+            {"retry": (300, 700)}, {"dungFlag": (50, 150)}],
+            [dict(kind=0, x=450, y=800), dict(kind=0, x=420, y=912), dict(kind=0, x=320, y=712)], workflow="common")
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 3)
+        self.assertFalse(r["mismatch"])
+        self.assertFalse(r["snapshot"]["business"]["death_prompt_pending"])
+        self.assertTrue(r["snapshot"]["business"]["suicide_requested"])
+        self.assertEqual(r["snapshot"]["business"]["revivals"], 0)
 
     def test_party_death_clears_after_first_or_fifth_without_followup_click(self):
         for attempts in (1, 5):

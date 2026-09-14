@@ -74,7 +74,7 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common) {
     low_retry["threshold"] = .60;
     const auto to_title = C::image("totitle"), resume = C::image("resume");
     const J recognized = common ? C::any({J{{"mode", "boot_post"}}, panel}) : J{{"mode", "boot_post"}};
-    graph.route("Entry", common ? J{"Download", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title", "Pause", "Death", "Ready"}
+    graph.route("Entry", common ? J{"Download", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title", "Pause", "Death", "Defeat", "Ready"}
                                  : J{"Ready", "Download", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title", "Pause"});
     if (common) {
         const auto death = graph.define_child("PartyDeath", dismiss_party_death(), {"BlockedExit"});
@@ -82,6 +82,11 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common) {
         graph.call_child("DismissDeath", death, {"Entry"});
         graph.hit_limit("Death", 6);
         graph.hit_limit("DismissDeath", 6);
+        const auto defeat = graph.define_child("PartyDefeat", acknowledge_party_defeat());
+        graph.observe("Defeat", {{"mode", "party_defeat"}}, {"AcknowledgeDefeat"});
+        graph.call_child("AcknowledgeDefeat", defeat, {"Entry"});
+        graph.hit_limit("Defeat", 6);
+        graph.hit_limit("AcknowledgeDefeat", 6);
     }
     graph.observe("Ready", ready, common ? J{"PendingDeathCleared", "Terminal"} : J{"Terminal"});
     if (common) {

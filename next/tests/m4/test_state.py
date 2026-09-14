@@ -112,6 +112,13 @@ class StateTests(unittest.TestCase):
         self.assertEqual(result["revivals"], 0)
         self.assertFalse(result["recover_after_rez"])
 
+    def test_party_defeat_flag_resets_only_after_revival(self):
+        result = self.run_case("party-defeat")["direct"]["party_defeat_after_revival"]
+        self.assertFalse(result["suicide_requested"])
+        self.assertEqual(result["party_defeat_sequence"], 1)
+        self.assertEqual(result["revivals"], 1)
+        self.assertEqual(result["combats"], 0)
+
     def test_complete_one_as_all(self):
         r = self.run_case("all", all_at_once=True)
         self.assertEqual(r["snapshot"]["state"], "Completed", r)

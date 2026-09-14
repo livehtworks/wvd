@@ -186,14 +186,21 @@ J evaluate_uncached(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels
         result["action_eligible"] = false;
         return result;
     }
-    if (mode == "party_death") {
+    if (mode == "party_death" || mode == "party_defeat") {
         check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");
         // 保持旧 IdentifyState 的正常状态优先级。先排除无死亡模板的绝大多数帧；
         // 命中后才核对正常场景与 Pause/角色详情，不能仅凭一个骷髅授权点击。
-        auto marker = evaluate_impl(bundle, pixels, {{"mode", "template"}, {"image", "someonedead"}}, bound, scope, cache, depth + 1, memo);
+        auto marker = evaluate_impl(bundle, pixels, {{"mode", "template"},
+            {"image", mode == "party_death" ? "someonedead" : "multipeopledead"}}, bound, scope, cache, depth + 1, memo);
         check(marker.at("outcome") != "Error", "WVD_DEATH_RECOGNITION_ERROR");
         if (marker.at("outcome") != "Hit")
             return decision(false, {}, {{"reason", "no_death_marker"}});
+        if (mode == "party_defeat") {
+            auto single = evaluate_impl(bundle, pixels, {{"mode", "party_death"}}, bound, scope, cache, depth + 1, memo);
+            check(single.at("outcome") != "Error", "WVD_DEATH_RECOGNITION_ERROR");
+            if (single.at("outcome") == "Hit")
+                return decision(false, {}, {{"reason", "single_death_prompt_first"}});
+        }
         J guards = J::array();
         for (const auto *name : {"dungFlag", "chestFlag", "whowillopenit", "mapFlag", "worldmapflag", "Inn"})
             guards.push_back({{"mode", "template"}, {"image", name}, {"threshold", .8}});
@@ -213,7 +220,7 @@ J evaluate_uncached(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels
         check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");
         // 连续死亡页优先返回自身的完整场景判断，不再跑一遍通用启动候选；
         // 离开死亡页后再按原通用顺序分派。这里不是改变 any/all 的求值契约。
-        for (const auto &probe : J::array({J{{"mode", "party_death"}},
+        for (const auto &probe : J::array({J{{"mode", "party_death"}}, J{{"mode", "party_defeat"}},
                 J{{"mode", "template"}, {"image", "RiseAgain"}, {"threshold", .8}}, J{{"mode", "boot_post"}}})) {
             auto result = evaluate_impl(bundle, pixels, probe, bound, scope, cache, depth + 1, memo);
             check(result.at("outcome") != "Error", "WVD_DEATH_RECOGNITION_ERROR");

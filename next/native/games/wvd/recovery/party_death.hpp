@@ -4,4 +4,5 @@
 namespace wvd::games::recovery {
 // someonedead 提示的有限消费者，不承担 RiseAgain、全队死亡或住宿。
 tasks::CompiledWorkflow dismiss_party_death();
+tasks::CompiledWorkflow acknowledge_party_defeat();
 }
