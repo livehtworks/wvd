@@ -2061,13 +2061,16 @@
         "M4-NAVIGATION"
       ],
       "planned_owner_from_baseline": "native/games/wvd/navigation",
-      "implementation": null,
-      "entry": null,
-      "implementation_status": "NOT_STARTED",
-      "offline_status": "NOT_RUN",
+      "implementation": "native/games/wvd/navigation/dungeon_entry.cpp",
+      "entry": "navigation::enter_dungeon",
+      "implementation_status": "PARTIAL",
+      "offline_status": "PASS",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "remaining": "本轮未承接此完整业务；固定旧入口仍为唯一生产实现。"
+      "remaining": "外层任务推进、普通插入回归、补给和恢复尚未全部连接；真实质量未验。",
+      "implementation_extent": "FINITE_ENTRY_OR_AUTO_ROUTE",
+      "verification_scope": "有限入本/自动寻路子流程，不是全任务执行",
+      "evidence_report": "../m4-entry-validation.md"
     },
     {
       "inventory_id": "function:src/script.py:Factory.StateEoT.EoTStep:2477",
@@ -2080,13 +2083,16 @@
         "M4-NAVIGATION"
       ],
       "planned_owner_from_baseline": "native/games/wvd/navigation",
-      "implementation": null,
-      "entry": null,
-      "implementation_status": "NOT_STARTED",
-      "offline_status": "NOT_RUN",
+      "implementation": "native/games/wvd/navigation/dungeon_entry.cpp",
+      "entry": "navigation::enter_dungeon",
+      "implementation_status": "PARTIAL",
+      "offline_status": "PASS",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "remaining": "本轮未承接此完整业务；固定旧入口仍为唯一生产实现。"
+      "remaining": "外层任务推进、普通插入回归、补给和恢复尚未全部连接；真实质量未验。",
+      "implementation_extent": "FINITE_ENTRY_OR_AUTO_ROUTE",
+      "verification_scope": "有限入本/自动寻路子流程，不是全任务执行",
+      "evidence_report": "../m4-entry-validation.md"
     },
     {
       "inventory_id": "function:src/script.py:Factory.StateCombat:2502",
@@ -2617,13 +2623,16 @@
         "M4-TASKS"
       ],
       "planned_owner_from_baseline": "native/games/wvd/tasks",
-      "implementation": null,
-      "entry": null,
-      "implementation_status": "NOT_STARTED",
-      "offline_status": "NOT_RUN",
+      "implementation": "native/games/wvd/navigation/auto_route.cpp",
+      "entry": "navigation::auto_route",
+      "implementation_status": "PARTIAL",
+      "offline_status": "PASS",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "remaining": "本轮未承接此完整业务；固定旧入口仍为唯一生产实现。"
+      "remaining": "外层任务推进、普通插入回归、补给和恢复尚未全部连接；真实质量未验。",
+      "implementation_extent": "FINITE_ENTRY_OR_AUTO_ROUTE",
+      "verification_scope": "有限入本/自动寻路子流程，不是全任务执行",
+      "evidence_report": "../m4-entry-validation.md"
     },
     {
       "inventory_id": "function:src/script.py:Factory.StateAcceptRequest:3397",

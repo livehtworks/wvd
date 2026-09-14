@@ -174,6 +174,67 @@ def generate(data_evidence, state_evidence=None, plan_evidence=None, workflow_ev
     print("341 entries retained; 58 task data bindings verified; 0 task executions claimed.")
 
 
+def verify_workflows(folder, expected):
+    executable_hash = hashlib.sha256((ROOT / "build/m4/Release/test_m4_workflow.exe").read_bytes()).hexdigest()
+    for name, (state, calls) in expected.items():
+        result = read(folder / name / "output.json")
+        execution = read(folder / name / "execution.json")
+        if (execution != {"exe_sha256": executable_hash, "exit": 0} or result["snapshot"]["state"] != state
+                or result["backend_calls"] != calls or result["mismatch"] or not result["snapshot"]["quiescent"]):
+            raise ValueError("M4_WORKFLOW_EVIDENCE_MISMATCH:" + name)
+
+
+def update_navigation(workflow_evidence, plan_evidence):
+    """入本图与完整任务分别登记；不覆盖已有战斗等阶段证据。"""
+    verify_workflows(workflow_evidence, {
+        "auto-route-success": ("Completed", 2), "auto-route-disabled": ("Interrupted", 1),
+        "auto-route-battle": ("Interrupted", 1), "auto-route-stay": ("Interrupted", 0),
+        "auto-route-retreat": ("Completed", 1), "auto-route-mark": ("Completed", 1),
+        "auto-route-stopped": ("Interrupted", 1), "entry-sequence": ("Completed", 5),
+        "entry-not-entered": ("Interrupted", 1), "entry-event": ("Completed", 4),
+        "entry-event-fail": ("Failed", 1), "entry-world": ("Completed", 5),
+    })
+    compiled = read(plan_evidence / "entries/result.json")
+    execution = read(plan_evidence / "entries/execution.json")
+    exe_hash = hashlib.sha256((ROOT / "build/m4/Release/wvd_m4_check.exe").read_bytes()).hexdigest()
+    source = read(ROOT / "packs/wvd/parameters/legacy-quests.json")
+    entries = {v["task_id"]: v for v in compiled["compiled_entries"]}
+    if (execution != {"exe_sha256": exe_hash, "exit": 0} or compiled["outcome"] != "PASS"
+            or set(entries) != {k for k, v in source.items() if v["_TYPE"] == "dungeon"}
+            or any(v["executed"] or v["missing_images"] or v["scope"] != "ENTRY_ONLY_NOT_FULL_TASK" for v in entries.values())):
+        raise ValueError("M4_ENTRY_COMPILATION_EVIDENCE_MISMATCH")
+    folder = ROOT / "docs/migration"
+    document = read(folder / "m4-implementation-map.json")
+    targets = {
+        "Factory.StateEoT": ("navigation/dungeon_entry.cpp", "navigation::enter_dungeon"),
+        "Factory.StateEoT.EoTStep": ("navigation/dungeon_entry.cpp", "navigation::enter_dungeon"),
+        "Factory.StateDungeon.startAuto": ("navigation/auto_route.cpp", "navigation::auto_route"),
+    }
+    found = set()
+    for row in document["entries"]:
+        if row["legacy_symbol"] in targets:
+            found.add(row["legacy_symbol"])
+            file, entry = targets[row["legacy_symbol"]]
+            row.update(implementation="native/games/wvd/" + file, entry=entry,
+                       implementation_status="PARTIAL", implementation_extent="FINITE_ENTRY_OR_AUTO_ROUTE",
+                       offline_status="PASS", verification_scope="有限入本/自动寻路子流程，不是全任务执行",
+                       evidence_report="../m4-entry-validation.md",
+                       remaining="外层任务推进、普通插入回归、补给和恢复尚未全部连接；真实质量未验。")
+    if found != set(targets):
+        raise ValueError("M4_ENTRY_INVENTORY_MISMATCH:" + str(found))
+    task_document = read(folder / "m4-task-status.json")
+    if {r["task_id"] for r in task_document["items"]} != set(source):
+        raise ValueError("M4_TASK_DENOMINATOR_MISMATCH")
+    for row in task_document["items"]:
+        if row["task_id"] in entries:
+            row["entry_compilation"] = {"status": "PASS", "scope": "ENTRY_ONLY_NOT_FULL_TASK",
+                "entry": "navigation::enter_dungeon", "executed": False,
+                "evidence_report": "../m4-entry-validation.md"}
+    write(folder / "m4-implementation-map.json", document)
+    write(folder / "m4-task-status.json", task_document)
+    print("3 navigation entries and 43 entry-only compilation records updated; full-task statuses unchanged.")
+
+
 def update_combat(combat_evidence):
     """只覆盖已验证的战斗子流程行，保留其他阶段证据及全部任务分母。"""
     expected = {
@@ -183,13 +244,7 @@ def update_combat(combat_evidence):
         "turn-defend": ("Completed", 2), "turn-resource-False": ("Completed", 7),
         "turn-resource-True": ("Interrupted", 7), "turn-three-open": ("Completed", 5),
     }
-    executable_hash = hashlib.sha256((ROOT / "build/m4/Release/test_m4_workflow.exe").read_bytes()).hexdigest()
-    for name, (state, calls) in expected.items():
-        result = read(combat_evidence / name / "output.json")
-        execution = read(combat_evidence / name / "execution.json")
-        if (execution != {"exe_sha256": executable_hash, "exit": 0} or result["snapshot"]["state"] != state
-                or result["backend_calls"] != calls or result["mismatch"] or not result["snapshot"]["quiescent"]):
-            raise ValueError("M4_COMBAT_EVIDENCE_MISMATCH:" + name)
+    verify_workflows(combat_evidence, expected)
     path = ROOT / "docs/migration/m4-implementation-map.json"
     document = read(path)
     targets = {"Factory.StateCombat", "Factory.StateCombat.AutoThisChar", "Factory.StateCombat.AutoThisCharAfterTargetFailure",
@@ -216,10 +271,15 @@ if __name__ == "__main__":
     parser.add_argument("--plan-evidence", type=Path)
     parser.add_argument("--workflow-evidence", type=Path)
     parser.add_argument("--combat-evidence", type=Path)
+    parser.add_argument("--navigation-evidence", type=Path)
     args = parser.parse_args()
-    if not args.data_evidence and not args.combat_evidence:
-        parser.error("--data-evidence or --combat-evidence is required")
+    if not args.data_evidence and not args.combat_evidence and not args.navigation_evidence:
+        parser.error("an evidence group is required")
     if args.data_evidence:
         generate(args.data_evidence, args.state_evidence, args.plan_evidence, args.workflow_evidence)
     if args.combat_evidence:
         update_combat(args.combat_evidence)
+    if args.navigation_evidence:
+        if not args.plan_evidence:
+            parser.error("--navigation-evidence requires --plan-evidence")
+        update_navigation(args.navigation_evidence, args.plan_evidence)

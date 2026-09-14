@@ -58,6 +58,8 @@ if(WVD_BUILD_M4)
   add_library(wvd_business ../games/wvd/profile.cpp ../games/wvd/tasks/quest_catalog.cpp ../games/wvd/tasks/task_plan.cpp
     ../games/wvd/tasks/pipeline_compiler.cpp ../games/wvd/navigation/world_map.cpp ../games/wvd/supply/inn.cpp
     ../games/wvd/navigation/map_route.cpp
+    ../games/wvd/navigation/auto_route.cpp
+    ../games/wvd/navigation/dungeon_entry.cpp
     ../games/wvd/navigation/world_travel.cpp ../games/wvd/supply/party.cpp
     ../games/wvd/diagnostics.cpp
     ../games/wvd/chest/chest.cpp

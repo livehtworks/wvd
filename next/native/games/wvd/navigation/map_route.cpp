@@ -7,7 +7,7 @@ tasks::CompiledWorkflow reach_map_target(const MapTarget &target,
                                          const std::optional<std::string> &floor) {
     if (target.swipes.empty() || target.swipes.size() > 32)
         throw std::runtime_error("MAP_SEARCH_BUDGET_INVALID");
-    if (target.target == "stay" || target.target.ends_with("_auto") || target.target == "dungFlag")
+    if (target.target == "stay" || target.target == "chest_auto" || target.target == "mark_auto" || target.target == "dungFlag")
         throw std::runtime_error("MAP_TARGET_REQUIRES_AUTO_ROUTE");
     C graph("navigation.map_target");
     const auto map = C::image("mapFlag"), dungeon = C::image("dungFlag");

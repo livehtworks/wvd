@@ -20,7 +20,7 @@ class PlanTests(unittest.TestCase):
             ["git", "show", f"{BASE}:resources/quest/quest.json"], cwd=ROOT.parent))
         print("M4 plan evidence: " + str(cls.root), flush=True)
 
-    def inspect(self, name, source=None):
+    def inspect(self, name, source=None, **options):
         folder = self.root / name
         folder.mkdir()
         quests = folder / "quests.json"
@@ -28,12 +28,17 @@ class PlanTests(unittest.TestCase):
         before = hashlib.sha256(quests.read_bytes()).hexdigest()
         cfg = {"output": str(folder / "result.json"), "source": {}, "quests": str(quests),
                "descriptor": str(ROOT / "packs/wvd/parameters/legacy-config-fields.json"), "inspect_plans": True}
+        cfg.update(options)
         (folder / "input.json").write_text(json.dumps(cfg), encoding="utf-8")
+        exe = ROOT / "build/m4/Release/wvd_m4_check.exe"
+        exe_hash = hashlib.sha256(exe.read_bytes()).hexdigest()
         with (folder / "native.log").open("wb") as log:
-            p = subprocess.run([str(ROOT / "build/m4/Release/wvd_m4_check.exe"), str(folder / "input.json")],
+            p = subprocess.run([str(exe), str(folder / "input.json")],
                                cwd=folder, stdout=log, stderr=log, timeout=30,
                                env=dict(os.environ, PATH=str(self.sdk / "bin") + os.pathsep + os.environ.get("PATH", "")))
         self.assertEqual(p.returncode, 0)
+        self.assertEqual(hashlib.sha256(exe.read_bytes()).hexdigest(), exe_hash)
+        (folder / "execution.json").write_text(json.dumps({"exe_sha256": exe_hash, "exit": p.returncode}), encoding="utf-8")
         self.assertEqual(hashlib.sha256(quests.read_bytes()).hexdigest(), before)
         r = json.loads((folder / "result.json").read_text(encoding="utf-8"))
         self.assertEqual((r["real_connections"], r["real_inputs"]), (0, 0))
@@ -67,6 +72,22 @@ class PlanTests(unittest.TestCase):
     def task(self, **fields):
         return {"example": {"_TYPE": "dungeon", "_EOT": [["press", "Dist", [1, 1], 1]],
                             "_TARGETINFOLIST": [["chest"]], **fields}}
+
+    def test_all_43_dungeon_entries_compile_with_manifest_resources(self):
+        result = self.inspect("entries", compile_entries_manifest=str(ROOT / "packs/wvd/manifest.json"))
+        self.assertEqual(result["outcome"], "PASS", result)
+        entries = {v["task_id"]: v for v in result["compiled_entries"]}
+        self.assertEqual(set(entries), {k for k, v in self.source.items() if v["_TYPE"] == "dungeon"})
+        self.assertEqual(len(entries), 43)
+        for task_id, entry in entries.items():
+            with self.subTest(task_id=task_id):
+                self.assertEqual(entry["missing_images"], [])
+                self.assertEqual(entry["scope"], "ENTRY_ONLY_NOT_FULL_TASK")
+                self.assertFalse(entry["executed"])
+                self.assertEqual(entry["nodes"]["Terminal"]["custom_action"], "RootTerminal")
+                self.assertEqual(entry["nodes"]["Entered"]["next"], ["Terminal"])
+                self.assertTrue(any(v.get("custom_action") == "GuardedAction" for v in entry["nodes"].values()))
+                self.assertNotIn("Shell", entry["required_actions"])
 
     def test_typed_target_hint_and_chest_exclusions(self):
         r = self.inspect("hints", self.task(_TARGETINFOLIST=[

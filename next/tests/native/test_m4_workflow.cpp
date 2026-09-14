@@ -2,6 +2,8 @@
 #include "loaded_modules.hpp"
 #include "games/wvd/navigation/world_map.hpp"
 #include "games/wvd/navigation/map_route.hpp"
+#include "games/wvd/navigation/auto_route.hpp"
+#include "games/wvd/navigation/dungeon_entry.hpp"
 #include "games/wvd/navigation/world_travel.hpp"
 #include "games/wvd/supply/party.hpp"
 #include "games/wvd/chest/chest.hpp"
@@ -73,6 +75,15 @@ int main(int argc, char **argv) {
                 return games::supply::rest_at_inn(config.value("royal", false));
             if (kind == "auto")
                 return games::combat::enable_auto();
+            if (kind == "auto-route")
+                return games::navigation::auto_route(config.value("auto_target", "chest_auto"));
+            if (kind == "entry") {
+                games::WvdQuestDefinition definition{"entry-fixture", "dungeon",
+                    {{"_EOT", config.at("entry_steps")}, {"_TARGETINFOLIST", {{"chest"}}}}};
+                if (config.contains("pre_entry"))
+                    definition.source["_preEOTcheck"] = config.at("pre_entry");
+                return games::navigation::enter_dungeon(games::WvdTaskPlan::parse(definition));
+            }
             if (kind == "turn") {
                 std::set<std::string> images;
                 for (const auto &file : config.at("files")) {

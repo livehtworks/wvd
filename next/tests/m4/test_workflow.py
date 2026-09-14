@@ -48,8 +48,17 @@ class WorkflowTests(unittest.TestCase):
             names += ["openworldmap", "intoWorldMap", "dungFlag"]
         if options.get("workflow") in ("party", "party-rest"):
             names += ["guild", "Edit", "PartyManagement", "PartyManagementTitle", "AssembleParty", "partyBlue"]
+        if options.get("workflow") in ("auto-route", "entry"):
+            names += ["mapFlag", "dungFlag", "chestFlag", "combatActive", "combatActive_2", "combatActive_3", "combatActive_4", "EdgeOfTown"]
+        if options.get("workflow") == "auto-route":
+            names += ["chestOpening", "whowillopenit", "RiseAgain", "NoChestCanBeFound", "theRouteToTheDestinationCannotBeFound",
+                      "chest_auto", "mark_auto", "chest_auto_minus", "resume"]
+        if options.get("workflow") == "entry":
+            names += ["GotoDung", "openworldmap", "intoWorldMap", "TradeWaterway", "Dist", "EVENT", "FFXI/EVENT_GCN", "FFXI/zone5", "preGate"]
         rng = np.random.default_rng(90614)
         patterns = {name: rng.integers(30, 255, (24, 40, 3), dtype=np.uint8) for name in names}
+        if "chest_auto_minus" in patterns:
+            patterns["chest_auto_minus"] = rng.integers(10, 120, (24, 40, 3), dtype=np.uint8)
         def write(path, pixels):
             path.write_bytes(cv2.imencode(".png", pixels)[1].tobytes())
         for key, pixels in patterns.items():
@@ -61,6 +70,8 @@ class WorkflowTests(unittest.TestCase):
             pixels = np.zeros((1600, 900, 3), dtype=np.uint8)
             for key, (x, y) in screen.items():
                 pattern = patterns[key.split("@", 1)[0]]
+                if key == "chest_auto_minus":
+                    pattern = pattern + np.uint8(90)
                 if key == "next" and i in options.get("degraded_next_frames", []):
                     noise = rng.integers(30, 255, pattern.shape, dtype=np.uint8)
                     degraded = ((pattern.astype(np.uint16) + noise) // 2).astype(np.uint8)
@@ -243,6 +254,88 @@ class WorkflowTests(unittest.TestCase):
                 self.assertEqual(result["backend_calls"], miss_count+1)
                 self.assertEqual(result["cursor"], miss_count+1)
                 self.assertFalse(result["mismatch"])
+
+    def test_auto_route_expands_then_requires_no_target_notice(self):
+        initial = {"dungFlag": (50, 150)}
+        ready = {**initial, "chest_auto": (730, 270), "chest_auto_minus": (811, 340)}
+        done = {**initial, "NoChestCanBeFound": (300, 700)}
+        r = self.execute("auto-route-success", [initial, ready, done],
+                         [dict(kind=0, x=762, y=346), dict(kind=0, x=750, y=282)], workflow="auto-route")
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 2)
+        self.assertFalse(r["mismatch"])
+
+    def test_auto_route_disabled_interrupted_and_stay_are_not_point_completion(self):
+        ready = {"dungFlag": (50, 150), "chest_auto": (730, 270), "chest_auto_minus": (811, 340)}
+        disabled = {k: v for k, v in ready.items() if k != "chest_auto_minus"}
+        for name, screens, actions, target in [
+            ("disabled", [disabled, disabled], [dict(kind=0, x=750, y=282)], "chest_auto"),
+            ("battle", [ready, {"combatActive": (10, 5)}], [dict(kind=0, x=750, y=282)], "chest_auto"),
+            ("stay", [{"dungFlag": (50, 150)}], [], "stay"),
+        ]:
+            r = self.execute("auto-route-" + name, screens, actions, workflow="auto-route", auto_target=target)
+            self.assertEqual(r["snapshot"]["state"], "Interrupted", r)
+            self.assertEqual(r["backend_calls"], len(actions))
+            self.assertFalse(r["mismatch"])
+
+    def test_auto_route_retreat_mark_and_stopped_have_distinct_outcomes(self):
+        dungeon = {"dungFlag": (50, 150)}
+        cases = [
+            ("retreat", {**dungeon, "dungFlag@button": (730, 270)}, {"Inn": (100, 400)}, "dungFlag", "Completed"),
+            ("mark", {**dungeon, "mark_auto": (730, 270)}, {**dungeon, "theRouteToTheDestinationCannotBeFound": (300, 700)}, "mark_auto", "Completed"),
+            ("stopped", {**dungeon, "chest_auto": (730, 270), "chest_auto_minus": (811, 340)}, dungeon, "chest_auto", "Interrupted"),
+        ]
+        for name, before, after, target, expected in cases:
+            r = self.execute("auto-route-" + name, [before, after], [dict(kind=0, x=750, y=282)], workflow="auto-route", auto_target=target)
+            self.assertEqual(r["snapshot"]["state"], expected, r)
+            self.assertEqual(r["backend_calls"], 1)
+            self.assertFalse(r["mismatch"])
+
+    def test_entry_fallback_array_is_sequential_and_goto_is_confirmed(self):
+        steps = [["press", "TradeWaterway", ["EdgeOfTown", [1, 1]], 1],
+                 ["press", "Dist", "input swipe 650 250 650 900", 1]]
+        screens = [{"Inn": (100, 400), "EdgeOfTown": (300, 600)}, {"TradeWaterway": (200, 700)},
+                   {"TradeWaterway": (200, 700)}, {"Dist": (400, 700)}, {"GotoDung": (500, 900)}, {"dungFlag": (50, 150)}]
+        commands = [dict(kind=0, x=320, y=612), dict(kind=0, x=1, y=1), dict(kind=0, x=220, y=712),
+                    dict(kind=0, x=420, y=712), dict(kind=0, x=520, y=912)]
+        r = self.execute("entry-sequence", screens, commands, workflow="entry", entry_steps=steps)
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 5)
+        self.assertFalse(r["mismatch"])
+
+    def test_entry_does_not_complete_on_last_destination_click(self):
+        r = self.execute("entry-not-entered", [{"Dist": (400, 700)}] * 2, [dict(kind=0, x=420, y=712)],
+                         workflow="entry", entry_steps=[["press", "Dist", None, 1]])
+        self.assertEqual(r["snapshot"]["state"], "Interrupted", r)
+        self.assertEqual(r["backend_calls"], 1)
+        self.assertFalse(r["mismatch"])
+
+    def test_entry_event_opens_before_zone_and_stops_on_input_failure(self):
+        steps = [["press", "EVENT", "FFXI/EVENT_GCN", 1], ["press", "FFXI/zone5", [1, 1], 1]]
+        screens = [{"Inn": (100, 400), "EVENT": (200, 500)}, {"EVENT": (200, 500)},
+                   {"FFXI/EVENT_GCN": (300, 700)}, {"openworldmap": (300, 100), "FFXI/zone5": (400, 700)}, {"dungFlag": (50, 150)}]
+        commands = [dict(kind=0, x=1, y=1), dict(kind=0, x=220, y=512), dict(kind=0, x=320, y=712), dict(kind=0, x=420, y=712)]
+        r = self.execute("entry-event", screens, commands, workflow="entry", entry_steps=steps)
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 4)
+        self.assertFalse(r["mismatch"])
+        r = self.execute("entry-event-fail", screens[:1], [{**commands[0], "reject": True}], workflow="entry", entry_steps=steps)
+        self.assertEqual(r["snapshot"]["state"], "Failed", r)
+        self.assertEqual(r["backend_calls"], 1)
+
+    def test_entry_precheck_world_and_destination_are_sequential(self):
+        steps = [["press", "intoWorldMap", ["City_RoyalCityLuknalia", "input swipe 400 400 500 500"], 1],
+                 ["press", "Dist", [1, 1], 1]]
+        city = {"Inn": (100, 400), "intoWorldMap": (100, 700)}
+        screens = [{**city, "preGate": (300, 500)}, city,
+                   {"worldmapflag": (80, 100), "City_RoyalCityLuknalia": (500, 700)},
+                   {"openworldmap": (300, 100), "Dist": (400, 700)}, {"GotoDung": (500, 900)}, {"dungFlag": (50, 150)}]
+        commands = [dict(kind=0, x=320, y=512), dict(kind=0, x=120, y=712), dict(kind=0, x=520, y=712),
+                    dict(kind=0, x=420, y=712), dict(kind=0, x=520, y=912)]
+        r = self.execute("entry-world", screens, commands, workflow="entry", entry_steps=steps, pre_entry="preGate")
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 5)
+        self.assertFalse(r["mismatch"])
 
     def test_city_already_arrived_and_wrong_scene(self):
         for name, screen, state in [("arrived", {"Inn": (100, 400)}, "Completed"),

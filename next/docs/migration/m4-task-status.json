@@ -50,7 +50,14 @@
         "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
       ],
       "plan_data_status": "PASS",
-      "plan_evidence": "../m4-plan-validation.md"
+      "plan_evidence": "../m4-plan-validation.md",
+      "entry_compilation": {
+        "status": "PASS",
+        "scope": "ENTRY_ONLY_NOT_FULL_TASK",
+        "entry": "navigation::enter_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-entry-validation.md"
+      }
     },
     {
       "task_id": "lounge",
@@ -92,7 +99,14 @@
         "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
       ],
       "plan_data_status": "PASS",
-      "plan_evidence": "../m4-plan-validation.md"
+      "plan_evidence": "../m4-plan-validation.md",
+      "entry_compilation": {
+        "status": "PASS",
+        "scope": "ENTRY_ONLY_NOT_FULL_TASK",
+        "entry": "navigation::enter_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-entry-validation.md"
+      }
     },
     {
       "task_id": "fortress-B1F",
@@ -134,7 +148,14 @@
         "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
       ],
       "plan_data_status": "PASS",
-      "plan_evidence": "../m4-plan-validation.md"
+      "plan_evidence": "../m4-plan-validation.md",
+      "entry_compilation": {
+        "status": "PASS",
+        "scope": "ENTRY_ONLY_NOT_FULL_TASK",
+        "entry": "navigation::enter_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-entry-validation.md"
+      }
     },
     {
       "task_id": "fortress-B8F_entrance",
@@ -176,7 +197,14 @@
         "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
       ],
       "plan_data_status": "PASS",
-      "plan_evidence": "../m4-plan-validation.md"
+      "plan_evidence": "../m4-plan-validation.md",
+      "entry_compilation": {
+        "status": "PASS",
+        "scope": "ENTRY_ONLY_NOT_FULL_TASK",
+        "entry": "navigation::enter_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-entry-validation.md"
+      }
     },
     {
       "task_id": "fortress-B8F_trap",
@@ -260,7 +288,14 @@
         "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
       ],
       "plan_data_status": "PASS",
-      "plan_evidence": "../m4-plan-validation.md"
+      "plan_evidence": "../m4-plan-validation.md",
+      "entry_compilation": {
+        "status": "PASS",
+        "scope": "ENTRY_ONLY_NOT_FULL_TASK",
+        "entry": "navigation::enter_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-entry-validation.md"
+      }
     },
     {
       "task_id": "DH-4f",
@@ -302,7 +337,14 @@
         "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
       ],
       "plan_data_status": "PASS",
-      "plan_evidence": "../m4-plan-validation.md"
+      "plan_evidence": "../m4-plan-validation.md",
+      "entry_compilation": {
+        "status": "PASS",
+        "scope": "ENTRY_ONLY_NOT_FULL_TASK",
+        "entry": "navigation::enter_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-entry-validation.md"
+      }
     },
     {
       "task_id": "DH-6f",
@@ -344,7 +386,14 @@
         "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
       ],
       "plan_data_status": "PASS",
-      "plan_evidence": "../m4-plan-validation.md"
+      "plan_evidence": "../m4-plan-validation.md",
+      "entry_compilation": {
+        "status": "PASS",
+        "scope": "ENTRY_ONLY_NOT_FULL_TASK",
+        "entry": "navigation::enter_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-entry-validation.md"
+      }
     },
     {
       "task_id": "DH-7f-right",
@@ -386,7 +435,14 @@
         "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
       ],
       "plan_data_status": "PASS",
-      "plan_evidence": "../m4-plan-validation.md"
+      "plan_evidence": "../m4-plan-validation.md",
+      "entry_compilation": {
+        "status": "PASS",
+        "scope": "ENTRY_ONLY_NOT_FULL_TASK",
+        "entry": "navigation::enter_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-entry-validation.md"
+      }
     },
     {
       "task_id": "DH-7f-auto",
@@ -428,7 +484,14 @@
         "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
       ],
       "plan_data_status": "PASS",
-      "plan_evidence": "../m4-plan-validation.md"
+      "plan_evidence": "../m4-plan-validation.md",
+      "entry_compilation": {
+        "status": "PASS",
+        "scope": "ENTRY_ONLY_NOT_FULL_TASK",
+        "entry": "navigation::enter_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-entry-validation.md"
+      }
     },
     {
       "task_id": "DH-10f-test",
@@ -470,7 +533,14 @@
         "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
       ],
       "plan_data_status": "PASS",
-      "plan_evidence": "../m4-plan-validation.md"
+      "plan_evidence": "../m4-plan-validation.md",
+      "entry_compilation": {
+        "status": "PASS",
+        "scope": "ENTRY_ONLY_NOT_FULL_TASK",
+        "entry": "navigation::enter_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-entry-validation.md"
+      }
     },
     {
       "task_id": "DH-10f-JR",
@@ -512,7 +582,14 @@
         "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
       ],
       "plan_data_status": "PASS",
-      "plan_evidence": "../m4-plan-validation.md"
+      "plan_evidence": "../m4-plan-validation.md",
+      "entry_compilation": {
+        "status": "PASS",
+        "scope": "ENTRY_ONLY_NOT_FULL_TASK",
+        "entry": "navigation::enter_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-entry-validation.md"
+      }
     },
     {
       "task_id": "DH-Church-upper",
@@ -554,7 +631,14 @@
         "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
       ],
       "plan_data_status": "PASS",
-      "plan_evidence": "../m4-plan-validation.md"
+      "plan_evidence": "../m4-plan-validation.md",
+      "entry_compilation": {
+        "status": "PASS",
+        "scope": "ENTRY_ONLY_NOT_FULL_TASK",
+        "entry": "navigation::enter_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-entry-validation.md"
+      }
     },
     {
       "task_id": "DH-Church-auto",
@@ -596,7 +680,14 @@
         "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
       ],
       "plan_data_status": "PASS",
-      "plan_evidence": "../m4-plan-validation.md"
+      "plan_evidence": "../m4-plan-validation.md",
+      "entry_compilation": {
+        "status": "PASS",
+        "scope": "ENTRY_ONLY_NOT_FULL_TASK",
+        "entry": "navigation::enter_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-entry-validation.md"
+      }
     },
     {
       "task_id": "White-G-v2",
@@ -639,7 +730,14 @@
         "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
       ],
       "plan_data_status": "PASS",
-      "plan_evidence": "../m4-plan-validation.md"
+      "plan_evidence": "../m4-plan-validation.md",
+      "entry_compilation": {
+        "status": "PASS",
+        "scope": "ENTRY_ONLY_NOT_FULL_TASK",
+        "entry": "navigation::enter_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-entry-validation.md"
+      }
     },
     {
       "task_id": "FFXI-2F",
@@ -684,7 +782,14 @@
         "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
       ],
       "plan_data_status": "PASS",
-      "plan_evidence": "../m4-plan-validation.md"
+      "plan_evidence": "../m4-plan-validation.md",
+      "entry_compilation": {
+        "status": "PASS",
+        "scope": "ENTRY_ONLY_NOT_FULL_TASK",
+        "entry": "navigation::enter_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-entry-validation.md"
+      }
     },
     {
       "task_id": "FFXI-2F-elite",
@@ -729,7 +834,14 @@
         "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
       ],
       "plan_data_status": "PASS",
-      "plan_evidence": "../m4-plan-validation.md"
+      "plan_evidence": "../m4-plan-validation.md",
+      "entry_compilation": {
+        "status": "PASS",
+        "scope": "ENTRY_ONLY_NOT_FULL_TASK",
+        "entry": "navigation::enter_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-entry-validation.md"
+      }
     },
     {
       "task_id": "FFXI-5F-4Elite",
@@ -773,7 +885,14 @@
         "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
       ],
       "plan_data_status": "PASS",
-      "plan_evidence": "../m4-plan-validation.md"
+      "plan_evidence": "../m4-plan-validation.md",
+      "entry_compilation": {
+        "status": "PASS",
+        "scope": "ENTRY_ONLY_NOT_FULL_TASK",
+        "entry": "navigation::enter_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-entry-validation.md"
+      }
     },
     {
       "task_id": "FFXI-5F-2Elite-mid",
@@ -817,7 +936,14 @@
         "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
       ],
       "plan_data_status": "PASS",
-      "plan_evidence": "../m4-plan-validation.md"
+      "plan_evidence": "../m4-plan-validation.md",
+      "entry_compilation": {
+        "status": "PASS",
+        "scope": "ENTRY_ONLY_NOT_FULL_TASK",
+        "entry": "navigation::enter_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-entry-validation.md"
+      }
     },
     {
       "task_id": "FFXI-5F-2Elite-bottom",
@@ -861,7 +987,14 @@
         "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
       ],
       "plan_data_status": "PASS",
-      "plan_evidence": "../m4-plan-validation.md"
+      "plan_evidence": "../m4-plan-validation.md",
+      "entry_compilation": {
+        "status": "PASS",
+        "scope": "ENTRY_ONLY_NOT_FULL_TASK",
+        "entry": "navigation::enter_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-entry-validation.md"
+      }
     },
     {
       "task_id": "FFXI-5F-2Elite-left",
@@ -905,7 +1038,14 @@
         "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
       ],
       "plan_data_status": "PASS",
-      "plan_evidence": "../m4-plan-validation.md"
+      "plan_evidence": "../m4-plan-validation.md",
+      "entry_compilation": {
+        "status": "PASS",
+        "scope": "ENTRY_ONLY_NOT_FULL_TASK",
+        "entry": "navigation::enter_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-entry-validation.md"
+      }
     },
     {
       "task_id": "FFXI-5F-Elite",
@@ -949,7 +1089,14 @@
         "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
       ],
       "plan_data_status": "PASS",
-      "plan_evidence": "../m4-plan-validation.md"
+      "plan_evidence": "../m4-plan-validation.md",
+      "entry_compilation": {
+        "status": "PASS",
+        "scope": "ENTRY_ONLY_NOT_FULL_TASK",
+        "entry": "navigation::enter_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-entry-validation.md"
+      }
     },
     {
       "task_id": "HSR-1F",
@@ -993,7 +1140,14 @@
         "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
       ],
       "plan_data_status": "PASS",
-      "plan_evidence": "../m4-plan-validation.md"
+      "plan_evidence": "../m4-plan-validation.md",
+      "entry_compilation": {
+        "status": "PASS",
+        "scope": "ENTRY_ONLY_NOT_FULL_TASK",
+        "entry": "navigation::enter_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-entry-validation.md"
+      }
     },
     {
       "task_id": "IWO",
@@ -1038,7 +1192,14 @@
         "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
       ],
       "plan_data_status": "PASS",
-      "plan_evidence": "../m4-plan-validation.md"
+      "plan_evidence": "../m4-plan-validation.md",
+      "entry_compilation": {
+        "status": "PASS",
+        "scope": "ENTRY_ONLY_NOT_FULL_TASK",
+        "entry": "navigation::enter_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-entry-validation.md"
+      }
     },
     {
       "task_id": "IWO_2",
@@ -1083,7 +1244,14 @@
         "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
       ],
       "plan_data_status": "PASS",
-      "plan_evidence": "../m4-plan-validation.md"
+      "plan_evidence": "../m4-plan-validation.md",
+      "entry_compilation": {
+        "status": "PASS",
+        "scope": "ENTRY_ONLY_NOT_FULL_TASK",
+        "entry": "navigation::enter_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-entry-validation.md"
+      }
     },
     {
       "task_id": "malice-B3F",
@@ -1125,7 +1293,14 @@
         "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
       ],
       "plan_data_status": "PASS",
-      "plan_evidence": "../m4-plan-validation.md"
+      "plan_evidence": "../m4-plan-validation.md",
+      "entry_compilation": {
+        "status": "PASS",
+        "scope": "ENTRY_ONLY_NOT_FULL_TASK",
+        "entry": "navigation::enter_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-entry-validation.md"
+      }
     },
     {
       "task_id": "fordraig-B3F",
@@ -1168,7 +1343,14 @@
         "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
       ],
       "plan_data_status": "PASS",
-      "plan_evidence": "../m4-plan-validation.md"
+      "plan_evidence": "../m4-plan-validation.md",
+      "entry_compilation": {
+        "status": "PASS",
+        "scope": "ENTRY_ONLY_NOT_FULL_TASK",
+        "entry": "navigation::enter_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-entry-validation.md"
+      }
     },
     {
       "task_id": "SSC_chest",
@@ -1211,7 +1393,14 @@
         "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
       ],
       "plan_data_status": "PASS",
-      "plan_evidence": "../m4-plan-validation.md"
+      "plan_evidence": "../m4-plan-validation.md",
+      "entry_compilation": {
+        "status": "PASS",
+        "scope": "ENTRY_ONLY_NOT_FULL_TASK",
+        "entry": "navigation::enter_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-entry-validation.md"
+      }
     },
     {
       "task_id": "LBC",
@@ -1254,7 +1443,14 @@
         "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
       ],
       "plan_data_status": "PASS",
-      "plan_evidence": "../m4-plan-validation.md"
+      "plan_evidence": "../m4-plan-validation.md",
+      "entry_compilation": {
+        "status": "PASS",
+        "scope": "ENTRY_ONLY_NOT_FULL_TASK",
+        "entry": "navigation::enter_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-entry-validation.md"
+      }
     },
     {
       "task_id": "AWD",
@@ -1297,7 +1493,14 @@
         "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
       ],
       "plan_data_status": "PASS",
-      "plan_evidence": "../m4-plan-validation.md"
+      "plan_evidence": "../m4-plan-validation.md",
+      "entry_compilation": {
+        "status": "PASS",
+        "scope": "ENTRY_ONLY_NOT_FULL_TASK",
+        "entry": "navigation::enter_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-entry-validation.md"
+      }
     },
     {
       "task_id": "AWD-noGorgon",
@@ -1340,7 +1543,14 @@
         "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
       ],
       "plan_data_status": "PASS",
-      "plan_evidence": "../m4-plan-validation.md"
+      "plan_evidence": "../m4-plan-validation.md",
+      "entry_compilation": {
+        "status": "PASS",
+        "scope": "ENTRY_ONLY_NOT_FULL_TASK",
+        "entry": "navigation::enter_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-entry-validation.md"
+      }
     },
     {
       "task_id": "GHB",
@@ -1382,7 +1592,14 @@
         "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
       ],
       "plan_data_status": "PASS",
-      "plan_evidence": "../m4-plan-validation.md"
+      "plan_evidence": "../m4-plan-validation.md",
+      "entry_compilation": {
+        "status": "PASS",
+        "scope": "ENTRY_ONLY_NOT_FULL_TASK",
+        "entry": "navigation::enter_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-entry-validation.md"
+      }
     },
     {
       "task_id": "COS_chest",
@@ -1424,7 +1641,14 @@
         "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
       ],
       "plan_data_status": "PASS",
-      "plan_evidence": "../m4-plan-validation.md"
+      "plan_evidence": "../m4-plan-validation.md",
+      "entry_compilation": {
+        "status": "PASS",
+        "scope": "ENTRY_ONLY_NOT_FULL_TASK",
+        "entry": "navigation::enter_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-entry-validation.md"
+      }
     },
     {
       "task_id": "COS_chest_short",
@@ -1466,7 +1690,14 @@
         "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
       ],
       "plan_data_status": "PASS",
-      "plan_evidence": "../m4-plan-validation.md"
+      "plan_evidence": "../m4-plan-validation.md",
+      "entry_compilation": {
+        "status": "PASS",
+        "scope": "ENTRY_ONLY_NOT_FULL_TASK",
+        "entry": "navigation::enter_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-entry-validation.md"
+      }
     },
     {
       "task_id": "DOE",
@@ -1508,7 +1739,14 @@
         "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
       ],
       "plan_data_status": "PASS",
-      "plan_evidence": "../m4-plan-validation.md"
+      "plan_evidence": "../m4-plan-validation.md",
+      "entry_compilation": {
+        "status": "PASS",
+        "scope": "ENTRY_ONLY_NOT_FULL_TASK",
+        "entry": "navigation::enter_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-entry-validation.md"
+      }
     },
     {
       "task_id": "DOF",
@@ -1550,7 +1788,14 @@
         "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
       ],
       "plan_data_status": "PASS",
-      "plan_evidence": "../m4-plan-validation.md"
+      "plan_evidence": "../m4-plan-validation.md",
+      "entry_compilation": {
+        "status": "PASS",
+        "scope": "ENTRY_ONLY_NOT_FULL_TASK",
+        "entry": "navigation::enter_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-entry-validation.md"
+      }
     },
     {
       "task_id": "DOF_Plus",
@@ -1592,7 +1837,14 @@
         "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
       ],
       "plan_data_status": "PASS",
-      "plan_evidence": "../m4-plan-validation.md"
+      "plan_evidence": "../m4-plan-validation.md",
+      "entry_compilation": {
+        "status": "PASS",
+        "scope": "ENTRY_ONLY_NOT_FULL_TASK",
+        "entry": "navigation::enter_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-entry-validation.md"
+      }
     },
     {
       "task_id": "DOW",
@@ -1634,7 +1886,14 @@
         "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
       ],
       "plan_data_status": "PASS",
-      "plan_evidence": "../m4-plan-validation.md"
+      "plan_evidence": "../m4-plan-validation.md",
+      "entry_compilation": {
+        "status": "PASS",
+        "scope": "ENTRY_ONLY_NOT_FULL_TASK",
+        "entry": "navigation::enter_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-entry-validation.md"
+      }
     },
     {
       "task_id": "DOW_Plus",
@@ -1676,7 +1935,14 @@
         "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
       ],
       "plan_data_status": "PASS",
-      "plan_evidence": "../m4-plan-validation.md"
+      "plan_evidence": "../m4-plan-validation.md",
+      "entry_compilation": {
+        "status": "PASS",
+        "scope": "ENTRY_ONLY_NOT_FULL_TASK",
+        "entry": "navigation::enter_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-entry-validation.md"
+      }
     },
     {
       "task_id": "DOL",
@@ -1718,7 +1984,14 @@
         "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
       ],
       "plan_data_status": "PASS",
-      "plan_evidence": "../m4-plan-validation.md"
+      "plan_evidence": "../m4-plan-validation.md",
+      "entry_compilation": {
+        "status": "PASS",
+        "scope": "ENTRY_ONLY_NOT_FULL_TASK",
+        "entry": "navigation::enter_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-entry-validation.md"
+      }
     },
     {
       "task_id": "DOL_PLUS",
@@ -1760,7 +2033,14 @@
         "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
       ],
       "plan_data_status": "PASS",
-      "plan_evidence": "../m4-plan-validation.md"
+      "plan_evidence": "../m4-plan-validation.md",
+      "entry_compilation": {
+        "status": "PASS",
+        "scope": "ENTRY_ONLY_NOT_FULL_TASK",
+        "entry": "navigation::enter_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-entry-validation.md"
+      }
     },
     {
       "task_id": "DOS",
@@ -1802,7 +2082,14 @@
         "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
       ],
       "plan_data_status": "PASS",
-      "plan_evidence": "../m4-plan-validation.md"
+      "plan_evidence": "../m4-plan-validation.md",
+      "entry_compilation": {
+        "status": "PASS",
+        "scope": "ENTRY_ONLY_NOT_FULL_TASK",
+        "entry": "navigation::enter_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-entry-validation.md"
+      }
     },
     {
       "task_id": "LMG-GT",
@@ -1845,7 +2132,14 @@
         "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
       ],
       "plan_data_status": "PASS",
-      "plan_evidence": "../m4-plan-validation.md"
+      "plan_evidence": "../m4-plan-validation.md",
+      "entry_compilation": {
+        "status": "PASS",
+        "scope": "ENTRY_ONLY_NOT_FULL_TASK",
+        "entry": "navigation::enter_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-entry-validation.md"
+      }
     },
     {
       "task_id": "LMG-FT",
@@ -1888,7 +2182,14 @@
         "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
       ],
       "plan_data_status": "PASS",
-      "plan_evidence": "../m4-plan-validation.md"
+      "plan_evidence": "../m4-plan-validation.md",
+      "entry_compilation": {
+        "status": "PASS",
+        "scope": "ENTRY_ONLY_NOT_FULL_TASK",
+        "entry": "navigation::enter_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-entry-validation.md"
+      }
     },
     {
       "task_id": "7000G",

@@ -137,10 +137,24 @@ J layout(const cv::Mat &source) {
                      {"text_height", bounds.height}},
                     false);
 }
+using EvaluationMemo = std::map<std::string, J>;
+J evaluate_uncached(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels, const J &p,
+                    const J &bound, const maafw::CustomRecognitionScope &scope,
+                    maafw::RecognitionCache &cache, unsigned depth, EvaluationMemo &memo);
 J evaluate_impl(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels, const J &p,
                 const J &bound, const maafw::CustomRecognitionScope &scope,
-                maafw::RecognitionCache &cache, unsigned depth) {
+                maafw::RecognitionCache &cache, unsigned depth, EvaluationMemo &memo) {
     check(depth <= 8, "WVD_CONDITION_DEPTH");
+    const auto key = p.dump();
+    if (const auto found = memo.find(key); found != memo.end())
+        return found->second;
+    auto result = evaluate_uncached(bundle, pixels, p, bound, scope, cache, depth, memo);
+    memo.emplace(key, result);
+    return result;
+}
+J evaluate_uncached(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels, const J &p,
+                    const J &bound, const maafw::CustomRecognitionScope &scope,
+                    maafw::RecognitionCache &cache, unsigned depth, EvaluationMemo &memo) {
     check(pixels.size.width > 0 && pixels.size.height > 0 &&
               pixels.bgr.size() == std::size_t(pixels.size.width) * pixels.size.height * 3,
           "WVD_PIXELS_INVALID");
@@ -181,7 +195,7 @@ J evaluate_impl(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels, co
         J evidence = J::array();
         // 组合只产生布尔条件，不赋予坐标许可；所有子项都检查，不能短路掩盖缺图/Error。
         for (const auto &child : children) {
-            auto result = evaluate_impl(bundle, pixels, child, bound, scope, cache, depth + 1);
+            auto result = evaluate_impl(bundle, pixels, child, bound, scope, cache, depth + 1, memo);
             check(result.at("outcome") != "Error", "WVD_CONDITION_ERROR");
             bool hit = result.at("outcome") == "Hit";
             all = all && hit;
@@ -373,7 +387,7 @@ J evaluate_impl(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels, co
         for (const auto &entry : portraits)
             declared = declared || entry.at("image") == name;
         check(declared, "COMBAT_PORTRAIT_NOT_COMPILED");
-        auto actor = evaluate_impl(bundle, pixels, {{"mode", "portrait"}, {"image", name}}, bound, scope, cache, depth + 1);
+        auto actor = evaluate_impl(bundle, pixels, {{"mode", "portrait"}, {"image", name}}, bound, scope, cache, depth + 1, memo);
         if (mode == "prepared_actor" || actor.at("outcome") != "Hit")
             return actor;
         // 0.60 只在已选技能、同一角色、详情仍开且没有友方/OK 确认的单体阶段生效。
@@ -490,7 +504,10 @@ J evaluate_impl(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels, co
 }
 J evaluate(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels, const J &p, const J &bound,
            const maafw::CustomRecognitionScope &scope, maafw::RecognitionCache &cache) {
-    return evaluate_impl(bundle, pixels, p, bound, scope, cache, 0);
+    // 同次调用的 bundle、像素和范围固定。只复用完全相同的子参数；不同条件仍全部
+    // 求值，Error 不短路掩盖。离开本次调用即释放，不跨帧/代次增加常驻缓存。
+    EvaluationMemo memo;
+    return evaluate_impl(bundle, pixels, p, bound, scope, cache, 0, memo);
 }
 } // namespace
 void register_wvd(runtime::BehaviorRegistry &registry) {

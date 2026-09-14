@@ -45,6 +45,10 @@ class WvdTaskPlan {
     nlohmann::json inspect() const;
     const std::vector<EntryStep> &entry_steps() const { return entry_; }
     const std::vector<MapTarget> &route() const { return route_; }
+    const std::optional<std::string> &pre_entry() const { return pre_entry_; }
+    const std::optional<std::string> &floor() const { return floor_; }
+    const std::optional<WorldDestination> &return_destination() const { return return_; }
+    const WvdQuestDefinition &definition() const { return definition_; }
 
   private:
     WvdQuestDefinition definition_;

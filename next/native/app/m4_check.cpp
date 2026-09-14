@@ -2,9 +2,11 @@
 #include "storage/profile_store.hpp"
 #include "games/wvd/tasks/quest_catalog.hpp"
 #include "games/wvd/tasks/task_plan.hpp"
+#include "games/wvd/navigation/dungeon_entry.hpp"
 #include "maafw/buffers.hpp"
 #include <fstream>
 #include <iostream>
+#include <set>
 
 namespace {
 using J = nlohmann::json;
@@ -66,6 +68,28 @@ int main(int argc, char **argv) {
                 result["plans"] = J::array();
                 for (const auto &task : catalog.tasks())
                     result["plans"].push_back(games::WvdTaskPlan::parse(task).inspect());
+            }
+            if (config.contains("compile_entries_manifest")) {
+                const auto manifest = read(maafw::path_from_utf8(config.at("compile_entries_manifest")));
+                std::set<std::string> files;
+                for (const auto &file : manifest.at("files"))
+                    files.insert(file.at("path"));
+                const auto &aliases = manifest.at("aliases");
+                result["compiled_entries"] = J::array();
+                for (const auto &task : catalog.tasks()) {
+                    if (task.type != "dungeon")
+                        continue;
+                    const auto graph = games::navigation::enter_dungeon(games::WvdTaskPlan::parse(task));
+                    J missing = J::array();
+                    for (const auto &image : graph.images) {
+                        const auto selected = aliases.contains(image) ? aliases.at(image).get<std::string>() : image;
+                        if (!files.contains("image/" + selected))
+                            missing.push_back(image);
+                    }
+                    result["compiled_entries"].push_back({{"task_id", task.id}, {"nodes", graph.nodes},
+                        {"images", graph.images}, {"required_actions", graph.required_actions},
+                        {"missing_images", missing}, {"scope", "ENTRY_ONLY_NOT_FULL_TASK"}, {"executed", false}});
+                }
             }
         }
         if (config.contains("profile_path")) {

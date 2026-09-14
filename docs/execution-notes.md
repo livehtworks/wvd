@@ -80,6 +80,7 @@
 
 ## Next M4 状态与任务数据
 
+- 复合视觉条件不要在同一 evaluate 内重复计算相同子表达式；局部 memo 必须保留 ROI/预处理身份和深度校验，不跨调用/帧/代次。入本模板动作不应每次匹配整条路线所有页；实测识别约 1.86 秒加 SDK 动作等待约 0.21 秒会越过 2 秒帧 TTL，应收敛场景证明，不能延长 TTL 掩盖。
 - 状态工厂必须在 BehaviorRegistry seal 前注册，函数非捕获；其参数进入 definition_version=3。Maa 回调可能另在线程，状态修改通过 Context 的有锁访问，不能依赖线程局部变量保存整个 Run 状态。
 - 正常有限段需要本根任务检查点和真静止，不能复用 RecoveryRequired。单调时间起点用可空值；测试从零开始也应正确累计。
 - 旧 TargetInfo 的第三个参数并不总是 ROI：position/stair 为点，harken/Bharken 可以是楼梯资源名。旧 EOT 和嵌套 fallback 是顺序列表，不可直接作为 Maa 候选 next。
