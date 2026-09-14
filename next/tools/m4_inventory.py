@@ -543,6 +543,47 @@ def update_boundaries(evidence):
     print("Effect and image-source boundaries recorded; complete task statuses unchanged.")
 
 
+def update_revival(evidence, pause_evidence, pause_retry_evidence):
+    verify_workflows(evidence, {
+        "route-Inn": ("Completed", 0), "route-RiseAgain": ("Completed", 1),
+        "revival-confirmed-False": ("Completed", 1), "revival-confirmed-True": ("Completed", 2),
+        "route-revival-heal": ("Completed", 7), "revival-stop-False": ("Failed", 1),
+        "revival-stop-True": ("UserStopped", 1), "revival-unchanged": ("Interrupted", 2),
+        "revival-blocked": ("Interrupted", 1),
+    })
+    verify_workflows(pause_evidence, {
+        "pause-clears-1": ("Completed", 1), "pause-clears-6": ("Completed", 6),
+        **{"pause-negative-" + name: ("Completed", 0) for name in ("trait", "recover", "spellskill-skillDetail", "close")},
+    })
+    verify_workflows(pause_retry_evidence, {
+        "pause-frozen": ("Interrupted", 6), "pause-stop-False": ("Failed", 1), "pause-stop-True": ("UserStopped", 1),
+    })
+    for name in ("revival-unchanged", "revival-blocked"):
+        result = read(evidence / name / "output.json")
+        if result["lifecycle_calls"] or result["snapshot"]["sessions"][-1]["reason"] != "revival.outcome_unconfirmed":
+            raise ValueError("REVIVAL_UNCERTAIN_RECOVERY_INVALID")
+    frozen = read(pause_retry_evidence / "pause-frozen/output.json")
+    if frozen["snapshot"]["sessions"][-1]["reason"] != "pause.physics_frozen":
+        raise ValueError("PAUSE_FREEZE_REASON_INVALID")
+    path = ROOT / "docs/migration/m4-implementation-map.json"
+    document = read(path)
+    owners = {
+        "Factory.RiseAgainReset": ("recovery/revival.cpp", "recovery::revive_after_defeat", "m4-revival-validation.md"),
+        "Factory.TryResumePauseOverlay": ("recovery/boot.cpp", "recovery::clear_common_screens", "m4-pause-validation.md"),
+        "Factory.IdentifyState": ("tasks/dungeon_route.cpp", "tasks::traverse_dungeon / recovery::clear_common_screens", "m4-revival-validation.md"),
+    }
+    for row in document["entries"]:
+        if row["legacy_symbol"] in owners:
+            source, entry, report = owners[row["legacy_symbol"]]
+            row.update(implementation="native/games/wvd/" + source, entry=entry,
+                implementation_status="PARTIAL", implementation_extent="GLOBAL_PAUSE_REVIVAL_SUBSET",
+                offline_status="PASS", evidence_report="../" + report,
+                verification_scope="真实 Maa 合成场景的 Pause/复活与正常路线连接，不是全部全局事件或完整任务",
+                remaining="多人死亡、其它全局对话、完整任务与真实质量未齐；失败遭遇使用独立序号，不复用成功次数。")
+    write(path, document)
+    print("Pause and revival evidence recorded; complete task counts unchanged.")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--data-evidence", type=Path)
@@ -559,8 +600,11 @@ if __name__ == "__main__":
     parser.add_argument("--common-evidence", type=Path)
     parser.add_argument("--interruption-evidence", type=Path)
     parser.add_argument("--boundaries-evidence", type=Path)
+    parser.add_argument("--revival-evidence", type=Path)
+    parser.add_argument("--pause-evidence", type=Path)
+    parser.add_argument("--pause-retry-evidence", type=Path)
     args = parser.parse_args()
-    if not any((args.data_evidence, args.combat_evidence, args.navigation_evidence, args.encounter_evidence, args.healing_evidence, args.dungeon_route_evidence, args.departure_evidence, args.iteration_evidence, args.common_evidence, args.interruption_evidence, args.boundaries_evidence)):
+    if not any((args.data_evidence, args.combat_evidence, args.navigation_evidence, args.encounter_evidence, args.healing_evidence, args.dungeon_route_evidence, args.departure_evidence, args.iteration_evidence, args.common_evidence, args.interruption_evidence, args.boundaries_evidence, args.revival_evidence)):
         parser.error("an evidence group is required")
     if args.data_evidence:
         generate(args.data_evidence, args.state_evidence, args.plan_evidence, args.workflow_evidence)
@@ -586,6 +630,10 @@ if __name__ == "__main__":
         update_interruption(args.interruption_evidence)
     if args.boundaries_evidence:
         update_boundaries(args.boundaries_evidence)
+    if args.revival_evidence:
+        if not args.pause_evidence or not args.pause_retry_evidence:
+            parser.error("--revival-evidence requires both Pause evidence directories")
+        update_revival(args.revival_evidence, args.pause_evidence, args.pause_retry_evidence)
     if args.dungeon_route_evidence:
         if not args.plan_evidence:
             parser.error("--dungeon-route-evidence requires --plan-evidence")

@@ -5,6 +5,7 @@
 #include "games/wvd/navigation/map_route.hpp"
 #include "games/wvd/supply/dungeon_recover.hpp"
 #include "games/wvd/recovery/boot.hpp"
+#include "games/wvd/recovery/revival.hpp"
 
 namespace wvd::games::tasks {
 using J = nlohmann::json;
@@ -66,10 +67,13 @@ CompiledWorkflow traverse_dungeon(const WvdTaskPlan &plan, const J &profile,
     graph.hit_limit("ClearBlocking", 32);
     graph.hit_limit("Dispatch", 128);
     graph.observe("Outside", outside, {"Terminal"});
-    graph.observe("Revive", revive, {"ReviveExit"});
-    graph.recovery("ReviveExit", "dungeon.revival_required");
+    const auto resurrection = graph.define_child("Resurrection", recovery::revive_after_defeat(), {"BlockedExit"});
+    graph.observe("Revive", revive, {"Resurrect"});
+    graph.hit_limit("Revive", 32);
+    graph.call_child("Resurrect", resurrection, {"Dispatch"});
+    graph.hit_limit("Resurrect", 32);
 
-    const auto battle = graph.define_child("Battle", wvd::games::combat::fight_encounter(profile, available_images, 16), {"BlockedExit"});
+    const auto battle = graph.define_child("Battle", wvd::games::combat::fight_encounter(profile, available_images, 16), {"BlockedExit", "ReviveExit"});
     graph.observe("Combat", combat, {"Fight"});
     graph.call_child("Fight", battle, {"Dispatch"});
     graph.hit_limit("Combat", 128);

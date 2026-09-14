@@ -470,7 +470,7 @@ void PipelineCompiler::failure_route(const std::string &name, J next) {
 void PipelineCompiler::confirm(const std::string &name, const std::string &operation,
                                const std::string &event, const J &condition, J next, J step) {
     const std::set<std::string> events{"target_completed", "dungeon_entered", "combat_observed",
-                                      "chest_observed", "dungeon_resumed", "dungeon_completed", "resurrected", "game_restarted",
+                                      "chest_observed", "dungeon_resumed", "dungeon_completed", "revival_observed", "resurrected", "game_restarted",
                                       "healing_requested", "healing_completed", "inn_rest_completed", "party_reassembled"};
     require(events.contains(event) && !operation.empty() && operation.size() <= 128,
             "COMPILE_BUSINESS_EVENT_INVALID");

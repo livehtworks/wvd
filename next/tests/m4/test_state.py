@@ -134,6 +134,18 @@ class StateTests(unittest.TestCase):
         self.assertFalse(result["pending_combat"])
         self.assertFalse(result["pending_chest"])
 
+    def test_revival_does_not_reuse_encounter_ids_or_count_defeat(self):
+        result = self.run_case("revival-contract")["direct"]["revival_contract"]
+        for key, expected in (("combat_defeats", (0, 2)), ("chest_defeats", (2, 0))):
+            state = result[key]
+            self.assertEqual((state["combats"], state["chests"]), expected)
+            self.assertEqual((state["combat_sequence"], state["chest_sequence"], state["revivals"]), (2, 2, 2))
+            self.assertFalse(state["revival_pending"])
+            self.assertTrue(state["healing_required"])
+            after = result[key + "_then_success"]
+            self.assertEqual((after["combats"], after["chests"]), tuple(n + 1 for n in expected))
+            self.assertEqual((after["combat_sequence"], after["chest_sequence"]), (3, 3))
+
     def test_healing_requirements_survive_interruption_not_old_intents(self):
         state = self.run_case("healing-contract")["direct"]["healing_contract"]
         self.assertTrue(state["healing_required"])

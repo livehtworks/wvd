@@ -37,6 +37,7 @@
 | WvdRunState 确认签名、business.confirmed 事件、snapshot.business.last_confirmation | 本 Run 的操作去重与确认诊断；不是跨进程恢复数据库 | WvdConfirm 在实际新帧识别后生成；状态最多保存 4096 个签名，EventJournal 有界 | 任务步/宝箱计数与终态审查；摘要不等于持久化 profile 回执，不允许据此启动实机重放 |
 | snapshot.business.inn_rest_completed/inn_rests/supply_cycle、last_bag_clear | 本 Run 已确认住宿与队伍周期；不是装备或游戏资产权威 | 新帧确认后由 WvdRunState 更新，入本开始新补给周期 | 回城补给和旅店子图避免已确认住宿重付；跨普通段/恢复代次保留，不从磁盘历史自动重建许可 |
 | WvdRunState prepared 选择及 business.combat 事件 | 本代次未完成技能意图和已确认消费诊断；不是恢复许可 | WvdCombat 在同帧头像匹配后选择；新帧后置确认后消费 | 技能图读取只读摘要并重新识别原角色；不保存旧帧/坐标，段边界清除未完成选择 |
+| snapshot.business.combat_sequence/chest_sequence、revival_sequence/pending/revivals | 本 Run 遭遇身份与复活确认；序号不是成功统计，也不授权重放 | WvdRunState 根据新帧 WvdConfirm 事件更新 | 失败遭遇不重用 ID；复活图和外层恢复读取，已有成功计数不倒扣；不是跨进程断点 |
 | docs/migration/m4-implementation-map.json、m4-task-status.json | 当前实现叠加和完整任务分母；不是执行计划 | m4_inventory.py 对照固定索引与实际数据测试结果 | 审核；DATA_BOUND_ONLY 不能解释为任务已运行 |
 | .local/m3fix-m4-*、m3-fixes-*、m4-data-* | 本轮隔离配置、合成图、失败复现与测试结果 | 工作包执行脚本、原生检查入口 | 私有审核证据；公开包仅收脱敏报告/索引，不包含配置原文或真实图片 |
 

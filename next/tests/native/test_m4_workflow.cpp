@@ -16,6 +16,7 @@
 #include "games/wvd/combat/turn.hpp"
 #include "games/wvd/combat/encounter.hpp"
 #include "games/wvd/recovery/boot.hpp"
+#include "games/wvd/recovery/revival.hpp"
 #include "games/wvd/tasks/workflow_session.hpp"
 #include "games/wvd/tasks/dungeon_route.hpp"
 #include "games/wvd/tasks/departure.hpp"
@@ -178,6 +179,8 @@ int main(int argc, char **argv) {
             }
             if (kind == "heal")
                 return games::supply::recover_in_dungeon();
+            if (kind == "revival")
+                return games::recovery::revive_after_defeat();
             if (kind == "common")
                 return games::recovery::clear_common_screens(config.value("allow_download", true));
             if (kind == "dungeon-route" || kind == "iteration") {

@@ -72,6 +72,7 @@ if(WVD_BUILD_M4)
     ../games/wvd/combat/turn.cpp
     ../games/wvd/combat/encounter.cpp
     ../games/wvd/recovery/boot.cpp
+    ../games/wvd/recovery/revival.cpp
     ../games/wvd/state.cpp ../games/wvd/combat/strategy.cpp ../storage/legacy_import.cpp ../storage/profile_store.cpp)
   target_link_libraries(wvd_business PUBLIC wvd_core)
   target_compile_options(wvd_business PRIVATE /utf-8 /W4 /EHsc)

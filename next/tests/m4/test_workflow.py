@@ -65,12 +65,14 @@ class WorkflowTests(unittest.TestCase):
         if options.get("workflow") in ("entry", "iteration"):
             names += ["GotoDung", "openworldmap", "returntoTown", "intoWorldMap", "TradeWaterway", "Dist", "EVENT", "FFXI/EVENT_GCN", "FFXI/zone5", "preGate"]
         if options.get("workflow") in ("recover", "common", "iteration", "dungeon-route", "map", "map-confirm", "state-route",
-                                      "auto-route", "auto", "turn", "encounter", "chest", "heal"):
+                                      "auto-route", "auto", "turn", "encounter", "chest", "heal", "revival"):
             names += ["dungFlag", "openworldmap", "returnText", "returntoTown", "mapFlag", "chestFlag", "whowillopenit",
                       "fishing/cast", "fishing/striking", "fishing/CloseFishInfo", "combatActive", "combatActive_2",
                       "combatActive_3", "combatActive_4", "boot_title_logo", "boot_attention", "startdownload",
                       "retry", "retry_blank", "totitle", "resume", "trait", "recover", "spellskill/skillDetail", "close"]
         names += options.get("extra_images", [])
+        if options.get("workflow") == "revival":
+            names.append("RiseAgain")
         rng = np.random.default_rng(90614)
         patterns = {name: rng.integers(30, 255, (24, 40, 3), dtype=np.uint8) for name in names}
         if "chest_auto_minus" in patterns:
@@ -133,7 +135,7 @@ class WorkflowTests(unittest.TestCase):
             if options.get("corrupt_mod_before_publish"):
                 for path in mod.rglob("*.png"):
                     path.write_bytes(b"changed before publication")
-        if options.get("workflow") in ("chest", "map-confirm", "state-route", "turn", "encounter", "recover", "heal", "dungeon-route", "departure", "inn-tracked", "iteration"):
+        if options.get("workflow") in ("chest", "map-confirm", "state-route", "turn", "encounter", "recover", "heal", "dungeon-route", "departure", "inn-tracked", "iteration", "revival"):
             config.update(with_state=True, descriptor=str(ROOT / "packs/wvd/parameters/legacy-config-fields.json"))
         if "omit_image" in options:
             config["files"] = [f for f in config["files"] if f["path"] != "image/" + options["omit_image"]]
@@ -1199,12 +1201,72 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(r["backend_calls"], 1)
 
     def test_dungeon_route_outside_and_revive_never_use_map_coordinates(self):
-        for name, state in (("Inn", "Completed"), ("RiseAgain", "Interrupted")):
-            r = self.execute("route-" + name, [{name: (350, 450)}], [], workflow="dungeon-route",
+        # 新版接通复活消费者：仍禁止地图点，只允许当前 RiseAgain 上的确认点。
+        for name in ("Inn", "RiseAgain"):
+            screens = [{name: (350, 450)}]
+            commands = []
+            if name == "RiseAgain":
+                screens.append({"Inn": (100, 400)})
+                commands.append(dict(kind=0, x=370, y=462))
+            r = self.execute("route-" + name, screens, commands, workflow="dungeon-route",
                 profile=self.turn_profile(defend=True), route_targets=[["position", [None], [500, 600]]])
-            self.assertEqual(r["snapshot"]["state"], state, r)
+            self.assertEqual(r["snapshot"]["state"], "Completed", r)
             self.assertEqual(r["snapshot"]["business"]["task_step"], 0)
-            self.assertEqual(r["backend_calls"], 0)
+            self.assertEqual(r["backend_calls"], len(commands))
+            self.assertFalse(r["mismatch"])
+            self.assertEqual(r["snapshot"]["business"]["revivals"], len(commands))
+
+    def test_revival_confirms_only_after_leaving_prompt(self):
+        prompt, dungeon = {"RiseAgain": (350, 450)}, {"dungFlag": (50, 150)}
+        for second in (False, True):
+            commands = [dict(kind=0, x=370, y=462)]
+            if second:
+                commands.append(dict(kind=0, x=450, y=750))
+            r = self.execute(f"revival-confirmed-{second}", [prompt] * len(commands) + [dungeon], commands,
+                             workflow="revival", profile=self.turn_profile())
+            self.assertEqual(r["snapshot"]["state"], "Completed", r)
+            self.assertEqual(r["backend_calls"], len(commands))
+            self.assertFalse(r["mismatch"])
+            state = r["snapshot"]["business"]
+            self.assertEqual((state["revivals"], state["revival_sequence"]), (1, 1))
+            self.assertTrue(state["healing_required"])
+            self.assertFalse(state["revival_pending"])
+            self.assertEqual((state["combats"], state["chests"]), (0, 0))
+
+    def test_revival_uncertainty_never_restarts_or_replays(self):
+        prompt = {"RiseAgain": (350, 450)}
+        cases = (("unchanged", [prompt] * 3, [dict(kind=0, x=370, y=462), dict(kind=0, x=450, y=750)]),
+                 ("blocked", [prompt, {"retry": (400, 800)}], [dict(kind=0, x=370, y=462)]))
+        for name, screens, commands in cases:
+            r = self.execute("revival-" + name, screens, commands, workflow="revival",
+                profile=self.turn_profile(), attach_recovery=True, force_instance=True, max_crashes=0)
+            self.assert_uncertain_effect(r, "revival.outcome_unconfirmed", len(commands))
+            self.assertEqual(r["snapshot"]["business"]["revivals"], 0)
+            self.assertTrue(r["snapshot"]["business"]["revival_pending"])
+
+    def test_revival_stop_and_reject_leave_unconfirmed_state(self):
+        for stop in (False, True):
+            r = self.execute(f"revival-stop-{stop}", [{"RiseAgain": (350, 450)}] * 2,
+                [dict(kind=0, x=370, y=462, reject=not stop)], workflow="revival", stop_after_first=stop)
+            self.assertEqual(r["snapshot"]["state"], "UserStopped" if stop else "Failed", r)
+            self.assertEqual(r["backend_calls"], 1)
+            self.assertFalse(r["mismatch"])
+            self.assertEqual(r["snapshot"]["business"]["revivals"], 0)
+
+    def test_revival_route_heals_after_defeat_without_counting_win(self):
+        prompt, dungeon = {"RiseAgain": (350, 450)}, {"dungFlag": (50, 150)}
+        trait, recover = {"trait": (200, 300)}, {"recover": (250, 850)}
+        r = self.execute("route-revival-heal", [self.turn_screen(), prompt, dungeon, trait, recover, trait, dungeon,
+            {"mapFlag": (100, 100), "cursor_0": (480, 588)}],
+            [dict(kind=0, x=513, y=1200), dict(kind=0, x=370, y=462), dict(kind=0, x=36, y=1425),
+             dict(kind=0, x=830, y=850), dict(kind=0, x=600, y=1200), dict(kind=5, key=4), dict(kind=0, x=777, y=150)],
+            workflow="dungeon-route", profile=self.turn_profile(defend=True), route_targets=[["position", [None], [500, 600]]])
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 7)
+        self.assertFalse(r["mismatch"])
+        state = r["snapshot"]["business"]
+        self.assertEqual((state["task_step"], state["combat_sequence"], state["revivals"], state["combats"]), (1, 1, 1, 0))
+        self.assertFalse(state["healing_required"])
 
     def test_dungeon_route_heals_after_combat_before_navigation(self):
         profile = self.turn_profile(defend=True)

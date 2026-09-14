@@ -233,6 +233,51 @@ J direct_contract(const J &profile) {
     result["after_combat_reset"] = reloaded.summary();
     reloaded.resurrected();
     result["after_rez"] = reloaded.summary();
+    J revival_results = J::object();
+    for (const bool failed_combat : {false, true}) {
+        games::WvdRunState defeated(profile, {"revival", failed_combat ? 8u : 9u, clock});
+        defeated.enter_segment(contracts::SegmentBoundary::Initial, 1, 0);
+        auto confirm = [&](const std::string &operation, const std::string &event, unsigned frame) {
+            const auto id = defeated.confirmation_id(operation, event);
+            require(defeated.confirm_event(id, event, 1, frame), "REVIVAL_EVENT_NOT_APPLIED");
+            require(defeated.confirmation_id(operation, event) == id, "REVIVAL_EVENT_ID_UNSTABLE");
+            require(!defeated.confirm_event(id, event, 1, frame + 1), "REVIVAL_EVENT_REPLAYED");
+            return id;
+        };
+        std::string old_combat, old_chest;
+        for (unsigned repeat = 0; repeat < 2; ++repeat) {
+            const auto combat_id = defeated.confirmation_id("combat", "combat_observed");
+            const auto chest_id = defeated.confirmation_id("chest", "chest_observed");
+            require(combat_id != old_combat && chest_id != old_chest, "DEFEAT_REUSED_ENCOUNTER_ID");
+            old_combat = combat_id;
+            old_chest = chest_id;
+            if (failed_combat) {
+                confirm("chest", "chest_observed", repeat * 20 + 1);
+                confirm("combat", "combat_observed", repeat * 20 + 3);
+            } else {
+                confirm("combat", "combat_observed", repeat * 20 + 1);
+                confirm("chest", "chest_observed", repeat * 20 + 3);
+            }
+            confirm("revival", "revival_observed", repeat * 20 + 5);
+            confirm("revived", "resurrected", repeat * 20 + 7);
+            require(!defeated.confirm_event(old_combat, "combat_observed", 1, repeat * 20 + 9), "OLD_COMBAT_REOPENED");
+            confirm("resume", "dungeon_resumed", repeat * 20 + 11);
+        }
+        const auto key = failed_combat ? "combat_defeats" : "chest_defeats";
+        revival_results[key] = defeated.summary();
+        confirm("combat", "combat_observed", 50);
+        confirm("chest", "chest_observed", 52);
+        confirm("resume", "dungeon_resumed", 54);
+        revival_results[std::string(key) + "_then_success"] = defeated.summary();
+        bool unobserved_rejected = false;
+        try {
+            defeated.confirm_event("unobserved-revival", "resurrected", 1, 56);
+        } catch (const std::runtime_error &e) {
+            unobserved_rejected = std::string(e.what()) == "REVIVAL_NOT_OBSERVED";
+        }
+        require(unobserved_rejected, "UNOBSERVED_REVIVAL_ACCEPTED");
+    }
+    result["revival_contract"] = revival_results;
     games::CombatStrategy missing(points);
     missing.reload(0);
     auto old = missing.select({{"A", .9}});

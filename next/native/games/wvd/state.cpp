@@ -53,15 +53,21 @@ void WvdRunState::target_point_completed() {
         strategy_.reload(task_step_);
 }
 void WvdRunState::observe_combat() {
-    if (!pending_combat_)
+    if (!pending_combat_) {
+        ++combat_sequence_;
+        last_encounter_ = Encounter::Combat;
         healing_active_ = false;
+    }
     if (!combat_started_)
         combat_started_ = clock_->now();
     pending_combat_ = true;
 }
 void WvdRunState::observe_chest() {
-    if (!pending_chest_)
+    if (!pending_chest_) {
+        ++chest_sequence_;
+        last_encounter_ = Encounter::Chest;
         healing_active_ = false;
+    }
     if (!chest_started_)
         chest_started_ = clock_->now();
     pending_chest_ = true;
@@ -101,6 +107,15 @@ bool WvdRunState::healing_required() const {
 }
 void WvdRunState::resurrected() {
     prepared_.reset();
+    // 旧版先计数再按死亡原因扣一；新版推迟到回到地下城才计数，因此撤销
+    // 最后失败的待结算遭遇，不对 unsigned 成功次数做减法。已花费时间仍保留。
+    if (last_encounter_ == Encounter::Combat)
+        pending_combat_ = false;
+    else if (last_encounter_ == Encounter::Chest)
+        pending_chest_ = false;
+    last_encounter_ = Encounter::None;
+    revival_pending_ = false;
+    ++revivals_;
     recover_after_rez_ = true;
     healing_active_ = false;
     strategy_.reload(task_step_);
@@ -188,12 +203,15 @@ std::string WvdRunState::confirmation_id(const std::string &operation, const std
     // 同一遭遇中的重复识别共用 ID，回到地下城确认结束后才开始下一次遭遇。
     // 不用帧号/代次作 ID：它们会让重试重复计数；也不能只用节点名吞掉第二场。
     if (event == "combat_observed")
-        id += ":combat:" + std::to_string(combats_ + 1);
+        id += ":combat:" + std::to_string(combat_sequence_ + (pending_combat_ ? 0 : 1));
     else if (event == "chest_observed")
-        id += ":chest:" + std::to_string(chests_ + 1);
+        id += ":chest:" + std::to_string(chest_sequence_ + (pending_chest_ ? 0 : 1));
     else if (event == "dungeon_resumed")
-        id += ":resume:" + std::to_string(combats_ + (pending_combat_ ? 1 : 0)) + ":" +
-              std::to_string(chests_ + (pending_chest_ ? 1 : 0));
+        id += ":resume:" + std::to_string(combat_sequence_) + ":" + std::to_string(chest_sequence_);
+    else if (event == "revival_observed")
+        id += ":revival:" + std::to_string(revival_sequence_ + (revival_pending_ ? 0 : 1));
+    else if (event == "resurrected")
+        id += ":revival:" + std::to_string(revival_sequence_);
     else if (event == "game_restarted")
         id += ":restart:" + std::to_string(lifecycle_recovery_sequence_);
     else if (event == "healing_requested")
@@ -235,8 +253,16 @@ bool WvdRunState::confirm_event(const std::string &operation, const std::string 
         resume_dungeon();
     else if (event == "dungeon_completed")
         dungeon_completed();
-    else if (event == "resurrected")
+    else if (event == "revival_observed") {
+        if (!revival_pending_)
+            ++revival_sequence_;
+        revival_pending_ = true;
+    }
+    else if (event == "resurrected") {
+        if (!revival_pending_)
+            throw std::runtime_error("REVIVAL_NOT_OBSERVED");
         resurrected();
+    }
     else if (event == "party_reassembled")
         bag_clear_completed();
     else if (event == "inn_rest_completed") {
@@ -310,6 +336,11 @@ J WvdRunState::summarize() const {
             {"chest_timer_active", chest_started_.has_value()},
             {"pending_combat", pending_combat_},
             {"pending_chest", pending_chest_},
+            {"combat_sequence", combat_sequence_},
+            {"chest_sequence", chest_sequence_},
+            {"revival_sequence", revival_sequence_},
+            {"revival_pending", revival_pending_},
+            {"revivals", revivals_},
             {"met_encounter", met_encounter_},
             {"need_initial_recover", need_initial_recover_},
             {"recover_after_rez", recover_after_rez_},

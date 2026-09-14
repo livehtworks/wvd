@@ -12,7 +12,7 @@ CompiledWorkflow dungeon_iteration(const WvdTaskPlan &plan, const nlohmann::json
         throw std::runtime_error("DUNGEON_ITERATION_TYPE_INVALID");
     C graph("tasks.dungeon_iteration." + plan.definition().id, std::chrono::seconds{760});
     const auto inside = C::any({C::image("dungFlag"), C::image("mapFlag"), C::image("chestFlag"),
-                                C::image("whowillopenit"), J{{"mode", "combat_active"}}});
+                                C::image("whowillopenit"), C::image("RiseAgain"), J{{"mode", "combat_active"}}});
     const auto outside = C::all({C::any({C::image("Inn"), C::image("EdgeOfTown"), C::image("returntoTown"),
                                         C::image("openworldmap"), C::image("returnText"), C::image("worldmapflag")}),
                                  C::absent(inside)});
