@@ -874,7 +874,14 @@
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "remaining": "本轮未承接此完整业务；固定旧入口仍为唯一生产实现。"
+      "remaining": "本轮未承接此完整业务；固定旧入口仍为唯一生产实现。",
+      "cold_start_validation": {
+        "status": "PASS",
+        "implementation": "native/runtime/run_coordinator.cpp",
+        "entry": "RunCoordinator::drive / recovery::decide",
+        "evidence_report": "../m4-cold-start-validation.md",
+        "scope": "未启动任务且零输入的明确连接失败，经显式离线端口恢复并续接原任务；不开放真实设备"
+      }
     },
     {
       "inventory_id": "function:src/script.py:Factory.DeviceShell:936",
@@ -1535,7 +1542,14 @@
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "remaining": "本轮未承接此完整业务；固定旧入口仍为唯一生产实现。"
+      "remaining": "本轮未承接此完整业务；固定旧入口仍为唯一生产实现。",
+      "cold_start_validation": {
+        "status": "PASS",
+        "implementation": "native/runtime/run_coordinator.cpp",
+        "entry": "RunCoordinator::drive / recovery::decide",
+        "evidence_report": "../m4-cold-start-validation.md",
+        "scope": "未启动任务且零输入的明确连接失败，经显式离线端口恢复并续接原任务；不开放真实设备"
+      }
     },
     {
       "inventory_id": "function:src/script.py:Factory.restartGame:1649",
@@ -1557,7 +1571,14 @@
       "remaining": "状态消费/重置已迁移，实际导航/战斗/恢复输入及完整业务出口尚未承接。",
       "implementation_extent": "STATE_ONLY",
       "verification_scope": "状态 API 与真实 Maa 有限段，不是游戏动作",
-      "evidence_report": "../m4-state-validation.md"
+      "evidence_report": "../m4-state-validation.md",
+      "cold_start_validation": {
+        "status": "PASS",
+        "implementation": "native/runtime/run_coordinator.cpp",
+        "entry": "RunCoordinator::drive / recovery::decide",
+        "evidence_report": "../m4-cold-start-validation.md",
+        "scope": "未启动任务且零输入的明确连接失败，经显式离线端口恢复并续接原任务；不开放真实设备"
+      }
     },
     {
       "inventory_id": "function:src/script.py:Factory.restartGame.TryDeviceShellOnce:1666",
@@ -1614,7 +1635,14 @@
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "remaining": "本轮未承接此完整业务；固定旧入口仍为唯一生产实现。"
+      "remaining": "本轮未承接此完整业务；固定旧入口仍为唯一生产实现。",
+      "cold_start_validation": {
+        "status": "PASS",
+        "implementation": "native/runtime/run_coordinator.cpp",
+        "entry": "RunCoordinator::drive / recovery::decide",
+        "evidence_report": "../m4-cold-start-validation.md",
+        "scope": "未启动任务且零输入的明确连接失败，经显式离线端口恢复并续接原任务；不开放真实设备"
+      }
     },
     {
       "inventory_id": "function:src/script.py:Factory.ReloadStrategy:1756",

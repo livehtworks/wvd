@@ -623,6 +623,25 @@ def update_party_defeat(evidence):
     print("Party defeat evidence recorded; complete task counts unchanged.")
 
 
+def update_cold_start(evidence):
+    verify_workflows(evidence, {
+        "cold-offline": ("Completed", 8), "cold-closed": ("Completed", 8),
+        "cold-no-policy": ("Failed", 0), "cold-exception": ("Failed", 0),
+        "cold-no-port": ("Failed", 0), "cold-stop": ("UserStopped", 0),
+        "cold-exhausted": ("Interrupted", 0),
+    })
+    path = ROOT / "docs/migration/m4-implementation-map.json"
+    document = read(path)
+    for row in document["entries"]:
+        if row["legacy_symbol"] in ("Factory.ResetDevice", "Factory.WaitGameBootReady", "Factory.restartGame", "Factory.RestartableSequenceExecution"):
+            row["cold_start_validation"] = {
+                "status": "PASS", "implementation": "native/runtime/run_coordinator.cpp",
+                "entry": "RunCoordinator::drive / recovery::decide", "evidence_report": "../m4-cold-start-validation.md",
+                "scope": "未启动任务且零输入的明确连接失败，经显式离线端口恢复并续接原任务；不开放真实设备"}
+    write(path, document)
+    print("Cold start evidence recorded; complete task counts unchanged.")
+
+
 def update_chest(evidence):
     verify_workflows(evidence, {
         **{f"chest-character-{i}": ("Completed", 3) for i in range(1, 7)},
@@ -667,8 +686,9 @@ if __name__ == "__main__":
     parser.add_argument("--chest-evidence", type=Path)
     parser.add_argument("--party-death-evidence", type=Path)
     parser.add_argument("--party-defeat-evidence", type=Path)
+    parser.add_argument("--cold-start-evidence", type=Path)
     args = parser.parse_args()
-    if not any((args.data_evidence, args.combat_evidence, args.navigation_evidence, args.encounter_evidence, args.healing_evidence, args.dungeon_route_evidence, args.departure_evidence, args.iteration_evidence, args.common_evidence, args.interruption_evidence, args.boundaries_evidence, args.revival_evidence, args.chest_evidence, args.party_death_evidence, args.party_defeat_evidence)):
+    if not any((args.data_evidence, args.combat_evidence, args.navigation_evidence, args.encounter_evidence, args.healing_evidence, args.dungeon_route_evidence, args.departure_evidence, args.iteration_evidence, args.common_evidence, args.interruption_evidence, args.boundaries_evidence, args.revival_evidence, args.chest_evidence, args.party_death_evidence, args.party_defeat_evidence, args.cold_start_evidence)):
         parser.error("an evidence group is required")
     if args.data_evidence:
         generate(args.data_evidence, args.state_evidence, args.plan_evidence, args.workflow_evidence)
@@ -700,6 +720,8 @@ if __name__ == "__main__":
         update_party_death(args.party_death_evidence)
     if args.party_defeat_evidence:
         update_party_defeat(args.party_defeat_evidence)
+    if args.cold_start_evidence:
+        update_cold_start(args.cold_start_evidence)
     if args.revival_evidence:
         if not args.pause_evidence or not args.pause_retry_evidence:
             parser.error("--revival-evidence requires both Pause evidence directories")
