@@ -9,6 +9,7 @@ struct CompiledWorkflow {
     std::string kind;
     std::string entry{"Entry"};
     std::string terminal{"Terminal"};
+    std::string checkpoint;
     nlohmann::json nodes = nlohmann::json::object();
     std::vector<std::string> images;
     std::vector<std::string> required_actions;
@@ -36,6 +37,9 @@ class PipelineCompiler {
     std::string append(const std::string &prefix, const CompiledWorkflow &child,
                        nlohmann::json next);
     void recovery(const std::string &name, const std::string &reason);
+    void confirm(const std::string &name, const std::string &operation, const std::string &event,
+                 const nlohmann::json &condition, nlohmann::json next,
+                 nlohmann::json expected_step = nullptr);
     void hit_limit(const std::string &name, int limit);
     void delay_after(const std::string &name, int milliseconds);
     CompiledWorkflow finish();

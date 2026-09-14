@@ -2,6 +2,10 @@
 #include "loaded_modules.hpp"
 #include "games/wvd/navigation/world_map.hpp"
 #include "games/wvd/navigation/map_route.hpp"
+#include "games/wvd/chest/chest.hpp"
+#include "games/wvd/diagnostics.hpp"
+#include "games/wvd/state.hpp"
+#include "storage/legacy_import.hpp"
 #include "games/wvd/supply/inn.hpp"
 #include "games/wvd/combat/auto_combat.hpp"
 #include "games/wvd/tasks/workflow_session.hpp"
@@ -58,6 +62,8 @@ int main(int argc, char **argv) {
                 return games::supply::rest_at_inn(config.value("royal", false));
             if (kind == "auto")
                 return games::combat::enable_auto();
+            if (kind == "chest")
+                return games::chest::open_chest(config.value("preferred", 1), config.value("quick", false), 42);
             if (kind == "city-inn") {
                 games::tasks::PipelineCompiler graph("supply.city_and_rest");
                 const auto rest = graph.append("Rest", games::supply::rest_at_inn(false), {"Terminal"});
@@ -65,13 +71,24 @@ int main(int argc, char **argv) {
                 graph.route("Entry", {city});
                 return graph.finish();
             }
-            if (kind == "map") {
+            if (kind == "map" || kind == "map-confirm") {
                 games::WvdQuestDefinition definition{"map-fixture", "dungeon",
                     {{"_TARGETINFOLIST", J::array({config.at("map_target")})},
                      {"_EOT", J::array({J::array({"press", "Dist", nullptr, 1})})}}};
                 auto plan = games::WvdTaskPlan::parse(definition);
-                return games::navigation::reach_map_target(plan.route().at(0),
+                auto route = games::navigation::reach_map_target(plan.route().at(0),
                     config.contains("floor") ? std::optional(config.at("floor").get<std::string>()) : std::nullopt);
+                if (kind == "map")
+                    return route;
+                using C = games::tasks::PipelineCompiler;
+                C graph("navigation.confirmed_point");
+                const auto done = C::all({C::image("mapFlag"), J{{"mode", "reached"}, {"position", {500, 600}}}});
+                const auto entry = graph.append("Point", route, {"Confirm"});
+                graph.route("Entry", {entry});
+                graph.confirm("Confirm", "point.0", "target_completed", done,
+                               {"Replay"}, config.value("expected_step", 0));
+                graph.confirm("Replay", "point.0", "target_completed", done, {"Terminal"}, 0);
+                return graph.finish();
             }
             throw std::runtime_error("WORKFLOW_UNKNOWN");
         }();
@@ -117,6 +134,8 @@ int main(int argc, char **argv) {
         auto registry = std::make_shared<runtime::BehaviorRegistry>("m4-workflows-1");
         if (!config.value("missing_binding", false))
             games::vision::register_wvd(*registry);
+        games::register_wvd_state(*registry);
+        games::register_wvd_confirmations(*registry);
         registry->seal();
         runtime::SessionDefinition session;
         if (config.value("destination_exists", false))
@@ -154,6 +173,13 @@ int main(int argc, char **argv) {
         definition.request_id = "m4-causal";
         definition.policy = policy;
         definition.initial = std::move(session);
+        if (config.value("with_state", false)) {
+            J descriptor;
+            std::ifstream(maafw::path_from_utf8(config.at("descriptor"))) >> descriptor;
+            storage::LegacyConfigImporter importer(descriptor);
+            auto profile = importer.parse({{"GENERAL", J::object()}});
+            definition.state_factory = games::wvd_state_binding(profile.values);
+        }
         coordinator.start(definition, device);
         if (config.value("stop_after_first", false)) {
             until([&] { return device->calls.load() > 0 || coordinator.snapshot().quiescent; });

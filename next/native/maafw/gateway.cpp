@@ -6,6 +6,14 @@
 #include <thread>
 
 namespace wvd::maafw {
+void Context::business_event(const std::string &type, const nlohmann::json &payload) {
+    if (type.empty() || type.size() > 96 || !payload.is_object() || payload.dump().size() > 4096)
+        throw std::runtime_error("BUSINESS_EVENT_INVALID");
+    auto event = payload;
+    event["node"] = node_;
+    event["task_id"] = task_;
+    gateway_.hooks_.event("business." + type, event);
+}
 using namespace std::chrono_literals;
 namespace {
 void require(bool value, const char *code) {

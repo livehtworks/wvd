@@ -122,6 +122,44 @@ bool WvdRunState::confirm_skill(const SkillSelection &selection, SkillOutcome ou
         throw std::runtime_error("STALE_BUSINESS_SELECTION");
     return strategy_.consume(selection, outcome);
 }
+bool WvdRunState::confirm_event(const std::string &operation, const std::string &event,
+                                 std::uint64_t generation, std::uint64_t frame_id,
+                                 std::optional<std::size_t> expected_step) {
+    if (operation.empty() || operation.size() > 256 || generation != generation_ || !frame_id)
+        throw std::runtime_error("BUSINESS_CONFIRMATION_IDENTITY_INVALID");
+    const J effect{{"event", event}, {"expected_step", expected_step ? J(*expected_step) : J(nullptr)}};
+    if (auto old = confirmations_.find(operation); old != confirmations_.end()) {
+        if (old->second != effect)
+            throw std::runtime_error("BUSINESS_OPERATION_CONFLICT");
+        return false;
+    }
+    if (confirmations_.size() >= 4096)
+        throw std::runtime_error("BUSINESS_CONFIRMATION_CAPACITY");
+    if (expected_step && *expected_step != task_step_)
+        throw std::runtime_error("BUSINESS_TASK_STEP_MISMATCH");
+    if (event == "target_completed") {
+        if (!expected_step)
+            throw std::runtime_error("BUSINESS_TASK_STEP_REQUIRED");
+        target_point_completed();
+    } else if (event == "dungeon_entered")
+        enter_dungeon();
+    else if (event == "combat_observed")
+        observe_combat();
+    else if (event == "chest_observed")
+        observe_chest();
+    else if (event == "dungeon_resumed")
+        resume_dungeon();
+    else if (event == "dungeon_completed")
+        dungeon_completed();
+    else if (event == "resurrected")
+        resurrected();
+    else
+        throw std::runtime_error("BUSINESS_EVENT_UNKNOWN");
+    confirmations_.emplace(operation, effect);
+    last_confirmation_ = {{"operation_id", operation}, {"event", event},
+                           {"generation", generation}, {"frame_id", frame_id}};
+    return true;
+}
 J WvdRunState::summarize() const {
     return {{"kind", "wvd"},
             {"state_revision", "1"},
@@ -139,6 +177,8 @@ J WvdRunState::summarize() const {
             {"total_seconds", total_seconds_},
             {"chest_seconds", chest_seconds_},
             {"last_bag_clear", last_bag_clear_},
+            {"confirmed_operations", confirmations_.size()},
+            {"last_confirmation", last_confirmation_},
             {"combat_timer_active", combat_started_.has_value()},
             {"chest_timer_active", chest_started_.has_value()},
             {"pending_combat", pending_combat_},

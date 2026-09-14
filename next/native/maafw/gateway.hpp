@@ -29,6 +29,7 @@ class Context {
     bool controller_action(const contracts::Command &command);
     nlohmann::json node_data(const std::string &name) const;
     bool with_business_state(const std::function<bool(contracts::BusinessRunState &)> &operation);
+    void business_event(const std::string &type, const nlohmann::json &payload);
 
   private:
     friend class MaaGateway;

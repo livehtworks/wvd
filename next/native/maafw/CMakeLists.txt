@@ -58,6 +58,8 @@ if(WVD_BUILD_M4)
   add_library(wvd_business ../games/wvd/profile.cpp ../games/wvd/tasks/quest_catalog.cpp ../games/wvd/tasks/task_plan.cpp
     ../games/wvd/tasks/pipeline_compiler.cpp ../games/wvd/navigation/world_map.cpp ../games/wvd/supply/inn.cpp
     ../games/wvd/navigation/map_route.cpp
+    ../games/wvd/diagnostics.cpp
+    ../games/wvd/chest/chest.cpp
     ../games/wvd/supply/policy.cpp
     ../games/wvd/combat/auto_combat.cpp
     ../games/wvd/state.cpp ../games/wvd/combat/strategy.cpp ../storage/legacy_import.cpp ../storage/profile_store.cpp)

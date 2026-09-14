@@ -76,6 +76,8 @@ void CompiledWorkflow::validate() const {
         require(action == "DoNothing" ||
                     (action == "Custom" && (node.value("custom_action", "") == "GuardedAction" ||
                                             node.value("custom_action", "") == "RootTerminal" ||
+                                            node.value("custom_action", "") == "WvdConfirm" ||
+                                            node.value("custom_action", "") == "BusinessCheckpoint" ||
                                             node.value("custom_action", "") == "RequireRecovery")),
                 "COMPILE_UNGUARDED_ACTION");
         require(node.value("recognition", "DirectHit") == "DirectHit" ||
@@ -95,6 +97,9 @@ void CompiledWorkflow::validate() const {
     require(reached.size() == nodes.size(), "COMPILE_ORPHAN_NODE");
     require(nodes.at(terminal).value("custom_action", "") == "RootTerminal",
             "COMPILE_TERMINAL_INVALID");
+    if (!checkpoint.empty())
+        require(nodes.contains(checkpoint) && nodes.at(checkpoint).value("custom_action", "") == "BusinessCheckpoint",
+                "COMPILE_CHECKPOINT_INVALID");
     std::set<std::string> actual_images;
     collect_images(nodes, actual_images);
     require(std::vector<std::string>(actual_images.begin(), actual_images.end()) == images,
@@ -210,6 +215,11 @@ std::string PipelineCompiler::append(const std::string &prefix, const CompiledWo
     }
     for (const auto &[name, original] : child.nodes.items()) {
         auto node = original;
+        if (node.value("custom_action", "") == "WvdConfirm") {
+            auto &operation = node["custom_action_param"]["operation"];
+            operation = prefix + ":" + operation.get<std::string>();
+            require(operation.get<std::string>().size() <= 128, "COMPILE_BUSINESS_EVENT_INVALID");
+        }
         for (const auto *key : {"next", "on_error"})
             if (node.contains(key))
                 for (auto &edge : node[key])
@@ -230,7 +240,38 @@ void PipelineCompiler::recovery(const std::string &name, const std::string &reas
     add(name, {{"action", "Custom"}, {"custom_action", "RequireRecovery"},
                {"custom_action_param", {{"reason", reason}}}});
 }
+void PipelineCompiler::confirm(const std::string &name, const std::string &operation,
+                               const std::string &event, const J &condition, J next, J step) {
+    const std::set<std::string> events{"target_completed", "dungeon_entered", "combat_observed",
+                                      "chest_observed", "dungeon_resumed", "dungeon_completed", "resurrected"};
+    require(events.contains(event) && !operation.empty() && operation.size() <= 128,
+            "COMPILE_BUSINESS_EVENT_INVALID");
+    require(step.is_null() || (step.is_number_integer() && step >= 0 && step <= 4096),
+            "COMPILE_TASK_STEP_INVALID");
+    require(event != "target_completed" || !step.is_null(), "COMPILE_TASK_STEP_REQUIRED");
+    J parameters{{"event", event}, {"operation", operation}, {"confirmation", request(condition)}};
+    if (!step.is_null())
+        parameters["expected_step"] = step;
+    add(name, {{"recognition", "Custom"}, {"custom_recognition", "WvdVision"},
+               {"custom_recognition_param", condition}, {"roi", {0, 0, 900, 1600}},
+               {"action", "Custom"}, {"custom_action", "WvdConfirm"},
+               {"custom_action_param", parameters}, {"next", std::move(next)}});
+}
 CompiledWorkflow PipelineCompiler::finish() {
+    bool business = false;
+    for (const auto &node : workflow_.nodes)
+        business = business || node.value("custom_action", "") == "WvdConfirm";
+    if (business) {
+        workflow_.checkpoint = "Checkpoint";
+        for (auto &node : workflow_.nodes)
+            for (const auto *key : {"next", "on_error"})
+                if (node.contains(key))
+                    for (auto &edge : node[key])
+                        if (edge == "Terminal")
+                            edge = workflow_.checkpoint;
+        add(workflow_.checkpoint, {{"action", "Custom"}, {"custom_action", "BusinessCheckpoint"},
+                                   {"next", {"Terminal"}}});
+    }
     add("Terminal", {{"action", "Custom"}, {"custom_action", "RootTerminal"}});
     add("RecoveryRequired",
         {{"action", "Custom"},

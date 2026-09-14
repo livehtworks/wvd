@@ -33,10 +33,13 @@ class WorkflowTests(unittest.TestCase):
         if options.get("workflow") == "auto":
             names += ["combatActive", "combatActive_2", "combatActive_3", "combatActive_4", "close",
                       "spellskill/skillDetail", "spellskill/CombatAutoEnable", "spellskill/CombatAutoDisable"]
-        if options.get("workflow") == "map":
+        if options.get("workflow") in ("map", "map-confirm"):
             names += ["mapFlag", "dungFlag", "chest", "chestFlag", "chestOpening", "whowillopenit",
                       "AutoMove", "EdgeOfTown", "combatActive", "combatActive_2", "combatActive_3", "combatActive_4",
                       "cursor_0", "cursor_1", "cursor_2", "cursor_3", "stair_up", "stair_floor"]
+        if options.get("workflow") == "chest":
+            names += ["chestFlag", "whowillopenit", "chestOpening", "chestfear", "RiseAgain", "ambush", "dungFlag",
+                      "combatActive", "combatActive_2", "combatActive_3", "combatActive_4"]
         rng = np.random.default_rng(90614)
         patterns = {name: rng.integers(30, 255, (24, 40, 3), dtype=np.uint8) for name in names}
         def write(path, pixels):
@@ -49,7 +52,7 @@ class WorkflowTests(unittest.TestCase):
         for i, screen in enumerate(screens):
             pixels = np.zeros((1600, 900, 3), dtype=np.uint8)
             for key, (x, y) in screen.items():
-                pixels[y:y+24, x:x+40] = patterns[key]
+                pixels[y:y+24, x:x+40] = patterns[key.split("@", 1)[0]]
             frame = folder / f"frame-{i}.png"
             write(frame, pixels)
             frames.append(str(frame))
@@ -59,6 +62,8 @@ class WorkflowTests(unittest.TestCase):
                           {"path": p.relative_to(bundle).as_posix(), "sha256": digest(p)}
                           for p in sorted(bundle.rglob("*.png"))])
         config.update(options)
+        if options.get("workflow") in ("chest", "map-confirm"):
+            config.update(with_state=True, descriptor=str(ROOT / "packs/wvd/parameters/legacy-config-fields.json"))
         if "omit_image" in options:
             config["files"] = [f for f in config["files"] if f["path"] != "image/" + options["omit_image"]]
         source = folder / "input.json"
@@ -270,6 +275,67 @@ class WorkflowTests(unittest.TestCase):
                                 workflow="map", map_target=["chest", [None]])
         self.assertEqual(excluded["snapshot"]["state"], "Completed", excluded)
         self.assertEqual(excluded["backend_calls"], 0)
+
+    def test_business_confirmation_updates_point_once(self):
+        screen = {"mapFlag": (100, 100), "cursor_0": (480, 588)}
+        result = self.execute("point-confirmed", [screen], [], workflow="map-confirm",
+                              map_target=["position", [None], [500, 600]])
+        self.assertEqual(result["snapshot"]["state"], "Completed", result)
+        self.assertEqual(result["snapshot"]["business"]["task_step"], 1)
+        self.assertEqual(result["snapshot"]["business"]["confirmed_operations"], 1)
+        self.assertEqual(result["backend_calls"], 0)
+        wrong = self.execute("point-wrong-step", [screen], [], workflow="map-confirm",
+                             map_target=["position", [None], [500, 600]], expected_step=2)
+        self.assertEqual(wrong["snapshot"]["state"], "Failed", wrong)
+        self.assertEqual(wrong["snapshot"]["business"]["task_step"], 0)
+        self.assertEqual(wrong["snapshot"]["business"]["confirmed_operations"], 0)
+
+    def test_chest_confirms_only_after_dungeon_return(self):
+        for preferred in range(1, 7):
+            x = 258 + ((preferred - 1) % 3) * 258
+            y = 1161 + ((preferred - 1) // 3) * 184
+            screens = [{"chestFlag": (300, 400)}, {"whowillopenit": (200, 500)},
+                       {"chestOpening": (300, 500)}, {"dungFlag": (100, 1400)}]
+            result = self.execute(f"chest-character-{preferred}", screens,
+                                  [dict(kind=0, x=320, y=412), dict(kind=0, x=x, y=y),
+                                   dict(kind=0, x=515, y=934)], workflow="chest", preferred=preferred)
+            self.assertEqual(result["snapshot"]["state"], "Completed", result)
+            self.assertEqual(result["snapshot"]["business"]["chests"], 1)
+            self.assertEqual(result["snapshot"]["business"]["confirmed_operations"], 2)
+            self.assertEqual(result["backend_calls"], 3)
+            self.assertFalse(result["mismatch"])
+
+    def test_chest_transition_cancels_disarm_without_false_count(self):
+        for name, screen in [("combat", {"combatActive": (20, 20)}),
+                             ("revive", {"RiseAgain": (300, 500)}),
+                             ("ambush", {"ambush": (300, 500)})]:
+            result = self.execute("chest-" + name,
+                                  [{"chestOpening": (300, 500)}, screen], [dict(kind=0, x=515, y=934)],
+                                  workflow="chest", quick=True)
+            self.assertEqual(result["snapshot"]["state"], "Interrupted", result)
+            self.assertEqual(result["snapshot"]["business"]["chests"], 0)
+            self.assertEqual(result["backend_calls"], 1)
+            self.assertFalse(result["mismatch"])
+
+    def test_chest_all_fear_has_no_character_or_disarm_input(self):
+        # 同一模板重复放在六个角色 ROI 内，所有角色都不可选择。
+        # execute 的场景格式允许同名模板通过 @ 后缀多次放置。
+        screen = {"whowillopenit": (200, 500)}
+        for i in range(6):
+            screen[f"chestfear@{i}"] = (258 + (i % 3) * 258 - 20, 1161 + (i // 3) * 184 - 12)
+        result = self.execute("chest-fear", [screen], [], workflow="chest")
+        self.assertEqual(result["snapshot"]["state"], "Interrupted", result)
+        self.assertEqual(result["snapshot"]["business"]["chests"], 0)
+        self.assertEqual(result["backend_calls"], 0)
+
+    def test_chest_failed_input_and_stop_do_not_count(self):
+        for name, options, transition in [("failed", {}, dict(kind=0, x=515, y=934, reject=True)),
+                                          ("stop", {"stop_after_first": True}, dict(kind=0, x=515, y=934, stay=True))]:
+            result = self.execute("chest-" + name, [{"chestOpening": (300, 500)}], [transition],
+                                  workflow="chest", **options)
+            self.assertEqual(result["snapshot"]["state"], "Failed" if name == "failed" else "UserStopped", result)
+            self.assertEqual(result["snapshot"]["business"]["chests"], 0)
+            self.assertEqual(result["backend_calls"], 1)
 
 
 if __name__ == "__main__":
