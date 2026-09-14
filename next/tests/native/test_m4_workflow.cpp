@@ -11,6 +11,7 @@
 #include "games/wvd/state.hpp"
 #include "storage/legacy_import.hpp"
 #include "games/wvd/supply/inn.hpp"
+#include "games/wvd/supply/dungeon_recover.hpp"
 #include "games/wvd/combat/auto_combat.hpp"
 #include "games/wvd/combat/turn.hpp"
 #include "games/wvd/combat/encounter.hpp"
@@ -155,6 +156,8 @@ int main(int argc, char **argv) {
                 return games::navigation::enter_city(config.at("city"));
             if (kind == "inn")
                 return games::supply::rest_at_inn(config.value("royal", false));
+            if (kind == "heal")
+                return games::supply::recover_in_dungeon();
             if (kind == "child") {
                 using C = games::tasks::PipelineCompiler;
                 auto inn = games::supply::rest_at_inn(false);
@@ -425,7 +428,9 @@ int main(int argc, char **argv) {
             }
         }
         if (config.value("stop_after_first", false)) {
-            until([&] { return device->calls.load() > 0 || coordinator.snapshot().quiescent; });
+            // 前置观察可能超过通用夹具的 5 秒。等待本 Session 公开预算内的首个输入，
+            // 停止响应时间仍由 request_stop 后的正式 stop_timeout 约束。
+            until([&] { return device->calls.load() > 0 || coordinator.snapshot().quiescent; }, definition.initial.time_limit);
             coordinator.request_stop();
         }
         bool stop_node_observed = false;

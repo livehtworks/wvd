@@ -123,6 +123,14 @@ class StateTests(unittest.TestCase):
         self.assertFalse(result["pending_combat"])
         self.assertFalse(result["pending_chest"])
 
+    def test_healing_requirements_survive_interruption_not_old_intents(self):
+        state = self.run_case("healing-contract")["direct"]["healing_contract"]
+        self.assertTrue(state["healing_required"])
+        self.assertFalse(state["healing_active"])
+        self.assertEqual(state["healing_sequence"], 3)
+        self.assertEqual(state["combats"], 2)
+        self.assertEqual(state["chests"], 1)
+
     def test_supply_conditions_keep_forced_rest_separate(self):
         cases, expected = [], []
         # 预期来自旧 IdentifyState/强制补镐子条件，逐项列出而非调用被测函数生成。

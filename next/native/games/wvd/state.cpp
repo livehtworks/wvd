@@ -26,6 +26,7 @@ void WvdRunState::on_segment(contracts::SegmentBoundary boundary, std::uint64_t 
     unit_index_ = unit;
     prepared_.reset();
     prepared_portrait_.clear();
+    healing_active_ = false;
     // 普通恢复不等于重启游戏。系统生命周期恢复按旧 restartGame 在首次请求时
     // 重置一次；同一请求的应用/重连/实例升级不重复增加崩溃计数或重装策略。
     if (boundary == contracts::SegmentBoundary::LifecycleRecovery && !lifecycle_recovery_active_) {
@@ -38,6 +39,8 @@ void WvdRunState::enter_dungeon() {
     prepared_.reset();
     task_step_ = 0;
     need_initial_recover_ = true;
+    healing_pending_ = false;
+    healing_active_ = false;
     if (setting_is("RELOAD_STRATEGY_WHEN", "每次副本开始", "Dungeon start"))
         strategy_.reload(task_step_);
 }
@@ -48,11 +51,15 @@ void WvdRunState::target_point_completed() {
         strategy_.reload(task_step_);
 }
 void WvdRunState::observe_combat() {
+    if (!pending_combat_)
+        healing_active_ = false;
     if (!combat_started_)
         combat_started_ = clock_->now();
     pending_combat_ = true;
 }
 void WvdRunState::observe_chest() {
+    if (!pending_chest_)
+        healing_active_ = false;
     if (!chest_started_)
         chest_started_ = clock_->now();
     pending_chest_ = true;
@@ -74,23 +81,31 @@ void WvdRunState::resume_dungeon() {
     combat_started_.reset();
     chest_started_.reset();
     if (pending_combat_) {
+        healing_pending_ = healing_pending_ || !profile_.at("SKIP_COMBAT_RECOVER").get<bool>();
         ++combats_;
         met_encounter_ = true;
         pending_combat_ = false;
     }
     if (pending_chest_) {
+        healing_pending_ = healing_pending_ || !profile_.at("SKIP_CHEST_RECOVER").get<bool>();
         ++chests_;
         met_encounter_ = true;
         pending_chest_ = false;
     }
 }
+bool WvdRunState::healing_required() const {
+    return healing_pending_ || recover_after_rez_ ||
+           (need_initial_recover_ && profile_.at("RECOVER_WHEN_BEGINNING").get<bool>());
+}
 void WvdRunState::resurrected() {
     prepared_.reset();
     recover_after_rez_ = true;
+    healing_active_ = false;
     strategy_.reload(task_step_);
 }
 void WvdRunState::restart_game() {
     prepared_.reset();
+    healing_active_ = false;
     combat_speed_ = false;
     zoom_world_map_ = false;
     bypass_after_restart_ = false;
@@ -179,6 +194,10 @@ std::string WvdRunState::confirmation_id(const std::string &operation, const std
               std::to_string(chests_ + (pending_chest_ ? 1 : 0));
     else if (event == "game_restarted")
         id += ":restart:" + std::to_string(lifecycle_recovery_sequence_);
+    else if (event == "healing_requested")
+        id += ":heal:" + std::to_string(healing_sequence_ + (healing_active_ ? 0 : 1));
+    else if (event == "healing_completed")
+        id += ":heal:" + std::to_string(healing_sequence_);
     return id;
 }
 bool WvdRunState::confirm_event(const std::string &operation, const std::string &event,
@@ -212,6 +231,22 @@ bool WvdRunState::confirm_event(const std::string &operation, const std::string 
         dungeon_completed();
     else if (event == "resurrected")
         resurrected();
+    else if (event == "healing_requested") {
+        if (!healing_required())
+            throw std::runtime_error("HEALING_NOT_REQUIRED");
+        if (!healing_active_)
+            ++healing_sequence_;
+        healing_active_ = true;
+        healing_pending_ = true;
+        // 入本/复活请求在开始尝试时消费；未确认恢复结束时 pending 仍保留。
+        need_initial_recover_ = false;
+        recover_after_rez_ = false;
+    } else if (event == "healing_completed") {
+        if (!healing_active_)
+            throw std::runtime_error("HEALING_NOT_STARTED");
+        healing_active_ = false;
+        healing_pending_ = false;
+    }
     else if (event == "game_restarted") {
         if (!lifecycle_recovery_active_)
             throw std::runtime_error("GAME_RESTART_NOT_REQUESTED");
@@ -255,6 +290,9 @@ J WvdRunState::summarize() const {
             {"met_encounter", met_encounter_},
             {"need_initial_recover", need_initial_recover_},
             {"recover_after_rez", recover_after_rez_},
+            {"healing_required", healing_required()},
+            {"healing_active", healing_active_},
+            {"healing_sequence", healing_sequence_},
             {"combat_speed", combat_speed_},
             {"zoom_world_map", zoom_world_map_},
             {"bypass_after_restart", bypass_after_restart_}};

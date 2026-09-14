@@ -2588,10 +2588,13 @@
       "offline_status": "PASS",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "remaining": "状态消费/重置已迁移，实际导航/战斗/恢复输入及完整业务出口尚未承接。",
-      "implementation_extent": "STATE_ONLY",
-      "verification_scope": "状态 API 与真实 Maa 有限段，不是游戏动作",
-      "evidence_report": "../m4-state-validation.md"
+      "remaining": "完整路线、死亡/Pause、恢复调度及全部专项仍待接齐。",
+      "implementation_extent": "STATE_AND_HEALING_SUBFLOW",
+      "verification_scope": "角色面板恢复的真实 Maa 子链及状态，不是完整地下城任务",
+      "evidence_report": "../m4-healing-validation.md",
+      "supporting_implementations": [
+        "native/games/wvd/supply/dungeon_recover.cpp"
+      ]
     },
     {
       "inventory_id": "function:src/script.py:Factory.StateDungeon.TargetPointComplete:3120",

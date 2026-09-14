@@ -64,6 +64,7 @@ if(WVD_BUILD_M4)
     ../games/wvd/diagnostics.cpp
     ../games/wvd/chest/chest.cpp
     ../games/wvd/supply/policy.cpp
+    ../games/wvd/supply/dungeon_recover.cpp
     ../games/wvd/combat/auto_combat.cpp
     ../games/wvd/combat/turn.cpp
     ../games/wvd/combat/encounter.cpp

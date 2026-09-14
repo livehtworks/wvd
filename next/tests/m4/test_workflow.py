@@ -45,6 +45,9 @@ class WorkflowTests(unittest.TestCase):
         if options.get("workflow") == "chest":
             names += ["chestFlag", "whowillopenit", "chestOpening", "chestfear", "RiseAgain", "ambush", "dungFlag",
                       "combatActive", "combatActive_2", "combatActive_3", "combatActive_4"]
+        if options.get("workflow") == "heal":
+            names += ["mapFlag", "dungFlag", "trait", "recover", "story", "chestFlag", "whowillopenit", "chestOpening", "RiseAgain",
+                      "combatActive", "combatActive_2", "combatActive_3", "combatActive_4"]
         if options.get("workflow") == "travel":
             names += ["openworldmap", "intoWorldMap", "dungFlag"]
         if options.get("workflow") in ("party", "party-rest"):
@@ -95,7 +98,7 @@ class WorkflowTests(unittest.TestCase):
                           {"path": p.relative_to(bundle).as_posix(), "sha256": digest(p)}
                           for p in sorted(bundle.rglob("*.png"))])
         config.update(options)
-        if options.get("workflow") in ("chest", "map-confirm", "state-route", "turn", "encounter", "recover"):
+        if options.get("workflow") in ("chest", "map-confirm", "state-route", "turn", "encounter", "recover", "heal"):
             config.update(with_state=True, descriptor=str(ROOT / "packs/wvd/parameters/legacy-config-fields.json"))
         if "omit_image" in options:
             config["files"] = [f for f in config["files"] if f["path"] != "image/" + options["omit_image"]]
@@ -969,6 +972,83 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(r["snapshot"]["state"], "Failed", r)
         self.assertEqual(r["backend_calls"], 1)
         self.assertEqual(r["snapshot"]["business"]["combats"], 0)
+
+    def test_healing_initial_request_requires_recover_and_return(self):
+        for story in (False, True):
+            panel = {"trait": (200, 300), **({"story": (700, 820)} if story else {})}
+            r = self.execute("heal-initial-" + str(story), [{"dungFlag": (50, 150)}, panel,
+                {"recover": (250, 850)}, {"trait": (200, 300)}, {"dungFlag": (50, 150)}],
+                [dict(kind=0, x=36, y=1425), dict(kind=0, x=725 if story else 830, y=850),
+                 dict(kind=0, x=600, y=1200), dict(kind=5, key=4)], workflow="heal", profile={"RECOVER_WHEN_BEGINNING": True})
+            self.assertEqual(r["snapshot"]["state"], "Completed", r)
+            self.assertEqual(r["backend_calls"], 4)
+            self.assertFalse(r["mismatch"])
+            state = r["snapshot"]["business"]
+            self.assertFalse(state["healing_required"])
+            self.assertFalse(state["healing_active"])
+            self.assertEqual(state["healing_sequence"], 1)
+            self.assertEqual(state["last_confirmation"]["event"], "healing_completed")
+
+    def test_healing_disabled_does_not_open_character(self):
+        r = self.execute("heal-not-needed", [{"dungFlag": (50, 150)}], [], workflow="heal", profile={"RECOVER_WHEN_BEGINNING": False})
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 0)
+        self.assertEqual(r["snapshot"]["business"]["healing_sequence"], 0)
+
+    def test_healing_rotates_front_characters_and_seeks_recover(self):
+        dungeon = {"dungFlag": (50, 150)}
+        trait = {"trait": (200, 300)}
+        r = self.execute("heal-rotate-seek", [dungeon, dungeon, dungeon, trait, trait,
+            {"recover": (250, 850)}, trait, dungeon],
+            [dict(kind=0, x=x, y=1425) for x in (36, 322, 608)] +
+            [dict(kind=0, x=830, y=850), dict(kind=0, x=833, y=843),
+             dict(kind=0, x=600, y=1200), dict(kind=5, key=4)],
+            workflow="heal", profile={"RECOVER_WHEN_BEGINNING": True})
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 7)
+        self.assertFalse(r["mismatch"])
+        self.assertFalse(r["snapshot"]["business"]["healing_required"])
+
+    def test_healing_unknown_panel_is_not_success(self):
+        r = self.execute("heal-unknown-panel", [{"dungFlag": (50, 150)}, {}], [dict(kind=0, x=36, y=1425)],
+            workflow="heal", profile={"RECOVER_WHEN_BEGINNING": True})
+        self.assertEqual(r["snapshot"]["state"], "Failed", r)
+        self.assertEqual(r["backend_calls"], 1)
+        self.assertTrue(r["snapshot"]["business"]["healing_required"])
+        self.assertEqual(r["snapshot"]["business"]["last_confirmation"]["event"], "healing_requested")
+
+    def test_healing_encounter_interrupts_before_old_panel_input(self):
+        for encounter in ("combatActive", "chestFlag", "RiseAgain"):
+            r = self.execute("heal-interrupted-" + encounter, [{"dungFlag": (50, 150)},
+                {"trait": (200, 300), encounter: (10, 5) if encounter == "combatActive" else (350, 450)}],
+                [dict(kind=0, x=36, y=1425)], workflow="heal", profile={"RECOVER_WHEN_BEGINNING": True})
+            self.assertEqual(r["snapshot"]["state"], "Interrupted", r)
+            self.assertEqual(r["snapshot"]["sessions"][-1]["reason"], "supply.recover_interrupted")
+            self.assertEqual(r["backend_calls"], 1)
+            self.assertTrue(r["snapshot"]["business"]["healing_required"])
+            self.assertEqual(r["snapshot"]["business"]["last_confirmation"]["event"], "healing_requested")
+            self.assertFalse(r["mismatch"])
+
+    def test_healing_input_failure_and_stop_keep_pending_request(self):
+        for stop in (False, True):
+            r = self.execute("heal-stop-" + str(stop), [{"dungFlag": (50, 150)}],
+                [dict(kind=0, x=36, y=1425, **({"stay": True} if stop else {"reject": True}))], workflow="heal",
+                profile={"RECOVER_WHEN_BEGINNING": True}, stop_after_first=stop)
+            self.assertEqual(r["snapshot"]["state"], "UserStopped" if stop else "Failed", r)
+            self.assertEqual(r["backend_calls"], 1)
+            self.assertTrue(r["snapshot"]["business"]["healing_required"])
+            self.assertEqual(r["snapshot"]["business"]["last_confirmation"]["event"], "healing_requested")
+
+    def test_healing_panel_not_closed_never_claims_completion(self):
+        panel = {"recover": (250, 850)}
+        r = self.execute("heal-back-bounded", [panel] * 7,
+            [dict(kind=0, x=600, y=1200)] + [dict(kind=5, key=4)] * 5,
+            workflow="heal", profile={"RECOVER_WHEN_BEGINNING": True})
+        self.assertEqual(r["snapshot"]["state"], "Interrupted", r)
+        self.assertEqual(r["snapshot"]["sessions"][-1]["reason"], "supply.recover_panel_not_closed")
+        self.assertEqual(r["backend_calls"], 6)
+        self.assertTrue(r["snapshot"]["business"]["healing_required"])
+        self.assertFalse(r["mismatch"])
 
 
 if __name__ == "__main__":

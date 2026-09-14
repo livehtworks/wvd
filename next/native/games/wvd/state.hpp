@@ -15,6 +15,7 @@ class WvdRunState final : public contracts::BusinessRunState {
     void observe_combat();
     void observe_chest();
     void resume_dungeon();
+    bool healing_required() const;
     void resurrected();
     void restart_game();
     void dungeon_completed();
@@ -56,6 +57,8 @@ class WvdRunState final : public contracts::BusinessRunState {
     std::string prepared_portrait_;
     bool lifecycle_recovery_active_{};
     std::size_t lifecycle_recovery_sequence_{};
+    bool healing_pending_{}, healing_active_{};
+    std::size_t healing_sequence_{};
 };
 void register_wvd_state(runtime::BehaviorRegistry &registry);
 contracts::BehaviorBinding wvd_state_binding(const nlohmann::json &profile);

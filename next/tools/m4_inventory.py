@@ -290,6 +290,35 @@ def update_encounter(evidence):
     print("Finite encounter evidence updated; 58 complete task statuses unchanged.")
 
 
+def update_healing(evidence):
+    """仅为 StateDungeon 的角色恢复子链登记证据，不改变完整任务分母。"""
+    expected = {
+        "heal-not-needed": ("Completed", 0), "heal-initial-False": ("Completed", 4),
+        "heal-initial-True": ("Completed", 4), "heal-rotate-seek": ("Completed", 7),
+        "heal-stop-False": ("Failed", 1), "heal-stop-True": ("UserStopped", 1),
+        "heal-back-bounded": ("Interrupted", 6), "heal-unknown-panel": ("Failed", 1),
+        **{"heal-interrupted-" + name: ("Interrupted", 1) for name in ("combatActive", "chestFlag", "RiseAgain")},
+    }
+    verify_workflows(evidence, expected)
+    for name in expected:
+        state = read(evidence / name / "output.json")["snapshot"]["business"]
+        completed = name in ("heal-not-needed", "heal-initial-False", "heal-initial-True", "heal-rotate-seek")
+        if state["healing_required"] == completed or state["healing_sequence"] != (0 if name == "heal-not-needed" else 1):
+            raise ValueError("M4_HEALING_STATE_MISMATCH:" + name)
+    path = ROOT / "docs/migration/m4-implementation-map.json"
+    document = read(path)
+    rows = [row for row in document["entries"] if row["legacy_symbol"] == "Factory.StateDungeon"]
+    if len(rows) != 1 or document["counts"] != {"function": 250, "config": 33, "task": 58}:
+        raise ValueError("M4_HEALING_INVENTORY_MISMATCH")
+    rows[0].update(implementation="native/games/wvd/state.cpp", entry="WvdRunState::resume_dungeon / enter_dungeon",
+        supporting_implementations=["native/games/wvd/supply/dungeon_recover.cpp"],
+        implementation_status="PARTIAL", implementation_extent="STATE_AND_HEALING_SUBFLOW",
+        offline_status="PASS", verification_scope="角色面板恢复的真实 Maa 子链及状态，不是完整地下城任务",
+        evidence_report="../m4-healing-validation.md", remaining="完整路线、死亡/Pause、恢复调度及全部专项仍待接齐。")
+    write(path, document)
+    print("Healing subflow evidence updated; 58 complete task statuses unchanged.")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--data-evidence", type=Path)
@@ -299,8 +328,9 @@ if __name__ == "__main__":
     parser.add_argument("--combat-evidence", type=Path)
     parser.add_argument("--navigation-evidence", type=Path)
     parser.add_argument("--encounter-evidence", type=Path)
+    parser.add_argument("--healing-evidence", type=Path)
     args = parser.parse_args()
-    if not args.data_evidence and not args.combat_evidence and not args.navigation_evidence and not args.encounter_evidence:
+    if not args.data_evidence and not args.combat_evidence and not args.navigation_evidence and not args.encounter_evidence and not args.healing_evidence:
         parser.error("an evidence group is required")
     if args.data_evidence:
         generate(args.data_evidence, args.state_evidence, args.plan_evidence, args.workflow_evidence)
@@ -312,3 +342,5 @@ if __name__ == "__main__":
         update_navigation(args.navigation_evidence, args.plan_evidence)
     if args.encounter_evidence:
         update_encounter(args.encounter_evidence)
+    if args.healing_evidence:
+        update_healing(args.healing_evidence)
