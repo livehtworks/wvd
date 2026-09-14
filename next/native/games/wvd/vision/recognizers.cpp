@@ -194,13 +194,33 @@ J evaluate_uncached(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels
         check(marker.at("outcome") != "Error", "WVD_DEATH_RECOGNITION_ERROR");
         if (marker.at("outcome") != "Hit")
             return decision(false, {}, {{"reason", "no_death_marker"}});
-        for (const auto &guard : J::array({J{{"mode", "boot_ready"}}, J{{"mode", "pause"}}, J{{"mode", "pause_negative"}}})) {
+        J guards = J::array();
+        for (const auto *name : {"dungFlag", "chestFlag", "whowillopenit", "mapFlag", "worldmapflag", "Inn"})
+            guards.push_back({{"mode", "template"}, {"image", name}, {"threshold", .8}});
+        guards.push_back({{"mode", "combat_active"}});
+        guards.push_back({{"mode", "pause_negative"}});
+        for (const auto &probe : blocking_probes(false))
+            guards.push_back(probe);
+        for (const auto &guard : guards) {
             auto result = evaluate_impl(bundle, pixels, guard, bound, scope, cache, depth + 1, memo);
             check(result.at("outcome") != "Error", "WVD_DEATH_RECOGNITION_ERROR");
             if (result.at("outcome") == "Hit")
                 return decision(false, {}, {{"reason", "known_scene_precedes_death"}, {"guard", guard}});
         }
         return decision(true, allowed_rect, {{"marker", marker}}, false);
+    }
+    if (mode == "party_death_post") {
+        check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");
+        // 连续死亡页优先返回自身的完整场景判断，不再跑一遍通用启动候选；
+        // 离开死亡页后再按原通用顺序分派。这里不是改变 any/all 的求值契约。
+        for (const auto &probe : J::array({J{{"mode", "party_death"}},
+                J{{"mode", "template"}, {"image", "RiseAgain"}, {"threshold", .8}}, J{{"mode", "boot_post"}}})) {
+            auto result = evaluate_impl(bundle, pixels, probe, bound, scope, cache, depth + 1, memo);
+            check(result.at("outcome") != "Error", "WVD_DEATH_RECOGNITION_ERROR");
+            if (result.at("outcome") == "Hit")
+                return decision(true, allowed_rect, {{"stage", probe.value("image", probe.value("mode", "unknown"))}});
+        }
+        return decision(false, {}, {{"stage", "unknown"}});
     }
     if (mode == "boot_ready" || mode == "boot_post" || mode == "blocking_screen") {
         check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");

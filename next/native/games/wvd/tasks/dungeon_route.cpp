@@ -43,9 +43,11 @@ CompiledWorkflow traverse_dungeon(const WvdTaskPlan &plan, const J &profile,
                                  const std::set<std::string> &available_images, bool allow_download) {
     if (plan.route().empty() || plan.route().size() > 64)
         throw std::runtime_error("DUNGEON_ROUTE_SIZE_INVALID");
-    // 组合段不能继承短子流程默认的 60 秒。400 秒取自旧无进展检测窗口，
-    // 这里是有限段总上限，不冒充旧时序完全等价；更长任务需正常续段，不能扩大帧 TTL。
-    C graph("tasks.dungeon_route." + plan.definition().id, std::chrono::seconds{400});
+    const auto chest_workflow = wvd::games::chest::open_chest(profile.at("WHO_WILL_OPEN_IT").get<int>(),
+        profile.at("QUICK_DISARM_CHEST").get<bool>(), 0);
+    // 父段需容纳完整的一次有界开箱，再保留路线/遭遇的原预算；旧 400 秒
+    // 是无进展窗口，不能直接拿它截断可达 900 秒的有限子链。不是放宽帧 TTL。
+    C graph("tasks.dungeon_route." + plan.definition().id, std::chrono::seconds{400} + chest_workflow.time_limit);
     const J combat{{"mode", "combat_active"}};
     const auto chest = C::any({C::image("chestFlag"), C::image("whowillopenit"), C::image("chestOpening")});
     const auto revive = C::image("RiseAgain");
@@ -78,8 +80,7 @@ CompiledWorkflow traverse_dungeon(const WvdTaskPlan &plan, const J &profile,
     graph.call_child("Fight", battle, {"Dispatch"});
     graph.hit_limit("Combat", 128);
     graph.hit_limit("Fight", 128);
-    const auto box = graph.define_child("Box", wvd::games::chest::open_chest(profile.at("WHO_WILL_OPEN_IT").get<int>(),
-        profile.at("QUICK_DISARM_CHEST").get<bool>(), 0), {"CombatExit", "ReviveExit", "AmbushExit", "BlockedExit", "RetryExit"});
+    const auto box = graph.define_child("Box", chest_workflow, {"CombatExit", "ReviveExit", "AmbushExit", "BlockedExit", "RetryExit"});
     graph.observe("Chest", chest, {"OpenChest"});
     graph.call_child("OpenChest", box, {"Dispatch"});
     graph.hit_limit("Chest", 128);

@@ -143,11 +143,13 @@ class WorkflowTests(unittest.TestCase):
         source.write_text(json.dumps(config), encoding="utf-8")
         exe = ROOT / "build/m4/Release/test_m4_workflow.exe"
         before_hash = digest(exe)
+        # 测试看护预算跟随正式有限定义；不把较短测试超时伪装成产品停止。
+        route_budget = 1300 if options.get("profile", {}).get("QUICK_DISARM_CHEST", False) else 1000
         with (folder / "native.log").open("wb") as log:
             result = subprocess.run([str(exe), str(source)], cwd=folder, env=self.env,
-                                    stdout=log, stderr=log, timeout={"dungeon-route": 420, "recover": 750, "departure": 200, "heal": 260,
+                                    stdout=log, stderr=log, timeout={"dungeon-route": route_budget + 20, "recover": 750, "departure": 200, "heal": 260,
                                         "chest": 920 if options.get("quick") else 620,
-                                        "common": 140, "iteration": 780 * options.get("normal_units", 1)}.get(options.get("workflow"), 90))
+                                        "common": 140, "iteration": (route_budget + 380) * options.get("normal_units", 1)}.get(options.get("workflow"), 90))
         self.assertEqual(digest(exe), before_hash)
         (folder / "execution.json").write_text(json.dumps({"exe_sha256": before_hash, "exit": result.returncode}), encoding="utf-8")
         self.assertEqual(result.returncode, 0, (folder / "native.log").read_text(encoding="utf-8", errors="replace")[-3000:])
@@ -1347,7 +1349,20 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(state["combats"], 1)
         self.assertEqual(state["healing_sequence"], 1)
         self.assertFalse(state["healing_required"])
-        self.assertEqual(r["snapshot"]["sessions"][0]["definition"]["time_limit_ms"], 400000)
+        self.assertEqual(r["snapshot"]["sessions"][0]["definition"]["time_limit_ms"], 1000000)
+
+    def test_route_and_iteration_budgets_include_the_complete_chest_child(self):
+        for quick in (False, True):
+            for workflow in ("dungeon-route", "iteration"):
+                r = self.execute(f"parent-budget-{workflow}-{quick}",
+                    [{"mapFlag": (100, 100), "cursor_0": (480, 588)}], [], workflow=workflow,
+                    profile={**self.turn_profile(defend=True), "QUICK_DISARM_CHEST": quick},
+                    route_targets=[["position", [None], [500, 600]]])
+                self.assertEqual(r["snapshot"]["state"], "Completed", r)
+                self.assertEqual(r["backend_calls"], 0)
+                budget = (900 if quick else 600) + 400 + (360 if workflow == "iteration" else 0)
+                self.assertEqual(r["snapshot"]["sessions"][0]["definition"]["time_limit_ms"], budget * 1000)
+                self.assertLessEqual(budget + 120, 1800)
 
     def test_workflow_session_budget_must_be_finite_and_positive(self):
         for case in ("zero-session-budget", "large-session-budget"):

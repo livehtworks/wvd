@@ -10,7 +10,10 @@ CompiledWorkflow dungeon_iteration(const WvdTaskPlan &plan, const nlohmann::json
     using J = nlohmann::json;
     if (plan.definition().type != "dungeon")
         throw std::runtime_error("DUNGEON_ITERATION_TYPE_INVALID");
-    C graph("tasks.dungeon_iteration." + plan.definition().id, std::chrono::seconds{760});
+    const auto dungeon_workflow = traverse_dungeon(plan, profile, available_images, allow_download);
+    // 外层不能仍用旧 760 秒先截断已扩大但有限的路线。保留原有 360 秒
+    // 入本/补给余量；加启动恢复后的最长定义仍在编译器 30 分钟硬上限内。
+    C graph("tasks.dungeon_iteration." + plan.definition().id, dungeon_workflow.time_limit + std::chrono::seconds{360});
     const auto inside = C::any({C::image("dungFlag"), C::image("mapFlag"), C::image("chestFlag"),
                                 C::image("whowillopenit"), C::image("RiseAgain"), J{{"mode", "combat_active"}}});
     const auto outside = C::all({C::any({C::image("Inn"), C::image("EdgeOfTown"), C::image("returntoTown"),
@@ -34,7 +37,7 @@ CompiledWorkflow dungeon_iteration(const WvdTaskPlan &plan, const nlohmann::json
     graph.confirm("CountDeparture", "farm.departure", "dungeon_completed", entrance, {"EnterDungeon"});
     const auto enter = graph.append("Enter", navigation::enter_dungeon(plan), {"Traverse"});
     graph.route("EnterDungeon", {enter});
-    const auto route = graph.define_child("Dungeon", traverse_dungeon(plan, profile, available_images, allow_download));
+    const auto route = graph.define_child("Dungeon", dungeon_workflow);
     graph.call_child("Traverse", route, {"Terminal"});
     return graph.finish();
 }

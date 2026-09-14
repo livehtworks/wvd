@@ -8,7 +8,7 @@ tasks::CompiledWorkflow dismiss_party_death() {
     const J dead{{"mode", "party_death"}};
     const auto ready = C::any({J{{"mode", "boot_ready"}}, C::image("RiseAgain")});
     const auto cleared = C::all({ready, C::absent(dead), C::absent(J{{"mode", "blocking_screen"}})});
-    const auto known = C::any({J{{"mode", "boot_post"}}, C::image("RiseAgain")});
+    const J known{{"mode", "party_death_post"}};
     graph.route("Entry", {"Observed"});
     graph.confirm("Observed", "party.death", "party_death_observed", dead, {"Dismiss0"});
     graph.delay_after("Observed", 1000);

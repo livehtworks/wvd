@@ -14,6 +14,12 @@
 
 实现已接入通用阻塞和正常 Farm 迭代。七个相关原生目标构建通过，状态层 15 方法通过（5.149 秒），包括提示重复观察只重置一次策略、跨段保留待处理状态、清除回执去重，且不冒称复活/胜场。
 
-原生流程定点验证正在执行，流程尚未计通过。测试包括首个/第五个点击成功、地图/城市/角色负例、停止、底层拒绝、连续无效、Retry 中断和原任务续接。日志 `m4-party-death-integrity-build.log`、`m4-party-death-state.log`、`m4-party-death-workflow.log` 留在私有日志目录。
+首轮原生流程 5 方法中 3 通过、2 失败（127.122 秒）。首个点击清除、正常场景负例、Retry 及原任务续接通过；第五次清除与持续提示在中途被 `SCENE_UNCONFIRMED` 拒绝。证据 `m4-workflow-hqiod85p`。
+
+根因由逐事件时间定位：后置帧 captured 到 Hit 已耗时 2244.30ms，超过原 2000ms TTL，不是点击错误。原 `any(boot_post, RiseAgain)` 会把死亡页已做过的就绪排除和无关启动候选重算。修正为专用有序 `party_death_post`，并按旧状态优先级检查必要场景，再排除普通覆盖层；没有改变通用 any/all 的 Error 传播契约或帧有效期。
+
+七目标修后构建通过；同例补验和父预算测试 6 方法/16 场景全部通过（329.929 秒），其中死亡提示 5 方法/12 场景。持续无效实际五次点击后以 `party.death_prompt_unchanged` 返回，49.654 秒；停止/输入拒绝各一次输入后正确终止。没有重试挑选结果或改变原断言。
+
+证据根 `m4-workflow-wsi2pj6e`，流程 EXE SHA256 `8a49ccd0c7664fbf16b2ca299abe38f27f05af6bad3446e81cc633eff9851904`。构建和测试日志 `m4-party-death-bounded-retry-build.log`、`m4-party-death-retry-workflow.log` 保留在私有目录。通用阻塞与 Pause 回归正在执行，完整任务和真实质量尚未验。
 
 `multipeopledead`/SUICIDE、善恶写回、专项对话仍属于独立未完成范围；此报告不把一个提示处理当作全部死亡或全局事件完成。

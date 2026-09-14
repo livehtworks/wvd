@@ -25,6 +25,12 @@ void collect_images(const J &value, std::set<std::string> &images) {
             images.insert("someonedead.png");
             collect_images(vision::boot_probes(false), images);
             collect_images(J{{"mode", "pause"}}, images);
+            collect_images(vision::blocking_probes(false), images);
+        }
+        if (mode == "party_death_post") {
+            collect_images(J{{"mode", "party_death"}}, images);
+            images.insert("RiseAgain.png");
+            collect_images(vision::boot_probes(true), images);
         }
         if (mode == "pause" || mode == "pause_negative")
             for (const auto *name : {"trait", "recover", "spellskill/skillDetail", "close"})
