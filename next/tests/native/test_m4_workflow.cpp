@@ -1,6 +1,7 @@
 #include "runtime_fixture.hpp"
 #include "loaded_modules.hpp"
 #include "games/wvd/navigation/world_map.hpp"
+#include "games/wvd/navigation/map_route.hpp"
 #include "games/wvd/supply/inn.hpp"
 #include "games/wvd/combat/auto_combat.hpp"
 #include "games/wvd/tasks/workflow_session.hpp"
@@ -31,7 +32,9 @@ class WorkflowDevice final : public OfflineDevice {
         }
         const auto &expected = transitions.at(cursor);
         if (int(c.kind) != expected.at("kind").get<int>() || c.x != expected.value("x", 0) ||
-            c.y != expected.value("y", 0) || c.key != expected.value("key", 0)) {
+            c.y != expected.value("y", 0) || c.key != expected.value("key", 0) ||
+            c.x2 != expected.value("x2", 0) || c.y2 != expected.value("y2", 0) ||
+            c.duration != expected.value("duration", 0)) {
             mismatch = true;
             return false;
         }
@@ -55,6 +58,21 @@ int main(int argc, char **argv) {
                 return games::supply::rest_at_inn(config.value("royal", false));
             if (kind == "auto")
                 return games::combat::enable_auto();
+            if (kind == "city-inn") {
+                games::tasks::PipelineCompiler graph("supply.city_and_rest");
+                const auto rest = graph.append("Rest", games::supply::rest_at_inn(false), {"Terminal"});
+                const auto city = graph.append("City", games::navigation::enter_city(config.at("city")), {rest});
+                graph.route("Entry", {city});
+                return graph.finish();
+            }
+            if (kind == "map") {
+                games::WvdQuestDefinition definition{"map-fixture", "dungeon",
+                    {{"_TARGETINFOLIST", J::array({config.at("map_target")})},
+                     {"_EOT", J::array({J::array({"press", "Dist", nullptr, 1})})}}};
+                auto plan = games::WvdTaskPlan::parse(definition);
+                return games::navigation::reach_map_target(plan.route().at(0),
+                    config.contains("floor") ? std::optional(config.at("floor").get<std::string>()) : std::nullopt);
+            }
             throw std::runtime_error("WORKFLOW_UNKNOWN");
         }();
         if (config.contains("invalid")) {
@@ -122,8 +140,8 @@ int main(int argc, char **argv) {
             session.bundle.revision,
             "portrait",
             {900, 1600},
-            {contracts::ActionKind::Click, contracts::ActionKind::ClickKey},
-            {contracts::ActionKind::Click, contracts::ActionKind::ClickKey},
+            {contracts::ActionKind::Click, contracts::ActionKind::ClickKey, contracts::ActionKind::Swipe},
+            {contracts::ActionKind::Click, contracts::ActionKind::ClickKey, contracts::ActionKind::Swipe},
             {"wvd"},
             2000ms};
         policy.permissions.clear();

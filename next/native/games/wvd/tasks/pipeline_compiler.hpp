@@ -30,7 +30,14 @@ class PipelineCompiler {
               nlohmann::json next);
     void fixed_click(const std::string &name, const nlohmann::json &scene,
                      const nlohmann::json &post, nlohmann::json position, nlohmann::json next);
+    void swipe(const std::string &name, const nlohmann::json &scene,
+               const nlohmann::json &post, nlohmann::json coordinates, nlohmann::json next);
+    // 内联的是 Maa 图，不是第二个执行器；子终点只能进入调用者指定后继。
+    std::string append(const std::string &prefix, const CompiledWorkflow &child,
+                       nlohmann::json next);
+    void recovery(const std::string &name, const std::string &reason);
     void hit_limit(const std::string &name, int limit);
+    void delay_after(const std::string &name, int milliseconds);
     CompiledWorkflow finish();
 
   private:

@@ -12,6 +12,19 @@ void require(bool value, const char *code) {
 }
 void collect_images(const J &value, std::set<std::string> &images) {
     if (value.is_object()) {
+        // 专用识别器内部加载的资源也必须进入发布清单，不能等运行才发现缺图。
+        const auto mode = value.value("mode", "");
+        if (mode == "reached")
+            for (int i = 0; i < 4; ++i)
+                images.insert("cursor_" + std::to_string(i) + ".png");
+        if (mode == "combat_active")
+            for (const auto *name : {"combatActive", "combatActive_2", "combatActive_3", "combatActive_4"})
+                images.insert(std::string(name) + ".png");
+        if (mode == "movement_stopped")
+            for (const auto *name : {"dungFlag", "mapFlag"})
+                images.insert(std::string(name) + ".png");
+        if (mode == "harken_stair" && value.contains("stair"))
+            images.insert(value.at("stair").get<std::string>() + ".png");
         for (const auto &[key, child] : value.items()) {
             if (key == "image") {
                 const auto path = child.get<std::string>();
@@ -168,6 +181,54 @@ void PipelineCompiler::hit_limit(const std::string &name, int limit) {
     require(workflow_.nodes.contains(name) && limit >= 1 && limit <= 256,
             "COMPILE_HIT_LIMIT_INVALID");
     workflow_.nodes[name]["max_hit"] = limit;
+}
+void PipelineCompiler::delay_after(const std::string &name, int milliseconds) {
+    require(workflow_.nodes.contains(name) && milliseconds >= 0 && milliseconds <= 10000,
+            "COMPILE_DELAY_INVALID");
+    workflow_.nodes[name]["post_delay"] = milliseconds;
+}
+void PipelineCompiler::swipe(const std::string &name, const J &scene, const J &post,
+                             J coordinates, J next) {
+    require(coordinates.is_array() && coordinates.size() == 4, "COMPILE_SWIPE_INVALID");
+    for (std::size_t i = 0; i < 4; ++i)
+        require(coordinates[i].is_number_integer() && coordinates[i] >= 1 &&
+                    coordinates[i] <= (i % 2 == 0 ? 898 : 1598), "COMPILE_SWIPE_INVALID");
+    action(name, scene, scene, post,
+           {{"kind", "Swipe"}, {"x", coordinates[0]}, {"y", coordinates[1]},
+            {"x2", coordinates[2]}, {"y2", coordinates[3]}, {"duration", 400}},
+           std::move(next), nullptr);
+}
+std::string PipelineCompiler::append(const std::string &prefix, const CompiledWorkflow &child,
+                                    J next) {
+    require(!prefix.empty() && prefix.find_first_not_of(
+                "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_") == std::string::npos,
+            "COMPILE_PREFIX_INVALID");
+    child.validate();
+    for (const auto &[name, node] : child.nodes.items()) {
+        (void)node;
+        require(!workflow_.nodes.contains(prefix + "_" + name), "COMPILE_NODE_DUPLICATE");
+    }
+    for (const auto &[name, original] : child.nodes.items()) {
+        auto node = original;
+        for (const auto *key : {"next", "on_error"})
+            if (node.contains(key))
+                for (auto &edge : node[key])
+                    edge = prefix + "_" + edge.get<std::string>();
+        if (name == child.terminal) {
+            node.erase("custom_action");
+            node.erase("custom_action_param");
+            node["action"] = "DoNothing";
+            node["next"] = next;
+            node["on_error"] = {"RecoveryRequired"};
+        }
+        workflow_.nodes[prefix + "_" + name] = std::move(node);
+    }
+    return prefix + "_" + child.entry;
+}
+void PipelineCompiler::recovery(const std::string &name, const std::string &reason) {
+    require(!reason.empty(), "COMPILE_RECOVERY_REASON_EMPTY");
+    add(name, {{"action", "Custom"}, {"custom_action", "RequireRecovery"},
+               {"custom_action_param", {{"reason", reason}}}});
 }
 CompiledWorkflow PipelineCompiler::finish() {
     add("Terminal", {{"action", "Custom"}, {"custom_action", "RootTerminal"}});

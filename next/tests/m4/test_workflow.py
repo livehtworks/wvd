@@ -33,6 +33,10 @@ class WorkflowTests(unittest.TestCase):
         if options.get("workflow") == "auto":
             names += ["combatActive", "combatActive_2", "combatActive_3", "combatActive_4", "close",
                       "spellskill/skillDetail", "spellskill/CombatAutoEnable", "spellskill/CombatAutoDisable"]
+        if options.get("workflow") == "map":
+            names += ["mapFlag", "dungFlag", "chest", "chestFlag", "chestOpening", "whowillopenit",
+                      "AutoMove", "EdgeOfTown", "combatActive", "combatActive_2", "combatActive_3", "combatActive_4",
+                      "cursor_0", "cursor_1", "cursor_2", "cursor_3", "stair_up", "stair_floor"]
         rng = np.random.default_rng(90614)
         patterns = {name: rng.integers(30, 255, (24, 40, 3), dtype=np.uint8) for name in names}
         def write(path, pixels):
@@ -194,6 +198,78 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(result["snapshot"]["state"], "Interrupted", result)
         self.assertEqual(result["backend_calls"], 3)
         self.assertFalse(result["mismatch"])
+
+    def test_composed_city_does_not_finish_root_before_rest(self):
+        world = {"worldmapflag": (80, 100), "City_RoyalCityLuknalia": (132, 1352)}
+        screens = [world, {"Inn": (100, 400)}, {"Stay": (100, 600)},
+                   {"Economy": (100, 500)}, {"OK": (500, 800)},
+                   {"Stay": (100, 600)}, {"Inn": (100, 400)}]
+        commands = [dict(kind=0, x=152, y=1364), dict(kind=0, x=120, y=412),
+                    dict(kind=0, x=120, y=612), dict(kind=0, x=120, y=512),
+                    dict(kind=0, x=520, y=812), dict(kind=5, key=4)]
+        result = self.execute("city-rest", screens, commands, workflow="city-inn")
+        self.assertEqual(result["snapshot"]["state"], "Completed", result)
+        self.assertEqual(result["cursor"], 6)
+        self.assertFalse(result["mismatch"])
+        failed = self.execute("city-rest-failed", screens[:2],
+                              [commands[0], {**commands[1], "reject": True}], workflow="city-inn")
+        self.assertEqual(failed["snapshot"]["state"], "Failed", failed)
+        self.assertEqual(failed["cursor"], 1)
+
+    def test_map_arrival_and_floor_are_not_input_success(self):
+        base = {"mapFlag": (100, 100)}
+        cases = [("reached", {**base, "cursor_0": (480, 588)}, ["position", [None], [500, 600]], {}, "Completed"),
+                 ("stair", base, ["stair_up", [None], [500, 600]], {}, "Completed"),
+                 ("floor", base, ["position", [None], [500, 600]], {"floor": "stair_floor"}, "Interrupted")]
+        for name, screen, target, options, state in cases:
+            result = self.execute("map-" + name, [screen], [], workflow="map", map_target=target, **options)
+            self.assertEqual(result["snapshot"]["state"], state, result)
+            self.assertEqual(result["backend_calls"], 0)
+
+    def test_map_movement_reopens_and_confirms_position(self):
+        base = {"mapFlag": (100, 100)}
+        result = self.execute("map-moving", [base, base, {"dungFlag": (100, 1400)},
+                              {**base, "cursor_0": (480, 588)}],
+                              [dict(kind=0, x=500, y=600), dict(kind=0, x=136, y=1431),
+                               dict(kind=0, x=777, y=150)],
+                              workflow="map", map_target=["position", [None], [500, 600]])
+        self.assertEqual(result["snapshot"]["state"], "Completed", result)
+        self.assertEqual(result["cursor"], 3)
+        self.assertFalse(result["mismatch"])
+
+    def test_map_transition_revokes_old_move(self):
+        base = {"mapFlag": (100, 100)}
+        for name, new_scene in [("combat", {"combatActive": (20, 20)}),
+                                 ("chest", {"chestFlag": (300, 400)})]:
+            result = self.execute("map-interrupt-" + name, [base, new_scene],
+                                  [dict(kind=0, x=500, y=600)], workflow="map",
+                                  map_target=["position", [None], [500, 600]])
+            self.assertEqual(result["snapshot"]["state"], "Interrupted", result)
+            self.assertEqual(result["backend_calls"], 1)
+            self.assertFalse(result["mismatch"])
+
+    def test_map_automove_freeze_has_no_repeat_clicks(self):
+        base = {"mapFlag": (100, 100)}
+        result = self.execute("map-frozen", [base, base, {**base, "AutoMove": (200, 400)}],
+                              [dict(kind=0, x=500, y=600), dict(kind=0, x=136, y=1431)],
+                              workflow="map", map_target=["position", [None], [500, 600]])
+        self.assertEqual(result["snapshot"]["state"], "Interrupted", result)
+        self.assertEqual(result["backend_calls"], 2)
+        self.assertFalse(result["mismatch"])
+
+    def test_map_chest_search_uses_each_direction_and_exclusions(self):
+        base = {"mapFlag": (100, 100)}
+        commands = [dict(kind=1, x=100, y=250, x2=700, y2=1200, duration=400),
+                    dict(kind=1, x=700, y=1200, x2=100, y2=250, duration=400)]
+        result = self.execute("map-search", [base] * 3, commands, workflow="map",
+                              map_target=["chest", [[100, 250, 700, 1200], [700, 1200, 100, 250]]])
+        self.assertEqual(result["snapshot"]["state"], "Completed", result)
+        self.assertEqual(result["cursor"], 2)
+        self.assertFalse(result["mismatch"])
+        excluded = self.execute("map-excluded", [{**base, "chest": (200, 1300)}], [],
+                                workflow="map", map_target=["chest", [None]])
+        self.assertEqual(excluded["snapshot"]["state"], "Completed", excluded)
+        self.assertEqual(excluded["backend_calls"], 0)
 
 
 if __name__ == "__main__":

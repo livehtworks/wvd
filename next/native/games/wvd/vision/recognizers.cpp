@@ -3,12 +3,17 @@
 #include "bobber.hpp"
 #include "image_ops.hpp"
 #include <cmath>
+#include <chrono>
 #include <opencv2/imgproc.hpp>
 #include <opencv2/objdetect.hpp>
 
 namespace wvd::games::vision {
 using J = nlohmann::json;
 namespace {
+struct MovementSample {
+    cv::Mat gray;
+    std::chrono::steady_clock::time_point at;
+};
 void check(bool ok, const char *error) {
     if (!ok)
         throw std::runtime_error(error);
@@ -198,6 +203,37 @@ J evaluate_impl(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels, co
         result["roi_source"] = parameters.value("roi_source", has_roi ? "explicit" : "scope");
         return result;
     };
+    if (mode == "movement_stopped") {
+        // 沿用旧移动检查的 3 秒间隔和小地图 ROI，只保存一个 Session 内的灰度副本。
+        // Hit 仅表示需要重新打开地图检查，不表示目标完成或整局游戏卡死。
+        check(image.cols == 900 && image.rows == 1600, "WVD_VIEWPORT_INVALID");
+        const cv::Rect area(650, 25, 225, 225);
+        check((area & allowed_rect) == area, "WVD_ROI_OUTSIDE_SCOPE");
+        const auto dungeon = one("dungFlag", J::object());
+        const auto map = one("mapFlag", J::object());
+        const std::string key = "movement.sample";
+        if (dungeon.at("outcome") != "Hit" || map.at("outcome") == "Hit") {
+            cache.assets.erase(key);
+            return decision(false, {}, {{"reason", "not_moving_scene"}});
+        }
+        cv::Mat gray;
+        cv::cvtColor(image(area), gray, cv::COLOR_BGR2GRAY);
+        const auto now = std::chrono::steady_clock::now();
+        auto found = cache.assets.find(key);
+        if (found == cache.assets.end()) {
+            check(cache.assets.size() < 2048, "WVD_SESSION_ASSET_CAPACITY");
+            cache.assets.emplace(key, MovementSample{gray, now});
+            return decision(false, {}, {{"reason", "first_sample"}});
+        }
+        auto &previous = std::any_cast<MovementSample &>(found->second);
+        if (now - previous.at < std::chrono::seconds(3))
+            return decision(false, {}, {{"reason", "sample_interval"}});
+        cv::Mat difference;
+        cv::absdiff(gray, previous.gray, difference);
+        const double mean = cv::mean(difference)[0] / 255;
+        previous = {gray, now};
+        return decision(mean < 0.1, area, {{"mean_difference", mean}, {"threshold", 0.1}}, false);
+    }
     if (mode == "template" || mode == "bright_mask" || mode == "multiple") {
         auto parameters = p;
         parameters["roi_source"] = p.contains("roi") ? "explicit" : "scope";
