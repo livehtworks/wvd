@@ -32,9 +32,12 @@ class PlanTests(unittest.TestCase):
         (folder / "input.json").write_text(json.dumps(cfg), encoding="utf-8")
         exe = ROOT / "build/m4/Release/wvd_m4_check.exe"
         exe_hash = hashlib.sha256(exe.read_bytes()).hexdigest()
+        # 完整批次包含 43 份独立图的编译、校验和序列化；不是单个运行 Session。
+        # 外部看护仍有限，不改变任何节点、帧 TTL 或生产停止预算。
+        timeout = 120 if "compile_iterations_manifest" in options else 30
         with (folder / "native.log").open("wb") as log:
             p = subprocess.run([str(exe), str(folder / "input.json")],
-                               cwd=folder, stdout=log, stderr=log, timeout=30,
+                               cwd=folder, stdout=log, stderr=log, timeout=timeout,
                                env=dict(os.environ, PATH=str(self.sdk / "bin") + os.pathsep + os.environ.get("PATH", "")))
         self.assertEqual(p.returncode, 0)
         self.assertEqual(hashlib.sha256(exe.read_bytes()).hexdigest(), exe_hash)

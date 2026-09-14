@@ -70,7 +70,7 @@ class WorkflowTests(unittest.TestCase):
                       "fishing/cast", "fishing/striking", "fishing/CloseFishInfo", "combatActive", "combatActive_2",
                       "combatActive_3", "combatActive_4", "boot_title_logo", "boot_attention", "startdownload",
                       "retry", "retry_blank", "totitle", "resume", "trait", "recover", "spellskill/skillDetail", "close", "someonedead", "RiseAgain",
-                      "multipeopledead", "skull"]
+                      "multipeopledead", "skull", "sandman_recover", "blessing", "combatClose"]
         names += options.get("extra_images", [])
         if options.get("workflow") == "revival":
             names.append("RiseAgain")
@@ -1593,6 +1593,74 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(r["snapshot"]["business"]["healing_sequence"], 1)
         self.assertFalse(r["snapshot"]["business"]["healing_required"])
         self.assertFalse(r["mismatch"])
+
+    def test_global_prompt_sandman_then_retry_returns_without_extra_input(self):
+        r = self.execute("global-sandman-retry", [{"sandman_recover": (350, 850)},
+            {"retry": (300, 700)}, {"dungFlag": (50, 150)}],
+            [dict(kind=0, x=370, y=862), dict(kind=0, x=320, y=712)], workflow="common")
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 2)
+        self.assertFalse(r["mismatch"])
+        self.assertEqual(r["snapshot"]["business"]["revivals"], 0)
+        self.assertEqual(r["lifecycle_calls"], [])
+
+    def test_global_prompt_blessing_closes_secondary_confirmation(self):
+        for secondary in (False, True):
+            initial = {"blessing": (300, 550)}
+            if secondary:
+                initial["combatClose"] = (550, 950)
+            r = self.execute("global-blessing-" + str(secondary), [initial, {"dungFlag": (50, 150)}],
+                [dict(kind=0, x=570 if secondary else 320, y=962 if secondary else 562)], workflow="common")
+            self.assertEqual(r["snapshot"]["state"], "Completed", r)
+            self.assertEqual(r["backend_calls"], 1)
+            self.assertFalse(r["mismatch"])
+
+    def test_global_prompt_blessing_selection_can_open_confirmation_before_closing(self):
+        blessing = {"blessing": (300, 550)}
+        r = self.execute("global-blessing-confirmation", [blessing,
+            {**blessing, "combatClose": (550, 950)}, {"dungFlag": (50, 150)}],
+            [dict(kind=0, x=320, y=562), dict(kind=0, x=570, y=962)], workflow="common")
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 2)
+        self.assertFalse(r["mismatch"])
+
+    def test_global_prompt_unchanged_is_bounded(self):
+        for marker in ("sandman_recover", "blessing"):
+            r = self.execute("global-stuck-" + marker, [{marker: (300, 550)}] * 7,
+                [dict(kind=0, x=320, y=562)] * 6, workflow="common")
+            self.assertEqual(r["snapshot"]["state"], "Interrupted", r)
+            self.assertEqual(r["snapshot"]["sessions"][-1]["reason"], "global." + marker + ".unchanged")
+            self.assertEqual(r["backend_calls"], 6)
+            self.assertFalse(r["mismatch"])
+
+    def test_global_prompt_stop_and_rejection_preserve_no_business_success(self):
+        for stop in (False, True):
+            r = self.execute("global-stop-" + str(stop), [{"sandman_recover": (300, 550)},
+                {"dungFlag": (50, 150)}], [dict(kind=0, x=320, y=562, reject=not stop)],
+                workflow="common", stop_after_first=stop)
+            self.assertEqual(r["snapshot"]["state"], "UserStopped" if stop else "Failed", r)
+            self.assertEqual(r["backend_calls"], 1)
+            self.assertEqual(r["snapshot"]["business"]["revivals"], 0)
+            self.assertEqual(r["snapshot"]["business"]["combats"], 0)
+
+    def test_global_prompt_close_marker_alone_does_not_authorize_input(self):
+        r = self.execute("global-close-negative", [{"Inn": (100, 400), "combatClose": (550, 950)}], [], workflow="common")
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 0)
+        r = self.execute("global-missing", [{"Inn": (100, 400)}], [], workflow="common", omit_image="blessing.png")
+        self.assertIn("COMPILE_IMAGE_NOT_IN_MANIFEST", r["publish_error"])
+        self.assertEqual(r["connections"], 0)
+
+    def test_global_prompt_iteration_returns_to_same_task_point(self):
+        base = {"mapFlag": (100, 100), "cursor_0": (480, 588)}
+        r = self.execute("global-iteration", [{**base, "sandman_recover": (300, 550)}, base],
+            [dict(kind=0, x=320, y=562)], workflow="iteration", profile=self.turn_profile(defend=True),
+            route_targets=[["position", [None], [500, 600]]])
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["snapshot"]["business"]["task_step"], 1)
+        self.assertEqual(r["snapshot"]["generation"], 1)
+        self.assertEqual(r["backend_calls"], 1)
+        self.assertEqual(r["lifecycle_calls"], [])
 
     def test_party_defeat_acknowledges_marker_without_inventing_combat_behavior(self):
         r = self.execute("defeat-to-revival", [{"multipeopledead": (300, 500), "skull": (400, 900)},

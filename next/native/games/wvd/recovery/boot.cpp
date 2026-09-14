@@ -1,5 +1,6 @@
 #include "boot.hpp"
 #include "party_death.hpp"
+#include "global_prompt.hpp"
 
 namespace wvd::games::recovery {
 namespace {
@@ -74,8 +75,17 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common) {
     low_retry["threshold"] = .60;
     const auto to_title = C::image("totitle"), resume = C::image("resume");
     const J recognized = common ? C::any({J{{"mode", "boot_post"}}, panel}) : J{{"mode", "boot_post"}};
-    graph.route("Entry", common ? J{"Download", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title", "Pause", "Death", "Defeat", "Ready"}
-                                 : J{"Ready", "Download", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title", "Pause"});
+    graph.route("Entry", common ? J{"Download", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title", "Pause", "Death", "Defeat", "Sandman", "Blessing", "Ready"}
+                                 : J{"Ready", "Download", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title", "Pause", "Sandman", "Blessing"});
+    for (const auto &[prefix, prompt] : {std::pair{"Sandman", GlobalPrompt::SandmanRecovery},
+                                         std::pair{"Blessing", GlobalPrompt::Blessing}}) {
+        const std::string name = prefix;
+        const auto child = graph.define_child(name + "Prompt", dismiss_global_prompt(prompt));
+        graph.observe(name, C::image(prompt == GlobalPrompt::Blessing ? "blessing" : "sandman_recover"), {name + "Handle"});
+        graph.call_child(name + "Handle", child, {"Entry"});
+        graph.hit_limit(name, 6);
+        graph.hit_limit(name + "Handle", 6);
+    }
     if (common) {
         const auto death = graph.define_child("PartyDeath", dismiss_party_death(), {"BlockedExit"});
         graph.observe("Death", {{"mode", "party_death"}}, {"DismissDeath"});

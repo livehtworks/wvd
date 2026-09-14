@@ -80,6 +80,9 @@
 
 ## Next M4 状态与任务数据
 
+- 完整迭代计划测试一次编译/校验/序列化 43 份图；普通提示子图增加后曾超过原 30 秒测试进程看护。该批次看护为 120 秒，保留全部逐项断言；它不是运行 Session 预算或性能验收阈值。超时原轮保留 ERROR，不当作业务失败或成功，见 m4-global-prompt-validation.md。
+- EventJournal 是有界窗口，result.json 中的事件列表不保证包含早期每一次输入。核对全程次数用 Run 总计与 sessions[].inputs，核对仍在窗口内的输入用 session_generation；旧结果缺逐代次计数时不得补零。冷启动首轮曾错误地要求窗口保留全部 8 次输入，见 m4-cold-start-validation.md。
+
 - 死亡提示首轮后置识别曾耗时 2244ms，超过 2 秒 TTL 并被 SCENE_UNCONFIRMED 拒绝。应先用 frame.captured 与 recognition.custom 事件时间定位，再收敛专用有序候选和重复计算；不延长帧 TTL，也不改通用 any/all 的错误传播来通过测试。见 m4-party-death-validation.md。
 
 - Maa 5.13.0 RunActionDirect 的参数只进入 action.param，不能用它设置节点 pre_delay；会继承默认约 200ms 输入前延迟。受控 Click/Swipe 通过 RunAction 的本次克隆节点显式设零前后延迟及冻结等待，外层业务等待保持原定义；不要放宽 2 秒 TTL 掩盖重复等待。详见 `../next/docs/m4-native-action-timing-validation.md`。
