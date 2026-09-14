@@ -1932,7 +1932,7 @@
       "offline_status": "PASS",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "remaining": "其它全局对话、完整任务与真实质量未齐。",
+      "remaining": "其它对话、善恶写回、诅咒之轮等待/移交及完整任务与真实质量未齐。",
       "implementation_extent": "GLOBAL_PAUSE_REVIVAL_SUBSET",
       "evidence_report": "../m4-revival-validation.md",
       "verification_scope": "真实 Maa 合成场景的 Pause/复活与正常路线连接，不是全部全局事件或完整任务",
@@ -1949,6 +1949,13 @@
         "entry": "recovery::acknowledge_party_defeat",
         "evidence_report": "../m4-party-defeat-validation.md",
         "scope": "多人死亡提示与 _SUICIDE 观察/复位，不新增旧版不存在的战斗消费者"
+      },
+      "global_prompt_validation": {
+        "status": "PASS",
+        "implementation": "native/games/wvd/recovery/global_prompt.cpp",
+        "entry": "recovery::dismiss_global_prompt",
+        "evidence_report": "../m4-global-prompt-validation.md",
+        "scope": "沙人恢复与祝福提示的有限子图，含原任务续接；不是全部全局事件"
       }
     },
     {

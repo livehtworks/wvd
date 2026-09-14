@@ -648,6 +648,30 @@ def update_cold_start(evidence):
     print("Cold start evidence recorded; complete task counts unchanged.")
 
 
+def update_global_prompts(evidence):
+    verify_workflows(evidence, {
+        "global-sandman-retry": ("Completed", 2), "global-blessing-False": ("Completed", 1),
+        "global-blessing-True": ("Completed", 1), "global-blessing-confirmation": ("Completed", 2),
+        "global-stuck-sandman_recover": ("Interrupted", 6), "global-stuck-blessing": ("Interrupted", 6),
+        "global-stop-False": ("Failed", 1), "global-stop-True": ("UserStopped", 1),
+        "global-close-negative": ("Completed", 0), "global-iteration": ("Completed", 1),
+    })
+    missing = read(evidence / "global-missing/output.json")
+    if "COMPILE_IMAGE_NOT_IN_MANIFEST" not in missing.get("publish_error", "") or missing["connections"] or missing["backend_calls"]:
+        raise RuntimeError("Global prompt missing resource evidence invalid")
+    path = ROOT / "docs/migration/m4-implementation-map.json"
+    document = read(path)
+    for row in document["entries"]:
+        if row["legacy_symbol"] == "Factory.IdentifyState":
+            row["global_prompt_validation"] = {
+                "status": "PASS", "implementation": "native/games/wvd/recovery/global_prompt.cpp",
+                "entry": "recovery::dismiss_global_prompt", "evidence_report": "../m4-global-prompt-validation.md",
+                "scope": "沙人恢复与祝福提示的有限子图，含原任务续接；不是全部全局事件"}
+            row["remaining"] = "其它对话、善恶写回、诅咒之轮等待/移交及完整任务与真实质量未齐。"
+    write(path, document)
+    print("Global prompt evidence recorded; complete task counts unchanged.")
+
+
 def update_chest(evidence):
     verify_workflows(evidence, {
         **{f"chest-character-{i}": ("Completed", 3) for i in range(1, 7)},
@@ -693,8 +717,9 @@ if __name__ == "__main__":
     parser.add_argument("--party-death-evidence", type=Path)
     parser.add_argument("--party-defeat-evidence", type=Path)
     parser.add_argument("--cold-start-evidence", type=Path)
+    parser.add_argument("--global-prompt-evidence", type=Path)
     args = parser.parse_args()
-    if not any((args.data_evidence, args.combat_evidence, args.navigation_evidence, args.encounter_evidence, args.healing_evidence, args.dungeon_route_evidence, args.departure_evidence, args.iteration_evidence, args.common_evidence, args.interruption_evidence, args.boundaries_evidence, args.revival_evidence, args.chest_evidence, args.party_death_evidence, args.party_defeat_evidence, args.cold_start_evidence)):
+    if not any((args.data_evidence, args.combat_evidence, args.navigation_evidence, args.encounter_evidence, args.healing_evidence, args.dungeon_route_evidence, args.departure_evidence, args.iteration_evidence, args.common_evidence, args.interruption_evidence, args.boundaries_evidence, args.revival_evidence, args.chest_evidence, args.party_death_evidence, args.party_defeat_evidence, args.cold_start_evidence, args.global_prompt_evidence)):
         parser.error("an evidence group is required")
     if args.data_evidence:
         generate(args.data_evidence, args.state_evidence, args.plan_evidence, args.workflow_evidence)
@@ -728,6 +753,8 @@ if __name__ == "__main__":
         update_party_defeat(args.party_defeat_evidence)
     if args.cold_start_evidence:
         update_cold_start(args.cold_start_evidence)
+    if args.global_prompt_evidence:
+        update_global_prompts(args.global_prompt_evidence)
     if args.revival_evidence:
         if not args.pause_evidence or not args.pause_retry_evidence:
             parser.error("--revival-evidence requires both Pause evidence directories")
