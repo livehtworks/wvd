@@ -59,8 +59,8 @@ namespace {
 tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common) {
     C graph(common ? "recovery.common_screens" : "recovery.boot_ready", std::chrono::seconds{120});
     const auto panel = C::any({C::image("trait"), C::image("recover")});
-    const J ready = common ? C::all({C::any({J{{"mode", "boot_ready"}}, panel}), C::absent(J{{"mode", "blocking_screen"}})})
-                           : J{{"mode", "boot_ready"}};
+    const J ready = C::all({common ? C::any({J{{"mode", "boot_ready"}}, panel}) : J{{"mode", "boot_ready"}},
+                           C::absent(J{{"mode", "blocking_screen"}})});
     const auto title = scoped("boot_title_logo", {100, 300, 700, 470}, .86);
     const auto attention = scoped("boot_attention", {250, 430, 420, 220}, .86);
     const auto download = scoped("startdownload", {222, 901, 465, 84}, .8);
@@ -71,8 +71,8 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common) {
     low_retry["threshold"] = .60;
     const auto to_title = C::image("totitle"), resume = C::image("resume");
     const J recognized = common ? C::any({J{{"mode", "boot_post"}}, panel}) : J{{"mode", "boot_post"}};
-    graph.route("Entry", common ? J{"Download", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title", "Ready"}
-                                 : J{"Ready", "Download", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title"});
+    graph.route("Entry", common ? J{"Download", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title", "Pause", "Ready"}
+                                 : J{"Ready", "Download", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title", "Pause"});
     graph.observe("Ready", ready, {"Terminal"});
     if (allow_download)
         graph.click("Download", download, download, recognized, {"Entry"});
@@ -87,6 +87,23 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common) {
     graph.click("Resume", resume, resume, recognized, {"Entry"});
     graph.fixed_click("Attention", attention, recognized, {450, 1450}, {"Entry"});
     graph.fixed_click("Title", title, recognized, {450, 1450}, {"Entry"});
+    const J pause{{"mode", "pause"}};
+    graph.observe("Pause", pause, {"ResumePause0"});
+    graph.hit_limit("Pause", 6);
+    // 按旧版连续六次无效点击判定冻结，但第六次仍须新帧确认：
+    // 最后一次已恢复不能重启；角色/技能详情负例由 pause 识别器排除。
+    for (unsigned i = 0; i < 6; ++i) {
+        const auto name = "ResumePause" + std::to_string(i);
+        graph.fixed_click(name, pause, recognized, {450, 760},
+            {"PauseCleared", i < 5 ? "ResumePause" + std::to_string(i + 1) : "PauseFrozen"});
+        graph.hit_limit(name, 6);
+        graph.delay_after(name, 2000);
+        graph.postcondition_budget(name, 10000);
+    }
+    graph.observe("PauseCleared", C::absent(pause), {"Entry"});
+    graph.hit_limit("PauseCleared", 6);
+    graph.observe("PauseFrozen", pause, {"PauseFrozenExit"});
+    graph.recovery("PauseFrozenExit", "pause.physics_frozen");
     graph.hit_limit("Entry", 30);
     for (auto name : {"Download", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title"}) {
         if (!allow_download && std::string(name) == "Download")

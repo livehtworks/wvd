@@ -20,6 +20,8 @@ inline nlohmann::json blocking_probes() {
     add("resume");
     add("boot_attention", {250, 430, 420, 220}, .86);
     add("boot_title_logo", {100, 300, 700, 470}, .86);
+    // Pause 可能保留底层战斗/地图图标，必须先作为覆盖层处理。
+    probes.push_back({{"mode", "pause"}});
     return probes;
 }
 // 启动就绪只看稳定游戏场景；动作后置还接受已知的中间阻塞页。

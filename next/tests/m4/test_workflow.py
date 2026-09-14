@@ -69,7 +69,7 @@ class WorkflowTests(unittest.TestCase):
             names += ["dungFlag", "openworldmap", "returnText", "returntoTown", "mapFlag", "chestFlag", "whowillopenit",
                       "fishing/cast", "fishing/striking", "fishing/CloseFishInfo", "combatActive", "combatActive_2",
                       "combatActive_3", "combatActive_4", "boot_title_logo", "boot_attention", "startdownload",
-                      "retry", "retry_blank", "totitle", "resume", "trait", "recover"]
+                      "retry", "retry_blank", "totitle", "resume", "trait", "recover", "spellskill/skillDetail", "close"]
         names += options.get("extra_images", [])
         rng = np.random.default_rng(90614)
         patterns = {name: rng.integers(30, 255, (24, 40, 3), dtype=np.uint8) for name in names}
@@ -107,6 +107,11 @@ class WorkflowTests(unittest.TestCase):
                     self.assertLess(score, .80)
                     pattern = degraded
                 pixels[y:y+24, x:x+40] = pattern
+            if i in options.get("pause_frames", []):
+                area = np.full((110, 240, 3), 20, np.uint8)
+                cv2.putText(area, "Pause", (40, 55), cv2.FONT_HERSHEY_SIMPLEX,
+                            1.0, (190, 190, 190), 2, cv2.LINE_AA)
+                pixels[740:850, 330:570] = area
             frame = folder / f"frame-{i}.png"
             write(frame, pixels)
             frames.append(str(frame))
@@ -1375,6 +1380,43 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(r["snapshot"]["business"]["healing_sequence"], 1)
         self.assertFalse(r["snapshot"]["business"]["healing_required"])
         self.assertFalse(r["mismatch"])
+
+    def test_pause_precedes_ready_and_accepts_the_sixth_resume(self):
+        ready = {"dungFlag": (50, 150)}
+        for attempts in (1, 6):
+            r = self.execute(f"pause-clears-{attempts}", [ready] * (attempts + 1),
+                [dict(kind=0, x=450, y=760)] * attempts, workflow="common",
+                pause_frames=list(range(attempts)))
+            self.assertEqual(r["snapshot"]["state"], "Completed", r)
+            self.assertEqual(r["backend_calls"], attempts)
+            self.assertFalse(r["mismatch"])
+            self.assertEqual(r["lifecycle_calls"], [])
+
+    def test_pause_six_ineffective_inputs_request_physics_recovery(self):
+        r = self.execute("pause-frozen", [{"dungFlag": (50, 150)}] * 7,
+            [dict(kind=0, x=450, y=760)] * 6, workflow="common", pause_frames=list(range(7)))
+        self.assertEqual(r["snapshot"]["state"], "Interrupted", r)
+        self.assertEqual(r["snapshot"]["reason"], "RECOVERY_REQUIRED")
+        self.assertEqual(r["snapshot"]["sessions"][-1]["reason"], "pause.physics_frozen")
+        self.assertEqual(r["backend_calls"], 6)
+        self.assertFalse(r["mismatch"])
+
+    def test_pause_character_and_detail_negatives_never_click_center(self):
+        for symbol, point in (("trait", (100, 900)), ("recover", (100, 900)),
+                              ("spellskill/skillDetail", (100, 900)), ("close", (350, 1450))):
+            r = self.execute("pause-negative-" + symbol.replace("/", "-"),
+                [{"dungFlag": (50, 150), symbol: point}], [], workflow="common", pause_frames=[0])
+            self.assertEqual(r["snapshot"]["state"], "Completed", r)
+            self.assertEqual(r["backend_calls"], 0)
+
+    def test_pause_stop_and_rejected_input_do_not_continue(self):
+        for stopped in (False, True):
+            r = self.execute(f"pause-stop-{stopped}", [{"dungFlag": (50, 150)}] * 2,
+                [dict(kind=0, x=450, y=760, reject=not stopped)], workflow="common",
+                pause_frames=[0, 1], stop_after_first=stopped)
+            self.assertEqual(r["snapshot"]["state"], "UserStopped" if stopped else "Failed", r)
+            self.assertEqual(r["backend_calls"], 1)
+            self.assertFalse(r["mismatch"])
 
     def test_common_resume_overlay_precedes_ready_game(self):
         r = self.execute("common-resume", [{"dungFlag": (50, 150), "resume": (400, 800)}, {"dungFlag": (50, 150)}],

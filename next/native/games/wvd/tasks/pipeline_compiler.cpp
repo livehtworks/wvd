@@ -21,6 +21,9 @@ void collect_images(const J &value, std::set<std::string> &images) {
             collect_images(vision::boot_probes(mode == "boot_post"), images);
         if (mode == "blocking_screen")
             collect_images(vision::blocking_probes(), images);
+        if (mode == "pause" || mode == "pause_negative")
+            for (const auto *name : {"trait", "recover", "spellskill/skillDetail", "close"})
+                images.insert(std::string(name) + ".png");
         if (mode == "reached")
             for (int i = 0; i < 4; ++i)
                 images.insert("cursor_" + std::to_string(i) + ".png");
