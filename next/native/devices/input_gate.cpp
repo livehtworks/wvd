@@ -98,6 +98,12 @@ bool InputGate::same_frame(const FrameIdentity &f) const {
            f.color_format == "BGR8" && f.connection_generation == frame_.connection_generation &&
            std::chrono::steady_clock::now() - f.captured_at <= policy_.max_frame_age;
 }
+bool InputGate::current_observation(const Observation &observation) const {
+    std::lock_guard lock(mutex_);
+    // 只校验已观测证据，不建立场景许可。业务确认不能绕过相同的代次/epoch/帧龄边界。
+    return !closed() && observation.outcome != RecognitionOutcome::Error &&
+           same_frame(observation.basis) && application_ == policy_.application_id;
+}
 void InputGate::confirm_scene(const Observation &observation, const std::string &scene) {
     std::lock_guard lock(mutex_);
     if (observation.outcome != RecognitionOutcome::Hit || !same_frame(observation.basis) ||

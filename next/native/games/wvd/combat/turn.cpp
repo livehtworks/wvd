@@ -39,6 +39,9 @@ bool combat_action(maafw::Context &context, const J &p, const J &) {
     const auto accepted = context.with_business_state([&](contracts::BusinessRunState &base) {
         if (context.cancelled())
             return false;
+        // 所有头像取分完成后再次核对原帧，不能凭过期画面准备或消费技能。
+        if (!context.current_observation(confirmation))
+            throw std::runtime_error("COMBAT_CONFIRMATION_STALE");
         auto &state = dynamic_cast<WvdRunState &>(base);
         if (operation == "prepare")
             state.prepare_skill(scores, p.at("catalog"));

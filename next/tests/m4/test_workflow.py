@@ -704,6 +704,36 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(wrong["snapshot"]["business"]["task_step"], 0)
         self.assertEqual(wrong["snapshot"]["business"]["confirmed_operations"], 0)
 
+    def test_business_confirmation_rejects_stale_frame_without_advancing_point(self):
+        screen = {"mapFlag": (100, 100), "cursor_0": (480, 588)}
+        r = self.execute("point-stale", [screen], [], workflow="map-confirm",
+                         map_target=["position", [None], [500, 600]], returned_frame_age_ms=3000)
+        self.assertEqual(r["snapshot"]["state"], "Failed", r)
+        self.assertEqual(r["snapshot"]["reason"], "BUSINESS_CONFIRMATION_STALE")
+        self.assertEqual(r["snapshot"]["business"]["task_step"], 0)
+        self.assertEqual(r["snapshot"]["business"]["confirmed_operations"], 0)
+        self.assertEqual(r["backend_calls"], 0)
+        self.assertTrue(r["snapshot"]["quiescent"])
+
+    def test_business_confirmation_rejects_stale_actor_before_preparing_skill(self):
+        r = self.execute("actor-stale", [self.turn_screen("B")], [], workflow="turn",
+                         profile=self.turn_profile(defend=True), returned_frame_age_ms=3000)
+        self.assertEqual(r["snapshot"]["state"], "Failed", r)
+        self.assertEqual(r["snapshot"]["reason"], "COMBAT_CONFIRMATION_STALE")
+        self.assertFalse(r["snapshot"]["business"]["has_prepared_skill"])
+        self.assertEqual(len(r["snapshot"]["business"]["strategy"]["current"]["skill_settings"]), 2)
+        self.assertEqual(r["backend_calls"], 0)
+
+    def test_business_confirmation_stale_karma_cannot_prepare_or_write_profile(self):
+        r = self.execute("karma-stale", [{"ambush": (300, 700), "ignore": (500, 700)}], [],
+                         workflow="common", profile={"KARMA_ADJUST": "+0"}, karma_profile=True,
+                         returned_frame_age_ms=3000)
+        self.assertEqual(r["snapshot"]["state"], "Failed", r)
+        self.assertEqual(r["snapshot"]["reason"], "BUSINESS_CONFIRMATION_STALE")
+        self.assertFalse(r["snapshot"]["business"]["karma_pending"])
+        self.assertEqual(r["profile_before"], r["profile_after"])
+        self.assertEqual(r["backend_calls"], 0)
+
     def test_chest_confirms_only_after_dungeon_return(self):
         for preferred in range(1, 7):
             x = 258 + ((preferred - 1) % 3) * 258

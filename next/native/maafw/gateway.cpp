@@ -377,6 +377,9 @@ contracts::Observation Context::recognize(const contracts::FrameEnvelope &frame,
                                           const RecognitionRequest &request) {
     return gateway_.recognize(frame, gateway_.gate_->frame_identity(), request, context_);
 }
+bool Context::current_observation(const contracts::Observation &observation) const {
+    return gateway_.gate_ && gateway_.gate_->current_observation(observation);
+}
 ChildResult Context::run_child(const std::string &entry, const nlohmann::json &overrides,
                                bool clone, const std::vector<std::string> &reset_hit_counts) {
     storage::validate_bundle_references(gateway_.bundle_, overrides);

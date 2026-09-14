@@ -11,7 +11,7 @@
 
 ## 当前阶段
 
-- 要塞八层陷阱专项检查点 `492322c` 首次构建及状态 19 方法通过；依赖的自动移动地图流程首轮 3 方法在 Auto 后置帧超过 TTL 时失败，尚未到开图。正在收敛纯后置分类，不放宽 TTL；见 `../next/docs/m4-auto-map-validation.md`、`../next/docs/m4-fortress-trap-validation.md`。善恶阶段共用/全局提示/开箱回归 24 方法已全部通过，不与新源码混用证据。
+- 自动移动地图两轮定点修正后，检查点 `197f531` 的 6 方法/11 场景通过，组合条件/门禁/ROI 定点 3 方法通过；见 `../next/docs/m4-auto-map-validation.md`。另发现业务确认未检查帧龄，已补检查，流程 4 方法/5 场景与同产物 M2 102 方法通过，见 `../next/docs/m4-confirmation-freshness-validation.md`；其它 WVD 组合回归仍需验证。要塞八层陷阱专项检查点 `492322c` 状态 19 方法通过，完整流程正在确认修正后的产物上验证；见 `../next/docs/m4-fortress-trap-validation.md`。
 
 - 善恶选择与新版 profile 写回已接通，状态 18、流程 6 方法/13 场景、配置数据 11 方法通过；见 `../next/docs/m4-karma-validation.md`，实现检查点 `d5404bd`。纯规则、状态确认和存储 CAS 分层；保存失败不重发动作，未知后置保留门禁 Failed；不是完整任务/跨进程恢复通过。
 

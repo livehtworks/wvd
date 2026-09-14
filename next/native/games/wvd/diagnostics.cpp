@@ -30,6 +30,8 @@ bool confirm(maafw::Context &context, const J &parameters, const J &) {
     const bool accepted = context.with_business_state([&](contracts::BusinessRunState &base) {
         if (context.cancelled())
             return false;
+        if (!context.current_observation(observed))
+            throw std::runtime_error("BUSINESS_CONFIRMATION_STALE");
         auto &state = dynamic_cast<WvdRunState &>(base);
         // 普通段和恢复段共享 Run 身份；代次不进入幂等 ID，否则恢复后会重复提交。
         const auto id = state.confirmation_id(operation, event);

@@ -44,6 +44,7 @@ class WorkflowDevice final : public OfflineDevice, public devices::LifecyclePort
     std::atomic<bool> release_lifecycle{};
     int failed_starts{}, start_attempts{};
     std::size_t restart_frame{1}, restart_action{};
+    std::chrono::milliseconds returned_frame_age{};
     std::atomic<unsigned> lifecycle_count{};
     J lifecycle_calls = J::array();
     bool enforce_connection_state{}, connection_throws{};
@@ -122,7 +123,8 @@ class WorkflowDevice final : public OfflineDevice, public devices::LifecyclePort
             ++time_event_count;
         }
         ++captures;
-        return {frames.at(cursor), size, identity, viewport, application, {}, "fixture",
+        return {frames.at(cursor), size, identity, viewport, application,
+                std::chrono::steady_clock::now() - returned_frame_age, "fixture",
                 allow_lifecycle ? lifecycle_state.connection_generation : 0};
     }
     bool execute(const contracts::Command &c) override {
@@ -437,6 +439,9 @@ int main(int argc, char **argv) {
         device->wrong_instance = config.value("other_lifecycle_instance", false);
         device->failed_starts = config.value("fail_starts", 0);
         device->restart_frame = config.value("restart_frame", std::size_t{1});
+        const auto frame_age = config.value("returned_frame_age_ms", 0);
+        require(frame_age >= 0 && frame_age <= 60000, "FIXTURE_FRAME_AGE_INVALID");
+        device->returned_frame_age = std::chrono::milliseconds{frame_age};
         device->restart_action = config.value("restart_action", std::size_t{0});
         device->hold_lifecycle = config.value("stop_during_lifecycle", false) || config.value("late_lifecycle_release", false);
         device->ignore_lifecycle_cancel = config.value("late_lifecycle_release", false);

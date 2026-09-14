@@ -167,7 +167,8 @@ bool pure_condition(const J &p, unsigned depth = 0) {
     return mode == "template" || mode == "combat_active" || mode == "boot_ready" ||
            mode == "boot_post" || mode == "blocking_screen" || mode == "party_death" ||
            mode == "party_defeat" || mode == "party_death_post" || mode == "pause" ||
-           mode == "pause_negative" || mode == "auto_route_post";
+           mode == "pause_negative" || mode == "auto_route_post" || mode == "focus_cursor" ||
+           mode == "reached" || mode == "through_stair";
 }
 J evaluate_uncached(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels, const J &p,
                     const J &bound, const maafw::CustomRecognitionScope &scope,

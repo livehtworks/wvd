@@ -14,6 +14,7 @@ class InputGate {
     RawFrame capture();
     void invalidate_frame();
     contracts::FrameIdentity frame_identity() const;
+    bool current_observation(const contracts::Observation &observation) const;
     void confirm_scene(const contracts::Observation &observation, const std::string &scene);
     bool authorize(const contracts::ActionIntent &intent);
     void revoke();

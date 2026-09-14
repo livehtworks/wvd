@@ -27,6 +27,8 @@ J gate_case(const std::string &name, Setup &s) {
     auto scene_observation = gateway.recognize(frame, gate.frame_identity(), scene());
     require(scene_observation.outcome == RecognitionOutcome::Hit,
             "scene not recognized by native SDK");
+    require(gate.current_observation(scene_observation) == (name != "gate-package"),
+            "current observation did not enforce application identity");
     gate.confirm_scene(scene_observation, "battle");
     auto request = target();
     if (name == "gate-nohit")
@@ -174,6 +176,7 @@ J gate_case(const std::string &name, Setup &s) {
         auto fresh = next.capture();
         auto observed = next.recognize(fresh, changed.frame_identity(), scene());
         changed.confirm_scene(observed, "battle");
+        require(!changed.current_observation(observation), "old observation remained current");
         changed.authorize(intent);
         // SDK 识别结束会请求 Inactive；它同样被门禁拒绝，单独核对本次迟到输入的增量。
         auto before = changed.counts();
@@ -194,6 +197,7 @@ J gate_case(const std::string &name, Setup &s) {
             auto fresh = gateway.capture();
             auto observed = gateway.recognize(fresh, gate.frame_identity(), scene());
             gate.confirm_scene(observed, "battle");
+            require(!gate.current_observation(observation), "old frame remained current");
         }
         if (name == "gate-bounds") {
             input.x = 901;
@@ -210,6 +214,8 @@ J gate_case(const std::string &name, Setup &s) {
         if (name == "gate-expired")
             std::this_thread::sleep_until(gate.frame_identity().captured_at + policy.max_frame_age +
                                           10ms);
+        if (name == "gate-expired" || name == "gate-late")
+            require(!gate.current_observation(observation), "expired/closed observation accepted");
         auto success = gateway.controller_action(input);
         if (name == "gate-normal" || name == "gate-held-release")
             require(success, "authorized input failed");

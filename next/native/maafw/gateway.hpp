@@ -23,6 +23,7 @@ class Context {
     contracts::FrameEnvelope capture();
     contracts::Observation recognize(const contracts::FrameEnvelope &frame,
                                      const RecognitionRequest &request);
+    bool current_observation(const contracts::Observation &observation) const;
     ChildResult run_child(const std::string &entry,
                           const nlohmann::json &overrides = nlohmann::json::object(),
                           bool clone = false, const std::vector<std::string> &reset_hit_counts = {});

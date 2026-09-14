@@ -31,6 +31,8 @@ bool prepare_character(maafw::Context &context, const J &parameters, const J &) 
     const auto accepted = context.with_business_state([&](contracts::BusinessRunState &base) {
         if (context.cancelled())
             return false;
+        if (!context.current_observation(scene))
+            throw std::runtime_error("CHEST_CONFIRMATION_STALE");
         auto &state = dynamic_cast<WvdRunState &>(base);
         state.prepare_chest_character(fear, parameters.at("preferred").get<int>(), parameters.at("seed").get<std::uint32_t>());
         const auto summary = state.summary();

@@ -51,6 +51,7 @@
 ## 一致性与边界
 
 - SDK 对象、帧、识别缓存不是数据权威，不反写源图片或模型。
+- WvdConfirm、WvdCombat 和 WvdChest 修改运行状态前复核当前观察的代次、epoch、应用与帧龄；识别曾经 Hit 不等于提交时仍有效。此检查不创建输入许可，过期不得计数或写回 profile。
 - 运行中的事实由 RunCoordinator 提供；历史目录没有已提交 result.json 时读为 Interrupted，禁止从未确认点击续跑。
 - EventJournal 常规容量默认 256 条，普通事件可被淘汰并返回 resync_required。关键事件不能静默丢失；关键槽满则显式失败。
 - 事件固定字段为 server_instance_id、run_id、session_generation、seq、monotonic_time（纳秒）、type、node_id、outcome、payload；不适用的节点/结果为 null，不从引擎成功推算业务成功。
