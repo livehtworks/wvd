@@ -56,6 +56,13 @@ struct SessionResult {
     RootEvidence checkpoint;
     nlohmann::json business;
 };
+// 只允许尚未启动根任务、没有输入且已真实静止的连接失败进入显式恢复策略。
+// 控制器回调异常有自己的首要错误码，不能被连接失败或重试掩盖。
+inline bool connection_failed_before_task(const SessionResult &result) {
+    return result.end == SessionEnd::Failed && result.reason == "CONTROLLER_CONNECT_FAILED" &&
+           result.quiescent && result.root_task_id == 0 && result.inputs.attempted == 0 &&
+           result.inputs.accepted == 0 && result.inputs.backend_called == 0;
+}
 struct RunSnapshot {
     std::uint64_t run_id{}, generation{};
     RunState state{RunState::Idle};

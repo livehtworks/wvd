@@ -42,9 +42,20 @@ class WorkflowDevice final : public OfflineDevice, public devices::LifecyclePort
     int failed_starts{}, start_attempts{};
     std::atomic<unsigned> lifecycle_count{};
     J lifecycle_calls = J::array();
+    bool enforce_connection_state{}, connection_throws{};
     devices::LifecycleObservation lifecycle_state{
         {"m2-offline", "fixture-instance", "fixture.app", "fixture.vpn", true}, true, true, true, false, 1, {}, true};
     devices::LifecyclePort *lifecycle_port() override { return allow_lifecycle ? this : nullptr; }
+    bool connect() override {
+        if (connection_throws)
+            throw std::runtime_error("FIXTURE_CONNECTION_EXCEPTION");
+        if (enforce_connection_state) {
+            std::lock_guard lock(mutex);
+            ++connections;
+            return lifecycle_state.instance_running && lifecycle_state.connected;
+        }
+        return OfflineDevice::connect();
+    }
     std::optional<devices::LifecycleObservation> observe_lifecycle() override {
         std::lock_guard lock(mutex);
         auto result = lifecycle_state;
@@ -406,6 +417,15 @@ int main(int argc, char **argv) {
         device->failed_starts = config.value("fail_starts", 0);
         device->hold_lifecycle = config.value("stop_during_lifecycle", false) || config.value("late_lifecycle_release", false);
         device->ignore_lifecycle_cancel = config.value("late_lifecycle_release", false);
+        const auto initial_connection = config.value("initial_connection", std::string("ready"));
+        device->enforce_connection_state = initial_connection != "ready";
+        device->connection_throws = initial_connection == "exception";
+        if (initial_connection == "offline" || initial_connection == "closed") {
+            device->lifecycle_state.connected = false;
+            device->lifecycle_state.application_running = false;
+            device->lifecycle_state.application_foreground = false;
+            device->lifecycle_state.instance_running = initial_connection != "closed";
+        }
         auto registry = std::make_shared<runtime::BehaviorRegistry>("m4-workflows-1");
         if (!config.value("missing_binding", false))
             games::vision::register_wvd(*registry);
@@ -463,7 +483,7 @@ int main(int argc, char **argv) {
         definition.max_business_units = units;
         for (unsigned i = 1; i < units; ++i)
             definition.continuation_units.push_back(definition.initial);
-        if (recovering) {
+        if (recovering && !config.value("omit_recovery_policy", false)) {
             auto target = device->lifecycle_state.target;
             if (config.value("other_lifecycle_app", false))
                 target.application_id = "not-the-game";

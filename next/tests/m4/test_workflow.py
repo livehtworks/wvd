@@ -979,6 +979,74 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(r["snapshot"]["business"]["crashes"], 1)
         self.assertFalse(r["snapshot"]["business"]["lifecycle_recovery_active"])
 
+    def test_recovery_initial_connection_offline_and_closed_resume_original_task(self):
+        screens, actions = self.recovery_scenario()
+        for initial, expected, generation in [
+            ("offline", ["Reconnect", "EnsureVpn", "StartApplication"], 3),
+            ("closed", ["RestartInstance", "EnsureVpn", "StartApplication"], 4),
+        ]:
+            r = self.execute("cold-" + initial, screens, actions, workflow="recover", initial_connection=initial)
+            self.assertEqual(r["snapshot"]["state"], "Completed", r)
+            self.assertEqual(r["snapshot"]["generation"], generation)
+            self.assertEqual(r["snapshot"]["sessions"][0]["reason"], "CONTROLLER_CONNECT_FAILED")
+            self.assertEqual(r["lifecycle_calls"], expected)
+            self.assertEqual(r["backend_calls"], 8)
+            self.assertEqual(r["cursor"], 9)
+            self.assertFalse(r["mismatch"])
+            self.assertEqual(r["snapshot"]["business"]["crashes"], 1)
+            saved = list((self.root / ("cold-" + initial) / "run").rglob("result.json"))
+            self.assertEqual(len(saved), 1)
+            events = json.loads(saved[0].read_text(encoding="utf-8"))["events"]["events"]
+            calls = [e for e in events if e["type"] == "input.backend_called"]
+            self.assertEqual(len(calls), 8)
+            self.assertTrue(all(e["session_generation"] == generation for e in calls))
+
+    def test_recovery_initial_connection_requires_explicit_policy(self):
+        screens, actions = self.recovery_scenario()
+        r = self.execute("cold-no-policy", screens, actions, workflow="recover",
+                         initial_connection="closed", omit_recovery_policy=True)
+        self.assertEqual(r["snapshot"]["state"], "Failed", r)
+        self.assertEqual(r["snapshot"]["reason"], "CONTROLLER_CONNECT_FAILED")
+        self.assertEqual(r["snapshot"]["generation"], 1)
+        self.assertEqual(r["backend_calls"], 0)
+        self.assertEqual(r["lifecycle_calls"], [])
+
+    def test_recovery_initial_connection_callback_exception_is_not_recoverable(self):
+        screens, actions = self.recovery_scenario()
+        r = self.execute("cold-exception", screens, actions, workflow="recover", initial_connection="exception")
+        self.assertEqual(r["snapshot"]["state"], "Failed", r)
+        self.assertEqual(r["snapshot"]["reason"], "FIXTURE_CONNECTION_EXCEPTION")
+        self.assertEqual(r["snapshot"]["generation"], 1)
+        self.assertEqual(r["backend_calls"], 0)
+        self.assertEqual(r["lifecycle_calls"], [])
+
+    def test_recovery_initial_connection_cannot_bypass_lifecycle_permission(self):
+        screens, actions = self.recovery_scenario()
+        r = self.execute("cold-no-port", screens, actions, workflow="recover",
+                         initial_connection="closed", no_lifecycle_port=True)
+        self.assertEqual(r["snapshot"]["state"], "Failed", r)
+        self.assertEqual(r["snapshot"]["reason"], "LIFECYCLE_NOT_AUTHORIZED")
+        self.assertEqual(r["backend_calls"], 0)
+        self.assertEqual(r["lifecycle_calls"], [])
+
+    def test_recovery_initial_connection_stop_during_restart_does_not_start_game(self):
+        screens, actions = self.recovery_scenario()
+        r = self.execute("cold-stop", screens, actions, workflow="recover",
+                         initial_connection="closed", stop_during_lifecycle=True)
+        self.assertEqual(r["snapshot"]["state"], "UserStopped", r)
+        self.assertTrue(r["snapshot"]["quiescent"])
+        self.assertEqual(r["backend_calls"], 0)
+        self.assertEqual(r["lifecycle_calls"], ["RestartInstance"])
+
+    def test_recovery_initial_connection_exhausts_finite_attempts(self):
+        screens, actions = self.recovery_scenario()
+        r = self.execute("cold-exhausted", screens, actions, workflow="recover",
+                         initial_connection="closed", fail_starts=3)
+        self.assertEqual(r["snapshot"]["state"], "Interrupted", r)
+        self.assertEqual(r["snapshot"]["generation"], 4)
+        self.assertEqual(r["backend_calls"], 0)
+        self.assertEqual(r["lifecycle_calls"], ["RestartInstance", "EnsureVpn", "StartApplication"])
+
     def test_recovery_escalates_only_after_confirmed_failure(self):
         screens, actions = self.recovery_scenario()
         for failures, expected in [

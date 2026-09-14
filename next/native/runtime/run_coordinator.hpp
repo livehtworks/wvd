@@ -37,7 +37,7 @@ class RunCoordinator {
     void record_failure(const std::string &reason);
     void wait_session(const std::shared_ptr<ExecutionSession> &session,
                       const SessionDefinition &definition, bool events);
-    void collect_session(const std::shared_ptr<ExecutionSession> &session);
+    void collect_session(const std::shared_ptr<ExecutionSession> &session, bool allow_connection_recovery = false);
     void finish() noexcept;
     const std::filesystem::path data_root_;
     const std::string instance_id_;

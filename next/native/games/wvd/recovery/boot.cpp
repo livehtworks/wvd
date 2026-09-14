@@ -14,7 +14,7 @@ J scoped(const char *name, J roi, double threshold) {
 }
 std::optional<runtime::SessionDefinition> decide(const contracts::SessionResult &result,
                                                 const runtime::SessionDefinition &previous, const J &p) {
-    if (result.end != contracts::SessionEnd::RecoveryRequired || !result.quiescent)
+    if ((result.end != contracts::SessionEnd::RecoveryRequired && !contracts::connection_failed_before_task(result)) || !result.quiescent)
         return std::nullopt;
     // 重启无法判断刚才的副作用是否已生效。对此类明确的业务歧义，不升级、不重发。
     if (result.reason == "boot.download_permission_missing" ||

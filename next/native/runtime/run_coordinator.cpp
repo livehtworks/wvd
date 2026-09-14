@@ -270,7 +270,7 @@ void RunCoordinator::wait_session(const std::shared_ptr<ExecutionSession> &sessi
         }
     }
 }
-void RunCoordinator::collect_session(const std::shared_ptr<ExecutionSession> &session) {
+void RunCoordinator::collect_session(const std::shared_ptr<ExecutionSession> &session, bool allow_connection_recovery) {
     const auto result = session->join();
     if (!result.quiescent)
         throw std::runtime_error("SESSION_NOT_QUIESCENT");
@@ -304,7 +304,7 @@ void RunCoordinator::collect_session(const std::shared_ptr<ExecutionSession> &se
         }
         session_.reset();
     }
-    if (result.end == SessionEnd::Failed)
+    if (result.end == SessionEnd::Failed && !(allow_connection_recovery && connection_failed_before_task(result)))
         record_failure(result.reason);
 }
 void RunCoordinator::drive(RunDefinition definition,
@@ -338,7 +338,7 @@ void RunCoordinator::drive(RunDefinition definition,
                 session->start();
             }
             wait_session(session, next, true);
-            collect_session(session);
+            collect_session(session, definition.recover.has_value());
             journal_->emit(snapshot().generation, "session.quiescent", {{"quiescent", true}}, true);
             store_->save_events(*journal_);
             if (last_result_.end == SessionEnd::Completed && business_) {
@@ -362,7 +362,8 @@ void RunCoordinator::drive(RunDefinition definition,
                     continue;
                 }
             }
-            if (!stop_ && last_result_.end == SessionEnd::RecoveryRequired && definition.recover &&
+            if (!stop_ && snapshot().reason.empty() &&
+                (last_result_.end == SessionEnd::RecoveryRequired || connection_failed_before_task(last_result_)) && definition.recover &&
                 recovered < definition.recovery_limit) {
                 {
                     std::lock_guard lock(mutex_);
