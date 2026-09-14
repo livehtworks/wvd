@@ -51,7 +51,7 @@ std::optional<runtime::SessionDefinition> decide(const contracts::SessionResult 
 }
 }
 tasks::CompiledWorkflow wait_boot_ready(bool allow_download) {
-    C graph("recovery.boot_ready");
+    C graph("recovery.boot_ready", std::chrono::seconds{120});
     const J ready{{"mode", "boot_ready"}};
     const auto title = scoped("boot_title_logo", {100, 300, 700, 470}, .86);
     const auto attention = scoped("boot_attention", {250, 430, 420, 220}, .86);
@@ -89,7 +89,8 @@ tasks::CompiledWorkflow wait_boot_ready(bool allow_download) {
     return graph.finish();
 }
 tasks::CompiledWorkflow with_boot_recovery(const tasks::CompiledWorkflow &task, bool allow_download) {
-    C graph("recovery.restartable_task");
+    task.validate();
+    C graph("recovery.restartable_task", task.time_limit + std::chrono::seconds{120});
     const auto task_entry = graph.append("Task", task, {"Terminal"});
     graph.confirm("RestartConfirmed", "game.restart", "game_restarted", {{"mode", "boot_ready"}}, {task_entry});
     const auto boot = graph.append("Boot", wait_boot_ready(allow_download), {"RestartConfirmed"});

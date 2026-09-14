@@ -30,22 +30,23 @@ class WorkflowTests(unittest.TestCase):
         bundle = folder / "bundle"
         (bundle / "image").mkdir(parents=True)
         names = ["worldmapflag", "City_RoyalCityLuknalia", "Inn", "Stay", "Economy", "royalsuite", "OK"]
-        if options.get("workflow") in ("auto", "turn", "encounter"):
+        if options.get("workflow") in ("auto", "turn", "encounter", "dungeon-route"):
             names += ["combatActive", "combatActive_2", "combatActive_3", "combatActive_4", "close",
                       "dungFlag", "chestFlag", "RiseAgain",
                       "spellskill/skillDetail", "spellskill/CombatAutoEnable", "spellskill/CombatAutoDisable"]
-        if options.get("workflow") in ("turn", "encounter"):
+        if options.get("workflow") in ("turn", "encounter", "dungeon-route"):
             names += ["spellskill/char/A", "spellskill/char/A_sp", "spellskill/char/B", "flee", "dungFlag", "chestFlag",
                       "RiseAgain", "supportSkillCheck", "notenoughsp", "notenoughmp", "next", "combatTarget", "combatSpd", "combatSpd_DHI"]
             names += [f"spellskill/skillLvl/{prefix}{level}" for prefix in ("lv", "s_lv") for level in range(1, 10)]
-        if options.get("workflow") in ("map", "map-confirm", "state-route"):
+        if options.get("workflow") in ("map", "map-confirm", "state-route", "dungeon-route"):
             names += ["mapFlag", "dungFlag", "chest", "chestFlag", "chestOpening", "whowillopenit",
                       "AutoMove", "EdgeOfTown", "combatActive", "combatActive_2", "combatActive_3", "combatActive_4",
-                      "cursor_0", "cursor_1", "cursor_2", "cursor_3", "stair_up", "stair_floor"]
-        if options.get("workflow") == "chest":
+                      "cursor_0", "cursor_1", "cursor_2", "cursor_3", "stair_up", "stair_floor", "harken",
+                      "returnText", "returntoTown", "openworldmap"]
+        if options.get("workflow") in ("chest", "dungeon-route"):
             names += ["chestFlag", "whowillopenit", "chestOpening", "chestfear", "RiseAgain", "ambush", "dungFlag",
                       "combatActive", "combatActive_2", "combatActive_3", "combatActive_4"]
-        if options.get("workflow") == "heal":
+        if options.get("workflow") in ("heal", "dungeon-route"):
             names += ["mapFlag", "dungFlag", "trait", "recover", "story", "chestFlag", "whowillopenit", "chestOpening", "RiseAgain",
                       "combatActive", "combatActive_2", "combatActive_3", "combatActive_4"]
         if options.get("workflow") == "travel":
@@ -54,7 +55,7 @@ class WorkflowTests(unittest.TestCase):
             names += ["guild", "Edit", "PartyManagement", "PartyManagementTitle", "AssembleParty", "partyBlue"]
         if options.get("workflow") in ("auto-route", "entry"):
             names += ["mapFlag", "dungFlag", "chestFlag", "combatActive", "combatActive_2", "combatActive_3", "combatActive_4", "EdgeOfTown"]
-        if options.get("workflow") == "auto-route":
+        if options.get("workflow") in ("auto-route", "dungeon-route"):
             names += ["chestOpening", "whowillopenit", "RiseAgain", "NoChestCanBeFound", "theRouteToTheDestinationCannotBeFound",
                       "chest_auto", "mark_auto", "chest_auto_minus", "resume"]
         if options.get("workflow") == "entry":
@@ -98,7 +99,7 @@ class WorkflowTests(unittest.TestCase):
                           {"path": p.relative_to(bundle).as_posix(), "sha256": digest(p)}
                           for p in sorted(bundle.rglob("*.png"))])
         config.update(options)
-        if options.get("workflow") in ("chest", "map-confirm", "state-route", "turn", "encounter", "recover", "heal"):
+        if options.get("workflow") in ("chest", "map-confirm", "state-route", "turn", "encounter", "recover", "heal", "dungeon-route"):
             config.update(with_state=True, descriptor=str(ROOT / "packs/wvd/parameters/legacy-config-fields.json"))
         if "omit_image" in options:
             config["files"] = [f for f in config["files"] if f["path"] != "image/" + options["omit_image"]]
@@ -108,7 +109,7 @@ class WorkflowTests(unittest.TestCase):
         before_hash = digest(exe)
         with (folder / "native.log").open("wb") as log:
             result = subprocess.run([str(exe), str(source)], cwd=folder, env=self.env,
-                                    stdout=log, stderr=log, timeout=90)
+                                    stdout=log, stderr=log, timeout={"dungeon-route": 420, "recover": 750}.get(options.get("workflow"), 90))
         self.assertEqual(digest(exe), before_hash)
         (folder / "execution.json").write_text(json.dumps({"exe_sha256": before_hash, "exit": result.returncode}), encoding="utf-8")
         self.assertEqual(result.returncode, 0, (folder / "native.log").read_text(encoding="utf-8", errors="replace")[-3000:])
@@ -1049,6 +1050,97 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(r["backend_calls"], 6)
         self.assertTrue(r["snapshot"]["business"]["healing_required"])
         self.assertFalse(r["mismatch"])
+
+    def test_dungeon_route_reenters_same_point_after_real_combat(self):
+        profile = self.turn_profile(defend=True)
+        profile.update(SKIP_COMBAT_RECOVER=True, SKIP_CHEST_RECOVER=True)
+        base = {"mapFlag": (100, 100)}
+        r = self.execute("route-combat", [{**base, "cursor_0": (480, 588)}, self.turn_screen(),
+            {"dungFlag": (50, 150)}, {**base, "cursor_0": (680, 688)}],
+            [dict(kind=0, x=700, y=700), dict(kind=0, x=513, y=1200), dict(kind=0, x=777, y=150)],
+            workflow="dungeon-route", profile=profile,
+            route_targets=[["position", [None], [500, 600]], ["position", [None], [700, 700]]])
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["snapshot"]["business"]["task_step"], 2)
+        self.assertEqual(r["snapshot"]["business"]["combats"], 1)
+        self.assertEqual(r["snapshot"]["generation"], 1)
+        self.assertEqual(r["backend_calls"], 3)
+        self.assertFalse(r["mismatch"])
+
+    def test_dungeon_route_chest_combat_revokes_disarm_and_settles_both(self):
+        profile = self.turn_profile(defend=True)
+        profile.update(SKIP_COMBAT_RECOVER=True, SKIP_CHEST_RECOVER=True, WHO_WILL_OPEN_IT=1)
+        base = {"mapFlag": (100, 100)}
+        r = self.execute("route-chest-combat", [base, {"chestFlag": (330, 450)}, self.turn_screen(),
+            {"dungFlag": (50, 150)}, {**base, "cursor_0": (480, 588)}],
+            [dict(kind=0, x=500, y=600), dict(kind=0, x=350, y=462), dict(kind=0, x=513, y=1200), dict(kind=0, x=777, y=150)],
+            workflow="dungeon-route", profile=profile, route_targets=[["position", [None], [500, 600]]])
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["snapshot"]["business"]["task_step"], 1)
+        self.assertEqual(r["snapshot"]["business"]["combats"], 1)
+        self.assertEqual(r["snapshot"]["business"]["chests"], 1)
+        self.assertEqual(r["backend_calls"], 4)
+        self.assertFalse(r["mismatch"])
+
+    def test_dungeon_route_input_failure_does_not_advance_target(self):
+        r = self.execute("route-input-rejected", [{"mapFlag": (100, 100)}], [dict(kind=0, x=500, y=600, reject=True)],
+            workflow="dungeon-route", profile=self.turn_profile(defend=True), route_targets=[["position", [None], [500, 600]]])
+        self.assertEqual(r["snapshot"]["state"], "Failed", r)
+        self.assertEqual(r["snapshot"]["business"]["task_step"], 0)
+        self.assertEqual(r["backend_calls"], 1)
+
+    def test_dungeon_route_outside_and_revive_never_use_map_coordinates(self):
+        for name, state in (("Inn", "Completed"), ("RiseAgain", "Interrupted")):
+            r = self.execute("route-" + name, [{name: (350, 450)}], [], workflow="dungeon-route",
+                profile=self.turn_profile(defend=True), route_targets=[["position", [None], [500, 600]]])
+            self.assertEqual(r["snapshot"]["state"], state, r)
+            self.assertEqual(r["snapshot"]["business"]["task_step"], 0)
+            self.assertEqual(r["backend_calls"], 0)
+
+    def test_dungeon_route_heals_after_combat_before_navigation(self):
+        profile = self.turn_profile(defend=True)
+        profile.update(SKIP_COMBAT_RECOVER=False, RECOVER_WHEN_BEGINNING=False)
+        dungeon, trait = {"dungFlag": (50, 150)}, {"trait": (200, 300)}
+        r = self.execute("route-combat-heal", [self.turn_screen(), dungeon, trait, {"recover": (250, 850)}, trait,
+            dungeon, {"mapFlag": (100, 100), "cursor_0": (480, 588)}],
+            [dict(kind=0, x=513, y=1200), dict(kind=0, x=36, y=1425), dict(kind=0, x=830, y=850),
+             dict(kind=0, x=600, y=1200), dict(kind=5, key=4), dict(kind=0, x=777, y=150)],
+            workflow="dungeon-route", profile=profile, route_targets=[["position", [None], [500, 600]]])
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 6)
+        self.assertFalse(r["mismatch"])
+        state = r["snapshot"]["business"]
+        self.assertEqual(state["task_step"], 1)
+        self.assertEqual(state["combats"], 1)
+        self.assertEqual(state["healing_sequence"], 1)
+        self.assertFalse(state["healing_required"])
+        self.assertEqual(r["snapshot"]["sessions"][0]["definition"]["time_limit_ms"], 400000)
+
+    def test_workflow_session_budget_must_be_finite_and_positive(self):
+        for case in ("zero-session-budget", "large-session-budget"):
+            r = self.execute(case, [{}], [], invalid=case)
+            self.assertEqual(r["error"], "COMPILE_SESSION_BUDGET_INVALID")
+            self.assertEqual(r["backend_calls"], 0)
+
+    def test_dungeon_route_map_does_not_eagerly_open_healing_panel(self):
+        profile = self.turn_profile(defend=True)
+        profile["RECOVER_WHEN_BEGINNING"] = True
+        r = self.execute("route-map-initial-heal", [{"mapFlag": (100, 100), "cursor_0": (480, 588)}], [],
+            workflow="dungeon-route", profile=profile, route_targets=[["position", [None], [500, 600]]])
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 0)
+        self.assertTrue(r["snapshot"]["business"]["healing_required"])
+
+    def test_dungeon_route_exit_prompt_stops_old_map_clicks(self):
+        base = {"mapFlag": (100, 100), "harken": (480, 588)}
+        r = self.execute("route-exit-prompt", [base, base, {"returnText": (400, 800)}],
+            [dict(kind=0, x=500, y=600), dict(kind=0, x=136, y=1431)], workflow="dungeon-route",
+            profile=self.turn_profile(defend=True), route_targets=[["harken", [None]]])
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 2)
+        self.assertFalse(r["mismatch"])
+        # 这是退出 StateDungeon，不是假装在地图上完成了最后一个任务点。
+        self.assertEqual(r["snapshot"]["business"]["task_step"], 0)
 
 
 if __name__ == "__main__":

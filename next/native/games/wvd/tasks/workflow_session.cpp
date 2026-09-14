@@ -23,6 +23,7 @@ runtime::SessionDefinition publish_workflow(const CompiledWorkflow &workflow,
     session.entry = workflow.entry;
     session.terminal_node = workflow.terminal;
     session.checkpoint_node = workflow.checkpoint;
+    session.time_limit = workflow.time_limit;
     session.recognitions = {vision::binding(aliases)};
     std::set<std::string> bound_actions;
     for (const auto &node : workflow.nodes) {
@@ -57,6 +58,7 @@ runtime::SessionDefinition publish_workflow(const CompiledWorkflow &workflow,
     J identity{{"source_revision", source.revision},
                {"source_files", manifest},
                {"kind", workflow.kind},
+               {"time_limit_ms", workflow.time_limit.count()},
                {"required_actions", workflow.required_actions},
                {"pipeline", workflow.nodes},
                {"aliases", aliases},

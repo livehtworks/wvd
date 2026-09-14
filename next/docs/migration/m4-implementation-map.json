@@ -2582,18 +2582,21 @@
         "M4-TASKS"
       ],
       "planned_owner_from_baseline": "native/games/wvd/tasks",
-      "implementation": "native/games/wvd/state.cpp",
-      "entry": "WvdRunState::resume_dungeon / enter_dungeon",
+      "implementation": "native/games/wvd/tasks/dungeon_route.cpp",
+      "entry": "tasks::traverse_dungeon",
       "implementation_status": "PARTIAL",
       "offline_status": "PASS",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "remaining": "完整路线、死亡/Pause、恢复调度及全部专项仍待接齐。",
-      "implementation_extent": "STATE_AND_HEALING_SUBFLOW",
-      "verification_scope": "角色面板恢复的真实 Maa 子链及状态，不是完整地下城任务",
-      "evidence_report": "../m4-healing-validation.md",
+      "remaining": "完整入本/回城/住宿循环、死亡/Pause、恢复调度和其余特殊对话尚未齐。",
+      "implementation_extent": "DUNGEON_ROUTE_COMPOSITION",
+      "verification_scope": "路线与遭遇/角色恢复组合的因果验证；不是43条完整任务执行",
+      "evidence_report": "../m4-dungeon-route-validation.md",
       "supporting_implementations": [
-        "native/games/wvd/supply/dungeon_recover.cpp"
+        "native/games/wvd/state.cpp",
+        "native/games/wvd/supply/dungeon_recover.cpp",
+        "native/games/wvd/combat/encounter.cpp",
+        "native/games/wvd/chest/chest.cpp"
       ]
     },
     {

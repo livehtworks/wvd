@@ -29,7 +29,8 @@ tasks::CompiledWorkflow reach_map_target(const MapTarget &target,
     bool positional = target.target == "position" || target.target.starts_with("stair");
     const bool exit_target = target.target == "harken" || target.target == "Bharken" ||
                              target.target == "leaveDung" || target.target.ends_with("_quit");
-    const auto outside = C::all({C::any({C::image("Inn"), C::image("EdgeOfTown")}), C::absent(map)});
+    const auto outside = C::all({C::any({C::image("Inn"), C::image("EdgeOfTown"), C::image("returnText"),
+                                        C::image("returntoTown"), C::image("openworldmap")}), C::absent(map)});
     J done;
     if (positional) {
         if (!target.position)

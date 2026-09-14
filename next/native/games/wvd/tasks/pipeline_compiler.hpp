@@ -1,4 +1,5 @@
 #pragma once
+#include <chrono>
 #include <json.hpp>
 #include <string>
 #include <vector>
@@ -13,12 +14,13 @@ struct CompiledWorkflow {
     nlohmann::json nodes = nlohmann::json::object();
     std::vector<std::string> images;
     std::vector<std::string> required_actions;
+    std::chrono::milliseconds time_limit{60000};
     void validate() const;
 };
 
 class PipelineCompiler {
   public:
-    explicit PipelineCompiler(std::string kind);
+    explicit PipelineCompiler(std::string kind, std::chrono::milliseconds time_limit = std::chrono::milliseconds{60000});
     static nlohmann::json image(const std::string &name);
     static nlohmann::json any(nlohmann::json conditions);
     static nlohmann::json all(nlohmann::json conditions);
@@ -39,7 +41,8 @@ class PipelineCompiler {
     std::string append(const std::string &prefix, const CompiledWorkflow &child,
                        nlohmann::json next, const nlohmann::json &normal_exits = nlohmann::json::object());
     // 原生子任务独立持有命中预算；定义一次、有限调用，不复制整份战斗图。
-    std::string define_child(const std::string &prefix, const CompiledWorkflow &child);
+    std::string define_child(const std::string &prefix, const CompiledWorkflow &child,
+                             const std::vector<std::string> &normal_returns = {});
     void call_child(const std::string &name, const std::string &entry, nlohmann::json next);
     void recovery(const std::string &name, const std::string &reason);
     void confirm(const std::string &name, const std::string &operation, const std::string &event,

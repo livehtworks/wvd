@@ -72,6 +72,8 @@ std::set<std::string> collect_actions(const J &nodes) {
 }
 } // namespace
 void CompiledWorkflow::validate() const {
+    require(time_limit > std::chrono::milliseconds::zero() && time_limit <= std::chrono::minutes{30},
+            "COMPILE_SESSION_BUDGET_INVALID");
     require(!kind.empty() && nodes.is_object() && nodes.contains(entry) && nodes.contains(terminal),
             "COMPILE_ENTRY_INVALID");
     require(nodes.size() <= 4096, "COMPILE_NODE_LIMIT");
@@ -185,7 +187,10 @@ void CompiledWorkflow::validate() const {
     require(std::vector<std::string>(actions.begin(), actions.end()) == required_actions,
             "COMPILE_PERMISSION_INDEX_STALE");
 }
-PipelineCompiler::PipelineCompiler(std::string kind) { workflow_.kind = std::move(kind); }
+PipelineCompiler::PipelineCompiler(std::string kind, std::chrono::milliseconds time_limit) {
+    workflow_.kind = std::move(kind);
+    workflow_.time_limit = time_limit;
+}
 J PipelineCompiler::image(const std::string &name) {
     // 保留旧普通模板默认 0.8，不以降低阈值代替导航界面确认。
     return {{"mode", "template"}, {"image", name}, {"threshold", 0.8}};
@@ -358,8 +363,15 @@ std::string PipelineCompiler::append(const std::string &prefix, const CompiledWo
     }
     return prefix + "_" + child.entry;
 }
-std::string PipelineCompiler::define_child(const std::string &prefix, const CompiledWorkflow &child) {
-    return append(prefix, child, J::array());
+std::string PipelineCompiler::define_child(const std::string &prefix, const CompiledWorkflow &child,
+                                          const std::vector<std::string> &normal_returns) {
+    J returns = J::object();
+    for (const auto &name : normal_returns) {
+        // 普通插入出口只能显式列出，不能把通用错误出口整体改成成功。
+        require(name != "RecoveryRequired" && !returns.contains(name), "COMPILE_CHILD_RETURN_INVALID");
+        returns[name] = {prefix + "_" + child.terminal};
+    }
+    return append(prefix, child, J::array(), returns);
 }
 void PipelineCompiler::call_child(const std::string &name, const std::string &entry, J next) {
     require(!entry.empty(), "COMPILE_CHILD_ENTRY_INVALID");

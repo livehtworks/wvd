@@ -89,6 +89,33 @@ class PlanTests(unittest.TestCase):
                 self.assertTrue(any(v.get("custom_action") == "GuardedAction" for v in entry["nodes"].values()))
                 self.assertNotIn("Shell", entry["required_actions"])
 
+    def test_all_43_dungeon_routes_bind_each_original_target(self):
+        result = self.inspect("routes", compile_routes_manifest=str(ROOT / "packs/wvd/manifest.json"))
+        self.assertEqual(result["outcome"], "PASS", result)
+        routes = {row["task_id"]: row for row in result["compiled_routes"]}
+        self.assertEqual(set(routes), {key for key, value in self.source.items() if value["_TYPE"] == "dungeon"})
+        for task_id, route in routes.items():
+            with self.subTest(task_id=task_id):
+                self.assertFalse(route["executed"])
+                self.assertEqual(route["scope"], "DUNGEON_ROUTE_ONLY_NOT_FULL_TASK")
+                self.assertEqual(route["missing_images"], [])
+                nodes = route["nodes"]
+                self.assertEqual(nodes["Fight"]["custom_action"], "RunChild")
+                self.assertEqual(nodes["OpenChest"]["custom_action"], "RunChild")
+                self.assertEqual(nodes["Heal"]["custom_action"], "RunChild")
+                for i, target in enumerate(self.source[task_id]["_TARGETINFOLIST"]):
+                    self.assertEqual(nodes[f"Point{i}"]["custom_recognition_param"]["value"], i)
+                    self.assertEqual(nodes[f"Confirm{i}"]["custom_action_param"]["expected_step"], i)
+                    if target[0] in ("stay", "chest_auto", "mark_auto", "dungFlag"):
+                        self.assertIn(f"Route{i}_" + ("Wait" if target[0] == "stay" else "Choose"), nodes)
+                    elif target[0] == "position" or target[0].startswith("stair"):
+                        command = nodes[f"Route{i}_Select0"]["custom_action_param"]["command"]
+                        self.assertEqual([command["x"], command["y"]], target[2])
+                    else:
+                        params = nodes[f"Route{i}_Select0"]["custom_action_param"]["target_recognition"]["parameters"]
+                        self.assertEqual(params["image"], target[0])
+                self.assertEqual(nodes["Finished"]["custom_recognition_param"]["value"], len(self.source[task_id]["_TARGETINFOLIST"]))
+
     def test_typed_target_hint_and_chest_exclusions(self):
         r = self.inspect("hints", self.task(_TARGETINFOLIST=[
             ["chest"], ["position", "左下", [133, 814]], ["stair_2", "右上", [827, 547]],

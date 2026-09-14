@@ -319,6 +319,59 @@ def update_healing(evidence):
     print("Healing subflow evidence updated; 58 complete task statuses unchanged.")
 
 
+def update_dungeon_route(evidence, plan_evidence):
+    """区分通用路线因果验证、43 条路线静态绑定与尚未完成的完整任务。"""
+    verify_workflows(evidence, {
+        "route-combat": ("Completed", 3), "route-chest-combat": ("Completed", 4),
+        "route-combat-heal": ("Completed", 6), "route-input-rejected": ("Failed", 1),
+        "route-map-initial-heal": ("Completed", 0), "route-Inn": ("Completed", 0),
+        "route-RiseAgain": ("Interrupted", 0), "route-exit-prompt": ("Completed", 2),
+    })
+    state = read(evidence / "route-combat-heal/output.json")["snapshot"]["business"]
+    both = read(evidence / "route-chest-combat/output.json")["snapshot"]["business"]
+    if state["task_step"] != 1 or state["healing_required"] or state["combats"] != 1 or state["healing_sequence"] != 1:
+        raise ValueError("M4_DUNGEON_HEALING_EVIDENCE_MISMATCH")
+    if both["task_step"] != 1 or both["combats"] != 1 or both["chests"] != 1:
+        raise ValueError("M4_DUNGEON_ENCOUNTER_EVIDENCE_MISMATCH")
+    compiled = read(plan_evidence / "routes/result.json")
+    execution = read(plan_evidence / "routes/execution.json")
+    exe_hash = hashlib.sha256((ROOT / "build/m4/Release/wvd_m4_check.exe").read_bytes()).hexdigest()
+    source = read(ROOT / "packs/wvd/parameters/legacy-quests.json")
+    routes = {row["task_id"]: row for row in compiled["compiled_routes"]}
+    if (execution != {"exe_sha256": exe_hash, "exit": 0} or compiled["outcome"] != "PASS"
+            or set(routes) != {key for key, value in source.items() if value["_TYPE"] == "dungeon"}
+            or any(row["executed"] or row["missing_images"] or row["scope"] != "DUNGEON_ROUTE_ONLY_NOT_FULL_TASK" for row in routes.values())):
+        raise ValueError("M4_DUNGEON_ROUTE_COMPILATION_MISMATCH")
+    folder = ROOT / "docs/migration"
+    document = read(folder / "m4-implementation-map.json")
+    rows = [row for row in document["entries"] if row["legacy_symbol"] == "Factory.StateDungeon"]
+    if len(rows) != 1 or document["counts"] != {"function": 250, "config": 33, "task": 58}:
+        raise ValueError("M4_DUNGEON_ROUTE_INVENTORY_MISMATCH")
+    rows[0].update(implementation="native/games/wvd/tasks/dungeon_route.cpp", entry="tasks::traverse_dungeon",
+        supporting_implementations=["native/games/wvd/state.cpp", "native/games/wvd/supply/dungeon_recover.cpp",
+            "native/games/wvd/combat/encounter.cpp", "native/games/wvd/chest/chest.cpp"],
+        implementation_status="PARTIAL", implementation_extent="DUNGEON_ROUTE_COMPOSITION",
+        offline_status="PASS", verification_scope="路线与遭遇/角色恢复组合的因果验证；不是43条完整任务执行",
+        evidence_report="../m4-dungeon-route-validation.md",
+        remaining="完整入本/回城/住宿循环、死亡/Pause、恢复调度和其余特殊对话尚未齐。")
+    task_document = read(folder / "m4-task-status.json")
+    if {row["task_id"] for row in task_document["items"]} != set(source):
+        raise ValueError("M4_TASK_DENOMINATOR_MISMATCH")
+    for row in task_document["items"]:
+        if row["task_id"] not in routes:
+            continue
+        row["route_compilation"] = {"status": "PASS", "scope": "DUNGEON_ROUTE_ONLY_NOT_FULL_TASK",
+            "entry": "tasks::traverse_dungeon", "executed": False,
+            "evidence_report": "../m4-dungeon-route-validation.md"}
+        row["implementation_extent"] = "TYPED_DATA_AND_DUNGEON_ROUTE"
+        if "native/games/wvd/tasks/dungeon_route.cpp" not in row["new_files"]:
+            row["new_files"].append("native/games/wvd/tasks/dungeon_route.cpp")
+        row["blockers"] = ["FULL_TASK_PIPELINE_NOT_IMPLEMENTED", "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE", "FULL_TASK_EXECUTION_NOT_VERIFIED"]
+    write(folder / "m4-implementation-map.json", document)
+    write(folder / "m4-task-status.json", task_document)
+    print("43 dungeon route graphs recorded; complete task execution statuses unchanged.")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--data-evidence", type=Path)
@@ -329,8 +382,9 @@ if __name__ == "__main__":
     parser.add_argument("--navigation-evidence", type=Path)
     parser.add_argument("--encounter-evidence", type=Path)
     parser.add_argument("--healing-evidence", type=Path)
+    parser.add_argument("--dungeon-route-evidence", type=Path)
     args = parser.parse_args()
-    if not args.data_evidence and not args.combat_evidence and not args.navigation_evidence and not args.encounter_evidence and not args.healing_evidence:
+    if not any((args.data_evidence, args.combat_evidence, args.navigation_evidence, args.encounter_evidence, args.healing_evidence, args.dungeon_route_evidence)):
         parser.error("an evidence group is required")
     if args.data_evidence:
         generate(args.data_evidence, args.state_evidence, args.plan_evidence, args.workflow_evidence)
@@ -344,3 +398,7 @@ if __name__ == "__main__":
         update_encounter(args.encounter_evidence)
     if args.healing_evidence:
         update_healing(args.healing_evidence)
+    if args.dungeon_route_evidence:
+        if not args.plan_evidence:
+            parser.error("--dungeon-route-evidence requires --plan-evidence")
+        update_dungeon_route(args.dungeon_route_evidence, args.plan_evidence)

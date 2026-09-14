@@ -17,6 +17,7 @@
 #include "games/wvd/combat/encounter.hpp"
 #include "games/wvd/recovery/boot.hpp"
 #include "games/wvd/tasks/workflow_session.hpp"
+#include "games/wvd/tasks/dungeon_route.hpp"
 #include "games/wvd/vision/recognizers.hpp"
 #include "platform/windows/file_digest.hpp"
 #include <iostream>
@@ -158,6 +159,19 @@ int main(int argc, char **argv) {
                 return games::supply::rest_at_inn(config.value("royal", false));
             if (kind == "heal")
                 return games::supply::recover_in_dungeon();
+            if (kind == "dungeon-route") {
+                games::WvdQuestDefinition definition{"route-fixture", "dungeon",
+                    {{"_EOT", {{"press", "Dist", {1, 1}, 1}}}, {"_TARGETINFOLIST", config.at("route_targets")}}};
+                if (config.contains("floor"))
+                    definition.source["_FloorCheck"] = config.at("floor");
+                std::set<std::string> images;
+                for (const auto &file : config.at("files")) {
+                    const auto path = file.at("path").get<std::string>();
+                    if (path.starts_with("image/"))
+                        images.insert(path.substr(6));
+                }
+                return games::tasks::traverse_dungeon(games::WvdTaskPlan::parse(definition), profile, images);
+            }
             if (kind == "child") {
                 using C = games::tasks::PipelineCompiler;
                 auto inn = games::supply::rest_at_inn(false);
@@ -281,6 +295,10 @@ int main(int argc, char **argv) {
                 workflow.nodes["Entry"]["next"] = {"Missing"};
             else if (config["invalid"] == "unbounded")
                 workflow.nodes["Entry"]["max_hit"] = 0;
+            else if (config["invalid"] == "zero-session-budget")
+                workflow.time_limit = 0ms;
+            else if (config["invalid"] == "large-session-budget")
+                workflow.time_limit = std::chrono::minutes{31};
             else if (config["invalid"] == "empty")
                 workflow.nodes = J::object();
             else if (config["invalid"] == "missing-terminal")
@@ -450,7 +468,7 @@ int main(int argc, char **argv) {
                 auto s = coordinator.snapshot();
                 return s.quiescent && s.result_saved;
             },
-            70000ms);
+            definition.initial.time_limit * (definition.recovery_limit + 1) + 10000ms);
         J output{{"snapshot", storage::snapshot_json(coordinator.snapshot())},
                  {"backend_calls", device->calls.load()},
                  {"cursor", device->cursor},
@@ -460,6 +478,7 @@ int main(int argc, char **argv) {
                  {"required_actions", workflow.required_actions},
                  {"kind", workflow.kind},
                  {"node_count", workflow.nodes.size()},
+                 {"time_limit_ms", workflow.time_limit.count()},
                  {"lifecycle_calls", device->lifecycle_calls},
                  {"lifecycle_stop", lifecycle_stop},
                  {"time_event_count", device->time_event_count},

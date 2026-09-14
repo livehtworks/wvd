@@ -20,7 +20,7 @@
         "M4-TASK-Dist"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "TYPED_PLAN_DATA",
+      "implementation_extent": "TYPED_DATA_AND_DUNGEON_ROUTE",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
       "offline_status": "NOT_RUN",
@@ -30,7 +30,8 @@
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
-        "native/games/wvd/tasks/task_plan.cpp"
+        "native/games/wvd/tasks/task_plan.cpp",
+        "native/games/wvd/tasks/dungeon_route.cpp"
       ],
       "source_fields": [
         "_TYPE",
@@ -47,7 +48,8 @@
       "semantic_differences": [],
       "blockers": [
         "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
+        "FULL_TASK_EXECUTION_NOT_VERIFIED"
       ],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
@@ -57,6 +59,13 @@
         "entry": "navigation::enter_dungeon",
         "executed": false,
         "evidence_report": "../m4-entry-validation.md"
+      },
+      "route_compilation": {
+        "status": "PASS",
+        "scope": "DUNGEON_ROUTE_ONLY_NOT_FULL_TASK",
+        "entry": "tasks::traverse_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-dungeon-route-validation.md"
       }
     },
     {
@@ -69,7 +78,7 @@
         "M4-TASK-lounge"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "TYPED_PLAN_DATA",
+      "implementation_extent": "TYPED_DATA_AND_DUNGEON_ROUTE",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
       "offline_status": "NOT_RUN",
@@ -79,7 +88,8 @@
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
-        "native/games/wvd/tasks/task_plan.cpp"
+        "native/games/wvd/tasks/task_plan.cpp",
+        "native/games/wvd/tasks/dungeon_route.cpp"
       ],
       "source_fields": [
         "_TYPE",
@@ -96,7 +106,8 @@
       "semantic_differences": [],
       "blockers": [
         "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
+        "FULL_TASK_EXECUTION_NOT_VERIFIED"
       ],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
@@ -106,6 +117,13 @@
         "entry": "navigation::enter_dungeon",
         "executed": false,
         "evidence_report": "../m4-entry-validation.md"
+      },
+      "route_compilation": {
+        "status": "PASS",
+        "scope": "DUNGEON_ROUTE_ONLY_NOT_FULL_TASK",
+        "entry": "tasks::traverse_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-dungeon-route-validation.md"
       }
     },
     {
@@ -118,7 +136,7 @@
         "M4-TASK-fortress-B1F"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "TYPED_PLAN_DATA",
+      "implementation_extent": "TYPED_DATA_AND_DUNGEON_ROUTE",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
       "offline_status": "NOT_RUN",
@@ -128,7 +146,8 @@
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
-        "native/games/wvd/tasks/task_plan.cpp"
+        "native/games/wvd/tasks/task_plan.cpp",
+        "native/games/wvd/tasks/dungeon_route.cpp"
       ],
       "source_fields": [
         "_TYPE",
@@ -145,7 +164,8 @@
       "semantic_differences": [],
       "blockers": [
         "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
+        "FULL_TASK_EXECUTION_NOT_VERIFIED"
       ],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
@@ -155,6 +175,13 @@
         "entry": "navigation::enter_dungeon",
         "executed": false,
         "evidence_report": "../m4-entry-validation.md"
+      },
+      "route_compilation": {
+        "status": "PASS",
+        "scope": "DUNGEON_ROUTE_ONLY_NOT_FULL_TASK",
+        "entry": "tasks::traverse_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-dungeon-route-validation.md"
       }
     },
     {
@@ -167,7 +194,7 @@
         "M4-TASK-fortress-B8F_entrance"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "TYPED_PLAN_DATA",
+      "implementation_extent": "TYPED_DATA_AND_DUNGEON_ROUTE",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
       "offline_status": "NOT_RUN",
@@ -177,7 +204,8 @@
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
-        "native/games/wvd/tasks/task_plan.cpp"
+        "native/games/wvd/tasks/task_plan.cpp",
+        "native/games/wvd/tasks/dungeon_route.cpp"
       ],
       "source_fields": [
         "_TYPE",
@@ -194,7 +222,8 @@
       "semantic_differences": [],
       "blockers": [
         "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
+        "FULL_TASK_EXECUTION_NOT_VERIFIED"
       ],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
@@ -204,6 +233,13 @@
         "entry": "navigation::enter_dungeon",
         "executed": false,
         "evidence_report": "../m4-entry-validation.md"
+      },
+      "route_compilation": {
+        "status": "PASS",
+        "scope": "DUNGEON_ROUTE_ONLY_NOT_FULL_TASK",
+        "entry": "tasks::traverse_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-dungeon-route-validation.md"
       }
     },
     {
@@ -258,7 +294,7 @@
         "M4-TASK-fortress-10F"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "TYPED_PLAN_DATA",
+      "implementation_extent": "TYPED_DATA_AND_DUNGEON_ROUTE",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
       "offline_status": "NOT_RUN",
@@ -268,7 +304,8 @@
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
-        "native/games/wvd/tasks/task_plan.cpp"
+        "native/games/wvd/tasks/task_plan.cpp",
+        "native/games/wvd/tasks/dungeon_route.cpp"
       ],
       "source_fields": [
         "_TYPE",
@@ -285,7 +322,8 @@
       "semantic_differences": [],
       "blockers": [
         "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
+        "FULL_TASK_EXECUTION_NOT_VERIFIED"
       ],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
@@ -295,6 +333,13 @@
         "entry": "navigation::enter_dungeon",
         "executed": false,
         "evidence_report": "../m4-entry-validation.md"
+      },
+      "route_compilation": {
+        "status": "PASS",
+        "scope": "DUNGEON_ROUTE_ONLY_NOT_FULL_TASK",
+        "entry": "tasks::traverse_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-dungeon-route-validation.md"
       }
     },
     {
@@ -307,7 +352,7 @@
         "M4-TASK-DH-4f"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "TYPED_PLAN_DATA",
+      "implementation_extent": "TYPED_DATA_AND_DUNGEON_ROUTE",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
       "offline_status": "NOT_RUN",
@@ -317,7 +362,8 @@
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
-        "native/games/wvd/tasks/task_plan.cpp"
+        "native/games/wvd/tasks/task_plan.cpp",
+        "native/games/wvd/tasks/dungeon_route.cpp"
       ],
       "source_fields": [
         "_TYPE",
@@ -334,7 +380,8 @@
       "semantic_differences": [],
       "blockers": [
         "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
+        "FULL_TASK_EXECUTION_NOT_VERIFIED"
       ],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
@@ -344,6 +391,13 @@
         "entry": "navigation::enter_dungeon",
         "executed": false,
         "evidence_report": "../m4-entry-validation.md"
+      },
+      "route_compilation": {
+        "status": "PASS",
+        "scope": "DUNGEON_ROUTE_ONLY_NOT_FULL_TASK",
+        "entry": "tasks::traverse_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-dungeon-route-validation.md"
       }
     },
     {
@@ -356,7 +410,7 @@
         "M4-TASK-DH-6f"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "TYPED_PLAN_DATA",
+      "implementation_extent": "TYPED_DATA_AND_DUNGEON_ROUTE",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
       "offline_status": "NOT_RUN",
@@ -366,7 +420,8 @@
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
-        "native/games/wvd/tasks/task_plan.cpp"
+        "native/games/wvd/tasks/task_plan.cpp",
+        "native/games/wvd/tasks/dungeon_route.cpp"
       ],
       "source_fields": [
         "_TYPE",
@@ -383,7 +438,8 @@
       "semantic_differences": [],
       "blockers": [
         "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
+        "FULL_TASK_EXECUTION_NOT_VERIFIED"
       ],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
@@ -393,6 +449,13 @@
         "entry": "navigation::enter_dungeon",
         "executed": false,
         "evidence_report": "../m4-entry-validation.md"
+      },
+      "route_compilation": {
+        "status": "PASS",
+        "scope": "DUNGEON_ROUTE_ONLY_NOT_FULL_TASK",
+        "entry": "tasks::traverse_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-dungeon-route-validation.md"
       }
     },
     {
@@ -405,7 +468,7 @@
         "M4-TASK-DH-7f-right"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "TYPED_PLAN_DATA",
+      "implementation_extent": "TYPED_DATA_AND_DUNGEON_ROUTE",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
       "offline_status": "NOT_RUN",
@@ -415,7 +478,8 @@
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
-        "native/games/wvd/tasks/task_plan.cpp"
+        "native/games/wvd/tasks/task_plan.cpp",
+        "native/games/wvd/tasks/dungeon_route.cpp"
       ],
       "source_fields": [
         "_TYPE",
@@ -432,7 +496,8 @@
       "semantic_differences": [],
       "blockers": [
         "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
+        "FULL_TASK_EXECUTION_NOT_VERIFIED"
       ],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
@@ -442,6 +507,13 @@
         "entry": "navigation::enter_dungeon",
         "executed": false,
         "evidence_report": "../m4-entry-validation.md"
+      },
+      "route_compilation": {
+        "status": "PASS",
+        "scope": "DUNGEON_ROUTE_ONLY_NOT_FULL_TASK",
+        "entry": "tasks::traverse_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-dungeon-route-validation.md"
       }
     },
     {
@@ -454,7 +526,7 @@
         "M4-TASK-DH-7f-auto"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "TYPED_PLAN_DATA",
+      "implementation_extent": "TYPED_DATA_AND_DUNGEON_ROUTE",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
       "offline_status": "NOT_RUN",
@@ -464,7 +536,8 @@
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
-        "native/games/wvd/tasks/task_plan.cpp"
+        "native/games/wvd/tasks/task_plan.cpp",
+        "native/games/wvd/tasks/dungeon_route.cpp"
       ],
       "source_fields": [
         "_TYPE",
@@ -481,7 +554,8 @@
       "semantic_differences": [],
       "blockers": [
         "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
+        "FULL_TASK_EXECUTION_NOT_VERIFIED"
       ],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
@@ -491,6 +565,13 @@
         "entry": "navigation::enter_dungeon",
         "executed": false,
         "evidence_report": "../m4-entry-validation.md"
+      },
+      "route_compilation": {
+        "status": "PASS",
+        "scope": "DUNGEON_ROUTE_ONLY_NOT_FULL_TASK",
+        "entry": "tasks::traverse_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-dungeon-route-validation.md"
       }
     },
     {
@@ -503,7 +584,7 @@
         "M4-TASK-DH-10f-test"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "TYPED_PLAN_DATA",
+      "implementation_extent": "TYPED_DATA_AND_DUNGEON_ROUTE",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
       "offline_status": "NOT_RUN",
@@ -513,7 +594,8 @@
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
-        "native/games/wvd/tasks/task_plan.cpp"
+        "native/games/wvd/tasks/task_plan.cpp",
+        "native/games/wvd/tasks/dungeon_route.cpp"
       ],
       "source_fields": [
         "_TYPE",
@@ -530,7 +612,8 @@
       "semantic_differences": [],
       "blockers": [
         "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
+        "FULL_TASK_EXECUTION_NOT_VERIFIED"
       ],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
@@ -540,6 +623,13 @@
         "entry": "navigation::enter_dungeon",
         "executed": false,
         "evidence_report": "../m4-entry-validation.md"
+      },
+      "route_compilation": {
+        "status": "PASS",
+        "scope": "DUNGEON_ROUTE_ONLY_NOT_FULL_TASK",
+        "entry": "tasks::traverse_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-dungeon-route-validation.md"
       }
     },
     {
@@ -552,7 +642,7 @@
         "M4-TASK-DH-10f-JR"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "TYPED_PLAN_DATA",
+      "implementation_extent": "TYPED_DATA_AND_DUNGEON_ROUTE",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
       "offline_status": "NOT_RUN",
@@ -562,7 +652,8 @@
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
-        "native/games/wvd/tasks/task_plan.cpp"
+        "native/games/wvd/tasks/task_plan.cpp",
+        "native/games/wvd/tasks/dungeon_route.cpp"
       ],
       "source_fields": [
         "_TYPE",
@@ -579,7 +670,8 @@
       "semantic_differences": [],
       "blockers": [
         "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
+        "FULL_TASK_EXECUTION_NOT_VERIFIED"
       ],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
@@ -589,6 +681,13 @@
         "entry": "navigation::enter_dungeon",
         "executed": false,
         "evidence_report": "../m4-entry-validation.md"
+      },
+      "route_compilation": {
+        "status": "PASS",
+        "scope": "DUNGEON_ROUTE_ONLY_NOT_FULL_TASK",
+        "entry": "tasks::traverse_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-dungeon-route-validation.md"
       }
     },
     {
@@ -601,7 +700,7 @@
         "M4-TASK-DH-Church-upper"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "TYPED_PLAN_DATA",
+      "implementation_extent": "TYPED_DATA_AND_DUNGEON_ROUTE",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
       "offline_status": "NOT_RUN",
@@ -611,7 +710,8 @@
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
-        "native/games/wvd/tasks/task_plan.cpp"
+        "native/games/wvd/tasks/task_plan.cpp",
+        "native/games/wvd/tasks/dungeon_route.cpp"
       ],
       "source_fields": [
         "_TYPE",
@@ -628,7 +728,8 @@
       "semantic_differences": [],
       "blockers": [
         "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
+        "FULL_TASK_EXECUTION_NOT_VERIFIED"
       ],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
@@ -638,6 +739,13 @@
         "entry": "navigation::enter_dungeon",
         "executed": false,
         "evidence_report": "../m4-entry-validation.md"
+      },
+      "route_compilation": {
+        "status": "PASS",
+        "scope": "DUNGEON_ROUTE_ONLY_NOT_FULL_TASK",
+        "entry": "tasks::traverse_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-dungeon-route-validation.md"
       }
     },
     {
@@ -650,7 +758,7 @@
         "M4-TASK-DH-Church-auto"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "TYPED_PLAN_DATA",
+      "implementation_extent": "TYPED_DATA_AND_DUNGEON_ROUTE",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
       "offline_status": "NOT_RUN",
@@ -660,7 +768,8 @@
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
-        "native/games/wvd/tasks/task_plan.cpp"
+        "native/games/wvd/tasks/task_plan.cpp",
+        "native/games/wvd/tasks/dungeon_route.cpp"
       ],
       "source_fields": [
         "_TYPE",
@@ -677,7 +786,8 @@
       "semantic_differences": [],
       "blockers": [
         "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
+        "FULL_TASK_EXECUTION_NOT_VERIFIED"
       ],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
@@ -687,6 +797,13 @@
         "entry": "navigation::enter_dungeon",
         "executed": false,
         "evidence_report": "../m4-entry-validation.md"
+      },
+      "route_compilation": {
+        "status": "PASS",
+        "scope": "DUNGEON_ROUTE_ONLY_NOT_FULL_TASK",
+        "entry": "tasks::traverse_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-dungeon-route-validation.md"
       }
     },
     {
@@ -699,7 +816,7 @@
         "M4-TASK-White-G-v2"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "TYPED_PLAN_DATA",
+      "implementation_extent": "TYPED_DATA_AND_DUNGEON_ROUTE",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
       "offline_status": "NOT_RUN",
@@ -709,7 +826,8 @@
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
-        "native/games/wvd/tasks/task_plan.cpp"
+        "native/games/wvd/tasks/task_plan.cpp",
+        "native/games/wvd/tasks/dungeon_route.cpp"
       ],
       "source_fields": [
         "_TYPE",
@@ -727,7 +845,8 @@
       "semantic_differences": [],
       "blockers": [
         "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
+        "FULL_TASK_EXECUTION_NOT_VERIFIED"
       ],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
@@ -737,6 +856,13 @@
         "entry": "navigation::enter_dungeon",
         "executed": false,
         "evidence_report": "../m4-entry-validation.md"
+      },
+      "route_compilation": {
+        "status": "PASS",
+        "scope": "DUNGEON_ROUTE_ONLY_NOT_FULL_TASK",
+        "entry": "tasks::traverse_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-dungeon-route-validation.md"
       }
     },
     {
@@ -749,7 +875,7 @@
         "M4-TASK-FFXI-2F"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "TYPED_PLAN_DATA",
+      "implementation_extent": "TYPED_DATA_AND_DUNGEON_ROUTE",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
       "offline_status": "NOT_RUN",
@@ -759,7 +885,8 @@
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
-        "native/games/wvd/tasks/task_plan.cpp"
+        "native/games/wvd/tasks/task_plan.cpp",
+        "native/games/wvd/tasks/dungeon_route.cpp"
       ],
       "source_fields": [
         "_TYPE",
@@ -779,7 +906,8 @@
       "semantic_differences": [],
       "blockers": [
         "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
+        "FULL_TASK_EXECUTION_NOT_VERIFIED"
       ],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
@@ -789,6 +917,13 @@
         "entry": "navigation::enter_dungeon",
         "executed": false,
         "evidence_report": "../m4-entry-validation.md"
+      },
+      "route_compilation": {
+        "status": "PASS",
+        "scope": "DUNGEON_ROUTE_ONLY_NOT_FULL_TASK",
+        "entry": "tasks::traverse_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-dungeon-route-validation.md"
       }
     },
     {
@@ -801,7 +936,7 @@
         "M4-TASK-FFXI-2F-elite"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "TYPED_PLAN_DATA",
+      "implementation_extent": "TYPED_DATA_AND_DUNGEON_ROUTE",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
       "offline_status": "NOT_RUN",
@@ -811,7 +946,8 @@
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
-        "native/games/wvd/tasks/task_plan.cpp"
+        "native/games/wvd/tasks/task_plan.cpp",
+        "native/games/wvd/tasks/dungeon_route.cpp"
       ],
       "source_fields": [
         "_TYPE",
@@ -831,7 +967,8 @@
       "semantic_differences": [],
       "blockers": [
         "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
+        "FULL_TASK_EXECUTION_NOT_VERIFIED"
       ],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
@@ -841,6 +978,13 @@
         "entry": "navigation::enter_dungeon",
         "executed": false,
         "evidence_report": "../m4-entry-validation.md"
+      },
+      "route_compilation": {
+        "status": "PASS",
+        "scope": "DUNGEON_ROUTE_ONLY_NOT_FULL_TASK",
+        "entry": "tasks::traverse_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-dungeon-route-validation.md"
       }
     },
     {
@@ -853,7 +997,7 @@
         "M4-TASK-FFXI-5F-4Elite"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "TYPED_PLAN_DATA",
+      "implementation_extent": "TYPED_DATA_AND_DUNGEON_ROUTE",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
       "offline_status": "NOT_RUN",
@@ -863,7 +1007,8 @@
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
-        "native/games/wvd/tasks/task_plan.cpp"
+        "native/games/wvd/tasks/task_plan.cpp",
+        "native/games/wvd/tasks/dungeon_route.cpp"
       ],
       "source_fields": [
         "_TYPE",
@@ -882,7 +1027,8 @@
       "semantic_differences": [],
       "blockers": [
         "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
+        "FULL_TASK_EXECUTION_NOT_VERIFIED"
       ],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
@@ -892,6 +1038,13 @@
         "entry": "navigation::enter_dungeon",
         "executed": false,
         "evidence_report": "../m4-entry-validation.md"
+      },
+      "route_compilation": {
+        "status": "PASS",
+        "scope": "DUNGEON_ROUTE_ONLY_NOT_FULL_TASK",
+        "entry": "tasks::traverse_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-dungeon-route-validation.md"
       }
     },
     {
@@ -904,7 +1057,7 @@
         "M4-TASK-FFXI-5F-2Elite-mid"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "TYPED_PLAN_DATA",
+      "implementation_extent": "TYPED_DATA_AND_DUNGEON_ROUTE",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
       "offline_status": "NOT_RUN",
@@ -914,7 +1067,8 @@
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
-        "native/games/wvd/tasks/task_plan.cpp"
+        "native/games/wvd/tasks/task_plan.cpp",
+        "native/games/wvd/tasks/dungeon_route.cpp"
       ],
       "source_fields": [
         "_TYPE",
@@ -933,7 +1087,8 @@
       "semantic_differences": [],
       "blockers": [
         "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
+        "FULL_TASK_EXECUTION_NOT_VERIFIED"
       ],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
@@ -943,6 +1098,13 @@
         "entry": "navigation::enter_dungeon",
         "executed": false,
         "evidence_report": "../m4-entry-validation.md"
+      },
+      "route_compilation": {
+        "status": "PASS",
+        "scope": "DUNGEON_ROUTE_ONLY_NOT_FULL_TASK",
+        "entry": "tasks::traverse_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-dungeon-route-validation.md"
       }
     },
     {
@@ -955,7 +1117,7 @@
         "M4-TASK-FFXI-5F-2Elite-bottom"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "TYPED_PLAN_DATA",
+      "implementation_extent": "TYPED_DATA_AND_DUNGEON_ROUTE",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
       "offline_status": "NOT_RUN",
@@ -965,7 +1127,8 @@
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
-        "native/games/wvd/tasks/task_plan.cpp"
+        "native/games/wvd/tasks/task_plan.cpp",
+        "native/games/wvd/tasks/dungeon_route.cpp"
       ],
       "source_fields": [
         "_TYPE",
@@ -984,7 +1147,8 @@
       "semantic_differences": [],
       "blockers": [
         "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
+        "FULL_TASK_EXECUTION_NOT_VERIFIED"
       ],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
@@ -994,6 +1158,13 @@
         "entry": "navigation::enter_dungeon",
         "executed": false,
         "evidence_report": "../m4-entry-validation.md"
+      },
+      "route_compilation": {
+        "status": "PASS",
+        "scope": "DUNGEON_ROUTE_ONLY_NOT_FULL_TASK",
+        "entry": "tasks::traverse_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-dungeon-route-validation.md"
       }
     },
     {
@@ -1006,7 +1177,7 @@
         "M4-TASK-FFXI-5F-2Elite-left"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "TYPED_PLAN_DATA",
+      "implementation_extent": "TYPED_DATA_AND_DUNGEON_ROUTE",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
       "offline_status": "NOT_RUN",
@@ -1016,7 +1187,8 @@
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
-        "native/games/wvd/tasks/task_plan.cpp"
+        "native/games/wvd/tasks/task_plan.cpp",
+        "native/games/wvd/tasks/dungeon_route.cpp"
       ],
       "source_fields": [
         "_TYPE",
@@ -1035,7 +1207,8 @@
       "semantic_differences": [],
       "blockers": [
         "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
+        "FULL_TASK_EXECUTION_NOT_VERIFIED"
       ],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
@@ -1045,6 +1218,13 @@
         "entry": "navigation::enter_dungeon",
         "executed": false,
         "evidence_report": "../m4-entry-validation.md"
+      },
+      "route_compilation": {
+        "status": "PASS",
+        "scope": "DUNGEON_ROUTE_ONLY_NOT_FULL_TASK",
+        "entry": "tasks::traverse_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-dungeon-route-validation.md"
       }
     },
     {
@@ -1057,7 +1237,7 @@
         "M4-TASK-FFXI-5F-Elite"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "TYPED_PLAN_DATA",
+      "implementation_extent": "TYPED_DATA_AND_DUNGEON_ROUTE",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
       "offline_status": "NOT_RUN",
@@ -1067,7 +1247,8 @@
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
-        "native/games/wvd/tasks/task_plan.cpp"
+        "native/games/wvd/tasks/task_plan.cpp",
+        "native/games/wvd/tasks/dungeon_route.cpp"
       ],
       "source_fields": [
         "_TYPE",
@@ -1086,7 +1267,8 @@
       "semantic_differences": [],
       "blockers": [
         "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
+        "FULL_TASK_EXECUTION_NOT_VERIFIED"
       ],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
@@ -1096,6 +1278,13 @@
         "entry": "navigation::enter_dungeon",
         "executed": false,
         "evidence_report": "../m4-entry-validation.md"
+      },
+      "route_compilation": {
+        "status": "PASS",
+        "scope": "DUNGEON_ROUTE_ONLY_NOT_FULL_TASK",
+        "entry": "tasks::traverse_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-dungeon-route-validation.md"
       }
     },
     {
@@ -1108,7 +1297,7 @@
         "M4-TASK-HSR-1F"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "TYPED_PLAN_DATA",
+      "implementation_extent": "TYPED_DATA_AND_DUNGEON_ROUTE",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
       "offline_status": "NOT_RUN",
@@ -1118,7 +1307,8 @@
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
-        "native/games/wvd/tasks/task_plan.cpp"
+        "native/games/wvd/tasks/task_plan.cpp",
+        "native/games/wvd/tasks/dungeon_route.cpp"
       ],
       "source_fields": [
         "_TYPE",
@@ -1137,7 +1327,8 @@
       "semantic_differences": [],
       "blockers": [
         "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
+        "FULL_TASK_EXECUTION_NOT_VERIFIED"
       ],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
@@ -1147,6 +1338,13 @@
         "entry": "navigation::enter_dungeon",
         "executed": false,
         "evidence_report": "../m4-entry-validation.md"
+      },
+      "route_compilation": {
+        "status": "PASS",
+        "scope": "DUNGEON_ROUTE_ONLY_NOT_FULL_TASK",
+        "entry": "tasks::traverse_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-dungeon-route-validation.md"
       }
     },
     {
@@ -1159,7 +1357,7 @@
         "M4-TASK-IWO"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "TYPED_PLAN_DATA",
+      "implementation_extent": "TYPED_DATA_AND_DUNGEON_ROUTE",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
       "offline_status": "NOT_RUN",
@@ -1169,7 +1367,8 @@
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
-        "native/games/wvd/tasks/task_plan.cpp"
+        "native/games/wvd/tasks/task_plan.cpp",
+        "native/games/wvd/tasks/dungeon_route.cpp"
       ],
       "source_fields": [
         "_TYPE",
@@ -1189,7 +1388,8 @@
       "semantic_differences": [],
       "blockers": [
         "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
+        "FULL_TASK_EXECUTION_NOT_VERIFIED"
       ],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
@@ -1199,6 +1399,13 @@
         "entry": "navigation::enter_dungeon",
         "executed": false,
         "evidence_report": "../m4-entry-validation.md"
+      },
+      "route_compilation": {
+        "status": "PASS",
+        "scope": "DUNGEON_ROUTE_ONLY_NOT_FULL_TASK",
+        "entry": "tasks::traverse_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-dungeon-route-validation.md"
       }
     },
     {
@@ -1211,7 +1418,7 @@
         "M4-TASK-IWO_2"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "TYPED_PLAN_DATA",
+      "implementation_extent": "TYPED_DATA_AND_DUNGEON_ROUTE",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
       "offline_status": "NOT_RUN",
@@ -1221,7 +1428,8 @@
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
-        "native/games/wvd/tasks/task_plan.cpp"
+        "native/games/wvd/tasks/task_plan.cpp",
+        "native/games/wvd/tasks/dungeon_route.cpp"
       ],
       "source_fields": [
         "_TYPE",
@@ -1241,7 +1449,8 @@
       "semantic_differences": [],
       "blockers": [
         "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
+        "FULL_TASK_EXECUTION_NOT_VERIFIED"
       ],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
@@ -1251,6 +1460,13 @@
         "entry": "navigation::enter_dungeon",
         "executed": false,
         "evidence_report": "../m4-entry-validation.md"
+      },
+      "route_compilation": {
+        "status": "PASS",
+        "scope": "DUNGEON_ROUTE_ONLY_NOT_FULL_TASK",
+        "entry": "tasks::traverse_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-dungeon-route-validation.md"
       }
     },
     {
@@ -1263,7 +1479,7 @@
         "M4-TASK-malice-B3F"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "TYPED_PLAN_DATA",
+      "implementation_extent": "TYPED_DATA_AND_DUNGEON_ROUTE",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
       "offline_status": "NOT_RUN",
@@ -1273,7 +1489,8 @@
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
-        "native/games/wvd/tasks/task_plan.cpp"
+        "native/games/wvd/tasks/task_plan.cpp",
+        "native/games/wvd/tasks/dungeon_route.cpp"
       ],
       "source_fields": [
         "_TYPE",
@@ -1290,7 +1507,8 @@
       "semantic_differences": [],
       "blockers": [
         "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
+        "FULL_TASK_EXECUTION_NOT_VERIFIED"
       ],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
@@ -1300,6 +1518,13 @@
         "entry": "navigation::enter_dungeon",
         "executed": false,
         "evidence_report": "../m4-entry-validation.md"
+      },
+      "route_compilation": {
+        "status": "PASS",
+        "scope": "DUNGEON_ROUTE_ONLY_NOT_FULL_TASK",
+        "entry": "tasks::traverse_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-dungeon-route-validation.md"
       }
     },
     {
@@ -1312,7 +1537,7 @@
         "M4-TASK-fordraig-B3F"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "TYPED_PLAN_DATA",
+      "implementation_extent": "TYPED_DATA_AND_DUNGEON_ROUTE",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
       "offline_status": "NOT_RUN",
@@ -1322,7 +1547,8 @@
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
-        "native/games/wvd/tasks/task_plan.cpp"
+        "native/games/wvd/tasks/task_plan.cpp",
+        "native/games/wvd/tasks/dungeon_route.cpp"
       ],
       "source_fields": [
         "_TYPE",
@@ -1340,7 +1566,8 @@
       "semantic_differences": [],
       "blockers": [
         "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
+        "FULL_TASK_EXECUTION_NOT_VERIFIED"
       ],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
@@ -1350,6 +1577,13 @@
         "entry": "navigation::enter_dungeon",
         "executed": false,
         "evidence_report": "../m4-entry-validation.md"
+      },
+      "route_compilation": {
+        "status": "PASS",
+        "scope": "DUNGEON_ROUTE_ONLY_NOT_FULL_TASK",
+        "entry": "tasks::traverse_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-dungeon-route-validation.md"
       }
     },
     {
@@ -1362,7 +1596,7 @@
         "M4-TASK-SSC_chest"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "TYPED_PLAN_DATA",
+      "implementation_extent": "TYPED_DATA_AND_DUNGEON_ROUTE",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
       "offline_status": "NOT_RUN",
@@ -1372,7 +1606,8 @@
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
-        "native/games/wvd/tasks/task_plan.cpp"
+        "native/games/wvd/tasks/task_plan.cpp",
+        "native/games/wvd/tasks/dungeon_route.cpp"
       ],
       "source_fields": [
         "_TYPE",
@@ -1390,7 +1625,8 @@
       "semantic_differences": [],
       "blockers": [
         "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
+        "FULL_TASK_EXECUTION_NOT_VERIFIED"
       ],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
@@ -1400,6 +1636,13 @@
         "entry": "navigation::enter_dungeon",
         "executed": false,
         "evidence_report": "../m4-entry-validation.md"
+      },
+      "route_compilation": {
+        "status": "PASS",
+        "scope": "DUNGEON_ROUTE_ONLY_NOT_FULL_TASK",
+        "entry": "tasks::traverse_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-dungeon-route-validation.md"
       }
     },
     {
@@ -1412,7 +1655,7 @@
         "M4-TASK-LBC"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "TYPED_PLAN_DATA",
+      "implementation_extent": "TYPED_DATA_AND_DUNGEON_ROUTE",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
       "offline_status": "NOT_RUN",
@@ -1422,7 +1665,8 @@
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
-        "native/games/wvd/tasks/task_plan.cpp"
+        "native/games/wvd/tasks/task_plan.cpp",
+        "native/games/wvd/tasks/dungeon_route.cpp"
       ],
       "source_fields": [
         "_TYPE",
@@ -1440,7 +1684,8 @@
       "semantic_differences": [],
       "blockers": [
         "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
+        "FULL_TASK_EXECUTION_NOT_VERIFIED"
       ],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
@@ -1450,6 +1695,13 @@
         "entry": "navigation::enter_dungeon",
         "executed": false,
         "evidence_report": "../m4-entry-validation.md"
+      },
+      "route_compilation": {
+        "status": "PASS",
+        "scope": "DUNGEON_ROUTE_ONLY_NOT_FULL_TASK",
+        "entry": "tasks::traverse_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-dungeon-route-validation.md"
       }
     },
     {
@@ -1462,7 +1714,7 @@
         "M4-TASK-AWD"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "TYPED_PLAN_DATA",
+      "implementation_extent": "TYPED_DATA_AND_DUNGEON_ROUTE",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
       "offline_status": "NOT_RUN",
@@ -1472,7 +1724,8 @@
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
-        "native/games/wvd/tasks/task_plan.cpp"
+        "native/games/wvd/tasks/task_plan.cpp",
+        "native/games/wvd/tasks/dungeon_route.cpp"
       ],
       "source_fields": [
         "_TYPE",
@@ -1490,7 +1743,8 @@
       "semantic_differences": [],
       "blockers": [
         "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
+        "FULL_TASK_EXECUTION_NOT_VERIFIED"
       ],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
@@ -1500,6 +1754,13 @@
         "entry": "navigation::enter_dungeon",
         "executed": false,
         "evidence_report": "../m4-entry-validation.md"
+      },
+      "route_compilation": {
+        "status": "PASS",
+        "scope": "DUNGEON_ROUTE_ONLY_NOT_FULL_TASK",
+        "entry": "tasks::traverse_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-dungeon-route-validation.md"
       }
     },
     {
@@ -1512,7 +1773,7 @@
         "M4-TASK-AWD-noGorgon"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "TYPED_PLAN_DATA",
+      "implementation_extent": "TYPED_DATA_AND_DUNGEON_ROUTE",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
       "offline_status": "NOT_RUN",
@@ -1522,7 +1783,8 @@
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
-        "native/games/wvd/tasks/task_plan.cpp"
+        "native/games/wvd/tasks/task_plan.cpp",
+        "native/games/wvd/tasks/dungeon_route.cpp"
       ],
       "source_fields": [
         "_TYPE",
@@ -1540,7 +1802,8 @@
       "semantic_differences": [],
       "blockers": [
         "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
+        "FULL_TASK_EXECUTION_NOT_VERIFIED"
       ],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
@@ -1550,6 +1813,13 @@
         "entry": "navigation::enter_dungeon",
         "executed": false,
         "evidence_report": "../m4-entry-validation.md"
+      },
+      "route_compilation": {
+        "status": "PASS",
+        "scope": "DUNGEON_ROUTE_ONLY_NOT_FULL_TASK",
+        "entry": "tasks::traverse_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-dungeon-route-validation.md"
       }
     },
     {
@@ -1562,7 +1832,7 @@
         "M4-TASK-GHB"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "TYPED_PLAN_DATA",
+      "implementation_extent": "TYPED_DATA_AND_DUNGEON_ROUTE",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
       "offline_status": "NOT_RUN",
@@ -1572,7 +1842,8 @@
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
-        "native/games/wvd/tasks/task_plan.cpp"
+        "native/games/wvd/tasks/task_plan.cpp",
+        "native/games/wvd/tasks/dungeon_route.cpp"
       ],
       "source_fields": [
         "_TYPE",
@@ -1589,7 +1860,8 @@
       "semantic_differences": [],
       "blockers": [
         "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
+        "FULL_TASK_EXECUTION_NOT_VERIFIED"
       ],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
@@ -1599,6 +1871,13 @@
         "entry": "navigation::enter_dungeon",
         "executed": false,
         "evidence_report": "../m4-entry-validation.md"
+      },
+      "route_compilation": {
+        "status": "PASS",
+        "scope": "DUNGEON_ROUTE_ONLY_NOT_FULL_TASK",
+        "entry": "tasks::traverse_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-dungeon-route-validation.md"
       }
     },
     {
@@ -1611,7 +1890,7 @@
         "M4-TASK-COS_chest"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "TYPED_PLAN_DATA",
+      "implementation_extent": "TYPED_DATA_AND_DUNGEON_ROUTE",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
       "offline_status": "NOT_RUN",
@@ -1621,7 +1900,8 @@
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
-        "native/games/wvd/tasks/task_plan.cpp"
+        "native/games/wvd/tasks/task_plan.cpp",
+        "native/games/wvd/tasks/dungeon_route.cpp"
       ],
       "source_fields": [
         "_TYPE",
@@ -1638,7 +1918,8 @@
       "semantic_differences": [],
       "blockers": [
         "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
+        "FULL_TASK_EXECUTION_NOT_VERIFIED"
       ],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
@@ -1648,6 +1929,13 @@
         "entry": "navigation::enter_dungeon",
         "executed": false,
         "evidence_report": "../m4-entry-validation.md"
+      },
+      "route_compilation": {
+        "status": "PASS",
+        "scope": "DUNGEON_ROUTE_ONLY_NOT_FULL_TASK",
+        "entry": "tasks::traverse_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-dungeon-route-validation.md"
       }
     },
     {
@@ -1660,7 +1948,7 @@
         "M4-TASK-COS_chest_short"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "TYPED_PLAN_DATA",
+      "implementation_extent": "TYPED_DATA_AND_DUNGEON_ROUTE",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
       "offline_status": "NOT_RUN",
@@ -1670,7 +1958,8 @@
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
-        "native/games/wvd/tasks/task_plan.cpp"
+        "native/games/wvd/tasks/task_plan.cpp",
+        "native/games/wvd/tasks/dungeon_route.cpp"
       ],
       "source_fields": [
         "_TYPE",
@@ -1687,7 +1976,8 @@
       "semantic_differences": [],
       "blockers": [
         "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
+        "FULL_TASK_EXECUTION_NOT_VERIFIED"
       ],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
@@ -1697,6 +1987,13 @@
         "entry": "navigation::enter_dungeon",
         "executed": false,
         "evidence_report": "../m4-entry-validation.md"
+      },
+      "route_compilation": {
+        "status": "PASS",
+        "scope": "DUNGEON_ROUTE_ONLY_NOT_FULL_TASK",
+        "entry": "tasks::traverse_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-dungeon-route-validation.md"
       }
     },
     {
@@ -1709,7 +2006,7 @@
         "M4-TASK-DOE"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "TYPED_PLAN_DATA",
+      "implementation_extent": "TYPED_DATA_AND_DUNGEON_ROUTE",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
       "offline_status": "NOT_RUN",
@@ -1719,7 +2016,8 @@
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
-        "native/games/wvd/tasks/task_plan.cpp"
+        "native/games/wvd/tasks/task_plan.cpp",
+        "native/games/wvd/tasks/dungeon_route.cpp"
       ],
       "source_fields": [
         "_TYPE",
@@ -1736,7 +2034,8 @@
       "semantic_differences": [],
       "blockers": [
         "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
+        "FULL_TASK_EXECUTION_NOT_VERIFIED"
       ],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
@@ -1746,6 +2045,13 @@
         "entry": "navigation::enter_dungeon",
         "executed": false,
         "evidence_report": "../m4-entry-validation.md"
+      },
+      "route_compilation": {
+        "status": "PASS",
+        "scope": "DUNGEON_ROUTE_ONLY_NOT_FULL_TASK",
+        "entry": "tasks::traverse_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-dungeon-route-validation.md"
       }
     },
     {
@@ -1758,7 +2064,7 @@
         "M4-TASK-DOF"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "TYPED_PLAN_DATA",
+      "implementation_extent": "TYPED_DATA_AND_DUNGEON_ROUTE",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
       "offline_status": "NOT_RUN",
@@ -1768,7 +2074,8 @@
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
-        "native/games/wvd/tasks/task_plan.cpp"
+        "native/games/wvd/tasks/task_plan.cpp",
+        "native/games/wvd/tasks/dungeon_route.cpp"
       ],
       "source_fields": [
         "_TYPE",
@@ -1785,7 +2092,8 @@
       "semantic_differences": [],
       "blockers": [
         "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
+        "FULL_TASK_EXECUTION_NOT_VERIFIED"
       ],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
@@ -1795,6 +2103,13 @@
         "entry": "navigation::enter_dungeon",
         "executed": false,
         "evidence_report": "../m4-entry-validation.md"
+      },
+      "route_compilation": {
+        "status": "PASS",
+        "scope": "DUNGEON_ROUTE_ONLY_NOT_FULL_TASK",
+        "entry": "tasks::traverse_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-dungeon-route-validation.md"
       }
     },
     {
@@ -1807,7 +2122,7 @@
         "M4-TASK-DOF_Plus"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "TYPED_PLAN_DATA",
+      "implementation_extent": "TYPED_DATA_AND_DUNGEON_ROUTE",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
       "offline_status": "NOT_RUN",
@@ -1817,7 +2132,8 @@
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
-        "native/games/wvd/tasks/task_plan.cpp"
+        "native/games/wvd/tasks/task_plan.cpp",
+        "native/games/wvd/tasks/dungeon_route.cpp"
       ],
       "source_fields": [
         "_TYPE",
@@ -1834,7 +2150,8 @@
       "semantic_differences": [],
       "blockers": [
         "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
+        "FULL_TASK_EXECUTION_NOT_VERIFIED"
       ],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
@@ -1844,6 +2161,13 @@
         "entry": "navigation::enter_dungeon",
         "executed": false,
         "evidence_report": "../m4-entry-validation.md"
+      },
+      "route_compilation": {
+        "status": "PASS",
+        "scope": "DUNGEON_ROUTE_ONLY_NOT_FULL_TASK",
+        "entry": "tasks::traverse_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-dungeon-route-validation.md"
       }
     },
     {
@@ -1856,7 +2180,7 @@
         "M4-TASK-DOW"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "TYPED_PLAN_DATA",
+      "implementation_extent": "TYPED_DATA_AND_DUNGEON_ROUTE",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
       "offline_status": "NOT_RUN",
@@ -1866,7 +2190,8 @@
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
-        "native/games/wvd/tasks/task_plan.cpp"
+        "native/games/wvd/tasks/task_plan.cpp",
+        "native/games/wvd/tasks/dungeon_route.cpp"
       ],
       "source_fields": [
         "_TYPE",
@@ -1883,7 +2208,8 @@
       "semantic_differences": [],
       "blockers": [
         "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
+        "FULL_TASK_EXECUTION_NOT_VERIFIED"
       ],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
@@ -1893,6 +2219,13 @@
         "entry": "navigation::enter_dungeon",
         "executed": false,
         "evidence_report": "../m4-entry-validation.md"
+      },
+      "route_compilation": {
+        "status": "PASS",
+        "scope": "DUNGEON_ROUTE_ONLY_NOT_FULL_TASK",
+        "entry": "tasks::traverse_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-dungeon-route-validation.md"
       }
     },
     {
@@ -1905,7 +2238,7 @@
         "M4-TASK-DOW_Plus"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "TYPED_PLAN_DATA",
+      "implementation_extent": "TYPED_DATA_AND_DUNGEON_ROUTE",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
       "offline_status": "NOT_RUN",
@@ -1915,7 +2248,8 @@
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
-        "native/games/wvd/tasks/task_plan.cpp"
+        "native/games/wvd/tasks/task_plan.cpp",
+        "native/games/wvd/tasks/dungeon_route.cpp"
       ],
       "source_fields": [
         "_TYPE",
@@ -1932,7 +2266,8 @@
       "semantic_differences": [],
       "blockers": [
         "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
+        "FULL_TASK_EXECUTION_NOT_VERIFIED"
       ],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
@@ -1942,6 +2277,13 @@
         "entry": "navigation::enter_dungeon",
         "executed": false,
         "evidence_report": "../m4-entry-validation.md"
+      },
+      "route_compilation": {
+        "status": "PASS",
+        "scope": "DUNGEON_ROUTE_ONLY_NOT_FULL_TASK",
+        "entry": "tasks::traverse_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-dungeon-route-validation.md"
       }
     },
     {
@@ -1954,7 +2296,7 @@
         "M4-TASK-DOL"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "TYPED_PLAN_DATA",
+      "implementation_extent": "TYPED_DATA_AND_DUNGEON_ROUTE",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
       "offline_status": "NOT_RUN",
@@ -1964,7 +2306,8 @@
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
-        "native/games/wvd/tasks/task_plan.cpp"
+        "native/games/wvd/tasks/task_plan.cpp",
+        "native/games/wvd/tasks/dungeon_route.cpp"
       ],
       "source_fields": [
         "_TYPE",
@@ -1981,7 +2324,8 @@
       "semantic_differences": [],
       "blockers": [
         "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
+        "FULL_TASK_EXECUTION_NOT_VERIFIED"
       ],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
@@ -1991,6 +2335,13 @@
         "entry": "navigation::enter_dungeon",
         "executed": false,
         "evidence_report": "../m4-entry-validation.md"
+      },
+      "route_compilation": {
+        "status": "PASS",
+        "scope": "DUNGEON_ROUTE_ONLY_NOT_FULL_TASK",
+        "entry": "tasks::traverse_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-dungeon-route-validation.md"
       }
     },
     {
@@ -2003,7 +2354,7 @@
         "M4-TASK-DOL_PLUS"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "TYPED_PLAN_DATA",
+      "implementation_extent": "TYPED_DATA_AND_DUNGEON_ROUTE",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
       "offline_status": "NOT_RUN",
@@ -2013,7 +2364,8 @@
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
-        "native/games/wvd/tasks/task_plan.cpp"
+        "native/games/wvd/tasks/task_plan.cpp",
+        "native/games/wvd/tasks/dungeon_route.cpp"
       ],
       "source_fields": [
         "_TYPE",
@@ -2030,7 +2382,8 @@
       "semantic_differences": [],
       "blockers": [
         "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
+        "FULL_TASK_EXECUTION_NOT_VERIFIED"
       ],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
@@ -2040,6 +2393,13 @@
         "entry": "navigation::enter_dungeon",
         "executed": false,
         "evidence_report": "../m4-entry-validation.md"
+      },
+      "route_compilation": {
+        "status": "PASS",
+        "scope": "DUNGEON_ROUTE_ONLY_NOT_FULL_TASK",
+        "entry": "tasks::traverse_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-dungeon-route-validation.md"
       }
     },
     {
@@ -2052,7 +2412,7 @@
         "M4-TASK-DOS"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "TYPED_PLAN_DATA",
+      "implementation_extent": "TYPED_DATA_AND_DUNGEON_ROUTE",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
       "offline_status": "NOT_RUN",
@@ -2062,7 +2422,8 @@
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
-        "native/games/wvd/tasks/task_plan.cpp"
+        "native/games/wvd/tasks/task_plan.cpp",
+        "native/games/wvd/tasks/dungeon_route.cpp"
       ],
       "source_fields": [
         "_TYPE",
@@ -2079,7 +2440,8 @@
       "semantic_differences": [],
       "blockers": [
         "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
+        "FULL_TASK_EXECUTION_NOT_VERIFIED"
       ],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
@@ -2089,6 +2451,13 @@
         "entry": "navigation::enter_dungeon",
         "executed": false,
         "evidence_report": "../m4-entry-validation.md"
+      },
+      "route_compilation": {
+        "status": "PASS",
+        "scope": "DUNGEON_ROUTE_ONLY_NOT_FULL_TASK",
+        "entry": "tasks::traverse_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-dungeon-route-validation.md"
       }
     },
     {
@@ -2101,7 +2470,7 @@
         "M4-TASK-LMG-GT"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "TYPED_PLAN_DATA",
+      "implementation_extent": "TYPED_DATA_AND_DUNGEON_ROUTE",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
       "offline_status": "NOT_RUN",
@@ -2111,7 +2480,8 @@
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
-        "native/games/wvd/tasks/task_plan.cpp"
+        "native/games/wvd/tasks/task_plan.cpp",
+        "native/games/wvd/tasks/dungeon_route.cpp"
       ],
       "source_fields": [
         "_TYPE",
@@ -2129,7 +2499,8 @@
       "semantic_differences": [],
       "blockers": [
         "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
+        "FULL_TASK_EXECUTION_NOT_VERIFIED"
       ],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
@@ -2139,6 +2510,13 @@
         "entry": "navigation::enter_dungeon",
         "executed": false,
         "evidence_report": "../m4-entry-validation.md"
+      },
+      "route_compilation": {
+        "status": "PASS",
+        "scope": "DUNGEON_ROUTE_ONLY_NOT_FULL_TASK",
+        "entry": "tasks::traverse_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-dungeon-route-validation.md"
       }
     },
     {
@@ -2151,7 +2529,7 @@
         "M4-TASK-LMG-FT"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "TYPED_PLAN_DATA",
+      "implementation_extent": "TYPED_DATA_AND_DUNGEON_ROUTE",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
       "offline_status": "NOT_RUN",
@@ -2161,7 +2539,8 @@
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
-        "native/games/wvd/tasks/task_plan.cpp"
+        "native/games/wvd/tasks/task_plan.cpp",
+        "native/games/wvd/tasks/dungeon_route.cpp"
       ],
       "source_fields": [
         "_TYPE",
@@ -2179,7 +2558,8 @@
       "semantic_differences": [],
       "blockers": [
         "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
+        "FULL_TASK_EXECUTION_NOT_VERIFIED"
       ],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
@@ -2189,6 +2569,13 @@
         "entry": "navigation::enter_dungeon",
         "executed": false,
         "evidence_report": "../m4-entry-validation.md"
+      },
+      "route_compilation": {
+        "status": "PASS",
+        "scope": "DUNGEON_ROUTE_ONLY_NOT_FULL_TASK",
+        "entry": "tasks::traverse_dungeon",
+        "executed": false,
+        "evidence_report": "../m4-dungeon-route-validation.md"
       }
     },
     {
