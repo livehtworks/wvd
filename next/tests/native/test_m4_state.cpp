@@ -72,6 +72,46 @@ J direct_contract(const J &profile) {
     J result;
     result["initial"] = state.summary();
     {
+        games::WvdRunState trap(profile, {"trap", 1, clock});
+        trap.enter_segment(contracts::SegmentBoundary::Initial, 1, 0);
+        const auto started = trap.confirmation_id("trap.start", "trap_cycle_started");
+        trap.confirm_event(started, "trap_cycle_started", 1, 1);
+        trap.enter_segment(contracts::SegmentBoundary::Recovery, 2, 0);
+        require(!trap.confirm_event(started, "trap_cycle_started", 2, 2), "TRAP_RESTART_DOUBLE_COUNTED");
+        bool premature = false;
+        try { trap.confirm_event("early", "trap_cycle_completed", 2, 3); }
+        catch (const std::runtime_error &e) { premature = std::string(e.what()) == "TRAP_ROUTE_NOT_COMPLETED"; }
+        require(premature, "TRAP_PREMATURE_COMPLETION");
+        trap.enter_dungeon();
+        for (int i = 0; i < 7; ++i)
+            trap.target_point_completed();
+        const auto completed = trap.confirmation_id("trap.complete", "trap_cycle_completed");
+        trap.confirm_event(completed, "trap_cycle_completed", 2, 4);
+        require(!trap.confirm_event(completed, "trap_cycle_completed", 2, 5), "TRAP_COMPLETION_REPLAYED");
+        trap.enter_segment(contracts::SegmentBoundary::Continuation, 3, 1);
+        trap.confirm_event(trap.confirmation_id("trap.start", "trap_cycle_started"), "trap_cycle_started", 3, 6);
+        result["trap_contract"] = trap.summary();
+        require(result["trap_contract"].at("dungeons") == 2 && result["trap_contract"].at("trap_cycles_completed") == 1,
+                "TRAP_ATTEMPT_SUCCESS_CONFLATED");
+    }
+    {
+        games::WvdRunState route(profile, {"route-restart", 1, clock});
+        route.enter_segment(contracts::SegmentBoundary::Initial, 1, 0);
+        auto entry = route.confirmation_id("entry", "dungeon_entered");
+        route.confirm_event(entry, "dungeon_entered", 1, 1);
+        const auto point = route.confirmation_id("point.0", "target_completed");
+        route.confirm_event(point, "target_completed", 1, 2, 0);
+        route.enter_segment(contracts::SegmentBoundary::LifecycleRecovery, 2, 0);
+        const auto restarted_entry = route.confirmation_id("entry", "dungeon_entered");
+        require(entry != restarted_entry, "ROUTE_RECOVERY_REUSED_ENTRY_RECEIPT");
+        route.confirm_event(restarted_entry, "dungeon_entered", 2, 3);
+        require(route.summary().at("task_step") == 0, "ROUTE_RECOVERY_KEPT_OLD_STEP");
+        require(!route.confirm_event(point, "target_completed", 2, 4, 0), "ROUTE_OLD_RECEIPT_REPLAYED");
+        route.confirm_event(route.confirmation_id("point.0", "target_completed"), "target_completed", 2, 5, 0);
+        require(route.summary().at("task_step") == 1, "ROUTE_NEW_PASS_NOT_ADVANCED");
+        result["route_restart_contract"] = route.summary();
+    }
+    {
         games::WvdRunState wall(profile, {"wall", 1, clock});
         wall.enter_segment(contracts::SegmentBoundary::Initial, 1, 0);
         require(wall.summary().at("bypass_after_restart").get<bool>(), "WALL_ENABLED_BEFORE_RESTART");

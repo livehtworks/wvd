@@ -37,6 +37,7 @@
 | result.json snapshot.business、sessions[].business/checkpoint | 静止边界的业务摘要及根检查点证据，不是崩溃后自动续跑许可 | RunCoordinator 在 Session join 后拷贝 | 历史审查与离线验收；completed_business_units 单独计数，不把一个段当整条任务 |
 | result.json snapshot.sessions[].inputs | 每个已静止代次的尝试、接受、拒绝、底层输入与清理计数，不受有界事件淘汰影响 | RunCoordinator 收集 SessionResult 时复制 | 与 Run 总计核对；schema1 的新增可选摘要，旧结果没有此字段时标记未记录，不推导为零、不改写历史 |
 | WvdRunState wall_bypass_step/sequence | 重启后防空气墙动作的已确认阶段及本轮序号，不是移动成功或物理引擎恢复证明 | 游戏重启清阶段并换序号；真实有限子图的三个确认事件顺序推进 | 路线恢复后继续未完成阶段；bypass_after_restart 是派生布尔值，旧回执不作用于新重启 |
+| WvdRunState trap_unit / trap_cycles_completed、陷阱任务的 dungeons | 专项本轮归属、确认完成数及旧开始次数口径，三者不等价 | 陷阱图在已知本内场景开始时增加开始次数，七点完成才提交完成回执 | 同轮恢复不重计开始；普通下一轮另计，提前回城不能 Completed；当前实现待专项离线验收 |
 | WvdRunState 确认签名、business.confirmed 事件、snapshot.business.last_confirmation | 本 Run 的操作去重与确认诊断；不是跨进程恢复数据库 | WvdConfirm 在实际新帧识别后生成；状态最多保存 4096 个签名，EventJournal 有界 | 任务步/宝箱计数与终态审查；摘要不等于持久化 profile 回执，不允许据此启动实机重放 |
 | snapshot.business.inn_rest_completed/inn_rests/supply_cycle、last_bag_clear | 本 Run 已确认住宿与队伍周期；不是装备或游戏资产权威 | 新帧确认后由 WvdRunState 更新，入本开始新补给周期 | 回城补给和旅店子图避免已确认住宿重付；跨普通段/恢复代次保留，不从磁盘历史自动重建许可 |
 | WvdRunState prepared 选择及 business.combat 事件 | 本代次未完成技能意图和已确认消费诊断；不是恢复许可 | WvdCombat 在同帧头像匹配后选择；新帧后置确认后消费 | 技能图读取只读摘要并重新识别原角色；不保存旧帧/坐标，段边界清除未完成选择 |

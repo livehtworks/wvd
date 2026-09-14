@@ -213,7 +213,11 @@ std::string WvdRunState::confirmation_id(const std::string &operation, const std
     auto id = identity_ + ":" + std::to_string(unit_index_) + ":" + operation;
     // 同一遭遇中的重复识别共用 ID，回到地下城确认结束后才开始下一次遭遇。
     // 不用帧号/代次作 ID：它们会让重试重复计数；也不能只用节点名吞掉第二场。
-    if (event == "combat_observed")
+    // 真正生命周期恢复会重入旧 RestartableSequenceExecution 的 StateDungeon 调用。
+    // 仅该局部路线开始新轮；住宿/善恶/专项开始回执仍保留，不能按 generation 全部重放。
+    if (event == "dungeon_entered" || event == "target_completed")
+        id += ":route:" + std::to_string(lifecycle_recovery_sequence_);
+    else if (event == "combat_observed")
         id += ":combat:" + std::to_string(combat_sequence_ + (pending_combat_ ? 0 : 1));
     else if (event == "chest_observed")
         id += ":chest:" + std::to_string(chest_sequence_ + (pending_chest_ ? 0 : 1));
@@ -267,7 +271,26 @@ bool WvdRunState::confirm_event(const std::string &operation, const std::string 
         throw std::runtime_error("BUSINESS_CONFIRMATION_CAPACITY");
     if (expected_step && *expected_step != task_step_)
         throw std::runtime_error("BUSINESS_TASK_STEP_MISMATCH");
-    if (event == "karma_observed") {
+    if (event == "trap_cycle_started") {
+        if (trap_unit_)
+            throw std::runtime_error("TRAP_CYCLE_ALREADY_STARTED");
+        const auto now = clock_->now();
+        if (lap_started_) {
+            const auto elapsed = std::chrono::duration<double>(now - *lap_started_).count();
+            if (elapsed < 0)
+                throw std::runtime_error("WVD_CLOCK_MOVED_BACKWARD");
+            total_seconds_ += elapsed;
+        }
+        lap_started_ = now;
+        // 旧陷阱任务在开始本轮时计数，不要求遭遇；另记完成数，不能把尝试当成功。
+        ++dungeons_;
+        trap_unit_ = unit_index_;
+    } else if (event == "trap_cycle_completed") {
+        if (!trap_unit_ || *trap_unit_ != unit_index_ || task_step_ != 7)
+            throw std::runtime_error("TRAP_ROUTE_NOT_COMPLETED");
+        ++trap_cycles_completed_;
+        trap_unit_.reset();
+    } else if (event == "karma_observed") {
         if (!karma_writer_)
             throw std::runtime_error("KARMA_PROFILE_NOT_BOUND");
         if (!karma_choice_) {
@@ -400,6 +423,7 @@ J WvdRunState::summarize() const {
             {"prepared_skill_index", prepared_ ? J(prepared_index_) : J(nullptr)},
             {"prepared_portrait", prepared_ ? prepared_portrait_ : ""},
             {"dungeons", dungeons_},
+            {"trap_cycles_completed", trap_cycles_completed_},
             {"combats", combats_},
             {"chests", chests_},
             {"crashes", crashes_},

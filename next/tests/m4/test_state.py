@@ -86,6 +86,11 @@ class StateTests(unittest.TestCase):
         self.assertEqual(r["karma_second"]["after"], "+1")
         self.assertNotEqual(r["karma_receipt"]["operation_id"], r["karma_second"]["operation_id"])
 
+    def test_trap_attempt_and_success_are_separate_and_recovery_does_not_recount(self):
+        r = self.run_case("trap-contract")
+        self.assertEqual(r["direct"]["trap_contract"]["dungeons"], 2)
+        self.assertEqual(r["direct"]["trap_contract"]["trap_cycles_completed"], 1)
+
     def test_strategy_consumption_and_run_isolation(self):
         r = self.run_case("normal", new_run=True, mutate_definition=True)
         for key in ("snapshot", "second"):

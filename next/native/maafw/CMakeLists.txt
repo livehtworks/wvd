@@ -77,7 +77,7 @@ if(WVD_BUILD_M4)
     ../games/wvd/recovery/party_death.cpp
     ../games/wvd/recovery/global_prompt.cpp
     ../games/wvd/navigation/wall_bypass.cpp
-    ../games/wvd/state.cpp ../games/wvd/state_factory.cpp ../games/wvd/karma.cpp
+    ../games/wvd/state.cpp ../games/wvd/state_factory.cpp ../games/wvd/karma.cpp ../games/wvd/tasks/fortress_trap.cpp
     ../games/wvd/recovery/karma_prompt.cpp ../storage/karma_writer.cpp
     ../games/wvd/combat/strategy.cpp ../storage/legacy_import.cpp ../storage/profile_store.cpp)
   target_link_libraries(wvd_business PUBLIC wvd_core)

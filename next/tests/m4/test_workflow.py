@@ -1,5 +1,6 @@
 """运行正式 C++ 编译器的导航/住宿 Pipeline；图像合成，SDK 和门禁不替换。"""
 import hashlib
+import ast
 import json
 import os
 from pathlib import Path
@@ -29,42 +30,43 @@ class WorkflowTests(unittest.TestCase):
         folder = self.root / name
         bundle = folder / "bundle"
         (bundle / "image").mkdir(parents=True)
+        resource_kind = "dungeon-route" if options.get("workflow") == "fortress-trap" else options.get("workflow")
         names = ["worldmapflag", "City_RoyalCityLuknalia", "Inn", "Stay", "Economy", "royalsuite", "OK"]
-        if options.get("workflow") in ("departure", "iteration"):
+        if resource_kind in ("departure", "iteration"):
             names += ["openworldmap", "intoWorldMap", "returntoTown", "returnText", "EdgeOfTown", "dungFlag", "mapFlag", "chestFlag",
                       "combatActive", "combatActive_2", "combatActive_3", "combatActive_4",
                       "guild", "Edit", "PartyManagement", "PartyManagementTitle", "AssembleParty"]
-        if options.get("workflow") in ("auto", "turn", "encounter", "dungeon-route", "iteration"):
+        if resource_kind in ("auto", "turn", "encounter", "dungeon-route", "iteration"):
             names += ["combatActive", "combatActive_2", "combatActive_3", "combatActive_4", "close",
                       "dungFlag", "chestFlag", "RiseAgain",
                       "spellskill/skillDetail", "spellskill/CombatAutoEnable", "spellskill/CombatAutoDisable"]
-        if options.get("workflow") in ("turn", "encounter", "dungeon-route", "iteration"):
+        if resource_kind in ("turn", "encounter", "dungeon-route", "iteration"):
             names += ["spellskill/char/A", "spellskill/char/A_sp", "spellskill/char/B", "flee", "dungFlag", "chestFlag",
                       "RiseAgain", "supportSkillCheck", "notenoughsp", "notenoughmp", "next", "combatTarget", "combatSpd", "combatSpd_DHI"]
             names += [f"spellskill/skillLvl/{prefix}{level}" for prefix in ("lv", "s_lv") for level in range(1, 10)]
-        if options.get("workflow") in ("map", "map-confirm", "state-route", "dungeon-route", "iteration"):
+        if resource_kind in ("map", "map-confirm", "state-route", "dungeon-route", "iteration"):
             names += ["mapFlag", "dungFlag", "chest", "chestFlag", "chestOpening", "whowillopenit",
                       "AutoMove", "EdgeOfTown", "combatActive", "combatActive_2", "combatActive_3", "combatActive_4",
                       "cursor_0", "cursor_1", "cursor_2", "cursor_3", "stair_up", "stair_floor", "harken",
                       "returnText", "returntoTown", "openworldmap"]
-        if options.get("workflow") in ("chest", "dungeon-route", "iteration"):
+        if resource_kind in ("chest", "dungeon-route", "iteration"):
             names += ["chestFlag", "whowillopenit", "chestOpening", "chestfear", "RiseAgain", "ambush", "dungFlag",
                       "combatActive", "combatActive_2", "combatActive_3", "combatActive_4"]
-        if options.get("workflow") in ("heal", "dungeon-route", "iteration"):
+        if resource_kind in ("heal", "dungeon-route", "iteration"):
             names += ["mapFlag", "dungFlag", "trait", "recover", "story", "chestFlag", "whowillopenit", "chestOpening", "RiseAgain",
                       "combatActive", "combatActive_2", "combatActive_3", "combatActive_4"]
-        if options.get("workflow") == "travel":
+        if resource_kind == "travel":
             names += ["openworldmap", "intoWorldMap", "dungFlag"]
-        if options.get("workflow") in ("party", "party-rest"):
+        if resource_kind in ("party", "party-rest"):
             names += ["guild", "Edit", "PartyManagement", "PartyManagementTitle", "AssembleParty", "partyBlue"]
-        if options.get("workflow") in ("auto-route", "entry"):
+        if resource_kind in ("auto-route", "entry"):
             names += ["mapFlag", "dungFlag", "chestFlag", "combatActive", "combatActive_2", "combatActive_3", "combatActive_4", "EdgeOfTown"]
-        if options.get("workflow") in ("auto-route", "dungeon-route", "iteration"):
+        if resource_kind in ("auto-route", "dungeon-route", "iteration"):
             names += ["chestOpening", "whowillopenit", "RiseAgain", "NoChestCanBeFound", "theRouteToTheDestinationCannotBeFound",
                       "chest_auto", "mark_auto", "chest_auto_minus", "resume", "returnText", "returntoTown", "openworldmap"]
-        if options.get("workflow") in ("entry", "iteration"):
+        if resource_kind in ("entry", "iteration"):
             names += ["GotoDung", "openworldmap", "returntoTown", "intoWorldMap", "TradeWaterway", "Dist", "EVENT", "FFXI/EVENT_GCN", "FFXI/zone5", "preGate"]
-        if options.get("workflow") in ("recover", "common", "iteration", "dungeon-route", "map", "map-confirm", "state-route",
+        if resource_kind in ("recover", "common", "iteration", "dungeon-route", "map", "map-confirm", "state-route",
                                       "auto-route", "auto", "turn", "encounter", "chest", "heal", "revival"):
             names += ["dungFlag", "openworldmap", "returnText", "returntoTown", "mapFlag", "chestFlag", "whowillopenit",
                       "fishing/cast", "fishing/striking", "fishing/CloseFishInfo", "combatActive", "combatActive_2",
@@ -72,10 +74,12 @@ class WorkflowTests(unittest.TestCase):
                       "retry", "retry_blank", "totitle", "resume", "trait", "recover", "spellskill/skillDetail", "close", "someonedead", "RiseAgain",
                       "multipeopledead", "skull", "sandman_recover", "blessing", "combatClose", "ambush", "ignore"]
         names += options.get("extra_images", [])
-        if options.get("workflow") == "revival":
+        if resource_kind == "revival":
             names.append("RiseAgain")
         rng = np.random.default_rng(90614)
         patterns = {name: rng.integers(30, 255, (24, 40, 3), dtype=np.uint8) for name in names}
+        for name in options.get("large_templates", []):
+            patterns[name] = rng.integers(30, 255, (80, 80, 3), dtype=np.uint8)
         if "chest_auto_minus" in patterns:
             patterns["chest_auto_minus"] = rng.integers(10, 120, (24, 40, 3), dtype=np.uint8)
         def write(path, pixels):
@@ -109,7 +113,17 @@ class WorkflowTests(unittest.TestCase):
                     self.assertGreater(score, .60)
                     self.assertLess(score, .80)
                     pattern = degraded
-                pixels[y:y+24, x:x+40] = pattern
+                if key.split("@", 1)[0] in options.get("focused_map_templates", {}).get(str(i), []):
+                    altered = pattern.copy()
+                    cy, cx = (pattern.shape[0] - 15) // 2, (pattern.shape[1] - 15) // 2
+                    altered[cy:cy+15, cx:cx+15] = 255
+                    self.assertGreater(float(cv2.matchTemplate(altered, pattern, cv2.TM_CCOEFF_NORMED)[0, 0]), .80)
+                    difference = np.abs(cv2.cvtColor(altered[cy:cy+15, cx:cx+15], cv2.COLOR_BGR2GRAY).astype(float) -
+                        cv2.cvtColor(pattern[cy:cy+15, cx:cx+15], cv2.COLOR_BGR2GRAY).astype(float)).mean() / 255
+                    self.assertGreater(difference, .20)
+                    pattern = altered
+                h, w = pattern.shape[:2]
+                pixels[y:y+h, x:x+w] = pattern
             if i in options.get("pause_frames", []):
                 area = np.full((110, 240, 3), 20, np.uint8)
                 cv2.putText(area, "Pause", (40, 55), cv2.FONT_HERSHEY_SIMPLEX,
@@ -136,7 +150,7 @@ class WorkflowTests(unittest.TestCase):
             if options.get("corrupt_mod_before_publish"):
                 for path in mod.rglob("*.png"):
                     path.write_bytes(b"changed before publication")
-        if options.get("workflow") in ("chest", "map-confirm", "state-route", "turn", "encounter", "recover", "common", "heal", "dungeon-route", "departure", "inn-tracked", "iteration", "revival"):
+        if resource_kind in ("chest", "map-confirm", "state-route", "turn", "encounter", "recover", "common", "heal", "dungeon-route", "departure", "inn-tracked", "iteration", "revival"):
             config.update(with_state=True, descriptor=str(ROOT / "packs/wvd/parameters/legacy-config-fields.json"))
         if "omit_image" in options:
             config["files"] = [f for f in config["files"] if f["path"] != "image/" + options["omit_image"]]
@@ -148,7 +162,7 @@ class WorkflowTests(unittest.TestCase):
         route_budget = 1300 if options.get("profile", {}).get("QUICK_DISARM_CHEST", False) else 1000
         with (folder / "native.log").open("wb") as log:
             result = subprocess.run([str(exe), str(source)], cwd=folder, env=self.env,
-                                    stdout=log, stderr=log, timeout={"dungeon-route": route_budget + 20, "recover": 750, "departure": 200, "heal": 260,
+                                    stdout=log, stderr=log, timeout={"dungeon-route": route_budget + 20, "fortress-trap": route_budget + 260, "recover": 750, "departure": 200, "heal": 260,
                                         "chest": 920 if options.get("quick") else 620,
                                         "common": 140, "iteration": (route_budget + 380) * options.get("normal_units", 1)}.get(options.get("workflow"), 90))
         self.assertEqual(digest(exe), before_hash)
@@ -1598,6 +1612,162 @@ class WorkflowTests(unittest.TestCase):
     def wall_profile(enabled=True):
         return {**WorkflowTests.turn_profile(defend=True), "BYPASS_THE_WALL": enabled,
                 "RECOVER_WHEN_BEGINNING": False, "SKIP_CHEST_RECOVER": True, "SKIP_COMBAT_RECOVER": True}
+
+    def test_auto_map_stopped_mark_is_confirmed_on_map_without_repressing_auto(self):
+        r = self.execute("auto-map-mark", [{"dungFlag": (50, 150), "mark_auto": (760, 350)},
+            {"dungFlag": (50, 150)}, {"mapFlag": (100, 100), "mark_auto": (400, 700)}],
+            [dict(kind=0, x=800, y=390), dict(kind=0, x=777, y=150)], workflow="dungeon-route",
+            profile=self.wall_profile(False), route_targets=[["mark_auto", [None]]],
+            large_templates=["mark_auto"], focused_map_templates={"2": ["mark_auto"]})
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 2)
+        self.assertFalse(r["mismatch"])
+        self.assertEqual(r["snapshot"]["business"]["task_step"], 1)
+
+    def test_auto_map_disabled_chest_uses_map_confirmation(self):
+        r = self.execute("auto-map-chest", [{"dungFlag": (50, 150), "chest_auto": (760, 350)},
+            {"dungFlag": (50, 150)}, {"mapFlag": (100, 100), "chest_auto": (400, 700)}],
+            [dict(kind=0, x=800, y=390), dict(kind=0, x=777, y=150)], workflow="dungeon-route",
+            profile=self.wall_profile(False), route_targets=[["chest_auto", [None]]],
+            large_templates=["chest_auto"], focused_map_templates={"2": ["chest_auto"]})
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 2)
+        self.assertFalse(r["mismatch"])
+        self.assertEqual(r["snapshot"]["business"]["task_step"], 1)
+
+    def test_auto_map_stop_or_failed_map_open_never_advances_target(self):
+        for stop in (False, True):
+            r = self.execute("auto-map-stop-" + str(stop), [{"dungFlag": (50, 150), "mark_auto": (760, 350)},
+                {"dungFlag": (50, 150)}, {"mapFlag": (100, 100)}],
+                [dict(kind=0, x=800, y=390), dict(kind=0, x=777, y=150, reject=True)],
+                workflow="dungeon-route", profile=self.wall_profile(False), route_targets=[["mark_auto", [None]]],
+                large_templates=["mark_auto"], stop_after_first=stop)
+            self.assertEqual(r["snapshot"]["state"], "UserStopped" if stop else "Failed", r)
+            self.assertEqual(r["backend_calls"], 1 if stop else 2)
+            self.assertEqual(r["snapshot"]["business"]["task_step"], 0)
+            self.assertFalse(r["mismatch"])
+
+    @staticmethod
+    def trap_scenario():
+        # 只读 AST 提取固定源码中的 TargetInfo 常量，不执行旧 Python 业务。
+        source = subprocess.check_output(["git", "show", "6585f4075f5714ab522aa582993860c09af912c1:src/script.py"], cwd=ROOT.parent)
+        tree = ast.parse(source.decode("utf-8"))
+        branch = next(node for node in ast.walk(tree) if isinstance(node, ast.match_case)
+            and isinstance(node.pattern, ast.MatchValue) and isinstance(node.pattern.value, ast.Constant)
+            and node.pattern.value.value == "fortress-B8F_trap")
+        call = next(node for statement in branch.body for node in ast.walk(statement)
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "StateDungeon")
+        targets = [[ast.literal_eval(value) for value in node.args] for node in call.args[0].elts]
+        frames, commands, focused = [{"mapFlag": (100, 100)}], [], {}
+        def advance(command, screen):
+            commands.append(command)
+            frames.append(dict(screen))
+        for row in targets:
+            name = row[0]
+            if name == "mark_auto":
+                advance(dict(kind=5, key=4), {"dungFlag": (50, 150), name: (760, 350)})
+                advance(dict(kind=0, x=800, y=390), {"dungFlag": (50, 150)})
+                advance(dict(kind=0, x=777, y=150), {"mapFlag": (100, 100), name: (400, 700)})
+                focused[str(len(frames) - 1)] = [name]
+                continue
+            swipe = {"左上": (100, 250, 700, 1200), "右下": (700, 1200, 100, 250), "左下": (100, 1200, 700, 250)}[row[1]]
+            x, y = row[2]
+            advance(dict(kind=1, x=swipe[0], y=swipe[1], x2=swipe[2], y2=swipe[3], duration=400), {"mapFlag": (100, 100)})
+            advance(dict(kind=0, x=x, y=y), {"mapFlag": (100, 100)})
+            advance(dict(kind=0, x=136, y=1431), {"dungFlag": (50, 150)})
+            after = {"mapFlag": (100, 100), "cursor_0": (x - 20, y - 12)}
+            if name.startswith("stair"):
+                after[name] = (400, 600)
+            advance(dict(kind=0, x=777, y=150), after)
+        return targets, frames, commands, focused
+
+    def test_trap_full_route_and_cold_recovery_preserve_source_order(self):
+        targets, frames, commands, focused = self.trap_scenario()
+        for cold in (False, True):
+            keyframes = {str(int(key) + int(cold)): value for key, value in focused.items()}
+            r = self.execute("trap-route-" + str(cold), ([{}] if cold else []) + frames, commands,
+                workflow="fortress-trap", quest_catalog=str(ROOT / "packs/wvd/parameters/legacy-quests.json"),
+                profile=self.wall_profile(False), large_templates=["mark_auto"], focused_map_templates=keyframes,
+                extra_images=["stair_fortress1f", "stair_fortressGate"],
+                attach_recovery=cold, initial_connection="closed" if cold else "ready")
+            self.assertEqual(r["snapshot"]["state"], "Completed", r)
+            self.assertEqual(r["backend_calls"], len(commands))
+            self.assertFalse(r["mismatch"])
+            self.assertEqual(r["cursor"], len(frames) - 1 + int(cold))
+            self.assertEqual([row["target"] for row in r["task_plan"]["route"]], [row[0] for row in targets])
+            self.assertEqual([row["position"] for row in r["task_plan"]["route"]], [row[2] if len(row) > 2 else None for row in targets])
+            self.assertNotIn("_TARGETINFOLIST", r["task_plan"]["source"])
+            self.assertEqual(r["snapshot"]["business"]["task_step"], 7)
+            self.assertEqual(r["snapshot"]["business"]["dungeons"], 1)
+            self.assertEqual(r["snapshot"]["business"]["trap_cycles_completed"], 1)
+            self.assertEqual(r["snapshot"]["business"]["crashes"], int(cold))
+
+    def test_trap_stop_and_failed_swipe_preserve_attempt_without_completion(self):
+        _, frames, commands, focused = self.trap_scenario()
+        for stop in (False, True):
+            first = {**commands[0], "reject": not stop}
+            r = self.execute("trap-stop-" + str(stop), frames[:2], [first], workflow="fortress-trap",
+                quest_catalog=str(ROOT / "packs/wvd/parameters/legacy-quests.json"), profile=self.wall_profile(False),
+                extra_images=["stair_fortress1f", "stair_fortressGate"], large_templates=["mark_auto"], stop_after_first=stop)
+            self.assertEqual(r["snapshot"]["state"], "UserStopped" if stop else "Failed", r)
+            self.assertEqual(r["backend_calls"], 1)
+            self.assertFalse(r["mismatch"])
+            self.assertEqual(r["snapshot"]["business"]["dungeons"], 1)
+            self.assertEqual(r["snapshot"]["business"]["trap_cycles_completed"], 0)
+            self.assertEqual(r["snapshot"]["business"]["task_step"], 0)
+
+    def test_trap_mid_route_restart_rebuilds_local_route_without_recounting_cycle(self):
+        _, frames, commands, focused = self.trap_scenario()
+        fault_index = 14
+        self.assertEqual(commands[fault_index - 1], dict(kind=0, x=136, y=1431))
+        fault_frames = frames[:fault_index] + [{"mapFlag": (100, 100), "AutoMove": (300, 700)}]
+        restart_frame = len(fault_frames)
+        focus = {**focused, **{str(int(key) + restart_frame): value for key, value in focused.items()}}
+        r = self.execute("trap-mid-restart", fault_frames + frames, commands[:fault_index] + commands,
+            workflow="fortress-trap", quest_catalog=str(ROOT / "packs/wvd/parameters/legacy-quests.json"),
+            profile=self.wall_profile(False), large_templates=["mark_auto"], focused_map_templates=focus,
+            extra_images=["stair_fortress1f", "stair_fortressGate"], attach_recovery=True,
+            restart_frame=restart_frame, restart_action=fault_index)
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], fault_index + len(commands))
+        self.assertFalse(r["mismatch"])
+        self.assertEqual(r["snapshot"]["sessions"][0]["reason"], "navigation.automove_physics_frozen")
+        self.assertEqual(r["snapshot"]["sessions"][0]["business"]["task_step"], 3)
+        self.assertEqual(r["snapshot"]["business"]["task_step"], 7)
+        self.assertEqual(r["snapshot"]["business"]["dungeons"], 1)
+        self.assertEqual(r["snapshot"]["business"]["trap_cycles_completed"], 1)
+        self.assertEqual(r["snapshot"]["business"]["crashes"], 1)
+        self.assertEqual(r["snapshot"]["generation"], 2)
+
+    def test_trap_normal_continuation_counts_two_distinct_cycles(self):
+        _, frames, commands, focused = self.trap_scenario()
+        offset = len(frames) - 1
+        focus = {**focused, **{str(int(key) + offset): value for key, value in focused.items()}}
+        r = self.execute("trap-two-cycles", frames + frames[1:], commands + commands,
+            workflow="fortress-trap", quest_catalog=str(ROOT / "packs/wvd/parameters/legacy-quests.json"),
+            profile=self.wall_profile(False), large_templates=["mark_auto"], focused_map_templates=focus,
+            extra_images=["stair_fortress1f", "stair_fortressGate"], normal_units=2)
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 2 * len(commands))
+        self.assertFalse(r["mismatch"])
+        self.assertEqual(r["snapshot"]["completed_business_units"], 2)
+        self.assertEqual(r["snapshot"]["business"]["dungeons"], 2)
+        self.assertEqual(r["snapshot"]["business"]["trap_cycles_completed"], 2)
+        self.assertEqual(r["snapshot"]["business"]["crashes"], 0)
+        self.assertEqual(r["lifecycle_calls"], [])
+
+    def test_trap_early_city_return_is_not_task_completion(self):
+        _, frames, commands, _ = self.trap_scenario()
+        r = self.execute("trap-early-return", frames[:3] + [{"Inn": (400, 700)}], commands[:3],
+            workflow="fortress-trap", quest_catalog=str(ROOT / "packs/wvd/parameters/legacy-quests.json"),
+            profile=self.wall_profile(False), large_templates=["mark_auto"],
+            extra_images=["stair_fortress1f", "stair_fortressGate"])
+        self.assertEqual(r["snapshot"]["state"], "Interrupted", r)
+        self.assertEqual(r["backend_calls"], 3)
+        self.assertFalse(r["mismatch"])
+        self.assertEqual(r["snapshot"]["sessions"][-1]["reason"], "quest.trap_route_incomplete")
+        self.assertEqual(r["snapshot"]["business"]["trap_cycles_completed"], 0)
+        self.assertEqual(r["snapshot"]["business"]["task_step"], 0)
 
     def test_karma_confirmed_updates_only_new_profile_and_revises_once(self):
         for value, symbol, after in [("+0", "ambush", "+2"), ("-1", "ambush", "1"), ("+1", "ignore", "+0")]:

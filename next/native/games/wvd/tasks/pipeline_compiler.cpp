@@ -498,7 +498,7 @@ void PipelineCompiler::confirm(const std::string &name, const std::string &opera
                                       "healing_requested", "healing_completed", "inn_rest_completed", "party_reassembled", "chest_character_attempted",
                                       "party_death_observed", "party_death_cleared", "party_defeat_observed",
                                       "wall_turn_completed", "wall_left_completed", "wall_right_completed",
-                                      "karma_observed", "karma_completed"};
+                                      "karma_observed", "karma_completed", "trap_cycle_started", "trap_cycle_completed"};
     require(events.contains(event) && !operation.empty() && operation.size() <= 128,
             "COMPILE_BUSINESS_EVENT_INVALID");
     require(step.is_null() || (step.is_number_integer() && step >= 0 && step <= 4096),

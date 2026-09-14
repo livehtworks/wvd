@@ -22,6 +22,7 @@
 #include "games/wvd/tasks/dungeon_route.hpp"
 #include "games/wvd/tasks/departure.hpp"
 #include "games/wvd/tasks/dungeon_iteration.hpp"
+#include "games/wvd/tasks/fortress_trap.hpp"
 #include "games/wvd/vision/recognizers.hpp"
 #include "platform/windows/file_digest.hpp"
 #include <iostream>
@@ -42,6 +43,7 @@ class WorkflowDevice final : public OfflineDevice, public devices::LifecyclePort
     bool allow_lifecycle{}, stale_lifecycle{}, wrong_instance{}, hold_lifecycle{}, ignore_lifecycle_cancel{};
     std::atomic<bool> release_lifecycle{};
     int failed_starts{}, start_attempts{};
+    std::size_t restart_frame{1}, restart_action{};
     std::atomic<unsigned> lifecycle_count{};
     J lifecycle_calls = J::array();
     bool enforce_connection_state{}, connection_throws{};
@@ -97,8 +99,8 @@ class WorkflowDevice final : public OfflineDevice, public devices::LifecyclePort
                 return false;
             lifecycle_state.application_running = true;
             lifecycle_state.application_foreground = true;
-            cursor = 1; // 只有确认的启动操作切换到标题；capture 不推进状态。
-            action_cursor = 0;
+            cursor = restart_frame; // 只有确认的启动操作切换场景；capture 不推进状态。
+            action_cursor = restart_action;
         } else {
             ++lifecycle_state.connection_generation;
             lifecycle_state.instance_running = true;
@@ -169,6 +171,7 @@ int main(int argc, char **argv) {
             if (config.contains("max_crashes"))
                 profile["MAX_CRASH_LIMIT"] = config.at("max_crashes");
         }
+        J task_plan;
         auto workflow = [&] {
             const auto kind = config.at("workflow").get<std::string>();
             if (kind == "city")
@@ -198,6 +201,20 @@ int main(int argc, char **argv) {
                 return games::recovery::revive_after_defeat();
             if (kind == "common")
                 return games::recovery::clear_common_screens(config.value("allow_download", true));
+            if (kind == "fortress-trap") {
+                nlohmann::ordered_json source;
+                std::ifstream(maafw::path_from_utf8(config.at("quest_catalog"))) >> source;
+                games::WvdQuestCatalog catalog(source);
+                const auto &task = catalog.at("fortress-B8F_trap");
+                std::set<std::string> images;
+                for (const auto &file : config.at("files")) {
+                    const auto path = file.at("path").get<std::string>();
+                    if (path.starts_with("image/"))
+                        images.insert(path.substr(6));
+                }
+                task_plan = games::tasks::fortress_trap_plan(task).inspect();
+                return games::tasks::fortress_trap_iteration(task, profile, images, config.value("allow_download", true));
+            }
             if (kind == "dungeon-route" || kind == "iteration") {
                 games::WvdQuestDefinition definition{"route-fixture", config.value("route_type", std::string("dungeon")),
                     {{"_EOT", {{"press", "Dist", {1, 1}, 1}}}, {"_TARGETINFOLIST", config.at("route_targets")}}};
@@ -419,6 +436,8 @@ int main(int argc, char **argv) {
         device->stale_lifecycle = config.value("stale_lifecycle", false);
         device->wrong_instance = config.value("other_lifecycle_instance", false);
         device->failed_starts = config.value("fail_starts", 0);
+        device->restart_frame = config.value("restart_frame", std::size_t{1});
+        device->restart_action = config.value("restart_action", std::size_t{0});
         device->hold_lifecycle = config.value("stop_during_lifecycle", false) || config.value("late_lifecycle_release", false);
         device->ignore_lifecycle_cancel = config.value("late_lifecycle_release", false);
         const auto initial_connection = config.value("initial_connection", std::string("ready"));
@@ -581,6 +600,7 @@ int main(int argc, char **argv) {
             },
             definition.initial.time_limit * (definition.recovery_limit + units) + 10000ms);
         J output{{"snapshot", storage::snapshot_json(coordinator.snapshot())},
+                 {"task_plan", task_plan},
                  {"backend_calls", device->calls.load()},
                  {"cursor", device->cursor},
                  {"mismatch", device->mismatch},

@@ -18,8 +18,15 @@ bool automatic_target(const MapTarget &target) {
 }
 // 子图完成只是到达确认入口；仍用新帧复核任务点，而非按已发送的动作计数。
 J point_confirmation(const MapTarget &target, const J &map) {
-    if (automatic_target(target))
-        return C::any({C::image("NoChestCanBeFound"), C::image("theRouteToTheDestinationCannotBeFound")});
+    if (automatic_target(target)) {
+        const auto unavailable = C::any({C::image("NoChestCanBeFound"), C::image("theRouteToTheDestinationCannotBeFound")});
+        if (target.target == "mark_auto" || target.target == "chest_auto") {
+            auto focus = C::image(target.target);
+            focus["mode"] = "focus_cursor";
+            return C::any({unavailable, C::all({map, C::image(target.target), C::absent(focus)})});
+        }
+        return unavailable;
+    }
     if (target.position) {
         J reached{{"mode", target.target == "position" ? "reached" : "through_stair"}, {"position", *target.position}};
         if (target.target != "position")
@@ -120,8 +127,18 @@ CompiledWorkflow traverse_dungeon(const WvdTaskPlan &plan, const J &profile,
         J normal{{"EncounterExit", {"Dispatch"}}, {"BlockedExit", {"Dispatch"}}};
         if (automatic) {
             normal["StoppedExit"] = {"Dispatch"};
-            if (target.target == "chest_auto")
-                normal["UnavailableExit"] = {"Dispatch"};
+            if (target.target == "mark_auto" || target.target == "chest_auto") {
+                // 旧 startAuto 在停止后仍会打开地图并执行 StateMapSearch。
+                // 不能只回 Dispatch 再点同一自动按钮，否则到达标记后永远不推进。
+                J exits{{"EncounterExit", {"Dispatch"}}, {"BlockedExit", {"Dispatch"}}};
+                if (plan.floor())
+                    exits["FloorExit"] = {"Retreat"};
+                const auto map_entry = graph.append("AutoMap" + suffix,
+                    navigation::reach_map_target(target, plan.floor()), {"Blocked", "Outside", "Confirm" + suffix}, exits);
+                normal["StoppedExit"] = {map_entry};
+                if (target.target == "chest_auto")
+                    normal["UnavailableExit"] = {map_entry};
+            }
         } else if (plan.floor())
             normal["FloorExit"] = {"Retreat"};
         const auto route = graph.append("Route" + suffix, child, {"Blocked", "Outside", "Confirm" + suffix}, normal);

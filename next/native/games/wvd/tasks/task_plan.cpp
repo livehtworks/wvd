@@ -217,6 +217,15 @@ WvdTaskPlan WvdTaskPlan::parse(const WvdQuestDefinition &definition) {
         throw std::runtime_error("TASK_DUNGEON_ROUTE_EMPTY");
     return plan;
 }
+WvdTaskPlan WvdTaskPlan::with_route(const J &targets) const {
+    if (!targets.is_array() || targets.empty() || targets.size() > 64)
+        throw std::runtime_error("TASK_LOCAL_ROUTE_INVALID");
+    auto plan = *this;
+    plan.route_.clear();
+    for (const auto &target : targets)
+        plan.route_.push_back(map_target(target));
+    return plan;
+}
 nlohmann::json WvdTaskPlan::inspect() const {
     J entries = J::array(), targets = J::array();
     for (const auto &step : entry_)
