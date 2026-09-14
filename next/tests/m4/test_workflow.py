@@ -40,6 +40,10 @@ class WorkflowTests(unittest.TestCase):
         if options.get("workflow") == "chest":
             names += ["chestFlag", "whowillopenit", "chestOpening", "chestfear", "RiseAgain", "ambush", "dungFlag",
                       "combatActive", "combatActive_2", "combatActive_3", "combatActive_4"]
+        if options.get("workflow") == "travel":
+            names += ["openworldmap", "intoWorldMap", "dungFlag"]
+        if options.get("workflow") in ("party", "party-rest"):
+            names += ["guild", "Edit", "PartyManagement", "PartyManagementTitle", "AssembleParty", "partyBlue"]
         rng = np.random.default_rng(90614)
         patterns = {name: rng.integers(30, 255, (24, 40, 3), dtype=np.uint8) for name in names}
         def write(path, pixels):
@@ -336,6 +340,64 @@ class WorkflowTests(unittest.TestCase):
             self.assertEqual(result["snapshot"]["state"], "Failed" if name == "failed" else "UserStopped", result)
             self.assertEqual(result["snapshot"]["business"]["chests"], 0)
             self.assertEqual(result["backend_calls"], 1)
+
+    def test_travel_opens_relocates_and_stops_in_city(self):
+        empty_world = {"worldmapflag": (80, 100)}
+        target_world = {**empty_world, "City_RoyalCityLuknalia": (132, 1352)}
+        screens = [{"openworldmap": (600, 300)}, empty_world, target_world, {"Inn": (100, 400)}]
+        result = self.execute("travel-return", screens,
+                              [dict(kind=0, x=620, y=312), dict(kind=1, x=450, y=150, x2=500, y2=150, duration=400),
+                               dict(kind=0, x=152, y=1364)], workflow="travel")
+        self.assertEqual(result["snapshot"]["state"], "Completed", result)
+        self.assertEqual(result["cursor"], 3)
+        self.assertFalse(result["mismatch"])
+
+    def test_travel_departure_and_existing_arrival(self):
+        world = {"worldmapflag": (80, 100), "City_RoyalCityLuknalia": (132, 1352)}
+        result = self.execute("travel-depart", [{"Inn": (100, 400), "intoWorldMap": (600, 300)},
+                              world, {"openworldmap": (600, 300)}],
+                              [dict(kind=0, x=620, y=312), dict(kind=0, x=152, y=1364)],
+                              workflow="travel", returning=False)
+        self.assertEqual(result["snapshot"]["state"], "Completed", result)
+        self.assertFalse(result["mismatch"])
+        for returning, screen in [(True, {"Inn": (100, 400)}), (False, {"dungFlag": (100, 1400)})]:
+            result = self.execute("travel-arrived-" + str(returning), [screen], [],
+                                  workflow="travel", returning=returning)
+            self.assertEqual(result["snapshot"]["state"], "Completed", result)
+            self.assertEqual(result["backend_calls"], 0)
+
+    def test_travel_unknown_scene_never_uses_map_coordinates(self):
+        result = self.execute("travel-unknown", [{"City_RoyalCityLuknalia": (132, 1352)}], [], workflow="travel")
+        self.assertEqual(result["snapshot"]["state"], "Interrupted", result)
+        self.assertEqual(result["backend_calls"], 0)
+
+    def test_party_requires_assembly_confirmation_and_rest(self):
+        title = {"PartyManagementTitle": (100, 200), "AssembleParty": (400, 900)}
+        for named in (False, True):
+            selected = {**title, "partyBlue": (100, 500)} if named else title
+            city = {"Inn": (100, 400), "guild": (500, 400)}
+            screens = [city, {"Edit": (100, 500)}, {"PartyManagement": (300, 500)}, selected, title,
+                       {**title, "OK": (500, 800)}, title, city, {"Stay": (100, 600)},
+                       {"Economy": (100, 500)}, {"OK": (500, 800)}, {"Stay": (100, 600)}, city]
+            commands = [dict(kind=0, x=520, y=412), dict(kind=0, x=120, y=512),
+                        dict(kind=0, x=320, y=512), dict(kind=0, x=120 if named else 137, y=512 if named else 290),
+                        dict(kind=0, x=420, y=912), dict(kind=0, x=520, y=812), dict(kind=5, key=4),
+                        dict(kind=0, x=120, y=412), dict(kind=0, x=120, y=612), dict(kind=0, x=120, y=512),
+                        dict(kind=0, x=520, y=812), dict(kind=5, key=4)]
+            result = self.execute("party-rest-" + str(named), screens, commands, workflow="party-rest",
+                                  **({"party_image": "partyBlue"} if named else {}))
+            self.assertEqual(result["snapshot"]["state"], "Completed", result)
+            self.assertEqual(result["backend_calls"], 12)
+            self.assertFalse(result["mismatch"])
+
+    def test_party_confirm_failure_cannot_start_rest(self):
+        title = {"PartyManagementTitle": (100, 200), "AssembleParty": (400, 900)}
+        result = self.execute("party-reject", [title, title, {**title, "OK": (500, 800)}],
+                              [dict(kind=0, x=137, y=290), dict(kind=0, x=420, y=912),
+                               dict(kind=0, x=520, y=812, reject=True)], workflow="party-rest")
+        self.assertEqual(result["snapshot"]["state"], "Failed", result)
+        self.assertEqual(result["cursor"], 2)
+        self.assertEqual(result["backend_calls"], 3)
 
 
 if __name__ == "__main__":

@@ -192,6 +192,12 @@ void PipelineCompiler::delay_after(const std::string &name, int milliseconds) {
             "COMPILE_DELAY_INVALID");
     workflow_.nodes[name]["post_delay"] = milliseconds;
 }
+void PipelineCompiler::postcondition_budget(const std::string &name, int milliseconds) {
+    require(workflow_.nodes.contains(name) && milliseconds >= 1 && milliseconds <= 60000 &&
+                workflow_.nodes.at(name).value("custom_action", "") == "GuardedAction",
+            "COMPILE_POSTCONDITION_BUDGET_INVALID");
+    workflow_.nodes[name]["custom_action_param"]["postcondition_timeout_ms"] = milliseconds;
+}
 void PipelineCompiler::swipe(const std::string &name, const J &scene, const J &post,
                              J coordinates, J next) {
     require(coordinates.is_array() && coordinates.size() == 4, "COMPILE_SWIPE_INVALID");

@@ -2,6 +2,8 @@
 #include "loaded_modules.hpp"
 #include "games/wvd/navigation/world_map.hpp"
 #include "games/wvd/navigation/map_route.hpp"
+#include "games/wvd/navigation/world_travel.hpp"
+#include "games/wvd/supply/party.hpp"
 #include "games/wvd/chest/chest.hpp"
 #include "games/wvd/diagnostics.hpp"
 #include "games/wvd/state.hpp"
@@ -64,6 +66,19 @@ int main(int argc, char **argv) {
                 return games::combat::enable_auto();
             if (kind == "chest")
                 return games::chest::open_chest(config.value("preferred", 1), config.value("quick", false), 42);
+            if (kind == "travel") {
+                const auto coords = config.value("swipe", J{450, 150, 500, 150});
+                games::WorldDestination destination{config.at("city"), {}, {550, 1}};
+                if (!coords.is_null())
+                    destination.swipe = games::TaskSwipe{{coords[0], coords[1]}, {coords[2], coords[3]}};
+                return games::navigation::travel_world(destination, config.value("returning", true)
+                    ? games::navigation::WorldArrival::City : games::navigation::WorldArrival::DungeonEntrance);
+            }
+            if (kind == "party" || kind == "party-rest") {
+                const auto party = config.contains("party_image") ? std::optional(config.at("party_image").get<std::string>()) : std::nullopt;
+                return kind == "party" ? games::supply::assemble_party(party)
+                                       : games::supply::assemble_and_rest(config.value("royal", false), party);
+            }
             if (kind == "city-inn") {
                 games::tasks::PipelineCompiler graph("supply.city_and_rest");
                 const auto rest = graph.append("Rest", games::supply::rest_at_inn(false), {"Terminal"});

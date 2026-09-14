@@ -42,6 +42,7 @@ class PipelineCompiler {
                  nlohmann::json expected_step = nullptr);
     void hit_limit(const std::string &name, int limit);
     void delay_after(const std::string &name, int milliseconds);
+    void postcondition_budget(const std::string &name, int milliseconds);
     CompiledWorkflow finish();
 
   private:
