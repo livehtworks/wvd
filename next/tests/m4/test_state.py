@@ -115,6 +115,14 @@ class StateTests(unittest.TestCase):
         self.assertFalse(r["fallback_confirmed"]["has_prepared_skill"])
         self.assertTrue(r["prepared_cleared_at_boundary"])
 
+    def test_repeated_encounters_have_stable_distinct_receipts(self):
+        result = self.run_case("recurring-receipts")["direct"]["recurring_encounters"]
+        self.assertEqual(result["combats"], 2)
+        self.assertEqual(result["chests"], 2)
+        self.assertEqual(result["confirmed_operations"], 6)
+        self.assertFalse(result["pending_combat"])
+        self.assertFalse(result["pending_chest"])
+
     def test_supply_conditions_keep_forced_rest_separate(self):
         cases, expected = [], []
         # 预期来自旧 IdentifyState/强制补镐子条件，逐项列出而非调用被测函数生成。

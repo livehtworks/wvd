@@ -24,6 +24,7 @@ class WvdRunState final : public contracts::BusinessRunState {
     bool confirm_skill(const SkillSelection &, SkillOutcome);
     void prepare_skill(const std::vector<PortraitScore> &, const nlohmann::json &catalog);
     bool finish_prepared_skill(std::size_t index, SkillOutcome);
+    std::string confirmation_id(const std::string &operation, const std::string &event) const;
     // 回放同一操作不重复修改业务；相同 ID 的不同效果拒绝。观察仍须来自当前代次。
     bool confirm_event(const std::string &operation, const std::string &event,
                        std::uint64_t generation, std::uint64_t frame_id,

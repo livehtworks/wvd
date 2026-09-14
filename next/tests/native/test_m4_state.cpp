@@ -64,6 +64,23 @@ J direct_contract(const J &profile) {
     state.dungeon_completed();
     J result;
     result["initial"] = state.summary();
+    games::WvdRunState recurring(profile, {"recurring", 1, clock});
+    recurring.enter_segment(contracts::SegmentBoundary::Initial, 1, 0);
+    for (std::uint64_t encounter = 1; encounter <= 2; ++encounter) {
+        const auto combat_id = recurring.confirmation_id("observe", "combat_observed");
+        require(recurring.confirm_event(combat_id, "combat_observed", 1, encounter * 10), "ENCOUNTER_BEGIN_MISSING");
+        require(recurring.confirmation_id("observe", "combat_observed") == combat_id, "ENCOUNTER_ID_UNSTABLE");
+        require(!recurring.confirm_event(combat_id, "combat_observed", 1, encounter * 10 + 1), "ENCOUNTER_REPEAT_APPLIED");
+        const auto chest_id = recurring.confirmation_id("chest", "chest_observed");
+        require(recurring.confirm_event(chest_id, "chest_observed", 1, encounter * 10 + 2), "CHEST_BEGIN_MISSING");
+        const auto resume_id = recurring.confirmation_id("resume", "dungeon_resumed");
+        require(recurring.confirm_event(resume_id, "dungeon_resumed", 1, encounter * 10 + 3), "ENCOUNTER_RESUME_MISSING");
+        require(recurring.confirmation_id("resume", "dungeon_resumed") == resume_id, "RESUME_ID_UNSTABLE");
+        require(!recurring.confirm_event(resume_id, "dungeon_resumed", 1, encounter * 10 + 4), "RESUME_REPEAT_COUNTED");
+        // 保存的旧 ID 即使迟到到下一次循环也不能重放已执行效果。
+        require(!recurring.confirm_event(combat_id, "combat_observed", 1, encounter * 10 + 5), "OLD_RECEIPT_REPLAYED");
+    }
+    result["recurring_encounters"] = recurring.summary();
     result["below_threshold"] = state.select_skill({{"A", .79}}).has_value();
     result["negative_is_nohit"] = !state.select_skill({{"A", -1}, {"B", -.5}}).has_value();
     auto selection = state.select_skill({{"A_sp", .8}});

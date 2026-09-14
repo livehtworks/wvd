@@ -13,6 +13,7 @@
 #include "games/wvd/supply/inn.hpp"
 #include "games/wvd/combat/auto_combat.hpp"
 #include "games/wvd/combat/turn.hpp"
+#include "games/wvd/combat/encounter.hpp"
 #include "games/wvd/tasks/workflow_session.hpp"
 #include "games/wvd/vision/recognizers.hpp"
 #include "platform/windows/file_digest.hpp"
@@ -84,14 +85,15 @@ int main(int argc, char **argv) {
                     definition.source["_preEOTcheck"] = config.at("pre_entry");
                 return games::navigation::enter_dungeon(games::WvdTaskPlan::parse(definition));
             }
-            if (kind == "turn") {
+            if (kind == "turn" || kind == "encounter") {
                 std::set<std::string> images;
                 for (const auto &file : config.at("files")) {
                     const auto path = file.at("path").get<std::string>();
                     if (path.starts_with("image/"))
                         images.insert(path.substr(6));
                 }
-                return games::combat::take_turn(profile, images);
+                return kind == "turn" ? games::combat::take_turn(profile, images)
+                                      : games::combat::fight_encounter(profile, images, config.value("max_turns", 2u));
             }
             if (kind == "chest")
                 return games::chest::open_chest(config.value("preferred", 1), config.value("quick", false), 42);

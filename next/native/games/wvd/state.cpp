@@ -160,6 +160,19 @@ bool WvdRunState::finish_prepared_skill(std::size_t index, SkillOutcome outcome)
         prepared_.reset();
     return consumed;
 }
+std::string WvdRunState::confirmation_id(const std::string &operation, const std::string &event) const {
+    auto id = identity_ + ":" + std::to_string(unit_index_) + ":" + operation;
+    // 同一遭遇中的重复识别共用 ID，回到地下城确认结束后才开始下一次遭遇。
+    // 不用帧号/代次作 ID：它们会让重试重复计数；也不能只用节点名吞掉第二场。
+    if (event == "combat_observed")
+        id += ":combat:" + std::to_string(combats_ + 1);
+    else if (event == "chest_observed")
+        id += ":chest:" + std::to_string(chests_ + 1);
+    else if (event == "dungeon_resumed")
+        id += ":resume:" + std::to_string(combats_ + (pending_combat_ ? 1 : 0)) + ":" +
+              std::to_string(chests_ + (pending_chest_ ? 1 : 0));
+    return id;
+}
 bool WvdRunState::confirm_event(const std::string &operation, const std::string &event,
                                  std::uint64_t generation, std::uint64_t frame_id,
                                  std::optional<std::size_t> expected_step) {

@@ -117,8 +117,9 @@ tasks::CompiledWorkflow take_turn(const J &profile, const std::set<std::string> 
     const auto support = roi_image("supportSkillCheck", {677, 1475, 189, 80});
     const auto errors = C::any({C::image("notenoughsp"), C::image("notenoughmp")});
     const auto finished = C::all({C::any({clear, ended}), C::absent(errors), C::absent(popup)});
-    const auto full_auto = graph.append("FullAuto", enable_auto(), {"Terminal"});
-    const auto char_auto = graph.append("CharAuto", enable_auto(), {"DisableCharAuto", "AutoEnded"});
+    const J auto_exits{{"BattleEndedExit", {"Terminal"}}};
+    const auto full_auto = graph.append("FullAuto", enable_auto(), {"Terminal"}, auto_exits);
+    const auto char_auto = graph.append("CharAuto", enable_auto(), {"DisableCharAuto", "AutoEnded"}, auto_exits);
     graph.fixed_click("DisableCharAuto", C::all({clear, enabled}), C::any({C::all({clear, disabled}), ended}),
                       {850, 1100}, {"AutoEnded"});
     graph.observe("AutoEnded", C::any({C::all({clear, disabled}), ended}), {"Terminal"});
@@ -149,7 +150,7 @@ tasks::CompiledWorkflow take_turn(const J &profile, const std::set<std::string> 
             graph.combat_step(prefix + "Success", advanced, {{"operation", "success"}, {"index", index}}, {"Terminal"});
             continue;
         }
-        const auto automatic = graph.append(prefix + "Auto", enable_auto(), {prefix + "Disable", prefix + "AutoConfirmed"});
+        const auto automatic = graph.append(prefix + "Auto", enable_auto(), {prefix + "Disable", prefix + "AutoConfirmed"}, auto_exits);
         graph.fixed_click(prefix + "Disable", C::all({clear, enabled}), C::any({C::all({clear, disabled}), ended}),
                           {850, 1100}, {prefix + "AutoConfirmed"});
         graph.combat_step(prefix + "AutoConfirmed", C::any({C::all({clear, disabled}), ended}),

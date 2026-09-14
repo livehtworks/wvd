@@ -30,10 +30,11 @@ class WorkflowTests(unittest.TestCase):
         bundle = folder / "bundle"
         (bundle / "image").mkdir(parents=True)
         names = ["worldmapflag", "City_RoyalCityLuknalia", "Inn", "Stay", "Economy", "royalsuite", "OK"]
-        if options.get("workflow") in ("auto", "turn"):
+        if options.get("workflow") in ("auto", "turn", "encounter"):
             names += ["combatActive", "combatActive_2", "combatActive_3", "combatActive_4", "close",
+                      "dungFlag", "chestFlag", "RiseAgain",
                       "spellskill/skillDetail", "spellskill/CombatAutoEnable", "spellskill/CombatAutoDisable"]
-        if options.get("workflow") == "turn":
+        if options.get("workflow") in ("turn", "encounter"):
             names += ["spellskill/char/A", "spellskill/char/A_sp", "spellskill/char/B", "flee", "dungFlag", "chestFlag",
                       "RiseAgain", "supportSkillCheck", "notenoughsp", "notenoughmp", "next", "combatTarget", "combatSpd", "combatSpd_DHI"]
             names += [f"spellskill/skillLvl/{prefix}{level}" for prefix in ("lv", "s_lv") for level in range(1, 10)]
@@ -89,7 +90,7 @@ class WorkflowTests(unittest.TestCase):
                           {"path": p.relative_to(bundle).as_posix(), "sha256": digest(p)}
                           for p in sorted(bundle.rglob("*.png"))])
         config.update(options)
-        if options.get("workflow") in ("chest", "map-confirm", "state-route", "turn"):
+        if options.get("workflow") in ("chest", "map-confirm", "state-route", "turn", "encounter"):
             config.update(with_state=True, descriptor=str(ROOT / "packs/wvd/parameters/legacy-config-fields.json"))
         if "omit_image" in options:
             config["files"] = [f for f in config["files"] if f["path"] != "image/" + options["omit_image"]]
@@ -651,6 +652,88 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(result["snapshot"]["business"]["combats"], 1)
         self.assertEqual(result["backend_calls"], 3)
         self.assertFalse(result["mismatch"])
+
+    def test_state_routes_count_two_encounters_at_the_same_node(self):
+        base = {"mapFlag": (100, 100)}
+        battle = {"combatActive": (20, 20)}
+        dungeon = {"dungFlag": (100, 1400)}
+        screens = [{**base, "cursor_0": (480, 588)}, battle, dungeon, base,
+                   battle, dungeon, {**base, "cursor_0": (680, 688)}]
+        actions = [dict(kind=0, x=700, y=700), dict(kind=0, x=850, y=1100), dict(kind=0, x=777, y=150)] * 2
+        r = self.execute("state-two-encounters", screens, actions, workflow="state-route")
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["snapshot"]["business"]["combats"], 2)
+        self.assertEqual(r["snapshot"]["business"]["task_step"], 2)
+        self.assertEqual(r["snapshot"]["generation"], 1)
+        self.assertEqual(r["backend_calls"], 6)
+        self.assertFalse(r["mismatch"])
+
+    def test_encounter_sequences_two_actors_and_counts_only_after_dungeon(self):
+        profile = self.turn_profile()
+        profile["RELOAD_STRATEGY_WHEN"] = "每次副本开始"
+        detail = {"spellskill/skillDetail": (350, 950), "next": (500, 300)}
+        screens = [self.turn_screen(), self.turn_screen(**detail), self.turn_screen("B"),
+                   self.turn_screen("B", **detail), {"dungFlag": (50, 150)}]
+        actions = [dict(kind=0, x=266, y=1054), dict(kind=0, x=440, y=392)] * 2
+        r = self.execute("encounter-two-actors", screens, actions, workflow="encounter", profile=profile)
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 4)
+        self.assertFalse(r["mismatch"])
+        state = r["snapshot"]["business"]
+        self.assertEqual(state["combats"], 1)
+        self.assertFalse(state["pending_combat"])
+        self.assertEqual(state["strategy"]["current"]["skill_settings"], [])
+
+    def test_encounter_budget_and_input_failure_do_not_complete_battle(self):
+        screens = [self.turn_screen(), self.turn_screen("B")]
+        for name, command, state in [("budget", dict(kind=0, x=513, y=1200), "Interrupted"),
+                                      ("reject", dict(kind=0, x=513, y=1200, reject=True), "Failed")]:
+            r = self.execute("encounter-" + name, screens, [command], workflow="encounter",
+                             profile=self.turn_profile(defend=True), max_turns=1)
+            self.assertEqual(r["snapshot"]["state"], state, r)
+            self.assertEqual(r["snapshot"]["business"]["combats"], 0)
+            self.assertTrue(r["snapshot"]["business"]["pending_combat"])
+            self.assertEqual(r["backend_calls"], 1)
+            self.assertFalse(r["mismatch"])
+
+    def test_auto_battle_end_is_not_auto_enabled(self):
+        disabled = {"combatActive": (20, 20), "spellskill/CombatAutoDisable": (800, 1070)}
+        r = self.execute("auto-ended", [disabled, {"dungFlag": (50, 150)}],
+                         [dict(kind=0, x=850, y=1100)], workflow="auto")
+        self.assertEqual(r["snapshot"]["state"], "Interrupted", r)
+        self.assertEqual(r["backend_calls"], 1)
+        self.assertFalse(r["mismatch"])
+
+    def test_encounter_chest_transition_does_not_settle_dungeon_counters(self):
+        r = self.execute("encounter-to-chest", [self.turn_screen(), {"chestFlag": (300, 400)}],
+                         [dict(kind=0, x=513, y=1200)], workflow="encounter",
+                         profile=self.turn_profile(defend=True), max_turns=1)
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["snapshot"]["business"]["combats"], 0)
+        self.assertTrue(r["snapshot"]["business"]["pending_combat"])
+        self.assertEqual(r["backend_calls"], 1)
+        self.assertFalse(r["mismatch"])
+
+    def test_encounter_ended_while_closing_detail_does_not_consume_unconfirmed_auto(self):
+        profile = self.turn_profile()
+        profile["RELOAD_STRATEGY_WHEN"] = "每次副本开始"
+        detail = self.turn_screen(**{"spellskill/skillDetail": (350, 950), "close": (350, 1490)})
+        r = self.execute("encounter-ended-before-auto", [self.turn_screen(), detail, {"dungFlag": (50, 150)}],
+                         [dict(kind=0, x=266, y=1054), dict(kind=0, x=370, y=1502)],
+                         workflow="encounter", profile=profile, max_turns=1)
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["snapshot"]["business"]["combats"], 1)
+        self.assertEqual(len(r["snapshot"]["business"]["strategy"]["current"]["skill_settings"]), 2)
+        self.assertEqual(r["backend_calls"], 2)
+        self.assertFalse(r["mismatch"])
+        # 外层确认返回地下城可结束遭遇，不把未确认的 Auto 误报为开启。
+        r = self.execute("encounter-auto-ended", [self.turn_screen(**{"spellskill/CombatAutoDisable": (800, 1070)}),
+                          {"dungFlag": (50, 150)}], [dict(kind=0, x=850, y=1100)],
+                         workflow="encounter", profile={"DEFAULT_OVERALL_STRATEGY": "全自动战斗", "STRATEGY": [], "TASK_SPECIFIC_CONFIG": False}, max_turns=1)
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["snapshot"]["business"]["combats"], 1)
+        self.assertEqual(r["backend_calls"], 1)
+        self.assertFalse(r["mismatch"])
 
 
 if __name__ == "__main__":
