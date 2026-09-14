@@ -25,7 +25,7 @@
 - 正常 Farm 迭代图已接入入口/补给/EOT/路线及正常续段：43 项静态编译绑定核对、5 方法/8 场景通过；导航 12、状态 11、核心定点 15 方法回归通过，见 `../next/docs/m4-iteration-validation.md`。两段共享统计且再次入本按配置重置策略。全局事件和完整逐任务验收尚未齐，仍 0/58。
 - M4 已接入配置副本/profile-CAS、58 项类型化任务数据、运行级状态工厂、策略消费、正常续段、43 项入本/路线图。回城普通/强制补给、角色面板恢复、住宿回执和退场新帧确认已组合；证据见 `../next/docs/m4-departure-validation.md`、`../next/docs/m4-dungeon-route-validation.md`、`../next/docs/m4-healing-validation.md`。
 - 战斗已有头像/技能/等级/敌我目标、防跨角色连点、Auto 确认及有界持续等待、有限多角色遭遇和宝箱转战斗。原生子作用域仅清理局部命中预算，不清父预算/策略；证据见 `../next/docs/m4-combat-turn-validation.md`、`../next/docs/m4-auto-wait-validation.md`、`../next/docs/m4-encounter-validation.md`、`../next/docs/m4-native-child-validation.md`。
-- 类型化恢复已有应用优先、重连/实例升级、启动后继续原任务的离线链，见 `../next/docs/m4-lifecycle-validation.md`。首次连接失败冷启动 6 方法/7 场景通过，见 `../next/docs/m4-cold-start-validation.md`；原恢复链和核心回归待执行。完整任务恢复位置、全部全局事件和真实端口未齐。
+- 类型化恢复已有应用优先、重连/实例升级、启动后继续原任务的离线链。首次连接失败冷启动 6 方法/7 场景、恢复全组 17 方法、M2 102、M3 定点 11、状态 16 方法通过，见 `../next/docs/m4-cold-start-validation.md`；不包含后续沙人/祝福提示改动。完整任务恢复位置、全部全局事件和真实端口未齐。
 - 当前主要剩余：死亡/其它全局对话及普通插入全链连接，15 项专项，副作用确认/保存间的对账与新版 profile 写回，配置/mod 剩余组合及资源导入，逐任务离线成功/失败/停止/恢复和最终完整性矩阵。已通过的开箱、Pause 和复活子链仍须全任务组合验收。分项事实见 `../next/docs/m4-business-validation.md` 与 `../next/docs/migration/m4-task-status.json`；不把子图、静态编译或正常迭代通过改成完整 TaskID 通过。
 - 阶段历史、失败修正和 EXE/SDK 身份以各专题报告为准，不累计旧测试数量冒充当前全量复测；早期私有证据和原审核包保持不变。输入帧 TTL 未放宽，Session 总预算随编译定义封存。
 

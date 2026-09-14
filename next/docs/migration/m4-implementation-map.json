@@ -868,20 +868,23 @@
         "M3-DEVICE"
       ],
       "planned_owner_from_baseline": "native/devices",
-      "implementation": null,
-      "entry": null,
-      "implementation_status": "NOT_STARTED",
-      "offline_status": "NOT_RUN",
+      "implementation": "native/games/wvd/recovery/boot.cpp",
+      "entry": "recovery::with_boot_recovery / RunCoordinator::drive",
+      "implementation_status": "PARTIAL",
+      "offline_status": "PASS",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "remaining": "本轮未承接此完整业务；固定旧入口仍为唯一生产实现。",
+      "remaining": "全任务恢复位置、专项移交、其余冻结/未知页与真实端口未齐；不计完整任务通过。",
       "cold_start_validation": {
         "status": "PASS",
         "implementation": "native/runtime/run_coordinator.cpp",
         "entry": "RunCoordinator::drive / recovery::decide",
         "evidence_report": "../m4-cold-start-validation.md",
         "scope": "未启动任务且零输入的明确连接失败，经显式离线端口恢复并续接原任务；不开放真实设备"
-      }
+      },
+      "implementation_extent": "TYPED_LIFECYCLE_AND_BOOT_SUBFLOW",
+      "verification_scope": "应用/连接/实例及启动后续接原任务的受控离线子链",
+      "evidence_report": "../m4-cold-start-validation.md"
     },
     {
       "inventory_id": "function:src/script.py:Factory.DeviceShell:936",
@@ -1536,20 +1539,23 @@
         "M4-RECOVERY"
       ],
       "planned_owner_from_baseline": "native/games/wvd/recovery",
-      "implementation": null,
-      "entry": null,
-      "implementation_status": "NOT_STARTED",
-      "offline_status": "NOT_RUN",
+      "implementation": "native/games/wvd/recovery/boot.cpp",
+      "entry": "recovery::with_boot_recovery / RunCoordinator::drive",
+      "implementation_status": "PARTIAL",
+      "offline_status": "PASS",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "remaining": "本轮未承接此完整业务；固定旧入口仍为唯一生产实现。",
+      "remaining": "全任务恢复位置、专项移交、其余冻结/未知页与真实端口未齐；不计完整任务通过。",
       "cold_start_validation": {
         "status": "PASS",
         "implementation": "native/runtime/run_coordinator.cpp",
         "entry": "RunCoordinator::drive / recovery::decide",
         "evidence_report": "../m4-cold-start-validation.md",
         "scope": "未启动任务且零输入的明确连接失败，经显式离线端口恢复并续接原任务；不开放真实设备"
-      }
+      },
+      "implementation_extent": "TYPED_LIFECYCLE_AND_BOOT_SUBFLOW",
+      "verification_scope": "应用/连接/实例及启动后续接原任务的受控离线子链",
+      "evidence_report": "../m4-cold-start-validation.md"
     },
     {
       "inventory_id": "function:src/script.py:Factory.restartGame:1649",
@@ -1562,16 +1568,16 @@
         "M4-RECOVERY"
       ],
       "planned_owner_from_baseline": "native/games/wvd/recovery",
-      "implementation": "native/games/wvd/state.cpp",
-      "entry": "WvdRunState::restart_game",
+      "implementation": "native/games/wvd/recovery/boot.cpp",
+      "entry": "recovery::with_boot_recovery / RunCoordinator::drive",
       "implementation_status": "PARTIAL",
       "offline_status": "PASS",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "remaining": "状态消费/重置已迁移，实际导航/战斗/恢复输入及完整业务出口尚未承接。",
-      "implementation_extent": "STATE_ONLY",
-      "verification_scope": "状态 API 与真实 Maa 有限段，不是游戏动作",
-      "evidence_report": "../m4-state-validation.md",
+      "remaining": "全任务恢复位置、专项移交、其余冻结/未知页与真实端口未齐；不计完整任务通过。",
+      "implementation_extent": "TYPED_LIFECYCLE_AND_BOOT_SUBFLOW",
+      "verification_scope": "应用/连接/实例及启动后续接原任务的受控离线子链",
+      "evidence_report": "../m4-cold-start-validation.md",
       "cold_start_validation": {
         "status": "PASS",
         "implementation": "native/runtime/run_coordinator.cpp",
@@ -1629,20 +1635,23 @@
         "M4-RECOVERY"
       ],
       "planned_owner_from_baseline": "native/games/wvd/recovery",
-      "implementation": null,
-      "entry": null,
-      "implementation_status": "NOT_STARTED",
-      "offline_status": "NOT_RUN",
+      "implementation": "native/games/wvd/recovery/boot.cpp",
+      "entry": "recovery::with_boot_recovery / RunCoordinator::drive",
+      "implementation_status": "PARTIAL",
+      "offline_status": "PASS",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "remaining": "本轮未承接此完整业务；固定旧入口仍为唯一生产实现。",
+      "remaining": "全任务恢复位置、专项移交、其余冻结/未知页与真实端口未齐；不计完整任务通过。",
       "cold_start_validation": {
         "status": "PASS",
         "implementation": "native/runtime/run_coordinator.cpp",
         "entry": "RunCoordinator::drive / recovery::decide",
         "evidence_report": "../m4-cold-start-validation.md",
         "scope": "未启动任务且零输入的明确连接失败，经显式离线端口恢复并续接原任务；不开放真实设备"
-      }
+      },
+      "implementation_extent": "TYPED_LIFECYCLE_AND_BOOT_SUBFLOW",
+      "verification_scope": "应用/连接/实例及启动后续接原任务的受控离线子链",
+      "evidence_report": "../m4-cold-start-validation.md"
     },
     {
       "inventory_id": "function:src/script.py:Factory.ReloadStrategy:1756",

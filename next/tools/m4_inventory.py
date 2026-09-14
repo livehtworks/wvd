@@ -634,6 +634,12 @@ def update_cold_start(evidence):
     document = read(path)
     for row in document["entries"]:
         if row["legacy_symbol"] in ("Factory.ResetDevice", "Factory.WaitGameBootReady", "Factory.restartGame", "Factory.RestartableSequenceExecution"):
+            row.update(implementation="native/games/wvd/recovery/boot.cpp",
+                entry="recovery::with_boot_recovery / RunCoordinator::drive",
+                implementation_status="PARTIAL", implementation_extent="TYPED_LIFECYCLE_AND_BOOT_SUBFLOW",
+                offline_status="PASS", verification_scope="应用/连接/实例及启动后续接原任务的受控离线子链",
+                evidence_report="../m4-cold-start-validation.md",
+                remaining="全任务恢复位置、专项移交、其余冻结/未知页与真实端口未齐；不计完整任务通过。")
             row["cold_start_validation"] = {
                 "status": "PASS", "implementation": "native/runtime/run_coordinator.cpp",
                 "entry": "RunCoordinator::drive / recovery::decide", "evidence_report": "../m4-cold-start-validation.md",
