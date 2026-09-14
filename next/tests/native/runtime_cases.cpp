@@ -81,7 +81,7 @@ J runtime_case(const std::string &name, Setup &s) {
         d.initial.entry = "HeldTouch";
         s.device->reject_release = true;
     }
-    if (name == "native-swipe")
+    if (name == "native-swipe" || name == "native-timing-swipe")
         d.initial.entry = "NativeSwipe";
     if (name == "session-time-limit") {
         d.initial.entry = "Cooperate";
@@ -301,7 +301,7 @@ J runtime_case(const std::string &name, Setup &s) {
         auto again = coordinator.start(d, s.device);
         require(again.run_id == started.run_id, "completed duplicate restarted");
     }
-    if (name == "normal" || name == "large-frame") {
+    if (name == "normal" || name == "large-frame" || name.starts_with("native-timing-")) {
         require(result.inputs.backend_called == 1, "guarded action count mismatch");
         auto sent = s.device->sent.front();
         require(std::abs(sent.x - (s.device->size.width == 900 ? 374 : 449)) <= 1 &&

@@ -2,6 +2,7 @@
 #include "preflight.hpp"
 #include "storage/runtime_bundle.hpp"
 #include "platform/windows/bundle_lease.hpp"
+#include "platform/windows/runtime_files.hpp"
 #include <algorithm>
 #include <thread>
 
@@ -405,8 +406,15 @@ ChildResult Context::run_child(const std::string &entry, const nlohmann::json &o
 }
 bool Context::native_action(const std::string &type, const nlohmann::json &parameters) {
     MaaRect box{};
-    auto id =
-        MaaContextRunActionDirect(context_, type.c_str(), parameters.dump().c_str(), &box, "{}");
+    // Direct 只封装 action.param，仍继承 SDK 默认 200ms 前/后延迟；
+    // 此处许可已经签发，不能再附加隐式等待。只在此次原生子动作的克隆上下文
+    // 指定时序，保留原命令和 Controller 门禁，不改全局默认或外层业务延迟。
+    const auto entry = "wvd/guarded/" + platform::unique_id();
+    const nlohmann::json node{{"action", {{"type", type}, {"param", parameters}}},
+                               {"pre_delay", 0}, {"post_delay", 0},
+                               {"pre_wait_freezes", 0}, {"post_wait_freezes", 0}};
+    const nlohmann::json overrides{{entry, node}};
+    auto id = MaaContextRunAction(context_, entry.c_str(), overrides.dump().c_str(), &box, "{}");
     auto name = string_buffer(), action = string_buffer(), detail = string_buffer();
     MaaBool success{};
     return id != MaaInvalidId &&

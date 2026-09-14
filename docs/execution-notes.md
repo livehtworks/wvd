@@ -80,6 +80,7 @@
 
 ## Next M4 状态与任务数据
 
+- Maa 5.13.0 RunActionDirect 的参数只进入 action.param，不能用它设置节点 pre_delay；会继承默认约 200ms 输入前延迟。受控 Click/Swipe 通过 RunAction 的本次克隆节点显式设零前后延迟及冻结等待，外层业务等待保持原定义；不要放宽 2 秒 TTL 掩盖重复等待。详见 `../next/docs/m4-native-action-timing-validation.md`。
 - `CompiledWorkflow.time_limit` 必须发布到 Session 并参与定义身份；长组合段不能继承短子流程默认预算。内联/原生子调用不重启父总计时，帧 TTL 和停止预算独立保持；测试等待依据实际有限 Run 定义，不用外层 watchdog 代替正式停止。
 - 新业务摘要字段必须同步核对 `business_condition` 的显式白名单。业务条件是只读选路信息，`action_eligible=false`；WvdConfirm 不能把业务条件和视觉条件混为许可，应先 observe 选路，再用新帧视觉确认，并在状态所有者中再次验证业务前置。角色恢复首轮曾分别因遗漏白名单和混合确认被安全拒绝，详见 m4-healing-validation.md。
 - M2/M3/M4 离线夹具可能使用相同设备身份，Windows 设备租约仍是跨进程互斥。不同临时数据目录不代表可以同时运行这些组；必须等上一组进程完成再启动下一组。曾重叠运行 M3 与 M4 状态组导致 DEVICE_BUSY，保留该轮证据，串行补验；不能关闭租约或把这个拒绝当产品崩溃。

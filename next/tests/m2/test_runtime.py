@@ -172,6 +172,11 @@ class RuntimeTests(unittest.TestCase):
         (bundle / "pipeline/cases.json").write_text(
             json.dumps(pipeline()), encoding="utf-8"
         )
+        if name.startswith("native-timing-"):
+            # 原生动作不得继承外部 Bundle 默认等待；这里只写独立测试资源。
+            (bundle / "default_pipeline.json").write_text(json.dumps({
+                "Default": {"pre_delay": 3000, "post_delay": 3000},
+            }), encoding="utf-8")
         rng = np.random.default_rng(17409)
         frame = rng.integers(20, 80, (1600, 900, 3), dtype=np.uint8)
         patterns = {}
@@ -354,6 +359,8 @@ CASES = [
     "clone-isolation",
     "interrupt",
     "native-swipe",
+    "native-timing-click",
+    "native-timing-swipe",
     "real-device-rejected",
     "result-save-failure",
     "gate-normal",
