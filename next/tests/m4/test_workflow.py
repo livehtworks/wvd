@@ -145,7 +145,7 @@ class WorkflowTests(unittest.TestCase):
         before_hash = digest(exe)
         with (folder / "native.log").open("wb") as log:
             result = subprocess.run([str(exe), str(source)], cwd=folder, env=self.env,
-                                    stdout=log, stderr=log, timeout={"dungeon-route": 420, "recover": 750, "departure": 200, "heal": 260,
+                                    stdout=log, stderr=log, timeout={"dungeon-route": 420, "recover": 750, "departure": 200, "heal": 260, "chest": 260,
                                         "common": 140, "iteration": 780 * options.get("normal_units", 1)}.get(options.get("workflow"), 90))
         self.assertEqual(digest(exe), before_hash)
         (folder / "execution.json").write_text(json.dumps({"exe_sha256": before_hash, "exit": result.returncode}), encoding="utf-8")
@@ -700,6 +700,41 @@ class WorkflowTests(unittest.TestCase):
             self.assertEqual(result["snapshot"]["business"]["confirmed_operations"], 2)
             self.assertEqual(result["backend_calls"], 3)
             self.assertFalse(result["mismatch"])
+
+    def test_chest_quick_full_attempts_and_three_fallbacks(self):
+        opening = {"chestOpening": (300, 500)}
+        screens = [{"chestFlag": (300, 400)}] + [{"whowillopenit": (200, 500)}] * 3 + [opening] * 36 + [{"dungFlag": (50, 150)}]
+        commands = [dict(kind=0, x=320, y=412)] + [dict(kind=0, x=774, y=1345)] * 3
+        commands += [dict(kind=0, x=515, y=934)] * 30
+        commands += [command for _ in range(3) for command in (dict(kind=0, x=1, y=1), dict(kind=0, x=515, y=934))]
+        result = self.execute("chest-quick-full", screens, commands, workflow="chest", quick=True, preferred=0)
+        self.assertEqual(result["snapshot"]["state"], "Completed", result)
+        self.assertEqual(result["backend_calls"], 40)
+        self.assertFalse(result["mismatch"])
+        self.assertEqual(result["snapshot"]["business"]["chests"], 1)
+
+    def test_chest_quick_stops_selecting_as_soon_as_opening_appears(self):
+        result = self.execute("chest-quick-fast", [{"chestFlag": (300, 400)}, {"whowillopenit": (200, 500)},
+            {"chestOpening": (300, 500)}, {"dungFlag": (50, 150)}],
+            [dict(kind=0, x=320, y=412), dict(kind=0, x=258, y=1161), dict(kind=0, x=515, y=934)],
+            workflow="chest", quick=True)
+        self.assertEqual(result["snapshot"]["state"], "Completed", result)
+        self.assertEqual(result["backend_calls"], 3)
+        self.assertFalse(result["mismatch"])
+
+    def test_chest_quick_stops_on_combat_and_blocking_after_input(self):
+        for blocked in (False, True):
+            screens = [{"chestFlag": (300, 400)}, {"whowillopenit": (200, 500)},
+                       {"chestOpening": (300, 500)}, {"retry": (400, 800)} if blocked else {"combatActive": (20, 20)}]
+            result = self.execute(f"chest-quick-interrupt-{blocked}", screens,
+                [dict(kind=0, x=320, y=412), dict(kind=0, x=258, y=1161), dict(kind=0, x=515, y=934)],
+                workflow="chest", quick=True)
+            self.assertEqual(result["snapshot"]["state"], "Interrupted", result)
+            self.assertEqual(result["backend_calls"], 3)
+            self.assertFalse(result["mismatch"])
+            self.assertEqual(result["snapshot"]["business"]["chests"], 0)
+            if blocked:
+                self.assertEqual(result["snapshot"]["sessions"][-1]["reason"], "chest.disarm_outcome_unconfirmed")
 
     def test_chest_transition_cancels_disarm_without_false_count(self):
         for name, screen in [("combat", {"combatActive": (20, 20)}),
