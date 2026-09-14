@@ -1653,12 +1653,15 @@ class WorkflowTests(unittest.TestCase):
         for name, after in [("unchanged", {"ambush": (300, 700)}), ("unknown", {})]:
             r = self.execute("karma-" + name, [{"ambush": (300, 700)}, after],
                 [dict(kind=0, x=320, y=712)], workflow="common", karma_profile=True, attach_recovery=True)
-            self.assertEqual(r["snapshot"]["state"], "Interrupted", r)
-            self.assertEqual(r["snapshot"]["reason"], "RECOVERY_REQUIRED")
-            self.assertEqual(r["snapshot"]["sessions"][-1]["reason"], "karma.choice_outcome_unconfirmed")
+            self.assertEqual(r["snapshot"]["state"], "Failed" if name == "unknown" else "Interrupted", r)
+            self.assertEqual(r["snapshot"]["reason"], "POSTCONDITION_TIMEOUT" if name == "unknown" else "RECOVERY_REQUIRED")
+            self.assertEqual(r["snapshot"]["sessions"][-1]["reason"],
+                "POSTCONDITION_TIMEOUT" if name == "unknown" else "karma.choice_outcome_unconfirmed")
             self.assertEqual(r["backend_calls"], 1)
             self.assertEqual(r["lifecycle_calls"], [])
             self.assertEqual(r["profile_before"], r["profile_after"])
+            self.assertIsNone(r["snapshot"]["business"]["karma_effect"])
+            self.assertTrue(r["snapshot"]["business"]["karma_pending"])
 
     def test_karma_retry_overlay_is_not_evidence_of_success(self):
         r = self.execute("karma-retry", [{"ambush": (300, 700)}, {"retry": (300, 700), "dungFlag": (50, 150)}],

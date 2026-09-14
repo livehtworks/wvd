@@ -11,7 +11,7 @@
 
 ## 当前阶段
 
-- 善恶选择与新版 profile 写回已接线，状态 18 方法通过，流程验证中；见 `../next/docs/m4-karma-validation.md`。纯规则、状态确认和存储 CAS 分层；保存失败不重发动作，尚不计完整能力通过。
+- 善恶选择与新版 profile 写回已接通，状态 18、流程 6 方法/13 场景、配置数据 11 方法通过；见 `../next/docs/m4-karma-validation.md`，实现检查点 `d5404bd`。纯规则、状态确认和存储 CAS 分层；保存失败不重发动作，未知后置保留门禁 Failed；不是完整任务/跨进程恢复通过。
 
 - 沙人/祝福提示已接通：计划 6、流程 7 方法/11 场景、同产物通用/Pause/死亡回归 22 方法通过，见 `../next/docs/m4-global-prompt-validation.md`，实现检查点 `f009420`。重启后空气墙动作阶段状态 17、流程 5 方法/8 场景通过，见 `../next/docs/m4-wall-bypass-validation.md`；不将动作确认当作物理引擎恢复证明。
 - 普通/快速开箱完整有限链已通过：状态 14、流程 9 方法/18 场景、计划 6 方法；原 240 秒预算失败同例修后完成 40 次输入，见 `../next/docs/m4-chest-selection-validation.md`。实现检查点 `2912988`，不将此子流程记为完整 TaskID 通过。

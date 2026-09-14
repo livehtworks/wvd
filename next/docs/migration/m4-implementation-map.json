@@ -1956,6 +1956,13 @@
         "entry": "recovery::dismiss_global_prompt",
         "evidence_report": "../m4-global-prompt-validation.md",
         "scope": "沙人恢复与祝福提示的有限子图，含原任务续接；不是全部全局事件"
+      },
+      "karma_validation": {
+        "status": "PASS",
+        "implementation": "native/games/wvd/recovery/karma_prompt.cpp",
+        "entry": "recovery::choose_karma_prompt",
+        "evidence_report": "../m4-karma-validation.md",
+        "scope": "有限离线选择、新帧确认及新版 CAS 写回；未知/失败不重放；非完整任务或跨进程恢复"
       }
     },
     {
@@ -5249,7 +5256,14 @@
       "remaining": "状态工厂参数可随 Run 冻结；完整业务消费与写回未实现。",
       "implementation_extent": "DATA_BOUND",
       "verification_scope": "33 字段数据，不代表所有字段已有业务消费者",
-      "data_evidence": "../m4-business-validation.md#配置与目录"
+      "data_evidence": "../m4-business-validation.md#配置与目录",
+      "karma_validation": {
+        "status": "PASS",
+        "implementation": "native/games/wvd/recovery/karma_prompt.cpp",
+        "entry": "recovery::choose_karma_prompt",
+        "evidence_report": "../m4-karma-validation.md",
+        "scope": "有限离线选择、新帧确认及新版 CAS 写回；未知/失败不重放；非完整任务或跨进程恢复"
+      }
     },
     {
       "inventory_id": "config:TASK_SPECIFIC_CONFIG",

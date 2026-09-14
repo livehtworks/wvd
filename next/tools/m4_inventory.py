@@ -672,6 +672,32 @@ def update_global_prompts(evidence):
     print("Global prompt evidence recorded; complete task counts unchanged.")
 
 
+def update_karma(evidence):
+    verify_workflows(evidence, {
+        **{"karma-" + value: ("Completed", 1) for value in ("+0", "-1", "+1")},
+        **{"karma-save-" + value: ("Failed", 1) for value in ("conflict", "lock", "replace")},
+        "karma-invalid": ("Failed", 0), "karma-unbound": ("Failed", 0),
+        "karma-stop-False": ("Failed", 1), "karma-stop-True": ("UserStopped", 1),
+        "karma-unchanged": ("Interrupted", 1), "karma-unknown": ("Failed", 1), "karma-retry": ("Interrupted", 1),
+    })
+    for name in ("conflict", "lock", "replace"):
+        result = read(evidence / ("karma-save-" + name) / "output.json")
+        effect = result["snapshot"]["business"]["karma_effect"]
+        if (result["snapshot"]["reason"] != "PROFILE_SAVE_FAILED" or effect["save_status"] != "Failed"
+                or effect["before"] != "+0" or effect["after"] != "+2" or result["lifecycle_calls"]):
+            raise ValueError("M4_KARMA_SAVE_FAILURE_EVIDENCE_INVALID")
+    path = ROOT / "docs/migration/m4-implementation-map.json"
+    document = read(path)
+    for row in document["entries"]:
+        if row["legacy_symbol"] in ("Factory.IdentifyState", "config:KARMA_ADJUST"):
+            row["karma_validation"] = {
+                "status": "PASS", "implementation": "native/games/wvd/recovery/karma_prompt.cpp",
+                "entry": "recovery::choose_karma_prompt", "evidence_report": "../m4-karma-validation.md",
+                "scope": "有限离线选择、新帧确认及新版 CAS 写回；未知/失败不重放；非完整任务或跨进程恢复"}
+    write(path, document)
+    print("Karma evidence recorded; complete task counts unchanged.")
+
+
 def update_wall_bypass(evidence):
     verify_workflows(evidence, {
         "wall-after-restart": ("Completed", 4), "wall-combat": ("Completed", 5),
@@ -738,8 +764,9 @@ if __name__ == "__main__":
     parser.add_argument("--cold-start-evidence", type=Path)
     parser.add_argument("--global-prompt-evidence", type=Path)
     parser.add_argument("--wall-bypass-evidence", type=Path)
+    parser.add_argument("--karma-evidence", type=Path)
     args = parser.parse_args()
-    if not any((args.data_evidence, args.combat_evidence, args.navigation_evidence, args.encounter_evidence, args.healing_evidence, args.dungeon_route_evidence, args.departure_evidence, args.iteration_evidence, args.common_evidence, args.interruption_evidence, args.boundaries_evidence, args.revival_evidence, args.chest_evidence, args.party_death_evidence, args.party_defeat_evidence, args.cold_start_evidence, args.global_prompt_evidence, args.wall_bypass_evidence)):
+    if not any((args.data_evidence, args.combat_evidence, args.navigation_evidence, args.encounter_evidence, args.healing_evidence, args.dungeon_route_evidence, args.departure_evidence, args.iteration_evidence, args.common_evidence, args.interruption_evidence, args.boundaries_evidence, args.revival_evidence, args.chest_evidence, args.party_death_evidence, args.party_defeat_evidence, args.cold_start_evidence, args.global_prompt_evidence, args.wall_bypass_evidence, args.karma_evidence)):
         parser.error("an evidence group is required")
     if args.data_evidence:
         generate(args.data_evidence, args.state_evidence, args.plan_evidence, args.workflow_evidence)
@@ -777,6 +804,8 @@ if __name__ == "__main__":
         update_global_prompts(args.global_prompt_evidence)
     if args.wall_bypass_evidence:
         update_wall_bypass(args.wall_bypass_evidence)
+    if args.karma_evidence:
+        update_karma(args.karma_evidence)
     if args.revival_evidence:
         if not args.pause_evidence or not args.pause_retry_evidence:
             parser.error("--revival-evidence requires both Pause evidence directories")

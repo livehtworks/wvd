@@ -181,6 +181,12 @@ class DataTests(unittest.TestCase):
         result = self.run_data("save-failed", profile_path=str(destination))
         self.assertEqual(result["outcome"], "Error", result)
         self.assertEqual(destination.read_bytes(), b"existing private fixture")
+        for index, filename in enumerate(("config.json", "CONFIG.JSON", "Config.Json")):
+            protected = self.root / filename
+            result = self.run_data("protected-name-" + str(index), profile_path=str(protected))
+            self.assertEqual(result["outcome"], "Error", result)
+            self.assertIn("PROFILE_PATH_INVALID", result["error"])
+            self.assertFalse(protected.exists())
 
     def test_all_fields_reject_wrong_types(self):
         for field in self.fields:
