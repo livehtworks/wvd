@@ -79,7 +79,7 @@ CompiledWorkflow traverse_dungeon(const WvdTaskPlan &plan, const J &profile,
     graph.hit_limit("Combat", 128);
     graph.hit_limit("Fight", 128);
     const auto box = graph.define_child("Box", wvd::games::chest::open_chest(profile.at("WHO_WILL_OPEN_IT").get<int>(),
-        profile.at("QUICK_DISARM_CHEST").get<bool>(), 0), {"CombatExit", "ReviveExit", "AmbushExit", "BlockedExit"});
+        profile.at("QUICK_DISARM_CHEST").get<bool>(), 0), {"CombatExit", "ReviveExit", "AmbushExit", "BlockedExit", "RetryExit"});
     graph.observe("Chest", chest, {"OpenChest"});
     graph.call_child("OpenChest", box, {"Dispatch"});
     graph.hit_limit("Chest", 128);

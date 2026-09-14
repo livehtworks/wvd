@@ -26,6 +26,7 @@ void WvdRunState::on_segment(contracts::SegmentBoundary boundary, std::uint64_t 
     unit_index_ = unit;
     prepared_.reset();
     prepared_portrait_.clear();
+    chest_selection_.clear_intent();
     healing_active_ = false;
     // 普通恢复不等于重启游戏。系统生命周期恢复按旧 restartGame 在首次请求时
     // 重置一次；同一请求的应用/重连/实例升级不重复增加崩溃计数或重装策略。
@@ -64,6 +65,7 @@ void WvdRunState::observe_combat() {
 }
 void WvdRunState::observe_chest() {
     if (!pending_chest_) {
+        chest_selection_.reset();
         ++chest_sequence_;
         last_encounter_ = Encounter::Chest;
         healing_active_ = false;
@@ -71,6 +73,11 @@ void WvdRunState::observe_chest() {
     if (!chest_started_)
         chest_started_ = clock_->now();
     pending_chest_ = true;
+}
+void WvdRunState::prepare_chest_character(const std::array<bool, 6> &fear, int preferred, std::uint32_t seed) {
+    if (!pending_chest_)
+        throw std::runtime_error("CHEST_NOT_OBSERVED");
+    chest_selection_.prepare(fear, preferred, seed);
 }
 void WvdRunState::resume_dungeon() {
     prepared_.reset();
@@ -212,6 +219,9 @@ std::string WvdRunState::confirmation_id(const std::string &operation, const std
         id += ":revival:" + std::to_string(revival_sequence_ + (revival_pending_ ? 0 : 1));
     else if (event == "resurrected")
         id += ":revival:" + std::to_string(revival_sequence_);
+    else if (event == "chest_character_attempted")
+        id += ":chest:" + std::to_string(chest_sequence_) + ":selection:" +
+              std::to_string(chest_selection_.attempts() + (chest_selection_.selected() ? 1 : 0));
     else if (event == "game_restarted")
         id += ":restart:" + std::to_string(lifecycle_recovery_sequence_);
     else if (event == "healing_requested")
@@ -249,6 +259,11 @@ bool WvdRunState::confirm_event(const std::string &operation, const std::string 
         observe_combat();
     else if (event == "chest_observed")
         observe_chest();
+    else if (event == "chest_character_attempted") {
+        if (!pending_chest_)
+            throw std::runtime_error("CHEST_NOT_OBSERVED");
+        chest_selection_.attempted();
+    }
     else if (event == "dungeon_resumed")
         resume_dungeon();
     else if (event == "dungeon_completed")
@@ -336,6 +351,10 @@ J WvdRunState::summarize() const {
             {"chest_timer_active", chest_started_.has_value()},
             {"pending_combat", pending_combat_},
             {"pending_chest", pending_chest_},
+            {"chest_has_character", chest_selection_.selected().has_value()},
+            {"chest_character", chest_selection_.selected() ? J(*chest_selection_.selected()) : J(nullptr)},
+            {"chest_available_mask", chest_selection_.available_mask()},
+            {"chest_character_attempts", chest_selection_.attempts()},
             {"combat_sequence", combat_sequence_},
             {"chest_sequence", chest_sequence_},
             {"revival_sequence", revival_sequence_},

@@ -3,6 +3,7 @@
 #include "games/wvd/vision/asset_resolver.hpp"
 #include "games/wvd/diagnostics.hpp"
 #include "games/wvd/combat/turn.hpp"
+#include "games/wvd/chest/chest.hpp"
 #include "platform/windows/bundle_lease.hpp"
 #include "platform/windows/file_digest.hpp"
 #include "maafw/preflight.hpp"
@@ -35,6 +36,8 @@ runtime::SessionDefinition publish_workflow(const CompiledWorkflow &workflow,
         }
         if (node.value("custom_action", "") == "WvdCombat" && bound_actions.insert("WvdCombat").second)
             session.actions.push_back(combat::combat_binding());
+        if (node.value("custom_action", "") == "WvdChest" && bound_actions.insert("WvdChest").second)
+            session.actions.push_back(chest::chest_binding());
     }
     // 缺失或不同修订的 binding 在连接前拒绝，不等候 SDK 首次执行才暴露。
     registry.bind_recognitions(session.recognitions);

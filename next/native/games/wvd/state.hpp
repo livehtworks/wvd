@@ -1,5 +1,6 @@
 #pragma once
 #include "combat/strategy.hpp"
+#include "chest/selection.hpp"
 #include "contracts/business_state.hpp"
 #include "runtime/behavior_registry.hpp"
 #include "supply/policy.hpp"
@@ -14,6 +15,7 @@ class WvdRunState final : public contracts::BusinessRunState {
     void target_point_completed();
     void observe_combat();
     void observe_chest();
+    void prepare_chest_character(const std::array<bool, 6> &fear, int preferred, std::uint32_t seed);
     void resume_dungeon();
     bool healing_required() const;
     void resurrected();
@@ -65,6 +67,7 @@ class WvdRunState final : public contracts::BusinessRunState {
     // 遭遇编号不等于成功次数：复活取消一次待计数事件后仍不能重用其幂等 ID。
     std::size_t combat_sequence_{}, chest_sequence_{}, revival_sequence_{}, revivals_{};
     bool revival_pending_{};
+    chest::Selection chest_selection_;
 };
 void register_wvd_state(runtime::BehaviorRegistry &registry);
 contracts::BehaviorBinding wvd_state_binding(const nlohmann::json &profile);

@@ -278,6 +278,41 @@ J direct_contract(const J &profile) {
         require(unobserved_rejected, "UNOBSERVED_REVIVAL_ACCEPTED");
     }
     result["revival_contract"] = revival_results;
+    {
+    games::chest::Selection selection;
+    selection.prepare({true, false, true, true, true, true}, 1, 42);
+    require(selection.selected() == 1, "FEAR_SELECTED");
+    selection.attempted();
+    selection.prepare({}, 1, 42);
+    require(selection.selected() == 1 && selection.available_mask() == 2, "FEAR_POOL_RESET_IN_SAME_CHEST");
+    selection.reset();
+    selection.prepare({}, 6, 42);
+    require(selection.selected() == 5 && selection.available_mask() == 63, "PREFERRED_FIRST_MISSING");
+    bool other_role = false;
+    for (unsigned i = 0; i < 16; ++i) {
+        selection.attempted();
+        selection.prepare({}, 6, 42);
+        require(selection.selected().has_value(), "AVAILABLE_ROLE_MISSING");
+        other_role = other_role || selection.selected() != 5;
+    }
+    require(other_role, "PREFERRED_FORCED_AFTER_FIRST_TRY");
+    selection.prepare({true, true, true, true, true, true}, 6, 42);
+    require(!selection.selected() && !selection.available_mask(), "EMPTY_POOL_SELECTED");
+    }
+    games::WvdRunState chest_state(profile, {"chest-selection", 10, clock});
+    chest_state.enter_segment(contracts::SegmentBoundary::Initial, 1, 0);
+    chest_state.observe_chest();
+    chest_state.prepare_chest_character({true, false, true, true, true, true}, 1, 42);
+    const auto attempt_id = chest_state.confirmation_id("role", "chest_character_attempted");
+    chest_state.confirm_event(attempt_id, "chest_character_attempted", 1, 1);
+    require(chest_state.confirmation_id("role", "chest_character_attempted") == attempt_id, "CHEST_ATTEMPT_ID_UNSTABLE");
+    require(!chest_state.confirm_event(attempt_id, "chest_character_attempted", 1, 2), "CHEST_ATTEMPT_REPLAYED");
+    chest_state.enter_segment(contracts::SegmentBoundary::Recovery, 2, 0);
+    chest_state.prepare_chest_character({}, 1, 42);
+    result["chest_selection_contract"] = chest_state.summary();
+    chest_state.resume_dungeon();
+    chest_state.observe_chest();
+    result["new_chest_selection"] = chest_state.summary();
     games::CombatStrategy missing(points);
     missing.reload(0);
     auto old = missing.select({{"A", .9}});

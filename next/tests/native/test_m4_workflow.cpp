@@ -412,6 +412,7 @@ int main(int argc, char **argv) {
         games::register_wvd_state(*registry);
         games::register_wvd_confirmations(*registry);
         games::combat::register_combat(*registry);
+        games::chest::register_chest(*registry);
         games::recovery::register_recovery(*registry);
         registry->seal();
         runtime::SessionDefinition session;

@@ -134,6 +134,17 @@ class StateTests(unittest.TestCase):
         self.assertFalse(result["pending_combat"])
         self.assertFalse(result["pending_chest"])
 
+    def test_chest_selection_pool_survives_segments_but_not_next_chest(self):
+        direct = self.run_case("chest-selection")["direct"]
+        state = direct["chest_selection_contract"]
+        self.assertEqual(state["chest_available_mask"], 2)
+        self.assertEqual(state["chest_character"], 1)
+        self.assertEqual(state["chest_character_attempts"], 1)
+        next_chest = direct["new_chest_selection"]
+        self.assertEqual(next_chest["chest_available_mask"], 63)
+        self.assertEqual(next_chest["chest_character_attempts"], 0)
+        self.assertFalse(next_chest["chest_has_character"])
+
     def test_revival_does_not_reuse_encounter_ids_or_count_defeat(self):
         result = self.run_case("revival-contract")["direct"]["revival_contract"]
         for key, expected in (("combat_defeats", (0, 2)), ("chest_defeats", (2, 0))):

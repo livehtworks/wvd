@@ -9,7 +9,7 @@ inline bool business_condition(const nlohmann::json &summary, const nlohmann::js
     static const std::set<std::string> fields{
         "/task_step", "/pending_combat", "/pending_chest", "/need_initial_recover",
         "/recover_after_rez", "/met_encounter", "/dungeons", "/combats", "/chests", "/strategy/automatic",
-        "/has_prepared_skill", "/prepared_skill_index", "/healing_required",
+        "/has_prepared_skill", "/prepared_skill_index", "/healing_required", "/chest_has_character", "/chest_character",
         "/ordinary_rest_due", "/party_refresh_due", "/city_supply_due", "/inn_rest_completed"};
     const auto path = parameters.at("field").get<std::string>();
     if (!fields.contains(path))
@@ -17,7 +17,7 @@ inline bool business_condition(const nlohmann::json &summary, const nlohmann::js
     const auto &actual = summary.at(nlohmann::json::json_pointer(path));
     const auto &expected = parameters.at("value");
     const auto comparison = parameters.value("comparison", "eq");
-    if (path == "/prepared_skill_index" && actual.is_null())
+    if ((path == "/prepared_skill_index" || path == "/chest_character") && actual.is_null())
         return false;
     if (actual.is_boolean()) {
         if (!expected.is_boolean() || comparison != "eq")

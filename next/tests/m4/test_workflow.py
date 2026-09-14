@@ -145,7 +145,8 @@ class WorkflowTests(unittest.TestCase):
         before_hash = digest(exe)
         with (folder / "native.log").open("wb") as log:
             result = subprocess.run([str(exe), str(source)], cwd=folder, env=self.env,
-                                    stdout=log, stderr=log, timeout={"dungeon-route": 420, "recover": 750, "departure": 200, "heal": 260, "chest": 260,
+                                    stdout=log, stderr=log, timeout={"dungeon-route": 420, "recover": 750, "departure": 200, "heal": 260,
+                                        "chest": 920 if options.get("quick") else 620,
                                         "common": 140, "iteration": 780 * options.get("normal_units", 1)}.get(options.get("workflow"), 90))
         self.assertEqual(digest(exe), before_hash)
         (folder / "execution.json").write_text(json.dumps({"exe_sha256": before_hash, "exit": result.returncode}), encoding="utf-8")
@@ -697,9 +698,35 @@ class WorkflowTests(unittest.TestCase):
                                    dict(kind=0, x=515, y=934)], workflow="chest", preferred=preferred)
             self.assertEqual(result["snapshot"]["state"], "Completed", result)
             self.assertEqual(result["snapshot"]["business"]["chests"], 1)
-            self.assertEqual(result["snapshot"]["business"]["confirmed_operations"], 2)
+            self.assertEqual(result["snapshot"]["business"]["confirmed_operations"], 3)
+            self.assertEqual(result["snapshot"]["business"]["chest_character_attempts"], 1)
             self.assertEqual(result["backend_calls"], 3)
             self.assertFalse(result["mismatch"])
+
+    def test_chest_normal_retries_opening_after_eight_inputs(self):
+        result = self.execute("chest-opening-retry", [{"chestOpening": (300, 500)}] * 9 + [{"dungFlag": (50, 150)}],
+            [dict(kind=0, x=515, y=934)] * 9, workflow="chest")
+        self.assertEqual(result["snapshot"]["state"], "Completed", result)
+        self.assertEqual(result["backend_calls"], 9)
+        self.assertFalse(result["mismatch"])
+        self.assertEqual(result["snapshot"]["business"]["chests"], 1)
+        self.assertEqual(result["snapshot"]["business"]["chest_character_attempts"], 0)
+
+    def test_chest_normal_keeps_fear_pool_between_rounds(self):
+        choosing = {"whowillopenit": (200, 500)}
+        restricted = dict(choosing)
+        for i in (0, 2, 3, 4, 5):
+            restricted[f"chestfear@{i}"] = (258 + (i % 3) * 258 - 20, 1161 + (i // 3) * 184 - 12)
+        opening = {"chestOpening": (300, 500)}
+        screens = [restricted] + [opening] * 8 + [choosing, opening, {"dungFlag": (50, 150)}]
+        commands = [dict(kind=0, x=516, y=1161)] + [dict(kind=0, x=515, y=934)] * 8
+        commands += [dict(kind=0, x=516, y=1161), dict(kind=0, x=515, y=934)]
+        result = self.execute("chest-persistent-fear", screens, commands, workflow="chest", preferred=1)
+        self.assertEqual(result["snapshot"]["state"], "Completed", result)
+        self.assertEqual(result["backend_calls"], 11)
+        self.assertFalse(result["mismatch"])
+        self.assertEqual(result["snapshot"]["business"]["chest_available_mask"], 2)
+        self.assertEqual(result["snapshot"]["business"]["chest_character_attempts"], 2)
 
     def test_chest_quick_full_attempts_and_three_fallbacks(self):
         opening = {"chestOpening": (300, 500)}

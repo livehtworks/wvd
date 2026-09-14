@@ -62,6 +62,8 @@ class PipelineCompiler {
     // 固定游戏行为 binding；不开放任意动作/任意实现名称。
     void combat_step(const std::string &name, const nlohmann::json &condition,
                      nlohmann::json parameters, nlohmann::json next);
+    void chest_selection(const std::string &name, const nlohmann::json &condition,
+                         int preferred, unsigned seed, nlohmann::json next);
     CompiledWorkflow finish();
 
   private:

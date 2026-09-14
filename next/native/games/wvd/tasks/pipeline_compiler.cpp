@@ -97,6 +97,7 @@ void CompiledWorkflow::validate() const {
                                             node.value("custom_action", "") == "RunChild" ||
                                             node.value("custom_action", "") == "WvdConfirm" ||
                                             node.value("custom_action", "") == "WvdCombat" ||
+                                            node.value("custom_action", "") == "WvdChest" ||
                                             node.value("custom_action", "") == "BusinessCheckpoint" ||
                                             node.value("custom_action", "") == "RequireRecovery")),
                 "COMPILE_UNGUARDED_ACTION");
@@ -339,7 +340,7 @@ void PipelineCompiler::compile_interruption() {
             // 弹窗只是动作后的普通插入，不是业务成功。后继先返回外层；下面所有
             // WvdConfirm/WvdCombat 的新帧确认也排除弹窗，不能因此消费技能或任务点。
             p["postcondition"]["parameters"] = any({interruption_, p.at("postcondition").at("parameters")});
-        } else if (action == "WvdConfirm" || action == "WvdCombat") {
+        } else if (action == "WvdConfirm" || action == "WvdCombat" || action == "WvdChest") {
             auto &confirmation = node["custom_action_param"]["confirmation"]["parameters"];
             confirmation = all({clear, confirmation});
         }
@@ -367,6 +368,15 @@ void PipelineCompiler::combat_step(const std::string &name, const J &condition, 
                {"custom_recognition_param", condition}, {"roi", {0, 0, 900, 1600}},
                {"action", "Custom"}, {"custom_action", "WvdCombat"},
                {"custom_action_param", std::move(parameters)}, {"next", std::move(next)}});
+}
+void PipelineCompiler::chest_selection(const std::string &name, const J &condition,
+                                      int preferred, unsigned seed, J next) {
+    require(preferred >= 0 && preferred <= 6, "CHEST_CHARACTER_INVALID");
+    add(name, {{"recognition", "Custom"}, {"custom_recognition", "WvdVision"},
+        {"custom_recognition_param", condition}, {"roi", {0, 0, 900, 1600}},
+        {"action", "Custom"}, {"custom_action", "WvdChest"},
+        {"custom_action_param", {{"confirmation", request(condition)}, {"preferred", preferred},
+                                 {"seed", seed}, {"image", "chestfear"}}}, {"next", std::move(next)}});
 }
 void PipelineCompiler::swipe(const std::string &name, const J &scene, const J &post,
                              J coordinates, J next) {
@@ -471,7 +481,7 @@ void PipelineCompiler::confirm(const std::string &name, const std::string &opera
                                const std::string &event, const J &condition, J next, J step) {
     const std::set<std::string> events{"target_completed", "dungeon_entered", "combat_observed",
                                       "chest_observed", "dungeon_resumed", "dungeon_completed", "revival_observed", "resurrected", "game_restarted",
-                                      "healing_requested", "healing_completed", "inn_rest_completed", "party_reassembled"};
+                                      "healing_requested", "healing_completed", "inn_rest_completed", "party_reassembled", "chest_character_attempted"};
     require(events.contains(event) && !operation.empty() && operation.size() <= 128,
             "COMPILE_BUSINESS_EVENT_INVALID");
     require(step.is_null() || (step.is_number_integer() && step >= 0 && step <= 4096),
@@ -489,7 +499,8 @@ CompiledWorkflow PipelineCompiler::finish() {
     compile_interruption();
     bool business = false;
     for (const auto &node : workflow_.nodes)
-        business = business || node.value("custom_action", "") == "WvdConfirm" || node.value("custom_action", "") == "WvdCombat";
+        business = business || node.value("custom_action", "") == "WvdConfirm" || node.value("custom_action", "") == "WvdCombat" ||
+                   node.value("custom_action", "") == "WvdChest";
     if (business) {
         workflow_.checkpoint = "Checkpoint";
         for (auto &node : workflow_.nodes)

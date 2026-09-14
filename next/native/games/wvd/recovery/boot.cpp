@@ -20,6 +20,7 @@ std::optional<runtime::SessionDefinition> decide(const contracts::SessionResult 
         result.reason == "combat.skill_outcome_unconfirmed" ||
         result.reason == "supply.healing_outcome_unconfirmed" ||
         result.reason == "chest.disarm_outcome_unconfirmed" ||
+        result.reason == "chest.retry_pending" ||
         result.reason == "revival.outcome_unconfirmed" ||
         result.reason == "departure.inn_payment_unconfirmed")
         return std::nullopt;

@@ -66,6 +66,7 @@ if(WVD_BUILD_M4)
     ../games/wvd/navigation/world_travel.cpp ../games/wvd/supply/party.cpp
     ../games/wvd/diagnostics.cpp
     ../games/wvd/chest/chest.cpp
+    ../games/wvd/chest/selection.cpp ../games/wvd/chest/character.cpp
     ../games/wvd/supply/policy.cpp
     ../games/wvd/supply/dungeon_recover.cpp
     ../games/wvd/combat/auto_combat.cpp
