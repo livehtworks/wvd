@@ -133,7 +133,8 @@ void WvdRunState::restart_game() {
     healing_active_ = false;
     combat_speed_ = false;
     zoom_world_map_ = false;
-    bypass_after_restart_ = false;
+    wall_bypass_step_ = 0;
+    ++wall_bypass_sequence_;
     combat_started_.reset();
     chest_started_.reset();
     ++crashes_;
@@ -226,6 +227,8 @@ std::string WvdRunState::confirmation_id(const std::string &operation, const std
         id += ":death_prompt:" + std::to_string(death_prompt_sequence_);
     else if (event == "party_defeat_observed")
         id += ":party_defeat:" + std::to_string(party_defeat_sequence_ + (suicide_requested_ ? 0 : 1));
+    else if (event == "wall_turn_completed" || event == "wall_left_completed" || event == "wall_right_completed")
+        id += ":wall:" + std::to_string(wall_bypass_sequence_);
     else if (event == "chest_character_attempted")
         id += ":chest:" + std::to_string(chest_sequence_) + ":selection:" +
               std::to_string(chest_selection_.attempts() + (chest_selection_.selected() ? 1 : 0));
@@ -304,6 +307,12 @@ bool WvdRunState::confirm_event(const std::string &operation, const std::string 
         if (!suicide_requested_)
             ++party_defeat_sequence_;
         suicide_requested_ = true;
+    }
+    else if (event == "wall_turn_completed" || event == "wall_left_completed" || event == "wall_right_completed") {
+        const std::size_t expected = event == "wall_turn_completed" ? 0 : event == "wall_left_completed" ? 1 : 2;
+        if (wall_bypass_step_ != expected)
+            throw std::runtime_error("WALL_BYPASS_STEP_MISMATCH");
+        ++wall_bypass_step_;
     }
     else if (event == "inn_rest_completed") {
         // 换 generation 或换普通段均保留已住宿事实；真正再次入本才开始新补给周期。
@@ -397,7 +406,8 @@ J WvdRunState::summarize() const {
             {"healing_sequence", healing_sequence_},
             {"combat_speed", combat_speed_},
             {"zoom_world_map", zoom_world_map_},
-            {"bypass_after_restart", bypass_after_restart_}};
+            {"bypass_after_restart", wall_bypass_step_ == 3},
+            {"wall_bypass_step", wall_bypass_step_}, {"wall_bypass_sequence", wall_bypass_sequence_}};
 }
 namespace {
 std::unique_ptr<contracts::BusinessRunState>

@@ -11,7 +11,7 @@
 
 ## 当前阶段
 
-- 沙人/祝福提示已接通：计划 6、流程 7 方法/11 场景、同产物通用/Pause/死亡回归 22 方法通过，见 `../next/docs/m4-global-prompt-validation.md`，实现检查点 `f009420`。后续空气墙动作阶段已接线，尚未构建验证。
+- 沙人/祝福提示已接通：计划 6、流程 7 方法/11 场景、同产物通用/Pause/死亡回归 22 方法通过，见 `../next/docs/m4-global-prompt-validation.md`，实现检查点 `f009420`。重启后空气墙动作阶段状态 17、流程 5 方法/8 场景通过，见 `../next/docs/m4-wall-bypass-validation.md`；不将动作确认当作物理引擎恢复证明。
 - 普通/快速开箱完整有限链已通过：状态 14、流程 9 方法/18 场景、计划 6 方法；原 240 秒预算失败同例修后完成 40 次输入，见 `../next/docs/m4-chest-selection-validation.md`。实现检查点 `2912988`，不将此子流程记为完整 TaskID 通过。
 - 队友死亡提示：状态 15 方法通过；首次后置识别超 2 秒 TTL 失败，收敛专用候选后，死亡提示与父流程预算 6 方法/16 场景通过。同产物通用阻塞/Pause 回归 12 方法通过；实现提交 `2754096`。见 `../next/docs/m4-party-death-validation.md`、`../next/docs/m4-parent-budget-validation.md`。多人死亡提示状态 16、流程 5 方法/6 场景通过，同产物单人提示回归 5 方法/12 场景通过，见 `../next/docs/m4-party-defeat-validation.md`，实现检查点 `c2c0386`。
 - 资源封存补验 2 方法/新增 9 负例全部通过，含写锁冲突、中途失败释放、目录改名/新增和 junction；提交 `1564f85`。见 `../next/docs/m3-integrity-negative-validation.md`，不改变 metadata、资源稳定性和完整矩阵剩余边界。

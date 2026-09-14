@@ -228,6 +228,14 @@ class StateTests(unittest.TestCase):
         self.assertEqual(r["snapshot"]["completed_business_units"], 0)
         self.assertEqual(r["snapshot"]["generation"], 1)
 
+    def test_wall_bypass_order_replay_and_restart_boundary(self):
+        r = self.run_case("wall-state")
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        state = r["direct"]["wall_bypass_contract"]
+        self.assertEqual(state["wall_bypass_step"], 0)
+        self.assertEqual(state["wall_bypass_sequence"], 2)
+        self.assertFalse(state["bypass_after_restart"])
+
     def test_recovery_is_not_normal_continuation(self):
         r = self.run_case("recover", recovery=True)
         self.assertEqual(r["snapshot"]["state"], "Completed", r)

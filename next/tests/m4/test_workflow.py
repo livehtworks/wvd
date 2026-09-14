@@ -1594,6 +1594,81 @@ class WorkflowTests(unittest.TestCase):
         self.assertFalse(r["snapshot"]["business"]["healing_required"])
         self.assertFalse(r["mismatch"])
 
+    @staticmethod
+    def wall_profile(enabled=True):
+        return {**WorkflowTests.turn_profile(defend=True), "BYPASS_THE_WALL": enabled,
+                "RECOVER_WHEN_BEGINNING": False, "SKIP_CHEST_RECOVER": True, "SKIP_COMBAT_RECOVER": True}
+
+    def test_wall_bypass_runs_three_actions_once_after_restart_then_reaches_target(self):
+        dungeon = {"dungFlag": (50, 150)}
+        target = {"mapFlag": (100, 100), "cursor_0": (480, 588)}
+        r = self.execute("wall-after-restart", [{}, dungeon, dungeon, dungeon, dungeon, target],
+            [dict(kind=1, x=300, y=950, x2=600, y2=950, duration=400),
+             dict(kind=0, x=27, y=950), dict(kind=0, x=853, y=950), dict(kind=0, x=777, y=150)],
+            workflow="dungeon-route", profile=self.wall_profile(), attach_recovery=True, initial_connection="closed",
+            route_targets=[["position", [None], [500, 600]]])
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 4)
+        self.assertFalse(r["mismatch"])
+        self.assertTrue(r["snapshot"]["business"]["bypass_after_restart"])
+        self.assertEqual(r["snapshot"]["business"]["wall_bypass_step"], 3)
+        self.assertEqual(r["snapshot"]["business"]["task_step"], 1)
+
+    def test_wall_bypass_never_runs_before_restart_or_when_disabled_or_in_quest(self):
+        dungeon = {"dungFlag": (50, 150)}
+        target = {"mapFlag": (100, 100), "cursor_0": (480, 588)}
+        for name, enabled, cold, kind in [("before", True, False, "dungeon"),
+                                          ("disabled", False, True, "dungeon"), ("quest", True, True, "quest")]:
+            frames = ([{}] if cold else []) + [dungeon, target]
+            r = self.execute("wall-skip-" + name, frames, [dict(kind=0, x=777, y=150)],
+                workflow="dungeon-route", profile=self.wall_profile(enabled), attach_recovery=cold,
+                initial_connection="closed" if cold else "ready", route_type=kind,
+                route_targets=[["position", [None], [500, 600]]])
+            self.assertEqual(r["snapshot"]["state"], "Completed", r)
+            self.assertEqual(r["backend_calls"], 1)
+            self.assertFalse(r["mismatch"])
+            self.assertEqual(r["snapshot"]["business"]["wall_bypass_step"], 0 if cold else 3)
+
+    def test_wall_bypass_retry_overlay_does_not_repeat_turn(self):
+        dungeon = {"dungFlag": (50, 150)}
+        target = {"mapFlag": (100, 100), "cursor_0": (480, 588)}
+        r = self.execute("wall-retry", [{}, dungeon, {**dungeon, "retry": (300, 700)},
+            dungeon, dungeon, dungeon, target],
+            [dict(kind=1, x=300, y=950, x2=600, y2=950, duration=400), dict(kind=0, x=320, y=712),
+             dict(kind=0, x=27, y=950), dict(kind=0, x=853, y=950), dict(kind=0, x=777, y=150)],
+            workflow="dungeon-route", profile=self.wall_profile(), attach_recovery=True, initial_connection="closed",
+            route_targets=[["position", [None], [500, 600]]])
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 5)
+        self.assertFalse(r["mismatch"])
+        self.assertEqual(r["snapshot"]["business"]["wall_bypass_sequence"], 1)
+
+    def test_wall_bypass_combat_interrupt_resumes_only_remaining_actions(self):
+        dungeon = {"dungFlag": (50, 150)}
+        target = {"mapFlag": (100, 100), "cursor_0": (480, 588)}
+        r = self.execute("wall-combat", [{}, dungeon, self.turn_screen(), dungeon, dungeon, dungeon, target],
+            [dict(kind=1, x=300, y=950, x2=600, y2=950, duration=400), dict(kind=0, x=513, y=1200),
+             dict(kind=0, x=27, y=950), dict(kind=0, x=853, y=950), dict(kind=0, x=777, y=150)],
+            workflow="dungeon-route", profile=self.wall_profile(), attach_recovery=True, initial_connection="closed",
+            route_targets=[["position", [None], [500, 600]]])
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 5)
+        self.assertFalse(r["mismatch"])
+        self.assertEqual(r["snapshot"]["business"]["combats"], 1)
+        self.assertEqual(r["snapshot"]["business"]["wall_bypass_step"], 3)
+
+    def test_wall_bypass_stop_or_reject_never_completes_pending_phase(self):
+        dungeon = {"dungFlag": (50, 150)}
+        for stop in (False, True):
+            r = self.execute("wall-stop-" + str(stop), [{}, dungeon, dungeon],
+                [dict(kind=1, x=300, y=950, x2=600, y2=950, duration=400, reject=not stop)],
+                workflow="dungeon-route", profile=self.wall_profile(), attach_recovery=True, initial_connection="closed",
+                stop_after_first=stop, route_targets=[["position", [None], [500, 600]]])
+            self.assertEqual(r["snapshot"]["state"], "UserStopped" if stop else "Failed", r)
+            self.assertEqual(r["backend_calls"], 1)
+            self.assertEqual(r["snapshot"]["business"]["wall_bypass_step"], 0)
+            self.assertFalse(r["snapshot"]["business"]["bypass_after_restart"])
+
     def test_global_prompt_sandman_then_retry_returns_without_extra_input(self):
         r = self.execute("global-sandman-retry", [{"sandman_recover": (350, 850)},
             {"retry": (300, 700)}, {"dungFlag": (50, 150)}],

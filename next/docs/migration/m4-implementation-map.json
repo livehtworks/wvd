@@ -2696,6 +2696,13 @@
         "status": "PASS",
         "evidence_report": "../m4-effect-interruption-validation.md",
         "scope": "明确副作用后覆盖层停止，不重放、不消费，不是全部恢复窗口已闭合"
+      },
+      "wall_bypass_validation": {
+        "status": "PASS",
+        "implementation": "native/games/wvd/navigation/wall_bypass.cpp",
+        "entry": "navigation::bypass_wall_after_restart",
+        "evidence_report": "../m4-wall-bypass-validation.md",
+        "scope": "重启后仅 dungeon 开启配置时执行，逐动作确认与中断续接；不证明物理冻结消失"
       }
     },
     {
@@ -5748,7 +5755,14 @@
       "remaining": "状态工厂参数可随 Run 冻结；完整业务消费与写回未实现。",
       "implementation_extent": "DATA_BOUND",
       "verification_scope": "33 字段数据，不代表所有字段已有业务消费者",
-      "data_evidence": "../m4-business-validation.md#配置与目录"
+      "data_evidence": "../m4-business-validation.md#配置与目录",
+      "wall_bypass_validation": {
+        "status": "PASS",
+        "implementation": "native/games/wvd/navigation/wall_bypass.cpp",
+        "entry": "navigation::bypass_wall_after_restart",
+        "evidence_report": "../m4-wall-bypass-validation.md",
+        "scope": "重启后仅 dungeon 开启配置时执行，逐动作确认与中断续接；不证明物理冻结消失"
+      }
     },
     {
       "inventory_id": "config:RE_ASSEMBLE_PARTY",

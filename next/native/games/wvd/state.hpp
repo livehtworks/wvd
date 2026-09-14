@@ -50,7 +50,8 @@ class WvdRunState final : public contracts::BusinessRunState {
     std::optional<TimePoint> combat_started_, chest_started_, lap_started_;
     double combat_seconds_{}, chest_seconds_{}, total_seconds_{};
     bool pending_combat_{}, pending_chest_{}, need_initial_recover_{true}, recover_after_rez_{},
-        met_encounter_{}, combat_speed_{}, zoom_world_map_{}, bypass_after_restart_{true};
+        met_encounter_{}, combat_speed_{}, zoom_world_map_{};
+    std::size_t wall_bypass_step_{3}, wall_bypass_sequence_{};
     bool setting_is(const char *name, const char *zh, const char *en) const;
     std::map<std::string, nlohmann::json> confirmations_;
     nlohmann::json last_confirmation_;

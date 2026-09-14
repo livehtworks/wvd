@@ -70,6 +70,29 @@ J direct_contract(const J &profile) {
     state.dungeon_completed();
     J result;
     result["initial"] = state.summary();
+    {
+        games::WvdRunState wall(profile, {"wall", 1, clock});
+        wall.enter_segment(contracts::SegmentBoundary::Initial, 1, 0);
+        require(wall.summary().at("bypass_after_restart").get<bool>(), "WALL_ENABLED_BEFORE_RESTART");
+        wall.restart_game();
+        bool wrong_order = false;
+        try { wall.confirm_event("wall-wrong", "wall_right_completed", 1, 1); }
+        catch (const std::runtime_error &e) { wrong_order = std::string(e.what()) == "WALL_BYPASS_STEP_MISMATCH"; }
+        require(wrong_order, "WALL_ACCEPTED_WRONG_ORDER");
+        const auto turn = wall.confirmation_id("wall.Turn", "wall_turn_completed");
+        wall.confirm_event(turn, "wall_turn_completed", 1, 2);
+        wall.enter_segment(contracts::SegmentBoundary::Continuation, 2, 1);
+        require(!wall.confirm_event(turn, "wall_turn_completed", 2, 3), "WALL_REPLAYED_TURN");
+        require(wall.summary().at("wall_bypass_step") == 1, "WALL_LOST_CONFIRMED_PHASE");
+        wall.confirm_event(wall.confirmation_id("wall.Left", "wall_left_completed"), "wall_left_completed", 2, 4);
+        const auto right = wall.confirmation_id("wall.Right", "wall_right_completed");
+        wall.confirm_event(right, "wall_right_completed", 2, 5);
+        require(wall.summary().at("bypass_after_restart").get<bool>(), "WALL_NOT_COMPLETED");
+        wall.restart_game();
+        require(!wall.confirm_event(right, "wall_right_completed", 2, 6), "OLD_WALL_COMPLETED_NEW_RESTART");
+        require(wall.confirmation_id("wall.Turn", "wall_turn_completed") != turn, "WALL_REUSED_RESTART_ID");
+        result["wall_bypass_contract"] = wall.summary();
+    }
     auto supply_profile = profile;
     supply_profile.update({{"ACTIVE_REST", true}, {"REST_INTERVEL", 1}, {"RE_ASSEMBLE_PARTY", true}});
     games::WvdRunState supply_state(supply_profile, {"supply", 1, clock});

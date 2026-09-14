@@ -195,7 +195,7 @@ int main(int argc, char **argv) {
             if (kind == "common")
                 return games::recovery::clear_common_screens(config.value("allow_download", true));
             if (kind == "dungeon-route" || kind == "iteration") {
-                games::WvdQuestDefinition definition{"route-fixture", "dungeon",
+                games::WvdQuestDefinition definition{"route-fixture", config.value("route_type", std::string("dungeon")),
                     {{"_EOT", {{"press", "Dist", {1, 1}, 1}}}, {"_TARGETINFOLIST", config.at("route_targets")}}};
                 if (config.contains("floor"))
                     definition.source["_FloorCheck"] = config.at("floor");

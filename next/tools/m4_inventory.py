@@ -672,6 +672,25 @@ def update_global_prompts(evidence):
     print("Global prompt evidence recorded; complete task counts unchanged.")
 
 
+def update_wall_bypass(evidence):
+    verify_workflows(evidence, {
+        "wall-after-restart": ("Completed", 4), "wall-combat": ("Completed", 5),
+        "wall-retry": ("Completed", 5),
+        **{"wall-skip-" + name: ("Completed", 1) for name in ("before", "disabled", "quest")},
+        "wall-stop-False": ("Failed", 1), "wall-stop-True": ("UserStopped", 1),
+    })
+    path = ROOT / "docs/migration/m4-implementation-map.json"
+    document = read(path)
+    for row in document["entries"]:
+        if row["legacy_symbol"] in ("Factory.StateDungeon", "config:BYPASS_THE_WALL"):
+            row["wall_bypass_validation"] = {
+                "status": "PASS", "implementation": "native/games/wvd/navigation/wall_bypass.cpp",
+                "entry": "navigation::bypass_wall_after_restart", "evidence_report": "../m4-wall-bypass-validation.md",
+                "scope": "重启后仅 dungeon 开启配置时执行，逐动作确认与中断续接；不证明物理冻结消失"}
+    write(path, document)
+    print("Wall bypass evidence recorded; complete task counts unchanged.")
+
+
 def update_chest(evidence):
     verify_workflows(evidence, {
         **{f"chest-character-{i}": ("Completed", 3) for i in range(1, 7)},
@@ -718,8 +737,9 @@ if __name__ == "__main__":
     parser.add_argument("--party-defeat-evidence", type=Path)
     parser.add_argument("--cold-start-evidence", type=Path)
     parser.add_argument("--global-prompt-evidence", type=Path)
+    parser.add_argument("--wall-bypass-evidence", type=Path)
     args = parser.parse_args()
-    if not any((args.data_evidence, args.combat_evidence, args.navigation_evidence, args.encounter_evidence, args.healing_evidence, args.dungeon_route_evidence, args.departure_evidence, args.iteration_evidence, args.common_evidence, args.interruption_evidence, args.boundaries_evidence, args.revival_evidence, args.chest_evidence, args.party_death_evidence, args.party_defeat_evidence, args.cold_start_evidence, args.global_prompt_evidence)):
+    if not any((args.data_evidence, args.combat_evidence, args.navigation_evidence, args.encounter_evidence, args.healing_evidence, args.dungeon_route_evidence, args.departure_evidence, args.iteration_evidence, args.common_evidence, args.interruption_evidence, args.boundaries_evidence, args.revival_evidence, args.chest_evidence, args.party_death_evidence, args.party_defeat_evidence, args.cold_start_evidence, args.global_prompt_evidence, args.wall_bypass_evidence)):
         parser.error("an evidence group is required")
     if args.data_evidence:
         generate(args.data_evidence, args.state_evidence, args.plan_evidence, args.workflow_evidence)
@@ -755,6 +775,8 @@ if __name__ == "__main__":
         update_cold_start(args.cold_start_evidence)
     if args.global_prompt_evidence:
         update_global_prompts(args.global_prompt_evidence)
+    if args.wall_bypass_evidence:
+        update_wall_bypass(args.wall_bypass_evidence)
     if args.revival_evidence:
         if not args.pause_evidence or not args.pause_retry_evidence:
             parser.error("--revival-evidence requires both Pause evidence directories")

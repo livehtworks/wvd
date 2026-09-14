@@ -3,6 +3,7 @@
 #include "games/wvd/chest/chest.hpp"
 #include "games/wvd/navigation/auto_route.hpp"
 #include "games/wvd/navigation/map_route.hpp"
+#include "games/wvd/navigation/wall_bypass.hpp"
 #include "games/wvd/supply/dungeon_recover.hpp"
 #include "games/wvd/recovery/boot.hpp"
 #include "games/wvd/recovery/revival.hpp"
@@ -92,8 +93,14 @@ CompiledWorkflow traverse_dungeon(const WvdTaskPlan &plan, const J &profile,
     graph.hit_limit("HealingPanel", 128);
     graph.confirm("Resume", "dungeon.resume", "dungeon_resumed", dungeon, {"Heal"});
     graph.hit_limit("Resume", 128);
-    graph.call_child("Heal", heal, {"SelectPoint"});
+    const bool bypass = profile.at("BYPASS_THE_WALL").get<bool>() && plan.definition().type == "dungeon";
+    graph.call_child("Heal", heal, {bypass ? "BypassWall" : "SelectPoint"});
     graph.hit_limit("Heal", 128);
+    if (bypass) {
+        const auto wall = graph.define_child("Wall", navigation::bypass_wall_after_restart(), {"InterruptedExit"});
+        graph.call_child("BypassWall", wall, {"Blocked", "Combat", "Chest", "Revive", "Outside", "HealingPanel", "SelectPoint"});
+        graph.hit_limit("BypassWall", 128);
+    }
     // 与旧 StateDungeon 一致，仅 Dungeon 分支调度角色恢复；已打开地图时不新增关闭地图动作。
     graph.observe("Map", map, {"SelectPoint"});
     graph.hit_limit("Map", 128);

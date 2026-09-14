@@ -10,7 +10,7 @@ inline bool business_condition(const nlohmann::json &summary, const nlohmann::js
         "/task_step", "/pending_combat", "/pending_chest", "/need_initial_recover",
         "/recover_after_rez", "/met_encounter", "/dungeons", "/combats", "/chests", "/strategy/automatic",
         "/has_prepared_skill", "/prepared_skill_index", "/healing_required", "/chest_has_character", "/chest_character",
-        "/ordinary_rest_due", "/party_refresh_due", "/city_supply_due", "/inn_rest_completed", "/death_prompt_pending"};
+        "/ordinary_rest_due", "/party_refresh_due", "/city_supply_due", "/inn_rest_completed", "/death_prompt_pending", "/wall_bypass_step"};
     const auto path = parameters.at("field").get<std::string>();
     if (!fields.contains(path))
         throw std::runtime_error("BUSINESS_CONDITION_FIELD_INVALID");
