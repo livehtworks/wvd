@@ -53,6 +53,7 @@ struct SessionResult {
     RootEvidence terminal;
     InputCounts inputs;
     bool quiescent{};
+    RootEvidence checkpoint;
 };
 struct RunSnapshot {
     std::uint64_t run_id{}, generation{};
@@ -64,5 +65,7 @@ struct RunSnapshot {
     std::string storage_error;
     std::vector<std::string> secondary_errors;
     nlohmann::json sessions = nlohmann::json::array();
+    nlohmann::json business = nullptr;
+    std::size_t completed_business_units{};
 };
 } // namespace wvd::contracts

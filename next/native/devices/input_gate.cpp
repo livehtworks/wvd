@@ -24,9 +24,7 @@ InputGate::InputGate(DeviceBackend &backend, InputPolicy policy, std::uint64_t r
          !policy_.allowed_scenes.empty()))
         throw std::runtime_error("READ_ONLY_VIEWPORT_WITH_INPUT_POLICY");
 }
-InputGate::~InputGate() {
-    backend_.disconnect();
-}
+InputGate::~InputGate() { backend_.disconnect(); }
 bool InputGate::connect() {
     if (!backend_.offline() && !backend_.verified_access())
         throw std::runtime_error("REAL_DEVICE_NOT_ENABLED");
@@ -131,6 +129,8 @@ std::string InputGate::reject_reason(const Command &c) const {
         return "STALE_ACTION_INTENT";
     if (p.observation.outcome != RecognitionOutcome::Hit)
         return "OBSERVATION_NOT_HIT";
+    if (!p.observation.action_eligible)
+        return "OBSERVATION_REQUIRES_CONFIRMATION";
     if (!(p.command == c))
         return "COMMAND_INTENT_MISMATCH";
     if (scene_ != p.required_scene || !policy_.allowed_scenes.contains(scene_))

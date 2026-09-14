@@ -45,6 +45,7 @@ struct Observation {
     RecognitionOutcome outcome{RecognitionOutcome::Error};
     std::optional<Box> box;
     std::optional<Point> center;
+    bool action_eligible{true};
     std::vector<RecognitionMatch> matches;
     std::int64_t engine_task_id{}, engine_reco_id{};
     int engine_status{};

@@ -2,6 +2,7 @@
 #include "games/wvd/vision/image_ops.hpp"
 #include "games/wvd/vision/recognizers.hpp"
 #include "runtime_fixture.hpp"
+#include "storage/runtime_bundle.hpp"
 #include <iostream>
 #include <opencv2/imgcodecs.hpp>
 
@@ -49,13 +50,15 @@ int main(int argc, char **argv) {
                 mod.files.push_back({file.at("path"), file.at("sha256")});
             maafw::RecognitionCache cache;
             J aliases{{"Alias.png", "fixture.png"}};
-            games::vision::AssetResolver resolver(bundle, aliases, cache, &mod);
+            auto active_base = storage::materialize_bundle(bundle);
+            auto active_mod = storage::materialize_bundle(mod);
+            games::vision::AssetResolver resolver(active_base, aliases, cache, &active_mod);
             auto base = resolver.load("fixture"), alias = resolver.load("Alias"),
                  fallback = resolver.load("modOnly");
             require(cv::norm(base, alias, cv::NORM_INF) == 0, "explicit alias mismatch");
             require(base.at<cv::Vec3b>(0, 0) != cv::Vec3b(7, 7, 7), "mod overrode baseline");
             require(fallback.at<cv::Vec3b>(0, 0) == cv::Vec3b(7, 7, 7), "mod fallback missing");
-            games::vision::AssetResolver other(mod, J::object(), cache);
+            games::vision::AssetResolver other(active_mod, J::object(), cache);
             require(other.load("fixture").at<cv::Vec3b>(0, 0) == cv::Vec3b(7, 7, 7),
                     "same-name bundle cache collision");
         }
@@ -82,6 +85,7 @@ int main(int argc, char **argv) {
         auto init_begin = std::chrono::steady_clock::now();
         gateway.initialize();
         J output{{"sdk", MaaVersion()},
+                 {"bundle", gateway.bundle_status()},
                  {"registry", registry->manifest()},
                  {"initialization_ms", std::chrono::duration<double, std::milli>(
                                            std::chrono::steady_clock::now() - init_begin)
@@ -100,12 +104,16 @@ int main(int argc, char **argv) {
                 {0, 0, 900, 1600},
                 maafw::RecognitionRequest::CustomParameters{"WvdVision", item.at("parameters")}};
             auto begin = std::chrono::steady_clock::now();
+            auto integrity_before = gateway.bundle_status();
             auto result = gateway.recognize(frame, gate.frame_identity(), request);
+            auto integrity_after = gateway.bundle_status();
             auto outcome = result.outcome == contracts::RecognitionOutcome::Hit     ? "Hit"
                            : result.outcome == contracts::RecognitionOutcome::NoHit ? "NoHit"
                                                                                     : "Error";
             require(frame.encoded_image == original, "custom recognition modified source");
             output["cases"].push_back({{"id", item.at("id")},
+                                       {"integrity_before", integrity_before},
+                                       {"integrity_after", integrity_after},
                                        {"outcome", outcome},
                                        {"expected", item.at("expected")},
                                        {"pass", outcome == item.at("expected")},
@@ -131,6 +139,7 @@ int main(int argc, char **argv) {
         output["backend_inputs"] = device->calls.load();
         gate.close();
         gateway.close();
+        output["bundle_after_close"] = gateway.bundle_status();
         gate.disconnect_backend();
         output["quiescent"] = true;
         std::ofstream(maafw::path_from_utf8(config.at("output"))) << output.dump(2);

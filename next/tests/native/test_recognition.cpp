@@ -73,11 +73,12 @@ int main(int argc, char **argv) {
             request.parameters = maafw::TemplateParameters{cfg.value("template", "target.png"),
                                                            cfg.value("threshold", 0.8)};
         if (cfg.contains("mutate_after_load")) {
-            // 仅驱动的专属临时资源被写坏，验证运行缓存不能隐藏资源快照变化。
-            std::ofstream change(
-                maafw::path_from_utf8(cfg.at("mutate_after_load").get<std::string>()),
-                std::ios::binary);
+            // 新契约先阻止活动文件写入；作者目录可编辑，但不再是运行时加载源。
+            auto active = maafw::path_from_utf8(recognizer.bundle_status().at("root"));
+            std::ofstream change(active / "image/target.png", std::ios::binary);
             change << "mutated";
+            if (change)
+                throw std::runtime_error("ACTIVE_BUNDLE_WRITE_WAS_ALLOWED");
         }
         J results = J::array();
         for (int i = 0; i < cfg.value("repeat", 1); ++i) {

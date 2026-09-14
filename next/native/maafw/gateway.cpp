@@ -1,5 +1,7 @@
 #include "gateway.hpp"
 #include "preflight.hpp"
+#include "storage/runtime_bundle.hpp"
+#include "platform/windows/bundle_lease.hpp"
 #include <algorithm>
 #include <thread>
 
@@ -10,30 +12,23 @@ void require(bool value, const char *code) {
     if (!value)
         throw std::runtime_error(code);
 }
-bool pending(int status) {
-    return status == MaaStatus_Pending || status == MaaStatus_Running;
-}
+bool pending(int status) { return status == MaaStatus_Pending || status == MaaStatus_Running; }
 } // namespace
 MaaGateway::MaaGateway(Bundle bundle, devices::InputGate *gate, GatewayHooks hooks,
-                       ActionRegistry actions, RecognitionHandlers recognitions)
+                       ActionRegistry actions, RecognitionHandlers recognitions,
+                       contracts::BusinessRunState *business)
     : bundle_(std::move(bundle)), gate_(gate), hooks_(std::move(hooks)),
-      actions_(std::move(actions)), recognitions_(std::move(recognitions)) {
+      actions_(std::move(actions)), recognitions_(std::move(recognitions)), business_(business) {
     activity_.failure = hooks_.failure;
 }
-MaaGateway::~MaaGateway() {
-    close();
-}
+MaaGateway::~MaaGateway() { close(); }
 void MaaGateway::initialize() {
     require(!initialization_started_, "GATEWAY_ALREADY_INITIALIZED");
     initialization_started_ = true;
     require(std::string(MaaVersion()) == "v5.13.0", "SDK_VERSION_MISMATCH");
     require(!bundle_.revision.empty() && !bundle_.files.empty(), "BUNDLE_MANIFEST_INVALID");
-    std::set<std::string> names;
-    for (const auto &file : bundle_.files) {
-        require(names.insert(file.relative_path).second, "BUNDLE_DUPLICATE_FILE");
-        verify_file(bundle_, file.relative_path);
-    }
-    verify_bundle(bundle_);
+    bundle_ = storage::materialize_bundle(bundle_);
+    hooks_.event("bundle.sealed", bundle_status());
     require(!hooks_.cancelled(), "SESSION_CANCELLED");
     resource_.reset(MaaResourceCreate());
     require(bool(resource_), "RESOURCE_CREATE_FAILED");
@@ -97,13 +92,33 @@ MaaBool MaaGateway::recognition_callback(MaaContext *, MaaTaskId, const char *, 
     nlohmann::json result;
     try {
         require(!self.hooks_.cancelled(), "SESSION_CANCELLED");
-        verify_bundle(self.bundle_);
         require(image && MaaImageBufferGetRawData(image) && MaaImageBufferType(image) == 16,
                 "CUSTOM_IMAGE_INVALID");
         auto size = contracts::Size{MaaImageBufferWidth(image), MaaImageBufferHeight(image)};
         auto params = nlohmann::json::parse(parameters);
-        if (!params.contains("roi") && roi)
-            params["roi"] = {roi->x, roi->y, roi->width, roi->height};
+        require(roi && roi->x >= 0 && roi->y >= 0 && roi->width > 0 && roi->height > 0 &&
+                    roi->width <= size.width && roi->height <= size.height &&
+                    roi->x <= size.width - roi->width && roi->y <= size.height - roi->height,
+                "CUSTOM_SCOPE_INVALID");
+        std::uint64_t invocation{};
+        bool shared_boundary = false;
+        if (params.contains("_wvd_verified_invocation")) {
+            auto token = params.at("_wvd_verified_invocation").get<std::string>();
+            params.erase("_wvd_verified_invocation");
+            auto &verified = self.verified_invocation_;
+            require(verified && !verified->used && verified->token == token &&
+                        verified->binding == name && verified->parameters == params &&
+                        verified->roi.x == roi->x && verified->roi.y == roi->y &&
+                        verified->roi.width == roi->width && verified->roi.height == roi->height,
+                    "INTEGRITY_INVOCATION_INVALID");
+            verified->used = true;
+            invocation = verified->id;
+            shared_boundary = true;
+        } else {
+            verify_bundle(self.bundle_);
+            invocation = ++self.recognition_invocation_;
+        }
+        const CustomRecognitionScope scope({roi->x, roi->y, roi->width, roi->height}, invocation);
         auto impl = self.recognitions_.find(name);
         require(impl != self.recognitions_.end(), "CUSTOM_RECO_NOT_REGISTERED");
         if (self.gate_) {
@@ -117,7 +132,8 @@ MaaBool MaaGateway::recognition_callback(MaaContext *, MaaTaskId, const char *, 
                 self.recognition_cache_.results.clear();
             }
         }
-        auto key = std::string(name) + ":" + params.dump();
+        auto key = std::string(name) + ":" + params.dump() + ":" +
+                   nlohmann::json({roi->x, roi->y, roi->width, roi->height}).dump();
         auto cached = self.recognition_cache_.results.find(key);
         if (self.gate_ && cached != self.recognition_cache_.results.end())
             result = cached->second;
@@ -127,10 +143,13 @@ MaaBool MaaGateway::recognition_callback(MaaContext *, MaaTaskId, const char *, 
                              {{static_cast<const std::uint8_t *>(MaaImageBufferGetRawData(image)),
                                std::size_t(size.width) * size.height * 3},
                               size},
-                             params, self.recognition_cache_);
+                             params, scope, self.recognition_cache_);
             if (self.gate_ && self.recognition_cache_.results.size() < 512)
                 self.recognition_cache_.results.emplace(key, result);
         }
+        result["invocation_id"] = scope.invocation_id();
+        result["allowed_roi"] = {roi->x, roi->y, roi->width, roi->height};
+        result["integrity_boundary"] = shared_boundary ? "shared_direct" : "pipeline";
         require(result.value("schema", 0) == 1 && result.contains("outcome"),
                 "CUSTOM_DETAIL_INVALID");
         if (result["outcome"] == "Hit") {
@@ -138,6 +157,10 @@ MaaBool MaaGateway::recognition_callback(MaaContext *, MaaTaskId, const char *, 
             require(box.size() == 4 && box[0] >= 0 && box[1] >= 0 && box[2] > 0 && box[3] > 0 &&
                         box[0] <= size.width - box[2] && box[1] <= size.height - box[3],
                     "CUSTOM_BOX_INVALID");
+            require(box[0] >= roi->x && box[1] >= roi->y &&
+                        box[0] + box[2] <= roi->x + roi->width &&
+                        box[1] + box[3] <= roi->y + roi->height,
+                    "CUSTOM_BOX_OUTSIDE_SCOPE");
             *output = {box[0], box[1], box[2], box[3]};
         }
     } catch (const std::exception &error) {
@@ -161,12 +184,8 @@ std::int64_t MaaGateway::post(const std::string &entry) {
     require(id != MaaInvalidId, "TASK_POST_FAILED");
     return id;
 }
-int MaaGateway::status(std::int64_t id) const {
-    return MaaTaskerStatus(tasker_.get(), id);
-}
-bool MaaGateway::running() const {
-    return tasker_ && MaaTaskerRunning(tasker_.get());
-}
+int MaaGateway::status(std::int64_t id) const { return MaaTaskerStatus(tasker_.get(), id); }
+bool MaaGateway::running() const { return tasker_ && MaaTaskerRunning(tasker_.get()); }
 void MaaGateway::request_stop() {
     if (tasker_ && !stop_posted_) {
         stop_posted_ = true;
@@ -213,7 +232,22 @@ void MaaGateway::close() noexcept {
         event("objects.resource_destroyed");
     }
     controller_callbacks_.reset();
+    recognition_cache_ = {};
+    bundle_.lease.reset();
     initialized_ = false;
+}
+nlohmann::json MaaGateway::bundle_status() const {
+    if (!bundle_.lease)
+        return {{"active", false}};
+    return {{"active", true},
+            {"root", utf8(bundle_.root)},
+            {"lease", bundle_.lease->identity()},
+            {"revision", bundle_.revision},
+            {"file_handles", bundle_.lease->file_count()},
+            {"directory_handles", bundle_.lease->directory_count()},
+            {"directory_checks", bundle_.lease->directory_checks()},
+            {"sealing_hash_bytes", bundle_.lease->hash_bytes()},
+            {"sealing_hash_count", bundle_.lease->file_count()}};
 }
 MaaBool MaaGateway::action_callback(MaaContext *native, MaaTaskId task, const char *node,
                                     const char *custom, const char *parameters, MaaRecoId,
@@ -325,29 +359,20 @@ bool MaaGateway::controller_action(const contracts::Command &c) {
     }
     return id != MaaInvalidId && MaaControllerWait(controller_.get(), id) == MaaStatus_Succeeded;
 }
-int Context::depth() const {
-    return gateway_.depth_.load();
-}
-bool Context::cancelled() const {
-    return gateway_.hooks_.cancelled();
-}
-contracts::FrameEnvelope Context::capture() {
-    return gateway_.capture();
-}
+int Context::depth() const { return gateway_.depth_.load(); }
+bool Context::cancelled() const { return gateway_.hooks_.cancelled(); }
+contracts::FrameEnvelope Context::capture() { return gateway_.capture(); }
 contracts::Observation Context::recognize(const contracts::FrameEnvelope &frame,
                                           const RecognitionRequest &request) {
     return gateway_.recognize(frame, gateway_.gate_->frame_identity(), request, context_);
 }
 ChildResult Context::run_child(const std::string &entry, const nlohmann::json &overrides,
                                bool clone) {
+    storage::validate_bundle_references(gateway_.bundle_, overrides);
     struct Depth {
         std::atomic<int> &depth;
-        Depth(std::atomic<int> &value) : depth(value) {
-            ++depth;
-        }
-        ~Depth() {
-            --depth;
-        }
+        Depth(std::atomic<int> &value) : depth(value) { ++depth; }
+        ~Depth() { --depth; }
     } depth(gateway_.depth_);
     auto native = clone ? MaaContextClone(context_) : context_;
     require(native != nullptr, "CONTEXT_CLONE_FAILED");
@@ -379,5 +404,10 @@ nlohmann::json Context::node_data(const std::string &name) const {
     auto value = string_buffer();
     require(MaaContextGetNodeData(context_, name.c_str(), value.get()), "NODE_DATA_UNAVAILABLE");
     return nlohmann::json::parse(MaaStringBufferGet(value.get()));
+}
+bool Context::with_business_state(
+    const std::function<bool(contracts::BusinessRunState &)> &operation) {
+    require(gateway_.business_ != nullptr, "BUSINESS_STATE_REQUIRED");
+    return gateway_.business_->apply([&](auto &state) { return !cancelled() && operation(state); });
 }
 } // namespace wvd::maafw

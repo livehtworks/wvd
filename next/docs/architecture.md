@@ -69,12 +69,40 @@ Windows 绑定层交叉核对只读旧配置线索、管理器的实例创建标
 `games/wvd/vision` 不含 Maa C ABI、设备点击、策略消费、游戏恢复。版本化纯算法由同一
 Gateway 注册为 CustomRecognition，直接识别与 Pipeline 共享实现和三态转换。
 Custom 详情 schema=1 保存真实证据和候选分数；NoHit 无可执行中心，boolean-only 也不编造中心。
-Session 缓存由包 revision/规范路径/参数及帧身份定位；完整包校验仍在识别前执行。
+Session 缓存绑定包 revision、活动 lease、参数及帧身份。文件 hash 移至快照封存期，
+每次识别仍验证闭合成员与身份；direct/Custom 通过一次性内部凭证共享一次检查。
+SDK 提供的调用 ROI 由独立 CustomRecognitionScope 传入，不再覆盖业务 ROI。
 OpenCV 头文件/导入库来自固定 MaaDeps，运行时复用与 SDK 同 hash 的 DLL，不装第二套 ABI。
 
 基线图片由固定 Git 对象生成到 `packs/wvd/image`，作者 manifest 不加入运行 Bundle 内容树。
-完整业务迁移仍未开始；静态索引保持原状，实际纯视觉实现与缺口见
-`docs/migration/m3-implementation-map.json` 和 `docs/m3-device-vision-validation.md`。
+完整业务仍未实现，M4 已开始离线配置与任务目录数据迁移；静态索引保持原状。
+当前实现与缺口见 `docs/migration/m3-implementation-map.json`、`m4-implementation-map.json`，
+最新验收以 `m3-fix-validation.md` 和 `m4-business-validation.md` 为准。
+
+本轮 MetadataQuery 拥有查询子进程、Job、重叠管道与取消事件，只允许固定 info 参数。
+首次进程句柄增量仍未归因；绑定入口的局部 Query 遇到 CLEANUP_PENDING 时，析构等待可能继续阻塞。
+因此该发现链仍阻断，不能把 helper 的正常超时回收当成任意底层取消保证。
+
+### 离线 M4 数据与状态
+
+`wvd_m4_check` 只组装导入器、ProfileStore 和 WvdQuestCatalog，不注册业务动作，不创建 Run。
+`games/wvd/profile` 与 `tasks/quest_catalog` 保存游戏字段和目录；`storage` 负责严格解析、来源、
+复制导入、原子保存及 revision/CAS。仅显式 `--m4` 编译此数据模块，默认服务仍只读。
+`BusinessRunState` 是无游戏知识的运行契约。非捕获状态工厂注册在封存 BehaviorRegistry，
+工厂 revision 和参数随 RunDefinition 冻结；RunCoordinator 创建并独占状态，Session/Gateway
+仅借用，Context 在受锁保护的回调范围内访问。观察者取得段结束时的 JSON 值副本，不拿可变指针。
+`WvdRunState` 负责策略消费、任务步和旧统计口径，`CombatStrategy` 不直接截图或输入。
+正常续段必须同时满足 Completed、真正静止和本根任务检查点；新段更新 generation、保留业务事实，
+不复用帧、识别缓存或目标。正常续段不借用 RecoveryRequired；停止与创建工作线程有唯一先后顺序。
+M4 状态测试使用真实 Maa 离线 Controller。WvdTaskPlan 已解析旧任务的顺序动作、目标提示和地图参数，
+保留源树。已有独立有限子流程 PipelineCompiler 与 publish_workflow，但尚无完整任务动作图，
+不把状态/数据或单个子流程测试当任务通过。
+`navigation/world_map`、`supply/inn`、`combat/auto_combat` 输出静态 Maa 图；所有输入使用
+GuardedAction，目标偏移只能基于新识别且在合法区域裁剪。组合条件没有位置中心，
+不短路掩盖 Error，也不提升低置信子识别的授权级别。
+发布器仅向不存在的新目录复制封存资产；源、图、权限、别名和注册表参与 revision。
+节点重试预算耗尽通过 RequireRecovery 记录原因；只有 RunCoordinator 可以决定后续新代次。
+资源快照的完整所有权说明见 [快照契约](integrity-snapshot-contract.md)。
 
 ### 所有权与停止
 
@@ -111,7 +139,7 @@ RunCoordinator 的监督线程不调用 SDK 阻塞等待；会话工作线程持
 | native/maafw | 已实现统一 Gateway、三态识别、回调和停止映射 | M2 |
 | native/devices | 门禁、帧身份、单次原始坐标转换；真实 Controller 适配在 maafw | M2/M3 |
 | native/platform | Windows / Linux 平台机制 | 分平台验收 |
-| native/storage | 已实现运行快照、原子结果、有界事件；配置迁移另做 | M2/M4 |
+| native/storage | 已实现运行快照、原子结果、有界事件、资源快照和离线配置副本；业务写回未实现 | M2/M4 |
 | native/games/wvd | 视觉、战斗、路线、补给、恢复和任务业务 | M3/M4 |
 | packs/wvd | 可验证的游戏包内容 | M3/M4 |
 | web/src/features | 流程/视觉编辑草稿及调试呈现 | M5 |

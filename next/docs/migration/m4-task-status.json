@@ -1,0 +1,2475 @@
+{
+  "schema": 1,
+  "implementation_base": "4d7c4fabd29bfadf55963bfdaecf79e3b6582bdd",
+  "legacy_base": "6585f4075f5714ab522aa582993860c09af912c1",
+  "release_allowed": false,
+  "expected_counts": {
+    "total": 58,
+    "dungeon": 43,
+    "quest": 15
+  },
+  "execution_passed": 0,
+  "items": [
+    {
+      "task_id": "Dist",
+      "legacy_type": "dungeon",
+      "legacy_title": "[宝箱]水路一号街",
+      "source_ref": "resources/quest/quest.json#/Dist",
+      "source_data_sha256_canonical_json": "205c2cefbf1d6fa78378a161ee222b2a0849a104c011313e379ec9f1835bf9f7",
+      "original_acceptance_ids": [
+        "M4-TASK-Dist"
+      ],
+      "implementation_status": "PARTIAL",
+      "implementation_extent": "TYPED_PLAN_DATA",
+      "data_binding_status": "PASS",
+      "plan_status": "PARTIAL",
+      "offline_status": "NOT_RUN",
+      "real_status": "UNVERIFIED",
+      "release_allowed": false,
+      "new_entry": null,
+      "new_files": [
+        "native/games/wvd/tasks/quest_catalog.cpp",
+        "packs/wvd/parameters/legacy-quests.json",
+        "native/games/wvd/tasks/task_plan.cpp"
+      ],
+      "source_fields": [
+        "_TYPE",
+        "questName",
+        "questName_en_US",
+        "questCategory",
+        "questCategory_en_US",
+        "_TARGETINFOLIST",
+        "_EOT"
+      ],
+      "success_evidence": [],
+      "failure_stop_recovery_evidence": [],
+      "data_evidence": "../m4-business-validation.md#配置与目录",
+      "semantic_differences": [],
+      "blockers": [
+        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
+        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+      ],
+      "plan_data_status": "PASS",
+      "plan_evidence": "../m4-plan-validation.md"
+    },
+    {
+      "task_id": "lounge",
+      "legacy_type": "dungeon",
+      "legacy_title": "[宝箱]水路船二lounge",
+      "source_ref": "resources/quest/quest.json#/lounge",
+      "source_data_sha256_canonical_json": "c098292b1dba19d4af96d19eb89ec0c2fbca95462b206ab78b1a9eac4a55d933",
+      "original_acceptance_ids": [
+        "M4-TASK-lounge"
+      ],
+      "implementation_status": "PARTIAL",
+      "implementation_extent": "TYPED_PLAN_DATA",
+      "data_binding_status": "PASS",
+      "plan_status": "PARTIAL",
+      "offline_status": "NOT_RUN",
+      "real_status": "UNVERIFIED",
+      "release_allowed": false,
+      "new_entry": null,
+      "new_files": [
+        "native/games/wvd/tasks/quest_catalog.cpp",
+        "packs/wvd/parameters/legacy-quests.json",
+        "native/games/wvd/tasks/task_plan.cpp"
+      ],
+      "source_fields": [
+        "_TYPE",
+        "questName",
+        "questName_en_US",
+        "questCategory",
+        "questCategory_en_US",
+        "_TARGETINFOLIST",
+        "_EOT"
+      ],
+      "success_evidence": [],
+      "failure_stop_recovery_evidence": [],
+      "data_evidence": "../m4-business-validation.md#配置与目录",
+      "semantic_differences": [],
+      "blockers": [
+        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
+        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+      ],
+      "plan_data_status": "PASS",
+      "plan_evidence": "../m4-plan-validation.md"
+    },
+    {
+      "task_id": "fortress-B1F",
+      "legacy_type": "dungeon",
+      "legacy_title": "[宝箱]要塞一层",
+      "source_ref": "resources/quest/quest.json#/fortress-B1F",
+      "source_data_sha256_canonical_json": "cfc41683d97745091236bf7b7aa5575c86a0851717838288f3cee554b2f02618",
+      "original_acceptance_ids": [
+        "M4-TASK-fortress-B1F"
+      ],
+      "implementation_status": "PARTIAL",
+      "implementation_extent": "TYPED_PLAN_DATA",
+      "data_binding_status": "PASS",
+      "plan_status": "PARTIAL",
+      "offline_status": "NOT_RUN",
+      "real_status": "UNVERIFIED",
+      "release_allowed": false,
+      "new_entry": null,
+      "new_files": [
+        "native/games/wvd/tasks/quest_catalog.cpp",
+        "packs/wvd/parameters/legacy-quests.json",
+        "native/games/wvd/tasks/task_plan.cpp"
+      ],
+      "source_fields": [
+        "_TYPE",
+        "questName",
+        "questName_en_US",
+        "questCategory",
+        "questCategory_en_US",
+        "_TARGETINFOLIST",
+        "_EOT"
+      ],
+      "success_evidence": [],
+      "failure_stop_recovery_evidence": [],
+      "data_evidence": "../m4-business-validation.md#配置与目录",
+      "semantic_differences": [],
+      "blockers": [
+        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
+        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+      ],
+      "plan_data_status": "PASS",
+      "plan_evidence": "../m4-plan-validation.md"
+    },
+    {
+      "task_id": "fortress-B8F_entrance",
+      "legacy_type": "dungeon",
+      "legacy_title": "[妖精]要塞八层门口",
+      "source_ref": "resources/quest/quest.json#/fortress-B8F_entrance",
+      "source_data_sha256_canonical_json": "9e49832fdc3ac91f00234fb5db83a1631b1d8bf60a32343f56422f36a06b6f32",
+      "original_acceptance_ids": [
+        "M4-TASK-fortress-B8F_entrance"
+      ],
+      "implementation_status": "PARTIAL",
+      "implementation_extent": "TYPED_PLAN_DATA",
+      "data_binding_status": "PASS",
+      "plan_status": "PARTIAL",
+      "offline_status": "NOT_RUN",
+      "real_status": "UNVERIFIED",
+      "release_allowed": false,
+      "new_entry": null,
+      "new_files": [
+        "native/games/wvd/tasks/quest_catalog.cpp",
+        "packs/wvd/parameters/legacy-quests.json",
+        "native/games/wvd/tasks/task_plan.cpp"
+      ],
+      "source_fields": [
+        "_TYPE",
+        "questName",
+        "questName_en_US",
+        "questCategory",
+        "questCategory_en_US",
+        "_TARGETINFOLIST",
+        "_EOT"
+      ],
+      "success_evidence": [],
+      "failure_stop_recovery_evidence": [],
+      "data_evidence": "../m4-business-validation.md#配置与目录",
+      "semantic_differences": [],
+      "blockers": [
+        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
+        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+      ],
+      "plan_data_status": "PASS",
+      "plan_evidence": "../m4-plan-validation.md"
+    },
+    {
+      "task_id": "fortress-B8F_trap",
+      "legacy_type": "quest",
+      "legacy_title": "[妖精]要塞八层陷阱",
+      "source_ref": "resources/quest/quest.json#/fortress-B8F_trap",
+      "source_data_sha256_canonical_json": "62f3009acea51d6faf6d4402876f44d9a1678657baae2827e0c0b8bf61534745",
+      "original_acceptance_ids": [
+        "M4-TASK-fortress-B8F_trap"
+      ],
+      "implementation_status": "PARTIAL",
+      "implementation_extent": "TYPED_PLAN_DATA",
+      "data_binding_status": "PASS",
+      "plan_status": "PARTIAL",
+      "offline_status": "NOT_RUN",
+      "real_status": "UNVERIFIED",
+      "release_allowed": false,
+      "new_entry": null,
+      "new_files": [
+        "native/games/wvd/tasks/quest_catalog.cpp",
+        "packs/wvd/parameters/legacy-quests.json",
+        "native/games/wvd/tasks/task_plan.cpp"
+      ],
+      "source_fields": [
+        "_TYPE",
+        "questName",
+        "questName_en_US",
+        "questCategory",
+        "questCategory_en_US",
+        "_TIPS"
+      ],
+      "success_evidence": [],
+      "failure_stop_recovery_evidence": [],
+      "data_evidence": "../m4-business-validation.md#配置与目录",
+      "semantic_differences": [],
+      "blockers": [
+        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
+        "BUSINESS_ACTIONS_NOT_IMPLEMENTED",
+        "SPECIAL_CASE_NOT_IMPLEMENTED"
+      ],
+      "plan_data_status": "PASS",
+      "plan_evidence": "../m4-plan-validation.md"
+    },
+    {
+      "task_id": "fortress-10F",
+      "legacy_type": "dungeon",
+      "legacy_title": "[灯怪]要塞10层",
+      "source_ref": "resources/quest/quest.json#/fortress-10F",
+      "source_data_sha256_canonical_json": "3b211032b614a2cd44da7205520608bce1a5c0bf74dc63737299ee38390cdb90",
+      "original_acceptance_ids": [
+        "M4-TASK-fortress-10F"
+      ],
+      "implementation_status": "PARTIAL",
+      "implementation_extent": "TYPED_PLAN_DATA",
+      "data_binding_status": "PASS",
+      "plan_status": "PARTIAL",
+      "offline_status": "NOT_RUN",
+      "real_status": "UNVERIFIED",
+      "release_allowed": false,
+      "new_entry": null,
+      "new_files": [
+        "native/games/wvd/tasks/quest_catalog.cpp",
+        "packs/wvd/parameters/legacy-quests.json",
+        "native/games/wvd/tasks/task_plan.cpp"
+      ],
+      "source_fields": [
+        "_TYPE",
+        "questName",
+        "questName_en_US",
+        "questCategory",
+        "questCategory_en_US",
+        "_TARGETINFOLIST",
+        "_EOT"
+      ],
+      "success_evidence": [],
+      "failure_stop_recovery_evidence": [],
+      "data_evidence": "../m4-business-validation.md#配置与目录",
+      "semantic_differences": [],
+      "blockers": [
+        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
+        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+      ],
+      "plan_data_status": "PASS",
+      "plan_evidence": "../m4-plan-validation.md"
+    },
+    {
+      "task_id": "DH-4f",
+      "legacy_type": "dungeon",
+      "legacy_title": "[刷怪]深雪R4",
+      "source_ref": "resources/quest/quest.json#/DH-4f",
+      "source_data_sha256_canonical_json": "dcae32a8bfed898a549e8ac85578d9461d6ad22d87a6be1f8c5ca438fa77af79",
+      "original_acceptance_ids": [
+        "M4-TASK-DH-4f"
+      ],
+      "implementation_status": "PARTIAL",
+      "implementation_extent": "TYPED_PLAN_DATA",
+      "data_binding_status": "PASS",
+      "plan_status": "PARTIAL",
+      "offline_status": "NOT_RUN",
+      "real_status": "UNVERIFIED",
+      "release_allowed": false,
+      "new_entry": null,
+      "new_files": [
+        "native/games/wvd/tasks/quest_catalog.cpp",
+        "packs/wvd/parameters/legacy-quests.json",
+        "native/games/wvd/tasks/task_plan.cpp"
+      ],
+      "source_fields": [
+        "_TYPE",
+        "questName",
+        "questName_en_US",
+        "questCategory",
+        "questCategory_en_US",
+        "_TARGETINFOLIST",
+        "_EOT"
+      ],
+      "success_evidence": [],
+      "failure_stop_recovery_evidence": [],
+      "data_evidence": "../m4-business-validation.md#配置与目录",
+      "semantic_differences": [],
+      "blockers": [
+        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
+        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+      ],
+      "plan_data_status": "PASS",
+      "plan_evidence": "../m4-plan-validation.md"
+    },
+    {
+      "task_id": "DH-6f",
+      "legacy_type": "dungeon",
+      "legacy_title": "[宝箱+刷怪]深雪R6",
+      "source_ref": "resources/quest/quest.json#/DH-6f",
+      "source_data_sha256_canonical_json": "972a38f22365192621ac64a89244b7b5dcdfca04349ac6b2c82caea13e276e75",
+      "original_acceptance_ids": [
+        "M4-TASK-DH-6f"
+      ],
+      "implementation_status": "PARTIAL",
+      "implementation_extent": "TYPED_PLAN_DATA",
+      "data_binding_status": "PASS",
+      "plan_status": "PARTIAL",
+      "offline_status": "NOT_RUN",
+      "real_status": "UNVERIFIED",
+      "release_allowed": false,
+      "new_entry": null,
+      "new_files": [
+        "native/games/wvd/tasks/quest_catalog.cpp",
+        "packs/wvd/parameters/legacy-quests.json",
+        "native/games/wvd/tasks/task_plan.cpp"
+      ],
+      "source_fields": [
+        "_TYPE",
+        "questName",
+        "questName_en_US",
+        "questCategory",
+        "questCategory_en_US",
+        "_TARGETINFOLIST",
+        "_EOT"
+      ],
+      "success_evidence": [],
+      "failure_stop_recovery_evidence": [],
+      "data_evidence": "../m4-business-validation.md#配置与目录",
+      "semantic_differences": [],
+      "blockers": [
+        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
+        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+      ],
+      "plan_data_status": "PASS",
+      "plan_evidence": "../m4-plan-validation.md"
+    },
+    {
+      "task_id": "DH-7f-right",
+      "legacy_type": "dungeon",
+      "legacy_title": "[宝箱+刷怪]深雪R7矿洞右",
+      "source_ref": "resources/quest/quest.json#/DH-7f-right",
+      "source_data_sha256_canonical_json": "1ee7cdc87fcc936a3929293064506cf5f69c6008225add75b8f8c4d835455f06",
+      "original_acceptance_ids": [
+        "M4-TASK-DH-7f-right"
+      ],
+      "implementation_status": "PARTIAL",
+      "implementation_extent": "TYPED_PLAN_DATA",
+      "data_binding_status": "PASS",
+      "plan_status": "PARTIAL",
+      "offline_status": "NOT_RUN",
+      "real_status": "UNVERIFIED",
+      "release_allowed": false,
+      "new_entry": null,
+      "new_files": [
+        "native/games/wvd/tasks/quest_catalog.cpp",
+        "packs/wvd/parameters/legacy-quests.json",
+        "native/games/wvd/tasks/task_plan.cpp"
+      ],
+      "source_fields": [
+        "_TYPE",
+        "questName",
+        "questName_en_US",
+        "questCategory",
+        "questCategory_en_US",
+        "_TARGETINFOLIST",
+        "_EOT"
+      ],
+      "success_evidence": [],
+      "failure_stop_recovery_evidence": [],
+      "data_evidence": "../m4-business-validation.md#配置与目录",
+      "semantic_differences": [],
+      "blockers": [
+        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
+        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+      ],
+      "plan_data_status": "PASS",
+      "plan_evidence": "../m4-plan-validation.md"
+    },
+    {
+      "task_id": "DH-7f-auto",
+      "legacy_type": "dungeon",
+      "legacy_title": "[宝箱+刷怪]深雪R7自动箱",
+      "source_ref": "resources/quest/quest.json#/DH-7f-auto",
+      "source_data_sha256_canonical_json": "14ad09df11bf1ae921e6a2ed078baff70868008eb10231dfa0dab9089a6bc468",
+      "original_acceptance_ids": [
+        "M4-TASK-DH-7f-auto"
+      ],
+      "implementation_status": "PARTIAL",
+      "implementation_extent": "TYPED_PLAN_DATA",
+      "data_binding_status": "PASS",
+      "plan_status": "PARTIAL",
+      "offline_status": "NOT_RUN",
+      "real_status": "UNVERIFIED",
+      "release_allowed": false,
+      "new_entry": null,
+      "new_files": [
+        "native/games/wvd/tasks/quest_catalog.cpp",
+        "packs/wvd/parameters/legacy-quests.json",
+        "native/games/wvd/tasks/task_plan.cpp"
+      ],
+      "source_fields": [
+        "_TYPE",
+        "questName",
+        "questName_en_US",
+        "questCategory",
+        "questCategory_en_US",
+        "_TARGETINFOLIST",
+        "_EOT"
+      ],
+      "success_evidence": [],
+      "failure_stop_recovery_evidence": [],
+      "data_evidence": "../m4-business-validation.md#配置与目录",
+      "semantic_differences": [],
+      "blockers": [
+        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
+        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+      ],
+      "plan_data_status": "PASS",
+      "plan_evidence": "../m4-plan-validation.md"
+    },
+    {
+      "task_id": "DH-10f-test",
+      "legacy_type": "dungeon",
+      "legacy_title": "[宝箱+刷怪]深雪R10",
+      "source_ref": "resources/quest/quest.json#/DH-10f-test",
+      "source_data_sha256_canonical_json": "28dd5aba27420701cac65abf25ae186a448c11650595d318e168e6003cae75b8",
+      "original_acceptance_ids": [
+        "M4-TASK-DH-10f-test"
+      ],
+      "implementation_status": "PARTIAL",
+      "implementation_extent": "TYPED_PLAN_DATA",
+      "data_binding_status": "PASS",
+      "plan_status": "PARTIAL",
+      "offline_status": "NOT_RUN",
+      "real_status": "UNVERIFIED",
+      "release_allowed": false,
+      "new_entry": null,
+      "new_files": [
+        "native/games/wvd/tasks/quest_catalog.cpp",
+        "packs/wvd/parameters/legacy-quests.json",
+        "native/games/wvd/tasks/task_plan.cpp"
+      ],
+      "source_fields": [
+        "_TYPE",
+        "questName",
+        "questName_en_US",
+        "questCategory",
+        "questCategory_en_US",
+        "_TARGETINFOLIST",
+        "_EOT"
+      ],
+      "success_evidence": [],
+      "failure_stop_recovery_evidence": [],
+      "data_evidence": "../m4-business-validation.md#配置与目录",
+      "semantic_differences": [],
+      "blockers": [
+        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
+        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+      ],
+      "plan_data_status": "PASS",
+      "plan_evidence": "../m4-plan-validation.md"
+    },
+    {
+      "task_id": "DH-10f-JR",
+      "legacy_type": "dungeon",
+      "legacy_title": "[刷怪]深雪R10巨人",
+      "source_ref": "resources/quest/quest.json#/DH-10f-JR",
+      "source_data_sha256_canonical_json": "37f14ecd933d44be7cd5ba32ce77191c29c2665b4f1384eab32ae3178f5a7f65",
+      "original_acceptance_ids": [
+        "M4-TASK-DH-10f-JR"
+      ],
+      "implementation_status": "PARTIAL",
+      "implementation_extent": "TYPED_PLAN_DATA",
+      "data_binding_status": "PASS",
+      "plan_status": "PARTIAL",
+      "offline_status": "NOT_RUN",
+      "real_status": "UNVERIFIED",
+      "release_allowed": false,
+      "new_entry": null,
+      "new_files": [
+        "native/games/wvd/tasks/quest_catalog.cpp",
+        "packs/wvd/parameters/legacy-quests.json",
+        "native/games/wvd/tasks/task_plan.cpp"
+      ],
+      "source_fields": [
+        "_TYPE",
+        "questName",
+        "questName_en_US",
+        "questCategory",
+        "questCategory_en_US",
+        "_TARGETINFOLIST",
+        "_EOT"
+      ],
+      "success_evidence": [],
+      "failure_stop_recovery_evidence": [],
+      "data_evidence": "../m4-business-validation.md#配置与目录",
+      "semantic_differences": [],
+      "blockers": [
+        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
+        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+      ],
+      "plan_data_status": "PASS",
+      "plan_evidence": "../m4-plan-validation.md"
+    },
+    {
+      "task_id": "DH-Church-upper",
+      "legacy_type": "dungeon",
+      "legacy_title": "[宝箱]教会-自动宝箱上半",
+      "source_ref": "resources/quest/quest.json#/DH-Church-upper",
+      "source_data_sha256_canonical_json": "fb5848fd28e81d1fb9afc2668c2446c732870b03164b6f293413936ad05cf5af",
+      "original_acceptance_ids": [
+        "M4-TASK-DH-Church-upper"
+      ],
+      "implementation_status": "PARTIAL",
+      "implementation_extent": "TYPED_PLAN_DATA",
+      "data_binding_status": "PASS",
+      "plan_status": "PARTIAL",
+      "offline_status": "NOT_RUN",
+      "real_status": "UNVERIFIED",
+      "release_allowed": false,
+      "new_entry": null,
+      "new_files": [
+        "native/games/wvd/tasks/quest_catalog.cpp",
+        "packs/wvd/parameters/legacy-quests.json",
+        "native/games/wvd/tasks/task_plan.cpp"
+      ],
+      "source_fields": [
+        "_TYPE",
+        "questName",
+        "questName_en_US",
+        "questCategory",
+        "questCategory_en_US",
+        "_TARGETINFOLIST",
+        "_EOT"
+      ],
+      "success_evidence": [],
+      "failure_stop_recovery_evidence": [],
+      "data_evidence": "../m4-business-validation.md#配置与目录",
+      "semantic_differences": [],
+      "blockers": [
+        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
+        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+      ],
+      "plan_data_status": "PASS",
+      "plan_evidence": "../m4-plan-validation.md"
+    },
+    {
+      "task_id": "DH-Church-auto",
+      "legacy_type": "dungeon",
+      "legacy_title": "[宝箱]教会-全范围找箱",
+      "source_ref": "resources/quest/quest.json#/DH-Church-auto",
+      "source_data_sha256_canonical_json": "2557b637b8f878b97444481f156e6969e1685e5831720bd924d3341cfd27001e",
+      "original_acceptance_ids": [
+        "M4-TASK-DH-Church-auto"
+      ],
+      "implementation_status": "PARTIAL",
+      "implementation_extent": "TYPED_PLAN_DATA",
+      "data_binding_status": "PASS",
+      "plan_status": "PARTIAL",
+      "offline_status": "NOT_RUN",
+      "real_status": "UNVERIFIED",
+      "release_allowed": false,
+      "new_entry": null,
+      "new_files": [
+        "native/games/wvd/tasks/quest_catalog.cpp",
+        "packs/wvd/parameters/legacy-quests.json",
+        "native/games/wvd/tasks/task_plan.cpp"
+      ],
+      "source_fields": [
+        "_TYPE",
+        "questName",
+        "questName_en_US",
+        "questCategory",
+        "questCategory_en_US",
+        "_TARGETINFOLIST",
+        "_EOT"
+      ],
+      "success_evidence": [],
+      "failure_stop_recovery_evidence": [],
+      "data_evidence": "../m4-business-validation.md#配置与目录",
+      "semantic_differences": [],
+      "blockers": [
+        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
+        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+      ],
+      "plan_data_status": "PASS",
+      "plan_evidence": "../m4-plan-validation.md"
+    },
+    {
+      "task_id": "White-G-v2",
+      "legacy_type": "dungeon",
+      "legacy_title": "[刷怪]教会白巨人 byXX",
+      "source_ref": "resources/quest/quest.json#/White-G-v2",
+      "source_data_sha256_canonical_json": "7db6f21ba0be63b8206a1834e208451029194b2f8f696203cf1320a08b9d8858",
+      "original_acceptance_ids": [
+        "M4-TASK-White-G-v2"
+      ],
+      "implementation_status": "PARTIAL",
+      "implementation_extent": "TYPED_PLAN_DATA",
+      "data_binding_status": "PASS",
+      "plan_status": "PARTIAL",
+      "offline_status": "NOT_RUN",
+      "real_status": "UNVERIFIED",
+      "release_allowed": false,
+      "new_entry": null,
+      "new_files": [
+        "native/games/wvd/tasks/quest_catalog.cpp",
+        "packs/wvd/parameters/legacy-quests.json",
+        "native/games/wvd/tasks/task_plan.cpp"
+      ],
+      "source_fields": [
+        "_TYPE",
+        "questName",
+        "questName_en_US",
+        "questCategory",
+        "questCategory_en_US",
+        "_TARGETINFOLIST",
+        "_EOT",
+        "_TIPS"
+      ],
+      "success_evidence": [],
+      "failure_stop_recovery_evidence": [],
+      "data_evidence": "../m4-business-validation.md#配置与目录",
+      "semantic_differences": [],
+      "blockers": [
+        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
+        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+      ],
+      "plan_data_status": "PASS",
+      "plan_evidence": "../m4-plan-validation.md"
+    },
+    {
+      "task_id": "FFXI-2F",
+      "legacy_type": "dungeon",
+      "legacy_title": "[宝箱]FFXI 2F 自动宝箱",
+      "source_ref": "resources/quest/quest.json#/FFXI-2F",
+      "source_data_sha256_canonical_json": "73a2d4b79d8b5716ea4c9e85042addac8caa9bb8aed359ec32257f13a2abc2ec",
+      "original_acceptance_ids": [
+        "M4-TASK-FFXI-2F"
+      ],
+      "implementation_status": "PARTIAL",
+      "implementation_extent": "TYPED_PLAN_DATA",
+      "data_binding_status": "PASS",
+      "plan_status": "PARTIAL",
+      "offline_status": "NOT_RUN",
+      "real_status": "UNVERIFIED",
+      "release_allowed": false,
+      "new_entry": null,
+      "new_files": [
+        "native/games/wvd/tasks/quest_catalog.cpp",
+        "packs/wvd/parameters/legacy-quests.json",
+        "native/games/wvd/tasks/task_plan.cpp"
+      ],
+      "source_fields": [
+        "_TYPE",
+        "questName",
+        "questName_en_US",
+        "questCategory",
+        "questCategory_en_US",
+        "_TARGETINFOLIST",
+        "_preEOTcheck",
+        "_EOT",
+        "_RTT",
+        "_TIPS"
+      ],
+      "success_evidence": [],
+      "failure_stop_recovery_evidence": [],
+      "data_evidence": "../m4-business-validation.md#配置与目录",
+      "semantic_differences": [],
+      "blockers": [
+        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
+        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+      ],
+      "plan_data_status": "PASS",
+      "plan_evidence": "../m4-plan-validation.md"
+    },
+    {
+      "task_id": "FFXI-2F-elite",
+      "legacy_type": "dungeon",
+      "legacy_title": "[刷怪]FFXI 2F 精英",
+      "source_ref": "resources/quest/quest.json#/FFXI-2F-elite",
+      "source_data_sha256_canonical_json": "51066701efad47ce494dff588f72821f7e37936d36a787371c92248df13e6617",
+      "original_acceptance_ids": [
+        "M4-TASK-FFXI-2F-elite"
+      ],
+      "implementation_status": "PARTIAL",
+      "implementation_extent": "TYPED_PLAN_DATA",
+      "data_binding_status": "PASS",
+      "plan_status": "PARTIAL",
+      "offline_status": "NOT_RUN",
+      "real_status": "UNVERIFIED",
+      "release_allowed": false,
+      "new_entry": null,
+      "new_files": [
+        "native/games/wvd/tasks/quest_catalog.cpp",
+        "packs/wvd/parameters/legacy-quests.json",
+        "native/games/wvd/tasks/task_plan.cpp"
+      ],
+      "source_fields": [
+        "_TYPE",
+        "questName",
+        "questName_en_US",
+        "questCategory",
+        "questCategory_en_US",
+        "_TARGETINFOLIST",
+        "_preEOTcheck",
+        "_EOT",
+        "_RTT",
+        "_TIPS"
+      ],
+      "success_evidence": [],
+      "failure_stop_recovery_evidence": [],
+      "data_evidence": "../m4-business-validation.md#配置与目录",
+      "semantic_differences": [],
+      "blockers": [
+        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
+        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+      ],
+      "plan_data_status": "PASS",
+      "plan_evidence": "../m4-plan-validation.md"
+    },
+    {
+      "task_id": "FFXI-5F-4Elite",
+      "legacy_type": "dungeon",
+      "legacy_title": "[恶名]FFXI 5F 4精英",
+      "source_ref": "resources/quest/quest.json#/FFXI-5F-4Elite",
+      "source_data_sha256_canonical_json": "1e7beb3c90a77d12665d4da69682762f17f71dff52b070d6c4ae7fa99706c064",
+      "original_acceptance_ids": [
+        "M4-TASK-FFXI-5F-4Elite"
+      ],
+      "implementation_status": "PARTIAL",
+      "implementation_extent": "TYPED_PLAN_DATA",
+      "data_binding_status": "PASS",
+      "plan_status": "PARTIAL",
+      "offline_status": "NOT_RUN",
+      "real_status": "UNVERIFIED",
+      "release_allowed": false,
+      "new_entry": null,
+      "new_files": [
+        "native/games/wvd/tasks/quest_catalog.cpp",
+        "packs/wvd/parameters/legacy-quests.json",
+        "native/games/wvd/tasks/task_plan.cpp"
+      ],
+      "source_fields": [
+        "_TYPE",
+        "questName",
+        "questName_en_US",
+        "questCategory",
+        "questCategory_en_US",
+        "_TARGETINFOLIST",
+        "_EOT",
+        "_RTT",
+        "_TIPS"
+      ],
+      "success_evidence": [],
+      "failure_stop_recovery_evidence": [],
+      "data_evidence": "../m4-business-validation.md#配置与目录",
+      "semantic_differences": [],
+      "blockers": [
+        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
+        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+      ],
+      "plan_data_status": "PASS",
+      "plan_evidence": "../m4-plan-validation.md"
+    },
+    {
+      "task_id": "FFXI-5F-2Elite-mid",
+      "legacy_type": "dungeon",
+      "legacy_title": "[恶名]FFXI 5F 中部2精英",
+      "source_ref": "resources/quest/quest.json#/FFXI-5F-2Elite-mid",
+      "source_data_sha256_canonical_json": "cd95ab0d392c7b6b872567f4ed224fcd07bb18fbb911d954376892e9257f9718",
+      "original_acceptance_ids": [
+        "M4-TASK-FFXI-5F-2Elite-mid"
+      ],
+      "implementation_status": "PARTIAL",
+      "implementation_extent": "TYPED_PLAN_DATA",
+      "data_binding_status": "PASS",
+      "plan_status": "PARTIAL",
+      "offline_status": "NOT_RUN",
+      "real_status": "UNVERIFIED",
+      "release_allowed": false,
+      "new_entry": null,
+      "new_files": [
+        "native/games/wvd/tasks/quest_catalog.cpp",
+        "packs/wvd/parameters/legacy-quests.json",
+        "native/games/wvd/tasks/task_plan.cpp"
+      ],
+      "source_fields": [
+        "_TYPE",
+        "questName",
+        "questName_en_US",
+        "questCategory",
+        "questCategory_en_US",
+        "_TARGETINFOLIST",
+        "_EOT",
+        "_RTT",
+        "_TIPS"
+      ],
+      "success_evidence": [],
+      "failure_stop_recovery_evidence": [],
+      "data_evidence": "../m4-business-validation.md#配置与目录",
+      "semantic_differences": [],
+      "blockers": [
+        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
+        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+      ],
+      "plan_data_status": "PASS",
+      "plan_evidence": "../m4-plan-validation.md"
+    },
+    {
+      "task_id": "FFXI-5F-2Elite-bottom",
+      "legacy_type": "dungeon",
+      "legacy_title": "[恶名]FFXI 5F 底部2精英",
+      "source_ref": "resources/quest/quest.json#/FFXI-5F-2Elite-bottom",
+      "source_data_sha256_canonical_json": "a71dec397380f7394ba483dcf639d12ecdffd605ac3b4a62b2ad370615d15fb3",
+      "original_acceptance_ids": [
+        "M4-TASK-FFXI-5F-2Elite-bottom"
+      ],
+      "implementation_status": "PARTIAL",
+      "implementation_extent": "TYPED_PLAN_DATA",
+      "data_binding_status": "PASS",
+      "plan_status": "PARTIAL",
+      "offline_status": "NOT_RUN",
+      "real_status": "UNVERIFIED",
+      "release_allowed": false,
+      "new_entry": null,
+      "new_files": [
+        "native/games/wvd/tasks/quest_catalog.cpp",
+        "packs/wvd/parameters/legacy-quests.json",
+        "native/games/wvd/tasks/task_plan.cpp"
+      ],
+      "source_fields": [
+        "_TYPE",
+        "questName",
+        "questName_en_US",
+        "questCategory",
+        "questCategory_en_US",
+        "_TARGETINFOLIST",
+        "_EOT",
+        "_RTT",
+        "_TIPS"
+      ],
+      "success_evidence": [],
+      "failure_stop_recovery_evidence": [],
+      "data_evidence": "../m4-business-validation.md#配置与目录",
+      "semantic_differences": [],
+      "blockers": [
+        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
+        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+      ],
+      "plan_data_status": "PASS",
+      "plan_evidence": "../m4-plan-validation.md"
+    },
+    {
+      "task_id": "FFXI-5F-2Elite-left",
+      "legacy_type": "dungeon",
+      "legacy_title": "[恶名]FFXI 5F 左侧2精英",
+      "source_ref": "resources/quest/quest.json#/FFXI-5F-2Elite-left",
+      "source_data_sha256_canonical_json": "9797c617286f0f72d84460a9423fa653b09f8d2c390cc69878b3b46c56f1fa4b",
+      "original_acceptance_ids": [
+        "M4-TASK-FFXI-5F-2Elite-left"
+      ],
+      "implementation_status": "PARTIAL",
+      "implementation_extent": "TYPED_PLAN_DATA",
+      "data_binding_status": "PASS",
+      "plan_status": "PARTIAL",
+      "offline_status": "NOT_RUN",
+      "real_status": "UNVERIFIED",
+      "release_allowed": false,
+      "new_entry": null,
+      "new_files": [
+        "native/games/wvd/tasks/quest_catalog.cpp",
+        "packs/wvd/parameters/legacy-quests.json",
+        "native/games/wvd/tasks/task_plan.cpp"
+      ],
+      "source_fields": [
+        "_TYPE",
+        "questName",
+        "questName_en_US",
+        "questCategory",
+        "questCategory_en_US",
+        "_TARGETINFOLIST",
+        "_EOT",
+        "_RTT",
+        "_TIPS"
+      ],
+      "success_evidence": [],
+      "failure_stop_recovery_evidence": [],
+      "data_evidence": "../m4-business-validation.md#配置与目录",
+      "semantic_differences": [],
+      "blockers": [
+        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
+        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+      ],
+      "plan_data_status": "PASS",
+      "plan_evidence": "../m4-plan-validation.md"
+    },
+    {
+      "task_id": "FFXI-5F-Elite",
+      "legacy_type": "dungeon",
+      "legacy_title": "[恶名]FFXI 5F 单恶魔",
+      "source_ref": "resources/quest/quest.json#/FFXI-5F-Elite",
+      "source_data_sha256_canonical_json": "456fd48ffaa689a3c5fabafa35b93f641de7710166c4d1f48613bbdd2708402b",
+      "original_acceptance_ids": [
+        "M4-TASK-FFXI-5F-Elite"
+      ],
+      "implementation_status": "PARTIAL",
+      "implementation_extent": "TYPED_PLAN_DATA",
+      "data_binding_status": "PASS",
+      "plan_status": "PARTIAL",
+      "offline_status": "NOT_RUN",
+      "real_status": "UNVERIFIED",
+      "release_allowed": false,
+      "new_entry": null,
+      "new_files": [
+        "native/games/wvd/tasks/quest_catalog.cpp",
+        "packs/wvd/parameters/legacy-quests.json",
+        "native/games/wvd/tasks/task_plan.cpp"
+      ],
+      "source_fields": [
+        "_TYPE",
+        "questName",
+        "questName_en_US",
+        "questCategory",
+        "questCategory_en_US",
+        "_TARGETINFOLIST",
+        "_EOT",
+        "_RTT",
+        "_TIPS"
+      ],
+      "success_evidence": [],
+      "failure_stop_recovery_evidence": [],
+      "data_evidence": "../m4-business-validation.md#配置与目录",
+      "semantic_differences": [],
+      "blockers": [
+        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
+        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+      ],
+      "plan_data_status": "PASS",
+      "plan_evidence": "../m4-plan-validation.md"
+    },
+    {
+      "task_id": "HSR-1F",
+      "legacy_type": "dungeon",
+      "legacy_title": "[宝箱]药师洞1f宝箱",
+      "source_ref": "resources/quest/quest.json#/HSR-1F",
+      "source_data_sha256_canonical_json": "ceb4068b5da22cc7f5582e85d11e6060229ebead73acf23c2bffa0acb897d4c9",
+      "original_acceptance_ids": [
+        "M4-TASK-HSR-1F"
+      ],
+      "implementation_status": "PARTIAL",
+      "implementation_extent": "TYPED_PLAN_DATA",
+      "data_binding_status": "PASS",
+      "plan_status": "PARTIAL",
+      "offline_status": "NOT_RUN",
+      "real_status": "UNVERIFIED",
+      "release_allowed": false,
+      "new_entry": null,
+      "new_files": [
+        "native/games/wvd/tasks/quest_catalog.cpp",
+        "packs/wvd/parameters/legacy-quests.json",
+        "native/games/wvd/tasks/task_plan.cpp"
+      ],
+      "source_fields": [
+        "_TYPE",
+        "questName",
+        "questName_en_US",
+        "questCategory",
+        "questCategory_en_US",
+        "_TARGETINFOLIST",
+        "_preEOTcheck",
+        "_EOT",
+        "_TIPS"
+      ],
+      "success_evidence": [],
+      "failure_stop_recovery_evidence": [],
+      "data_evidence": "../m4-business-validation.md#配置与目录",
+      "semantic_differences": [],
+      "blockers": [
+        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
+        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+      ],
+      "plan_data_status": "PASS",
+      "plan_evidence": "../m4-plan-validation.md"
+    },
+    {
+      "task_id": "IWO",
+      "legacy_type": "dungeon",
+      "legacy_title": "[宝箱]鬼洞1f 水路出发",
+      "source_ref": "resources/quest/quest.json#/IWO",
+      "source_data_sha256_canonical_json": "eabc8a163c3731c9241fa8dc8e2803748101326ed7d1a7ae2e05f26a4264a806",
+      "original_acceptance_ids": [
+        "M4-TASK-IWO"
+      ],
+      "implementation_status": "PARTIAL",
+      "implementation_extent": "TYPED_PLAN_DATA",
+      "data_binding_status": "PASS",
+      "plan_status": "PARTIAL",
+      "offline_status": "NOT_RUN",
+      "real_status": "UNVERIFIED",
+      "release_allowed": false,
+      "new_entry": null,
+      "new_files": [
+        "native/games/wvd/tasks/quest_catalog.cpp",
+        "packs/wvd/parameters/legacy-quests.json",
+        "native/games/wvd/tasks/task_plan.cpp"
+      ],
+      "source_fields": [
+        "_TYPE",
+        "questName",
+        "questName_en_US",
+        "questCategory",
+        "questCategory_en_US",
+        "_TARGETINFOLIST",
+        "_preEOTcheck",
+        "_EOT",
+        "_RTT",
+        "_TIPS"
+      ],
+      "success_evidence": [],
+      "failure_stop_recovery_evidence": [],
+      "data_evidence": "../m4-business-validation.md#配置与目录",
+      "semantic_differences": [],
+      "blockers": [
+        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
+        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+      ],
+      "plan_data_status": "PASS",
+      "plan_evidence": "../m4-plan-validation.md"
+    },
+    {
+      "task_id": "IWO_2",
+      "legacy_type": "dungeon",
+      "legacy_title": "[宝箱]鬼洞2F",
+      "source_ref": "resources/quest/quest.json#/IWO_2",
+      "source_data_sha256_canonical_json": "f7a7bf2bc1b90e7078e1dbf8320a1c740f351da67016c0f779f3fd64799cf815",
+      "original_acceptance_ids": [
+        "M4-TASK-IWO_2"
+      ],
+      "implementation_status": "PARTIAL",
+      "implementation_extent": "TYPED_PLAN_DATA",
+      "data_binding_status": "PASS",
+      "plan_status": "PARTIAL",
+      "offline_status": "NOT_RUN",
+      "real_status": "UNVERIFIED",
+      "release_allowed": false,
+      "new_entry": null,
+      "new_files": [
+        "native/games/wvd/tasks/quest_catalog.cpp",
+        "packs/wvd/parameters/legacy-quests.json",
+        "native/games/wvd/tasks/task_plan.cpp"
+      ],
+      "source_fields": [
+        "_TYPE",
+        "questName",
+        "questName_en_US",
+        "questCategory",
+        "questCategory_en_US",
+        "_TARGETINFOLIST",
+        "_preEOTcheck",
+        "_EOT",
+        "_RTT",
+        "_TIPS"
+      ],
+      "success_evidence": [],
+      "failure_stop_recovery_evidence": [],
+      "data_evidence": "../m4-business-validation.md#配置与目录",
+      "semantic_differences": [],
+      "blockers": [
+        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
+        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+      ],
+      "plan_data_status": "PASS",
+      "plan_evidence": "../m4-plan-validation.md"
+    },
+    {
+      "task_id": "malice-B3F",
+      "legacy_type": "dungeon",
+      "legacy_title": "[刷怪]怨嗟洞窟三层",
+      "source_ref": "resources/quest/quest.json#/malice-B3F",
+      "source_data_sha256_canonical_json": "9c4a5f08eb042ee1864ef5a66f62444d830abfa1e5ad1e61c9355da6f31cac34",
+      "original_acceptance_ids": [
+        "M4-TASK-malice-B3F"
+      ],
+      "implementation_status": "PARTIAL",
+      "implementation_extent": "TYPED_PLAN_DATA",
+      "data_binding_status": "PASS",
+      "plan_status": "PARTIAL",
+      "offline_status": "NOT_RUN",
+      "real_status": "UNVERIFIED",
+      "release_allowed": false,
+      "new_entry": null,
+      "new_files": [
+        "native/games/wvd/tasks/quest_catalog.cpp",
+        "packs/wvd/parameters/legacy-quests.json",
+        "native/games/wvd/tasks/task_plan.cpp"
+      ],
+      "source_fields": [
+        "_TYPE",
+        "questName",
+        "questName_en_US",
+        "questCategory",
+        "questCategory_en_US",
+        "_EOT",
+        "_TARGETINFOLIST"
+      ],
+      "success_evidence": [],
+      "failure_stop_recovery_evidence": [],
+      "data_evidence": "../m4-business-validation.md#配置与目录",
+      "semantic_differences": [],
+      "blockers": [
+        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
+        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+      ],
+      "plan_data_status": "PASS",
+      "plan_evidence": "../m4-plan-validation.md"
+    },
+    {
+      "task_id": "fordraig-B3F",
+      "legacy_type": "dungeon",
+      "legacy_title": "[宝箱]弗德莱戈的迷宫三层",
+      "source_ref": "resources/quest/quest.json#/fordraig-B3F",
+      "source_data_sha256_canonical_json": "3e8ee740494b2191f2f080e4425495828f21243520aa75eb87237adf189e6fff",
+      "original_acceptance_ids": [
+        "M4-TASK-fordraig-B3F"
+      ],
+      "implementation_status": "PARTIAL",
+      "implementation_extent": "TYPED_PLAN_DATA",
+      "data_binding_status": "PASS",
+      "plan_status": "PARTIAL",
+      "offline_status": "NOT_RUN",
+      "real_status": "UNVERIFIED",
+      "release_allowed": false,
+      "new_entry": null,
+      "new_files": [
+        "native/games/wvd/tasks/quest_catalog.cpp",
+        "packs/wvd/parameters/legacy-quests.json",
+        "native/games/wvd/tasks/task_plan.cpp"
+      ],
+      "source_fields": [
+        "_TYPE",
+        "questName",
+        "questName_en_US",
+        "questCategory",
+        "questCategory_en_US",
+        "_TARGETINFOLIST",
+        "_preEOTcheck",
+        "_EOT"
+      ],
+      "success_evidence": [],
+      "failure_stop_recovery_evidence": [],
+      "data_evidence": "../m4-business-validation.md#配置与目录",
+      "semantic_differences": [],
+      "blockers": [
+        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
+        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+      ],
+      "plan_data_status": "PASS",
+      "plan_evidence": "../m4-plan-validation.md"
+    },
+    {
+      "task_id": "SSC_chest",
+      "legacy_type": "dungeon",
+      "legacy_title": "[宝箱]忍洞一层",
+      "source_ref": "resources/quest/quest.json#/SSC_chest",
+      "source_data_sha256_canonical_json": "d576e6c3f4ad3ff943454b4bb153c2e59f836a7421bef701b73200fe4ed52933",
+      "original_acceptance_ids": [
+        "M4-TASK-SSC_chest"
+      ],
+      "implementation_status": "PARTIAL",
+      "implementation_extent": "TYPED_PLAN_DATA",
+      "data_binding_status": "PASS",
+      "plan_status": "PARTIAL",
+      "offline_status": "NOT_RUN",
+      "real_status": "UNVERIFIED",
+      "release_allowed": false,
+      "new_entry": null,
+      "new_files": [
+        "native/games/wvd/tasks/quest_catalog.cpp",
+        "packs/wvd/parameters/legacy-quests.json",
+        "native/games/wvd/tasks/task_plan.cpp"
+      ],
+      "source_fields": [
+        "_TYPE",
+        "questName",
+        "questName_en_US",
+        "questCategory",
+        "questCategory_en_US",
+        "_TARGETINFOLIST",
+        "_preEOTcheck",
+        "_EOT"
+      ],
+      "success_evidence": [],
+      "failure_stop_recovery_evidence": [],
+      "data_evidence": "../m4-business-validation.md#配置与目录",
+      "semantic_differences": [],
+      "blockers": [
+        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
+        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+      ],
+      "plan_data_status": "PASS",
+      "plan_evidence": "../m4-plan-validation.md"
+    },
+    {
+      "task_id": "LBC",
+      "legacy_type": "dungeon",
+      "legacy_title": "[宝箱]卢比肯宝箱",
+      "source_ref": "resources/quest/quest.json#/LBC",
+      "source_data_sha256_canonical_json": "ff201a30e7ca241f1bbd6382108ea585332ef8e5ca68ccb6ada6de31904b83f7",
+      "original_acceptance_ids": [
+        "M4-TASK-LBC"
+      ],
+      "implementation_status": "PARTIAL",
+      "implementation_extent": "TYPED_PLAN_DATA",
+      "data_binding_status": "PASS",
+      "plan_status": "PARTIAL",
+      "offline_status": "NOT_RUN",
+      "real_status": "UNVERIFIED",
+      "release_allowed": false,
+      "new_entry": null,
+      "new_files": [
+        "native/games/wvd/tasks/quest_catalog.cpp",
+        "packs/wvd/parameters/legacy-quests.json",
+        "native/games/wvd/tasks/task_plan.cpp"
+      ],
+      "source_fields": [
+        "_TYPE",
+        "questName",
+        "questName_en_US",
+        "questCategory",
+        "questCategory_en_US",
+        "_TARGETINFOLIST",
+        "_preEOTcheck",
+        "_EOT"
+      ],
+      "success_evidence": [],
+      "failure_stop_recovery_evidence": [],
+      "data_evidence": "../m4-business-validation.md#配置与目录",
+      "semantic_differences": [],
+      "blockers": [
+        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
+        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+      ],
+      "plan_data_status": "PASS",
+      "plan_evidence": "../m4-plan-validation.md"
+    },
+    {
+      "task_id": "AWD",
+      "legacy_type": "dungeon",
+      "legacy_title": "[宝箱]狼洞2f",
+      "source_ref": "resources/quest/quest.json#/AWD",
+      "source_data_sha256_canonical_json": "aa885e8db74b697f665aa8fd5c4d3915027af4961a40a824976ffa6c5787f9ce",
+      "original_acceptance_ids": [
+        "M4-TASK-AWD"
+      ],
+      "implementation_status": "PARTIAL",
+      "implementation_extent": "TYPED_PLAN_DATA",
+      "data_binding_status": "PASS",
+      "plan_status": "PARTIAL",
+      "offline_status": "NOT_RUN",
+      "real_status": "UNVERIFIED",
+      "release_allowed": false,
+      "new_entry": null,
+      "new_files": [
+        "native/games/wvd/tasks/quest_catalog.cpp",
+        "packs/wvd/parameters/legacy-quests.json",
+        "native/games/wvd/tasks/task_plan.cpp"
+      ],
+      "source_fields": [
+        "_TYPE",
+        "questName",
+        "questName_en_US",
+        "questCategory",
+        "questCategory_en_US",
+        "_TARGETINFOLIST",
+        "_preEOTcheck",
+        "_EOT"
+      ],
+      "success_evidence": [],
+      "failure_stop_recovery_evidence": [],
+      "data_evidence": "../m4-business-validation.md#配置与目录",
+      "semantic_differences": [],
+      "blockers": [
+        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
+        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+      ],
+      "plan_data_status": "PASS",
+      "plan_evidence": "../m4-plan-validation.md"
+    },
+    {
+      "task_id": "AWD-noGorgon",
+      "legacy_type": "dungeon",
+      "legacy_title": "[宝箱]狼洞1f",
+      "source_ref": "resources/quest/quest.json#/AWD-noGorgon",
+      "source_data_sha256_canonical_json": "52263d4ac95451d97907116f20e686a0baaf4ce860d3ba93c7e21f51684ce0cb",
+      "original_acceptance_ids": [
+        "M4-TASK-AWD-noGorgon"
+      ],
+      "implementation_status": "PARTIAL",
+      "implementation_extent": "TYPED_PLAN_DATA",
+      "data_binding_status": "PASS",
+      "plan_status": "PARTIAL",
+      "offline_status": "NOT_RUN",
+      "real_status": "UNVERIFIED",
+      "release_allowed": false,
+      "new_entry": null,
+      "new_files": [
+        "native/games/wvd/tasks/quest_catalog.cpp",
+        "packs/wvd/parameters/legacy-quests.json",
+        "native/games/wvd/tasks/task_plan.cpp"
+      ],
+      "source_fields": [
+        "_TYPE",
+        "questName",
+        "questName_en_US",
+        "questCategory",
+        "questCategory_en_US",
+        "_TARGETINFOLIST",
+        "_preEOTcheck",
+        "_EOT"
+      ],
+      "success_evidence": [],
+      "failure_stop_recovery_evidence": [],
+      "data_evidence": "../m4-business-validation.md#配置与目录",
+      "semantic_differences": [],
+      "blockers": [
+        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
+        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+      ],
+      "plan_data_status": "PASS",
+      "plan_evidence": "../m4-plan-validation.md"
+    },
+    {
+      "task_id": "GHB",
+      "legacy_type": "dungeon",
+      "legacy_title": "[宝箱]百花之庭固定怪",
+      "source_ref": "resources/quest/quest.json#/GHB",
+      "source_data_sha256_canonical_json": "250cb58077da46cdd009f003e3f27a9362fa6f1b5ca71f6bcaf3624d28a2d0b0",
+      "original_acceptance_ids": [
+        "M4-TASK-GHB"
+      ],
+      "implementation_status": "PARTIAL",
+      "implementation_extent": "TYPED_PLAN_DATA",
+      "data_binding_status": "PASS",
+      "plan_status": "PARTIAL",
+      "offline_status": "NOT_RUN",
+      "real_status": "UNVERIFIED",
+      "release_allowed": false,
+      "new_entry": null,
+      "new_files": [
+        "native/games/wvd/tasks/quest_catalog.cpp",
+        "packs/wvd/parameters/legacy-quests.json",
+        "native/games/wvd/tasks/task_plan.cpp"
+      ],
+      "source_fields": [
+        "_TYPE",
+        "questName",
+        "questCategory",
+        "questCategory_en_US",
+        "_TARGETINFOLIST",
+        "_preEOTcheck",
+        "_EOT"
+      ],
+      "success_evidence": [],
+      "failure_stop_recovery_evidence": [],
+      "data_evidence": "../m4-business-validation.md#配置与目录",
+      "semantic_differences": [],
+      "blockers": [
+        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
+        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+      ],
+      "plan_data_status": "PASS",
+      "plan_evidence": "../m4-plan-validation.md"
+    },
+    {
+      "task_id": "COS_chest",
+      "legacy_type": "dungeon",
+      "legacy_title": "[宝箱]离别洞窟",
+      "source_ref": "resources/quest/quest.json#/COS_chest",
+      "source_data_sha256_canonical_json": "7febb5e346087a649d67e11c817850a85e0b50c6403628319a5e21e536c270a8",
+      "original_acceptance_ids": [
+        "M4-TASK-COS_chest"
+      ],
+      "implementation_status": "PARTIAL",
+      "implementation_extent": "TYPED_PLAN_DATA",
+      "data_binding_status": "PASS",
+      "plan_status": "PARTIAL",
+      "offline_status": "NOT_RUN",
+      "real_status": "UNVERIFIED",
+      "release_allowed": false,
+      "new_entry": null,
+      "new_files": [
+        "native/games/wvd/tasks/quest_catalog.cpp",
+        "packs/wvd/parameters/legacy-quests.json",
+        "native/games/wvd/tasks/task_plan.cpp"
+      ],
+      "source_fields": [
+        "_TYPE",
+        "questName",
+        "questName_en_US",
+        "questCategory",
+        "questCategory_en_US",
+        "_TARGETINFOLIST",
+        "_EOT"
+      ],
+      "success_evidence": [],
+      "failure_stop_recovery_evidence": [],
+      "data_evidence": "../m4-business-validation.md#配置与目录",
+      "semantic_differences": [],
+      "blockers": [
+        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
+        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+      ],
+      "plan_data_status": "PASS",
+      "plan_evidence": "../m4-plan-validation.md"
+    },
+    {
+      "task_id": "COS_chest_short",
+      "legacy_type": "dungeon",
+      "legacy_title": "[宝箱]离别洞窟(只刷2f)",
+      "source_ref": "resources/quest/quest.json#/COS_chest_short",
+      "source_data_sha256_canonical_json": "9cc104cce0ba87c9524d698ce34e1e64ffd90c6491c5e6447df581b8e07bb37d",
+      "original_acceptance_ids": [
+        "M4-TASK-COS_chest_short"
+      ],
+      "implementation_status": "PARTIAL",
+      "implementation_extent": "TYPED_PLAN_DATA",
+      "data_binding_status": "PASS",
+      "plan_status": "PARTIAL",
+      "offline_status": "NOT_RUN",
+      "real_status": "UNVERIFIED",
+      "release_allowed": false,
+      "new_entry": null,
+      "new_files": [
+        "native/games/wvd/tasks/quest_catalog.cpp",
+        "packs/wvd/parameters/legacy-quests.json",
+        "native/games/wvd/tasks/task_plan.cpp"
+      ],
+      "source_fields": [
+        "_TYPE",
+        "questName",
+        "questName_en_US",
+        "questCategory",
+        "questCategory_en_US",
+        "_TARGETINFOLIST",
+        "_EOT"
+      ],
+      "success_evidence": [],
+      "failure_stop_recovery_evidence": [],
+      "data_evidence": "../m4-business-validation.md#配置与目录",
+      "semantic_differences": [],
+      "blockers": [
+        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
+        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+      ],
+      "plan_data_status": "PASS",
+      "plan_evidence": "../m4-plan-validation.md"
+    },
+    {
+      "task_id": "DOE",
+      "legacy_type": "dungeon",
+      "legacy_title": "[矿石]土洞(中/次)",
+      "source_ref": "resources/quest/quest.json#/DOE",
+      "source_data_sha256_canonical_json": "f4b2d313675c66825819a37fa5c2606a5b526d52055ee3c8da29e956fca6cbff",
+      "original_acceptance_ids": [
+        "M4-TASK-DOE"
+      ],
+      "implementation_status": "PARTIAL",
+      "implementation_extent": "TYPED_PLAN_DATA",
+      "data_binding_status": "PASS",
+      "plan_status": "PARTIAL",
+      "offline_status": "NOT_RUN",
+      "real_status": "UNVERIFIED",
+      "release_allowed": false,
+      "new_entry": null,
+      "new_files": [
+        "native/games/wvd/tasks/quest_catalog.cpp",
+        "packs/wvd/parameters/legacy-quests.json",
+        "native/games/wvd/tasks/task_plan.cpp"
+      ],
+      "source_fields": [
+        "_TYPE",
+        "questName",
+        "questName_en_US",
+        "questCategory",
+        "questCategory_en_US",
+        "_EOT",
+        "_TARGETINFOLIST"
+      ],
+      "success_evidence": [],
+      "failure_stop_recovery_evidence": [],
+      "data_evidence": "../m4-business-validation.md#配置与目录",
+      "semantic_differences": [],
+      "blockers": [
+        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
+        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+      ],
+      "plan_data_status": "PASS",
+      "plan_evidence": "../m4-plan-validation.md"
+    },
+    {
+      "task_id": "DOF",
+      "legacy_type": "dungeon",
+      "legacy_title": "[矿石]火洞(特/中/次)",
+      "source_ref": "resources/quest/quest.json#/DOF",
+      "source_data_sha256_canonical_json": "23d5d736a816db987ed4a89dfb4ad0cd37abe73fe49964796635e3ad38809700",
+      "original_acceptance_ids": [
+        "M4-TASK-DOF"
+      ],
+      "implementation_status": "PARTIAL",
+      "implementation_extent": "TYPED_PLAN_DATA",
+      "data_binding_status": "PASS",
+      "plan_status": "PARTIAL",
+      "offline_status": "NOT_RUN",
+      "real_status": "UNVERIFIED",
+      "release_allowed": false,
+      "new_entry": null,
+      "new_files": [
+        "native/games/wvd/tasks/quest_catalog.cpp",
+        "packs/wvd/parameters/legacy-quests.json",
+        "native/games/wvd/tasks/task_plan.cpp"
+      ],
+      "source_fields": [
+        "_TYPE",
+        "questName",
+        "questName_en_US",
+        "questCategory",
+        "questCategory_en_US",
+        "_TARGETINFOLIST",
+        "_EOT"
+      ],
+      "success_evidence": [],
+      "failure_stop_recovery_evidence": [],
+      "data_evidence": "../m4-business-validation.md#配置与目录",
+      "semantic_differences": [],
+      "blockers": [
+        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
+        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+      ],
+      "plan_data_status": "PASS",
+      "plan_evidence": "../m4-plan-validation.md"
+    },
+    {
+      "task_id": "DOF_Plus",
+      "legacy_type": "dungeon",
+      "legacy_title": "[矿石]火洞plus-地图全开",
+      "source_ref": "resources/quest/quest.json#/DOF_Plus",
+      "source_data_sha256_canonical_json": "d9fa8982bd6597d00ca669297cc360a5477ab41870f5dd5d90d317f54931121c",
+      "original_acceptance_ids": [
+        "M4-TASK-DOF_Plus"
+      ],
+      "implementation_status": "PARTIAL",
+      "implementation_extent": "TYPED_PLAN_DATA",
+      "data_binding_status": "PASS",
+      "plan_status": "PARTIAL",
+      "offline_status": "NOT_RUN",
+      "real_status": "UNVERIFIED",
+      "release_allowed": false,
+      "new_entry": null,
+      "new_files": [
+        "native/games/wvd/tasks/quest_catalog.cpp",
+        "packs/wvd/parameters/legacy-quests.json",
+        "native/games/wvd/tasks/task_plan.cpp"
+      ],
+      "source_fields": [
+        "_TYPE",
+        "questName",
+        "questName_en_US",
+        "questCategory",
+        "questCategory_en_US",
+        "_TARGETINFOLIST",
+        "_EOT"
+      ],
+      "success_evidence": [],
+      "failure_stop_recovery_evidence": [],
+      "data_evidence": "../m4-business-validation.md#配置与目录",
+      "semantic_differences": [],
+      "blockers": [
+        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
+        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+      ],
+      "plan_data_status": "PASS",
+      "plan_evidence": "../m4-plan-validation.md"
+    },
+    {
+      "task_id": "DOW",
+      "legacy_type": "dungeon",
+      "legacy_title": "[矿石]风洞(特/上/中)",
+      "source_ref": "resources/quest/quest.json#/DOW",
+      "source_data_sha256_canonical_json": "fb51ba2080b8d38503be3aa2a8357db40819871aa88da5667ac17098b615b0dd",
+      "original_acceptance_ids": [
+        "M4-TASK-DOW"
+      ],
+      "implementation_status": "PARTIAL",
+      "implementation_extent": "TYPED_PLAN_DATA",
+      "data_binding_status": "PASS",
+      "plan_status": "PARTIAL",
+      "offline_status": "NOT_RUN",
+      "real_status": "UNVERIFIED",
+      "release_allowed": false,
+      "new_entry": null,
+      "new_files": [
+        "native/games/wvd/tasks/quest_catalog.cpp",
+        "packs/wvd/parameters/legacy-quests.json",
+        "native/games/wvd/tasks/task_plan.cpp"
+      ],
+      "source_fields": [
+        "_TYPE",
+        "questName",
+        "questName_en_US",
+        "questCategory",
+        "questCategory_en_US",
+        "_TARGETINFOLIST",
+        "_EOT"
+      ],
+      "success_evidence": [],
+      "failure_stop_recovery_evidence": [],
+      "data_evidence": "../m4-business-validation.md#配置与目录",
+      "semantic_differences": [],
+      "blockers": [
+        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
+        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+      ],
+      "plan_data_status": "PASS",
+      "plan_evidence": "../m4-plan-validation.md"
+    },
+    {
+      "task_id": "DOW_Plus",
+      "legacy_type": "dungeon",
+      "legacy_title": "[矿石]风洞plus-地图全开",
+      "source_ref": "resources/quest/quest.json#/DOW_Plus",
+      "source_data_sha256_canonical_json": "e8d84a88658613946972770823933db67d6e8bd80c9ee22223b3c2de85eeb2aa",
+      "original_acceptance_ids": [
+        "M4-TASK-DOW_Plus"
+      ],
+      "implementation_status": "PARTIAL",
+      "implementation_extent": "TYPED_PLAN_DATA",
+      "data_binding_status": "PASS",
+      "plan_status": "PARTIAL",
+      "offline_status": "NOT_RUN",
+      "real_status": "UNVERIFIED",
+      "release_allowed": false,
+      "new_entry": null,
+      "new_files": [
+        "native/games/wvd/tasks/quest_catalog.cpp",
+        "packs/wvd/parameters/legacy-quests.json",
+        "native/games/wvd/tasks/task_plan.cpp"
+      ],
+      "source_fields": [
+        "_TYPE",
+        "questName",
+        "questName_en_US",
+        "questCategory",
+        "questCategory_en_US",
+        "_TARGETINFOLIST",
+        "_EOT"
+      ],
+      "success_evidence": [],
+      "failure_stop_recovery_evidence": [],
+      "data_evidence": "../m4-business-validation.md#配置与目录",
+      "semantic_differences": [],
+      "blockers": [
+        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
+        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+      ],
+      "plan_data_status": "PASS",
+      "plan_evidence": "../m4-plan-validation.md"
+    },
+    {
+      "task_id": "DOL",
+      "legacy_type": "dungeon",
+      "legacy_title": "[矿石]光洞(特/上/中)",
+      "source_ref": "resources/quest/quest.json#/DOL",
+      "source_data_sha256_canonical_json": "0661364a85a1736bedabbd22f017e33e3fe8e6ea5d6761096e1d32fedc392cc3",
+      "original_acceptance_ids": [
+        "M4-TASK-DOL"
+      ],
+      "implementation_status": "PARTIAL",
+      "implementation_extent": "TYPED_PLAN_DATA",
+      "data_binding_status": "PASS",
+      "plan_status": "PARTIAL",
+      "offline_status": "NOT_RUN",
+      "real_status": "UNVERIFIED",
+      "release_allowed": false,
+      "new_entry": null,
+      "new_files": [
+        "native/games/wvd/tasks/quest_catalog.cpp",
+        "packs/wvd/parameters/legacy-quests.json",
+        "native/games/wvd/tasks/task_plan.cpp"
+      ],
+      "source_fields": [
+        "_TYPE",
+        "questName",
+        "questName_en_US",
+        "questCategory",
+        "questCategory_en_US",
+        "_EOT",
+        "_TARGETINFOLIST"
+      ],
+      "success_evidence": [],
+      "failure_stop_recovery_evidence": [],
+      "data_evidence": "../m4-business-validation.md#配置与目录",
+      "semantic_differences": [],
+      "blockers": [
+        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
+        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+      ],
+      "plan_data_status": "PASS",
+      "plan_evidence": "../m4-plan-validation.md"
+    },
+    {
+      "task_id": "DOL_PLUS",
+      "legacy_type": "dungeon",
+      "legacy_title": "[矿石]光洞plus-地图全开",
+      "source_ref": "resources/quest/quest.json#/DOL_PLUS",
+      "source_data_sha256_canonical_json": "869c0cb648bed6552afcf1646820c43a67e45c742373c2b5260a3cca920d8073",
+      "original_acceptance_ids": [
+        "M4-TASK-DOL_PLUS"
+      ],
+      "implementation_status": "PARTIAL",
+      "implementation_extent": "TYPED_PLAN_DATA",
+      "data_binding_status": "PASS",
+      "plan_status": "PARTIAL",
+      "offline_status": "NOT_RUN",
+      "real_status": "UNVERIFIED",
+      "release_allowed": false,
+      "new_entry": null,
+      "new_files": [
+        "native/games/wvd/tasks/quest_catalog.cpp",
+        "packs/wvd/parameters/legacy-quests.json",
+        "native/games/wvd/tasks/task_plan.cpp"
+      ],
+      "source_fields": [
+        "_TYPE",
+        "questName",
+        "questName_en_US",
+        "questCategory",
+        "questCategory_en_US",
+        "_EOT",
+        "_TARGETINFOLIST"
+      ],
+      "success_evidence": [],
+      "failure_stop_recovery_evidence": [],
+      "data_evidence": "../m4-business-validation.md#配置与目录",
+      "semantic_differences": [],
+      "blockers": [
+        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
+        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+      ],
+      "plan_data_status": "PASS",
+      "plan_evidence": "../m4-plan-validation.md"
+    },
+    {
+      "task_id": "DOS",
+      "legacy_type": "dungeon",
+      "legacy_title": "[矿石]水洞(银/特/上)",
+      "source_ref": "resources/quest/quest.json#/DOS",
+      "source_data_sha256_canonical_json": "3c0eb3db11491fdc8d85bacd54d8bf0687026b651f160464202a73c941a57e1d",
+      "original_acceptance_ids": [
+        "M4-TASK-DOS"
+      ],
+      "implementation_status": "PARTIAL",
+      "implementation_extent": "TYPED_PLAN_DATA",
+      "data_binding_status": "PASS",
+      "plan_status": "PARTIAL",
+      "offline_status": "NOT_RUN",
+      "real_status": "UNVERIFIED",
+      "release_allowed": false,
+      "new_entry": null,
+      "new_files": [
+        "native/games/wvd/tasks/quest_catalog.cpp",
+        "packs/wvd/parameters/legacy-quests.json",
+        "native/games/wvd/tasks/task_plan.cpp"
+      ],
+      "source_fields": [
+        "_TYPE",
+        "questName",
+        "questName_en_US",
+        "questCategory",
+        "questCategory_en_US",
+        "_EOT",
+        "_TARGETINFOLIST"
+      ],
+      "success_evidence": [],
+      "failure_stop_recovery_evidence": [],
+      "data_evidence": "../m4-business-validation.md#配置与目录",
+      "semantic_differences": [],
+      "blockers": [
+        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
+        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+      ],
+      "plan_data_status": "PASS",
+      "plan_evidence": "../m4-plan-validation.md"
+    },
+    {
+      "task_id": "LMG-GT",
+      "legacy_type": "dungeon",
+      "legacy_title": "[骨头]炉壶灵庙(王都出发)",
+      "source_ref": "resources/quest/quest.json#/LMG-GT",
+      "source_data_sha256_canonical_json": "e9b1aa6506e50f358fa5b3d5e370bcc60f9bc19ea19144bd50baacba453af088",
+      "original_acceptance_ids": [
+        "M4-TASK-LMG-GT"
+      ],
+      "implementation_status": "PARTIAL",
+      "implementation_extent": "TYPED_PLAN_DATA",
+      "data_binding_status": "PASS",
+      "plan_status": "PARTIAL",
+      "offline_status": "NOT_RUN",
+      "real_status": "UNVERIFIED",
+      "release_allowed": false,
+      "new_entry": null,
+      "new_files": [
+        "native/games/wvd/tasks/quest_catalog.cpp",
+        "packs/wvd/parameters/legacy-quests.json",
+        "native/games/wvd/tasks/task_plan.cpp"
+      ],
+      "source_fields": [
+        "_TYPE",
+        "questName",
+        "questName_en_US",
+        "questCategory",
+        "questCategory_en_US",
+        "_TARGETINFOLIST",
+        "_preEOTcheck",
+        "_EOT"
+      ],
+      "success_evidence": [],
+      "failure_stop_recovery_evidence": [],
+      "data_evidence": "../m4-business-validation.md#配置与目录",
+      "semantic_differences": [],
+      "blockers": [
+        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
+        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+      ],
+      "plan_data_status": "PASS",
+      "plan_evidence": "../m4-plan-validation.md"
+    },
+    {
+      "task_id": "LMG-FT",
+      "legacy_type": "dungeon",
+      "legacy_title": "[骨头]战士灵庙",
+      "source_ref": "resources/quest/quest.json#/LMG-FT",
+      "source_data_sha256_canonical_json": "44151d94f55fb3d8c6fea7120961822ce44b831cf1590d45ac83497b3f86f38f",
+      "original_acceptance_ids": [
+        "M4-TASK-LMG-FT"
+      ],
+      "implementation_status": "PARTIAL",
+      "implementation_extent": "TYPED_PLAN_DATA",
+      "data_binding_status": "PASS",
+      "plan_status": "PARTIAL",
+      "offline_status": "NOT_RUN",
+      "real_status": "UNVERIFIED",
+      "release_allowed": false,
+      "new_entry": null,
+      "new_files": [
+        "native/games/wvd/tasks/quest_catalog.cpp",
+        "packs/wvd/parameters/legacy-quests.json",
+        "native/games/wvd/tasks/task_plan.cpp"
+      ],
+      "source_fields": [
+        "_TYPE",
+        "questName",
+        "questName_en_US",
+        "questCategory",
+        "questCategory_en_US",
+        "_TARGETINFOLIST",
+        "_preEOTcheck",
+        "_EOT"
+      ],
+      "success_evidence": [],
+      "failure_stop_recovery_evidence": [],
+      "data_evidence": "../m4-business-validation.md#配置与目录",
+      "semantic_differences": [],
+      "blockers": [
+        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
+        "BUSINESS_ACTIONS_NOT_IMPLEMENTED"
+      ],
+      "plan_data_status": "PASS",
+      "plan_evidence": "../m4-plan-validation.md"
+    },
+    {
+      "task_id": "7000G",
+      "legacy_type": "quest",
+      "legacy_title": "[金币]7000G",
+      "source_ref": "resources/quest/quest.json#/7000G",
+      "source_data_sha256_canonical_json": "8bd91d5eab6c87fd2844584802f9fc8103f78f155d4cc431401266cba4e96570",
+      "original_acceptance_ids": [
+        "M4-TASK-7000G"
+      ],
+      "implementation_status": "PARTIAL",
+      "implementation_extent": "TYPED_PLAN_DATA",
+      "data_binding_status": "PASS",
+      "plan_status": "PARTIAL",
+      "offline_status": "NOT_RUN",
+      "real_status": "UNVERIFIED",
+      "release_allowed": false,
+      "new_entry": null,
+      "new_files": [
+        "native/games/wvd/tasks/quest_catalog.cpp",
+        "packs/wvd/parameters/legacy-quests.json",
+        "native/games/wvd/tasks/task_plan.cpp"
+      ],
+      "source_fields": [
+        "questName",
+        "questName_en_US",
+        "questCategory",
+        "questCategory_en_US",
+        "_TYPE"
+      ],
+      "success_evidence": [],
+      "failure_stop_recovery_evidence": [],
+      "data_evidence": "../m4-business-validation.md#配置与目录",
+      "semantic_differences": [],
+      "blockers": [
+        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
+        "BUSINESS_ACTIONS_NOT_IMPLEMENTED",
+        "SPECIAL_CASE_NOT_IMPLEMENTED"
+      ],
+      "plan_data_status": "PASS",
+      "plan_evidence": "../m4-plan-validation.md"
+    },
+    {
+      "task_id": "manualSepDemon",
+      "legacy_type": "quest",
+      "legacy_title": "[装备]半自动大恶魔",
+      "source_ref": "resources/quest/quest.json#/manualSepDemon",
+      "source_data_sha256_canonical_json": "79bb4646a6ce3d9ac15b6d2deb45fdfc6e95467e3906fb008f12d92485dd8304",
+      "original_acceptance_ids": [
+        "M4-TASK-manualSepDemon"
+      ],
+      "implementation_status": "PARTIAL",
+      "implementation_extent": "TYPED_PLAN_DATA",
+      "data_binding_status": "PASS",
+      "plan_status": "PARTIAL",
+      "offline_status": "NOT_RUN",
+      "real_status": "UNVERIFIED",
+      "release_allowed": false,
+      "new_entry": null,
+      "new_files": [
+        "native/games/wvd/tasks/quest_catalog.cpp",
+        "packs/wvd/parameters/legacy-quests.json",
+        "native/games/wvd/tasks/task_plan.cpp"
+      ],
+      "source_fields": [
+        "questName",
+        "questName_en_US",
+        "questCategory",
+        "questCategory_en_US",
+        "_TIPS",
+        "_TYPE"
+      ],
+      "success_evidence": [],
+      "failure_stop_recovery_evidence": [],
+      "data_evidence": "../m4-business-validation.md#配置与目录",
+      "semantic_differences": [],
+      "blockers": [
+        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
+        "BUSINESS_ACTIONS_NOT_IMPLEMENTED",
+        "SPECIAL_CASE_NOT_IMPLEMENTED"
+      ],
+      "plan_data_status": "PASS",
+      "plan_evidence": "../m4-plan-validation.md"
+    },
+    {
+      "task_id": "darkLight",
+      "legacy_type": "quest",
+      "legacy_title": "[装备]暗灯",
+      "source_ref": "resources/quest/quest.json#/darkLight",
+      "source_data_sha256_canonical_json": "c7ba4915ba7c0c6179dfa449ea7b2fa0f4f52b9ba99fbb8fa19cb37d231644be",
+      "original_acceptance_ids": [
+        "M4-TASK-darkLight"
+      ],
+      "implementation_status": "PARTIAL",
+      "implementation_extent": "TYPED_PLAN_DATA",
+      "data_binding_status": "PASS",
+      "plan_status": "PARTIAL",
+      "offline_status": "NOT_RUN",
+      "real_status": "UNVERIFIED",
+      "release_allowed": false,
+      "new_entry": null,
+      "new_files": [
+        "native/games/wvd/tasks/quest_catalog.cpp",
+        "packs/wvd/parameters/legacy-quests.json",
+        "native/games/wvd/tasks/task_plan.cpp"
+      ],
+      "source_fields": [
+        "questName",
+        "questName_en_US",
+        "questCategory",
+        "questCategory_en_US",
+        "_TYPE"
+      ],
+      "success_evidence": [],
+      "failure_stop_recovery_evidence": [],
+      "data_evidence": "../m4-business-validation.md#配置与目录",
+      "semantic_differences": [],
+      "blockers": [
+        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
+        "BUSINESS_ACTIONS_NOT_IMPLEMENTED",
+        "SPECIAL_CASE_NOT_IMPLEMENTED"
+      ],
+      "plan_data_status": "PASS",
+      "plan_evidence": "../m4-plan-validation.md"
+    },
+    {
+      "task_id": "LBC-oneGorgon",
+      "legacy_type": "quest",
+      "legacy_title": "[任务]卢比肯 三牛",
+      "source_ref": "resources/quest/quest.json#/LBC-oneGorgon",
+      "source_data_sha256_canonical_json": "f6b90cdfce65fe0e1ec3453a54621b0a2bc701c37798276f168e6a760dff99e3",
+      "original_acceptance_ids": [
+        "M4-TASK-LBC-oneGorgon"
+      ],
+      "implementation_status": "PARTIAL",
+      "implementation_extent": "TYPED_PLAN_DATA",
+      "data_binding_status": "PASS",
+      "plan_status": "PARTIAL",
+      "offline_status": "NOT_RUN",
+      "real_status": "UNVERIFIED",
+      "release_allowed": false,
+      "new_entry": null,
+      "new_files": [
+        "native/games/wvd/tasks/quest_catalog.cpp",
+        "packs/wvd/parameters/legacy-quests.json",
+        "native/games/wvd/tasks/task_plan.cpp"
+      ],
+      "source_fields": [
+        "questName",
+        "questName_en_US",
+        "questCategory",
+        "questCategory_en_US",
+        "_TYPE"
+      ],
+      "success_evidence": [],
+      "failure_stop_recovery_evidence": [],
+      "data_evidence": "../m4-business-validation.md#配置与目录",
+      "semantic_differences": [],
+      "blockers": [
+        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
+        "BUSINESS_ACTIONS_NOT_IMPLEMENTED",
+        "SPECIAL_CASE_NOT_IMPLEMENTED"
+      ],
+      "plan_data_status": "PASS",
+      "plan_evidence": "../m4-plan-validation.md"
+    },
+    {
+      "task_id": "SSC-goldenchest",
+      "legacy_type": "quest",
+      "legacy_title": "[任务]忍洞一层 金箱",
+      "source_ref": "resources/quest/quest.json#/SSC-goldenchest",
+      "source_data_sha256_canonical_json": "db57a5b70dde2ca8fa83ef52e2017e7b511936c1ea8d62741f16eed6076d7ecf",
+      "original_acceptance_ids": [
+        "M4-TASK-SSC-goldenchest"
+      ],
+      "implementation_status": "PARTIAL",
+      "implementation_extent": "TYPED_PLAN_DATA",
+      "data_binding_status": "PASS",
+      "plan_status": "PARTIAL",
+      "offline_status": "NOT_RUN",
+      "real_status": "UNVERIFIED",
+      "release_allowed": false,
+      "new_entry": null,
+      "new_files": [
+        "native/games/wvd/tasks/quest_catalog.cpp",
+        "packs/wvd/parameters/legacy-quests.json",
+        "native/games/wvd/tasks/task_plan.cpp"
+      ],
+      "source_fields": [
+        "questName",
+        "questName_en_US",
+        "questCategory",
+        "questCategory_en_US",
+        "_TYPE"
+      ],
+      "success_evidence": [],
+      "failure_stop_recovery_evidence": [],
+      "data_evidence": "../m4-business-validation.md#配置与目录",
+      "semantic_differences": [],
+      "blockers": [
+        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
+        "BUSINESS_ACTIONS_NOT_IMPLEMENTED",
+        "SPECIAL_CASE_NOT_IMPLEMENTED"
+      ],
+      "plan_data_status": "PASS",
+      "plan_evidence": "../m4-plan-validation.md"
+    },
+    {
+      "task_id": "jier",
+      "legacy_type": "quest",
+      "legacy_title": "[悬赏]吉尔",
+      "source_ref": "resources/quest/quest.json#/jier",
+      "source_data_sha256_canonical_json": "bedfc7fd135a465f4e8ccabf9cce8cf6ff64d827ee9a24958bf3e5a9b196bdb1",
+      "original_acceptance_ids": [
+        "M4-TASK-jier"
+      ],
+      "implementation_status": "PARTIAL",
+      "implementation_extent": "TYPED_PLAN_DATA",
+      "data_binding_status": "PASS",
+      "plan_status": "PARTIAL",
+      "offline_status": "NOT_RUN",
+      "real_status": "UNVERIFIED",
+      "release_allowed": false,
+      "new_entry": null,
+      "new_files": [
+        "native/games/wvd/tasks/quest_catalog.cpp",
+        "packs/wvd/parameters/legacy-quests.json",
+        "native/games/wvd/tasks/task_plan.cpp"
+      ],
+      "source_fields": [
+        "questName",
+        "questName_en_US",
+        "questCategory",
+        "questCategory_en_US",
+        "_TYPE"
+      ],
+      "success_evidence": [],
+      "failure_stop_recovery_evidence": [],
+      "data_evidence": "../m4-business-validation.md#配置与目录",
+      "semantic_differences": [],
+      "blockers": [
+        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
+        "BUSINESS_ACTIONS_NOT_IMPLEMENTED",
+        "SPECIAL_CASE_NOT_IMPLEMENTED"
+      ],
+      "plan_data_status": "PASS",
+      "plan_evidence": "../m4-plan-validation.md"
+    },
+    {
+      "task_id": "Scorpionesses",
+      "legacy_type": "quest",
+      "legacy_title": "[悬赏]蝎女",
+      "source_ref": "resources/quest/quest.json#/Scorpionesses",
+      "source_data_sha256_canonical_json": "a545ac86d0e3efaae1c7f6c0a899ed75b6e54a6238cc1dfee4937516435345fe",
+      "original_acceptance_ids": [
+        "M4-TASK-Scorpionesses"
+      ],
+      "implementation_status": "PARTIAL",
+      "implementation_extent": "TYPED_PLAN_DATA",
+      "data_binding_status": "PASS",
+      "plan_status": "PARTIAL",
+      "offline_status": "NOT_RUN",
+      "real_status": "UNVERIFIED",
+      "release_allowed": false,
+      "new_entry": null,
+      "new_files": [
+        "native/games/wvd/tasks/quest_catalog.cpp",
+        "packs/wvd/parameters/legacy-quests.json",
+        "native/games/wvd/tasks/task_plan.cpp"
+      ],
+      "source_fields": [
+        "questName",
+        "questName_en_US",
+        "questCategory",
+        "questCategory_en_US",
+        "_TYPE"
+      ],
+      "success_evidence": [],
+      "failure_stop_recovery_evidence": [],
+      "data_evidence": "../m4-business-validation.md#配置与目录",
+      "semantic_differences": [],
+      "blockers": [
+        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
+        "BUSINESS_ACTIONS_NOT_IMPLEMENTED",
+        "SPECIAL_CASE_NOT_IMPLEMENTED"
+      ],
+      "plan_data_status": "PASS",
+      "plan_evidence": "../m4-plan-validation.md"
+    },
+    {
+      "task_id": "Scorpionesses_plus_6_hands",
+      "legacy_type": "quest",
+      "legacy_title": "[悬赏]蝎女+风暴六手",
+      "source_ref": "resources/quest/quest.json#/Scorpionesses_plus_6_hands",
+      "source_data_sha256_canonical_json": "20b896af264240bd986f5cc9bf06ae9a32a0f21c77271f71da390d93498754c0",
+      "original_acceptance_ids": [
+        "M4-TASK-Scorpionesses_plus_6_hands"
+      ],
+      "implementation_status": "PARTIAL",
+      "implementation_extent": "TYPED_PLAN_DATA",
+      "data_binding_status": "PASS",
+      "plan_status": "PARTIAL",
+      "offline_status": "NOT_RUN",
+      "real_status": "UNVERIFIED",
+      "release_allowed": false,
+      "new_entry": null,
+      "new_files": [
+        "native/games/wvd/tasks/quest_catalog.cpp",
+        "packs/wvd/parameters/legacy-quests.json",
+        "native/games/wvd/tasks/task_plan.cpp"
+      ],
+      "source_fields": [
+        "questName",
+        "questName_en_US",
+        "questCategory",
+        "questCategory_en_US",
+        "_TYPE"
+      ],
+      "success_evidence": [],
+      "failure_stop_recovery_evidence": [],
+      "data_evidence": "../m4-business-validation.md#配置与目录",
+      "semantic_differences": [],
+      "blockers": [
+        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
+        "BUSINESS_ACTIONS_NOT_IMPLEMENTED",
+        "SPECIAL_CASE_NOT_IMPLEMENTED"
+      ],
+      "plan_data_status": "PASS",
+      "plan_evidence": "../m4-plan-validation.md"
+    },
+    {
+      "task_id": "gaintKiller",
+      "legacy_type": "quest",
+      "legacy_title": "[刷怪]要塞7f刷巨人",
+      "source_ref": "resources/quest/quest.json#/gaintKiller",
+      "source_data_sha256_canonical_json": "69b9f658ab2c5e62cea5ba02a4e00d6dd305f7222d681057c2fa572ab4d5ec79",
+      "original_acceptance_ids": [
+        "M4-TASK-gaintKiller"
+      ],
+      "implementation_status": "PARTIAL",
+      "implementation_extent": "TYPED_PLAN_DATA",
+      "data_binding_status": "PASS",
+      "plan_status": "PARTIAL",
+      "offline_status": "NOT_RUN",
+      "real_status": "UNVERIFIED",
+      "release_allowed": false,
+      "new_entry": null,
+      "new_files": [
+        "native/games/wvd/tasks/quest_catalog.cpp",
+        "packs/wvd/parameters/legacy-quests.json",
+        "native/games/wvd/tasks/task_plan.cpp"
+      ],
+      "source_fields": [
+        "questName",
+        "questName_en_US",
+        "questCategory",
+        "questCategory_en_US",
+        "_TYPE"
+      ],
+      "success_evidence": [],
+      "failure_stop_recovery_evidence": [],
+      "data_evidence": "../m4-business-validation.md#配置与目录",
+      "semantic_differences": [],
+      "blockers": [
+        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
+        "BUSINESS_ACTIONS_NOT_IMPLEMENTED",
+        "SPECIAL_CASE_NOT_IMPLEMENTED"
+      ],
+      "plan_data_status": "PASS",
+      "plan_evidence": "../m4-plan-validation.md"
+    },
+    {
+      "task_id": "lovesleep",
+      "legacy_type": "quest",
+      "legacy_title": "[刷药]喜欢睡觉",
+      "source_ref": "resources/quest/quest.json#/lovesleep",
+      "source_data_sha256_canonical_json": "ddbc86f32aa705ddd9bb9cae1782902f57583829d73678a27ab4fc969387636e",
+      "original_acceptance_ids": [
+        "M4-TASK-lovesleep"
+      ],
+      "implementation_status": "PARTIAL",
+      "implementation_extent": "TYPED_PLAN_DATA",
+      "data_binding_status": "PASS",
+      "plan_status": "PARTIAL",
+      "offline_status": "NOT_RUN",
+      "real_status": "UNVERIFIED",
+      "release_allowed": false,
+      "new_entry": null,
+      "new_files": [
+        "native/games/wvd/tasks/quest_catalog.cpp",
+        "packs/wvd/parameters/legacy-quests.json",
+        "native/games/wvd/tasks/task_plan.cpp"
+      ],
+      "source_fields": [
+        "questName",
+        "questName_en_US",
+        "questCategory",
+        "questCategory_en_US",
+        "_TYPE"
+      ],
+      "success_evidence": [],
+      "failure_stop_recovery_evidence": [],
+      "data_evidence": "../m4-business-validation.md#配置与目录",
+      "semantic_differences": [],
+      "blockers": [
+        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
+        "BUSINESS_ACTIONS_NOT_IMPLEMENTED",
+        "SPECIAL_CASE_NOT_IMPLEMENTED"
+      ],
+      "plan_data_status": "PASS",
+      "plan_evidence": "../m4-plan-validation.md"
+    },
+    {
+      "task_id": "FFXI-Org",
+      "legacy_type": "quest",
+      "legacy_title": "[矿石]FFXI挖矿",
+      "source_ref": "resources/quest/quest.json#/FFXI-Org",
+      "source_data_sha256_canonical_json": "7eae3d082c7e55adc2aa5d580a24e48dd4e359a3f4c2d127a3c211d9922a1fef",
+      "original_acceptance_ids": [
+        "M4-TASK-FFXI-Org"
+      ],
+      "implementation_status": "PARTIAL",
+      "implementation_extent": "TYPED_PLAN_DATA",
+      "data_binding_status": "PASS",
+      "plan_status": "PARTIAL",
+      "offline_status": "NOT_RUN",
+      "real_status": "UNVERIFIED",
+      "release_allowed": false,
+      "new_entry": null,
+      "new_files": [
+        "native/games/wvd/tasks/quest_catalog.cpp",
+        "packs/wvd/parameters/legacy-quests.json",
+        "native/games/wvd/tasks/task_plan.cpp"
+      ],
+      "source_fields": [
+        "questName",
+        "questName_en_US",
+        "questCategory",
+        "questCategory_en_US",
+        "_TYPE",
+        "_preEOTcheck",
+        "_EOT",
+        "_RTT",
+        "_TIPS"
+      ],
+      "success_evidence": [],
+      "failure_stop_recovery_evidence": [],
+      "data_evidence": "../m4-business-validation.md#配置与目录",
+      "semantic_differences": [],
+      "blockers": [
+        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
+        "BUSINESS_ACTIONS_NOT_IMPLEMENTED",
+        "SPECIAL_CASE_NOT_IMPLEMENTED"
+      ],
+      "plan_data_status": "PASS",
+      "plan_evidence": "../m4-plan-validation.md"
+    },
+    {
+      "task_id": "sandman",
+      "legacy_type": "quest",
+      "legacy_title": "[缘]沙人",
+      "source_ref": "resources/quest/quest.json#/sandman",
+      "source_data_sha256_canonical_json": "b46a5b05990b8de3a9e601102bbc1ce0be029eafe066fbeace8bebb1f4ee34e1",
+      "original_acceptance_ids": [
+        "M4-TASK-sandman"
+      ],
+      "implementation_status": "PARTIAL",
+      "implementation_extent": "TYPED_PLAN_DATA",
+      "data_binding_status": "PASS",
+      "plan_status": "PARTIAL",
+      "offline_status": "NOT_RUN",
+      "real_status": "UNVERIFIED",
+      "release_allowed": false,
+      "new_entry": null,
+      "new_files": [
+        "native/games/wvd/tasks/quest_catalog.cpp",
+        "packs/wvd/parameters/legacy-quests.json",
+        "native/games/wvd/tasks/task_plan.cpp"
+      ],
+      "source_fields": [
+        "questName",
+        "questName_en_US",
+        "questCategory",
+        "questCategory_en_US",
+        "_TYPE"
+      ],
+      "success_evidence": [],
+      "failure_stop_recovery_evidence": [],
+      "data_evidence": "../m4-business-validation.md#配置与目录",
+      "semantic_differences": [],
+      "blockers": [
+        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
+        "BUSINESS_ACTIONS_NOT_IMPLEMENTED",
+        "SPECIAL_CASE_NOT_IMPLEMENTED"
+      ],
+      "plan_data_status": "PASS",
+      "plan_evidence": "../m4-plan-validation.md"
+    },
+    {
+      "task_id": "fishing",
+      "legacy_type": "quest",
+      "legacy_title": "钓鱼(测试)-近端",
+      "source_ref": "resources/quest/quest.json#/fishing",
+      "source_data_sha256_canonical_json": "81d63e211a41b21706521dd6466557704f19c921826c019ee658cd3f40d7be04",
+      "original_acceptance_ids": [
+        "M4-TASK-fishing"
+      ],
+      "implementation_status": "PARTIAL",
+      "implementation_extent": "TYPED_PLAN_DATA",
+      "data_binding_status": "PASS",
+      "plan_status": "PARTIAL",
+      "offline_status": "NOT_RUN",
+      "real_status": "UNVERIFIED",
+      "release_allowed": false,
+      "new_entry": null,
+      "new_files": [
+        "native/games/wvd/tasks/quest_catalog.cpp",
+        "packs/wvd/parameters/legacy-quests.json",
+        "native/games/wvd/tasks/task_plan.cpp"
+      ],
+      "source_fields": [
+        "questName",
+        "questName_en_US",
+        "questCategory",
+        "questCategory_en_US",
+        "_TYPE",
+        "_TIPS"
+      ],
+      "success_evidence": [],
+      "failure_stop_recovery_evidence": [],
+      "data_evidence": "../m4-business-validation.md#配置与目录",
+      "semantic_differences": [],
+      "blockers": [
+        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
+        "BUSINESS_ACTIONS_NOT_IMPLEMENTED",
+        "SPECIAL_CASE_NOT_IMPLEMENTED"
+      ],
+      "plan_data_status": "PASS",
+      "plan_evidence": "../m4-plan-validation.md"
+    },
+    {
+      "task_id": "fishing2",
+      "legacy_type": "quest",
+      "legacy_title": "钓鱼(测试)-远端",
+      "source_ref": "resources/quest/quest.json#/fishing2",
+      "source_data_sha256_canonical_json": "bc5c8b03e8ffdd97274b2481827f71d64e9eb993353dba962bb6cd63950a77b2",
+      "original_acceptance_ids": [
+        "M4-TASK-fishing2"
+      ],
+      "implementation_status": "PARTIAL",
+      "implementation_extent": "TYPED_PLAN_DATA",
+      "data_binding_status": "PASS",
+      "plan_status": "PARTIAL",
+      "offline_status": "NOT_RUN",
+      "real_status": "UNVERIFIED",
+      "release_allowed": false,
+      "new_entry": null,
+      "new_files": [
+        "native/games/wvd/tasks/quest_catalog.cpp",
+        "packs/wvd/parameters/legacy-quests.json",
+        "native/games/wvd/tasks/task_plan.cpp"
+      ],
+      "source_fields": [
+        "questName",
+        "questName_en_US",
+        "questCategory",
+        "questCategory_en_US",
+        "_TYPE",
+        "_TIPS"
+      ],
+      "success_evidence": [],
+      "failure_stop_recovery_evidence": [],
+      "data_evidence": "../m4-business-validation.md#配置与目录",
+      "semantic_differences": [],
+      "blockers": [
+        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
+        "BUSINESS_ACTIONS_NOT_IMPLEMENTED",
+        "SPECIAL_CASE_NOT_IMPLEMENTED"
+      ],
+      "plan_data_status": "PASS",
+      "plan_evidence": "../m4-plan-validation.md"
+    }
+  ]
+}

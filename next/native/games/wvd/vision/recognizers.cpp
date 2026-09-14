@@ -21,9 +21,7 @@ cv::Rect rect(const J &value, cv::Size size) {
           "WVD_ROI_INVALID");
     return {v[0], v[1], v[2], v[3]};
 }
-J box(cv::Rect value) {
-    return {value.x, value.y, value.width, value.height};
-}
+J box(cv::Rect value) { return {value.x, value.y, value.width, value.height}; }
 J decision(bool hit, cv::Rect area, J evidence, bool target = false) {
     return {{"schema", 1},
             {"outcome", hit ? "Hit" : "NoHit"},
@@ -133,8 +131,10 @@ J layout(const cv::Mat &source) {
                      {"text_height", bounds.height}},
                     false);
 }
-J evaluate(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels, const J &p, const J &bound,
-           maafw::RecognitionCache &cache) {
+J evaluate_impl(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels, const J &p,
+                const J &bound, const maafw::CustomRecognitionScope &scope,
+                maafw::RecognitionCache &cache, unsigned depth) {
+    check(depth <= 8, "WVD_CONDITION_DEPTH");
     check(pixels.size.width > 0 && pixels.size.height > 0 &&
               pixels.bgr.size() == std::size_t(pixels.size.width) * pixels.size.height * 3,
           "WVD_PIXELS_INVALID");
@@ -149,15 +149,58 @@ J evaluate(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels, const J
     }
     const J aliases = bound.value("aliases", J::object());
     AssetResolver assets(bundle, aliases, cache);
+    const auto allowed = scope.allowed_roi();
+    const auto allowed_rect =
+        rect(J{allowed.x, allowed.y, allowed.width, allowed.height}, image.size());
+    if (p.contains("roi")) {
+        const auto explicit_roi = rect(p.at("roi"), image.size());
+        check((explicit_roi & allowed_rect) == explicit_roi, "WVD_ROI_OUTSIDE_SCOPE");
+    }
     auto mode = p.at("mode").get<std::string>();
-    if (mode == "bobber")
+    if (mode == "all" || mode == "any" || mode == "not") {
+        check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");
+        const auto &children = p.at("conditions");
+        check(children.is_array() && !children.empty() && children.size() <= 16 &&
+                  (mode != "not" || children.size() == 1),
+              "WVD_CONDITIONS_INVALID");
+        bool all = true, any = false, action_eligible = true;
+        J evidence = J::array();
+        // 组合只产生布尔条件，不赋予坐标许可；所有子项都检查，不能短路掩盖缺图/Error。
+        for (const auto &child : children) {
+            auto result = evaluate_impl(bundle, pixels, child, bound, scope, cache, depth + 1);
+            check(result.at("outcome") != "Error", "WVD_CONDITION_ERROR");
+            bool hit = result.at("outcome") == "Hit";
+            all = all && hit;
+            any = any || hit;
+            // 布尔包装不能提升子识别的授权级别，尤其不能洗掉低置信 NEXT 的限制。
+            action_eligible = action_eligible && result.value("action_eligible", true);
+            evidence.push_back(std::move(result));
+        }
+        auto result = decision(mode == "all"   ? all
+                               : mode == "any" ? any
+                                               : !any,
+                               allowed_rect, {{"conditions", evidence}}, false);
+        result["action_eligible"] = action_eligible;
+        return result;
+    }
+    if (mode == "bobber") {
+        check(allowed_rect == cv::Rect(0, 0, image.cols, image.rows), "WVD_ROI_OUTSIDE_SCOPE");
         return detect_bobber(image, assets.load("fishing/bobber"));
+    }
     auto one = [&](const std::string &name, J parameters) {
-        return match(image, assets.load(name), std::move(parameters), cache,
-                     bundle.revision + ":" + name);
+        const bool has_roi = parameters.contains("roi");
+        auto effective = has_roi ? rect(parameters.at("roi"), image.size()) : allowed_rect;
+        check((effective & allowed_rect) == effective, "WVD_ROI_OUTSIDE_SCOPE");
+        parameters["roi"] = box(effective);
+        auto result =
+            match(image, assets.load(name), parameters, cache, bundle.revision + ":" + name);
+        result["effective_roi"] = box(effective);
+        result["roi_source"] = parameters.value("roi_source", has_roi ? "explicit" : "scope");
+        return result;
     };
     if (mode == "template" || mode == "bright_mask" || mode == "multiple") {
         auto parameters = p;
+        parameters["roi_source"] = p.contains("roi") ? "explicit" : "scope";
         if (!p.contains("roi") && p.value("default_roi", false)) {
             const auto name = p.at("image").get<std::string>();
             if (name == "next" || name == "combatTarget")
@@ -167,6 +210,8 @@ J evaluate(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels, const J
             else if (name == "combatActive" || name == "combatActive_2" ||
                      name == "combatActive_3" || name == "combatActive_4")
                 parameters["roi"] = {0, 0, 150, 80};
+            if (parameters.contains("roi"))
+                parameters["roi_source"] = "default";
         }
         parameters["bright_mask"] = mode == "bright_mask" || p.value("bright_mask", false);
         parameters["multiple"] = mode == "multiple";
@@ -195,10 +240,13 @@ J evaluate(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels, const J
         return result;
     }
     // 低置信结果只供已限定阶段的调用者判断；本纯识别器从不触发点击/自动战斗。
-    if (mode == "next_low_confidence" || mode == "target_marker")
-        return one(
+    if (mode == "next_low_confidence" || mode == "target_marker") {
+        auto result = one(
             mode == "target_marker" ? "combatTarget" : "next",
             {{"roi", {80, 220, 819, 680}}, {"threshold", mode == "target_marker" ? 0.86 : 0.60}});
+        result["action_eligible"] = mode != "next_low_confidence";
+        return result;
+    }
     if (mode == "next") {
         J attempts = J::array();
         for (const auto &name : {"next", "combatTarget"}) {
@@ -227,6 +275,7 @@ J evaluate(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels, const J
     if (mode == "pause" || mode == "pause_negative") {
         check(image.cols == 900 && image.rows == 1600, "WVD_VIEWPORT_INVALID");
         cv::Rect area(330, 740, 240, 110);
+        check((area & allowed_rect) == area, "WVD_ROI_OUTSIDE_SCOPE");
         cv::Mat gray;
         cv::cvtColor(image(area), gray, cv::COLOR_BGR2GRAY);
         double dark = double(cv::countNonZero(gray < 70)) / gray.total(),
@@ -358,6 +407,10 @@ J evaluate(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels, const J
         return decision(stair ? !present : present, area, {{"template", result}, {"stair", stair}});
     }
     throw std::runtime_error("WVD_RECOGNIZER_UNKNOWN");
+}
+J evaluate(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels, const J &p, const J &bound,
+           const maafw::CustomRecognitionScope &scope, maafw::RecognitionCache &cache) {
+    return evaluate_impl(bundle, pixels, p, bound, scope, cache, 0);
 }
 } // namespace
 void register_wvd(runtime::BehaviorRegistry &registry) {

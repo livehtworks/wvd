@@ -3,19 +3,17 @@
 #include "devices/backend.hpp"
 #include "devices/screenshot_route.hpp"
 #include <json.hpp>
+#include <stop_token>
 
 namespace wvd::maafw {
 // 只管理内层 Controller。Tasker/Resource 仍由外层唯一 Gateway 持有。
 class AdbBackend final : public devices::DeviceBackend {
   public:
-    explicit AdbBackend(const std::filesystem::path &verified_binding, bool encode_only = false);
+    explicit AdbBackend(const std::filesystem::path &verified_binding, bool encode_only = false,
+                        std::stop_token discovery_cancellation = {});
     ~AdbBackend();
-    bool offline() const override {
-        return false;
-    }
-    bool verified_access() const override {
-        return verified_;
-    }
+    bool offline() const override { return false; }
+    bool verified_access() const override { return verified_; }
     bool connect() override;
     void disconnect() override;
     devices::RawFrame capture() override;

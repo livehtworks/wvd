@@ -1,4 +1,5 @@
 #include "mumu_binding.hpp"
+#include "metadata_query.hpp"
 #include "maafw/buffers.hpp"
 #include <algorithm>
 #include <fstream>
@@ -20,38 +21,23 @@ void check(bool value, const char *code) {
     if (!value)
         throw std::runtime_error(code);
 }
-std::string manager_info(const std::filesystem::path &manager, int index) {
-    SECURITY_ATTRIBUTES attributes{sizeof(attributes), nullptr, TRUE};
-    Handle read, write;
-    check(CreatePipe(&read.value, &write.value, &attributes, 0), "MUMU_METADATA_PIPE_FAILED");
-    check(SetHandleInformation(read.value, HANDLE_FLAG_INHERIT, 0), "MUMU_METADATA_PIPE_FLAGS");
-    STARTUPINFOW startup{};
-    startup.cb = sizeof(startup);
-    startup.dwFlags = STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
-    startup.wShowWindow = SW_HIDE;
-    startup.hStdOutput = write.value;
-    startup.hStdError = write.value;
-    PROCESS_INFORMATION process{};
-    auto command = L"\"" + manager.wstring() + L"\" info -v " + std::to_wstring(index);
-    check(CreateProcessW(manager.c_str(), command.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW,
-                         nullptr, manager.parent_path().c_str(), &startup, &process),
-          "MUMU_METADATA_START_FAILED");
-    Handle child{process.hProcess}, thread{process.hThread};
-    CloseHandle(write.value);
-    write.value = nullptr;
-    std::string output;
-    char block[4096];
-    DWORD count{};
-    while (ReadFile(read.value, block, sizeof(block), &count, nullptr) && count) {
-        check(output.size() + count < 2 * 1024 * 1024, "MUMU_METADATA_TOO_LARGE");
-        output.append(block, count);
+void reject_controller(const char *code, const PROCESSENTRY32W &entry) {
+    nlohmann::json evidence{
+        {"pid", entry.th32ProcessID}, {"image", "unknown"}, {"created", nullptr}};
+    Handle process{OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, entry.th32ProcessID)};
+    if (process.value) {
+        std::wstring image(32768, L'\0');
+        DWORD size = static_cast<DWORD>(image.size());
+        if (QueryFullProcessImageNameW(process.value, 0, image.data(), &size)) {
+            image.resize(size);
+            evidence["image"] = maafw::utf8(std::filesystem::path(image));
+        }
+        FILETIME created{}, ended{}, kernel{}, user{};
+        if (GetProcessTimes(process.value, &created, &ended, &kernel, &user))
+            evidence["created"] =
+                (std::uint64_t(created.dwHighDateTime) << 32) | created.dwLowDateTime;
     }
-    // 元数据进程不是取消替代物；不强杀后把验证计为成功。
-    WaitForSingleObject(child.value, INFINITE);
-    DWORD exit{};
-    GetExitCodeProcess(child.value, &exit);
-    check(exit == 0, "MUMU_METADATA_FAILED");
-    return output;
+    throw std::runtime_error(std::string(code) + ":" + evidence.dump());
 }
 void check_controllers() {
     Handle snapshot{CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)};
@@ -77,13 +63,14 @@ void check_controllers() {
         const auto name = std::wstring(entry.szExeFile);
         if (_wcsicmp(name.c_str(), L"wvd.exe") == 0 || _wcsicmp(name.c_str(), L"scrcpy.exe") == 0 ||
             _wcsicmp(name.c_str(), L"pythonw.exe") == 0)
-            throw std::runtime_error("OTHER_CONTROLLER_PRESENT");
+            reject_controller("OTHER_CONTROLLER_PRESENT", entry);
         if (_wcsicmp(name.c_str(), L"python.exe") == 0 && !ancestors.contains(entry.th32ProcessID))
-            throw std::runtime_error("PYTHON_CONTROLLER_OWNERSHIP_UNCONFIRMED");
+            reject_controller("PYTHON_CONTROLLER_OWNERSHIP_UNCONFIRMED", entry);
     }
 }
 } // namespace
-nlohmann::json verify_mumu_binding(const std::filesystem::path &file) {
+nlohmann::json verify_mumu_binding(const std::filesystem::path &file,
+                                   std::stop_token cancellation) {
     std::ifstream input(file);
     check(bool(input), "DEVICE_BINDING_REQUIRED");
     nlohmann::json binding;
@@ -98,7 +85,12 @@ nlohmann::json verify_mumu_binding(const std::filesystem::path &file) {
           "MUMU_MANAGER_INVALID");
     int index = binding.at("index");
     check(index >= 0 && index <= 10000, "MUMU_INSTANCE_INVALID");
-    auto live = nlohmann::json::parse(manager_info(manager, index));
+    MetadataQuery query;
+    std::stop_callback cancel(cancellation, [&] { query.cancel(); });
+    auto metadata = query.run(manager, index);
+    if (!metadata.at("success").get<bool>())
+        throw std::runtime_error(metadata.at("error").get<std::string>() + ":" + metadata.dump());
+    auto live = metadata.at("data");
     check(live.value("error_code", -1) == 0 &&
               live.at("index").get<std::string>() == std::to_string(index),
           "MUMU_INSTANCE_MISMATCH");
@@ -118,6 +110,7 @@ nlohmann::json verify_mumu_binding(const std::filesystem::path &file) {
               std::filesystem::canonical(root),
           "MUMU_INSTALL_MISMATCH");
     binding["live_manager"] = live;
+    binding["metadata_query"] = metadata;
     return binding;
 }
 } // namespace wvd::platform

@@ -6,6 +6,9 @@
 #include <memory>
 #include <variant>
 
+namespace wvd::platform {
+class BundleLease;
+}
 namespace wvd::maafw {
 struct ResourceFile {
     std::string relative_path, sha256;
@@ -14,6 +17,8 @@ struct Bundle {
     std::filesystem::path root;
     std::string revision;
     std::vector<ResourceFile> files;
+    std::filesystem::path snapshot_parent;
+    std::shared_ptr<const platform::BundleLease> lease;
 };
 struct TemplateParameters {
     std::string image;
@@ -32,6 +37,8 @@ struct RecognitionRequest {
     };
     std::variant<TemplateParameters, OcrParameters, CustomParameters> parameters;
 };
+// 所有动作入口共用相同参数边界；绑定存在性由持有封存注册表的 Gateway 检查。
+RecognitionRequest parse_recognition_request(const nlohmann::json &value);
 
 // M2 的离线识别入口：只绑定 Resource，不创建任何 Controller。
 // 同一对象串行调用；evaluate 等原生任务静止后才返回，不宣称底层等待可中断。
@@ -40,6 +47,7 @@ class OfflineRecognizer {
   public:
     explicit OfflineRecognizer(Bundle bundle);
     ~OfflineRecognizer();
+    nlohmann::json bundle_status() const;
     OfflineRecognizer(const OfflineRecognizer &) = delete;
     OfflineRecognizer &operator=(const OfflineRecognizer &) = delete;
     contracts::Observation evaluate(const contracts::FrameEnvelope &frame,

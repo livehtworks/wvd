@@ -197,7 +197,8 @@ class NativeRecognitionTests(unittest.TestCase):
         self.expect_error(self.case(mutate="hash"), "RESOURCE_HASH_MISMATCH")
 
     def test_resource_changed_after_load(self):
-        self.expect_error(self.case(mutate="after_load"), "RESOURCE_HASH_MISMATCH")
+        # PERF-INTEGRITY 指定等价断言：活动文件改写必须被共享锁阻止，原图仍能识别。
+        self.assertEqual(self.case(mutate="after_load")[0]["outcome"], "Hit")
 
     def test_unlisted_resource(self):
         self.expect_error(self.case(mutate="unlisted"), "RESOURCE_NOT_IN_MANIFEST")

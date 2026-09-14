@@ -2,6 +2,7 @@
 #include "buffers.hpp"
 #include "gateway.hpp"
 #include "preflight.hpp"
+#include "platform/windows/runtime_files.hpp"
 #include <cmath>
 #include <mutex>
 #include <set>
@@ -56,6 +57,7 @@ void read_detail(MaaTasker *tasker, contracts::Observation &result) {
             custom = nlohmann::json::parse(custom.get<std::string>());
         require(custom.is_object() && custom.value("schema", 0) == 1, "CUSTOM_DETAIL_INVALID");
         result.evidence = custom;
+        result.action_eligible = custom.value("action_eligible", true);
         const auto outcome = custom.at("outcome").get<std::string>();
         if (outcome == "Error")
             throw std::runtime_error(custom.value("error", std::string("CUSTOM_RECO_ERROR")));
@@ -99,6 +101,29 @@ void read_detail(MaaTasker *tasker, contracts::Observation &result) {
 }
 } // namespace
 
+RecognitionRequest parse_recognition_request(const nlohmann::json &value) {
+    const auto roi = value.at("roi").get<std::vector<int>>();
+    require(roi.size() == 4, "ROI_INVALID");
+    RecognitionRequest result{
+        value.at("id"), value.at("revision"), {roi[0], roi[1], roi[2], roi[3]}, {}};
+    require(!result.recognizer_id.empty() && !result.parameter_revision.empty(),
+            "RECO_IDENTITY_INVALID");
+    const auto type = value.value("type", std::string("template"));
+    if (type == "template")
+        result.parameters = TemplateParameters{value.at("image"), value.value("threshold", 0.8)};
+    else if (type == "ocr")
+        result.parameters = OcrParameters{value.at("expected").get<std::vector<std::string>>()};
+    else if (type == "custom") {
+        auto params = value.at("parameters");
+        auto binding = value.at("binding").get<std::string>();
+        require(!binding.empty() && params.is_object() && params.dump().size() <= 32768,
+                "CUSTOM_PARAMETERS_INVALID");
+        result.parameters = RecognitionRequest::CustomParameters{binding, params};
+    } else
+        throw std::runtime_error("RECO_TYPE_NOT_SUPPORTED");
+    return result;
+}
+
 struct OfflineRecognizer::Impl {
     std::mutex mutex;
     std::string initialization_error;
@@ -120,6 +145,7 @@ struct OfflineRecognizer::Impl {
 OfflineRecognizer::OfflineRecognizer(Bundle bundle)
     : impl_(std::make_unique<Impl>(std::move(bundle))) {}
 OfflineRecognizer::~OfflineRecognizer() = default;
+nlohmann::json OfflineRecognizer::bundle_status() const { return impl_->gateway.bundle_status(); }
 
 contracts::Observation OfflineRecognizer::evaluate(const contracts::FrameEnvelope &frame,
                                                    const contracts::FrameIdentity &current,
@@ -140,6 +166,15 @@ contracts::Observation MaaGateway::recognize(const contracts::FrameEnvelope &fra
                                              const contracts::FrameIdentity &current,
                                              const RecognitionRequest &request,
                                              MaaContext *context) {
+    std::lock_guard direct_lock(direct_recognition_mutex_);
+    struct InvocationCleanup {
+        std::mutex &mutex;
+        std::optional<VerifiedInvocation> &active;
+        ~InvocationCleanup() {
+            std::lock_guard lock(mutex);
+            active.reset();
+        }
+    } invocation_cleanup{recognition_mutex_, verified_invocation_};
     contracts::Observation result;
     result.basis = frame.identity;
     result.recognizer_id = request.recognizer_id;
@@ -162,7 +197,19 @@ contracts::Observation MaaGateway::recognize(const contracts::FrameEnvelope &fra
         verify_bundle(bundle_);
         stage("bundle_verification");
         result.error_stage = "parameter_preflight";
+        if (const auto *custom =
+                std::get_if<RecognitionRequest::CustomParameters>(&request.parameters))
+            require(recognitions_.contains(custom->binding), "CUSTOM_RECO_NOT_REGISTERED");
         auto parameters = validate_parameters(bundle_, request, frame.identity.recognition_size);
+        if (const auto *custom =
+                std::get_if<RecognitionRequest::CustomParameters>(&request.parameters)) {
+            std::lock_guard lock(recognition_mutex_);
+            auto token = platform::unique_id();
+            verified_invocation_ = VerifiedInvocation{
+                token,       custom->binding,           parameters.at("custom_recognition_param"),
+                request.roi, ++recognition_invocation_, false};
+            parameters["custom_recognition_param"]["_wvd_verified_invocation"] = token;
+        }
         stage("parameter_preflight");
         result.error_stage = "native_recognition";
         const char *type = std::holds_alternative<TemplateParameters>(request.parameters)

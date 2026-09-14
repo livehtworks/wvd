@@ -1,5 +1,6 @@
 #include "asset_resolver.hpp"
 #include "maafw/preflight.hpp"
+#include "platform/windows/bundle_lease.hpp"
 #include <fstream>
 #include <opencv2/imgcodecs.hpp>
 
@@ -21,12 +22,12 @@ cv::Mat AssetResolver::load(const std::string &name) {
         owner = mod_;
     // 即使有缓存也复核当前快照。缺图、坏图或修改后文件不能成为正常 NoHit。
     maafw::verify_file(*owner, relative);
-    auto key = "template:" + owner->revision + ":" +
-               maafw::utf8(std::filesystem::canonical(owner->root)) + ":" + relative;
+    if (!owner->lease)
+        throw std::runtime_error("BUNDLE_LEASE_REQUIRED");
+    auto key = "template:" + owner->revision + ":" + owner->lease->identity() + ":" + relative;
     if (auto found = cache_.assets.find(key); found != cache_.assets.end())
         return std::any_cast<cv::Mat>(found->second);
-    std::ifstream file(owner->root / maafw::path_from_utf8(relative), std::ios::binary);
-    std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(file)), {});
+    const auto &bytes = owner->lease->bytes(relative);
     auto image = cv::imdecode(bytes, cv::IMREAD_COLOR);
     if (image.empty() || image.type() != CV_8UC3)
         throw std::runtime_error("WVD_TEMPLATE_DECODE_INVALID");

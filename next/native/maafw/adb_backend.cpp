@@ -11,12 +11,11 @@ void check(bool value, const char *code) {
         throw std::runtime_error(code);
 }
 } // namespace
-AdbBackend::AdbBackend(const std::filesystem::path &binding, bool encode_only)
-    : binding_(platform::verify_mumu_binding(binding)), verified_(true), encode_only_(encode_only),
-      route_(encode_only) {}
-AdbBackend::~AdbBackend() {
-    disconnect();
-}
+AdbBackend::AdbBackend(const std::filesystem::path &binding, bool encode_only,
+                       std::stop_token cancellation)
+    : binding_(platform::verify_mumu_binding(binding, cancellation)), verified_(true),
+      encode_only_(encode_only), route_(encode_only) {}
+AdbBackend::~AdbBackend() { disconnect(); }
 bool AdbBackend::wait(MaaCtrlId id) {
     if (id == MaaInvalidId)
         return false;
@@ -93,9 +92,7 @@ bool AdbBackend::connect() {
         return true;
     return route_.connect([this](bool encode) { return open(encode); });
 }
-void AdbBackend::disconnect() {
-    controller_.reset();
-}
+void AdbBackend::disconnect() { controller_.reset(); }
 std::string AdbBackend::foreground() {
     // Android 15 的 windows 子段不含 mCurrentFocus；完整 window 报告才包含焦点。
     check(wait(MaaControllerPostShell(controller_.get(), "dumpsys window", 5000)),

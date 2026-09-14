@@ -3,6 +3,7 @@
 #include "custom_recognition.hpp"
 #include "guarded_controller.hpp"
 #include "recognition.hpp"
+#include "contracts/business_state.hpp"
 #include <map>
 
 namespace wvd::maafw {
@@ -14,12 +15,8 @@ struct ChildResult {
 };
 class Context {
   public:
-    std::int64_t task_id() const {
-        return task_;
-    }
-    const std::string &node() const {
-        return node_;
-    }
+    std::int64_t task_id() const { return task_; }
+    const std::string &node() const { return node_; }
     int depth() const;
     bool cancelled() const;
     contracts::FrameEnvelope capture();
@@ -31,6 +28,7 @@ class Context {
     bool native_action(const std::string &type, const nlohmann::json &parameters);
     bool controller_action(const contracts::Command &command);
     nlohmann::json node_data(const std::string &name) const;
+    bool with_business_state(const std::function<bool(contracts::BusinessRunState &)> &operation);
 
   private:
     friend class MaaGateway;
@@ -53,7 +51,8 @@ struct GatewayHooks {
 class MaaGateway {
   public:
     MaaGateway(Bundle bundle, devices::InputGate *gate = nullptr, GatewayHooks hooks = {},
-               ActionRegistry actions = {}, RecognitionHandlers recognitions = {});
+               ActionRegistry actions = {}, RecognitionHandlers recognitions = {},
+               contracts::BusinessRunState *business = nullptr);
     ~MaaGateway();
     MaaGateway(const MaaGateway &) = delete;
     MaaGateway &operator=(const MaaGateway &) = delete;
@@ -63,9 +62,8 @@ class MaaGateway {
     bool running() const;
     void request_stop();
     void close() noexcept;
-    unsigned active_callbacks() const {
-        return activity_.count.load();
-    }
+    nlohmann::json bundle_status() const;
+    unsigned active_callbacks() const { return activity_.count.load(); }
     contracts::FrameEnvelope capture();
     bool controller_action(const contracts::Command &command);
     contracts::Observation recognize(const contracts::FrameEnvelope &frame,
@@ -86,8 +84,19 @@ class MaaGateway {
     GatewayHooks hooks_;
     ActionRegistry actions_;
     RecognitionHandlers recognitions_;
+    contracts::BusinessRunState *business_;
     RecognitionCache recognition_cache_;
     std::mutex recognition_mutex_;
+    std::mutex direct_recognition_mutex_;
+    std::uint64_t recognition_invocation_{};
+    struct VerifiedInvocation {
+        std::string token, binding;
+        nlohmann::json parameters;
+        contracts::Box roi;
+        std::uint64_t id{};
+        bool used{};
+    };
+    std::optional<VerifiedInvocation> verified_invocation_;
     CallbackActivity activity_;
     std::atomic<int> depth_{};
     Handle<MaaResource, MaaResourceDestroy> resource_{nullptr, MaaResourceDestroy};

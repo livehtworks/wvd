@@ -9,6 +9,9 @@ struct RunDefinition {
     SessionDefinition initial;
     std::size_t recovery_limit{};
     std::optional<contracts::BehaviorBinding> recover;
+    std::optional<contracts::BehaviorBinding> state_factory;
+    std::vector<SessionDefinition> continuation_units;
+    std::size_t max_business_units{1};
 };
 // 一个用户运行的唯一所有者。监督线程不做原生阻塞调用；Session 工作线程独占 SDK 对象。
 // STOP_TIMEOUT 只改变可观察故障状态，不能提前 join、释放设备租约或接受另一运行。
@@ -16,7 +19,9 @@ class RunCoordinator {
   public:
     RunCoordinator(std::filesystem::path data_root,
                    std::shared_ptr<const BehaviorRegistry> registry,
-                   std::size_t event_capacity = 256);
+                   std::size_t event_capacity = 256,
+                   std::shared_ptr<const contracts::MonotonicClock> clock =
+                       std::make_shared<contracts::SteadyClock>());
     ~RunCoordinator();
     contracts::RunSnapshot start(RunDefinition definition,
                                  std::shared_ptr<devices::DeviceBackend> backend);
@@ -38,6 +43,8 @@ class RunCoordinator {
     const std::string instance_id_;
     const std::shared_ptr<const BehaviorRegistry> registry_;
     const std::size_t event_capacity_;
+    const std::shared_ptr<const contracts::MonotonicClock> clock_;
+    std::unique_ptr<contracts::BusinessRunState> business_;
     std::mutex start_mutex_;
     mutable std::mutex mutex_;
     std::condition_variable cv_;

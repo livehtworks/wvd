@@ -108,6 +108,8 @@ J snapshot_json(const contracts::RunSnapshot &s) {
             {"storage_error", s.storage_error},
             {"secondary_errors", s.secondary_errors},
             {"sessions", s.sessions},
+            {"business", s.business},
+            {"completed_business_units", s.completed_business_units},
             {"quiescent", s.quiescent},
             {"result_saved", s.result_saved},
             {"engine_status", s.engine_status},

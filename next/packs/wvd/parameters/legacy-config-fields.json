@@ -1,0 +1,254 @@
+{
+  "schema": 1,
+  "source_baseline": "6585f4075f5714ab522aa582993860c09af912c1",
+  "source_sha256": "e1eaa6289f24bc94f480d59f86e412355cbec20471fed93d652a88483094ec8c",
+  "fields": [
+    {
+      "category": "GENERAL",
+      "name": "EMU_PATH",
+      "type": "string",
+      "default": null,
+      "source_ref": "src/script.py:28"
+    },
+    {
+      "category": "GENERAL",
+      "name": "EMU_INDEX",
+      "type": "integer",
+      "default": 0,
+      "source_ref": "src/script.py:29"
+    },
+    {
+      "category": "GENERAL",
+      "name": "ADB_ADRESS",
+      "type": "string",
+      "default": "127.0.0.1:16384",
+      "source_ref": "src/script.py:30"
+    },
+    {
+      "category": "GENERAL",
+      "name": "AUTO_START_CLASH",
+      "type": "boolean",
+      "default": false,
+      "source_ref": "src/script.py:31"
+    },
+    {
+      "category": "GENERAL",
+      "name": "LAST_VERSION",
+      "type": "string",
+      "default": null,
+      "source_ref": "src/script.py:32"
+    },
+    {
+      "category": "GENERAL",
+      "name": "LATEST_VERSION",
+      "type": "string",
+      "default": null,
+      "source_ref": "src/script.py:33"
+    },
+    {
+      "category": "GENERAL",
+      "name": "FARM_TARGET_TEXT",
+      "type": "string",
+      "default": "",
+      "source_ref": "src/script.py:34"
+    },
+    {
+      "category": "GENERAL",
+      "name": "FARM_TARGET",
+      "type": "string",
+      "default": null,
+      "source_ref": "src/script.py:35"
+    },
+    {
+      "category": "GENERAL",
+      "name": "KARMA_ADJUST",
+      "type": "string",
+      "default": "+0",
+      "source_ref": "src/script.py:36"
+    },
+    {
+      "category": "GENERAL",
+      "name": "TASK_SPECIFIC_CONFIG",
+      "type": "boolean",
+      "default": false,
+      "source_ref": "src/script.py:37"
+    },
+    {
+      "category": "GENERAL",
+      "name": "STRATEGY",
+      "type": "array",
+      "default": [
+        {
+          "group_name": "柚子",
+          "skill_settings": [
+            {
+              "role_var": "F 柚奈壬姬",
+              "skill_var": "左上技能",
+              "target_var": "不可用",
+              "skill_lvl": 1
+            }
+          ]
+        },
+        {
+          "group_name": "全自动战斗",
+          "skill_settings": []
+        }
+      ],
+      "source_ref": "src/script.py:38"
+    },
+    {
+      "category": "GENERAL",
+      "name": "DEFAULT_OVERALL_STRATEGY",
+      "type": "string",
+      "default": "全自动战斗",
+      "source_ref": "src/script.py:53"
+    },
+    {
+      "category": "GENERAL",
+      "name": "RELOAD_STRATEGY_WHEN",
+      "type": "string",
+      "default": "不需要",
+      "source_ref": "src/script.py:54"
+    },
+    {
+      "category": "GENERAL",
+      "name": "LANGUAGE",
+      "type": "string",
+      "default": "zh_CN",
+      "source_ref": "src/script.py:55"
+    },
+    {
+      "category": "GENERAL",
+      "name": "WEBSITE_ORG_TIME",
+      "type": "string",
+      "default": null,
+      "source_ref": "src/script.py:56"
+    },
+    {
+      "category": "GENERAL",
+      "name": "AM_REFRESH_TIME",
+      "type": "string",
+      "default": null,
+      "source_ref": "src/script.py:57"
+    },
+    {
+      "category": "TEMPLATE",
+      "name": "TASK_POINT_STRATEGY",
+      "type": "object",
+      "default": {},
+      "source_ref": "src/script.py:59"
+    },
+    {
+      "category": "TEMPLATE",
+      "name": "QUICK_DISARM_CHEST",
+      "type": "boolean",
+      "default": false,
+      "source_ref": "src/script.py:60"
+    },
+    {
+      "category": "TEMPLATE",
+      "name": "WHO_WILL_OPEN_IT",
+      "type": "integer",
+      "default": 0,
+      "source_ref": "src/script.py:61"
+    },
+    {
+      "category": "TEMPLATE",
+      "name": "SKIP_COMBAT_RECOVER",
+      "type": "boolean",
+      "default": false,
+      "source_ref": "src/script.py:62"
+    },
+    {
+      "category": "TEMPLATE",
+      "name": "SKIP_CHEST_RECOVER",
+      "type": "boolean",
+      "default": false,
+      "source_ref": "src/script.py:63"
+    },
+    {
+      "category": "TEMPLATE",
+      "name": "RECOVER_WHEN_BEGINNING",
+      "type": "boolean",
+      "default": false,
+      "source_ref": "src/script.py:64"
+    },
+    {
+      "category": "TEMPLATE",
+      "name": "ACTIVE_REST",
+      "type": "boolean",
+      "default": true,
+      "source_ref": "src/script.py:65"
+    },
+    {
+      "category": "TEMPLATE",
+      "name": "ACTIVE_ROYALSUITE_REST",
+      "type": "boolean",
+      "default": false,
+      "source_ref": "src/script.py:66"
+    },
+    {
+      "category": "TEMPLATE",
+      "name": "ACTIVE_TRIUMPH",
+      "type": "boolean",
+      "default": false,
+      "source_ref": "src/script.py:67"
+    },
+    {
+      "category": "TEMPLATE",
+      "name": "ACTIVE_BEAUTIFUL_ORE",
+      "type": "boolean",
+      "default": false,
+      "source_ref": "src/script.py:68"
+    },
+    {
+      "category": "TEMPLATE",
+      "name": "ACTIVE_BEG_MONEY",
+      "type": "boolean",
+      "default": true,
+      "source_ref": "src/script.py:69"
+    },
+    {
+      "category": "TEMPLATE",
+      "name": "MAX_TRY_LIMIT",
+      "type": "integer",
+      "default": 25,
+      "source_ref": "src/script.py:70"
+    },
+    {
+      "category": "TEMPLATE",
+      "name": "MAX_CRASH_LIMIT",
+      "type": "integer",
+      "default": 10,
+      "source_ref": "src/script.py:71"
+    },
+    {
+      "category": "TEMPLATE",
+      "name": "REST_INTERVEL",
+      "type": "integer",
+      "default": 1,
+      "source_ref": "src/script.py:72"
+    },
+    {
+      "category": "TEMPLATE",
+      "name": "ACTIVE_CSC",
+      "type": "boolean",
+      "default": true,
+      "source_ref": "src/script.py:73"
+    },
+    {
+      "category": "TEMPLATE",
+      "name": "BYPASS_THE_WALL",
+      "type": "boolean",
+      "default": false,
+      "source_ref": "src/script.py:74"
+    },
+    {
+      "category": "TEMPLATE",
+      "name": "RE_ASSEMBLE_PARTY",
+      "type": "boolean",
+      "default": false,
+      "source_ref": "src/script.py:75"
+    }
+  ]
+}

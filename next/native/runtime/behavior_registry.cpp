@@ -16,8 +16,8 @@ void binding_valid(const contracts::BehaviorBinding &binding) {
         binding.parameters.dump().size() > 32768)
         throw std::runtime_error("BEHAVIOR_BINDING_INVALID");
 }
-const std::set<std::string> reserved{"RootTerminal", "RunChild", "RequireRecovery",
-                                     "GuardedAction"};
+const std::set<std::string> reserved{"RootTerminal", "RunChild", "RequireRecovery", "GuardedAction",
+                                     "BusinessCheckpoint"};
 } // namespace
 BehaviorRegistry::BehaviorRegistry(std::string revision) : revision_(std::move(revision)) {
     if (revision_.empty())
@@ -37,8 +37,30 @@ void BehaviorRegistry::add_recovery(contracts::ImplementationIdentity identity, 
     if (!recovery || !recoveries_.emplace(std::move(identity), recovery).second)
         throw std::runtime_error("IMPLEMENTATION_DUPLICATE_OR_EMPTY");
 }
-void BehaviorRegistry::seal() {
-    sealed_ = true;
+void BehaviorRegistry::seal() { sealed_ = true; }
+void BehaviorRegistry::add_state_factory(contracts::ImplementationIdentity identity,
+                                         StateFactory factory) {
+    if (sealed_)
+        throw std::runtime_error("REGISTRY_SEALED");
+    identity_valid(identity);
+    if (!factory || !state_factories_.emplace(std::move(identity), factory).second)
+        throw std::runtime_error("IMPLEMENTATION_DUPLICATE_OR_EMPTY");
+}
+void BehaviorRegistry::validate_state_factory(const contracts::BehaviorBinding &binding) const {
+    if (!sealed_)
+        throw std::runtime_error("REGISTRY_NOT_SEALED");
+    binding_valid(binding);
+    if (!state_factories_.contains(binding.implementation))
+        throw std::runtime_error("STATE_FACTORY_UNKNOWN");
+}
+std::unique_ptr<contracts::BusinessRunState>
+BehaviorRegistry::create_state(const contracts::BehaviorBinding &binding,
+                               const contracts::StateCreationContext &creation) const {
+    validate_state_factory(binding);
+    auto state = state_factories_.at(binding.implementation)(binding.parameters, creation);
+    if (!state)
+        throw std::runtime_error("STATE_FACTORY_RETURNED_EMPTY");
+    return state;
 }
 void BehaviorRegistry::add_recognition(contracts::ImplementationIdentity identity,
                                        Recognition recognition) {
@@ -56,14 +78,15 @@ BehaviorRegistry::bind_recognitions(const contracts::BehaviorBindings &bindings)
     maafw::RecognitionHandlers result;
     for (const auto &binding : bindings) {
         auto function = recognitions_.at(binding.implementation);
-        result.emplace(binding.name,
-                       [function, binding](const maafw::Bundle &bundle,
-                                           maafw::RecognitionPixels pixels, const J &node,
-                                           maafw::RecognitionCache &cache) {
-                           auto result = function(bundle, pixels, node, binding.parameters, cache);
-                           result["binding"] = binding_json(binding);
-                           return result;
-                       });
+        result.emplace(binding.name, [function, binding](const maafw::Bundle &bundle,
+                                                         maafw::RecognitionPixels pixels,
+                                                         const J &node,
+                                                         const maafw::CustomRecognitionScope &scope,
+                                                         maafw::RecognitionCache &cache) {
+            auto result = function(bundle, pixels, node, binding.parameters, scope, cache);
+            result["binding"] = binding_json(binding);
+            return result;
+        });
     }
     return result;
 }
@@ -71,6 +94,9 @@ J BehaviorRegistry::manifest() const {
     if (!sealed_)
         throw std::runtime_error("REGISTRY_NOT_SEALED");
     J entries = J::array();
+    for (const auto &[identity, factory] : state_factories_)
+        entries.push_back(
+            {{"kind", "state_factory"}, {"id", identity.id}, {"revision", identity.revision}});
     for (const auto &[identity, recognition] : recognitions_)
         entries.push_back(
             {{"kind", "recognition"}, {"id", identity.id}, {"revision", identity.revision}});
@@ -82,7 +108,7 @@ J BehaviorRegistry::manifest() const {
             {{"kind", "recovery"}, {"id", identity.id}, {"revision", identity.revision}});
     return {{"build_id", WVD_CORE_BUILD_ID},
             {"registry_revision", revision_},
-            {"builtin_revision", "m2-runtime-2"},
+            {"builtin_revision", "runtime-3"},
             {"entries", entries}};
 }
 void BehaviorRegistry::validate(const SessionDefinition &definition) const {
@@ -151,6 +177,7 @@ J session_definition_json(const SessionDefinition &definition, bool include_file
     J result{{"pack_revision", definition.bundle.revision},
              {"entry", definition.entry},
              {"terminal", definition.terminal_node},
+             {"checkpoint", definition.checkpoint_node},
              {"time_limit_ms", definition.time_limit.count()},
              {"stop_timeout_ms", definition.stop_timeout.count()},
              {"custom_actions", actions}};

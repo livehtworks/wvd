@@ -1,5 +1,6 @@
 #include "preflight.hpp"
 #include "platform/windows/file_digest.hpp"
+#include "platform/windows/bundle_lease.hpp"
 #include <algorithm>
 #include <cmath>
 #include <fstream>
@@ -27,6 +28,16 @@ std::string literal_regex(const std::string &text) {
 } // namespace
 
 void verify_file(const Bundle &bundle, const std::string &relative) {
+    if (bundle.lease) {
+        require(bundle.lease->root() == bundle.root && bundle.lease->revision() == bundle.revision,
+                "BUNDLE_LEASE_MISMATCH");
+        bundle.lease->require_member(relative);
+        auto item = std::find_if(bundle.files.begin(), bundle.files.end(),
+                                 [&](const auto &file) { return file.relative_path == relative; });
+        require(item != bundle.files.end() && item->sha256 == bundle.lease->hash(relative),
+                "BUNDLE_LEASE_MISMATCH");
+        return;
+    }
     const auto path = path_from_utf8(relative);
     require(!path.empty() && !path.is_absolute() && !path.has_root_name(), "RESOURCE_PATH_INVALID");
     for (const auto &part : path)
@@ -44,6 +55,14 @@ void verify_file(const Bundle &bundle, const std::string &relative) {
 }
 
 void verify_bundle(const Bundle &bundle) {
+    if (bundle.lease) {
+        require(bundle.lease->root() == bundle.root &&
+                    bundle.lease->revision() == bundle.revision &&
+                    bundle.files.size() == bundle.lease->file_count(),
+                "BUNDLE_LEASE_MISMATCH");
+        bundle.lease->verify_members();
+        return;
+    }
     std::size_t count = 0;
     for (const auto &entry : std::filesystem::recursive_directory_iterator(bundle.root)) {
         require(!entry.is_symlink(), "BUNDLE_LINK_REJECTED");
@@ -115,8 +134,8 @@ nlohmann::json validate_parameters(const Bundle &bundle, const RecognitionReques
         verify_file(bundle, "image/" + templ->image);
         require(std::filesystem::file_size(bundle.root / "image" / relative) <= 64 * 1024 * 1024,
                 "TEMPLATE_BYTES_INVALID");
-        std::ifstream file(bundle.root / "image" / relative, std::ios::binary);
-        std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(file)), {});
+        require(bool(bundle.lease), "BUNDLE_LEASE_REQUIRED");
+        auto bytes = bundle.lease->bytes("image/" + templ->image);
         require(!bytes.empty() && bytes.size() <= 64 * 1024 * 1024, "TEMPLATE_BYTES_INVALID");
         auto image = image_buffer();
         require(MaaImageBufferSetEncoded(image.get(), bytes.data(), bytes.size()) &&
@@ -135,6 +154,8 @@ nlohmann::json validate_parameters(const Bundle &bundle, const RecognitionReques
         require(!custom->binding.empty() && custom->parameters.is_object() &&
                     custom->parameters.dump().size() <= 32768,
                 "CUSTOM_PARAMETERS_INVALID");
+        require(!custom->parameters.contains("_wvd_verified_invocation"),
+                "INTEGRITY_INVOCATION_RESERVED");
         parameters["custom_recognition"] = custom->binding;
         parameters["custom_recognition_param"] = custom->parameters;
         parameters["custom_recognition_param"]["parameter_revision"] = request.parameter_revision;
@@ -158,7 +179,7 @@ nlohmann::json validate_parameters(const Bundle &bundle, const RecognitionReques
              "5662df9d2d03f0e8ca0d3b0649d6acbab904b6a14b3d3521463c71c37c668ce3"}};
         for (const auto &[path, hash] : models) {
             verify_file(bundle, path);
-            require(platform::file_sha256(bundle.root / path) == hash, "OCR_MODEL_NOT_LOCKED");
+            require(bool(bundle.lease) && bundle.lease->hash(path) == hash, "OCR_MODEL_NOT_LOCKED");
         }
     }
     return parameters;

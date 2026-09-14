@@ -11,10 +11,12 @@ using namespace wvd;
 using J = nlohmann::json;
 using namespace std::chrono_literals;
 std::atomic<bool> stopping{false};
+std::stop_source discovery_stop;
 BOOL WINAPI interrupt(DWORD signal) {
     if (signal != CTRL_C_EVENT && signal != CTRL_BREAK_EVENT)
         return FALSE;
     stopping = true;
+    discovery_stop.request_stop();
     return TRUE;
 }
 void save(const std::filesystem::path &path, const J &value) {
@@ -110,15 +112,16 @@ int main(int argc, char **argv) {
                  {"input_permissions", J::array()},
                  {"groups", J::array()}};
         // 同一后端对象跨有限会话重建自己的连接；会话静止后才能进入下一组。
-        auto ipc = std::make_shared<maafw::AdbBackend>(maafw::path_from_utf8(argv[2]));
+        auto ipc = std::make_shared<maafw::AdbBackend>(maafw::path_from_utf8(argv[2]), false,
+                                                       discovery_stop.get_token());
         for (int group = 0; group < 3; ++group) {
             const std::string name = group == 0 ? "mumu" : group == 1 ? "encode" : "reconnect";
             const auto folder = output / name;
             std::filesystem::create_directories(folder);
             auto backend =
-                group == 1
-                    ? std::make_shared<maafw::AdbBackend>(maafw::path_from_utf8(argv[2]), true)
-                    : ipc;
+                group == 1 ? std::make_shared<maafw::AdbBackend>(maafw::path_from_utf8(argv[2]),
+                                                                 true, discovery_stop.get_token())
+                           : ipc;
             runtime::RunDefinition definition;
             definition.request_id = name;
             // 独立系统只读 viewport 使用每帧实测尺寸，绝不转置成 WVD 画面。

@@ -65,3 +65,25 @@
 - M3 真设备检查遇到未知场景不打开 VPN/游戏、不试点找按钮。系统导航没有前置安全证明时单列 BLOCKED；真实截图不得冒充 NEXT/Pause 质量样本。
 - Android 15 的 `dumpsys window windows` 子段可能只有窗口列表而无 mCurrentFocus，前台观测应使用完整 `dumpsys window` 并验证焦点字段。不能将字段缺失当成默认游戏前台；本轮实际导致安全 Failed，修正后通过。
 - 模拟器启动后出现过一次未知 Python 控制者阻断，具体进程身份未归因；保留严格拒绝。后续排查应记录被拒 PID/来源，不可直接加宽白名单或杀未知进程。
+
+## Next M3 修复与 M4 数据验证
+
+- 用户已明确要求当前工作包每阶段做好本地 commit，此授权更新原包的禁止自动提交边界，不包含 push、发行或生产切换。阶段提交应记录实现范围、验证证据和未完成项；已有累计改动先保存整体检查点，不人为拆出不能独立构建的历史阶段。阶段提交和报告不是整包停止条件，独立剩余项继续推进。
+- MetadataQuery 首次启动自有 helper 后，进程总句柄可能增加 2 或 5 个；单独 CreateProcess 对照也曾增加 5 个，但两者不一致，不能据此扣掉差值宣布通过。两轮修正后已保留失败；不要反复跑同组挑 PASS。待定来源及收尾所有权问题见 M3 修复报告。
+- 本轮没有真实设备授权。不得运行设备发现脚本或查询已开的 MuMu/ADB；异常注入只针对自有 metadata helper。旧 Gate B 与新 EXE 不同，不能沿用旧通过记录。
+- Custom 识别的 boolean-only Hit 可用于场景/后置条件，但目标坐标动作必须另有合法位置；低置信 NEXT 不直接授权。测试应观察真实后置帧，不以截图次数自动推进离线场景。
+- RunCoordinator 的 quiescent 可以先于结果文件提交出现。测试需要等待 `quiescent && (result_saved || storage_error)`，不能读到尚未保存的中间快照就断言业务终态。
+- 资源完整性改为活动快照：活动写入应被 Windows 共享锁拒绝；作者副本变化不影响现有 Run，但新加载要拒绝旧 hash/复用 revision。旧“修改活动源后必须 Error”测试按此契约更新，不得干脆删除。
+- BundleLease 封存需要额外文件句柄、字节缓存和磁盘副本，不能只报告热路径变快。当前未实现自动快照清理；不要自行删旧源、配置或已有日志。
+- M4 导入只接受明确的新目的目录。`wvd_m4_check` 不连接设备也不执行任务；完整任务通过数仍为零。CAS 草稿必须含完整 33 字段，不用解析默认值替代缺字段的保存验证。
+- 最终 build 退出后再测试；C++ 格式化与源码变更会改变 build_id，之后需要重新构建。修前/修后固定窗口各 5 次预热、30 次正式，只执行约定窗口，不追加预热或测试量解释未决内存问题。
+
+## Next M4 状态与任务数据
+
+- 状态工厂必须在 BehaviorRegistry seal 前注册，函数非捕获；其参数进入 definition_version=3。Maa 回调可能另在线程，状态修改通过 Context 的有锁访问，不能依赖线程局部变量保存整个 Run 状态。
+- 正常有限段需要本根任务检查点和真静止，不能复用 RecoveryRequired。单调时间起点用可空值；测试从零开始也应正确累计。
+- 旧 TargetInfo 的第三个参数并不总是 ROI：position/stair 为点，harken/Bharken 可以是楼梯资源名。旧 EOT 和嵌套 fallback 是顺序列表，不可直接作为 Maa 候选 next。
+- m4_inventory.py 使用本轮 data/state/plan 证据更新叠加表；implementation_status 与 implementation_extent 分开，纯数据 PASS 不填写任务 offline_status=PASS。未实现专项仍保留在全部 58 项分母内。
+- M4 有限业务测试使用发布产物的 Session 时间预算；不要在测试驱动另设较短总限时后，又要求走完更长的候选重试链。无恢复策略的 RecoveryRequired 按现有契约返回 Interrupted，不是 Failed 或 Completed。
+- 固定 SDK 提供的 JSON 头是 `<json.hpp>`，不是 `<nlohmann/json.hpp>`；新游戏模块沿用现有 include，不另装第二份依赖。
+- Maa 节点未提供 custom_action_param 时，现有 Context 可传入 JSON null；给 RequireRecovery 增加可选原因时须保留这一无参数契约，不能直接对 null 调用 value()。

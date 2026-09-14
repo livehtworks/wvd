@@ -10,5 +10,6 @@ struct SessionDefinition {
     contracts::BehaviorBindings actions;
     std::chrono::milliseconds time_limit{60000}, stop_timeout{3000};
     contracts::BehaviorBindings recognitions;
+    std::string checkpoint_node;
 };
 } // namespace wvd::runtime

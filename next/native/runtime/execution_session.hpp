@@ -11,18 +11,15 @@ class ExecutionSession {
     ExecutionSession(SessionDefinition definition, devices::DeviceBackend &backend,
                      contracts::InputPolicy policy, std::uint64_t run, std::uint64_t generation,
                      storage::EventJournal &events,
-                     std::shared_ptr<const BehaviorRegistry> registry);
+                     std::shared_ptr<const BehaviorRegistry> registry,
+                     contracts::BusinessRunState *business = nullptr);
     ~ExecutionSession();
     void start();
     void request_stop();
     bool wait_for(std::chrono::milliseconds duration);
-    bool running() const {
-        return running_.load();
-    }
+    bool running() const { return running_.load(); }
     contracts::SessionResult join();
-    contracts::InputCounts counts() const {
-        return gate_.counts();
-    }
+    contracts::InputCounts counts() const { return gate_.counts(); }
 
   private:
     void execute() noexcept;
@@ -30,6 +27,7 @@ class ExecutionSession {
     bool cancelled() const;
     SessionDefinition definition_;
     std::shared_ptr<const BehaviorRegistry> registry_;
+    contracts::BusinessRunState *business_;
     storage::EventJournal &events_;
     devices::InputGate gate_;
     std::atomic<bool> started_{false}, user_stop_{false}, abort_{false}, recovery_{false},

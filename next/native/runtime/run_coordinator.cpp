@@ -15,7 +15,7 @@ nlohmann::json frozen(const RunDefinition &d, const BehaviorRegistry &registry,
         capabilities.push_back(int(kind));
     auto result = session_definition_json(d.initial);
     result.update(
-        {{"definition_version", 2},
+        {{"definition_version", 3},
          {"registry", registry.manifest()},
          {"request_id", d.request_id},
          {"device_id", d.policy.device_id},
@@ -31,6 +31,11 @@ nlohmann::json frozen(const RunDefinition &d, const BehaviorRegistry &registry,
          {"recovery_limit", d.recovery_limit},
          {"recovery", d.recover ? binding_json(*d.recover) : J(nullptr)},
          {"event_capacity", capacity}});
+    result["state_factory"] = d.state_factory ? binding_json(*d.state_factory) : J(nullptr);
+    result["max_business_units"] = d.max_business_units;
+    result["continuation_units"] = J::array();
+    for (const auto &unit : d.continuation_units)
+        result["continuation_units"].push_back(session_definition_json(unit));
     return result;
 }
 void remember_secondary(RunSnapshot &state, const std::string &reason) {
@@ -44,13 +49,16 @@ void remember_secondary(RunSnapshot &state, const std::string &reason) {
 } // namespace
 RunCoordinator::RunCoordinator(std::filesystem::path root,
                                std::shared_ptr<const BehaviorRegistry> registry,
-                               std::size_t event_capacity)
+                               std::size_t event_capacity,
+                               std::shared_ptr<const contracts::MonotonicClock> clock)
     : data_root_(std::move(root)), instance_id_(platform::unique_id()),
-      registry_(std::move(registry)), event_capacity_(event_capacity) {
+      registry_(std::move(registry)), event_capacity_(event_capacity), clock_(std::move(clock)) {
     if (!registry_ || !registry_->sealed())
         throw std::runtime_error("REGISTRY_NOT_SEALED");
     if (event_capacity < 8 || event_capacity > 65536)
         throw std::runtime_error("EVENT_CAPACITY_INVALID");
+    if (!clock_)
+        throw std::runtime_error("MONOTONIC_CLOCK_REQUIRED");
 }
 RunCoordinator::~RunCoordinator() {
     request_stop();
@@ -74,6 +82,24 @@ void RunCoordinator::validate(const RunDefinition &d, const devices::DeviceBacke
     registry_->validate(d.initial);
     if (d.recover)
         registry_->validate_recovery(*d.recover);
+    if (!d.max_business_units || d.max_business_units > 256 ||
+        d.continuation_units.size() + 1 > d.max_business_units)
+        throw std::runtime_error("BUSINESS_UNIT_BUDGET_INVALID");
+    if (!d.state_factory && (!d.continuation_units.empty() || !d.initial.checkpoint_node.empty()))
+        throw std::runtime_error("BUSINESS_STATE_REQUIRED");
+    if (d.state_factory) {
+        registry_->validate_state_factory(*d.state_factory);
+        auto validate_unit = [&](const SessionDefinition &unit) {
+            if (unit.checkpoint_node.empty() || unit.entry.empty() || unit.terminal_node.empty() ||
+                unit.time_limit <= 0ms || unit.stop_timeout <= 0ms ||
+                unit.bundle.revision != d.initial.bundle.revision)
+                throw std::runtime_error("BUSINESS_UNIT_INVALID");
+            registry_->validate(unit);
+        };
+        validate_unit(d.initial);
+        for (const auto &unit : d.continuation_units)
+            validate_unit(unit);
+    }
 }
 RunSnapshot RunCoordinator::start(RunDefinition definition,
                                   std::shared_ptr<devices::DeviceBackend> backend) {
@@ -116,6 +142,7 @@ RunSnapshot RunCoordinator::start(RunDefinition definition,
     stopped_at_.reset();
     collected_generation_ = 0;
     last_result_ = {};
+    business_.reset();
     current_definition_ = definition.initial;
     try {
         supervisor_ = std::thread(
@@ -260,6 +287,15 @@ void RunCoordinator::collect_session(const std::shared_ptr<ExecutionSession> &se
                  {"engine_status", result.engine_status},
                  {"reason", result.reason},
                  {"quiescent", result.quiescent}});
+            if (business_) {
+                snapshot_.business = business_->summary();
+                snapshot_.sessions.back()["business"] = snapshot_.business;
+                snapshot_.sessions.back()["checkpoint"] = {
+                    {"task_id", result.checkpoint.task_id},
+                    {"generation", result.checkpoint.generation},
+                    {"depth", result.checkpoint.depth},
+                    {"node", result.checkpoint.node}};
+            }
         }
         session_.reset();
     }
@@ -271,26 +307,56 @@ void RunCoordinator::drive(RunDefinition definition,
     try {
         auto next = definition.initial;
         std::size_t recovered = 0;
+        std::size_t unit_index = 0;
+        auto boundary = SegmentBoundary::Initial;
+        if (definition.state_factory)
+            business_ = registry_->create_state(*definition.state_factory,
+                                                {instance_id_, snapshot().run_id, clock_});
         while (true) {
+            if (stop_)
+                break;
+            if (business_)
+                business_->enter_segment(boundary, snapshot().generation, unit_index);
             auto policy = definition.policy;
             policy.pack_revision = next.bundle.revision;
             auto session = std::make_shared<ExecutionSession>(
                 next, *backend, std::move(policy), snapshot().run_id, snapshot().generation,
-                *journal_, registry_);
+                *journal_, registry_, business_.get());
             {
                 std::lock_guard lock(mutex_);
                 current_definition_ = next;
-                session_ = session;
                 if (stop_)
-                    session->request_stop();
-                else
-                    snapshot_.state = RunState::Preparing;
+                    break;
+                session_ = session;
+                snapshot_.state = RunState::Preparing;
+                // start 只创建工作线程，不等待 SDK。与 request_stop 同锁建立唯一先后顺序。
+                session->start();
             }
-            session->start();
             wait_session(session, next, true);
             collect_session(session);
             journal_->emit(snapshot().generation, "session.quiescent", {{"quiescent", true}}, true);
             store_->save_events(*journal_);
+            if (last_result_.end == SessionEnd::Completed && business_) {
+                {
+                    std::lock_guard lock(mutex_);
+                    ++snapshot_.completed_business_units;
+                }
+                if (!stop_ && unit_index < definition.continuation_units.size()) {
+                    next = definition.continuation_units.at(unit_index++);
+                    std::uint64_t generation;
+                    {
+                        std::lock_guard lock(mutex_);
+                        generation = ++snapshot_.generation;
+                    }
+                    boundary = SegmentBoundary::Continuation;
+                    journal_->emit(generation, "session.continuation_boundary",
+                                   {{"unit_index", unit_index},
+                                    {"definition", session_definition_json(next, false)},
+                                    {"business", business_->summary()}},
+                                   true);
+                    continue;
+                }
+            }
             if (!stop_ && last_result_.end == SessionEnd::RecoveryRequired && definition.recover &&
                 recovered < definition.recovery_limit) {
                 {
@@ -303,6 +369,10 @@ void RunCoordinator::drive(RunDefinition definition,
                         decision->time_limit <= 0ms || decision->stop_timeout <= 0ms)
                         throw std::runtime_error("RECOVERY_DEFINITION_INVALID");
                     next = std::move(*decision);
+                    if (business_ && (next.bundle.revision != definition.initial.bundle.revision ||
+                                      next.checkpoint_node.empty()))
+                        throw std::runtime_error("BUSINESS_RECOVERY_DEFINITION_INVALID");
+                    boundary = SegmentBoundary::Recovery;
                     ++recovered;
                     std::uint64_t generation;
                     {

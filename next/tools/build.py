@@ -59,7 +59,8 @@ def run(name, command, cwd=ROOT):
     print("  OK", flush=True)
 
 
-def build(m2_offline=False, m3=False):
+def build(m2_offline=False, m3=False, m4=False):
+    m3 = m3 or m4
     npm = shutil.which("npm.cmd")
     if npm is None:
         raise RuntimeError("需要固定 Node/npm 工具链，见 dependencies.lock.json")
@@ -78,6 +79,8 @@ def build(m2_offline=False, m3=False):
     run("dependencies", [sys.executable, str(ROOT / "tools/dependencies.py")])
     if m3:
         run("m3-prepare", [sys.executable, str(ROOT / "tools/prepare_m3.py")])
+    if m4:
+        run("m4-prepare", [sys.executable, str(ROOT / "tools/prepare_m4.py")])
     run("inventory", [sys.executable, str(ROOT / "tools/inventory/generate.py")])
     run(
         "npm-ci",
@@ -93,6 +96,7 @@ def build(m2_offline=False, m3=False):
             "windows-x64",
             "-DWVD_BUILD_M2_OFFLINE=" + ("ON" if m2_offline or m3 else "OFF"),
             "-DWVD_BUILD_M3=" + ("ON" if m3 else "OFF"),
+            "-DWVD_BUILD_M4=" + ("ON" if m4 else "OFF"),
         ],
     )
     run("native-build", [cmake, "--build", "--preset", "windows-release"])
@@ -109,9 +113,10 @@ if __name__ == "__main__":
     parser.add_argument(
         "--m3", action="store_true", help="构建 M2/M3 离线目标，不连接设备"
     )
+    parser.add_argument("--m4", action="store_true", help="构建 M4 离线迁移目标；不代表全业务迁移完成")
     args = parser.parse_args()
     try:
-        build(args.m2_offline, args.m3)
+        build(args.m2_offline, args.m3, args.m4)
     except (OSError, RuntimeError, subprocess.SubprocessError) as error:
         print(str(error), file=sys.stderr)
         sys.exit(1)

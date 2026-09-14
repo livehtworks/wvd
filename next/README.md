@@ -5,7 +5,7 @@
 
 已实现：原生服务正常启停、API 版本/能力查询、基线项搜索与详情、资源大小写核对及真实模板预览。
 另有显式 M3 本地只读设备检查和 WVD 专用视觉；这不是工作台的在线执行功能。
-未实现：完整 WVD 任务、配置导入、流程编辑和生产替换。
+M4 已有离线配置副本导入/CAS 保存和全部任务目录绑定；未实现完整 WVD 任务、运行配置接入、流程编辑和生产替换。
 尚未启用的工作包目录只放职责说明，不提供伪实现，不进入构建。
 
 M1 收尾 R01/R02/R03 已完成。M2 核心已实现独立 RunCoordinator、有限 ExecutionSession、
@@ -85,6 +85,9 @@ SDK 与模型会校验 hash 后复制到被 Git 忽略的 `next/.local`，原有
 
 ## M3 设备与视觉
 
+**当前 M3 修复整体为 FIXES_INCOMPLETE：设备发现句柄/收尾问题阻断，完整性负例矩阵尚未齐全。
+以下设备命令仅保留接口说明，本轮不得执行；不能沿用旧 Gate B 的通过结论。**
+
 ```powershell
 .venv-build/Scripts/python.exe next/tools/build.py --m3
 .venv-build/Scripts/python.exe next/tools/validate.py --m3
@@ -107,3 +110,22 @@ SDK 与模型会校验 hash 后复制到被 Git 忽略的 `next/.local`，原有
 
 修复与阶段边界见 [M2 收尾](docs/m2-fix-validation.md)、[M3 验收](docs/m3-device-vision-validation.md)。
 **真实 NEXT/Pause 质量、长期资源归因和生产运行不因离线 PASS 自动放行。**
+
+## M4 当前部分交付
+
+```powershell
+.venv-build/Scripts/python.exe next/tools/build.py --m4
+.venv-build/Scripts/python.exe -m unittest discover -s next/tests/m4 -v
+```
+
+`--m4` 构建独立数据/状态/有限流程模块、`wvd_m4_check` 和真实 Maa 离线测试，不运行旧任务或连接设备。
+完整 `validate.py --m4` 仍保留全部 M3 检查，已知失败不被跳过；数据测试通过不是整包通过。
+台账包含 250 函数、33 配置、58 任务；58 项已做目录/类型化数据解析，业务运行通过数为 0。
+
+- [M3 修复及性能证据](docs/m3-fix-validation.md)
+- [M4 已完成部分与接续清单](docs/m4-business-validation.md)
+- [M4 状态生命周期与验证](docs/m4-state-validation.md)
+- [M4 任务类型化数据与验证](docs/m4-plan-validation.md)
+- [M4 有限流程与实际输入验证](docs/m4-workflow-validation.md)
+- [资源快照契约](docs/integrity-snapshot-contract.md)
+- [配置和任务映射](docs/migration/m4-data-mapping.md)

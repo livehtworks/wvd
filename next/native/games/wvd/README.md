@@ -1,12 +1,24 @@
 # WVD 业务层（M3 / M4）
 
-当前 `vision/` 已实现纯视觉并经同一 MaaGateway 注册，其他业务仍只有迁移归属。
+当前 `vision/` 已实现纯视觉并经同一 MaaGateway 注册；profile、任务目录/类型化数据、
+运行状态和策略消费已实现。入城、旅店、Auto 有限子流程已有真实 Maa 离线输入验证；
+全部任务导航/补给/技能/宝箱/恢复/专项链仍未接入。
 没有可挂机的任务链；不得把 Python Factory 整体翻译成一个 C++ 类。
 
 视觉分工：`asset_resolver` 处理来源/hash/显式别名与基线优先；`recognizers` 处理版本化模式、
 模板、ROI、mask、Pause、战斗和地图纯判断；`image_ops` 保留旧通道预处理的截断语义；
 `bobber` 保留方向场与去重算法。均不创建 Maa 句柄、不点击或重启。
 完整盘点与验收缺口见 `next/docs/migration/m3-implementation-map.json` 及 M3 报告。
+
+`state` 不保存图像、Controller 或坐标缓存；`combat/strategy` 只处理纯策略，不执行输入。
+`tasks/task_plan` 解析旧路线的顺序操作、滑动和目标提示，输出可审查的纯数据；
+不能把 parsed plan 当作可运行任务。`pipeline_compiler` 只生成有限静态图；
+`workflow_session` 检查资源/权限/注册表后发布新包，执行节点只由 Maa 推进。
+`navigation/world_map`、`supply/inn`、`combat/auto_combat` 保留各自业务边界，
+`supply/policy` 只计算补给条件。没有新增逐节点 VM 或生产入口。
+状态、任务数据和子流程范围见对应的 `next/docs/m4-*-validation.md`。
+
+下表是职责边界，不表示表中每个业务族均已完成：
 
 | 子职责 | 输入与结果 | 不负责 |
 | --- | --- | --- |

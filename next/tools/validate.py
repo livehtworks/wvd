@@ -16,7 +16,8 @@ sys.path.insert(0, str(ROOT / "tests"))
 from service_process import NativeService
 
 
-def validate(m2_offline=False, m3=False):
+def validate(m2_offline=False, m3=False, m4=False):
+    m3 = m3 or m4
     gate = ROOT / ".local/m3-gate-b.json"
     if m3:
         gate.write_text(json.dumps({"offline_result": "RUNNING"}), encoding="utf-8")
@@ -53,6 +54,8 @@ def validate(m2_offline=False, m3=False):
                 "-v",
             ],
         )
+    if m4:
+        run("m4-data-tests", [sys.executable,"-m","unittest","discover","-s",str(ROOT/"tests/m4"),"-v"])
     service = NativeService()
     previous = os.environ.get("WVD_NEXT_URL")
     try:
@@ -103,9 +106,10 @@ if __name__ == "__main__":
     parser.add_argument(
         "--m3", action="store_true", help="执行 M1/M2/M3 离线验收，不连接设备"
     )
+    parser.add_argument("--m4", action="store_true", help="执行已实现的 M4 离线覆盖；完整状态以逐任务台账为准")
     args = parser.parse_args()
     try:
-        validate(args.m2_offline, args.m3)
+        validate(args.m2_offline, args.m3, args.m4)
     except (OSError, RuntimeError, AssertionError, subprocess.SubprocessError) as error:
         print(str(error), file=sys.stderr)
         sys.exit(1)

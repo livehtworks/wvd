@@ -1,0 +1,194 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "WVD 离线迁移配置副本",
+  "type": "object",
+  "required": [
+    "schema",
+    "revision",
+    "values",
+    "legacy_document",
+    "legacy_passthrough",
+    "sources",
+    "selected_section"
+  ],
+  "properties": {
+    "schema": {
+      "const": 1
+    },
+    "revision": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "values": {
+      "type": "object",
+      "required": [
+        "EMU_PATH",
+        "EMU_INDEX",
+        "ADB_ADRESS",
+        "AUTO_START_CLASH",
+        "LAST_VERSION",
+        "LATEST_VERSION",
+        "FARM_TARGET_TEXT",
+        "FARM_TARGET",
+        "KARMA_ADJUST",
+        "TASK_SPECIFIC_CONFIG",
+        "STRATEGY",
+        "DEFAULT_OVERALL_STRATEGY",
+        "RELOAD_STRATEGY_WHEN",
+        "LANGUAGE",
+        "WEBSITE_ORG_TIME",
+        "AM_REFRESH_TIME",
+        "TASK_POINT_STRATEGY",
+        "QUICK_DISARM_CHEST",
+        "WHO_WILL_OPEN_IT",
+        "SKIP_COMBAT_RECOVER",
+        "SKIP_CHEST_RECOVER",
+        "RECOVER_WHEN_BEGINNING",
+        "ACTIVE_REST",
+        "ACTIVE_ROYALSUITE_REST",
+        "ACTIVE_TRIUMPH",
+        "ACTIVE_BEAUTIFUL_ORE",
+        "ACTIVE_BEG_MONEY",
+        "MAX_TRY_LIMIT",
+        "MAX_CRASH_LIMIT",
+        "REST_INTERVEL",
+        "ACTIVE_CSC",
+        "BYPASS_THE_WALL",
+        "RE_ASSEMBLE_PARTY"
+      ],
+      "properties": {
+        "EMU_PATH": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "EMU_INDEX": {
+          "type": "integer"
+        },
+        "ADB_ADRESS": {
+          "type": "string"
+        },
+        "AUTO_START_CLASH": {
+          "type": "boolean"
+        },
+        "LAST_VERSION": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "LATEST_VERSION": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "FARM_TARGET_TEXT": {
+          "type": "string"
+        },
+        "FARM_TARGET": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "KARMA_ADJUST": {
+          "type": "string"
+        },
+        "TASK_SPECIFIC_CONFIG": {
+          "type": "boolean"
+        },
+        "STRATEGY": {
+          "type": "array"
+        },
+        "DEFAULT_OVERALL_STRATEGY": {
+          "type": "string"
+        },
+        "RELOAD_STRATEGY_WHEN": {
+          "type": "string"
+        },
+        "LANGUAGE": {
+          "type": "string"
+        },
+        "WEBSITE_ORG_TIME": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "AM_REFRESH_TIME": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "TASK_POINT_STRATEGY": {
+          "type": "object"
+        },
+        "QUICK_DISARM_CHEST": {
+          "type": "boolean"
+        },
+        "WHO_WILL_OPEN_IT": {
+          "type": "integer"
+        },
+        "SKIP_COMBAT_RECOVER": {
+          "type": "boolean"
+        },
+        "SKIP_CHEST_RECOVER": {
+          "type": "boolean"
+        },
+        "RECOVER_WHEN_BEGINNING": {
+          "type": "boolean"
+        },
+        "ACTIVE_REST": {
+          "type": "boolean"
+        },
+        "ACTIVE_ROYALSUITE_REST": {
+          "type": "boolean"
+        },
+        "ACTIVE_TRIUMPH": {
+          "type": "boolean"
+        },
+        "ACTIVE_BEAUTIFUL_ORE": {
+          "type": "boolean"
+        },
+        "ACTIVE_BEG_MONEY": {
+          "type": "boolean"
+        },
+        "MAX_TRY_LIMIT": {
+          "type": "integer"
+        },
+        "MAX_CRASH_LIMIT": {
+          "type": "integer"
+        },
+        "REST_INTERVEL": {
+          "type": "integer"
+        },
+        "ACTIVE_CSC": {
+          "type": "boolean"
+        },
+        "BYPASS_THE_WALL": {
+          "type": "boolean"
+        },
+        "RE_ASSEMBLE_PARTY": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "legacy_document": {
+      "type": "object"
+    },
+    "legacy_passthrough": {
+      "type": "object"
+    },
+    "sources": {
+      "type": "object"
+    },
+    "selected_section": {
+      "type": "string"
+    }
+  },
+  "$comment": "由固定旧源码生成；生产副本读写的类型和嵌套语义校验由 ProfileStore/LegacyConfigImporter 执行。"
+}

@@ -1,0 +1,44 @@
+#pragma once
+#include <json.hpp>
+#include <string>
+#include <vector>
+
+namespace wvd::games::tasks {
+// 编译产物不执行节点；推进、等待和候选优先级仍由 Maa Pipeline 持有。
+struct CompiledWorkflow {
+    std::string kind;
+    std::string entry{"Entry"};
+    std::string terminal{"Terminal"};
+    nlohmann::json nodes = nlohmann::json::object();
+    std::vector<std::string> images;
+    std::vector<std::string> required_actions;
+    void validate() const;
+};
+
+class PipelineCompiler {
+  public:
+    explicit PipelineCompiler(std::string kind);
+    static nlohmann::json image(const std::string &name);
+    static nlohmann::json any(nlohmann::json conditions);
+    static nlohmann::json all(nlohmann::json conditions);
+    static nlohmann::json absent(nlohmann::json condition);
+    void route(const std::string &name, nlohmann::json next);
+    void observe(const std::string &name, const nlohmann::json &condition, nlohmann::json next);
+    void click(const std::string &name, const nlohmann::json &scene, const nlohmann::json &target,
+               const nlohmann::json &post, nlohmann::json next, nlohmann::json offset = {0, 0});
+    void back(const std::string &name, const nlohmann::json &scene, const nlohmann::json &post,
+              nlohmann::json next);
+    void fixed_click(const std::string &name, const nlohmann::json &scene,
+                     const nlohmann::json &post, nlohmann::json position, nlohmann::json next);
+    void hit_limit(const std::string &name, int limit);
+    CompiledWorkflow finish();
+
+  private:
+    CompiledWorkflow workflow_;
+    void add(const std::string &name, nlohmann::json node);
+    nlohmann::json request(const nlohmann::json &condition) const;
+    void action(const std::string &name, const nlohmann::json &scene, const nlohmann::json &target,
+                const nlohmann::json &post, nlohmann::json command, nlohmann::json next,
+                nlohmann::json offset);
+};
+} // namespace wvd::games::tasks
