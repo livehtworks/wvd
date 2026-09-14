@@ -29,6 +29,9 @@ class WorkflowDevice final : public OfflineDevice, public devices::LifecyclePort
     std::size_t cursor{};
     std::size_t action_cursor{};
     bool mismatch{};
+    J time_event;
+    std::optional<std::chrono::steady_clock::time_point> time_event_due;
+    unsigned time_event_count{};
     bool allow_lifecycle{}, stale_lifecycle{}, wrong_instance{}, hold_lifecycle{}, ignore_lifecycle_cancel{};
     std::atomic<bool> release_lifecycle{};
     int failed_starts{}, start_attempts{};
@@ -92,6 +95,12 @@ class WorkflowDevice final : public OfflineDevice, public devices::LifecyclePort
     }
     devices::RawFrame capture() override {
         std::lock_guard lock(mutex);
+        // 只按显式时钟事件推进动画；重复截图本身不能产生业务进展。
+        if (time_event_due && std::chrono::steady_clock::now() >= *time_event_due) {
+            cursor = time_event.at("frame").get<std::size_t>();
+            time_event_due.reset();
+            ++time_event_count;
+        }
         ++captures;
         return {frames.at(cursor), size, identity, viewport, application, {}, "fixture",
                 allow_lifecycle ? lifecycle_state.connection_generation : 0};
@@ -118,6 +127,10 @@ class WorkflowDevice final : public OfflineDevice, public devices::LifecyclePort
             ++cursor;
             ++action_cursor;
         }
+        if (time_event.is_object() && !time_event_count && !time_event_due &&
+            action_cursor == time_event.at("after_input").get<std::size_t>())
+            time_event_due = std::chrono::steady_clock::now() +
+                             std::chrono::milliseconds(time_event.at("delay_ms").get<int>());
         return true;
     }
 };
@@ -185,7 +198,8 @@ int main(int argc, char **argv) {
                         images.insert(path.substr(6));
                 }
                 return kind == "turn" ? games::combat::take_turn(profile, images)
-                                      : games::combat::fight_encounter(profile, images, config.value("max_turns", 2u));
+                                      : games::combat::fight_encounter(profile, images, config.value("max_turns", 2u),
+                                                                      config.value("max_auto_polls", 128u));
             }
             if (kind == "chest")
                 return games::chest::open_chest(config.value("preferred", 1), config.value("quick", false), 42);
@@ -318,6 +332,14 @@ int main(int argc, char **argv) {
         for (const auto &frame : config.at("frames"))
             device->frames.push_back(bytes(maafw::path_from_utf8(frame)));
         device->transitions = config.at("transitions");
+        if (config.contains("time_event")) {
+            device->time_event = config.at("time_event");
+            require(device->time_event.at("after_input").get<std::size_t>() > 0 &&
+                        device->time_event.at("after_input").get<std::size_t>() <= device->transitions.size() &&
+                        device->time_event.at("frame").get<std::size_t>() < device->frames.size() &&
+                        device->time_event.at("delay_ms").get<int>() > 0 &&
+                        device->time_event.at("delay_ms").get<int>() <= 10000, "FIXTURE_TIME_EVENT_INVALID");
+        }
         const bool recovering = config.at("workflow") == "recover";
         device->allow_lifecycle = recovering && !config.value("no_lifecycle_port", false);
         device->stale_lifecycle = config.value("stale_lifecycle", false);
@@ -406,6 +428,18 @@ int main(int argc, char **argv) {
             until([&] { return device->calls.load() > 0 || coordinator.snapshot().quiescent; });
             coordinator.request_stop();
         }
+        bool stop_node_observed = false;
+        if (config.contains("stop_at_node")) {
+            until([&] {
+                const auto journal = coordinator.events();
+                for (const auto &event : journal.at("events"))
+                    if (event.at("type") == "Node.Action.Starting" &&
+                        event.at("payload").value("name", "") == config.at("stop_at_node").get<std::string>())
+                        stop_node_observed = true;
+                return stop_node_observed || coordinator.snapshot().quiescent;
+            }, 15000ms);
+            coordinator.request_stop();
+        }
         until(
             [&] {
                 auto s = coordinator.snapshot();
@@ -423,6 +457,8 @@ int main(int argc, char **argv) {
                  {"node_count", workflow.nodes.size()},
                  {"lifecycle_calls", device->lifecycle_calls},
                  {"lifecycle_stop", lifecycle_stop},
+                 {"time_event_count", device->time_event_count},
+                 {"stop_node_observed", stop_node_observed},
                  {"loaded_modules", loaded_vision_modules()}};
         std::ofstream(maafw::path_from_utf8(config.at("output"))) << output.dump(2);
         return 0;

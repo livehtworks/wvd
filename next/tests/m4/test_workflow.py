@@ -913,6 +913,63 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(r["backend_calls"], 1)
         self.assertFalse(r["mismatch"])
 
+    def test_encounter_auto_waits_for_clock_progress_without_consuming_turns(self):
+        r = self.execute("encounter-auto-clock", [
+            self.turn_screen(**{"spellskill/CombatAutoDisable": (800, 1070)}),
+            self.turn_screen(**{"spellskill/CombatAutoEnable": (800, 1070)}),
+            {"dungFlag": (50, 150)}], [dict(kind=0, x=850, y=1100)], workflow="encounter",
+            profile={"DEFAULT_OVERALL_STRATEGY": "全自动战斗", "STRATEGY": [], "TASK_SPECIFIC_CONFIG": False},
+            max_turns=1, max_auto_polls=32, time_event=dict(after_input=1, delay_ms=4000, frame=2))
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["snapshot"]["business"]["combats"], 1)
+        self.assertEqual(r["backend_calls"], 1)
+        self.assertEqual(r["time_event_count"], 1)
+        self.assertFalse(r["mismatch"])
+
+    def test_encounter_auto_wait_has_independent_timeout(self):
+        for already_on in (False, True):
+            enabled = self.turn_screen(**{"spellskill/CombatAutoEnable": (800, 1070)})
+            screens = [enabled] if already_on else [self.turn_screen(**{"spellskill/CombatAutoDisable": (800, 1070)}), enabled]
+            r = self.execute("encounter-auto-timeout-" + str(already_on), screens,
+                [] if already_on else [dict(kind=0, x=850, y=1100)], workflow="encounter",
+                profile={"DEFAULT_OVERALL_STRATEGY": "全自动战斗", "STRATEGY": [], "TASK_SPECIFIC_CONFIG": False},
+                max_turns=1, max_auto_polls=3)
+            self.assertEqual(r["snapshot"]["state"], "Interrupted", r)
+            self.assertEqual(r["snapshot"]["sessions"][-1]["reason"], "combat.auto_progress_timeout", r)
+            self.assertEqual(r["snapshot"]["business"]["combats"], 0)
+            self.assertEqual(r["backend_calls"], 0 if already_on else 1)
+            self.assertFalse(r["mismatch"])
+
+    def test_encounter_stop_inside_auto_wait_sends_no_late_input(self):
+        r = self.execute("encounter-auto-stop-wait", [self.turn_screen(**{"spellskill/CombatAutoEnable": (800, 1070)})], [],
+            workflow="encounter", profile={"DEFAULT_OVERALL_STRATEGY": "全自动战斗", "STRATEGY": [], "TASK_SPECIFIC_CONFIG": False},
+            max_turns=1, stop_at_node="Turn0Poll")
+        self.assertTrue(r["stop_node_observed"], r)
+        self.assertEqual(r["snapshot"]["state"], "UserStopped", r)
+        self.assertEqual(r["backend_calls"], 0)
+        self.assertEqual(r["snapshot"]["business"]["combats"], 0)
+
+    def test_encounter_auto_off_resumes_from_a_new_observation(self):
+        disabled = self.turn_screen(**{"spellskill/CombatAutoDisable": (800, 1070)})
+        r = self.execute("encounter-auto-off", [disabled,
+            self.turn_screen(**{"spellskill/CombatAutoEnable": (800, 1070)}), disabled, {"dungFlag": (50, 150)}],
+            [dict(kind=0, x=850, y=1100), dict(kind=0, x=850, y=1100)], workflow="encounter",
+            profile={"DEFAULT_OVERALL_STRATEGY": "全自动战斗", "STRATEGY": [], "TASK_SPECIFIC_CONFIG": False},
+            max_turns=2, max_auto_polls=32, time_event=dict(after_input=1, delay_ms=4000, frame=2))
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 2)
+        self.assertEqual(r["time_event_count"], 1)
+        self.assertEqual(r["snapshot"]["business"]["combats"], 1)
+        self.assertFalse(r["mismatch"])
+
+    def test_encounter_auto_input_failure_never_waits_or_counts(self):
+        r = self.execute("encounter-auto-rejected", [self.turn_screen(**{"spellskill/CombatAutoDisable": (800, 1070)})],
+            [dict(kind=0, x=850, y=1100, reject=True)], workflow="encounter",
+            profile={"DEFAULT_OVERALL_STRATEGY": "全自动战斗", "STRATEGY": [], "TASK_SPECIFIC_CONFIG": False})
+        self.assertEqual(r["snapshot"]["state"], "Failed", r)
+        self.assertEqual(r["backend_calls"], 1)
+        self.assertEqual(r["snapshot"]["business"]["combats"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()

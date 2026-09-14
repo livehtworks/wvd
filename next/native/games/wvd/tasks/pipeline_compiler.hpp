@@ -46,6 +46,7 @@ class PipelineCompiler {
                  const nlohmann::json &condition, nlohmann::json next,
                  nlohmann::json expected_step = nullptr);
     void hit_limit(const std::string &name, int limit);
+    void failure_route(const std::string &name, nlohmann::json next);
     void delay_after(const std::string &name, int milliseconds);
     void postcondition_budget(const std::string &name, int milliseconds);
     void allowed_area(const std::string &name, nlohmann::json area);

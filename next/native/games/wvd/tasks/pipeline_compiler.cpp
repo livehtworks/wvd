@@ -385,6 +385,10 @@ void PipelineCompiler::recovery(const std::string &name, const std::string &reas
     add(name, {{"action", "Custom"}, {"custom_action", "RequireRecovery"},
                {"custom_action_param", {{"reason", reason}}}});
 }
+void PipelineCompiler::failure_route(const std::string &name, J next) {
+    require(workflow_.nodes.contains(name) && next.is_array() && !next.empty(), "COMPILE_ERROR_ROUTE_INVALID");
+    workflow_.nodes[name]["on_error"] = std::move(next);
+}
 void PipelineCompiler::confirm(const std::string &name, const std::string &operation,
                                const std::string &event, const J &condition, J next, J step) {
     const std::set<std::string> events{"target_completed", "dungeon_entered", "combat_observed",
