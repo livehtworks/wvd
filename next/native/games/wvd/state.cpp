@@ -41,6 +41,8 @@ void WvdRunState::enter_dungeon() {
     need_initial_recover_ = true;
     healing_pending_ = false;
     healing_active_ = false;
+    inn_rest_completed_ = false;
+    ++supply_cycle_;
     if (setting_is("RELOAD_STRATEGY_WHEN", "每次副本开始", "Dungeon start"))
         strategy_.reload(task_step_);
 }
@@ -198,6 +200,10 @@ std::string WvdRunState::confirmation_id(const std::string &operation, const std
         id += ":heal:" + std::to_string(healing_sequence_ + (healing_active_ ? 0 : 1));
     else if (event == "healing_completed")
         id += ":heal:" + std::to_string(healing_sequence_);
+    else if (event == "inn_rest_completed")
+        id += ":supply:" + std::to_string(supply_cycle_);
+    else if (event == "party_reassembled")
+        id += ":party:" + std::to_string(static_cast<std::size_t>(total_seconds_ / 21600));
     return id;
 }
 bool WvdRunState::confirm_event(const std::string &operation, const std::string &event,
@@ -231,6 +237,14 @@ bool WvdRunState::confirm_event(const std::string &operation, const std::string 
         dungeon_completed();
     else if (event == "resurrected")
         resurrected();
+    else if (event == "party_reassembled")
+        bag_clear_completed();
+    else if (event == "inn_rest_completed") {
+        // 换 generation 或换普通段均保留已住宿事实；真正再次入本才开始新补给周期。
+        if (!inn_rest_completed_)
+            ++inn_rests_;
+        inn_rest_completed_ = true;
+    }
     else if (event == "healing_requested") {
         if (!healing_required())
             throw std::runtime_error("HEALING_NOT_REQUIRED");
@@ -260,6 +274,9 @@ bool WvdRunState::confirm_event(const std::string &operation, const std::string 
     return true;
 }
 J WvdRunState::summarize() const {
+    const supply::SupplyFacts facts{dungeons_, met_encounter_, total_seconds_, last_bag_clear_};
+    const bool ordinary = !inn_rest_completed_ && supply::ordinary_rest_due(profile_, facts);
+    const bool party = supply::decide_rest(profile_, facts).reassemble;
     return {{"kind", "wvd"},
             {"state_revision", "1"},
             {"run_identity", identity_},
@@ -281,6 +298,12 @@ J WvdRunState::summarize() const {
             {"total_seconds", total_seconds_},
             {"chest_seconds", chest_seconds_},
             {"last_bag_clear", last_bag_clear_},
+            {"ordinary_rest_due", ordinary},
+            {"party_refresh_due", party},
+            {"city_supply_due", ordinary || party},
+            {"inn_rest_completed", inn_rest_completed_},
+            {"inn_rests", inn_rests_},
+            {"supply_cycle", supply_cycle_},
             {"confirmed_operations", confirmations_.size()},
             {"last_confirmation", last_confirmation_},
             {"combat_timer_active", combat_started_.has_value()},

@@ -18,6 +18,7 @@
 #include "games/wvd/recovery/boot.hpp"
 #include "games/wvd/tasks/workflow_session.hpp"
 #include "games/wvd/tasks/dungeon_route.hpp"
+#include "games/wvd/tasks/departure.hpp"
 #include "games/wvd/vision/recognizers.hpp"
 #include "platform/windows/file_digest.hpp"
 #include <iostream>
@@ -157,6 +158,23 @@ int main(int argc, char **argv) {
                 return games::navigation::enter_city(config.at("city"));
             if (kind == "inn")
                 return games::supply::rest_at_inn(config.value("royal", false));
+            if (kind == "inn-tracked") {
+                using C = games::tasks::PipelineCompiler;
+                C graph("fixture.tracked_inn");
+                const auto child = graph.define_child("Inn", games::supply::rest_at_inn(config.value("royal", false), true));
+                graph.route("Entry", {"First"});
+                graph.call_child("First", child, {"Second"});
+                graph.call_child("Second", child, {"Terminal"});
+                return graph.finish();
+            }
+            if (kind == "departure") {
+                games::WvdQuestDefinition definition{"departure-fixture", "dungeon",
+                    {{"_EOT", {{"press", "Dist", {1, 1}, 1}}}, {"_TARGETINFOLIST", {{"chest"}}}}};
+                if (config.contains("return_destination"))
+                    definition.source["_RTT"] = config.at("return_destination");
+                return games::tasks::prepare_departure(games::WvdTaskPlan::parse(definition), profile,
+                                                       config.value("force_rest", false));
+            }
             if (kind == "heal")
                 return games::supply::recover_in_dungeon();
             if (kind == "dungeon-route") {

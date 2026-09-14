@@ -372,6 +372,38 @@ def update_dungeon_route(evidence, plan_evidence):
     print("43 dungeon route graphs recorded; complete task execution statuses unchanged.")
 
 
+def update_departure(evidence):
+    expected = {"inn-receipt": ("Completed", 5), "inn-paid-exit-failed": ("Failed", 5),
+        "departure-forced": ("Completed", 5), "departure-return-town": ("Completed", 6),
+        "departure-world": ("Completed", 1), "departure-prompt": ("Completed", 1),
+        "departure-stop": ("UserStopped", 1), "departure-reject": ("Failed", 1),
+        **{"departure-skip-" + name: ("Completed", 0) for name in ("Inn", "returntoTown", "openworldmap", "EdgeOfTown")},
+        **{"departure-uncertain-" + name: ("Interrupted", 0) for name in ("Stay", "worldmapflag", "mapFlag")}}
+    verify_workflows(evidence, expected)
+    for name in ("inn-receipt", "inn-paid-exit-failed", "departure-forced", "departure-return-town"):
+        state = read(evidence / name / "output.json")["snapshot"]["business"]
+        if state["inn_rests"] != 1 or not state["inn_rest_completed"]:
+            raise ValueError("M4_INN_RECEIPT_MISMATCH:" + name)
+    path = ROOT / "docs/migration/m4-implementation-map.json"
+    document = read(path)
+    for row in document["entries"]:
+        if row["legacy_symbol"] == "Factory.StateInn":
+            row.update(implementation="native/games/wvd/supply/inn.cpp", entry="supply::rest_at_inn",
+                implementation_extent="FINITE_INN_WITH_RUN_RECEIPT", offline_status="PASS",
+                evidence_report="../m4-departure-validation.md",
+                remaining="已确认住宿后不重复付费；输入后确认前的中断窗口和完整任务恢复仍须承接。")
+        if row["legacy_symbol"] == "Factory.DungeonFarm":
+            row.update(implementation="native/games/wvd/tasks/departure.cpp", entry="tasks::prepare_departure",
+                implementation_status="PARTIAL", implementation_extent="DEPARTURE_SUPPLY_SUBFLOW",
+                offline_status="PASS", evidence_report="../m4-departure-validation.md",
+                verification_scope="回城补给子流程，不是 DungeonFarm 完整运行",
+                remaining="完整入本/路线循环、其他全局事件、逐任务成功/失败/停止/恢复证据未齐。")
+    if document["counts"] != {"function": 250, "config": 33, "task": 58}:
+        raise ValueError("M4_DEPARTURE_INVENTORY_MISMATCH")
+    write(path, document)
+    print("Departure and inn receipt subflow recorded; complete task execution statuses unchanged.")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--data-evidence", type=Path)
@@ -383,8 +415,9 @@ if __name__ == "__main__":
     parser.add_argument("--encounter-evidence", type=Path)
     parser.add_argument("--healing-evidence", type=Path)
     parser.add_argument("--dungeon-route-evidence", type=Path)
+    parser.add_argument("--departure-evidence", type=Path)
     args = parser.parse_args()
-    if not any((args.data_evidence, args.combat_evidence, args.navigation_evidence, args.encounter_evidence, args.healing_evidence, args.dungeon_route_evidence)):
+    if not any((args.data_evidence, args.combat_evidence, args.navigation_evidence, args.encounter_evidence, args.healing_evidence, args.dungeon_route_evidence, args.departure_evidence)):
         parser.error("an evidence group is required")
     if args.data_evidence:
         generate(args.data_evidence, args.state_evidence, args.plan_evidence, args.workflow_evidence)
@@ -398,6 +431,8 @@ if __name__ == "__main__":
         update_encounter(args.encounter_evidence)
     if args.healing_evidence:
         update_healing(args.healing_evidence)
+    if args.departure_evidence:
+        update_departure(args.departure_evidence)
     if args.dungeon_route_evidence:
         if not args.plan_evidence:
             parser.error("--dungeon-route-evidence requires --plan-evidence")

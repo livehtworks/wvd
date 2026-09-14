@@ -405,7 +405,7 @@ void PipelineCompiler::confirm(const std::string &name, const std::string &opera
                                const std::string &event, const J &condition, J next, J step) {
     const std::set<std::string> events{"target_completed", "dungeon_entered", "combat_observed",
                                       "chest_observed", "dungeon_resumed", "dungeon_completed", "resurrected", "game_restarted",
-                                      "healing_requested", "healing_completed"};
+                                      "healing_requested", "healing_completed", "inn_rest_completed", "party_reassembled"};
     require(events.contains(event) && !operation.empty() && operation.size() <= 128,
             "COMPILE_BUSINESS_EVENT_INVALID");
     require(step.is_null() || (step.is_number_integer() && step >= 0 && step <= 4096),

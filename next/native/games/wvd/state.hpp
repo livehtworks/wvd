@@ -59,6 +59,8 @@ class WvdRunState final : public contracts::BusinessRunState {
     std::size_t lifecycle_recovery_sequence_{};
     bool healing_pending_{}, healing_active_{};
     std::size_t healing_sequence_{};
+    bool inn_rest_completed_{};
+    std::size_t supply_cycle_{}, inn_rests_{};
 };
 void register_wvd_state(runtime::BehaviorRegistry &registry);
 contracts::BehaviorBinding wvd_state_binding(const nlohmann::json &profile);

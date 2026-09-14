@@ -2045,10 +2045,10 @@
       "offline_status": "PASS",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "remaining": "子流程通过；外层任务调度、全部原分支和恢复生命周期尚未全部接入。",
-      "implementation_extent": "FINITE_WORKFLOW_SUBSET",
+      "remaining": "已确认住宿后不重复付费；输入后确认前的中断窗口和完整任务恢复仍须承接。",
+      "implementation_extent": "FINITE_INN_WITH_RUN_RECEIPT",
       "verification_scope": "真实 Maa 因果离线子流程，不是完整任务或所有旧分支",
-      "evidence_report": "../m4-workflow-validation.md"
+      "evidence_report": "../m4-departure-validation.md"
     },
     {
       "inventory_id": "function:src/script.py:Factory.StateEoT:2472",
@@ -2673,13 +2673,16 @@
         "M4-TASKS"
       ],
       "planned_owner_from_baseline": "native/games/wvd/tasks",
-      "implementation": null,
-      "entry": null,
-      "implementation_status": "NOT_STARTED",
-      "offline_status": "NOT_RUN",
+      "implementation": "native/games/wvd/tasks/departure.cpp",
+      "entry": "tasks::prepare_departure",
+      "implementation_status": "PARTIAL",
+      "offline_status": "PASS",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "remaining": "本轮未承接此完整业务；固定旧入口仍为唯一生产实现。"
+      "remaining": "完整入本/路线循环、其他全局事件、逐任务成功/失败/停止/恢复证据未齐。",
+      "implementation_extent": "DEPARTURE_SUPPLY_SUBFLOW",
+      "evidence_report": "../m4-departure-validation.md",
+      "verification_scope": "回城补给子流程，不是 DungeonFarm 完整运行"
     },
     {
       "inventory_id": "function:src/script.py:Factory.DungeonFarm._identifyState:3426",

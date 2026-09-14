@@ -30,6 +30,10 @@ class WorkflowTests(unittest.TestCase):
         bundle = folder / "bundle"
         (bundle / "image").mkdir(parents=True)
         names = ["worldmapflag", "City_RoyalCityLuknalia", "Inn", "Stay", "Economy", "royalsuite", "OK"]
+        if options.get("workflow") == "departure":
+            names += ["openworldmap", "intoWorldMap", "returntoTown", "returnText", "EdgeOfTown", "dungFlag", "mapFlag", "chestFlag",
+                      "combatActive", "combatActive_2", "combatActive_3", "combatActive_4",
+                      "guild", "Edit", "PartyManagement", "PartyManagementTitle", "AssembleParty"]
         if options.get("workflow") in ("auto", "turn", "encounter", "dungeon-route"):
             names += ["combatActive", "combatActive_2", "combatActive_3", "combatActive_4", "close",
                       "dungFlag", "chestFlag", "RiseAgain",
@@ -99,7 +103,7 @@ class WorkflowTests(unittest.TestCase):
                           {"path": p.relative_to(bundle).as_posix(), "sha256": digest(p)}
                           for p in sorted(bundle.rglob("*.png"))])
         config.update(options)
-        if options.get("workflow") in ("chest", "map-confirm", "state-route", "turn", "encounter", "recover", "heal", "dungeon-route"):
+        if options.get("workflow") in ("chest", "map-confirm", "state-route", "turn", "encounter", "recover", "heal", "dungeon-route", "departure", "inn-tracked"):
             config.update(with_state=True, descriptor=str(ROOT / "packs/wvd/parameters/legacy-config-fields.json"))
         if "omit_image" in options:
             config["files"] = [f for f in config["files"] if f["path"] != "image/" + options["omit_image"]]
@@ -109,7 +113,7 @@ class WorkflowTests(unittest.TestCase):
         before_hash = digest(exe)
         with (folder / "native.log").open("wb") as log:
             result = subprocess.run([str(exe), str(source)], cwd=folder, env=self.env,
-                                    stdout=log, stderr=log, timeout={"dungeon-route": 420, "recover": 750}.get(options.get("workflow"), 90))
+                                    stdout=log, stderr=log, timeout={"dungeon-route": 420, "recover": 750, "departure": 200}.get(options.get("workflow"), 90))
         self.assertEqual(digest(exe), before_hash)
         (folder / "execution.json").write_text(json.dumps({"exe_sha256": before_hash, "exit": result.returncode}), encoding="utf-8")
         self.assertEqual(result.returncode, 0, (folder / "native.log").read_text(encoding="utf-8", errors="replace")[-3000:])
@@ -124,7 +128,81 @@ class WorkflowTests(unittest.TestCase):
         return dict(DEFAULT_OVERALL_STRATEGY="Manual", TASK_SPECIFIC_CONFIG=False,
                     STRATEGY=[dict(group_name="Manual", skill_settings=[
                         dict(role_var=role, skill_var="防御" if defend else "左下技能", skill_lvl=level,
-                             target_var=target, freq_var="保留原值") for role in ("A", "B")])])
+                            target_var=target, freq_var="保留原值") for role in ("A", "B")])])
+
+    @staticmethod
+    def inn_sequence():
+        frames = [{name: (400, 700)} for name in ("Inn", "Stay", "Economy", "OK", "Stay", "Inn")]
+        inputs = [dict(kind=0, x=420, y=712)] * 4 + [dict(kind=5, key=4)]
+        return frames, inputs
+
+    def test_departure_tracked_inn_does_not_pay_twice(self):
+        frames, commands = self.inn_sequence()
+        r = self.execute("inn-receipt", frames, commands, workflow="inn-tracked")
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 5)
+        self.assertEqual(r["snapshot"]["business"]["inn_rests"], 1)
+        self.assertTrue(r["snapshot"]["business"]["inn_rest_completed"])
+
+    def test_departure_paid_but_exit_failed_preserves_receipt(self):
+        frames, commands = self.inn_sequence()
+        commands[-1] = dict(kind=5, key=4, reject=True)
+        r = self.execute("inn-paid-exit-failed", frames, commands, workflow="inn-tracked")
+        self.assertEqual(r["snapshot"]["state"], "Failed", r)
+        self.assertEqual(r["backend_calls"], 5)
+        self.assertEqual(r["snapshot"]["business"]["inn_rests"], 1)
+
+    def test_departure_initial_skips_without_encounter(self):
+        for symbol in ("Inn", "returntoTown", "openworldmap", "EdgeOfTown"):
+            with self.subTest(symbol=symbol):
+                r = self.execute("departure-skip-" + symbol, [{symbol: (400, 700)}], [], workflow="departure",
+                                 profile=dict(ACTIVE_REST=True, REST_INTERVEL=1))
+                self.assertEqual(r["snapshot"]["state"], "Completed", r)
+                self.assertEqual(r["backend_calls"], 0)
+                self.assertEqual(r["snapshot"]["business"]["inn_rests"], 0)
+
+    def test_departure_forced_rest_ignores_ordinary_interval(self):
+        frames, commands = self.inn_sequence()
+        r = self.execute("departure-forced", frames, commands, workflow="departure", force_rest=True,
+                         profile=dict(ACTIVE_REST=False, REST_INTERVEL=100))
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 5)
+        self.assertEqual(r["snapshot"]["business"]["inn_rests"], 1)
+
+    def test_departure_return_town_stops_back_at_inn(self):
+        frames, commands = self.inn_sequence()
+        r = self.execute("departure-return-town", [{"returntoTown": (400, 700)}] + frames,
+                         [dict(kind=5, key=4)] + commands, workflow="departure", force_rest=True)
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 6)
+
+    def test_departure_world_arrival_stops_world_inputs(self):
+        r = self.execute("departure-world", [{"worldmapflag": (20, 200), "City_RoyalCityLuknalia": (400, 700)}, {"Inn": (400, 700)}],
+                         [dict(kind=0, x=420, y=712)], workflow="departure",
+                         return_destination=["City_RoyalCityLuknalia", None, [550, 1]])
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 1)
+
+    def test_departure_prompt_and_uncertain_context(self):
+        r = self.execute("departure-prompt", [{"returnText": (400, 700)}, {"Inn": (400, 700)}],
+                         [dict(kind=0, x=420, y=712)], workflow="departure")
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        for symbol in ("Stay", "worldmapflag", "mapFlag"):
+            with self.subTest(symbol=symbol):
+                r = self.execute("departure-uncertain-" + symbol, [{symbol: (400, 700)}], [], workflow="departure")
+                self.assertEqual(r["snapshot"]["state"], "Interrupted", r)
+                self.assertEqual(r["backend_calls"], 0)
+
+    def test_departure_stop_and_reject_do_not_confirm_rest(self):
+        for stop in (False, True):
+            frames, commands = self.inn_sequence()
+            if not stop:
+                commands[0] = dict(kind=0, x=420, y=712, reject=True)
+            r = self.execute("departure-stop" if stop else "departure-reject", frames, commands,
+                             workflow="departure", force_rest=True, stop_after_first=stop)
+            self.assertEqual(r["snapshot"]["state"], "UserStopped" if stop else "Failed", r)
+            self.assertEqual(r["backend_calls"], 1)
+            self.assertFalse(r["snapshot"]["business"]["inn_rest_completed"])
 
     @staticmethod
     def turn_screen(role="A", **extra):

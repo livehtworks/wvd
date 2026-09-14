@@ -18,4 +18,5 @@ struct RestDecision {
 };
 RestDecision decide_rest(const nlohmann::json &profile, const SupplyFacts &facts,
                          bool pickaxes_exhausted = false);
+bool ordinary_rest_due(const nlohmann::json &profile, const SupplyFacts &facts);
 } // namespace wvd::games::supply
