@@ -290,7 +290,11 @@ void RunCoordinator::collect_session(const std::shared_ptr<ExecutionSession> &se
                  {"definition", session_definition_json(current_definition_, false)},
                  {"engine_status", result.engine_status},
                  {"reason", result.reason},
-                 {"quiescent", result.quiescent}});
+                 {"quiescent", result.quiescent},
+                 // 有界事件窗口可能已淘汰早期输入；逐代次计数必须独立保留。
+                 {"inputs", {{"attempted", result.inputs.attempted}, {"accepted", result.inputs.accepted},
+                             {"rejected", result.inputs.rejected}, {"backend_called", result.inputs.backend_called},
+                             {"cleanup_called", result.inputs.cleanup_called}}}});
             if (business_) {
                 snapshot_.business = business_->summary();
                 last_result_.business = snapshot_.business;

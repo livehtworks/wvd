@@ -998,8 +998,13 @@ class WorkflowTests(unittest.TestCase):
             self.assertEqual(len(saved), 1)
             events = json.loads(saved[0].read_text(encoding="utf-8"))["events"]["events"]
             calls = [e for e in events if e["type"] == "input.backend_called"]
-            self.assertEqual(len(calls), 8)
+            # 日志为有界窗口，完整输入次数以保存的逐代次摘要为权威。
+            self.assertTrue(calls)
             self.assertTrue(all(e["session_generation"] == generation for e in calls))
+            sessions = r["snapshot"]["sessions"]
+            self.assertTrue(all(s["inputs"]["backend_called"] == 0 for s in sessions[:-1]))
+            self.assertEqual(sessions[-1]["inputs"]["backend_called"], 8)
+            self.assertEqual(sum(s["inputs"]["backend_called"] for s in sessions), r["backend_calls"])
 
     def test_recovery_initial_connection_requires_explicit_policy(self):
         screens, actions = self.recovery_scenario()
