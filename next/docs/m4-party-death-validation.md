@@ -20,6 +20,8 @@
 
 七目标修后构建通过；同例补验和父预算测试 6 方法/16 场景全部通过（329.929 秒），其中死亡提示 5 方法/12 场景。持续无效实际五次点击后以 `party.death_prompt_unchanged` 返回，49.654 秒；停止/输入拒绝各一次输入后正确终止。没有重试挑选结果或改变原断言。
 
-证据根 `m4-workflow-wsi2pj6e`，流程 EXE SHA256 `8a49ccd0c7664fbf16b2ca299abe38f27f05af6bad3446e81cc633eff9851904`。构建和测试日志 `m4-party-death-bounded-retry-build.log`、`m4-party-death-retry-workflow.log` 保留在私有目录。通用阻塞与 Pause 回归正在执行，完整任务和真实质量尚未验。
+证据根 `m4-workflow-wsi2pj6e`，流程 EXE SHA256 `8a49ccd0c7664fbf16b2ca299abe38f27f05af6bad3446e81cc633eff9851904`。构建和测试日志 `m4-party-death-bounded-retry-build.log`、`m4-party-death-retry-workflow.log` 保留在私有目录。
+
+同产物通用阻塞与 Pause 回归 12 方法通过（214.439 秒），证据 `m4-workflow-gao8psst`，日志 `m4-party-death-common-pause.log`。实现提交 `2754096`；多人死亡后续改动未混入该产物。完整任务和真实质量尚未验。
 
 `multipeopledead`/SUICIDE、善恶写回、专项对话仍属于独立未完成范围；此报告不把一个提示处理当作全部死亡或全局事件完成。
