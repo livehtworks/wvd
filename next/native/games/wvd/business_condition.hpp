@@ -11,6 +11,7 @@ inline bool business_condition(const nlohmann::json &summary, const nlohmann::js
         "/recover_after_rez", "/met_encounter", "/dungeons", "/combats", "/chests", "/strategy/automatic",
         "/has_prepared_skill", "/prepared_skill_index", "/healing_required", "/chest_has_character", "/chest_character",
         "/ordinary_rest_due", "/party_refresh_due", "/city_supply_due", "/inn_rest_completed", "/inn_payment_pending", "/death_prompt_pending", "/wall_bypass_step",
+        "/giant_route_completed", "/giant_rest_due", "/giant_cycle_active",
         "/karma_ambush", "/karma_pending"};
     const auto path = parameters.at("field").get<std::string>();
     if (!fields.contains(path))

@@ -35,7 +35,7 @@ class WorkflowTests(unittest.TestCase):
         folder = self.root / name
         bundle = folder / "bundle"
         (bundle / "image").mkdir(parents=True)
-        resource_kind = "dungeon-route" if options.get("workflow") == "fortress-trap" else options.get("workflow")
+        resource_kind = "dungeon-route" if options.get("workflow") == "fortress-trap" else "iteration" if options.get("workflow") == "giant" else options.get("workflow")
         names = ["worldmapflag", "City_RoyalCityLuknalia", "Inn", "Stay", "Economy", "royalsuite", "OK"]
         if resource_kind in ("departure", "iteration"):
             names += ["openworldmap", "intoWorldMap", "returntoTown", "returnText", "EdgeOfTown", "dungFlag", "mapFlag", "chestFlag",
@@ -172,6 +172,7 @@ class WorkflowTests(unittest.TestCase):
             result = subprocess.run([str(exe), str(source)], cwd=folder, env=self.env,
                                     stdout=log, stderr=log, timeout={"dungeon-route": route_budget + 20,
                                         "fortress-trap": (route_budget + 260) * options.get("normal_units", 1),
+                                        "giant": (route_budget + 500) * options.get("normal_units", 1),
                                         "recover": 750, "departure": 200, "heal": 260,
                                         "chest": 920 if options.get("quick") else 620,
                                         "common": 140, "iteration": (route_budget + 380) * options.get("normal_units", 1)}.get(options.get("workflow"), 90))
@@ -1714,6 +1715,105 @@ class WorkflowTests(unittest.TestCase):
             self.assertEqual(r["backend_calls"], 1 if stop else 2)
             self.assertEqual(r["snapshot"]["business"]["task_step"], 0)
             self.assertFalse(r["mismatch"])
+
+    @staticmethod
+    def giant_scenario(rest=True):
+        # 参数来自固定旧 case，而场景变化只由预期输入触发，不靠截图次数推进。
+        source = subprocess.check_output(["git", "show", "6585f4075f5714ab522aa582993860c09af912c1:src/script.py"], cwd=ROOT.parent)
+        tree = ast.parse(source.decode("utf-8"))
+        branch = next(node for node in ast.walk(tree) if isinstance(node, ast.match_case)
+            and isinstance(node.pattern, ast.MatchValue) and isinstance(node.pattern.value, ast.Constant)
+            and node.pattern.value.value == "gaintKiller")
+        assignment = next(node for statement in branch.body for node in ast.walk(statement)
+            if isinstance(node, ast.Assign) and any(isinstance(target, ast.Attribute) and target.attr == "_EOT" for target in node.targets))
+        entries = ast.literal_eval(assignment.value)
+        city = {"Inn": (400, 700), "EdgeOfTown": (300, 1000)}
+        frames, actions, focused = [city], [], {}
+        def advance(command, frame):
+            actions.append(command)
+            frames.append(dict(frame))
+        def click(x, y, frame):
+            advance(dict(kind=0, x=x, y=y), frame)
+        click(320, 1012, {entries[0][1]: (300, 700)})
+        click(1, 1, {entries[0][1]: (300, 700)})
+        click(320, 712, {entries[1][1]: (300, 700)})
+        click(320, 712, {"GotoDung": (300, 700)})
+        click(320, 712, {"mapFlag": (100, 100)})
+        swipe = dict(kind=1, x=100, y=250, x2=700, y2=1200, duration=400)
+        advance(swipe, {"mapFlag": (100, 100)})
+        click(560, 982, {"mapFlag": (100, 100)})
+        click(136, 1431, {"dungFlag": (50, 150)})
+        reached = {"mapFlag": (100, 100), "cursor_0": (540, 970), "harken2": (400, 700)}
+        click(777, 150, reached)
+        advance(swipe, reached)
+        advance(swipe, reached)
+        click(440, 740, {"mapFlag": (100, 100), "harken2": (400, 700)})
+        click(136, 1431, {"dungFlag": (50, 150)})
+        exit_map = {"mapFlag": (100, 100), "harken2": (400, 700), "leaveDung": (600, 900)}
+        click(777, 150, exit_map)
+        focused[str(len(frames) - 1)] = ["harken2"]
+        advance(swipe, exit_map)
+        focused[str(len(frames) - 1)] = ["harken2"]
+        click(620, 912, {"returnText": (300, 700)})
+        click(320, 712, city)
+        if rest:
+            click(420, 712, {"Stay": (300, 700)})
+            click(320, 712, {"Economy": (300, 700)})
+            click(320, 712, {"OK": (300, 700)})
+            click(320, 712, {"Stay": (300, 700)})
+            advance(dict(kind=5, key=4), city)
+        return entries, frames, actions, focused
+
+    def giant_options(self, **extra):
+        return dict(workflow="giant", quest_catalog=str(ROOT / "packs/wvd/parameters/legacy-quests.json"),
+            profile={**self.wall_profile(False), "REST_INTERVEL": 1, "ACTIVE_REST": False},
+            extra_images=["impregnableFortress", "fortressb7f", "harken2", "returntotown", "leaveDung"],
+            large_templates=["harken2"], **extra)
+
+    def test_giant_full_cycle_and_cold_start(self):
+        entries, frames, actions, focused = self.giant_scenario()
+        for cold in (False, True):
+            result = self.execute("giant-cycle-" + str(cold), ([{}] if cold else []) + frames, actions,
+                **self.giant_options(attach_recovery=cold, initial_connection="closed" if cold else "ready",
+                    focused_map_templates={str(int(k) + int(cold)): v for k, v in focused.items()}))
+            self.assertEqual(result["snapshot"]["state"], "Completed", result)
+            self.assertEqual(result["backend_calls"], len(actions))
+            self.assertFalse(result["mismatch"])
+            self.assertEqual([row["target"] for row in result["task_plan"]["entry_steps"]], [row[1] for row in entries])
+            self.assertNotIn("_EOT", result["task_plan"]["source"])
+            state = result["snapshot"]["business"]
+            self.assertEqual(state["dungeons"], 1)
+            self.assertEqual(state["giant_cycles_completed"], 1)
+            self.assertEqual(state["inn_rests"], 1)
+            self.assertEqual(state["crashes"], int(cold))
+
+    def test_giant_second_cycle_uses_special_rest_interval(self):
+        _, first, actions, focused = self.giant_scenario()
+        _, second, more, second_focus = self.giant_scenario(rest=False)
+        offset = len(first) - 1
+        focused.update({str(int(k) + offset): v for k, v in second_focus.items()})
+        result = self.execute("giant-two-cycles", first + second[1:], actions + more,
+            **self.giant_options(normal_units=2, focused_map_templates=focused))
+        self.assertEqual(result["snapshot"]["state"], "Completed", result)
+        self.assertEqual(result["backend_calls"], len(actions) + len(more))
+        self.assertFalse(result["mismatch"])
+        state = result["snapshot"]["business"]
+        self.assertEqual(state["dungeons"], 2)
+        self.assertEqual(state["giant_cycles_completed"], 2)
+        self.assertEqual(state["inn_rests"], 1)
+        self.assertEqual(result["snapshot"]["completed_business_units"], 2)
+
+    def test_giant_stop_and_input_failure_do_not_finish_cycle(self):
+        _, frames, actions, _ = self.giant_scenario()
+        for stopped in (False, True):
+            result = self.execute("giant-stop-" + str(stopped), frames[:2],
+                [{**actions[0], "reject": not stopped}], **self.giant_options(stop_after_first=stopped))
+            self.assertEqual(result["snapshot"]["state"], "UserStopped" if stopped else "Failed", result)
+            self.assertEqual(result["backend_calls"], 1)
+            self.assertFalse(result["mismatch"])
+            self.assertEqual(result["snapshot"]["business"]["dungeons"], 1)
+            self.assertEqual(result["snapshot"]["business"]["giant_cycles_completed"], 0)
+            self.assertEqual(result["snapshot"]["business"]["inn_rests"], 0)
 
     @staticmethod
     def trap_scenario():

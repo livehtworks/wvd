@@ -226,6 +226,16 @@ WvdTaskPlan WvdTaskPlan::with_route(const J &targets) const {
         plan.route_.push_back(map_target(target));
     return plan;
 }
+WvdTaskPlan WvdTaskPlan::with_entry(const J &steps) const {
+    if (!steps.is_array() || steps.empty() || steps.size() > 64)
+        throw std::runtime_error("TASK_LOCAL_ENTRY_INVALID");
+    auto local = definition_;
+    local.source["_EOT"] = steps;
+    auto plan = *this;
+    plan.entry_ = parse(local).entry_;
+    // 局部编译参数不回写源任务树；检查报告仍可追溯目录没有声明 EOT 的事实。
+    return plan;
+}
 nlohmann::json WvdTaskPlan::inspect() const {
     J entries = J::array(), targets = J::array();
     for (const auto &step : entry_)

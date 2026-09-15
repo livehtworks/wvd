@@ -324,6 +324,17 @@ J evaluate_uncached(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels
                     return decision(true, allowed_rect, {{"stage", probe.at("image")}});
         return decision(false, {}, {{"stage", "unknown_or_map_only"}});
     }
+    if (mode == "dialogue_post") {
+        check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");
+        // 连续选项先走完整对话反证，再查其它页面；不先串行扫一次所有启动覆盖层。
+        for (const auto &probe : J::array({J{{"mode", "default_dialogue"}}, J{{"mode", "boot_post"}}})) {
+            auto result = evaluate_impl(bundle, pixels, probe, bound, scope, cache, depth + 1, memo);
+            check(result.at("outcome") != "Error", "WVD_DIALOGUE_RECOGNITION_ERROR");
+            if (result.at("outcome") == "Hit")
+                return decision(true, allowed_rect, {{"stage", probe.at("mode")}}, false);
+        }
+        return decision(false, {}, {{"stage", "unknown"}});
+    }
     if (mode == "default_dialogue") {
         check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");
         if (p.contains("selected"))

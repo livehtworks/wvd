@@ -152,6 +152,15 @@ class StateTests(unittest.TestCase):
         self.assertEqual(r["snapshot"]["state"], "Completed", r)
         self.assertTrue(r["snapshot"]["business"]["strategy"]["automatic"])
 
+    def test_giant_route_and_rest_receipts_survive_recovery(self):
+        r = self.run_case("giant-contract")
+        state = r["direct"]["giant_contract"]
+        self.assertEqual(state["dungeons"], 2)
+        self.assertEqual(state["giant_cycles_completed"], 2)
+        self.assertEqual(state["inn_rests"], 1)
+        self.assertFalse(state["giant_cycle_active"])
+        self.assertEqual(state["crashes"], 1)
+
     def test_profile_lock_replace_failure_and_concurrent_cas(self):
         result = self.run_case("profile-storage", profile_storage=True)
         self.assertEqual(result["offline_connections"], 0)

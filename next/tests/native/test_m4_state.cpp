@@ -82,6 +82,41 @@ J direct_contract(const J &profile) {
     J result;
     result["initial"] = state.summary();
     {
+        auto configured = profile;
+        configured.update({{"ACTIVE_REST", false}, {"REST_INTERVEL", 1}});
+        games::WvdRunState giant(configured, {"giant", 1, clock});
+        giant.enter_segment(contracts::SegmentBoundary::Initial, 1, 0);
+        const auto start = giant.confirmation_id("giant.start", "giant_cycle_started");
+        giant.confirm_event(start, "giant_cycle_started", 1, 1);
+        giant.enter_dungeon();
+        bool early = false;
+        try { giant.confirm_event("early", "giant_route_completed", 1, 2); }
+        catch (const std::exception &e) { early = std::string(e.what()) == "GIANT_ROUTE_NOT_COMPLETED"; }
+        require(early, "GIANT_EARLY_ROUTE_COMPLETED");
+        for (int i = 0; i < 2; ++i) giant.target_point_completed();
+        giant.confirm_event(giant.confirmation_id("giant.route", "giant_route_completed"), "giant_route_completed", 1, 3);
+        giant.enter_segment(contracts::SegmentBoundary::LifecycleRecovery, 2, 0);
+        require(!giant.confirm_event(start, "giant_cycle_started", 2, 4), "GIANT_RESTART_DOUBLE_COUNTED");
+        require(giant.summary().at("giant_route_completed").get<bool>(), "GIANT_RESTART_LOST_ROUTE");
+        bool unpaid = false;
+        try { giant.confirm_event("unpaid", "giant_cycle_completed", 2, 5); }
+        catch (const std::exception &e) { unpaid = std::string(e.what()) == "GIANT_CYCLE_NOT_COMPLETED"; }
+        require(unpaid, "GIANT_SKIPPED_DUE_REST");
+        giant.confirm_event(giant.confirmation_id("inn.prepare", "inn_payment_prepared"), "inn_payment_prepared", 2, 6);
+        giant.confirm_event(giant.confirmation_id("inn.paid", "inn_rest_completed"), "inn_rest_completed", 2, 7);
+        const auto done = giant.confirmation_id("giant.complete", "giant_cycle_completed");
+        giant.confirm_event(done, "giant_cycle_completed", 2, 8);
+        require(!giant.confirm_event(done, "giant_cycle_completed", 2, 9), "GIANT_DUPLICATE_COMPLETION");
+        giant.enter_segment(contracts::SegmentBoundary::Continuation, 3, 1);
+        giant.confirm_event(giant.confirmation_id("giant.start", "giant_cycle_started"), "giant_cycle_started", 3, 10);
+        giant.enter_dungeon();
+        require(!giant.summary().at("giant_rest_due").get<bool>(), "GIANT_INTERVAL_OFF_BY_ONE");
+        for (int i = 0; i < 2; ++i) giant.target_point_completed();
+        giant.confirm_event(giant.confirmation_id("giant.route", "giant_route_completed"), "giant_route_completed", 3, 11);
+        giant.confirm_event(giant.confirmation_id("giant.complete", "giant_cycle_completed"), "giant_cycle_completed", 3, 12);
+        result["giant_contract"] = giant.summary();
+    }
+    {
         games::WvdRunState trap(profile, {"trap", 1, clock});
         trap.enter_segment(contracts::SegmentBoundary::Initial, 1, 0);
         const auto started = trap.confirmation_id("trap.start", "trap_cycle_started");

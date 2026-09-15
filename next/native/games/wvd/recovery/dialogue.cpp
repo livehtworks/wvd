@@ -6,7 +6,7 @@ tasks::CompiledWorkflow choose_default_dialogue() {
     using C = tasks::PipelineCompiler;
     using J = nlohmann::json;
     C graph("recovery.default_dialogue", std::chrono::seconds{90});
-    const J known{{"mode", "boot_post"}};
+    const J known{{"mode", "dialogue_post"}};
     J candidates = J::array();
     for (std::size_t i = 0; i < vision::default_dialogue_names.size(); ++i) {
         const auto suffix = std::to_string(i);

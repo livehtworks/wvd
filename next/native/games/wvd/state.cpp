@@ -20,6 +20,15 @@ WvdRunState::WvdRunState(J profile, const contracts::StateCreationContext &creat
 bool WvdRunState::setting_is(const char *name, const char *zh, const char *en) const {
     return profile_.at(name) == (profile_.at("LANGUAGE") == "en_US" ? en : zh);
 }
+bool WvdRunState::giant_rest_due() const {
+    if (!giant_unit_ || inn_rest_completed_)
+        return false;
+    const auto interval = profile_.at("REST_INTERVEL").get<std::int64_t>();
+    if (interval < 0 || !dungeons_)
+        throw std::runtime_error("GIANT_REST_INTERVAL_INVALID");
+    // 先转无符号再加一，保留合法最大整数，不发生有符号溢出。
+    return (dungeons_ - 1) % (static_cast<std::uint64_t>(interval) + 1) == 0;
+}
 void WvdRunState::on_segment(contracts::SegmentBoundary boundary, std::uint64_t generation,
                              std::size_t unit) {
     if (generation <= generation_)
@@ -273,7 +282,33 @@ bool WvdRunState::confirm_event(const std::string &operation, const std::string 
         throw std::runtime_error("BUSINESS_CONFIRMATION_CAPACITY");
     if (expected_step && *expected_step != task_step_)
         throw std::runtime_error("BUSINESS_TASK_STEP_MISMATCH");
-    if (event == "trap_cycle_started") {
+    if (event == "giant_cycle_started") {
+        if (giant_unit_ || inn_payment_pending_)
+            throw std::runtime_error("GIANT_CYCLE_ALREADY_STARTED_OR_PAYMENT_PENDING");
+        if (profile_.at("REST_INTERVEL").get<std::int64_t>() < 0)
+            throw std::runtime_error("GIANT_REST_INTERVAL_INVALID");
+        const auto now = clock_->now();
+        if (lap_started_) {
+            const auto elapsed = std::chrono::duration<double>(now - *lap_started_).count();
+            if (elapsed < 0)
+                throw std::runtime_error("WVD_CLOCK_MOVED_BACKWARD");
+            total_seconds_ += elapsed;
+        }
+        lap_started_ = now;
+        ++dungeons_;
+        giant_unit_ = unit_index_;
+        giant_route_completed_ = false;
+    } else if (event == "giant_route_completed") {
+        if (!giant_unit_ || *giant_unit_ != unit_index_ || task_step_ != 2)
+            throw std::runtime_error("GIANT_ROUTE_NOT_COMPLETED");
+        giant_route_completed_ = true;
+    } else if (event == "giant_cycle_completed") {
+        if (!giant_unit_ || *giant_unit_ != unit_index_ || !giant_route_completed_ ||
+            inn_payment_pending_ || giant_rest_due())
+            throw std::runtime_error("GIANT_CYCLE_NOT_COMPLETED");
+        ++giant_cycles_completed_;
+        giant_unit_.reset();
+    } else if (event == "trap_cycle_started") {
         if (trap_unit_)
             throw std::runtime_error("TRAP_CYCLE_ALREADY_STARTED");
         const auto now = clock_->now();
@@ -435,6 +470,10 @@ J WvdRunState::summarize() const {
             {"prepared_portrait", prepared_ ? prepared_portrait_ : ""},
             {"dungeons", dungeons_},
             {"trap_cycles_completed", trap_cycles_completed_},
+            {"giant_route_completed", giant_route_completed_},
+            {"giant_cycle_active", giant_unit_.has_value()},
+            {"giant_cycles_completed", giant_cycles_completed_},
+            {"giant_rest_due", giant_rest_due()},
             {"combats", combats_},
             {"chests", chests_},
             {"crashes", crashes_},
