@@ -448,6 +448,21 @@ J evaluate_uncached(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels
         }
         return decision(false, {}, {{"stage", "unknown"}});
     }
+    if (mode == "auto_route_moving") {
+        check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");
+        const auto probes = auto_route_moving_probes();
+        const auto matches = evaluate_batch(bundle, pixels, probes, bound, scope, cache, depth, memo, 4);
+        bool hit = true;
+        for (std::size_t i = 0; i < probes.size(); ++i) {
+            const auto &result = matches.at(i);
+            check(result.at("outcome") != "Error", "WVD_NAVIGATION_RECOGNITION_ERROR");
+            const bool present = result.at("outcome") == "Hit";
+            hit = hit && (i == 0 ? present : !present);
+        }
+        // 即使先发现反证也消费全部结果，保持原 all/any 的 Error 传播。
+        // 不列入外层并行白名单，否则 OpenCV 嵌套并行会令本层退化为串行。
+        return decision(hit, allowed_rect, {{"stage", hit ? "moving" : "not_moving"}}, false);
+    }
     if (mode == "auto_route_post") {
         check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");
         auto observe = [&](const J &probe) {

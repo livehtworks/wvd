@@ -60,6 +60,8 @@ void collect_images(const J &value, std::set<std::string> &images, std::set<std:
             collect_images(vision::blocking_probes(false), images, expanded_modes);
             collect_images(J{{"mode", "party_death"}}, images, expanded_modes);
         }
+        if (expand && mode == "auto_route_moving")
+            collect_images(vision::auto_route_moving_probes(), images, expanded_modes);
         if (expand && mode == "auto_route_post") {
             images.insert("mapFlag.png");
             images.insert("dungFlag.png");

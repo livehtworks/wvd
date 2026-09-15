@@ -148,6 +148,32 @@ class VisionTests(unittest.TestCase):
             self.assertTrue(case["pass"], case)
         return result
 
+    def test_auto_route_moving_matches_original_predicate(self):
+        def image(name):
+            return dict(mode="template", image=name, threshold=.8)
+        def joined(mode, *conditions):
+            return dict(mode=mode, conditions=list(conditions))
+        def absent(condition):
+            return joined("not", condition)
+        map_flag = image("mapFlag")
+        encounter = joined("any", dict(mode="combat_active"), *map(image,
+            ("chestFlag", "chestOpening", "whowillopenit", "RiseAgain")))
+        outside = joined("all", joined("any", *map(image,
+            ("Inn", "EdgeOfTown", "returnText", "returntoTown", "openworldmap", "worldmapflag"))),
+            absent(map_flag), absent(encounter))
+        original = joined("all", image("dungFlag"), absent(map_flag), absent(encounter), absent(outside))
+        dungeon = cv2.imdecode(np.frombuffer((ROOT / "packs/wvd/image/dungFlag.png").read_bytes(), np.uint8), cv2.IMREAD_COLOR)
+        for marker in (None, "mapFlag", "Inn", "chestFlag"):
+            patches = [(100, 250, dungeon)]
+            if marker:
+                patch = cv2.imdecode(np.frombuffer((ROOT / ("packs/wvd/image/" + marker + ".png")).read_bytes(), np.uint8), cv2.IMREAD_COLOR)
+                patches.append((400, 650, patch))
+            expected = "NoHit" if marker else "Hit"
+            self.run_fixture("moving-" + str(marker), [
+                dict(id="original", expected=expected, parameters=original),
+                dict(id="flat", expected=expected, parameters=dict(mode="auto_route_moving")),
+            ], full=True, patches=patches)
+
     def test_resource_source_and_aliases(self):
         for file in self.manifest["files"]:
             self.assertEqual(sha(ROOT / "packs/wvd" / file["path"]), file["sha256"])

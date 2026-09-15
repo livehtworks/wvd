@@ -8,14 +8,13 @@ tasks::CompiledWorkflow auto_route(const std::string &target) {
         throw std::runtime_error("AUTO_ROUTE_TARGET_INVALID");
     C graph("navigation.auto_route");
     const auto map = C::image("mapFlag");
-    const auto dungeon = C::image("dungFlag");
     const J combat{{"mode", "combat_active"}};
     const auto chest = C::any({C::image("chestFlag"), C::image("chestOpening"), C::image("whowillopenit")});
     const auto encounter = C::any({combat, chest, C::image("RiseAgain")});
     const auto outside = C::all({C::any({C::image("Inn"), C::image("EdgeOfTown"), C::image("returnText"),
                                         C::image("returntoTown"), C::image("openworldmap"), C::image("worldmapflag")}),
                                  C::absent(map), C::absent(encounter)});
-    const auto moving = C::all({dungeon, C::absent(map), C::absent(encounter), C::absent(outside)});
+    const J moving{{"mode", "auto_route_moving"}};
     const auto no_target = C::any({C::image("NoChestCanBeFound"), C::image("theRouteToTheDestinationCannotBeFound")});
     const J post{{"mode", "auto_route_post"}};
     graph.observe("Encounter", encounter, {"EncounterExit"});
