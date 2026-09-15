@@ -15,43 +15,46 @@ void require(bool value, const char *code) {
     if (!value)
         throw std::runtime_error(code);
 }
-void collect_images(const J &value, std::set<std::string> &images) {
+void collect_images(const J &value, std::set<std::string> &images, std::set<std::string> &expanded_modes) {
     if (value.is_object()) {
         // 专用识别器内部加载的资源也必须进入发布清单，不能等运行才发现缺图。
         const auto mode = value.value("mode", "");
-        if (mode == "boot_ready" || mode == "boot_post")
-            collect_images(vision::boot_probes(mode == "boot_post"), images);
-        if (mode == "blocking_screen")
-            collect_images(vision::blocking_probes(), images);
-        if (mode == "dialogue_post") {
-            collect_images(J{{"mode", "default_dialogue"}}, images);
-            collect_images(vision::boot_probes(true), images);
+        // 常量隐式依赖在本次收集内只展开一次；显式 image/动态参数仍逐项收集。
+        // 不缓存整份图或跨编译共享结果，validate 仍独立重算完整资源集合。
+        const bool expand = expanded_modes.insert(mode).second;
+        if (expand && (mode == "boot_ready" || mode == "boot_post"))
+            collect_images(vision::boot_probes(mode == "boot_post"), images, expanded_modes);
+        if (expand && mode == "blocking_screen")
+            collect_images(vision::blocking_probes(), images, expanded_modes);
+        if (expand && mode == "dialogue_post") {
+            collect_images(J{{"mode", "default_dialogue"}}, images, expanded_modes);
+            collect_images(vision::boot_probes(true), images, expanded_modes);
         }
-        if (mode == "default_dialogue") {
-            collect_images(vision::default_dialogue_probes(), images);
-            collect_images(vision::default_dialogue_normal_probes(), images);
-            collect_images(vision::blocking_probes(false), images);
-            collect_images(J{{"mode", "party_death"}}, images);
+        if (expand && mode == "default_dialogue") {
+            collect_images(vision::default_dialogue_probes(), images, expanded_modes);
+            collect_images(vision::default_dialogue_normal_probes(), images, expanded_modes);
+            collect_images(vision::blocking_probes(false), images, expanded_modes);
+            collect_images(J{{"mode", "party_death"}}, images, expanded_modes);
         }
-        if (mode == "auto_route_post") {
+        if (expand && mode == "auto_route_post") {
             images.insert("mapFlag.png");
             images.insert("dungFlag.png");
-            collect_images(vision::auto_route_probes(), images);
-            collect_images(vision::auto_route_outside_probes(), images);
+            collect_images(vision::auto_route_probes(), images, expanded_modes);
+            collect_images(vision::auto_route_outside_probes(), images, expanded_modes);
         }
-        if (mode == "party_death" || mode == "party_defeat") {
+        if (expand && (mode == "party_death" || mode == "party_defeat")) {
             images.insert("someonedead.png");
             if (mode == "party_defeat")
                 images.insert("multipeopledead.png");
-            collect_images(vision::boot_probes(false), images);
-            collect_images(J{{"mode", "pause"}}, images);
-            collect_images(vision::blocking_probes(false), images);
+            collect_images(vision::boot_probes(false), images, expanded_modes);
+            collect_images(J{{"mode", "pause"}}, images, expanded_modes);
+            collect_images(vision::blocking_probes(false), images, expanded_modes);
         }
-        if (mode == "party_death_post") {
-            collect_images(J{{"mode", "party_death"}}, images);
-            collect_images(J{{"mode", "party_defeat"}}, images);
+        if (expand && mode == "party_death_post") {
+            collect_images(J{{"mode", "party_death"}}, images, expanded_modes);
+            collect_images(J{{"mode", "party_defeat"}}, images, expanded_modes);
             images.insert("RiseAgain.png");
-            collect_images(vision::boot_probes(true), images);
+            collect_images(vision::boot_probes(true), images, expanded_modes);
         }
         if (mode == "pause" || mode == "pause_negative")
             for (const auto *name : {"trait", "recover", "spellskill/skillDetail", "close"})
@@ -83,11 +86,15 @@ void collect_images(const J &value, std::set<std::string> &images) {
                         "COMPILE_IMAGE_PATH_INVALID");
                 images.insert(path.ends_with(".png") ? path : path + ".png");
             } else
-                collect_images(child, images);
+                collect_images(child, images, expanded_modes);
         }
     } else if (value.is_array())
         for (const auto &child : value)
-            collect_images(child, images);
+            collect_images(child, images, expanded_modes);
+}
+void collect_images(const J &value, std::set<std::string> &images) {
+    std::set<std::string> expanded_modes;
+    collect_images(value, images, expanded_modes);
 }
 std::set<std::string> collect_actions(const J &nodes) {
     std::set<std::string> actions;
