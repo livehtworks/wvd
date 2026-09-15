@@ -35,7 +35,7 @@ class WorkflowTests(unittest.TestCase):
         folder = self.root / name
         bundle = folder / "bundle"
         (bundle / "image").mkdir(parents=True)
-        resource_kind = "dungeon-route" if options.get("workflow") == "fortress-trap" else "iteration" if options.get("workflow") in ("giant", "dark-light", "mining") else options.get("workflow")
+        resource_kind = "dungeon-route" if options.get("workflow") == "fortress-trap" else "iteration" if options.get("workflow") in ("giant", "dark-light", "mining", "manual-separation") else options.get("workflow")
         names = ["worldmapflag", "City_RoyalCityLuknalia", "Inn", "Stay", "Economy", "royalsuite", "OK"]
         if resource_kind in ("departure", "iteration"):
             names += ["openworldmap", "intoWorldMap", "returntoTown", "returnText", "EdgeOfTown", "dungFlag", "mapFlag", "chestFlag",
@@ -183,7 +183,7 @@ class WorkflowTests(unittest.TestCase):
                                         "giant": (route_budget + 500) * options.get("normal_units", 1),
                                         "recover": 750, "departure": 200, "heal": 260,
                                         "chest": 920 if options.get("quick") else 620,
-                                        "time-leap": 200, "mining": 920, "common": 140, "iteration": (route_budget + 380) * options.get("normal_units", 1)}.get(options.get("workflow"), 90))
+                                        "manual-separation": 3620, "time-leap": 200, "mining": 920, "common": 140, "iteration": (route_budget + 380) * options.get("normal_units", 1)}.get(options.get("workflow"), 90))
         self.assertEqual(digest(exe), before_hash)
         (folder / "execution.json").write_text(json.dumps({"exe_sha256": before_hash, "exit": result.returncode}), encoding="utf-8")
         self.assertEqual(result.returncode, 0, (folder / "native.log").read_text(encoding="utf-8", errors="replace")[-3000:])
@@ -1796,6 +1796,85 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(r["snapshot"]["business"]["inn_rests"], 1)
         self.assertFalse(r["snapshot"]["business"]["mining"]["refill_pending"])
         self.assertEqual(r["snapshot"]["business"]["mining"]["completed_cycles"], 1)
+
+    def manual_options(self, **extra):
+        return dict(workflow="manual-separation", quest_catalog=str(ROOT / "packs/wvd/parameters/legacy-quests.json"),
+            profile=self.wall_profile(False), large_templates=["harken"],
+            aliases={"returntoTown.png": "returntotown.png"},
+            extra_images=["stair_2", "stair_3", "COS/COS", "COS/COSB2F", "leaveDung", "cursedWheelTitle",
+                "cursedWheel", "cursedWheelTapRight", "leap", "ruins", "BeautifulOre", "cursedwheel_dhi"], **extra)
+
+    @staticmethod
+    def manual_scenario():
+        frames, actions = [{"mapFlag": (100, 100)}], []
+        def advance(action, frame):
+            actions.append(action)
+            frames.append(frame)
+        def point(name, x, y, swipe):
+            advance(dict(kind=1, x=swipe[0], y=swipe[1], x2=swipe[2], y2=swipe[3], duration=400), {"mapFlag": (100, 100)})
+            advance(dict(kind=0, x=x, y=y), {"mapFlag": (100, 100)})
+            advance(dict(kind=0, x=136, y=1431), {"dungFlag": (50, 150)})
+            reached = {"mapFlag": (100, 100), "cursor_0": (x - 20, y - 12)}
+            if name != "position": reached[name] = (400, 600)
+            advance(dict(kind=0, x=777, y=150), reached)
+            advance(dict(kind=1, x=swipe[0], y=swipe[1], x2=swipe[2], y2=swipe[3], duration=400), reached)
+        point("stair_2", 827, 547, (100, 1200, 700, 250))
+        advance(dict(kind=1, x=100, y=1200, x2=700, y2=250, duration=400), {"mapFlag": (100, 100), "harken": (400, 700)})
+        advance(dict(kind=0, x=440, y=740), {"mapFlag": (100, 100), "harken": (400, 700)})
+        advance(dict(kind=0, x=136, y=1431), {"returnText": (400, 700)})
+        advance(dict(kind=5, key=4), {"EdgeOfTown": (400, 700)})
+        advance(dict(kind=5, key=4), {"Inn": (400, 700)})
+        for label in ("Stay", "Economy", "OK", "Stay"):
+            advance(dict(kind=0, x=420, y=712), {label: (400, 700)})
+        advance(dict(kind=5, key=4), {"Inn": (400, 700), "cursedWheelTitle": (200, 100), "BeautifulOre": (300, 900)})
+        advance(dict(kind=0, x=320, y=912), {"cursedWheelTitle": (200, 100), "leap": (400, 900)})
+        advance(dict(kind=0, x=420, y=912), {"EdgeOfTown": (400, 600), "COS/COS": (300, 700)})
+        first_unit_inputs = len(actions)
+        advance(dict(kind=0, x=320, y=712), {"COS/COSB2F": (400, 700)})
+        advance(dict(kind=0, x=420, y=712), {"dungFlag": (50, 150)})
+        advance(dict(kind=0, x=777, y=150), {"mapFlag": (100, 100)})
+        point("stair_3", 720, 822, (100, 250, 700, 1200))
+        point("position", 79, 447, (100, 250, 700, 1200))
+        return frames, actions, first_unit_inputs
+
+    def test_manual_separation_full_two_units(self):
+        frames, actions, first = self.manual_scenario()
+        r = self.execute("manual-full", frames, actions, **self.manual_options())
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], len(actions))
+        self.assertFalse(r["mismatch"])
+        state = r["snapshot"]["business"]
+        self.assertTrue(state["manual_separation"]["completed"])
+        self.assertEqual(state["inn_rests"], 1)
+        self.assertEqual(state["dungeons"], 0)
+        sessions = r["snapshot"]["sessions"]
+        self.assertEqual(len(sessions), 2)
+        self.assertEqual([session["engine_status"] for session in sessions], [3000, 3000])
+        self.assertTrue(all(session["quiescent"] for session in sessions))
+        self.assertFalse(sessions[0]["business"]["manual_separation"]["completed"])
+        self.assertTrue(sessions[1]["business"]["manual_separation"]["completed"])
+        self.assertEqual(first, 17)
+        self.assertEqual([row["target"] for row in r["task_plan"][0]["route"]], ["stair_2", "harken"])
+        self.assertEqual([row["target"] for row in r["task_plan"][1]["route"]], ["stair_3", "position"])
+
+    def test_manual_separation_stop_and_rejection_preserve_incomplete_route(self):
+        frames, actions, _ = self.manual_scenario()
+        for stop in (False, True):
+            r = self.execute("manual-stop-" + str(stop), frames[:2], [{**actions[0], "reject": not stop}],
+                **self.manual_options(stop_after_first=stop))
+            self.assertEqual(r["snapshot"]["state"], "UserStopped" if stop else "Failed", r)
+            self.assertEqual(r["backend_calls"], 1)
+            self.assertFalse(r["mismatch"])
+            self.assertFalse(r["snapshot"]["business"]["manual_separation"]["completed"])
+
+    def test_manual_separation_premature_exit_is_not_harken_completion(self):
+        frames, actions, _ = self.manual_scenario()
+        r = self.execute("manual-premature", frames[:3] + [{"Inn": (400, 700)}], actions[:3], **self.manual_options())
+        self.assertEqual(r["snapshot"]["state"], "Interrupted", r)
+        self.assertEqual(r["backend_calls"], 3)
+        self.assertFalse(r["mismatch"])
+        self.assertEqual(r["snapshot"]["sessions"][0]["reason"], "quest.manual_route_incomplete")
+        self.assertEqual(r["snapshot"]["business"]["inn_rests"], 0)
 
     def test_time_leap_visible_target_uses_fast_path(self):
         r = self.execute("time-leap-fast", [{"cursedWheelTitle": (200, 100), "BeautifulOre": (300, 700)},

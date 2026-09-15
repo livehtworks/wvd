@@ -298,7 +298,25 @@ bool WvdRunState::confirm_event(const std::string &operation, const std::string 
         throw std::runtime_error("BUSINESS_CONFIRMATION_CAPACITY");
     if (expected_step && *expected_step != task_step_)
         throw std::runtime_error("BUSINESS_TASK_STEP_MISMATCH");
-    if (event == "mining_reward_observed") {
+    if (event == "manual_started_in_city") {
+        manual_separation_.started_in_city(unit_index_);
+    } else if (event == "manual_route_completed") {
+        manual_separation_.route_completed(task_step_, unit_index_);
+    } else if (event == "manual_rest_completed") {
+        manual_separation_.rested(inn_rest_completed_ && !inn_payment_pending_);
+    } else if (event == "manual_first_back_prepared") {
+        manual_separation_.prepare(quests::ManualSeparation::Phase::FirstBack);
+    } else if (event == "manual_first_back_completed") {
+        manual_separation_.transferred(quests::ManualSeparation::Phase::FirstBack);
+    } else if (event == "manual_second_back_prepared") {
+        manual_separation_.prepare(quests::ManualSeparation::Phase::SecondBack);
+    } else if (event == "manual_second_back_completed") {
+        manual_separation_.transferred(quests::ManualSeparation::Phase::SecondBack);
+    } else if (event == "manual_leap_prepared") {
+        manual_separation_.prepare(quests::ManualSeparation::Phase::Leap);
+    } else if (event == "manual_leap_completed") {
+        manual_separation_.transferred(quests::ManualSeparation::Phase::Leap);
+    } else if (event == "mining_reward_observed") {
         if (!reward_index) throw std::runtime_error("MINING_REWARD_REQUIRED");
         mining_.observe_reward(*reward_index);
     } else if (event == "mining_reward_dismissed") {
@@ -517,6 +535,7 @@ J WvdRunState::summarize() const {
             {"giant_rest_due", giant_rest_due()},
             {"dark_light_active", dark_light_active_},
             {"mining", mining_.summary()},
+            {"manual_separation", manual_separation_.summary()},
             {"encounter_timed_out", encounter_timed_out()},
             {"combats", combats_},
             {"chests", chests_},

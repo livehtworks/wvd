@@ -12,7 +12,8 @@ inline bool business_condition(const nlohmann::json &summary, const nlohmann::js
         "/has_prepared_skill", "/prepared_skill_index", "/healing_required", "/chest_has_character", "/chest_character",
         "/ordinary_rest_due", "/party_refresh_due", "/city_supply_due", "/inn_rest_completed", "/inn_payment_pending", "/death_prompt_pending", "/wall_bypass_step",
         "/giant_route_completed", "/giant_rest_due", "/giant_cycle_active",
-        "/dark_light_active", "/encounter_timed_out",
+        "/dark_light_active", "/encounter_timed_out", "/unit_index",
+        "/manual_separation/phase", "/manual_separation/transfer_pending",
         "/mining/refill_pending", "/mining/party_ready", "/mining/reward_visible",
         "/karma_ambush", "/karma_pending"};
     const auto path = parameters.at("field").get<std::string>();

@@ -161,6 +161,17 @@ class StateTests(unittest.TestCase):
         self.assertFalse(state["giant_cycle_active"])
         self.assertEqual(state["crashes"], 1)
 
+    def test_manual_separation_requires_both_units_and_confirmed_rest(self):
+        result = self.run_case("manual-contract")["direct"]
+        first, last = result["manual_after_first_unit"], result["manual_completed"]
+        self.assertEqual(first["manual_separation"], dict(phase=5, transfer_pending=False, completed=False))
+        self.assertEqual(first["inn_rests"], 1)
+        self.assertEqual(last["manual_separation"], dict(phase=6, transfer_pending=False, completed=True))
+        self.assertEqual(last["task_step"], 2)
+        self.assertEqual(last["unit_index"], 1)
+        self.assertEqual(last["dungeons"], 0)
+        self.assertEqual(last["inn_rests"], 1)
+
     def test_mining_reward_receipts_and_pickaxe_refill_require_real_rest(self):
         result = self.run_case("mining-contract")["direct"]["mining_contract"]
         state = result["mining"]

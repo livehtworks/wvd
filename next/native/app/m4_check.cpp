@@ -9,6 +9,7 @@
 #include "games/wvd/tasks/giant.hpp"
 #include "games/wvd/tasks/dark_light.hpp"
 #include "games/wvd/tasks/mining.hpp"
+#include "games/wvd/tasks/manual_separation.hpp"
 #include "games/wvd/navigation/dungeon_entry.hpp"
 #include "games/wvd/vision/asset_resolver.hpp"
 #include "maafw/buffers.hpp"
@@ -101,12 +102,12 @@ int main(int argc, char **argv) {
                 for (const auto &task : catalog.tasks()) {
                     if (task.type != (specials ? "quest" : "dungeon"))
                         continue;
-                    if (specials && task.id != "fortress-B8F_trap" && task.id != "gaintKiller" && task.id != "darkLight" && task.id != "FFXI-Org") {
+                    if (specials && task.id != "fortress-B8F_trap" && task.id != "gaintKiller" && task.id != "darkLight" && task.id != "FFXI-Org" && task.id != "manualSepDemon") {
                         result["unimplemented_specials"].push_back(task.id);
                         continue;
                     }
                     const auto plan = games::WvdTaskPlan::parse(task);
-                    const auto graph = specials ? (task.id == "FFXI-Org" ? games::tasks::mining_iteration(task, profile.values) : task.id == "darkLight" ? games::tasks::dark_light(task, profile.values, images) : task.id == "gaintKiller"
+                    const auto graph = specials ? (task.id == "manualSepDemon" ? games::tasks::manual_separation(task, profile.values, images) : task.id == "FFXI-Org" ? games::tasks::mining_iteration(task, profile.values) : task.id == "darkLight" ? games::tasks::dark_light(task, profile.values, images) : task.id == "gaintKiller"
                                                 ? games::tasks::giant_iteration(task, profile.values, images)
                                                 : games::tasks::fortress_trap_iteration(task, profile.values, images))
                                               : iterations ? games::tasks::dungeon_iteration(plan, profile.values, images)
@@ -121,7 +122,7 @@ int main(int argc, char **argv) {
                     result[key].push_back({{"task_id", task.id}, {"nodes", graph.nodes},
                         {"images", graph.images}, {"required_actions", graph.required_actions},
                         {"missing_images", missing}, {"scope", specials ? "FINITE_SPECIAL_ITERATION_NOT_FULL_TASK" : iterations ? "NORMAL_FARM_ITERATION_NOT_FULL_TASK" : routes ? "DUNGEON_ROUTE_ONLY_NOT_FULL_TASK" : "ENTRY_ONLY_NOT_FULL_TASK"},
-                        {"executed", false}});
+                        {"required_normal_units", task.id == "manualSepDemon" ? 2 : 1}, {"executed", false}});
                 }
             }
         }

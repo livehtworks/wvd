@@ -82,6 +82,45 @@ J direct_contract(const J &profile) {
     J result;
     result["initial"] = state.summary();
     {
+        games::WvdRunState manual(profile, {"manual", 1, clock});
+        std::uint64_t generation = 1;
+        manual.enter_segment(contracts::SegmentBoundary::Initial, generation, 0);
+        auto emit = [&](const char *event) {
+            return manual.confirm_event(manual.confirmation_id(event, event), event, generation, 1);
+        };
+        bool early = false;
+        try { emit("manual_route_completed"); }
+        catch (const std::exception &e) { early = std::string(e.what()) == "MANUAL_SEPARATION_ROUTE_INCOMPLETE"; }
+        require(early, "MANUAL_EARLY_ROUTE_COMPLETED");
+        manual.enter_dungeon();
+        manual.target_point_completed();
+        manual.target_point_completed();
+        emit("manual_route_completed");
+        emit("manual_first_back_prepared");
+        manual.enter_segment(contracts::SegmentBoundary::LifecycleRecovery, ++generation, 0);
+        require(manual.summary().at("manual_separation").at("transfer_pending").get<bool>(), "MANUAL_PENDING_LOST_ON_RESTART");
+        emit("manual_first_back_completed");
+        emit("manual_second_back_prepared");
+        emit("manual_second_back_completed");
+        bool unpaid = false;
+        try { emit("manual_rest_completed"); }
+        catch (const std::exception &e) { unpaid = std::string(e.what()) == "MANUAL_SEPARATION_REST_NOT_CONFIRMED"; }
+        require(unpaid, "MANUAL_SKIPPED_INN");
+        emit("inn_payment_prepared");
+        emit("inn_rest_completed");
+        emit("manual_rest_completed");
+        emit("manual_leap_prepared");
+        emit("manual_leap_completed");
+        result["manual_after_first_unit"] = manual.summary();
+        manual.enter_segment(contracts::SegmentBoundary::Continuation, ++generation, 1);
+        manual.enter_dungeon();
+        manual.target_point_completed();
+        manual.target_point_completed();
+        require(emit("manual_route_completed"), "MANUAL_SECOND_ROUTE_MISSING");
+        require(!emit("manual_route_completed"), "MANUAL_SECOND_ROUTE_DOUBLE_COUNTED");
+        result["manual_completed"] = manual.summary();
+    }
+    {
         games::WvdRunState miner(profile, {"mining", 1, clock});
         miner.enter_segment(contracts::SegmentBoundary::Initial, 1, 0);
         auto emit = [&](const char *event, std::optional<std::size_t> reward = {}) {
