@@ -123,7 +123,7 @@ tasks::CompiledWorkflow reach_map_target(const MapTarget &target,
     graph.observe("Stopped", C::all({moving, J{{"mode", "movement_stopped"}}}), {"OpenMap"});
     // 多次采样不产生输入；时间和节点数均有界，预算耗尽交给恢复。
     graph.hit_limit("Moving", 100);
-    graph.interrupt_on({{"mode", "blocking_screen"}}, "navigation.common_screen_requires_dispatch");
+    graph.interrupt_on({{"mode", "blocking_screen"}, {"parallel_basic", true}}, "navigation.common_screen_requires_dispatch");
     return graph.finish();
 }
 }

@@ -198,7 +198,7 @@ struct ProbeBatch {
 };
 ProbeBatch evaluate_batch(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels,
                          const J &probes, const J &bound, const maafw::CustomRecognitionScope &scope,
-                         maafw::RecognitionCache &cache, unsigned depth, const EvaluationMemo &memo,
+                         maafw::RecognitionCache &cache, unsigned depth, EvaluationMemo &memo,
                          int partitions) {
     check(partitions >= 1 && partitions <= 4, "WVD_PROBE_PARTITIONS_INVALID");
     ProbeBatch batch{std::vector<J>(probes.size()), std::vector<std::exception_ptr>(probes.size())};
@@ -225,6 +225,13 @@ ProbeBatch evaluate_batch(const maafw::Bundle &bundle, maafw::RecognitionPixels 
             check(cache.assets.contains(key) || cache.assets.size() < 2048, "WVD_SESSION_ASSET_CAPACITY");
             cache.assets.try_emplace(key, value);
         }
+    // 工作线程已经同步结束。同帧、同scope、同参数的模板叶节点可供本次调用后继
+    // 复用；否则后继反证会重做刚才的matchTemplate。只合并叶节点，不合并复合模式，
+    // 避免其内部深度校验/时序状态被缓存绕过。异常不缓存，仍由消费顺序传播。
+    for (const auto &worker : worker_memos)
+        for (const auto &[key, value] : worker)
+            if (J::parse(key).value("mode", "") == "template")
+                memo.try_emplace(key, value);
     // 有序候选只消费优先级到达的结果/异常；all/any 调用者必须消费全部结果。
     return batch;
 }

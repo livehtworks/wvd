@@ -2980,7 +2980,7 @@
         "M4-TASK-manualSepDemon"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "TYPED_PLAN_DATA",
+      "implementation_extent": "FINITE_TWO_UNIT_TASK_PENDING_VALIDATION",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
       "offline_status": "NOT_RUN",
@@ -2990,7 +2990,10 @@
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
-        "native/games/wvd/tasks/task_plan.cpp"
+        "native/games/wvd/tasks/task_plan.cpp",
+        "native/games/wvd/tasks/manual_separation.cpp",
+        "native/games/wvd/quests/manual_separation.cpp",
+        "native/games/wvd/navigation/time_leap.cpp"
       ],
       "source_fields": [
         "questName",
@@ -3005,12 +3008,19 @@
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
       "blockers": [
-        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "BUSINESS_ACTIONS_NOT_IMPLEMENTED",
-        "SPECIAL_CASE_NOT_IMPLEMENTED"
+        "FULL_TWO_UNIT_OFFLINE_CHAIN_PENDING",
+        "FULL_CONFIGURATION_AND_RECOVERY_MATRIX_INCOMPLETE"
       ],
       "plan_data_status": "PASS",
-      "plan_evidence": "../m4-plan-validation.md"
+      "plan_evidence": "../m4-plan-validation.md",
+      "iteration_implementation": {
+        "status": "IMPLEMENTED_PENDING_VALIDATION",
+        "entry": "tasks::manual_separation / configure_manual_separation_units",
+        "source": "native/games/wvd/tasks/manual_separation.cpp",
+        "scope": "TWO_FINITE_UNITS_NOT_FULL_TASK_ACCEPTANCE",
+        "evidence_report": "../m4-manual-separation-validation.md",
+        "remaining": "FULL_TWO_UNIT_AND_RECOVERY_MATRIX"
+      }
     },
     {
       "task_id": "darkLight",
@@ -3396,7 +3406,7 @@
       "semantic_differences": [],
       "blockers": [
         "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "MINING_EOT_SEEK_SCENE_CONFIRMATION_FAILED",
+        "MINING_MID_RUN_AND_CONTINUOUS_CYCLES_PENDING",
         "FULL_CONFIGURATION_AND_RECOVERY_MATRIX_INCOMPLETE"
       ],
       "plan_data_status": "PASS",
@@ -3407,7 +3417,7 @@
         "source": "native/games/wvd/tasks/mining.cpp",
         "scope": "FINITE_ITERATION_NOT_FULL_TASK_ACCEPTANCE",
         "evidence_report": "../m4-mining-validation.md",
-        "remaining": "FULL_EOT_SEEK_AND_MID_RUN_RECOVERY_MATRIX"
+        "remaining": "MID_RUN_AND_CONTINUOUS_CYCLES_RECOVERY_MATRIX"
       }
     },
     {
