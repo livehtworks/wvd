@@ -35,7 +35,7 @@ class WorkflowTests(unittest.TestCase):
         folder = self.root / name
         bundle = folder / "bundle"
         (bundle / "image").mkdir(parents=True)
-        resource_kind = "dungeon-route" if options.get("workflow") == "fortress-trap" else "iteration" if options.get("workflow") in ("giant", "dark-light") else options.get("workflow")
+        resource_kind = "dungeon-route" if options.get("workflow") == "fortress-trap" else "iteration" if options.get("workflow") in ("giant", "dark-light", "mining") else options.get("workflow")
         names = ["worldmapflag", "City_RoyalCityLuknalia", "Inn", "Stay", "Economy", "royalsuite", "OK"]
         if resource_kind in ("departure", "iteration"):
             names += ["openworldmap", "intoWorldMap", "returntoTown", "returnText", "EdgeOfTown", "dungFlag", "mapFlag", "chestFlag",
@@ -1702,6 +1702,96 @@ class WorkflowTests(unittest.TestCase):
             extra_images=["darklight", "darklight_lightIt"])
         options.update(extra)
         return options
+
+    def mining_options(self, **extra):
+        options = dict(workflow="mining", quest_catalog=str(ROOT / "packs/wvd/parameters/legacy-quests.json"),
+            profile=self.wall_profile(False), extra_images=["FFXI/GCN", "FFXI/ZONE2", "FFXI/FFXIStone", "leaveDung",
+                "FFXI/org_position", "FFXI/receive", "FFXI/needpickaxe", "FFXI/nothingToDig", "FFXI/nothingToDig2"] +
+                ["FFXI/org_" + name for name in ("fine", "high", "mid", "low", "refine", "alter", "sliver", "ouro", "lesser_full", "full")])
+        options.update(extra)
+        return options
+
+    def mining_scenario(self, reward="fine", repeated=False):
+        site = {"dungFlag": (50, 150), "FFXI/org_position": (710, 100)}
+        receive = {**site, "FFXI/receive": (330, 700)}
+        if reward != "unknown": receive["FFXI/org_" + reward] = (480, 780)
+        end = {**site, "FFXI/nothingToDig": (400, 700)}
+        frames = [site, receive]
+        commands = [dict(kind=0, x=450, y=600)]
+        if repeated:
+            frames += [site, receive]
+            commands += [dict(kind=0, x=450, y=600)] * 2
+        frames += [end, {"leaveDung": (400, 700)}, {"returnText": (400, 700)}, {"openworldmap": (400, 700)}]
+        commands += [dict(kind=0, x=450, y=600), dict(kind=0, x=1, y=1),
+                     dict(kind=0, x=420, y=712), dict(kind=0, x=420, y=712)]
+        return frames, commands
+
+    def test_mining_reward_and_cold_start_complete_only_after_exit(self):
+        frames, commands = self.mining_scenario()
+        for cold in (False, True):
+            r = self.execute("mining-cycle-" + str(cold), ([{}] if cold else []) + frames, commands,
+                **self.mining_options(attach_recovery=cold, initial_connection="closed" if cold else "ready"))
+            self.assertEqual(r["snapshot"]["state"], "Completed", r)
+            self.assertEqual(r["backend_calls"], 5)
+            self.assertFalse(r["mismatch"])
+            self.assertEqual(r["snapshot"]["business"]["mining"]["rewards"]["fine"], 1)
+            self.assertEqual(r["snapshot"]["business"]["mining"]["completed_cycles"], 1)
+            self.assertEqual(r["snapshot"]["business"]["dungeons"], 0)
+            self.assertEqual(r["lifecycle_calls"], ["EnsureVpn", "StopApplication", "StartApplication"] if cold else [])
+
+    def test_mining_unknown_and_repeated_equal_rewards_are_not_confused(self):
+        for unknown in (False, True):
+            label = "unknown" if unknown else "fine"
+            frames, commands = self.mining_scenario(label, repeated=not unknown)
+            r = self.execute("mining-counts-" + label, frames, commands, **self.mining_options())
+            self.assertEqual(r["snapshot"]["state"], "Completed", r)
+            self.assertEqual(r["backend_calls"], 5 if unknown else 7)
+            self.assertFalse(r["mismatch"])
+            counts = r["snapshot"]["business"]["mining"]["rewards"]
+            self.assertEqual(counts[label], 1 if unknown else 2)
+            self.assertEqual(sum(counts.values()), counts[label])
+
+    def test_mining_reward_page_that_does_not_close_is_not_counted_twice(self):
+        frames, _ = self.mining_scenario()
+        r = self.execute("mining-reward-stuck", [frames[1], frames[1]], [dict(kind=0, x=450, y=600)], **self.mining_options())
+        self.assertEqual(r["snapshot"]["state"], "Failed", r)
+        self.assertIn("POSTCONDITION_TIMEOUT", str(r["snapshot"]))
+        self.assertEqual(r["backend_calls"], 1)
+        self.assertFalse(r["mismatch"])
+        state = r["snapshot"]["business"]["mining"]
+        self.assertEqual(state["rewards"]["fine"], 1)
+        self.assertEqual(state["completed_cycles"], 0)
+
+    def test_mining_stop_and_rejected_dig_never_record_reward(self):
+        frames, commands = self.mining_scenario()
+        for stopped in (False, True):
+            r = self.execute("mining-stop-" + str(stopped), frames[:2], [{**commands[0], "reject": not stopped}],
+                **self.mining_options(stop_after_first=stopped))
+            self.assertEqual(r["snapshot"]["state"], "UserStopped" if stopped else "Failed", r)
+            self.assertEqual(r["backend_calls"], 1)
+            self.assertFalse(r["mismatch"])
+            self.assertEqual(sum(r["snapshot"]["business"]["mining"]["rewards"].values()), 0)
+
+    def test_mining_pickaxe_refill_assembles_then_rests(self):
+        site = {"dungFlag": (50, 150), "FFXI/org_position": (710, 100)}
+        inn = {"Inn": (400, 700), "guild": (500, 700)}
+        party = {"PartyManagementTitle": (200, 300), "FFXI/FFXIStone": (300, 700)}
+        frames = [site, {**site, "FFXI/needpickaxe": (400, 700)}, {"leaveDung": (400, 700)},
+            {"returnText": (400, 700)}, {"openworldmap": (400, 700)},
+            {"worldmapflag": (50, 300), "City_RoyalCityLuknalia": (400, 700)}, inn,
+            {"Edit": (400, 700)}, {"PartyManagement": (400, 700)}, party,
+            {**party, "AssembleParty": (400, 850)}, {**party, "OK": (400, 950)}, party, inn,
+            {"Stay": (400, 700)}, {"Economy": (400, 700)}, {"OK": (400, 700)}, {"Stay": (400, 700)}, inn]
+        commands = [dict(kind=0, x=x, y=y) for x, y in [(450, 600), (1, 1), (420, 712), (420, 712),
+            (420, 712), (420, 712), (520, 712), (420, 712), (420, 712), (320, 712), (420, 862), (420, 962)]]
+        commands += [dict(kind=1, key=4)] + [dict(kind=0, x=420, y=712)] * 4 + [dict(kind=1, key=4)]
+        r = self.execute("mining-refill", frames, commands, **self.mining_options())
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 18)
+        self.assertFalse(r["mismatch"])
+        self.assertEqual(r["snapshot"]["business"]["inn_rests"], 1)
+        self.assertFalse(r["snapshot"]["business"]["mining"]["refill_pending"])
+        self.assertEqual(r["snapshot"]["business"]["mining"]["completed_cycles"], 1)
 
     def dark_scenario(self, heal=False):
         dungeon = {"dungFlag": (50, 150), "darklight": (400, 700)}

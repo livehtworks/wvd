@@ -58,6 +58,9 @@
   不是正式账号数据或历史恢复点，不覆盖源目录，只有新revision可进入随后冻结的Run权限。
 - `snapshot.business.dark_light_active` 是当前Run暗灯阶段；恢复保留、回城确认清除。
   `encounter_timed_out` 是未结算遭遇计时的只读派生值，不是另一份计时权威或输入许可。
+- `snapshot.business.mining` 由WvdRunState内的mining::Progress唯一持有，包含奖励类别计数、
+  奖励页序号/是否已关闭、补镐子意图和组队阶段。新帧WvdConfirm提交，运行结果只读保存；
+  不写旧配置/背包或复制SDK对象。重复奖励页不再次累计，住宿确认前补给意图不得清除。
 
 - SDK 对象、帧、识别缓存不是数据权威，不反写源图片或模型。
 - WvdConfirm、WvdCombat 和 WvdChest 修改运行状态前复核当前观察的代次、epoch、应用与帧龄；识别曾经 Hit 不等于提交时仍有效。此检查不创建输入许可，过期不得计数或写回 profile。

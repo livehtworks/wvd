@@ -22,6 +22,12 @@ void collect_images(const J &value, std::set<std::string> &images, std::set<std:
         // 常量隐式依赖在本次收集内只展开一次；显式 image/动态参数仍逐项收集。
         // 不缓存整份图或跨编译共享结果，validate 仍独立重算完整资源集合。
         const bool expand = expanded_modes.insert(mode).second;
+        if (expand && mode == "mining_reward") {
+            for (auto name : {"receive", "org_fine", "org_high", "org_mid", "org_low", "org_refine", "org_alter",
+                              "org_sliver", "org_ouro", "org_lesser_full", "org_full"})
+                images.insert(std::string("FFXI/") + name + ".png");
+            collect_images(J{{"mode", "blocking_screen"}}, images, expanded_modes);
+        }
         if (expand && mode == "dark_light_clear") {
             for (auto name : {"darklight", "darklight_lightIt", "dungFlag", "mapFlag", "trait", "recover",
                               "chestFlag", "whowillopenit", "chestOpening", "RiseAgain"})
@@ -543,12 +549,16 @@ void PipelineCompiler::confirm(const std::string &name, const std::string &opera
                                       "wall_turn_completed", "wall_left_completed", "wall_right_completed",
                                       "karma_observed", "karma_completed", "trap_cycle_started", "trap_cycle_completed",
                                       "giant_cycle_started", "giant_route_completed", "giant_cycle_completed",
+                                      "mining_reward_observed", "mining_reward_dismissed", "mining_refill_requested",
+                                      "mining_party_assembled", "mining_refill_completed", "mining_cycle_completed",
                                       "dark_light_entered", "dark_light_completed"};
     require(events.contains(event) && !operation.empty() && operation.size() <= 128,
             "COMPILE_BUSINESS_EVENT_INVALID");
     require(step.is_null() || (step.is_number_integer() && step >= 0 && step <= 4096),
             "COMPILE_TASK_STEP_INVALID");
     require(event != "target_completed" || !step.is_null(), "COMPILE_TASK_STEP_REQUIRED");
+    require(event != "mining_reward_observed" || (condition.value("mode", "") == "mining_reward" && step.is_null()),
+            "COMPILE_MINING_REWARD_RECOGNITION_REQUIRED");
     J parameters{{"event", event}, {"operation", operation}, {"confirmation", request(condition)}};
     if (!step.is_null())
         parameters["expected_step"] = step;

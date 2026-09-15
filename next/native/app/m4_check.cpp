@@ -8,6 +8,7 @@
 #include "games/wvd/tasks/fortress_trap.hpp"
 #include "games/wvd/tasks/giant.hpp"
 #include "games/wvd/tasks/dark_light.hpp"
+#include "games/wvd/tasks/mining.hpp"
 #include "games/wvd/navigation/dungeon_entry.hpp"
 #include "games/wvd/vision/asset_resolver.hpp"
 #include "maafw/buffers.hpp"
@@ -100,12 +101,12 @@ int main(int argc, char **argv) {
                 for (const auto &task : catalog.tasks()) {
                     if (task.type != (specials ? "quest" : "dungeon"))
                         continue;
-                    if (specials && task.id != "fortress-B8F_trap" && task.id != "gaintKiller" && task.id != "darkLight") {
+                    if (specials && task.id != "fortress-B8F_trap" && task.id != "gaintKiller" && task.id != "darkLight" && task.id != "FFXI-Org") {
                         result["unimplemented_specials"].push_back(task.id);
                         continue;
                     }
                     const auto plan = games::WvdTaskPlan::parse(task);
-                    const auto graph = specials ? (task.id == "darkLight" ? games::tasks::dark_light(task, profile.values, images) : task.id == "gaintKiller"
+                    const auto graph = specials ? (task.id == "FFXI-Org" ? games::tasks::mining_iteration(task, profile.values) : task.id == "darkLight" ? games::tasks::dark_light(task, profile.values, images) : task.id == "gaintKiller"
                                                 ? games::tasks::giant_iteration(task, profile.values, images)
                                                 : games::tasks::fortress_trap_iteration(task, profile.values, images))
                                               : iterations ? games::tasks::dungeon_iteration(plan, profile.values, images)

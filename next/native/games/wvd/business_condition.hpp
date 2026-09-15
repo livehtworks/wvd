@@ -13,6 +13,7 @@ inline bool business_condition(const nlohmann::json &summary, const nlohmann::js
         "/ordinary_rest_due", "/party_refresh_due", "/city_supply_due", "/inn_rest_completed", "/inn_payment_pending", "/death_prompt_pending", "/wall_bypass_step",
         "/giant_route_completed", "/giant_rest_due", "/giant_cycle_active",
         "/dark_light_active", "/encounter_timed_out",
+        "/mining/refill_pending", "/mining/party_ready", "/mining/reward_visible",
         "/karma_ambush", "/karma_pending"};
     const auto path = parameters.at("field").get<std::string>();
     if (!fields.contains(path))

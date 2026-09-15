@@ -82,6 +82,30 @@ J direct_contract(const J &profile) {
     J result;
     result["initial"] = state.summary();
     {
+        games::WvdRunState miner(profile, {"mining", 1, clock});
+        miner.enter_segment(contracts::SegmentBoundary::Initial, 1, 0);
+        auto emit = [&](const char *event, std::optional<std::size_t> reward = {}) {
+            return miner.confirm_event(miner.confirmation_id(event, event), event, 1, 1, {}, reward);
+        };
+        require(emit("mining_reward_observed", 0), "MINING_FIRST_REWARD_MISSING");
+        require(!emit("mining_reward_observed", 0), "MINING_REWARD_DOUBLE_COUNTED");
+        emit("mining_reward_dismissed");
+        emit("mining_reward_observed", 0);
+        emit("mining_reward_dismissed");
+        emit("mining_refill_requested");
+        emit("mining_party_assembled");
+        bool rejected = false;
+        try { emit("mining_refill_completed"); }
+        catch (const std::exception &e) { rejected = std::string(e.what()) == "MINING_REST_NOT_CONFIRMED"; }
+        require(rejected, "MINING_PARTY_REPLACED_INN_REST");
+        emit("inn_payment_prepared");
+        emit("inn_rest_completed");
+        emit("mining_refill_completed");
+        emit("mining_cycle_completed");
+        require(!emit("mining_cycle_completed"), "MINING_CYCLE_DOUBLE_COUNTED");
+        result["mining_contract"] = miner.summary();
+    }
+    {
         auto timer = std::make_shared<TestClock>();
         auto configured = profile;
         configured.update({{"RECOVER_WHEN_BEGINNING", true}, {"SKIP_COMBAT_RECOVER", false}});

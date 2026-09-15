@@ -161,6 +161,18 @@ class StateTests(unittest.TestCase):
         self.assertFalse(state["giant_cycle_active"])
         self.assertEqual(state["crashes"], 1)
 
+    def test_mining_reward_receipts_and_pickaxe_refill_require_real_rest(self):
+        result = self.run_case("mining-contract")["direct"]["mining_contract"]
+        state = result["mining"]
+        self.assertEqual(state["rewards"]["fine"], 2)
+        self.assertEqual(sum(state["rewards"].values()), 2)
+        self.assertEqual(state["reward_sequence"], 2)
+        self.assertEqual(state["completed_cycles"], 1)
+        self.assertFalse(state["reward_visible"])
+        self.assertFalse(state["refill_pending"])
+        self.assertEqual(result["inn_rests"], 1)
+        self.assertEqual(result["dungeons"], 0)
+
     def test_dark_light_timeout_boundary_and_recovery(self):
         result = self.run_case("dark-light-contract")["direct"]
         self.assertFalse(result["encounter_at_boundary"]["encounter_timed_out"])

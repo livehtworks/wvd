@@ -5,6 +5,7 @@
 #include "runtime/behavior_registry.hpp"
 #include "supply/policy.hpp"
 #include "karma.hpp"
+#include "mining/progress.hpp"
 #include <map>
 
 namespace wvd::games {
@@ -33,7 +34,8 @@ class WvdRunState final : public contracts::BusinessRunState {
     // 回放同一操作不重复修改业务；相同 ID 的不同效果拒绝。观察仍须来自当前代次。
     bool confirm_event(const std::string &operation, const std::string &event,
                        std::uint64_t generation, std::uint64_t frame_id,
-                       std::optional<std::size_t> expected_step = {});
+                       std::optional<std::size_t> expected_step = {},
+                       std::optional<std::size_t> reward_index = {});
 
   protected:
     void on_segment(contracts::SegmentBoundary, std::uint64_t, std::size_t) override;
@@ -62,6 +64,7 @@ class WvdRunState final : public contracts::BusinessRunState {
     bool giant_rest_due() const;
     bool encounter_timed_out() const;
     bool dark_light_active_{};
+    mining::Progress mining_;
     bool setting_is(const char *name, const char *zh, const char *en) const;
     std::map<std::string, nlohmann::json> confirmations_;
     nlohmann::json last_confirmation_;

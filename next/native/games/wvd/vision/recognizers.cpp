@@ -261,6 +261,35 @@ J evaluate_uncached(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels
         result["action_eligible"] = false;
         return result;
     }
+    if (mode == "mining_reward") {
+        check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");
+        auto probe = [](const std::string &name) {
+            return J{{"mode", "template"}, {"image", "FFXI/" + name}, {"roi", {4, 664, 890, 283}}, {"threshold", .8}};
+        };
+        auto received = evaluate_impl(bundle, pixels, probe("receive"), bound, scope, cache, depth + 1, memo);
+        check(received.at("outcome") != "Error", "MINING_RECOGNITION_ERROR");
+        if (received.at("outcome") != "Hit") return decision(false, {}, {{"reason", "no_reward_page"}});
+        const auto blocked = evaluate_impl(bundle, pixels, {{"mode", "blocking_screen"}}, bound, scope, cache, depth + 1, memo);
+        check(blocked.at("outcome") != "Error", "MINING_RECOGNITION_ERROR");
+        if (blocked.at("outcome") == "Hit") return decision(false, {}, {{"reason", "blocking_screen"}});
+        J candidates = J::array();
+        for (auto name : {"fine", "high", "mid", "low", "refine", "alter", "sliver", "ouro", "lesser_full", "full"})
+            candidates.push_back(probe(std::string("org_") + name));
+        const auto matches = evaluate_batch(bundle, pixels, candidates, bound, scope, cache, depth, memo, 4);
+        J scores = J::array();
+        double best = -1;
+        std::size_t selected = 10;
+        for (std::size_t i = 0; i < candidates.size(); ++i) {
+            const auto &result = matches.at(i);
+            check(result.at("outcome") != "Error", "MINING_RECOGNITION_ERROR");
+            const auto score = result.at("evidence").at("best_score").get<double>();
+            scores.push_back(score);
+            if (score > best) { best = score; selected = i; }
+        }
+        if (best <= .9) selected = 10;
+        return decision(true, allowed_rect, {{"selected_index", selected}, {"best_score", best},
+            {"scores", scores}, {"threshold", .9}}, false);
+    }
     if (mode == "dark_light_clear") {
         check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");
         const auto stage = p.at("stage").get<std::string>();

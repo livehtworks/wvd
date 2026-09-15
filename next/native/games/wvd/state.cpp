@@ -273,14 +273,20 @@ std::string WvdRunState::confirmation_id(const std::string &operation, const std
         id += ":karma:" + std::to_string(karma_sequence_ + (karma_choice_ ? 0 : 1));
     else if (event == "karma_completed")
         id += ":karma:" + std::to_string(karma_sequence_);
+    if (event == "mining_reward_observed" || event == "mining_reward_dismissed")
+        id += ":mining:" + std::to_string(mining_.reward_sequence(event == "mining_reward_observed"));
     return id;
 }
 bool WvdRunState::confirm_event(const std::string &operation, const std::string &event,
                                  std::uint64_t generation, std::uint64_t frame_id,
-                                 std::optional<std::size_t> expected_step) {
+                                 std::optional<std::size_t> expected_step, std::optional<std::size_t> reward_index) {
     if (operation.empty() || operation.size() > 256 || generation != generation_ || !frame_id)
         throw std::runtime_error("BUSINESS_CONFIRMATION_IDENTITY_INVALID");
-    const J effect{{"event", event}, {"expected_step", expected_step ? J(*expected_step) : J(nullptr)}};
+    J effect{{"event", event}, {"expected_step", expected_step ? J(*expected_step) : J(nullptr)}};
+    if (reward_index) {
+        if (event != "mining_reward_observed") throw std::runtime_error("MINING_REWARD_EVENT_INVALID");
+        effect["reward_index"] = *reward_index;
+    }
     if (karma_effect_.is_object() && karma_effect_.value("save_status", "") == "Failed")
         throw std::runtime_error("PROFILE_SAVE_FAILED");
     if (auto old = confirmations_.find(operation); old != confirmations_.end()) {
@@ -292,7 +298,26 @@ bool WvdRunState::confirm_event(const std::string &operation, const std::string 
         throw std::runtime_error("BUSINESS_CONFIRMATION_CAPACITY");
     if (expected_step && *expected_step != task_step_)
         throw std::runtime_error("BUSINESS_TASK_STEP_MISMATCH");
-    if (event == "dark_light_entered") {
+    if (event == "mining_reward_observed") {
+        if (!reward_index) throw std::runtime_error("MINING_REWARD_REQUIRED");
+        mining_.observe_reward(*reward_index);
+    } else if (event == "mining_reward_dismissed") {
+        mining_.reward_dismissed();
+    } else if (event == "mining_refill_requested") {
+        if (!mining_.refill_pending()) {
+            if (inn_payment_pending_) throw std::runtime_error("INN_PAYMENT_UNCONFIRMED");
+            ++supply_cycle_;
+            inn_rest_completed_ = false;
+        }
+        mining_.require_pickaxes();
+    } else if (event == "mining_party_assembled") {
+        mining_.party_assembled();
+    } else if (event == "mining_refill_completed") {
+        if (!inn_rest_completed_ || inn_payment_pending_) throw std::runtime_error("MINING_REST_NOT_CONFIRMED");
+        mining_.rest_completed();
+    } else if (event == "mining_cycle_completed") {
+        mining_.complete_cycle();
+    } else if (event == "dark_light_entered") {
         // 暗灯case不是StateDungeon入本，不触发初始恢复、计次或重置路线。
         dark_light_active_ = true;
         need_initial_recover_ = false;
@@ -491,6 +516,7 @@ J WvdRunState::summarize() const {
             {"giant_cycles_completed", giant_cycles_completed_},
             {"giant_rest_due", giant_rest_due()},
             {"dark_light_active", dark_light_active_},
+            {"mining", mining_.summary()},
             {"encounter_timed_out", encounter_timed_out()},
             {"combats", combats_},
             {"chests", chests_},

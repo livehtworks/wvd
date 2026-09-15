@@ -56,6 +56,8 @@ target_link_options(test_runtime PRIVATE "/MANIFEST:EMBED" "/MANIFESTINPUT:${PRO
 set_target_properties(test_runtime PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/m2")
 if(WVD_BUILD_M4)
   add_library(wvd_business ../games/wvd/profile.cpp ../games/wvd/tasks/quest_catalog.cpp ../games/wvd/tasks/task_plan.cpp
+    ../games/wvd/mining/progress.cpp
+    ../games/wvd/tasks/mining.cpp
     ../games/wvd/tasks/pipeline_compiler.cpp ../games/wvd/navigation/world_map.cpp ../games/wvd/supply/inn.cpp
     ../games/wvd/tasks/dungeon_route.cpp
     ../games/wvd/tasks/departure.cpp
