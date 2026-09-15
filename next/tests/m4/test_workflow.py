@@ -1686,6 +1686,36 @@ class WorkflowTests(unittest.TestCase):
         return {**WorkflowTests.turn_profile(defend=True), "BYPASS_THE_WALL": enabled,
                 "RECOVER_WHEN_BEGINNING": False, "SKIP_CHEST_RECOVER": True, "SKIP_COMBAT_RECOVER": True}
 
+    def test_unknown_window_frozen_route_never_clicks(self):
+        r = self.execute("unknown-window-frozen", [{}], [], workflow="dungeon-route",
+            profile=self.wall_profile(False), route_targets=[["position", [None], [500, 600]]])
+        self.assertEqual(r["snapshot"]["state"], "Interrupted", r)
+        self.assertEqual(r["snapshot"]["sessions"][-1]["reason"], "dungeon.unknown_static_window")
+        self.assertEqual(r["backend_calls"], 0)
+        self.assertEqual(r["lifecycle_calls"], [])
+        self.assertTrue(r["snapshot"]["quiescent"])
+        self.assertEqual(r["snapshot"]["business"]["task_step"], 0)
+
+    def test_unknown_window_restart_enters_new_generation_before_completion(self):
+        r = self.execute("unknown-window-recovery", [{}, {"mapFlag": (100, 100), "cursor_0": (480, 588)}], [],
+            workflow="dungeon-route", profile=self.wall_profile(False),
+            route_targets=[["position", [None], [500, 600]]], attach_recovery=True)
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 0)
+        self.assertEqual(r["lifecycle_calls"], ["EnsureVpn", "StopApplication", "StartApplication"])
+        self.assertEqual(r["snapshot"]["generation"], 2)
+        self.assertEqual(r["snapshot"]["sessions"][0]["reason"], "dungeon.unknown_static_window")
+        self.assertTrue(all(s["quiescent"] for s in r["snapshot"]["sessions"]))
+        self.assertEqual(r["snapshot"]["business"]["task_step"], 1)
+
+    def test_unknown_window_known_city_is_not_frozen(self):
+        r = self.execute("unknown-window-known", [{"Inn": (400, 700)}], [], workflow="dungeon-route",
+            profile=self.wall_profile(False), route_targets=[["position", [None], [500, 600]]])
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 0)
+        self.assertEqual(r["lifecycle_calls"], [])
+        self.assertEqual(r["snapshot"]["business"]["task_step"], 0)
+
     def test_auto_map_stopped_mark_is_confirmed_on_map_without_repressing_auto(self):
         r = self.execute("auto-map-mark", [{"dungFlag": (50, 150), "mark_auto": (760, 350)},
             {"dungFlag": (50, 150)}, {"mapFlag": (100, 100), "mark_auto": (400, 700)}],

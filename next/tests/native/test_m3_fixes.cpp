@@ -1,10 +1,13 @@
 #include "runtime_fixture.hpp"
 #include "games/wvd/vision/recognizers.hpp"
+#include "games/wvd/vision/unknown_window.hpp"
 #include "platform/windows/file_digest.hpp"
 #include "platform/windows/bundle_lease.hpp"
 #include "loaded_modules.hpp"
 #include "integrity_lease_cases.hpp"
 #include <iostream>
+#include <cmath>
+#include <opencv2/imgproc.hpp>
 
 using namespace fixture;
 // 只有匹配独立测试预期的输入才能推进画面；截图本身绝不推进场景。
@@ -55,7 +58,50 @@ int main(int argc, char **argv) {
             {"battle"},
             2000ms};
         J output;
-        if (config.at("mode") == "lease-matrix") {
+        if (config.at("mode") == "unknown-window") {
+            games::vision::UnknownWindow window;
+            cv::Mat previous;
+            std::vector<double> reference;
+            output["samples"] = J::array();
+            const auto start = std::chrono::steady_clock::time_point{};
+            for (unsigned i = 0; i < 20; ++i) {
+                // 首十帧静止；后十帧交替亮暗，参考算法独立保存逐帧差值。
+                cv::Mat image(1600, 900, CV_8UC3, cv::Scalar::all(i < 10 ? 30 : (i % 2 ? 220 : 10)));
+                const auto now = start + std::chrono::seconds{i};
+                const auto actual = window.observe(image, now);
+                cv::Mat gray, difference;
+                cv::cvtColor(image, gray, cv::COLOR_BGR2GRAY);
+                if (!previous.empty()) {
+                    cv::absdiff(gray, previous, difference);
+                    reference.push_back(cv::mean(difference)[0] / 255);
+                }
+                previous = gray.clone();
+                double sum = 0;
+                for (std::size_t j = reference.size() > 9 ? reference.size() - 9 : 0; j < reference.size(); ++j)
+                    sum += reference[j];
+                require(actual.sampled && std::abs(actual.total_difference - sum) < 1e-10,
+                    "UNKNOWN_WINDOW_REFERENCE_MISMATCH");
+                const auto duplicate = window.observe(image, now + 10ms);
+                require(!duplicate.sampled && duplicate.window_size == actual.window_size,
+                    "UNKNOWN_FAST_FRAME_COUNTED_TWICE");
+                output["samples"].push_back({{"size", actual.window_size}, {"evaluated", actual.evaluated},
+                    {"frozen", actual.frozen}, {"difference", actual.total_difference}});
+            }
+            window.clear();
+            cv::Mat still(1600, 900, CV_8UC3, cv::Scalar::all(30));
+            const auto reset = window.observe(still, start + 21s);
+            require(reset.window_size == 1 && !reset.frozen, "UNKNOWN_WINDOW_NOT_RESET");
+            output["reset_size"] = reset.window_size;
+            for (const auto &kind : {std::string("invalid_frame"), std::string("reversed_clock")}) {
+                try {
+                    window.observe(kind == "invalid_frame" ? cv::Mat{} : still, start + 20s);
+                    output[kind] = "";
+                } catch (const std::exception &e) {
+                    output[kind] = e.what();
+                }
+            }
+            output["backend_calls"] = device->calls.load();
+        } else if (config.at("mode") == "lease-matrix") {
             output = integrity_lease_case(bundle, config.at("scenario"));
             output["backend_calls"] = device->calls.load();
         } else if (config.at("mode") == "guarded") {

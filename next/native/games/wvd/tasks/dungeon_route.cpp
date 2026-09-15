@@ -67,9 +67,16 @@ CompiledWorkflow traverse_dungeon(const WvdTaskPlan &plan, const J &profile,
                                         C::image("openworldmap"), C::image("worldmapflag")}),
                                  C::absent(C::image("mapFlag")), C::absent(encounter)});
     const auto inside = C::any({map, dungeon, encounter});
-    graph.route("Entry", {"Outside", "Entered"});
+    graph.route("Entry", {"UnknownFrozen", "Outside", "Entered", "UnknownWait"});
+    graph.hit_limit("Entry", 128);
+    graph.observe("UnknownFrozen", {{"mode", "unknown_frozen"}}, {"UnknownFrozenExit"});
+    graph.recovery("UnknownFrozenExit", "dungeon.unknown_static_window");
+    // 所有已知候选均失败才等待；不在未知页点返回/1,1，也不让三秒候选超时替代十帧窗口。
+    graph.route("UnknownWait", {"Entry"});
+    graph.delay_after("UnknownWait", 1000);
+    graph.hit_limit("UnknownWait", 128);
     graph.confirm("Entered", "dungeon.enter", "dungeon_entered", inside, {"Dispatch"});
-    graph.route("Dispatch", {"Blocked", "Combat", "Chest", "Revive", "Outside", "HealingPanel", "Resume", "Map"});
+    graph.route("Dispatch", {"UnknownFrozen", "Blocked", "Combat", "Chest", "Revive", "Outside", "HealingPanel", "Resume", "Map", "UnknownWait"});
     const auto common = graph.define_child("Common", recovery::clear_common_screens(allow_download));
     graph.observe("Blocked", {{"mode", "blocking_screen"}}, {"ClearBlocking"});
     graph.call_child("ClearBlocking", common, {"Dispatch"});

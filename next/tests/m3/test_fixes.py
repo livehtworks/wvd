@@ -79,6 +79,18 @@ class FixTests(unittest.TestCase):
             (folder / (key + ".png")).write_bytes(cv2.imencode(".png", image)[1].tobytes())
         return folder
 
+    def test_unknown_window_matches_legacy_sum_and_resets(self):
+        folder = self.images("unknown-window")
+        result = self.execute(folder, {"mode": "unknown-window"}, {"Entry": {}})
+        samples = result["samples"]
+        self.assertEqual(len(samples), 20)
+        self.assertEqual([i for i, value in enumerate(samples) if value["evaluated"]], [9, 19])
+        self.assertEqual([i for i, value in enumerate(samples) if value["frozen"]], [9])
+        self.assertEqual(result["reset_size"], 1)
+        self.assertEqual(result["invalid_frame"], "WVD_UNKNOWN_FRAME_INVALID")
+        self.assertEqual(result["reversed_clock"], "WVD_UNKNOWN_CLOCK_REVERSED")
+        self.assertEqual(result["backend_calls"], 0)
+
     def test_auto_route_post_matches_legacy_boolean_layouts(self):
         def image(name):
             return {"mode": "template", "image": name, "threshold": .8}

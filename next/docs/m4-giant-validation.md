@@ -42,6 +42,15 @@ ACTIVE_REST关闭不取消该case的专用住宿条件；负间隔明确拒绝�
 进一步核对发现外层all的二路分片将blocking_screen纳入，后者又进入默认对话四路扫描；
 固定OpenCV在嵌套parallel_for中将内层串行。修正二从外层并行白名单移除会间接进入
 对话分片的三个模式，保留条件顺序、全部Error传播和独立帧校验；需要共用视觉回归。
+修正二复验三方法87.502秒仍失败，根 `m4-workflow-9o5fuf7y`，日志
+`m4-giant-entry-correction2.log`。正常/输入失败场景仍在开始确认前被帧龄拒绝；两周期
+场景已开始并输入八次，随后 `SCENE_UNCONFIRMED`，没有错误坐标输入。其后冷启动/停止
+子场景因先前断言失败未运行。已达到这项开始确认问题的有限修正边界，保留阻断，不再
+重复运行该组挑通过。正式源码 `720b6db` 共用M3非Metadata九方法100.032秒通过，
+根 `m3-fixes-ackedjyx`，日志 `m4-shared-vision-m3.log`；不能据此宣布巨人业务通过。
+
+嵌套并行行为已核对固定 [OpenCV 4.12.0 parallel.cpp](https://github.com/opencv/opencv/blob/4.12.0/modules/core/src/parallel.cpp#L484-L505)，
+但它不是本轮剩余识别成本的完整归因，性能未决项继续保留。
 离线检查器另新增 compile_specials_manifest，复核已实现的陷阱/巨人资源与图，
 同时列出其余十三项；不建Run、不提供执行入口。此编译专项及负间隔测试待下一次构建。
 

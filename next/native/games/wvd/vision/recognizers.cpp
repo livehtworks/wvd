@@ -4,6 +4,7 @@
 #include "bobber.hpp"
 #include "boot_probes.hpp"
 #include "navigation_probes.hpp"
+#include "unknown_window.hpp"
 #include "image_ops.hpp"
 #include "games/wvd/business_condition.hpp"
 #include <cmath>
@@ -257,6 +258,37 @@ J evaluate_uncached(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels
         const auto hit = games::business_condition(scope.business_summary(), p);
         auto result = decision(hit, allowed_rect, {{"field", p.at("field")},
                                {"comparison", p.value("comparison", "eq")}, {"expected", p.at("value")}}, false);
+        result["action_eligible"] = false;
+        return result;
+    }
+    if (mode == "unknown_frozen") {
+        check(!p.contains("roi") && !p.contains("preprocess") &&
+            image.size() == cv::Size(900, 1600) &&
+            allowed_rect == cv::Rect(0, 0, 900, 1600), "WVD_UNKNOWN_SCOPE_INVALID");
+        const std::string key = "unknown.window";
+        auto found = cache.assets.find(key);
+        if (found == cache.assets.end()) {
+            check(cache.assets.size() < 2048, "WVD_SESSION_ASSET_CAPACITY");
+            found = cache.assets.emplace(key, UnknownWindow{}).first;
+        }
+        auto &window = std::any_cast<UnknownWindow &>(found->second);
+        // 先按已有分类识别正常页/覆盖层；已知静止页面不能成为“未知冻结”。
+        for (const auto &probe : J::array({J{{"mode", "boot_ready"}}, J{{"mode", "blocking_screen"}},
+            J{{"mode", "template"}, {"image", "trait"}}, J{{"mode", "template"}, {"image", "recover"}},
+            J{{"mode", "template"}, {"image", "spellskill/skillDetail"}}})) {
+            const auto known = evaluate_impl(bundle, pixels, probe, bound, scope, cache, depth + 1, memo);
+            check(known.at("outcome") != "Error", "WVD_UNKNOWN_RECOGNITION_ERROR");
+            if (known.at("outcome") == "Hit") {
+                window.clear();
+                auto result = decision(false, {}, {{"reason", "known_scene"}, {"window_size", 0}});
+                result["action_eligible"] = false;
+                return result;
+            }
+        }
+        const auto sample = window.observe(image, std::chrono::steady_clock::now());
+        auto result = decision(sample.frozen, allowed_rect, {{"reason", sample.frozen ? "unknown_static_window" : "observing"},
+            {"sampled", sample.sampled}, {"evaluated", sample.evaluated}, {"window_size", sample.window_size},
+            {"total_difference", sample.total_difference}, {"threshold", .15}});
         result["action_eligible"] = false;
         return result;
     }
