@@ -1821,6 +1821,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(r["backend_calls"], 4)
         self.assertFalse(r["mismatch"])
         self.assertEqual(r["snapshot"]["business"]["bounty_reports"], 0)
+        self.assertEqual(r["snapshot"]["business"]["bounty_reveals"], 1)
 
     def test_bounty_report_requires_exit_and_two_visits_have_two_receipts(self):
         frames, actions = self.bounty_report_scenario()

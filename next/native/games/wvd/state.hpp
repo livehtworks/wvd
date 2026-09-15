@@ -68,6 +68,7 @@ class WvdRunState final : public contracts::BusinessRunState {
     mining::Progress mining_;
     quests::ManualSeparation manual_separation_;
     std::size_t bounty_reports_{};
+    std::size_t bounty_reveals_{};
     bool bounty_report_pending_{};
     bool setting_is(const char *name, const char *zh, const char *en) const;
     std::map<std::string, nlohmann::json> confirmations_;

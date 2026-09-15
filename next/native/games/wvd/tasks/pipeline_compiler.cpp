@@ -553,7 +553,7 @@ void PipelineCompiler::confirm(const std::string &name, const std::string &opera
                                       "wall_turn_completed", "wall_left_completed", "wall_right_completed",
                                       "karma_observed", "karma_completed", "trap_cycle_started", "trap_cycle_completed",
                                       "giant_cycle_started", "giant_route_completed", "giant_cycle_completed",
-                                      "bounty_report_prepared", "bounty_report_completed",
+                                      "bounty_revealed", "bounty_report_prepared", "bounty_report_completed",
                                       "manual_started_in_city", "manual_route_completed", "manual_rest_completed", "manual_first_back_prepared", "manual_first_back_completed",
                                       "manual_second_back_prepared", "manual_second_back_completed", "manual_leap_prepared", "manual_leap_completed",
                                       "mining_reward_observed", "mining_reward_dismissed", "mining_refill_requested",

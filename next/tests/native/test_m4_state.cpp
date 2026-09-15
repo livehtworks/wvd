@@ -92,6 +92,10 @@ J direct_contract(const J &profile) {
         try { emit("bounty_report_completed"); }
         catch (const std::exception &e) { unprepared = std::string(e.what()) == "BOUNTY_REPORT_NOT_PREPARED"; }
         require(unprepared, "BOUNTY_UNPREPARED_REWARD");
+        emit("bounty_revealed");
+        require(!emit("bounty_revealed"), "BOUNTY_REVEAL_REPLAY");
+        require(bounty.summary().at("bounty_reveals").get<int>() == 1, "BOUNTY_REVEAL_NOT_RECORDED");
+        require(bounty.summary().at("bounty_reports").get<int>() == 0, "BOUNTY_REVEAL_IS_NOT_REWARD");
         emit("bounty_report_prepared");
         require(!emit("bounty_report_prepared"), "BOUNTY_DUPLICATE_INTENT");
         bounty.enter_segment(contracts::SegmentBoundary::LifecycleRecovery, ++generation, 0);

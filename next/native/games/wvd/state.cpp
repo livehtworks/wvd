@@ -300,7 +300,10 @@ bool WvdRunState::confirm_event(const std::string &operation, const std::string 
         throw std::runtime_error("BUSINESS_CONFIRMATION_CAPACITY");
     if (expected_step && *expected_step != task_step_)
         throw std::runtime_error("BUSINESS_TASK_STEP_MISMATCH");
-    if (event == "bounty_report_prepared") {
+    if (event == "bounty_revealed") {
+        // 仅记录揭榜子流程到达城内的回执，不代表接取了某个指定悬赏或获得奖励。
+        ++bounty_reveals_;
+    } else if (event == "bounty_report_prepared") {
         if (bounty_report_pending_) throw std::runtime_error("BOUNTY_REPORT_ALREADY_PENDING");
         bounty_report_pending_ = true;
     } else if (event == "bounty_report_completed") {
@@ -546,6 +549,7 @@ J WvdRunState::summarize() const {
             {"mining", mining_.summary()},
             {"manual_separation", manual_separation_.summary()},
             {"bounty_reports", bounty_reports_},
+            {"bounty_reveals", bounty_reveals_},
             {"bounty_report_pending", bounty_report_pending_},
             {"encounter_timed_out", encounter_timed_out()},
             {"combats", combats_},

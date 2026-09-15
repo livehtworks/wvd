@@ -34,7 +34,7 @@ CompiledWorkflow visit_bounty_board(BountyVisit operation) {
     if (report)
         graph.confirm("AtEdge", "bounty.report.done", "bounty_report_completed", C::all({edge, C::absent(completed)}), {"Terminal"});
     else
-        graph.observe("AtEdge", edge, {"Terminal"});
+        graph.confirm("AtEdge", "bounty.reveal.done", "bounty_revealed", edge, {"Terminal"});
     for (const auto *name : {"Find", "Guild", "Request", "Bounties", "Swipe", "Exit", "Back"}) graph.hit_limit(name, 16);
     graph.interrupt_on({{"mode", "blocking_screen"}, {"parallel_basic", true}}, "quest.bounty_common_screen_requires_dispatch");
     return graph.finish();
