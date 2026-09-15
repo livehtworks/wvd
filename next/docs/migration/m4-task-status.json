@@ -3268,7 +3268,7 @@
         "M4-TASK-gaintKiller"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "TYPED_PLAN_DATA",
+      "implementation_extent": "FINITE_SPECIAL_ITERATION_PENDING_VALIDATION",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
       "offline_status": "NOT_RUN",
@@ -3278,7 +3278,8 @@
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
-        "native/games/wvd/tasks/task_plan.cpp"
+        "native/games/wvd/tasks/task_plan.cpp",
+        "native/games/wvd/tasks/giant.cpp"
       ],
       "source_fields": [
         "questName",
@@ -3293,11 +3294,17 @@
       "semantic_differences": [],
       "blockers": [
         "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "BUSINESS_ACTIONS_NOT_IMPLEMENTED",
-        "SPECIAL_CASE_NOT_IMPLEMENTED"
+        "FULL_TASK_EXECUTION_NOT_VERIFIED",
+        "FULL_CONFIGURATION_AND_RECOVERY_MATRIX_INCOMPLETE"
       ],
       "plan_data_status": "PASS",
-      "plan_evidence": "../m4-plan-validation.md"
+      "plan_evidence": "../m4-plan-validation.md",
+      "iteration_implementation": {
+        "status": "IMPLEMENTED_NOT_VALIDATED",
+        "entry": "tasks::giant_iteration",
+        "scope": "FINITE_ITERATION_NOT_FULL_TASK_ACCEPTANCE",
+        "evidence_report": "../m4-giant-validation.md"
+      }
     },
     {
       "task_id": "lovesleep",

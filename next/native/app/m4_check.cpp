@@ -4,6 +4,8 @@
 #include "games/wvd/tasks/task_plan.hpp"
 #include "games/wvd/tasks/dungeon_route.hpp"
 #include "games/wvd/tasks/dungeon_iteration.hpp"
+#include "games/wvd/tasks/fortress_trap.hpp"
+#include "games/wvd/tasks/giant.hpp"
 #include "games/wvd/navigation/dungeon_entry.hpp"
 #include "games/wvd/vision/asset_resolver.hpp"
 #include "maafw/buffers.hpp"
@@ -72,12 +74,13 @@ int main(int argc, char **argv) {
                 for (const auto &task : catalog.tasks())
                     result["plans"].push_back(games::WvdTaskPlan::parse(task).inspect());
             }
-            if (config.contains("compile_entries_manifest") || config.contains("compile_routes_manifest") || config.contains("compile_iterations_manifest")) {
+            if (config.contains("compile_entries_manifest") || config.contains("compile_routes_manifest") || config.contains("compile_iterations_manifest") || config.contains("compile_specials_manifest")) {
                 const bool routes = config.contains("compile_routes_manifest");
                 const bool iterations = config.contains("compile_iterations_manifest");
-                if (int(routes) + int(iterations) + int(config.contains("compile_entries_manifest")) != 1)
+                const bool specials = config.contains("compile_specials_manifest");
+                if (int(routes) + int(iterations) + int(specials) + int(config.contains("compile_entries_manifest")) != 1)
                     throw std::runtime_error("M4_COMPILE_SCOPE_AMBIGUOUS");
-                const auto manifest = read(maafw::path_from_utf8(config.at(iterations ? "compile_iterations_manifest" : routes ? "compile_routes_manifest" : "compile_entries_manifest")));
+                const auto manifest = read(maafw::path_from_utf8(config.at(specials ? "compile_specials_manifest" : iterations ? "compile_iterations_manifest" : routes ? "compile_routes_manifest" : "compile_entries_manifest")));
                 std::set<std::string> files, images;
                 maafw::Bundle manifest_bundle;
                 for (const auto &file : manifest.at("files")) {
@@ -88,13 +91,22 @@ int main(int argc, char **argv) {
                         images.insert(path.substr(6));
                 }
                 const auto &aliases = manifest.at("aliases");
-                const auto key = iterations ? "compiled_iterations" : routes ? "compiled_routes" : "compiled_entries";
+                const auto key = specials ? "compiled_specials" : iterations ? "compiled_iterations" : routes ? "compiled_routes" : "compiled_entries";
                 result[key] = J::array();
+                if (specials)
+                    result["unimplemented_specials"] = J::array();
                 for (const auto &task : catalog.tasks()) {
-                    if (task.type != "dungeon")
+                    if (task.type != (specials ? "quest" : "dungeon"))
                         continue;
+                    if (specials && task.id != "fortress-B8F_trap" && task.id != "gaintKiller") {
+                        result["unimplemented_specials"].push_back(task.id);
+                        continue;
+                    }
                     const auto plan = games::WvdTaskPlan::parse(task);
-                    const auto graph = iterations ? games::tasks::dungeon_iteration(plan, profile.values, images)
+                    const auto graph = specials ? (task.id == "gaintKiller"
+                                                ? games::tasks::giant_iteration(task, profile.values, images)
+                                                : games::tasks::fortress_trap_iteration(task, profile.values, images))
+                                              : iterations ? games::tasks::dungeon_iteration(plan, profile.values, images)
                                               : routes ? games::tasks::traverse_dungeon(plan, profile.values, images)
                                               : games::navigation::enter_dungeon(plan);
                     J missing = J::array();
@@ -105,7 +117,7 @@ int main(int argc, char **argv) {
                     }
                     result[key].push_back({{"task_id", task.id}, {"nodes", graph.nodes},
                         {"images", graph.images}, {"required_actions", graph.required_actions},
-                        {"missing_images", missing}, {"scope", iterations ? "NORMAL_FARM_ITERATION_NOT_FULL_TASK" : routes ? "DUNGEON_ROUTE_ONLY_NOT_FULL_TASK" : "ENTRY_ONLY_NOT_FULL_TASK"},
+                        {"missing_images", missing}, {"scope", specials ? "FINITE_SPECIAL_ITERATION_NOT_FULL_TASK" : iterations ? "NORMAL_FARM_ITERATION_NOT_FULL_TASK" : routes ? "DUNGEON_ROUTE_ONLY_NOT_FULL_TASK" : "ENTRY_ONLY_NOT_FULL_TASK"},
                         {"executed", false}});
                 }
             }

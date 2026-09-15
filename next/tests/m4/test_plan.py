@@ -92,6 +92,30 @@ class PlanTests(unittest.TestCase):
                 self.assertTrue(any(v.get("custom_action") == "GuardedAction" for v in entry["nodes"].values()))
                 self.assertNotIn("Shell", entry["required_actions"])
 
+    def test_implemented_specials_bind_real_manifest_without_hiding_remaining(self):
+        result = self.inspect("specials", compile_specials_manifest=str(ROOT / "packs/wvd/manifest.json"))
+        self.assertEqual(result["outcome"], "PASS", result)
+        implemented = {row["task_id"]: row for row in result["compiled_specials"]}
+        self.assertEqual(set(implemented), {"fortress-B8F_trap", "gaintKiller"})
+        all_specials = {name for name, value in self.source.items() if value["_TYPE"] == "quest"}
+        self.assertEqual(set(result["unimplemented_specials"]), all_specials - set(implemented))
+        self.assertFalse(result["execution_available"])
+        for graph in implemented.values():
+            self.assertEqual(graph["missing_images"], [])
+            self.assertFalse(graph["executed"])
+            self.assertEqual(graph["scope"], "FINITE_SPECIAL_ITERATION_NOT_FULL_TASK")
+            self.assertNotIn("Shell", graph["required_actions"])
+        giant = implemented["gaintKiller"]["nodes"]
+        self.assertEqual(giant["Started"]["custom_action_param"]["event"], "giant_cycle_started")
+        self.assertEqual(giant["Completed"]["custom_action_param"]["event"], "giant_cycle_completed")
+        self.assertEqual(giant["RestDue"]["custom_recognition_param"]["field"], "/giant_rest_due")
+
+    def test_special_negative_interval_is_not_silently_reinterpreted(self):
+        result = self.inspect("specials-negative-interval", changed_values={"REST_INTERVEL": -1},
+            compile_specials_manifest=str(ROOT / "packs/wvd/manifest.json"))
+        self.assertEqual(result["outcome"], "Error")
+        self.assertEqual(result["error"], "GIANT_REST_INTERVAL_INVALID")
+
     def test_all_43_dungeon_routes_bind_each_original_target(self):
         result = self.inspect("routes", compile_routes_manifest=str(ROOT / "packs/wvd/manifest.json"))
         self.assertEqual(result["outcome"], "PASS", result)
