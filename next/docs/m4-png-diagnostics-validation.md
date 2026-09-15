@@ -2,7 +2,8 @@
 
 ## 当前事实
 
-`007a7d6`统一构建通过，8方法全部通过，不能将有限诊断验证扩大为完整任务通过。
+`007a7d6`统一构建通过，8方法全部通过；最终`7fa2957`同组8方法回归再次通过。
+不能将有限诊断验证扩大为完整任务通过。
 诊断变更不替换state/boot/handoff/workflow业务；不写旧config/resources/mod/logs。
 
 - Context仅提交本次Custom的首/末实际FrameEnvelope，保留身份而不建立图片仓库。
@@ -62,6 +63,11 @@ test_m4_diagnostics链接wvd_business和wvd_vision，沿用UTF8/manifest/m4输�
 83张已保存PNG的哈希与大小经独立复核。前/后置失败保留实际帧，领取确认只存一次，
 恢复入口截图失败不覆盖业务首因，配额/节流/原子写失败及真实隔离junction负例均符合断言。
 同一产物M2 104方法回归通过；不是生产环境长时稳定或任意原生阻塞取消证明。
+
+最终`7fa2957`定向批次48方法全部通过，其中诊断仍为上述8方法；
+`m4-7fa2957-final-targeted.log`和`m4-final-artifacts-7fa2957/batch-targeted.json`
+保留日志及批次前后16产物哈希，另同产物M2 104方法通过。历史83张PNG核验属于
+`007a7d6`私有根，不以最终回归替换或重复计算该历史证据。
 
 ## 未证明边界
 
