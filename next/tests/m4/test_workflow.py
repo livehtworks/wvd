@@ -36,6 +36,7 @@ class WorkflowTests(unittest.TestCase):
         bundle = folder / "bundle"
         (bundle / "image").mkdir(parents=True)
         resource_kind = "dungeon-route" if options.get("workflow") == "fortress-trap" else "iteration" if options.get("workflow") in ("giant", "dark-light", "mining", "manual-separation") else options.get("workflow")
+        if resource_kind == "bounty-visit": resource_kind = "common"
         names = ["worldmapflag", "City_RoyalCityLuknalia", "Inn", "Stay", "Economy", "royalsuite", "OK"]
         if resource_kind in ("departure", "iteration"):
             names += ["openworldmap", "intoWorldMap", "returntoTown", "returnText", "EdgeOfTown", "dungFlag", "mapFlag", "chestFlag",
@@ -185,7 +186,7 @@ class WorkflowTests(unittest.TestCase):
                                         "giant": (route_budget + 500) * options.get("normal_units", 1),
                                         "recover": 750, "departure": 200, "heal": 260,
                                         "chest": 920 if options.get("quick") else 620,
-                                        "manual-separation": 3620, "time-leap": 200, "mining": mining_watchdog, "common": 140, "iteration": (route_budget + 380) * options.get("normal_units", 1)}.get(options.get("workflow"), 90))
+                                        "bounty-visit": 200 * options.get("normal_units", 1), "manual-separation": 3620, "time-leap": 200, "mining": mining_watchdog, "common": 140, "iteration": (route_budget + 380) * options.get("normal_units", 1)}.get(options.get("workflow"), 90))
         self.assertEqual(digest(exe), before_hash)
         (folder / "execution.json").write_text(json.dumps({"exe_sha256": before_hash, "exit": result.returncode}), encoding="utf-8")
         self.assertEqual(result.returncode, 0, (folder / "native.log").read_text(encoding="utf-8", errors="replace")[-3000:])
@@ -1799,6 +1800,70 @@ class WorkflowTests(unittest.TestCase):
         self.assertFalse(r["snapshot"]["business"]["mining"]["refill_pending"])
         self.assertEqual(r["snapshot"]["business"]["mining"]["completed_cycles"], 1)
 
+    def bounty_options(self, report=False, **extra):
+        return dict(workflow="bounty-visit", report=report, profile=self.wall_profile(False),
+            extra_images=["guild", "guildRequest", "guildFeatured", "Bounties", "CompletionReported", "EdgeOfTown"], **extra)
+
+    @staticmethod
+    def bounty_report_scenario():
+        frames = [{"guild": (200, 500)}, {"guildRequest": (400, 700)}, {"Bounties": (300, 800)},
+                  {"CompletionReported": (500, 900)}, {"Bounties": (300, 800)},
+                  {"guildRequest": (400, 700)}, {"EdgeOfTown": (400, 700)}]
+        actions = [dict(kind=0, x=x, y=y) for x, y in [(220, 512), (420, 712), (320, 812), (520, 912)]]
+        actions += [dict(kind=5, key=4), dict(kind=5, key=4)]
+        return frames, actions
+
+    def test_bounty_reveal_is_not_a_report(self):
+        frames, actions = self.bounty_report_scenario()
+        r = self.execute("bounty-reveal", frames[:3] + [frames[4], frames[-1]], actions[:3] + [dict(kind=5, key=4)],
+            **self.bounty_options())
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 4)
+        self.assertFalse(r["mismatch"])
+        self.assertEqual(r["snapshot"]["business"]["bounty_reports"], 0)
+
+    def test_bounty_report_requires_exit_and_two_visits_have_two_receipts(self):
+        frames, actions = self.bounty_report_scenario()
+        for twice in (False, True):
+            screens, commands = [dict(frame) for frame in frames], list(actions)
+            if twice:
+                screens[-1].update(frames[0])
+                screens += frames[1:]
+                commands += actions
+            r = self.execute("bounty-report-" + str(twice), screens, commands,
+                **self.bounty_options(report=True, normal_units=2 if twice else 1))
+            self.assertEqual(r["snapshot"]["state"], "Completed", r)
+            self.assertEqual(r["backend_calls"], len(commands))
+            self.assertFalse(r["mismatch"])
+            self.assertEqual(r["snapshot"]["business"]["bounty_reports"], 2 if twice else 1)
+            self.assertFalse(r["snapshot"]["business"]["bounty_report_pending"])
+
+    def test_bounty_menu_scroll_uses_confirmed_menu(self):
+        frames = [{"guildFeatured": (200, 500)}, {"CompletionReported": (500, 900)}, {"EdgeOfTown": (400, 700)}]
+        actions = [dict(kind=1, x=600, y=1400, x2=300, y2=1400, duration=400), dict(kind=0, x=520, y=912)]
+        r = self.execute("bounty-scroll", frames, actions, **self.bounty_options(report=True))
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 2)
+        self.assertFalse(r["mismatch"])
+        self.assertEqual(r["snapshot"]["business"]["bounty_reports"], 1)
+
+    def test_bounty_unchanged_report_or_stop_never_claims_reward(self):
+        report = {"CompletionReported": (500, 900)}
+        for stop in (False, True):
+            r = self.execute("bounty-pending-" + str(stop), [report, report], [dict(kind=0, x=520, y=912)],
+                **self.bounty_options(report=True, stop_after_first=stop))
+            self.assertEqual(r["snapshot"]["state"], "UserStopped" if stop else "Failed", r)
+            self.assertEqual(r["backend_calls"], 1)
+            self.assertFalse(r["mismatch"])
+            self.assertEqual(r["snapshot"]["business"]["bounty_reports"], 0)
+            self.assertTrue(r["snapshot"]["business"]["bounty_report_pending"])
+
+    def test_bounty_unknown_page_never_swipes(self):
+        r = self.execute("bounty-unknown", [{}], [], **self.bounty_options(report=True))
+        self.assertEqual(r["snapshot"]["state"], "Interrupted", r)
+        self.assertEqual(r["backend_calls"], 0)
+        self.assertEqual(r["snapshot"]["business"]["bounty_reports"], 0)
+
     def manual_options(self, **extra):
         return dict(workflow="manual-separation", quest_catalog=str(ROOT / "packs/wvd/parameters/legacy-quests.json"),
             profile=self.wall_profile(False), large_templates=["harken"],
@@ -1958,6 +2023,7 @@ class WorkflowTests(unittest.TestCase):
     def test_mining_continuation_starts_a_new_cycle_without_reusing_reward(self):
         first, actions = self.mining_scenario()
         second, later = self.mining_scenario()
+        first[-1]["openworldmap"] = (300, 100)
         first[-1]["FFXI/GCN"] = (400, 700)
         entry = [{"EVENT": (200, 500)}, {"EVENT": (200, 500)},
                  {"FFXI/EVENT_GCN": (300, 700)}, {"openworldmap": (300, 100), "FFXI/ZONE2": (400, 700)},
@@ -1989,6 +2055,21 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(state["mining"]["rewards"]["fine"], 1)
         self.assertEqual(state["mining"]["completed_cycles"], 1)
         self.assertEqual(state["dungeons"], 0)
+        self.assertEqual(len(r["snapshot"]["sessions"]), 2)
+
+    def test_mining_mid_run_pause_freeze_recovers_to_a_new_dig(self):
+        frames, actions = self.mining_scenario()
+        commands = [actions[0]] + [dict(kind=0, x=450, y=760)] * 6 + actions
+        r = self.execute("mining-pause-recovery", [frames[0]] + [{} for _ in range(7)] + frames, commands,
+            **self.mining_options(attach_recovery=True, restart_frame=8, restart_action=7, pause_frames=list(range(1, 8))))
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 12)
+        self.assertFalse(r["mismatch"])
+        state = r["snapshot"]["business"]
+        self.assertEqual(state["crashes"], 1)
+        self.assertEqual(state["mining"]["rewards"]["fine"], 1)
+        self.assertEqual(state["mining"]["completed_cycles"], 1)
+        self.assertEqual(r["snapshot"]["sessions"][0]["reason"], "pause.physics_frozen")
         self.assertEqual(len(r["snapshot"]["sessions"]), 2)
 
     def test_mining_wrong_mark_position_never_digs(self):

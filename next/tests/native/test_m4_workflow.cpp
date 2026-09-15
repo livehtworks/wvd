@@ -28,6 +28,7 @@
 #include "games/wvd/tasks/dark_light.hpp"
 #include "games/wvd/tasks/mining.hpp"
 #include "games/wvd/tasks/manual_separation.hpp"
+#include "games/wvd/tasks/bounty_visit.hpp"
 #include "games/wvd/vision/recognizers.hpp"
 #include "platform/windows/file_digest.hpp"
 #include <iostream>
@@ -188,6 +189,8 @@ int main(int argc, char **argv) {
             if (kind == "time-leap")
                 return games::navigation::time_leap_without_causality(config.at("leap_target"),
                     config.value("leap_chapter", "cursedwheel_impregnableFortress"), config.value("allow_download", true));
+            if (kind == "bounty-visit")
+                return games::tasks::visit_bounty_board(config.value("report", false) ? games::tasks::BountyVisit::Report : games::tasks::BountyVisit::Reveal);
             if (kind == "inn-tracked") {
                 using C = games::tasks::PipelineCompiler;
                 C graph("fixture.tracked_inn");

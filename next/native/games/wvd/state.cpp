@@ -275,6 +275,8 @@ std::string WvdRunState::confirmation_id(const std::string &operation, const std
         id += ":karma:" + std::to_string(karma_sequence_);
     if (event == "mining_reward_observed" || event == "mining_reward_dismissed")
         id += ":mining:" + std::to_string(mining_.reward_sequence(event == "mining_reward_observed"));
+    if (event == "bounty_report_prepared" || event == "bounty_report_completed")
+        id += ":report:" + std::to_string(bounty_reports_ + (event == "bounty_report_prepared" || bounty_report_pending_ ? 1 : 0));
     return id;
 }
 bool WvdRunState::confirm_event(const std::string &operation, const std::string &event,
@@ -298,7 +300,14 @@ bool WvdRunState::confirm_event(const std::string &operation, const std::string 
         throw std::runtime_error("BUSINESS_CONFIRMATION_CAPACITY");
     if (expected_step && *expected_step != task_step_)
         throw std::runtime_error("BUSINESS_TASK_STEP_MISMATCH");
-    if (event == "manual_started_in_city") {
+    if (event == "bounty_report_prepared") {
+        if (bounty_report_pending_) throw std::runtime_error("BOUNTY_REPORT_ALREADY_PENDING");
+        bounty_report_pending_ = true;
+    } else if (event == "bounty_report_completed") {
+        if (!bounty_report_pending_) throw std::runtime_error("BOUNTY_REPORT_NOT_PREPARED");
+        ++bounty_reports_;
+        bounty_report_pending_ = false;
+    } else if (event == "manual_started_in_city") {
         manual_separation_.started_in_city(unit_index_);
     } else if (event == "manual_route_completed") {
         manual_separation_.route_completed(task_step_, unit_index_);
@@ -536,6 +545,8 @@ J WvdRunState::summarize() const {
             {"dark_light_active", dark_light_active_},
             {"mining", mining_.summary()},
             {"manual_separation", manual_separation_.summary()},
+            {"bounty_reports", bounty_reports_},
+            {"bounty_report_pending", bounty_report_pending_},
             {"encounter_timed_out", encounter_timed_out()},
             {"combats", combats_},
             {"chests", chests_},

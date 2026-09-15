@@ -14,6 +14,7 @@ inline bool business_condition(const nlohmann::json &summary, const nlohmann::js
         "/giant_route_completed", "/giant_rest_due", "/giant_cycle_active",
         "/dark_light_active", "/encounter_timed_out", "/unit_index",
         "/manual_separation/phase", "/manual_separation/transfer_pending",
+        "/bounty_report_pending",
         "/mining/refill_pending", "/mining/party_ready", "/mining/reward_visible",
         "/karma_ambush", "/karma_pending"};
     const auto path = parameters.at("field").get<std::string>();

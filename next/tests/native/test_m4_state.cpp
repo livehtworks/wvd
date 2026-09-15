@@ -82,6 +82,28 @@ J direct_contract(const J &profile) {
     J result;
     result["initial"] = state.summary();
     {
+        games::WvdRunState bounty(profile, {"bounty", 1, clock});
+        std::uint64_t generation = 1;
+        bounty.enter_segment(contracts::SegmentBoundary::Initial, generation, 0);
+        auto emit = [&](const char *event) {
+            return bounty.confirm_event(bounty.confirmation_id(event, event), event, generation, 1);
+        };
+        bool unprepared = false;
+        try { emit("bounty_report_completed"); }
+        catch (const std::exception &e) { unprepared = std::string(e.what()) == "BOUNTY_REPORT_NOT_PREPARED"; }
+        require(unprepared, "BOUNTY_UNPREPARED_REWARD");
+        emit("bounty_report_prepared");
+        require(!emit("bounty_report_prepared"), "BOUNTY_DUPLICATE_INTENT");
+        bounty.enter_segment(contracts::SegmentBoundary::LifecycleRecovery, ++generation, 0);
+        require(bounty.summary().at("bounty_report_pending").get<bool>(), "BOUNTY_INTENT_LOST");
+        require(bounty.summary().at("bounty_reports").get<int>() == 0, "BOUNTY_PREMATURE_REWARD");
+        emit("bounty_report_completed");
+        require(!emit("bounty_report_completed"), "BOUNTY_REPLAY_DOUBLE_COUNTED");
+        emit("bounty_report_prepared");
+        emit("bounty_report_completed");
+        result["bounty_contract"] = bounty.summary();
+    }
+    {
         games::WvdRunState manual(profile, {"manual", 1, clock});
         std::uint64_t generation = 1;
         manual.enter_segment(contracts::SegmentBoundary::Initial, generation, 0);

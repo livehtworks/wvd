@@ -161,6 +161,12 @@ class StateTests(unittest.TestCase):
         self.assertFalse(state["giant_cycle_active"])
         self.assertEqual(state["crashes"], 1)
 
+    def test_bounty_report_intent_and_distinct_receipts(self):
+        state = self.run_case("bounty-contract")["direct"]["bounty_contract"]
+        self.assertEqual(state["bounty_reports"], 2)
+        self.assertFalse(state["bounty_report_pending"])
+        self.assertEqual(state["dungeons"], 0)
+
     def test_manual_separation_requires_both_units_and_confirmed_rest(self):
         result = self.run_case("manual-contract")["direct"]
         first, last = result["manual_after_first_unit"], result["manual_completed"]

@@ -59,6 +59,7 @@ if(WVD_BUILD_M4)
     ../games/wvd/mining/progress.cpp
     ../games/wvd/tasks/mining.cpp
     ../games/wvd/tasks/manual_separation.cpp
+    ../games/wvd/tasks/bounty_visit.cpp
     ../games/wvd/quests/manual_separation.cpp
     ../games/wvd/tasks/pipeline_compiler.cpp ../games/wvd/navigation/world_map.cpp ../games/wvd/supply/inn.cpp
     ../games/wvd/tasks/dungeon_route.cpp
