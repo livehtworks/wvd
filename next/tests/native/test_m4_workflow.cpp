@@ -33,6 +33,8 @@
 #include "games/wvd/tasks/bounty_cycle.hpp"
 #include "games/wvd/tasks/fishing.hpp"
 #include "games/wvd/tasks/fishing_supply.hpp"
+#include "games/wvd/tasks/featured_request.hpp"
+#include "games/wvd/tasks/golden_chest.hpp"
 #include "games/wvd/vision/recognizers.hpp"
 #include "platform/windows/file_digest.hpp"
 #include <iostream>
@@ -203,6 +205,9 @@ int main(int argc, char **argv) {
                     config.value("leap_chapter", "cursedwheel_impregnableFortress"), config.value("allow_download", true));
             if (kind == "bounty-visit")
                 return games::tasks::visit_bounty_board(config.value("report", false) ? games::tasks::BountyVisit::Report : games::tasks::BountyVisit::Reveal);
+            if (kind == "featured-request")
+                return games::tasks::accept_featured_request(config.value("bull", true) ? games::tasks::FeaturedRequest::BullCave : games::tasks::FeaturedRequest::GoldenChest,
+                    config.value("royal", false));
             if (kind == "sleep-batch") {
                 nlohmann::ordered_json source;
                 std::ifstream(maafw::path_from_utf8(config.at("quest_catalog"))) >> source;
@@ -231,12 +236,16 @@ int main(int argc, char **argv) {
                 return games::recovery::revive_after_defeat();
             if (kind == "common")
                 return games::recovery::clear_common_screens(config.value("allow_download", true),
-                    config.value("jier_dialogue", false) ? games::recovery::DialoguePolicy::Jier : games::recovery::DialoguePolicy::Default);
-            if (kind == "fortress-trap" || kind == "giant" || kind == "dark-light" || kind == "mining" || kind == "manual-separation" || kind == "scorpion" || kind == "fishing-cycle" || kind == "jier") {
+                    config.value("golden_dialogue", false) ? games::recovery::DialoguePolicy::GoldenChest : config.value("jier_dialogue", false) ? games::recovery::DialoguePolicy::Jier : games::recovery::DialoguePolicy::Default);
+            if (kind == "fortress-trap" || kind == "giant" || kind == "dark-light" || kind == "mining" || kind == "manual-separation" || kind == "scorpion" || kind == "fishing-cycle" || kind == "jier" || kind == "golden-chest") {
                 nlohmann::ordered_json source;
                 std::ifstream(maafw::path_from_utf8(config.at("quest_catalog"))) >> source;
                 games::WvdQuestCatalog catalog(source);
-                const auto &task = catalog.at(kind == "jier" ? "jier" : kind == "fishing-cycle" ? (config.value("far", false) ? "fishing2" : "fishing") : kind == "scorpion" ? (config.value("hands", false) ? "Scorpionesses_plus_6_hands" : "Scorpionesses") : kind == "manual-separation" ? "manualSepDemon" : kind == "mining" ? "FFXI-Org" : kind == "dark-light" ? "darkLight" : kind == "giant" ? "gaintKiller" : "fortress-B8F_trap");
+                const auto &task = catalog.at(kind == "golden-chest" ? "SSC-goldenchest" : kind == "jier" ? "jier" : kind == "fishing-cycle" ? (config.value("far", false) ? "fishing2" : "fishing") : kind == "scorpion" ? (config.value("hands", false) ? "Scorpionesses_plus_6_hands" : "Scorpionesses") : kind == "manual-separation" ? "manualSepDemon" : kind == "mining" ? "FFXI-Org" : kind == "dark-light" ? "darkLight" : kind == "giant" ? "gaintKiller" : "fortress-B8F_trap");
+                if (kind == "golden-chest") {
+                    task_plan = games::tasks::golden_chest_plan(task).inspect();
+                    return games::tasks::golden_chest_cycle(task, profile, images, config.value("allow_download", true));
+                }
                 std::set<std::string> images;
                 for (const auto &file : config.at("files")) {
                     const auto path = file.at("path").get<std::string>();
@@ -563,7 +572,7 @@ int main(int argc, char **argv) {
         definition.policy = policy;
         definition.initial = std::move(session);
         const auto units = config.at("workflow") == "jier" ? 3u : config.at("workflow") == "scorpion" ? (config.value("hands", false) ? 4u : 3u) :
-            config.at("workflow") == "manual-separation" ? 2u : config.value("normal_units", 1u);
+            config.at("workflow") == "manual-separation" || config.at("workflow") == "golden-chest" ? 2u : config.value("normal_units", 1u);
         require(units > 0 && units <= 4, "FIXTURE_NORMAL_UNITS_INVALID");
         if (config.at("workflow") == "manual-separation")
             games::tasks::configure_manual_separation_units(definition);
@@ -571,6 +580,8 @@ int main(int argc, char **argv) {
             games::tasks::configure_bounty_units(definition, config.value("hands", false));
         else if (config.at("workflow") == "fishing-cycle")
             games::tasks::configure_fishing_units(definition, units);
+        else if (config.at("workflow") == "golden-chest")
+            games::tasks::configure_golden_chest_units(definition);
         else {
             definition.max_business_units = units;
             for (unsigned i = 1; i < units; ++i)
@@ -665,9 +676,17 @@ int main(int argc, char **argv) {
             }, 15000ms);
             coordinator.request_stop();
         }
+        auto progress_at = std::chrono::steady_clock::now();
         until(
             [&] {
                 auto s = coordinator.snapshot();
+                const auto now = std::chrono::steady_clock::now();
+                if (now - progress_at >= 30s) {
+                    // 只读夹具诊断，不改变画面、时钟或终态；长流程不再直到结束才有任何进度。
+                    std::cout << J{{"fixture_progress", {{"backend_calls", device->calls.load()},
+                        {"captures", device->captures.load()}, {"quiescent", s.quiescent}}}}.dump() << std::endl;
+                    progress_at = now;
+                }
                 return s.quiescent && s.result_saved;
             },
             definition.initial.time_limit * (definition.recovery_limit + units) + 10000ms);

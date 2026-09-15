@@ -78,6 +78,23 @@ class StateTests(unittest.TestCase):
         self.assertEqual(state["inn_rests"], 9999)
         self.assertEqual(state["dungeons"], 0)
 
+    def test_featured_visits_preserve_pending_and_rest_each_visit(self):
+        state = self.run_case("featured-contract", featured_contract=True)["featured_contract"]
+        self.assertEqual(state["inn_rests"], 2)
+        self.assertEqual(state["featured_visit"]["visits_completed"], 2)
+        self.assertEqual(state["featured_visit"]["selections_confirmed"], 1)
+        self.assertFalse(state["featured_visit"]["pending"])
+        self.assertFalse(state["featured_visit"]["active"])
+
+    def test_golden_cycle_preserves_leap_intent_and_requires_two_units(self):
+        state = self.run_case("golden-contract", golden_contract=True)["golden_contract"]
+        self.assertEqual(state["golden_chest"]["completed_cycles"], 2)
+        self.assertEqual(state["dungeons"], 2)
+        self.assertEqual(state["inn_rests"], 2)
+        self.assertEqual(state["featured_visit"]["visits_completed"], 2)
+        self.assertFalse(state["golden_chest"]["active"])
+        self.assertFalse(state["golden_chest"]["leap_pending"])
+
     def test_fishing_all_classifications_pending_recovery_and_receipt_replay(self):
         fish = self.run_case("fishing-contract", fishing_contract=True)["fishing_contract"]
         self.assertEqual(fish["caught"], 25)

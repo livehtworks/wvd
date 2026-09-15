@@ -5,6 +5,7 @@
 #include "games/wvd/tasks/giant.hpp"
 #include "games/wvd/fishing/unknown_window.hpp"
 #include "games/wvd/tasks/fishing_supply.hpp"
+#include "games/wvd/tasks/golden_chest.hpp"
 #include "games/wvd/vision/recognizers.hpp"
 #include "storage/legacy_import.hpp"
 #include "storage/profile_store.hpp"
@@ -78,6 +79,74 @@ std::optional<runtime::SessionDefinition> recover_unit(const contracts::SessionR
     auto next = previous;
     next.entry = "Recovered";
     return next;
+}
+J golden_contract(const J &profile) {
+    auto clock = std::make_shared<TestClock>();
+    games::WvdRunState state(profile, {"golden-contract", 1, clock});
+    std::uint64_t generation = 1;
+    state.enter_segment(contracts::SegmentBoundary::Initial, generation, 0);
+    auto apply = [&](const char *event) {
+        const auto id = state.confirmation_id(event, event);
+        require(state.confirm_event(id, event, generation, 1), "GOLDEN_EVENT_NOT_APPLIED");
+        require(!state.confirm_event(id, event, generation, 2), "GOLDEN_EVENT_REPLAYED");
+    };
+    for (std::size_t cycle = 0; cycle < 2; ++cycle) {
+        if (cycle) state.enter_segment(contracts::SegmentBoundary::Continuation, ++generation, cycle * 2);
+        apply("golden_started");
+        apply("golden_leap_prepared");
+        state.enter_segment(contracts::SegmentBoundary::Recovery, ++generation, cycle * 2);
+        require(state.summary().at("golden_chest").at("leap_pending").get<bool>(), "GOLDEN_RECOVERY_LOST_LEAP_INTENT");
+        apply("golden_leaped");
+        apply("golden_travelled");
+        apply("featured_visit_started");
+        apply("inn_payment_prepared");
+        apply("inn_rest_completed");
+        apply("featured_request_prepared");
+        apply("featured_request_completed");
+        apply("featured_visit_completed");
+        apply("golden_requested");
+        bool denied = false;
+        try { state.confirm_event("premature-enter-" + std::to_string(cycle), "golden_entered", generation, 3); }
+        catch (const std::runtime_error &) { denied = true; }
+        require(denied, "GOLDEN_DID_NOT_REQUIRE_NEXT_NORMAL_UNIT");
+        state.enter_segment(contracts::SegmentBoundary::Continuation, ++generation, cycle * 2 + 1);
+        apply("golden_entered");
+        apply("golden_trap_completed");
+        state.enter_dungeon();
+        for (int point = 0; point < 6; ++point) state.target_point_completed();
+        apply("golden_route_completed");
+        apply("golden_completed");
+    }
+    return state.summary();
+}
+J featured_contract(const J &profile) {
+    auto clock = std::make_shared<TestClock>();
+    games::WvdRunState state(profile, {"featured-contract", 1, clock});
+    std::uint64_t generation = 1;
+    state.enter_segment(contracts::SegmentBoundary::Initial, generation, 0);
+    for (int visit = 0; visit < 2; ++visit) {
+        auto apply = [&](const char *event) {
+            const auto id = state.confirmation_id(event, event);
+            require(state.confirm_event(id, event, generation, 1), "FEATURED_EVENT_NOT_APPLIED");
+            require(!state.confirm_event(id, event, generation, 2), "FEATURED_EVENT_REPLAYED");
+        };
+        apply("featured_visit_started");
+        require(!state.summary().at("inn_rest_completed").get<bool>(), "FEATURED_NEW_VISIT_REUSED_PAYMENT");
+        apply("inn_payment_prepared");
+        apply("inn_rest_completed");
+        if (visit == 0) {
+            apply("featured_request_prepared");
+            state.enter_segment(contracts::SegmentBoundary::Recovery, ++generation, 0);
+            require(state.summary().at("featured_visit").at("pending").get<bool>(), "FEATURED_RECOVERY_LOST_PENDING");
+            bool rejected = false;
+            try { state.confirm_event("premature", "featured_visit_completed", generation, 3); }
+            catch (const std::runtime_error &) { rejected = true; }
+            require(rejected, "FEATURED_PENDING_VISIT_COMPLETED");
+            apply("featured_request_completed");
+        }
+        apply("featured_visit_completed");
+    }
+    return state.summary();
 }
 J fishing_contract(const J &profile) {
     games::fishing::UnknownWindow unknown;
@@ -941,6 +1010,16 @@ int main(int argc, char **argv) {
             return 0;
         }
         auto profile = importer.parse(config.at("source")).values;
+        if (config.value("featured_contract", false)) {
+            const J output{{"featured_contract", featured_contract(profile)}, {"backend_inputs", 0}};
+            std::ofstream(maafw::path_from_utf8(config.at("output"))) << output.dump(2);
+            return 0;
+        }
+        if (config.value("golden_contract", false)) {
+            const J output{{"golden_contract", golden_contract(profile)}, {"backend_inputs", 0}};
+            std::ofstream(maafw::path_from_utf8(config.at("output"))) << output.dump(2);
+            return 0;
+        }
         if (config.value("fishing_supply_contract", false)) {
             const J output{{"fishing_supply_contract", fishing_supply_contract(profile)}, {"backend_inputs", 0}};
             std::ofstream(maafw::path_from_utf8(config.at("output"))) << output.dump(2);

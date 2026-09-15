@@ -22,6 +22,7 @@ void collect_images(const J &value, std::set<std::string> &images, std::set<std:
         // 常量隐式依赖在本次收集内只展开一次；显式 image/动态参数仍逐项收集。
         // 不缓存整份图或跨编译共享结果，validate 仍独立重算完整资源集合。
         const bool expand = expanded_modes.insert(mode).second;
+        if (expand && mode == "featured_request_accepted") images.insert("request_accepted.png");
         if (expand && mode == "fishing_bait_empty") {
             images.insert("fishing/nobait.png");
             images.insert("fishing/8bait.png");
@@ -270,8 +271,8 @@ void CompiledWorkflow::validate() const {
                 "COMPILE_CHECKPOINT_INVALID");
     std::set<std::string> actual_images;
     collect_images(nodes, actual_images);
-    if (dialogue_policy == recovery::DialoguePolicy::Jier) {
-        actual_images.insert("bounty/cuthimdown.png");
+    if (dialogue_policy != recovery::DialoguePolicy::Default) {
+        for (const auto name : recovery::special_dialogue_options(dialogue_policy)) actual_images.insert(std::string(name) + ".png");
         actual_images.insert("bondmate_close.png");
     }
     require(std::vector<std::string>(actual_images.begin(), actual_images.end()) == images,
@@ -577,6 +578,10 @@ void PipelineCompiler::confirm(const std::string &name, const std::string &opera
                                       "giant_cycle_started", "giant_route_completed", "giant_cycle_completed",
                                       "bounty_revealed", "bounty_report_prepared", "bounty_report_completed",
                                       "special_dialogue_prepared", "special_dialogue_completed",
+                                      "featured_request_prepared", "featured_request_completed",
+                                      "featured_visit_started", "featured_visit_completed",
+                                      "golden_started", "golden_leap_prepared", "golden_leaped", "golden_travelled", "golden_requested",
+                                      "golden_entered", "golden_trap_completed", "golden_route_completed", "golden_completed",
                                       "fishing_reward_prepared", "fishing_reward_completed",
                                       "fishing_wait_started", "fishing_wait_failed",
                                       "fishing_cast_prepared", "fishing_cast_completed",
@@ -640,8 +645,8 @@ CompiledWorkflow PipelineCompiler::finish() {
          {"custom_action_param", {{"reason", workflow_.kind + ".budget_exhausted"}}}});
     std::set<std::string> images;
     collect_images(workflow_.nodes, images);
-    if (workflow_.dialogue_policy == recovery::DialoguePolicy::Jier) {
-        images.insert("bounty/cuthimdown.png");
+    if (workflow_.dialogue_policy != recovery::DialoguePolicy::Default) {
+        for (const auto name : recovery::special_dialogue_options(workflow_.dialogue_policy)) images.insert(std::string(name) + ".png");
         images.insert("bondmate_close.png");
     }
     workflow_.images.assign(images.begin(), images.end());

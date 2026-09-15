@@ -8,6 +8,7 @@
 #include "unknown_window.hpp"
 #include "image_ops.hpp"
 #include "games/wvd/business_condition.hpp"
+#include "games/wvd/recovery/dialogue_policy.hpp"
 #include <cmath>
 #include <chrono>
 #include <exception>
@@ -595,8 +596,25 @@ J evaluate_uncached(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels
         }
         return decision(false, {}, {{"stage", "unknown"}});
     }
+    if (mode == "featured_request_accepted") {
+        check(!p.contains("roi") && !p.contains("preprocess") && p.value("image", "") == "LBC/request" &&
+            p.contains("accepted") && p.at("accepted").is_boolean(), "WVD_FEATURED_REQUEST_INVALID");
+        const auto target = evaluate_impl(bundle, pixels, {{"mode", "template"}, {"image", "LBC/request"}}, bound, scope, cache, depth + 1, memo);
+        check(target.at("outcome") != "Error", "WVD_FEATURED_RECOGNITION_ERROR");
+        if (target.at("outcome") != "Hit") return decision(false, {}, {{"reason", "request_missing"}});
+        const auto position = target.at("box").get<std::vector<int>>();
+        const int y = position.at(1) + position.at(3) / 2;
+        // 旧ROI第四项是高度posY+200，不是底边。只明确还原NumPy对底部的裁剪，负起点拒绝。
+        check(y >= 200 && y < 1600, "WVD_FEATURED_REQUEST_ROI_INVALID");
+        const J roi{0, y - 200, 900, std::min(y + 200, 1800 - y)};
+        const auto status = evaluate_impl(bundle, pixels, {{"mode", "template"}, {"image", "request_accepted"}, {"roi", roi}}, bound, scope, cache, depth + 1, memo);
+        check(status.at("outcome") != "Error", "WVD_FEATURED_RECOGNITION_ERROR");
+        return decision((status.at("outcome") == "Hit") == p.at("accepted").get<bool>(), allowed_rect,
+            {{"accepted", status.at("outcome") == "Hit"}, {"effective_roi", roi}}, false);
+    }
     if (mode == "special_dialogue_post") {
-        check(!p.contains("roi") && !p.contains("preprocess") && bound.value("dialogue_task", "") == "jier", "WVD_SPECIAL_DIALOGUE_SCOPE_INVALID");
+        check(!p.contains("roi") && !p.contains("preprocess") &&
+            recovery::dialogue_policy_from_name(bound.value("dialogue_task", "")) != recovery::DialoguePolicy::Default, "WVD_SPECIAL_DIALOGUE_SCOPE_INVALID");
         const J probes = J::array({J{{"mode", "template"}, {"image", "bondmate_close"}, {"roi", {277, 751, 330, 600}}},
             J{{"mode", "boot_ready"}}, J{{"mode", "special_dialogue"}}, J{{"mode", "default_dialogue"}}, J{{"mode", "boot_post"}}});
         // 先确认关闭按钮/稳定页面，避免已命中仍串行扫描所有对话而让后置帧过期。
@@ -610,11 +628,20 @@ J evaluate_uncached(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels
     if (mode == "special_dialogue") {
         check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");
         const auto task = bound.value("dialogue_task", "");
-        check(task.empty() || task == "jier", "WVD_DIALOGUE_POLICY_INVALID");
+        const auto options = recovery::special_dialogue_options(recovery::dialogue_policy_from_name(task));
         if (task.empty()) return decision(false, {}, {{"reason", "no_special_dialogue"}});
-        const auto candidate = evaluate_impl(bundle, pixels, {{"mode", "template"}, {"image", "bounty/cuthimdown"}}, bound, scope, cache, depth + 1, memo);
-        check(candidate.at("outcome") != "Error", "WVD_DIALOGUE_RECOGNITION_ERROR");
-        if (candidate.at("outcome") != "Hit") return candidate;
+        if (p.contains("selected")) check(p.at("selected").is_string() &&
+            std::find(options.begin(), options.end(), p.at("selected").get<std::string>()) != options.end(), "WVD_DIALOGUE_OPTION_INVALID");
+        J candidate;
+        std::string selected;
+        for (const auto option : options) {
+            candidate = evaluate_impl(bundle, pixels, {{"mode", "template"}, {"image", option}}, bound, scope, cache, depth + 1, memo);
+            check(candidate.at("outcome") != "Error", "WVD_DIALOGUE_RECOGNITION_ERROR");
+            if (candidate.at("outcome") == "Hit") { selected = option; break; }
+        }
+        if (selected.empty()) return decision(false, {}, {{"reason", "no_special_option"}});
+        if (p.contains("selected") && p.at("selected").get<std::string>() != selected)
+            return decision(false, {}, {{"reason", "option_changed"}, {"selected", selected}});
         // 旧 IdentifyState 的专用选项先于善恶/祝福/沙人兜底，晚于正常场景、启动阻塞和死亡提示。
         auto guards = default_dialogue_normal_probes();
         for (const auto &probe : blocking_probes(false)) {
@@ -629,6 +656,7 @@ J evaluate_uncached(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels
             check(result.at("outcome") != "Error", "WVD_DIALOGUE_RECOGNITION_ERROR");
             if (result.at("outcome") == "Hit") return decision(false, {}, {{"reason", "normal_or_system_scene"}});
         }
+        candidate["evidence"]["selected"] = selected;
         return candidate;
     }
     if (mode == "default_dialogue") {
@@ -673,6 +701,16 @@ J evaluate_uncached(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels
     }
     if (mode == "boot_ready" || mode == "boot_post" || mode == "blocking_screen") {
         check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");
+        if (mode == "boot_post") {
+            // 后置只证明进入已知页，不选择输入目标。先查正常页，避免下载已返回游戏后
+            // 仍扫描全部默认对话/死亡候选而超过2秒帧龄；输入前的覆盖层优先级不变。
+            for (const auto &probe : boot_probes(false)) {
+                const auto result = evaluate_impl(bundle, pixels, probe, bound, scope, cache, depth + 1, memo);
+                check(result.at("outcome") != "Error", "WVD_BOOT_RECOGNITION_ERROR");
+                if (result.at("outcome") == "Hit")
+                    return decision(true, allowed_rect, {{"stage", probe.value("image", "combat_active")}, {"matched", result}});
+            }
+        }
         // 旧 WaitGameBootReady 是顺序候选，不是把全部条件都求完的 boolean any。
         // 只省去命中后的无关检查；实际执行探针的 Error 仍直接传播，未知仍 NoHit。
         for (const auto &probe : mode == "blocking_screen" ? blocking_probes() : boot_probes(mode == "boot_post")) {

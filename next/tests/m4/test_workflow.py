@@ -35,8 +35,8 @@ class WorkflowTests(unittest.TestCase):
         folder = self.root / name
         bundle = folder / "bundle"
         (bundle / "image").mkdir(parents=True)
-        resource_kind = "dungeon-route" if options.get("workflow") == "fortress-trap" else "iteration" if options.get("workflow") in ("giant", "dark-light", "mining", "manual-separation", "scorpion", "fishing-cycle", "jier") else options.get("workflow")
-        if resource_kind in ("bounty-visit", "sleep-batch", "fishing-cast", "fishing-reward", "fishing-round", "fishing-seek"): resource_kind = "common"
+        resource_kind = "dungeon-route" if options.get("workflow") == "fortress-trap" else "iteration" if options.get("workflow") in ("giant", "dark-light", "mining", "manual-separation", "scorpion", "fishing-cycle", "jier", "golden-chest") else options.get("workflow")
+        if resource_kind in ("bounty-visit", "featured-request", "sleep-batch", "fishing-cast", "fishing-reward", "fishing-round", "fishing-seek"): resource_kind = "common"
         names = ["worldmapflag", "City_RoyalCityLuknalia", "Inn", "Stay", "Economy", "royalsuite", "OK"]
         if resource_kind in ("departure", "iteration"):
             names += ["openworldmap", "intoWorldMap", "returntoTown", "returnText", "EdgeOfTown", "dungFlag", "mapFlag", "chestFlag",
@@ -2153,12 +2153,80 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(r["snapshot"]["business"]["special_dialogues_completed"], 1)
         self.assertFalse(r["snapshot"]["business"]["special_dialogue_pending"])
 
+    def featured_options(self, **extra):
+        return dict(workflow="featured-request", extra_images=["guild", "guildRequest", "guildFeatured",
+            "LBC/request", "SSC/Request", "request_accepted"], **extra)
+
+    def featured_scenario(self, bull=True, accepted=None):
+        frames, commands = self.inn_sequence()
+        frames[-1]["guild"] = (200, 500)
+        target = "LBC/request" if bull else "SSC/Request"
+        listing = {"guildFeatured": (100, 300), target: (400, 800)}
+        if accepted is not None: listing["request_accepted"] = accepted
+        def advance(command, page):
+            commands.append(command)
+            frames.append(page)
+        advance(dict(kind=0, x=220, y=512), {"guildRequest": (400, 500)})
+        advance(dict(kind=0, x=420, y=512), {"guildFeatured": (100, 300)})
+        advance(dict(kind=0, x=120, y=312), listing)
+        for _ in range(3 if bull else 1):
+            advance(dict(kind=1, x=150, y=1000 if bull else 1300, x2=150, y2=200), listing)
+        selected = not bull or accepted is None or accepted[1] < 612
+        if selected:
+            advance(dict(kind=0, x=686 if bull else 720, y=1069 if bull else 962), {"guildRequest": (400, 500)})
+        advance(dict(kind=5, key=4), {"Inn": (400, 700)})
+        return frames, commands, selected
+
+    def test_featured_requests_keep_scroll_bias_and_accepted_roi(self):
+        for name, bull, accepted in [("bull", True, None), ("already", True, (400, 1100)),
+                ("outside", True, (400, 200)), ("golden", False, (400, 1100))]:
+            frames, commands, selected = self.featured_scenario(bull, accepted)
+            r = self.execute("featured-" + name, frames, commands, **self.featured_options(bull=bull))
+            self.assertEqual(r["snapshot"]["state"], "Completed", r)
+            self.assertEqual(r["backend_calls"], len(commands))
+            self.assertFalse(r["mismatch"])
+            state = r["snapshot"]["business"]
+            self.assertEqual(state["inn_rests"], 1)
+            self.assertEqual(state["featured_visit"]["selections_confirmed"], int(selected))
+            self.assertEqual(state["featured_visit"]["visits_completed"], 1)
+            self.assertFalse(state["featured_visit"]["pending"])
+
+    def test_featured_rejected_or_stopped_selection_does_not_replay(self):
+        for stop in (False, True):
+            frames, commands, _ = self.featured_scenario()
+            commands[-2] = dict(commands[-2], reject=not stop)
+            options = self.featured_options(**({"stop_after_calls": len(commands) - 1} if stop else {}))
+            r = self.execute("featured-stop-" + str(stop), frames[:-1], commands[:-1], **options)
+            self.assertEqual(r["snapshot"]["state"], "UserStopped" if stop else "Failed", r)
+            self.assertEqual(r["backend_calls"], len(commands) - 1)
+            self.assertFalse(r["mismatch"])
+            self.assertTrue(r["snapshot"]["business"]["featured_visit"]["pending"])
+            self.assertEqual(r["snapshot"]["business"]["featured_visit"]["visits_completed"], 0)
+
+    def test_featured_unknown_page_never_opens_inn_or_selects_request(self):
+        r = self.execute("featured-unknown", [{}], [], **self.featured_options())
+        self.assertEqual(r["snapshot"]["state"], "Interrupted", r)
+        self.assertEqual(r["backend_calls"], 0)
+        self.assertFalse(r["snapshot"]["business"]["featured_visit"]["active"])
+
     def test_jier_dialogue_not_enabled_cannot_choose_special_option(self):
         r = self.execute("jier-dialogue-unbound", [{"bounty/cuthimdown": (400, 600)}], [], workflow="common",
             extra_images=["bounty/cuthimdown", "bondmate_close"])
         self.assertEqual(r["snapshot"]["state"], "Interrupted", r)
         self.assertEqual(r["backend_calls"], 0)
         self.assertEqual(r["snapshot"]["business"]["special_dialogues_completed"], 0)
+
+    def test_golden_dialogue_order_and_bondmate_close_are_task_scoped(self):
+        r = self.execute("golden-dialogue-sequence",
+            [{"SSC/dotdotdot": (400, 600), "SSC/shadow": (400, 1000)}, {"SSC/shadow": (400, 1000)},
+             {"bondmate_close": (400, 900)}, {"dungFlag": (50, 150)}],
+            [dict(kind=0, x=420, y=612), dict(kind=0, x=420, y=1012), dict(kind=0, x=420, y=912)],
+            workflow="common", golden_dialogue=True, extra_images=["SSC/dotdotdot", "SSC/shadow", "bondmate_close"])
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 3)
+        self.assertFalse(r["mismatch"])
+        self.assertEqual(r["snapshot"]["business"]["special_dialogues_completed"], 2)
+        self.assertFalse(r["snapshot"]["business"]["special_dialogue_pending"])
 
     def test_jier_dialogue_precedes_karma_without_mutating_karma(self):
         r = self.execute("jier-dialogue-karma-priority",

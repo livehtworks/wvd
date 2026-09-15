@@ -63,6 +63,8 @@ if(WVD_BUILD_M4)
     ../games/wvd/quests/manual_separation.cpp
     ../games/wvd/quests/sleep_visits.cpp
     ../games/wvd/tasks/sleep_visits.cpp
+    ../games/wvd/tasks/featured_request.cpp
+    ../games/wvd/tasks/golden_chest.cpp
     ../games/wvd/quests/bounty_cycle.cpp
     ../games/wvd/tasks/bounty_cycle.cpp
     ../games/wvd/tasks/fishing.cpp

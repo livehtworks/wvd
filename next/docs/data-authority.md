@@ -7,6 +7,15 @@
 
 ## 当前有效数据
 
+指定公会任务访问的运行事实由 `quests::FeaturedVisit` 经 WvdRunState 独占：
+`featured_visit` 保存 active/pending、访问序号、完成访问数和已确认选择次数。
+选择次数只在选择后的城内新帧确认后增加，不代表任务奖励或物品数量；
+已领取的牛洞访问只增加访问数。恢复保留未决意图，不写旧配置或任务资源。
+
+忍洞运行事实由 `quests::GoldenChestCycle` 经同一WvdRunState独占，摘要为
+`golden_chest`。phase、leap_pending和unit_matches约束两段正常续接；
+completed_cycles只在六点及退出已确认后增加，不把任务点数或开始计数作为完成权威。
+
 | 数据或文件 | 属性与权威 | 生产者 | 消费者与关联 |
 | --- | --- | --- | --- |
 | 调用者显式提供的 data_root/instance/run/run.json | 新版运行元数据；只创建，不接管同名目录 | RunStore，来自冻结 RunDefinition | 离线历史读取；关联 instance、run_id、request_id、权限、资源清单/hash、预算 |

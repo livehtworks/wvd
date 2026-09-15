@@ -5,24 +5,29 @@ namespace wvd::games::recovery {
 tasks::CompiledWorkflow choose_special_dialogue(DialoguePolicy policy) {
     using C = tasks::PipelineCompiler;
     using J = nlohmann::json;
-    if (policy != DialoguePolicy::Jier) throw std::runtime_error("SPECIAL_DIALOGUE_POLICY_REQUIRED");
-    C graph("recovery.jier_dialogue", std::chrono::seconds{90});
+    if (policy == DialoguePolicy::Default) throw std::runtime_error("SPECIAL_DIALOGUE_POLICY_REQUIRED");
+    C graph("recovery.special_dialogue." + dialogue_policy_name(policy), std::chrono::seconds{90});
     graph.use_dialogue(policy);
-    const auto marker = C::image("bounty/cuthimdown");
     auto close = C::image("bondmate_close");
     close["roi"] = {277, 751, 330, 600};
-    const J choice{{"mode", "special_dialogue"}};
     const J after{{"mode", "special_dialogue_post"}};
-    graph.route("Entry", {"Pending", "Prepare"});
-    graph.observe("Pending", C::business("/special_dialogue_pending", true), {"AfterChoice"});
-    graph.confirm("Prepare", "dialogue.special.prepare", "special_dialogue_prepared", C::all({choice, marker}), {"Choose"});
-    graph.click("Choose", C::all({choice, marker}), marker, after, {"AfterChoice"});
-    graph.delay_after("Choose", 2000);
-    graph.postcondition_budget("Choose", 10000);
-    graph.route("AfterChoice", {"CloseBond", "Completed", "Unconfirmed"});
-    graph.click("CloseBond", C::all({close, C::absent(marker)}), close, after, {"Completed", "Unconfirmed"});
-    graph.confirm("Completed", "dialogue.special.done", "special_dialogue_completed",
-        C::all({after, C::absent(close), C::absent(marker)}), {"Terminal"});
+    J entry{"Pending"};
+    graph.observe("Pending", C::business("/special_dialogue_pending", true), {"Unconfirmed"});
+    for (const auto option : special_dialogue_options(policy)) {
+        const auto suffix = std::to_string(entry.size() - 1);
+        const auto marker = C::image(std::string(option));
+        const J choice{{"mode", "special_dialogue"}, {"selected", option}};
+        entry.push_back("Prepare" + suffix);
+        graph.confirm("Prepare" + suffix, "dialogue.special.prepare", "special_dialogue_prepared", C::all({choice, marker}), {"Choose" + suffix});
+        graph.click("Choose" + suffix, C::all({choice, marker}), marker, after, {"AfterChoice" + suffix});
+        graph.delay_after("Choose" + suffix, 2000);
+        graph.postcondition_budget("Choose" + suffix, 10000);
+        graph.route("AfterChoice" + suffix, {"CloseBond" + suffix, "Completed" + suffix, "Unconfirmed"});
+        graph.click("CloseBond" + suffix, C::all({close, C::absent(marker)}), close, after, {"Completed" + suffix, "Unconfirmed"});
+        graph.confirm("Completed" + suffix, "dialogue.special.done", "special_dialogue_completed",
+            C::all({after, C::absent(close), C::absent(marker)}), {"Terminal"});
+    }
+    graph.route("Entry", entry);
     graph.recovery("Unconfirmed", "dialogue.choice_outcome_unconfirmed");
     return graph.finish();
 }

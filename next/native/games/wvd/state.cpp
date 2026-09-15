@@ -288,6 +288,10 @@ std::string WvdRunState::confirmation_id(const std::string &operation, const std
         id += ":mining:" + std::to_string(mining_.reward_sequence(event == "mining_reward_observed"));
     if (event == "special_dialogue_prepared" || event == "special_dialogue_completed")
         id += ":dialogue:" + std::to_string(special_dialogue_sequence_ + (event == "special_dialogue_prepared" && !special_dialogue_pending_ ? 1 : 0));
+    if (event.starts_with("featured_"))
+        id += ":featured:" + std::to_string(featured_visit_.sequence(event == "featured_visit_started"));
+    if (event.starts_with("golden_"))
+        id += ":golden:" + std::to_string(golden_chest_.sequence(event == "golden_started"));
     if (event == "fishing_reward_prepared" || event == "fishing_reward_completed")
         id += ":fishing:" + std::to_string(fishing_.sequence(event == "fishing_reward_prepared"));
     if (event == "fishing_wait_started" || event == "fishing_wait_failed")
@@ -332,7 +336,37 @@ bool WvdRunState::confirm_event(const std::string &operation, const std::string 
         throw std::runtime_error("BUSINESS_CONFIRMATION_CAPACITY");
     if (expected_step && *expected_step != task_step_)
         throw std::runtime_error("BUSINESS_TASK_STEP_MISMATCH");
-    if (event == "special_dialogue_prepared") {
+    if (event == "golden_started") {
+        if (inn_payment_pending_ || featured_visit_.summary().at("active").get<bool>())
+            throw std::runtime_error("GOLDEN_SIDE_EFFECT_PENDING");
+        const auto now = clock_->now();
+        if (lap_started_ && now < *lap_started_) throw std::runtime_error("WVD_CLOCK_MOVED_BACKWARD");
+        golden_chest_.start(unit_index_, featured_visit_.summary().at("visits_completed").get<std::size_t>());
+        if (lap_started_) total_seconds_ += std::chrono::duration<double>(now - *lap_started_).count();
+        lap_started_ = now;
+        ++dungeons_;
+    } else if (event == "golden_leap_prepared") {
+        golden_chest_.prepare_leap(unit_index_);
+    } else if (event.starts_with("golden_")) {
+        using Phase = quests::GoldenChestCycle::Phase;
+        const std::map<std::string, Phase> events{{"golden_leaped", Phase::Leap}, {"golden_travelled", Phase::Travel},
+            {"golden_requested", Phase::Request}, {"golden_entered", Phase::Enter}, {"golden_trap_completed", Phase::Trap},
+            {"golden_route_completed", Phase::Route}, {"golden_completed", Phase::Exit}};
+        const auto found = events.find(event);
+        if (found == events.end()) throw std::runtime_error("GOLDEN_EVENT_INVALID");
+        golden_chest_.advance(found->second, unit_index_, featured_visit_.summary().at("visits_completed").get<std::size_t>(), task_step_);
+    } else if (event == "featured_visit_started") {
+        if (inn_payment_pending_) throw std::runtime_error("FEATURED_VISIT_PAYMENT_PENDING");
+        featured_visit_.start();
+        inn_rest_completed_ = false;
+        ++supply_cycle_;
+    } else if (event == "featured_visit_completed") {
+        featured_visit_.finish(inn_rest_completed_ && !inn_payment_pending_);
+    } else if (event == "featured_request_prepared") {
+        featured_visit_.prepare();
+    } else if (event == "featured_request_completed") {
+        featured_visit_.selected();
+    } else if (event == "special_dialogue_prepared") {
         if (special_dialogue_pending_) throw std::runtime_error("SPECIAL_DIALOGUE_ALREADY_PENDING");
         special_dialogue_pending_ = true;
         ++special_dialogue_sequence_;
@@ -658,6 +692,8 @@ J WvdRunState::summarize() const {
             {"special_dialogue_pending", special_dialogue_pending_},
             {"special_dialogue_sequence", special_dialogue_sequence_},
             {"special_dialogues_completed", special_dialogues_completed_},
+            {"featured_visit", featured_visit_.summary()},
+            {"golden_chest", golden_chest_.summary(unit_index_)},
             {"bounty_reveals", bounty_reveals_},
             {"sleep", sleep_.summary(unit_index_)},
             {"bounty_cycle", bounty_cycle_.summary(unit_index_, bounty_reports_)},

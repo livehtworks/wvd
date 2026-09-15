@@ -3122,17 +3122,22 @@
         "M4-TASK-SSC-goldenchest"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "TYPED_PLAN_DATA",
+      "implementation_extent": "FINITE_GOLDEN_CHEST_PENDING_VALIDATION",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "new_entry": null,
+      "new_entry": "tasks::golden_chest_cycle",
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
-        "native/games/wvd/tasks/task_plan.cpp"
+        "native/games/wvd/tasks/task_plan.cpp",
+        "native/games/wvd/tasks/golden_chest.cpp",
+        "native/games/wvd/quests/golden_chest.hpp",
+        "native/games/wvd/tasks/featured_request.cpp",
+        "native/games/wvd/quests/featured_visit.hpp",
+        "native/games/wvd/recovery/dialogue.cpp"
       ],
       "source_fields": [
         "questName",
@@ -3146,12 +3151,13 @@
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
       "blockers": [
-        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "BUSINESS_ACTIONS_NOT_IMPLEMENTED",
-        "SPECIAL_CASE_NOT_IMPLEMENTED"
+        "CURRENT_IMPLEMENTATION_NOT_BUILT_OR_VERIFIED",
+        "FULL_TASK_SUCCESS_FAILURE_STOP_RECOVERY_MATRIX_PENDING",
+        "CONFIG_AND_MOD_MATRIX_PENDING"
       ],
       "plan_data_status": "PASS",
-      "plan_evidence": "../m4-plan-validation.md"
+      "plan_evidence": "../m4-plan-validation.md",
+      "implementation_evidence": "../m4-golden-chest-validation.md"
     },
     {
       "task_id": "jier",
