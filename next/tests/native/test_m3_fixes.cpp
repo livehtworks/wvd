@@ -73,6 +73,9 @@ int main(int argc, char **argv) {
                 const auto now = start + std::chrono::seconds{i};
                 const auto actual = window.observe(image, now);
                 require(actual.samples == i + 1, "UNKNOWN_SAMPLE_COUNT_INVALID");
+                const auto read_only = window.latest();
+                require(read_only.samples == actual.samples && !read_only.sampled && !read_only.evaluated,
+                        "UNKNOWN_READ_ADVANCED_SAMPLE");
                 cv::Mat gray, difference;
                 cv::cvtColor(image, gray, cv::COLOR_BGR2GRAY);
                 if (!previous.empty()) {

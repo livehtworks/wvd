@@ -16,6 +16,7 @@ struct UnknownSample {
 class UnknownWindow {
   public:
     UnknownSample observe(const cv::Mat &bgr, std::chrono::steady_clock::time_point now);
+    UnknownSample latest() const;
     void clear();
 
   private:

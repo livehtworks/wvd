@@ -38,6 +38,11 @@ UnknownSample UnknownWindow::observe(const cv::Mat &bgr, std::chrono::steady_clo
     last_ = {true, evaluated, evaluated && total <= .15, window_size_, total, samples_};
     return last_;
 }
+UnknownSample UnknownWindow::latest() const {
+    auto result = last_;
+    result.sampled = result.evaluated = false;
+    return result;
+}
 void UnknownWindow::clear() {
     previous_.release();
     differences_.fill(0);

@@ -344,7 +344,8 @@ J evaluate_uncached(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels
                 return result;
             }
         }
-        const auto sample = window.observe(image, std::chrono::steady_clock::now());
+        // 只有冻结观察入口推进窗口。上限分支读同一轮已采样计数，不能再采一帧跳过第十帧结果。
+        const auto sample = mode == "unknown_frozen" ? window.observe(image, std::chrono::steady_clock::now()) : window.latest();
         // 旧counter从0起，在本次检查末尾比较>=上限；因此上限N允许前N次未知观察。
         const bool exhausted = max_tries < 0 || sample.samples > static_cast<std::uint64_t>(max_tries);
         const bool hit = mode == "unknown_exhausted" ? exhausted : sample.frozen;
