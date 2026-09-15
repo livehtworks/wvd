@@ -35,7 +35,7 @@ class WorkflowTests(unittest.TestCase):
         folder = self.root / name
         bundle = folder / "bundle"
         (bundle / "image").mkdir(parents=True)
-        resource_kind = "dungeon-route" if options.get("workflow") == "fortress-trap" else "iteration" if options.get("workflow") in ("giant", "dark-light", "mining", "manual-separation", "scorpion") else options.get("workflow")
+        resource_kind = "dungeon-route" if options.get("workflow") == "fortress-trap" else "iteration" if options.get("workflow") in ("giant", "dark-light", "mining", "manual-separation", "scorpion", "fishing-cycle") else options.get("workflow")
         if resource_kind in ("bounty-visit", "sleep-batch", "fishing-cast", "fishing-reward", "fishing-round", "fishing-seek"): resource_kind = "common"
         names = ["worldmapflag", "City_RoyalCityLuknalia", "Inn", "Stay", "Economy", "royalsuite", "OK"]
         if resource_kind in ("departure", "iteration"):
@@ -189,6 +189,7 @@ class WorkflowTests(unittest.TestCase):
                                         "recover": 750, "departure": 200, "heal": 260,
                                         "chest": 920 if options.get("quick") else 620,
                                         "fishing-round": 720, "fishing-cast": 110, "fishing-reward": 80, "fishing-seek": 200,
+                                        "fishing-cycle": (route_budget + 520) * options.get("normal_units", 1),
                                         "scorpion": (route_budget + 500) * (4 if options.get("hands") else 3), "city-travel": 140, "sleep-batch": 1620 * options.get("normal_units", 1), "bounty-visit": 200 * options.get("normal_units", 1), "manual-separation": 3620, "time-leap": 200, "mining": mining_watchdog, "common": 140, "iteration": (route_budget + 380) * options.get("normal_units", 1)}.get(options.get("workflow"), 90))
         self.assertEqual(digest(exe), before_hash)
         (folder / "execution.json").write_text(json.dumps({"exe_sha256": before_hash, "exit": result.returncode}), encoding="utf-8")
@@ -2009,6 +2010,92 @@ class WorkflowTests(unittest.TestCase):
         r = self.execute("fishing-cast-scene-changed", [frames[0], {"Inn": (400, 700)}], commands[:1], **self.fishing_cast_options())
         self.assertEqual(r["snapshot"]["state"], "Failed", r)
         self.assertEqual(r["backend_calls"], 1)
+
+    def fishing_cycle_options(self, **extra):
+        options = self.fishing_reward_options()
+        options.update(workflow="fishing-cycle", profile=self.wall_profile(False),
+            quest_catalog=str(ROOT / "packs/wvd/parameters/legacy-quests.json"),
+            aliases={"returntoTown.png": "returntotown.png"})
+        options["extra_images"] += ["fishing/nobait", "fishing/8bait", "fishing/bobber", "fishing/quit",
+            "fishing/startfishing", "fishing/iconbait", "fishing/baitbox", "itemList", "transfer",
+            "whowillyougiveitto", "DH", "DH-R6"]
+        options.update(extra)
+        return options
+
+    @staticmethod
+    def fishing_supply_scenario():
+        frames = [{"fishing/cast": (400, 1300), "fishing/nobait": (550, 1490), "fishing/quit": (100, 1400)}]
+        commands = []
+        def advance(command, page):
+            commands.append(command)
+            frames.append(page)
+        def click(x, y, page):
+            advance(dict(kind=0, x=x, y=y), page)
+        def point(x, y):
+            swipe = dict(kind=1, x=700, y=250, x2=100, y2=1200, duration=400)
+            advance(swipe.copy(), {"mapFlag": (100, 100)})
+            click(x, y, {"mapFlag": (100, 100)})
+            click(136, 1431, {"dungFlag": (50, 150)})
+            reached = {"mapFlag": (100, 100), "cursor_0": (x - 20, y - 12)}
+            click(777, 150, reached)
+            advance(swipe.copy(), reached)
+        click(120, 1412, {"dungFlag": (50, 150)})
+        click(777, 150, {"mapFlag": (100, 100)})
+        point(818, 928)
+        click(860, 1150, {"itemList": (400, 700)})
+        click(135, 1294, {"fishing/iconbait": (100, 700)})
+        box = {"whowillyougiveitto": (300, 200), "fishing/baitbox": (400, 700)}
+        click(759, 712, box)
+        for _ in range(70):
+            click(420, 712, box.copy())
+        advance(dict(kind=5, key=4), {"Inn": (400, 700), "DH": (200, 500)})
+        boundaries = [len(commands)]
+        click(220, 512, {"DH-R6": (400, 700)})
+        click(420, 712, {"GotoDung": (400, 700)})
+        click(420, 712, {"mapFlag": (100, 100)})
+        point(339, 555)
+        click(120, 112, {"dungFlag": (50, 150), "fishing/startfishing": (400, 700)})
+        click(420, 712, {"fishing/cast": (400, 1300), "fishing/8bait": (550, 1490)})
+        boundaries.append(len(commands))
+        return frames, commands, boundaries
+
+    def test_fishing_supply_returns_to_water_then_catches_in_next_unit(self):
+        frames, commands, boundaries = self.fishing_supply_scenario()
+        cast_frames, cast_commands = self.fishing_cast_scenario()
+        frames.extend(cast_frames[1:])
+        commands.extend(cast_commands)
+        frames.extend([{"fishing/CloseFishInfo": (400, 1400), "fishing/size_large": (300, 700), "fishing/三文鱼": (300, 1150)},
+            {"fishing/cast": (400, 1300), "fishing/8bait": (550, 1490)}])
+        commands.extend([dict(kind=1, x=450, y=700, x2=450, y2=50, duration=100), dict(kind=0, x=420, y=1412)])
+        r = self.execute("fishing-supply-full", frames, commands, **self.fishing_cycle_options(normal_units=3))
+        self.assertEqual(boundaries, [81, 91])
+        self.assertEqual(r["snapshot"]["terminal"], "Completed", r)
+        self.assertEqual(r["commands_consumed"], 101)
+        self.assertEqual(len(r["snapshot"]["sessions"]), 3)
+        fish = r["snapshot"]["business"]["fishing"]
+        self.assertEqual(fish["transfer_inputs_confirmed"], 70)
+        self.assertEqual(fish["refill_trips_completed"], 1)
+        self.assertEqual(fish["refill_phase"], 0)
+        self.assertEqual(fish["caught"], 1)
+        self.assertEqual(fish["fishinfo"]["大"]["三文鱼"], 1)
+
+    def test_fishing_supply_rejected_transfer_preserves_intent_and_stops(self):
+        frames, commands, _ = self.fishing_supply_scenario()
+        # 第一笔实际转交是第11次输入；拒绝发生后不得继续后面的69次。
+        commands[10]["reject"] = True
+        r = self.execute("fishing-supply-rejected", frames[:12], commands[:11], **self.fishing_cycle_options())
+        self.assertEqual(r["snapshot"]["terminal"], "Failed", r)
+        self.assertEqual(r["commands_consumed"], 11)
+        fish = r["snapshot"]["business"]["fishing"]
+        self.assertTrue(fish["transfer_pending"])
+        self.assertEqual(fish["transfer_inputs_confirmed"], 0)
+        self.assertEqual(fish["refill_trips_completed"], 0)
+
+    def test_fishing_supply_unknown_entry_does_not_touch_inventory(self):
+        r = self.execute("fishing-supply-unknown", [{}], [], **self.fishing_cycle_options())
+        self.assertEqual(r["snapshot"]["terminal"], "Interrupted", r)
+        self.assertEqual(r["commands_consumed"], 0)
+        self.assertEqual(r["snapshot"]["business"]["fishing"]["refill_phase"], 0)
 
     def scorpion_options(self, **extra):
         profile = self.wall_profile(False)

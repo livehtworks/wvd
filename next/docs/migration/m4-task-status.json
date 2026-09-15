@@ -3504,17 +3504,20 @@
         "M4-TASK-fishing"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "TYPED_PLAN_DATA",
+      "implementation_extent": "FINITE_FISHING_AND_SUPPLY_PARTIAL_VALIDATION",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "new_entry": null,
+      "new_entry": "tasks::fishing_cycle",
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
-        "native/games/wvd/tasks/task_plan.cpp"
+        "native/games/wvd/tasks/task_plan.cpp",
+        "native/games/wvd/tasks/fishing.cpp",
+        "native/games/wvd/tasks/fishing_supply.cpp",
+        "native/games/wvd/fishing/progress.cpp"
       ],
       "source_fields": [
         "questName",
@@ -3524,14 +3527,14 @@
         "_TYPE",
         "_TIPS"
       ],
-      "success_evidence": [],
-      "failure_stop_recovery_evidence": [],
+      "success_evidence": ["../m4-fishing-validation.md"],
+      "failure_stop_recovery_evidence": ["../m4-fishing-validation.md"],
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
       "blockers": [
-        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "BUSINESS_ACTIONS_NOT_IMPLEMENTED",
-        "SPECIAL_CASE_NOT_IMPLEMENTED"
+        "FISHING_SUPPLY_WORKFLOW_VALIDATION_PENDING",
+        "FISHING_TIMEOUT_CONTINUATION_RECOVERY_MATRIX_PENDING",
+        "FULL_TASK_ACCEPTANCE_PENDING"
       ],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md"
@@ -3546,17 +3549,20 @@
         "M4-TASK-fishing2"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "TYPED_PLAN_DATA",
+      "implementation_extent": "FINITE_FISHING_AND_SUPPLY_PARTIAL_VALIDATION",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "new_entry": null,
+      "new_entry": "tasks::fishing_cycle",
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
-        "native/games/wvd/tasks/task_plan.cpp"
+        "native/games/wvd/tasks/task_plan.cpp",
+        "native/games/wvd/tasks/fishing.cpp",
+        "native/games/wvd/tasks/fishing_supply.cpp",
+        "native/games/wvd/fishing/progress.cpp"
       ],
       "source_fields": [
         "questName",
@@ -3566,14 +3572,14 @@
         "_TYPE",
         "_TIPS"
       ],
-      "success_evidence": [],
-      "failure_stop_recovery_evidence": [],
+      "success_evidence": ["../m4-fishing-validation.md"],
+      "failure_stop_recovery_evidence": ["../m4-fishing-validation.md"],
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
       "blockers": [
-        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "BUSINESS_ACTIONS_NOT_IMPLEMENTED",
-        "SPECIAL_CASE_NOT_IMPLEMENTED"
+        "FISHING_SUPPLY_WORKFLOW_VALIDATION_PENDING",
+        "FISHING_TIMEOUT_CONTINUATION_RECOVERY_MATRIX_PENDING",
+        "FULL_TASK_ACCEPTANCE_PENDING"
       ],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md"

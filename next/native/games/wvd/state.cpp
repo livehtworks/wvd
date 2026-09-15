@@ -292,6 +292,12 @@ std::string WvdRunState::confirmation_id(const std::string &operation, const std
         id += ":cast:" + std::to_string(fishing_.cast_sequence(event == "fishing_wait_started"));
     if (event == "fishing_cast_prepared" || event == "fishing_cast_completed")
         id += ":cast:" + std::to_string(fishing_.cast_intent_sequence(event == "fishing_cast_prepared"));
+    if (event == "fishing_bait_requested" || event == "fishing_supplies_entered" || event == "fishing_transfer_prepared" ||
+        event == "fishing_transferred" || event == "fishing_supplies_finished" || event == "fishing_supplies_returned" || event == "fishing_refilled") {
+        id += ":refill:" + std::to_string(fishing_.refill_sequence(event == "fishing_bait_requested"));
+        if (event == "fishing_transfer_prepared" || event == "fishing_transferred")
+            id += ":transfer:" + std::to_string(fishing_.transfer_sequence(event == "fishing_transfer_prepared"));
+    }
     if (event == "bounty_report_prepared" || event == "bounty_report_completed")
         id += ":report:" + std::to_string(bounty_reports_ + (event == "bounty_report_prepared" || bounty_report_pending_ ? 1 : 0));
     if (event == "sleep_visit_started" || event == "sleep_visit_completed")
@@ -324,7 +330,21 @@ bool WvdRunState::confirm_event(const std::string &operation, const std::string 
         throw std::runtime_error("BUSINESS_CONFIRMATION_CAPACITY");
     if (expected_step && *expected_step != task_step_)
         throw std::runtime_error("BUSINESS_TASK_STEP_MISMATCH");
-    if (event == "fishing_cast_prepared") {
+    if (event == "fishing_bait_requested") {
+        fishing_.request_bait();
+    } else if (event == "fishing_supplies_entered") {
+        fishing_.supplies_entered();
+    } else if (event == "fishing_transfer_prepared") {
+        fishing_.prepare_transfer();
+    } else if (event == "fishing_transferred") {
+        fishing_.transferred();
+    } else if (event == "fishing_supplies_finished") {
+        fishing_.supplies_finished();
+    } else if (event == "fishing_supplies_returned") {
+        fishing_.supplies_returned();
+    } else if (event == "fishing_refilled") {
+        fishing_.refilled();
+    } else if (event == "fishing_cast_prepared") {
         fishing_.prepare_cast();
     } else if (event == "fishing_cast_completed") {
         fishing_.cast_completed(clock_->now());

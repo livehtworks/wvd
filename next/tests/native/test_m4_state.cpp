@@ -4,6 +4,7 @@
 #include "games/wvd/tasks/bounty_cycle.hpp"
 #include "games/wvd/tasks/giant.hpp"
 #include "games/wvd/fishing/unknown_window.hpp"
+#include "games/wvd/tasks/fishing_supply.hpp"
 #include "games/wvd/vision/recognizers.hpp"
 #include "storage/legacy_import.hpp"
 #include "storage/profile_store.hpp"
@@ -141,6 +142,60 @@ J fishing_contract(const J &profile) {
         catch (const std::exception &e) { rejected = std::string(e.what()) == "COMPILE_SWIPE_DURATION_INVALID"; }
         require(rejected, "FISHING_INVALID_DURATION_ACCEPTED");
     }
+    return state.summary().at("fishing");
+}
+J fishing_supply_contract(const J &profile) {
+    auto clock = std::make_shared<TestClock>();
+    games::WvdRunState state(profile, {"fishing-supply", 1, clock});
+    std::uint64_t generation = 1;
+    state.enter_segment(contracts::SegmentBoundary::Initial, generation, 0);
+    const auto emit = [&](const std::string &event) {
+        const auto id = state.confirmation_id(event, event);
+        require(state.confirm_event(id, event, generation, 1), "FISHING_SUPPLY_CONFIRMATION_MISSING");
+        require(!state.confirm_event(id, event, generation, 2), "FISHING_SUPPLY_REPLAYED");
+    };
+    const auto invalid = [&](const std::string &event) {
+        bool rejected = false;
+        try { state.confirm_event("invalid-" + event, event, generation, 1); }
+        catch (const std::exception &) { rejected = true; }
+        require(rejected, "FISHING_SUPPLY_OUT_OF_ORDER_ACCEPTED");
+    };
+    for (unsigned trip = 0; trip < 2; ++trip) {
+        emit("fishing_bait_requested");
+        invalid("fishing_refilled");
+        emit("fishing_supplies_entered");
+        invalid("fishing_transferred");
+        invalid("fishing_supplies_finished");
+        for (unsigned i = 0; i < 70; ++i) {
+            emit("fishing_transfer_prepared");
+            require(state.summary().at("fishing").at("transfer_inputs_confirmed") == i, "FISHING_COUNT_BEFORE_CONFIRMATION");
+            if (i == 35) {
+                state.enter_segment(contracts::SegmentBoundary::Recovery, ++generation, 0);
+                require(state.summary().at("fishing").at("transfer_pending").get<bool>(), "FISHING_RECOVERY_LOST_TRANSFER");
+                bool rejected = false;
+                try { state.confirm_event("old-generation", "fishing_transferred", generation - 1, 1); }
+                catch (const std::exception &e) { rejected = std::string(e.what()) == "BUSINESS_CONFIRMATION_IDENTITY_INVALID"; }
+                require(rejected, "FISHING_TRANSFER_STALE_GENERATION_ACCEPTED");
+            }
+            emit("fishing_transferred");
+        }
+        invalid("fishing_transfer_prepared");
+        emit("fishing_supplies_finished");
+        invalid("fishing_refilled");
+        emit("fishing_supplies_returned");
+        require(state.summary().at("fishing").at("refill_trips_completed") == trip, "FISHING_REFILL_COUNTED_BEFORE_WATER");
+        emit("fishing_refilled");
+    }
+    for (std::size_t units : {std::size_t{0}, std::size_t{257}}) {
+        runtime::RunDefinition run;
+        bool rejected = false;
+        try { games::tasks::configure_fishing_units(run, units); }
+        catch (const std::exception &e) { rejected = std::string(e.what()) == "FISHING_UNIT_BUDGET_INVALID"; }
+        require(rejected, "FISHING_INVALID_UNIT_BUDGET_ACCEPTED");
+    }
+    runtime::RunDefinition run;
+    games::tasks::configure_fishing_units(run, 3);
+    require(run.max_business_units == 3 && run.continuation_units.size() == 2, "FISHING_UNITS_NOT_CONNECTED");
     return state.summary().at("fishing");
 }
 J bounty_cycle_contract(const J &profile) {
@@ -876,6 +931,11 @@ int main(int argc, char **argv) {
             return 0;
         }
         auto profile = importer.parse(config.at("source")).values;
+        if (config.value("fishing_supply_contract", false)) {
+            const J output{{"fishing_supply_contract", fishing_supply_contract(profile)}, {"backend_inputs", 0}};
+            std::ofstream(maafw::path_from_utf8(config.at("output"))) << output.dump(2);
+            return 0;
+        }
         if (config.value("fishing_contract", false)) {
             const J output{{"fishing_contract", fishing_contract(profile)}, {"backend_inputs", 0}};
             std::ofstream(maafw::path_from_utf8(config.at("output"))) << output.dump(2);

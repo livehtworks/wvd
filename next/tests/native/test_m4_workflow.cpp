@@ -32,6 +32,7 @@
 #include "games/wvd/tasks/sleep_visits.hpp"
 #include "games/wvd/tasks/bounty_cycle.hpp"
 #include "games/wvd/tasks/fishing.hpp"
+#include "games/wvd/tasks/fishing_supply.hpp"
 #include "games/wvd/vision/recognizers.hpp"
 #include "platform/windows/file_digest.hpp"
 #include <iostream>
@@ -230,16 +231,20 @@ int main(int argc, char **argv) {
                 return games::recovery::revive_after_defeat();
             if (kind == "common")
                 return games::recovery::clear_common_screens(config.value("allow_download", true));
-            if (kind == "fortress-trap" || kind == "giant" || kind == "dark-light" || kind == "mining" || kind == "manual-separation" || kind == "scorpion") {
+            if (kind == "fortress-trap" || kind == "giant" || kind == "dark-light" || kind == "mining" || kind == "manual-separation" || kind == "scorpion" || kind == "fishing-cycle") {
                 nlohmann::ordered_json source;
                 std::ifstream(maafw::path_from_utf8(config.at("quest_catalog"))) >> source;
                 games::WvdQuestCatalog catalog(source);
-                const auto &task = catalog.at(kind == "scorpion" ? (config.value("hands", false) ? "Scorpionesses_plus_6_hands" : "Scorpionesses") : kind == "manual-separation" ? "manualSepDemon" : kind == "mining" ? "FFXI-Org" : kind == "dark-light" ? "darkLight" : kind == "giant" ? "gaintKiller" : "fortress-B8F_trap");
+                const auto &task = catalog.at(kind == "fishing-cycle" ? (config.value("far", false) ? "fishing2" : "fishing") : kind == "scorpion" ? (config.value("hands", false) ? "Scorpionesses_plus_6_hands" : "Scorpionesses") : kind == "manual-separation" ? "manualSepDemon" : kind == "mining" ? "FFXI-Org" : kind == "dark-light" ? "darkLight" : kind == "giant" ? "gaintKiller" : "fortress-B8F_trap");
                 std::set<std::string> images;
                 for (const auto &file : config.at("files")) {
                     const auto path = file.at("path").get<std::string>();
                     if (path.starts_with("image/"))
                         images.insert(path.substr(6));
+                }
+                if (kind == "fishing-cycle") {
+                    task_plan = games::WvdTaskPlan::parse(task).inspect();
+                    return games::tasks::fishing_cycle(task, profile, images, config.value("allow_download", true));
                 }
                 if (kind == "scorpion") {
                     task_plan = games::tasks::scorpion_plan(task).inspect();
@@ -563,6 +568,8 @@ int main(int argc, char **argv) {
             games::tasks::configure_manual_separation_units(definition);
         else if (config.at("workflow") == "scorpion")
             games::tasks::configure_scorpion_units(definition, config.value("hands", false));
+        else if (config.at("workflow") == "fishing-cycle")
+            games::tasks::configure_fishing_units(definition, units);
         else {
             definition.max_business_units = units;
             for (unsigned i = 1; i < units; ++i)

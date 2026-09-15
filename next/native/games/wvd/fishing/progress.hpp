@@ -17,6 +17,15 @@ class Progress {
     void begin_wait(TimePoint now);
     void prepare_cast();
     void cast_completed(TimePoint now);
+    void request_bait();
+    void supplies_entered();
+    void prepare_transfer();
+    void transferred();
+    void supplies_finished();
+    void supplies_returned();
+    void refilled();
+    std::size_t refill_sequence(bool next) const { return refill_sequence_ + (next && refill_phase_ == 0 ? 1 : 0); }
+    std::size_t transfer_sequence(bool next) const { return transfer_count_ + (next || transfer_pending_ ? 1 : 0); }
     void failed(TimePoint now);
     bool timed_out(TimePoint now) const;
     std::size_t cast_sequence(bool next) const { return cast_sequence_ + (next && !cast_started_ ? 1 : 0); }
@@ -29,6 +38,10 @@ class Progress {
     std::size_t cast_sequence_{}, failed_{};
     std::optional<TimePoint> cast_started_;
     bool casting_pending_{};
+    // 0钓鱼、1去物品页、2转交、3退出物品页、4返回钓点。不是另一个执行器。
+    unsigned refill_phase_{};
+    std::size_t refill_sequence_{}, refill_trips_{}, transfer_count_{};
+    bool transfer_pending_{};
     std::array<std::size_t, 25> counts_{};
 };
 }

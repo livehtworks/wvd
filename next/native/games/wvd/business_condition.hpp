@@ -18,6 +18,7 @@ inline bool business_condition(const nlohmann::json &summary, const nlohmann::js
         "/fishing/reward_pending",
         "/fishing/waiting", "/fishing/timed_out",
         "/fishing/casting_pending",
+        "/fishing/refill_phase", "/fishing/transfer_inputs_confirmed", "/fishing/transfer_pending",
         "/sleep/batch_complete", "/sleep/visit_active",
         "/bounty_cycle/active", "/bounty_cycle/phase", "/bounty_cycle/unit_matches",
         "/bounty_cycle/rest_due", "/bounty_cycle/transfer_pending", "/bounty_cycle/reports_remaining",

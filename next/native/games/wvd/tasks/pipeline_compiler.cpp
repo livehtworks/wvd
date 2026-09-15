@@ -573,6 +573,8 @@ void PipelineCompiler::confirm(const std::string &name, const std::string &opera
                                       "fishing_reward_prepared", "fishing_reward_completed",
                                       "fishing_wait_started", "fishing_wait_failed",
                                       "fishing_cast_prepared", "fishing_cast_completed",
+                                      "fishing_bait_requested", "fishing_supplies_entered", "fishing_transfer_prepared", "fishing_transferred",
+                                      "fishing_supplies_finished", "fishing_supplies_returned", "fishing_refilled",
                                       "sleep_visit_started", "sleep_visit_completed",
                                       "scorpion_started", "scorpion_hands_started", "bounty_leap_prepared", "bounty_leap_completed",
                                       "bounty_travel_prepared", "bounty_travel_completed", "bounty_cycle_revealed", "bounty_route_completed",

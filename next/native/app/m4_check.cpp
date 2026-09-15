@@ -11,6 +11,7 @@
 #include "games/wvd/tasks/mining.hpp"
 #include "games/wvd/tasks/manual_separation.hpp"
 #include "games/wvd/tasks/sleep_visits.hpp"
+#include "games/wvd/tasks/fishing_supply.hpp"
 #include "games/wvd/quests/sleep_visits.hpp"
 #include "games/wvd/tasks/bounty_cycle.hpp"
 #include "games/wvd/navigation/dungeon_entry.hpp"
@@ -106,7 +107,8 @@ int main(int argc, char **argv) {
                     if (task.type != (specials ? "quest" : "dungeon"))
                         continue;
                     const bool scorpion = task.id == "Scorpionesses" || task.id == "Scorpionesses_plus_6_hands";
-                    if (specials && !scorpion && task.id != "fortress-B8F_trap" && task.id != "gaintKiller" && task.id != "darkLight" && task.id != "FFXI-Org" && task.id != "manualSepDemon" && task.id != "lovesleep") {
+                    const bool fishing = task.id == "fishing" || task.id == "fishing2";
+                    if (specials && !scorpion && !fishing && task.id != "fortress-B8F_trap" && task.id != "gaintKiller" && task.id != "darkLight" && task.id != "FFXI-Org" && task.id != "manualSepDemon" && task.id != "lovesleep") {
                         result["unimplemented_specials"].push_back(task.id);
                         continue;
                     }
@@ -118,6 +120,7 @@ int main(int argc, char **argv) {
                             return games::navigation::enter_dungeon(plan);
                         }
                         if (scorpion) return games::tasks::scorpion_cycle(task, profile.values, images);
+                        if (fishing) return games::tasks::fishing_cycle(task, profile.values, images);
                         if (task.id == "lovesleep") return games::tasks::sleep_visits(task, profile.values);
                         if (task.id == "manualSepDemon") return games::tasks::manual_separation(task, profile.values, images);
                         if (task.id == "FFXI-Org") return games::tasks::mining_iteration(task, profile.values);

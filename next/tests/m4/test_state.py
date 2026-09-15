@@ -90,6 +90,15 @@ class StateTests(unittest.TestCase):
         self.assertEqual(fish["cast_sequence"], 3)
         self.assertEqual(sum(sum(group.values()) for group in fish["fishinfo"].values()), 24)
 
+    def test_fishing_two_refills_preserve_transfer_intent_and_order(self):
+        fish = self.run_case("fishing-supply-contract", fishing_supply_contract=True)["fishing_supply_contract"]
+        self.assertEqual(fish["refill_trips_completed"], 2)
+        self.assertEqual(fish["refill_sequence"], 2)
+        self.assertEqual(fish["transfer_inputs_confirmed"], 70)
+        self.assertFalse(fish["transfer_pending"])
+        self.assertEqual(fish["refill_phase"], 0)
+        self.assertEqual(fish["caught"], 0)
+
     def test_scorpion_two_cycles_preserve_routes_reports_and_rest_interval(self):
         results = self.run_case("bounty-cycle-contract", bounty_cycle_contract=True)["bounty_cycle_contract"]
         for hands, state in zip((False, True), results):

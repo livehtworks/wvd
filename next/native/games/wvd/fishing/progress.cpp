@@ -35,6 +35,39 @@ void Progress::cast_completed(TimePoint now) {
     casting_pending_ = false;
     cast_started_ = now;
 }
+void Progress::request_bait() {
+    if (refill_phase_ || pending_ || casting_pending_) throw std::runtime_error("FISHING_SIDE_EFFECT_PENDING");
+    refill_phase_ = 1;
+    ++refill_sequence_;
+    transfer_count_ = 0;
+    cast_started_.reset();
+}
+void Progress::supplies_entered() {
+    if (refill_phase_ != 1) throw std::runtime_error("FISHING_REFILL_PHASE_INVALID");
+    refill_phase_ = 2;
+}
+void Progress::prepare_transfer() {
+    if (refill_phase_ != 2 || transfer_pending_ || transfer_count_ >= 70) throw std::runtime_error("FISHING_TRANSFER_NOT_AVAILABLE");
+    transfer_pending_ = true;
+}
+void Progress::transferred() {
+    if (refill_phase_ != 2 || !transfer_pending_ || transfer_count_ >= 70) throw std::runtime_error("FISHING_TRANSFER_NOT_PREPARED");
+    ++transfer_count_;
+    transfer_pending_ = false;
+}
+void Progress::supplies_finished() {
+    if (refill_phase_ != 2 || transfer_pending_ || transfer_count_ != 70) throw std::runtime_error("FISHING_TRANSFERS_INCOMPLETE");
+    refill_phase_ = 3;
+}
+void Progress::supplies_returned() {
+    if (refill_phase_ != 3 || transfer_pending_) throw std::runtime_error("FISHING_REFILL_PHASE_INVALID");
+    refill_phase_ = 4;
+}
+void Progress::refilled() {
+    if (refill_phase_ != 4 || transfer_pending_ || transfer_count_ != 70) throw std::runtime_error("FISHING_REFILL_NOT_CONFIRMED");
+    ++refill_trips_;
+    refill_phase_ = 0;
+}
 bool Progress::timed_out(TimePoint now) const {
     if (cast_started_ && now < *cast_started_) throw std::runtime_error("WVD_CLOCK_MOVED_BACKWARD");
     return cast_started_ && now - *cast_started_ > std::chrono::seconds{300};
@@ -52,6 +85,8 @@ nlohmann::json Progress::summary(TimePoint now) const {
     return {{"caught", caught_}, {"reward_pending", pending_.has_value()}, {"reward_sequence", sequence_},
         {"cast_sequence", cast_sequence_}, {"waiting", cast_started_.has_value()}, {"timed_out", timed_out(now)}, {"failed", failed_},
         {"casting_pending", casting_pending_},
+        {"refill_phase", refill_phase_}, {"refill_sequence", refill_sequence_}, {"refill_trips_completed", refill_trips_},
+        {"transfer_inputs_confirmed", transfer_count_}, {"transfer_pending", transfer_pending_},
         {"pending_index", pending_ ? nlohmann::json(*pending_) : nlohmann::json(nullptr)},
         {"unclassified_size", counts_.back()}, {"fishinfo", classified}};
 }
