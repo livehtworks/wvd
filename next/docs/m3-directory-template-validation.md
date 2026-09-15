@@ -23,3 +23,6 @@ M4离线检查CLI的 `prepare_pipeline_bundle` 请求可消费它；只准备派
 - CLI准备入口、派生资源身份与M2必要回归。
 
 当前实现与测试已写，尚待新构建。既有M3发现/清理与资源性能阻断保持，不重跑其有限窗口。
+
+首轮构建 `524e52d` 在SetEncoded的const指针处失败，未运行测试；沿用既有preflight做法，
+只复制单张编码图给固定C ABI，不使用const_cast暴露源lease。修正后再构建和执行。

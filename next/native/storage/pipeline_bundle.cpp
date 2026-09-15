@@ -51,7 +51,8 @@ void expand(J &value, const platform::BundleLease &source, J &expansions, unsign
                 const auto generic = entry.path().lexically_relative(source.root()).generic_u8string();
                 const std::string member(generic.begin(), generic.end());
                 source.require_member(member);
-                const auto &bytes = source.bytes(member);
+                // 固定C ABI要求可写数据指针；复制单张编码数据，不把源lease暴露为可写。
+                auto bytes = source.bytes(member);
                 auto image = maafw::image_buffer();
                 require(!bytes.empty() && MaaImageBufferSetEncoded(image.get(), bytes.data(), bytes.size()) &&
                     !MaaImageBufferIsEmpty(image.get()) && MaaImageBufferWidth(image.get()) > 0 &&
