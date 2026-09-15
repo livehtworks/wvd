@@ -3,6 +3,7 @@
 #include "games/wvd/navigation/world_map.hpp"
 #include "games/wvd/navigation/map_route.hpp"
 #include "games/wvd/navigation/auto_route.hpp"
+#include "games/wvd/navigation/time_leap.hpp"
 #include "games/wvd/navigation/dungeon_entry.hpp"
 #include "games/wvd/navigation/world_travel.hpp"
 #include "games/wvd/supply/party.hpp"
@@ -183,6 +184,9 @@ int main(int argc, char **argv) {
                 return games::navigation::enter_city(config.at("city"));
             if (kind == "inn")
                 return games::supply::rest_at_inn(config.value("royal", false));
+            if (kind == "time-leap")
+                return games::navigation::time_leap_without_causality(config.at("leap_target"),
+                    config.value("leap_chapter", "cursedwheel_impregnableFortress"), config.value("allow_download", true));
             if (kind == "inn-tracked") {
                 using C = games::tasks::PipelineCompiler;
                 C graph("fixture.tracked_inn");

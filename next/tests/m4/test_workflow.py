@@ -62,6 +62,10 @@ class WorkflowTests(unittest.TestCase):
                       "combatActive", "combatActive_2", "combatActive_3", "combatActive_4"]
         if resource_kind == "travel":
             names += ["openworldmap", "intoWorldMap", "dungFlag"]
+        if resource_kind == "time-leap":
+            names += ["cursedWheelTitle", "cursedWheel", "cursedWheelTapRight", "leap", "ruins", "startdownload",
+                      "dungFlag", "mapFlag", "EdgeOfTown", "returnText", "returntotown", "openworldmap",
+                      options.get("leap_chapter", "cursedwheel_impregnableFortress"), options["leap_target"]]
         if resource_kind in ("party", "party-rest"):
             names += ["guild", "Edit", "PartyManagement", "PartyManagementTitle", "AssembleParty", "partyBlue"]
         if resource_kind in ("auto-route", "entry"):
@@ -179,7 +183,7 @@ class WorkflowTests(unittest.TestCase):
                                         "giant": (route_budget + 500) * options.get("normal_units", 1),
                                         "recover": 750, "departure": 200, "heal": 260,
                                         "chest": 920 if options.get("quick") else 620,
-                                        "mining": 920, "common": 140, "iteration": (route_budget + 380) * options.get("normal_units", 1)}.get(options.get("workflow"), 90))
+                                        "time-leap": 200, "mining": 920, "common": 140, "iteration": (route_budget + 380) * options.get("normal_units", 1)}.get(options.get("workflow"), 90))
         self.assertEqual(digest(exe), before_hash)
         (folder / "execution.json").write_text(json.dumps({"exe_sha256": before_hash, "exit": result.returncode}), encoding="utf-8")
         self.assertEqual(result.returncode, 0, (folder / "native.log").read_text(encoding="utf-8", errors="replace")[-3000:])
@@ -1792,6 +1796,66 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(r["snapshot"]["business"]["inn_rests"], 1)
         self.assertFalse(r["snapshot"]["business"]["mining"]["refill_pending"])
         self.assertEqual(r["snapshot"]["business"]["mining"]["completed_cycles"], 1)
+
+    def test_time_leap_visible_target_uses_fast_path(self):
+        r = self.execute("time-leap-fast", [{"cursedWheelTitle": (200, 100), "BeautifulOre": (300, 700)},
+            {"leap": (400, 700)}, {"Inn": (400, 700)}],
+            [dict(kind=0, x=320, y=712), dict(kind=0, x=420, y=712)],
+            workflow="time-leap", leap_target="BeautifulOre", leap_chapter="cursedwheel_dhi")
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 2)
+        self.assertFalse(r["mismatch"])
+
+    def test_time_leap_reset_chapter_and_ordered_scrolling(self):
+        title = {"cursedWheelTitle": (200, 100)}
+        chapter = {**title, "cursedwheel_dhi": (300, 700)}
+        frames = [title] + [title] * 9 + [chapter, title] + [title] * 3
+        actions = [dict(kind=0, x=105, y=230)] * 10 + [dict(kind=0, x=320, y=712)]
+        actions += [dict(kind=1, x=450, y=1200, x2=450, y2=200, duration=400)] * 3
+        frames += [{**title, "BeautifulOre": (300, 700)}, {"leap": (400, 700)}, {"dungFlag": (50, 150)}]
+        actions += [dict(kind=1, x=50, y=1200, x2=50, y2=1300, duration=400),
+                    dict(kind=0, x=320, y=712), dict(kind=0, x=420, y=712)]
+        r = self.execute("time-leap-scroll", frames, actions, workflow="time-leap", leap_target="BeautifulOre",
+                         leap_chapter="cursedwheel_dhi")
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 17)
+        self.assertFalse(r["mismatch"])
+
+    def test_time_leap_stop_and_rejection_never_complete(self):
+        for stop in (False, True):
+            r = self.execute("time-leap-stop-" + str(stop),
+                [{"cursedWheelTitle": (200, 100), "BeautifulOre": (300, 700)}, {"leap": (400, 700)}],
+                [dict(kind=0, x=320, y=712, reject=not stop)], workflow="time-leap", leap_target="BeautifulOre",
+                leap_chapter="cursedwheel_dhi", stop_after_first=stop)
+            self.assertEqual(r["snapshot"]["state"], "UserStopped" if stop else "Failed", r)
+            self.assertEqual(r["backend_calls"], 1)
+            self.assertFalse(r["mismatch"])
+
+    def test_time_leap_unknown_after_click_and_unrelated_city_do_not_complete(self):
+        r = self.execute("time-leap-unknown-post", [{"cursedWheelTitle": (200, 100), "BeautifulOre": (300, 700)},
+            {"leap": (400, 700)}, {}], [dict(kind=0, x=320, y=712), dict(kind=0, x=420, y=712)],
+            workflow="time-leap", leap_target="BeautifulOre", leap_chapter="cursedwheel_dhi")
+        self.assertEqual(r["snapshot"]["state"], "Failed", r)
+        self.assertIn("POSTCONDITION_TIMEOUT", str(r["snapshot"]))
+        self.assertEqual(r["backend_calls"], 2)
+        self.assertFalse(r["mismatch"])
+        r = self.execute("time-leap-unrelated-city", [{"Inn": (400, 700)}], [],
+            workflow="time-leap", leap_target="BeautifulOre", leap_chapter="cursedwheel_dhi")
+        self.assertEqual(r["snapshot"]["state"], "Interrupted", r)
+        self.assertEqual(r["backend_calls"], 0)
+
+    def test_time_leap_download_respects_frozen_permission(self):
+        frames = [{"startdownload": (300, 920)}, {"cursedWheelTitle": (200, 100), "BeautifulOre": (300, 700)},
+                  {"leap": (400, 700)}, {"Inn": (400, 700)}]
+        for allowed in (False, True):
+            actions = [dict(kind=0, x=320, y=932), dict(kind=0, x=320, y=712), dict(kind=0, x=420, y=712)] if allowed else []
+            r = self.execute("time-leap-download-" + str(allowed), frames, actions,
+                workflow="time-leap", leap_target="BeautifulOre", leap_chapter="cursedwheel_dhi", allow_download=allowed)
+            self.assertEqual(r["snapshot"]["state"], "Completed" if allowed else "Interrupted", r)
+            self.assertEqual(r["backend_calls"], len(actions))
+            self.assertFalse(r["mismatch"])
+            if not allowed:
+                self.assertEqual(r["snapshot"]["sessions"][0]["reason"], "boot.download_permission_missing")
 
     def test_mining_eot_and_mark_navigation_reach_the_verified_site(self):
         frames, actions = self.mining_scenario()
