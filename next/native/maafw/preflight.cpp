@@ -38,10 +38,7 @@ void verify_file(const Bundle &bundle, const std::string &relative) {
                 "BUNDLE_LEASE_MISMATCH");
         return;
     }
-    const auto path = path_from_utf8(relative);
-    require(!path.empty() && !path.is_absolute() && !path.has_root_name(), "RESOURCE_PATH_INVALID");
-    for (const auto &part : path)
-        require(part != ".." && part != ".", "RESOURCE_PATH_INVALID");
+    const auto path = platform::BundleLease::checked_relative(relative);
     const auto root = std::filesystem::canonical(bundle.root);
     const auto resolved = std::filesystem::weakly_canonical(root / path);
     auto a = root.begin(), b = resolved.begin();
@@ -128,9 +125,7 @@ nlohmann::json validate_parameters(const Bundle &bundle, const RecognitionReques
     if (const auto *templ = std::get_if<TemplateParameters>(&request.parameters)) {
         require(std::isfinite(templ->threshold) && templ->threshold >= 0 && templ->threshold <= 1,
                 "THRESHOLD_INVALID");
-        const auto relative = path_from_utf8(templ->image);
-        require(!relative.empty() && !relative.is_absolute() && !relative.has_root_name(),
-                "RESOURCE_PATH_INVALID");
+        const auto relative = platform::BundleLease::checked_relative(templ->image);
         verify_file(bundle, "image/" + templ->image);
         require(std::filesystem::file_size(bundle.root / "image" / relative) <= 64 * 1024 * 1024,
                 "TEMPLATE_BYTES_INVALID");

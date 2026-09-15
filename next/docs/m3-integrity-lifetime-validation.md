@@ -26,6 +26,10 @@ MetadataQuery测试。全部文件操作仅限本例新建的资源副本和独�
 包内相对路径拼接。修正一使用has_root_path同时拒绝root_directory/root_name；不改manifest
 或降低测试断言。待复验，不把错误类型不正确的负例算PASS。
 
+同次修正审查另外两处预检：裸模板名称在拼接`image/`之前，以及无lease的文件预检，
+统一调用BundleLease::checked_relative，不再保留较弱的重复路径判断。增加SDK模板请求的
+无盘符根路径和ADS两个独立负例；是在首次修正复验前补齐调用链，不是复测失败后改断言。
+
 同构建M2的三个timeout方法通过（2.896秒，`m3-integrity-timeout-lifetime.log`）。
 新增资源锁断言分别随stop-timeout、release-timeout执行；原生输入阻塞和触点释放失败时
 全部快照成员都无法取得写句柄，真实静止后均可打开。不代表任意原生等待可被及时取消。

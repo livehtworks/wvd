@@ -193,6 +193,12 @@ class NativeRecognitionTests(unittest.TestCase):
             self.case(template="../../outside.png"), "RESOURCE_PATH_INVALID"
         )
 
+    def test_template_rooted_path_without_drive(self):
+        self.expect_error(self.case(template="/target.png"), "RESOURCE_PATH_INVALID")
+
+    def test_template_ads_path(self):
+        self.expect_error(self.case(template="target.png:stream"), "RESOURCE_PATH_INVALID")
+
     def test_manifest_mismatch(self):
         self.expect_error(self.case(mutate="hash"), "RESOURCE_HASH_MISMATCH")
 
