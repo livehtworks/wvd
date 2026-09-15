@@ -80,6 +80,9 @@
 
 ## Next M4 状态与任务数据
 
+- Windows合成图片按封存别名规范化后去重，例如 `returntoTown.png` 指向 `returntotown.png`；不能同时写仅大小写不同的文件后再声称两个成员均存在。生产资源闭包仍按精确manifest校验。
+- 固定OpenCV4.12的嵌套 `parallel_for_` 会将内层串行执行；含默认对话四路识别的复合模式不再放进外层两路并行白名单。此修正不能证明全部慢帧已归因，巨人专项两轮修正后仍保持阻断。
+
 - 完整迭代计划测试一次编译/校验/序列化 43 份图；普通提示子图增加后曾超过原 30 秒测试进程看护。该批次看护为 120 秒，保留全部逐项断言；它不是运行 Session 预算或性能验收阈值。超时原轮保留 ERROR，不当作业务失败或成功，见 m4-global-prompt-validation.md。
 - EventJournal 是有界窗口，result.json 中的事件列表不保证包含早期每一次输入。核对全程次数用 Run 总计与 sessions[].inputs，核对仍在窗口内的输入用 session_generation；旧结果缺逐代次计数时不得补零。冷启动首轮曾错误地要求窗口保留全部 8 次输入，见 m4-cold-start-validation.md。
 

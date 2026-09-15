@@ -161,6 +161,22 @@ class StateTests(unittest.TestCase):
         self.assertFalse(state["giant_cycle_active"])
         self.assertEqual(state["crashes"], 1)
 
+    def test_dark_light_timeout_boundary_and_recovery(self):
+        result = self.run_case("dark-light-contract")["direct"]
+        self.assertFalse(result["encounter_at_boundary"]["encounter_timed_out"])
+        self.assertTrue(result["encounter_after_boundary"]["encounter_timed_out"])
+        self.assertFalse(result["encounter_resumed"]["encounter_timed_out"])
+        self.assertEqual(result["encounter_resumed"]["combats"], 1)
+        self.assertTrue(result["encounter_resumed"]["healing_required"])
+        self.assertTrue(result["chest_after_boundary"]["encounter_timed_out"])
+        self.assertFalse(result["dark_light_recovered"]["encounter_timed_out"])
+        self.assertTrue(result["dark_light_recovered"]["dark_light_active"])
+        state = result["dark_light_contract"]
+        self.assertFalse(state["dark_light_active"])
+        self.assertFalse(state["need_initial_recover"])
+        self.assertEqual(state["dungeons"], 0)
+        self.assertEqual(state["inn_rests"], 0)
+
     def test_profile_lock_replace_failure_and_concurrent_cas(self):
         result = self.run_case("profile-storage", profile_storage=True)
         self.assertEqual(result["offline_connections"], 0)

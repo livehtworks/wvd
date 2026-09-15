@@ -261,6 +261,17 @@ J evaluate_uncached(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels
         result["action_eligible"] = false;
         return result;
     }
+    if (mode == "dark_light_post") {
+        check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");
+        for (const auto &probe : J::array({J{{"mode", "template"}, {"image", "darklight_lightIt"}},
+            J{{"mode", "boot_ready"}}, J{{"mode", "blocking_screen"}}})) {
+            const auto result = evaluate_impl(bundle, pixels, probe, bound, scope, cache, depth + 1, memo);
+            check(result.at("outcome") != "Error", "WVD_DARK_LIGHT_RECOGNITION_ERROR");
+            if (result.at("outcome") == "Hit")
+                return decision(true, allowed_rect, {{"stage", probe.value("image", probe.value("mode", ""))}}, false);
+        }
+        return decision(false, {}, {{"stage", "unknown"}});
+    }
     if (mode == "unknown_frozen") {
         check(!p.contains("roi") && !p.contains("preprocess") &&
             image.size() == cv::Size(900, 1600) &&
@@ -273,9 +284,16 @@ J evaluate_uncached(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels
         }
         auto &window = std::any_cast<UnknownWindow &>(found->second);
         // 先按已有分类识别正常页/覆盖层；已知静止页面不能成为“未知冻结”。
-        for (const auto &probe : J::array({J{{"mode", "boot_ready"}}, J{{"mode", "blocking_screen"}},
+        J probes = J::array({J{{"mode", "boot_ready"}}, J{{"mode", "blocking_screen"}},
             J{{"mode", "template"}, {"image", "trait"}}, J{{"mode", "template"}, {"image", "recover"}},
-            J{{"mode", "template"}, {"image", "spellskill/skillDetail"}}})) {
+            J{{"mode", "template"}, {"image", "spellskill/skillDetail"}}});
+        if (p.contains("extra_known")) {
+            check(p.at("extra_known").is_array() && p.at("extra_known").size() <= 16,
+                "WVD_UNKNOWN_KNOWN_LIST_INVALID");
+            for (const auto &probe : p.at("extra_known"))
+                probes.push_back(probe);
+        }
+        for (const auto &probe : probes) {
             const auto known = evaluate_impl(bundle, pixels, probe, bound, scope, cache, depth + 1, memo);
             check(known.at("outcome") != "Error", "WVD_UNKNOWN_RECOGNITION_ERROR");
             if (known.at("outcome") == "Hit") {

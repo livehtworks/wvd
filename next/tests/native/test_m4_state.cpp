@@ -82,6 +82,28 @@ J direct_contract(const J &profile) {
     J result;
     result["initial"] = state.summary();
     {
+        auto timer = std::make_shared<TestClock>();
+        auto configured = profile;
+        configured.update({{"RECOVER_WHEN_BEGINNING", true}, {"SKIP_COMBAT_RECOVER", false}});
+        games::WvdRunState dark(configured, {"dark-light", 1, timer});
+        dark.enter_segment(contracts::SegmentBoundary::Initial, 1, 0);
+        dark.confirm_event(dark.confirmation_id("darklight.enter", "dark_light_entered"), "dark_light_entered", 1, 1);
+        dark.observe_combat();
+        timer->milliseconds = 400000;
+        result["encounter_at_boundary"] = dark.summary();
+        timer->milliseconds = 400001;
+        result["encounter_after_boundary"] = dark.summary();
+        dark.resume_dungeon();
+        result["encounter_resumed"] = dark.summary();
+        dark.observe_chest();
+        timer->milliseconds = 800002;
+        result["chest_after_boundary"] = dark.summary();
+        dark.enter_segment(contracts::SegmentBoundary::LifecycleRecovery, 2, 0);
+        result["dark_light_recovered"] = dark.summary();
+        dark.confirm_event(dark.confirmation_id("darklight.leave", "dark_light_completed"), "dark_light_completed", 2, 2);
+        result["dark_light_contract"] = dark.summary();
+    }
+    {
         auto configured = profile;
         configured.update({{"ACTIVE_REST", false}, {"REST_INTERVEL", 1}});
         games::WvdRunState giant(configured, {"giant", 1, clock});

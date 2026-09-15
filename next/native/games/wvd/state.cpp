@@ -29,6 +29,16 @@ bool WvdRunState::giant_rest_due() const {
     // 先转无符号再加一，保留合法最大整数，不发生有符号溢出。
     return (dungeons_ - 1) % (static_cast<std::uint64_t>(interval) + 1) == 0;
 }
+bool WvdRunState::encounter_timed_out() const {
+    const auto now = clock_->now();
+    for (const auto &started : {combat_started_, chest_started_}) {
+        if (started && now < *started)
+            throw std::runtime_error("WVD_CLOCK_MOVED_BACKWARD");
+        if (started && now - *started > std::chrono::seconds{400})
+            return true;
+    }
+    return false;
+}
 void WvdRunState::on_segment(contracts::SegmentBoundary boundary, std::uint64_t generation,
                              std::size_t unit) {
     if (generation <= generation_)
@@ -282,7 +292,13 @@ bool WvdRunState::confirm_event(const std::string &operation, const std::string 
         throw std::runtime_error("BUSINESS_CONFIRMATION_CAPACITY");
     if (expected_step && *expected_step != task_step_)
         throw std::runtime_error("BUSINESS_TASK_STEP_MISMATCH");
-    if (event == "giant_cycle_started") {
+    if (event == "dark_light_entered") {
+        // 暗灯case不是StateDungeon入本，不触发初始恢复、计次或重置路线。
+        dark_light_active_ = true;
+        need_initial_recover_ = false;
+    } else if (event == "dark_light_completed") {
+        dark_light_active_ = false;
+    } else if (event == "giant_cycle_started") {
         if (giant_unit_ || inn_payment_pending_)
             throw std::runtime_error("GIANT_CYCLE_ALREADY_STARTED_OR_PAYMENT_PENDING");
         if (profile_.at("REST_INTERVEL").get<std::int64_t>() < 0)
@@ -474,6 +490,8 @@ J WvdRunState::summarize() const {
             {"giant_cycle_active", giant_unit_.has_value()},
             {"giant_cycles_completed", giant_cycles_completed_},
             {"giant_rest_due", giant_rest_due()},
+            {"dark_light_active", dark_light_active_},
+            {"encounter_timed_out", encounter_timed_out()},
             {"combats", combats_},
             {"chests", chests_},
             {"crashes", crashes_},

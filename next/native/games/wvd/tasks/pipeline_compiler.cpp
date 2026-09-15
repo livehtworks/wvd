@@ -22,6 +22,11 @@ void collect_images(const J &value, std::set<std::string> &images, std::set<std:
         // 常量隐式依赖在本次收集内只展开一次；显式 image/动态参数仍逐项收集。
         // 不缓存整份图或跨编译共享结果，validate 仍独立重算完整资源集合。
         const bool expand = expanded_modes.insert(mode).second;
+        if (expand && mode == "dark_light_post") {
+            images.insert("darklight_lightIt.png");
+            collect_images(J{{"mode", "boot_ready"}}, images, expanded_modes);
+            collect_images(J{{"mode", "blocking_screen"}}, images, expanded_modes);
+        }
         if (expand && mode == "unknown_frozen") {
             collect_images(J{{"mode", "boot_ready"}}, images, expanded_modes);
             collect_images(J{{"mode", "blocking_screen"}}, images, expanded_modes);
@@ -530,7 +535,8 @@ void PipelineCompiler::confirm(const std::string &name, const std::string &opera
                                       "party_death_observed", "party_death_cleared", "party_defeat_observed",
                                       "wall_turn_completed", "wall_left_completed", "wall_right_completed",
                                       "karma_observed", "karma_completed", "trap_cycle_started", "trap_cycle_completed",
-                                      "giant_cycle_started", "giant_route_completed", "giant_cycle_completed"};
+                                      "giant_cycle_started", "giant_route_completed", "giant_cycle_completed",
+                                      "dark_light_entered", "dark_light_completed"};
     require(events.contains(event) && !operation.empty() && operation.size() <= 128,
             "COMPILE_BUSINESS_EVENT_INVALID");
     require(step.is_null() || (step.is_number_integer() && step >= 0 && step <= 4096),

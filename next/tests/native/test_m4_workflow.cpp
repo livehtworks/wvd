@@ -24,6 +24,7 @@
 #include "games/wvd/tasks/dungeon_iteration.hpp"
 #include "games/wvd/tasks/fortress_trap.hpp"
 #include "games/wvd/tasks/giant.hpp"
+#include "games/wvd/tasks/dark_light.hpp"
 #include "games/wvd/vision/recognizers.hpp"
 #include "platform/windows/file_digest.hpp"
 #include <iostream>
@@ -204,16 +205,20 @@ int main(int argc, char **argv) {
                 return games::recovery::revive_after_defeat();
             if (kind == "common")
                 return games::recovery::clear_common_screens(config.value("allow_download", true));
-            if (kind == "fortress-trap" || kind == "giant") {
+            if (kind == "fortress-trap" || kind == "giant" || kind == "dark-light") {
                 nlohmann::ordered_json source;
                 std::ifstream(maafw::path_from_utf8(config.at("quest_catalog"))) >> source;
                 games::WvdQuestCatalog catalog(source);
-                const auto &task = catalog.at(kind == "giant" ? "gaintKiller" : "fortress-B8F_trap");
+                const auto &task = catalog.at(kind == "dark-light" ? "darkLight" : kind == "giant" ? "gaintKiller" : "fortress-B8F_trap");
                 std::set<std::string> images;
                 for (const auto &file : config.at("files")) {
                     const auto path = file.at("path").get<std::string>();
                     if (path.starts_with("image/"))
                         images.insert(path.substr(6));
+                }
+                if (kind == "dark-light") {
+                    task_plan = games::WvdTaskPlan::parse(task).inspect();
+                    return games::tasks::dark_light(task, profile, images, config.value("allow_download", true));
                 }
                 if (kind == "giant") {
                     task_plan = games::tasks::giant_plan(task).inspect();

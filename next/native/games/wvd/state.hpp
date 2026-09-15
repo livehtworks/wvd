@@ -60,6 +60,8 @@ class WvdRunState final : public contracts::BusinessRunState {
     bool giant_route_completed_{};
     std::size_t giant_cycles_completed_{};
     bool giant_rest_due() const;
+    bool encounter_timed_out() const;
+    bool dark_light_active_{};
     bool setting_is(const char *name, const char *zh, const char *en) const;
     std::map<std::string, nlohmann::json> confirmations_;
     nlohmann::json last_confirmation_;

@@ -35,7 +35,7 @@ class WorkflowTests(unittest.TestCase):
         folder = self.root / name
         bundle = folder / "bundle"
         (bundle / "image").mkdir(parents=True)
-        resource_kind = "dungeon-route" if options.get("workflow") == "fortress-trap" else "iteration" if options.get("workflow") == "giant" else options.get("workflow")
+        resource_kind = "dungeon-route" if options.get("workflow") == "fortress-trap" else "iteration" if options.get("workflow") in ("giant", "dark-light") else options.get("workflow")
         names = ["worldmapflag", "City_RoyalCityLuknalia", "Inn", "Stay", "Economy", "royalsuite", "OK"]
         if resource_kind in ("departure", "iteration"):
             names += ["openworldmap", "intoWorldMap", "returntoTown", "returnText", "EdgeOfTown", "dungFlag", "mapFlag", "chestFlag",
@@ -1695,6 +1695,79 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(r["lifecycle_calls"], [])
         self.assertTrue(r["snapshot"]["quiescent"])
         self.assertEqual(r["snapshot"]["business"]["task_step"], 0)
+
+    def dark_options(self, **extra):
+        options = dict(workflow="dark-light", quest_catalog=str(ROOT / "packs/wvd/parameters/legacy-quests.json"),
+            profile={**self.wall_profile(False), "RECOVER_WHEN_BEGINNING": True},
+            extra_images=["darkLight", "darklight_lightIt"])
+        options.update(extra)
+        return options
+
+    def dark_scenario(self, heal=False):
+        dungeon = {"dungFlag": (50, 150), "darkLight": (400, 700)}
+        light = {"darklight_lightIt": (400, 700)}
+        frames = [dungeon, dungeon, light, self.turn_screen(), dungeon, dungeon]
+        commands = [dict(kind=0, x=x, y=y) for x, y in [(1, 1), (420, 712), (420, 712), (513, 1200), (1, 1)]]
+        if heal:
+            frames += [{"trait": (200, 300)}, {"recover": (250, 850)}, {"trait": (200, 300)}, dungeon]
+            commands += [dict(kind=0, x=36, y=1425), dict(kind=0, x=830, y=850),
+                         dict(kind=0, x=600, y=1200), dict(kind=1, key=4)]
+        frames += [light, {"Inn": (400, 700)}]
+        commands += [dict(kind=0, x=420, y=712)] * 2
+        return frames, commands
+
+    def test_dark_light_cycle_and_cold_start(self):
+        frames, commands = self.dark_scenario()
+        for cold in (False, True):
+            r = self.execute("dark-light-cycle-" + str(cold), ([{}] if cold else []) + frames, commands,
+                **self.dark_options(attach_recovery=cold, initial_connection="closed" if cold else "ready"))
+            self.assertEqual(r["snapshot"]["state"], "Completed", r)
+            self.assertEqual(r["backend_calls"], 7)
+            self.assertFalse(r["mismatch"])
+            self.assertEqual(r["snapshot"]["generation"], 2 if cold else 1)
+            self.assertEqual(r["lifecycle_calls"], ["EnsureVpn", "StopApplication", "StartApplication"] if cold else [])
+            for field, expected in {"dungeons": 0, "combats": 1, "chests": 0, "inn_rests": 0,
+                                    "dark_light_active": False, "task_step": 0, "need_initial_recover": False}.items():
+                self.assertEqual(r["snapshot"]["business"][field], expected, field)
+            self.assertTrue(r["snapshot"]["quiescent"])
+
+    def test_dark_light_heals_after_combat_not_on_initial_entry(self):
+        frames, commands = self.dark_scenario(heal=True)
+        r = self.execute("dark-light-heal", frames, commands, **self.dark_options(
+            profile={**self.wall_profile(False), "RECOVER_WHEN_BEGINNING": True, "SKIP_COMBAT_RECOVER": False}))
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 11)
+        self.assertFalse(r["mismatch"])
+        self.assertFalse(r["snapshot"]["business"]["healing_required"])
+        self.assertEqual(r["snapshot"]["business"]["dungeons"], 0)
+
+    def test_dark_light_stop_and_rejection_never_complete(self):
+        frames, commands = self.dark_scenario()
+        for stopped in (False, True):
+            r = self.execute("dark-light-stop-" + str(stopped), frames[:2],
+                [{**commands[0], "reject": not stopped}], **self.dark_options(stop_after_first=stopped))
+            self.assertEqual(r["snapshot"]["state"], "UserStopped" if stopped else "Failed", r)
+            self.assertEqual(r["backend_calls"], 1)
+            self.assertFalse(r["mismatch"])
+            self.assertTrue(r["snapshot"]["business"]["dark_light_active"])
+            self.assertEqual(r["snapshot"]["business"]["dungeons"], 0)
+
+    def test_dark_light_unchanged_confirmation_is_not_replayed(self):
+        frames, commands = self.dark_scenario()
+        r = self.execute("dark-light-unchanged", frames[:3] + [frames[2]], commands[:3],
+            **self.dark_options(attach_recovery=True))
+        self.assertEqual(r["snapshot"]["state"], "Failed", r)
+        self.assertIn("POSTCONDITION_TIMEOUT", str(r["snapshot"]))
+        self.assertEqual(r["backend_calls"], 3)
+        self.assertEqual(r["lifecycle_calls"], [])
+        self.assertFalse(r["mismatch"])
+
+    def test_dark_light_already_in_city_does_not_start_dungeon(self):
+        r = self.execute("dark-light-city", [{"Inn": (400, 700)}], [], **self.dark_options())
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 0)
+        self.assertEqual(r["snapshot"]["business"]["dungeons"], 0)
+        self.assertFalse(r["snapshot"]["business"]["dark_light_active"])
 
     def test_unknown_window_restart_enters_new_generation_before_completion(self):
         r = self.execute("unknown-window-recovery", [{}, {"mapFlag": (100, 100), "cursor_0": (480, 588)}], [],
