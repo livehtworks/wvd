@@ -1709,6 +1709,9 @@ class WorkflowTests(unittest.TestCase):
             if name.startswith("stair"):
                 after[name] = (400, 600)
             advance(dict(kind=0, x=777, y=150), after)
+            # 旧 StateMap_FindSwipeClick 每次重入先拖动，再判断是否到点/换层。
+            # 移动停止后的二次开图也需要这次输入，不能在夹具中省略。
+            advance(dict(kind=1, x=swipe[0], y=swipe[1], x2=swipe[2], y2=swipe[3], duration=400), after)
         return targets, frames, commands, focused
 
     def test_trap_full_route_and_cold_recovery_preserve_source_order(self):
@@ -1748,7 +1751,8 @@ class WorkflowTests(unittest.TestCase):
 
     def test_trap_mid_route_restart_rebuilds_local_route_without_recounting_cycle(self):
         _, frames, commands, focused = self.trap_scenario()
-        fault_index = 14
+        fault_index = [i + 1 for i, command in enumerate(commands)
+                       if command == dict(kind=0, x=136, y=1431)][2]
         self.assertEqual(commands[fault_index - 1], dict(kind=0, x=136, y=1431))
         fault_frames = frames[:fault_index] + [{"mapFlag": (100, 100), "AutoMove": (300, 700)}]
         restart_frame = len(fault_frames)
