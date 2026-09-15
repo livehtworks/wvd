@@ -1,12 +1,25 @@
 #pragma once
 #include "contracts/run.hpp"
+#include "contracts/business_state.hpp"
 #include <deque>
 #include <filesystem>
 #include <functional>
 #include <json.hpp>
 #include <mutex>
+#include <map>
+#include <set>
 
 namespace wvd::storage {
+// 只有Context/Session填写归属；原因和业务ID永不参与路径拼接。
+struct DiagnosticRequest {
+    std::uint64_t run_id{}, generation{}, unit_index{};
+    std::int64_t task_id{};
+    int depth{};
+    std::string node, reason, stage, operation_id, error;
+};
+struct DiagnosticLimits {
+    std::size_t rewards{128}, failures{32}, frame_bytes{8 * 1024 * 1024};
+};
 class EventJournal {
   public:
     EventJournal(std::string instance, std::uint64_t run, std::size_t capacity = 256);
@@ -33,7 +46,13 @@ class EventJournal {
 class RunStore {
   public:
     RunStore(const std::filesystem::path &root, const std::string &instance, std::uint64_t run,
-             const nlohmann::json &frozen_definition);
+             const nlohmann::json &frozen_definition,
+             std::shared_ptr<const contracts::MonotonicClock> diagnostic_clock =
+                 std::make_shared<contracts::SteadyClock>(), DiagnosticLimits limits = {});
+    nlohmann::json save_diagnostic(const contracts::FrameEnvelope *frame,
+                                  const DiagnosticRequest &request);
+    nlohmann::json diagnostic_summary() const;
+    void note_diagnostic_hook_failure() noexcept;
     void save_events(const EventJournal &events);
     void save_terminal(const contracts::RunSnapshot &snapshot,
                        const contracts::SessionResult &session,
@@ -46,6 +65,21 @@ class RunStore {
   private:
     std::filesystem::path directory_;
     bool saved_{};
+    const std::string instance_;
+    const std::uint64_t run_;
+    const nlohmann::json definition_;
+    const std::shared_ptr<const contracts::MonotonicClock> diagnostic_clock_;
+    const DiagnosticLimits diagnostic_limits_;
+    mutable std::mutex diagnostic_mutex_;
+    std::map<std::string, contracts::MonotonicClock::TimePoint> diagnostic_times_;
+    std::set<std::string> diagnostic_operations_;
+    nlohmann::json diagnostic_entries_ = nlohmann::json::array();
+    std::uint64_t diagnostic_rewards_{}, diagnostic_failures_{}, diagnostic_bytes_{},
+        diagnostic_failed_{}, diagnostic_throttled_{}, diagnostic_duplicates_{}, diagnostic_quota_{},
+        diagnostic_unavailable_{}, diagnostic_unrecorded_{};
+    bool diagnostic_closed_{}, diagnostic_directory_created_{};
+    std::uint64_t diagnostic_directory_id_{};
+    unsigned long diagnostic_volume_{};
 };
 nlohmann::json snapshot_json(const contracts::RunSnapshot &snapshot);
 } // namespace wvd::storage

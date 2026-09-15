@@ -17,13 +17,14 @@ class StateTests(unittest.TestCase):
     def setUpClass(cls):
         cls.root = Path(tempfile.mkdtemp(prefix="m4-state-tests-", dir=ROOT / ".local"))
         cls.sdk = Path(json.loads((ROOT / ".local/maafw.json").read_text(encoding="utf-8"))["sdk"])
+        cls.exe_hash = hashlib.sha256((ROOT / "build/m4/Release/test_m4_state.exe").read_bytes()).hexdigest()
         print("M4 state evidence: " + str(cls.root), flush=True)
 
     def run_case(self, name, *, all_at_once=False, **options):
         folder = self.root / name
         bundle = folder / "bundle"
         (bundle / "pipeline").mkdir(parents=True)
-        profile = {"LANGUAGE": "zh_CN", "DEFAULT_OVERALL_STRATEGY": "Manual", "RELOAD_STRATEGY_WHEN": "不需要",
+        profile = {"LANGUAGE": "zh_CN", "FARM_TARGET_TEXT": "state-fixture-name", "DEFAULT_OVERALL_STRATEGY": "Manual", "RELOAD_STRATEGY_WHEN": "不需要",
                    "STRATEGY": [{"group_name": "Manual", "complete_one_as_all": all_at_once, "skill_settings": [
                        {"role_var": role, "skill_var": "左下技能", "target_var": "next", "skill_lvl": 1, "freq_var": "保留原值"}
                        for role in ("A", "B")]}]}
@@ -60,10 +61,21 @@ class StateTests(unittest.TestCase):
         path = folder / "input.json"
         path.write_text(json.dumps(config), encoding="utf-8")
         exe = ROOT / "build/m4/Release/test_m4_state.exe"
-        with (folder / "native.log").open("wb") as log:
-            process = subprocess.run([str(exe), str(path)], cwd=folder,
-                env=dict(os.environ, PATH=str(self.sdk / "bin") + os.pathsep + os.environ.get("PATH", "")),
-                stdout=log, stderr=log, timeout=45)
+        before_hash = hashlib.sha256(exe.read_bytes()).hexdigest()
+        self.assertEqual(before_hash, self.exe_hash)
+        process = None
+        try:
+            with (folder / "native.log").open("wb") as log:
+                process = subprocess.run([str(exe), str(path)], cwd=folder,
+                    env=dict(os.environ, PATH=str(self.sdk / "bin") + os.pathsep + os.environ.get("PATH", "")),
+                    stdout=log, stderr=log, timeout=45)
+        finally:
+            after_hash = hashlib.sha256(exe.read_bytes()).hexdigest()
+            (folder / "execution.json").write_text(json.dumps({
+                "exe_sha256": self.exe_hash,
+                "exe_sha256_before": before_hash, "exe_sha256_after": after_hash,
+                "exit": process.returncode if process else None}), encoding="utf-8")
+            self.assertEqual(after_hash, self.exe_hash)
         self.assertEqual(process.returncode, 0, (folder / "native.log").read_text(encoding="utf-8", errors="replace")[-2000:])
         result = json.loads((folder / "result.json").read_text(encoding="utf-8"))
         self.assertEqual(result["backend_inputs"], 0)
@@ -77,6 +89,42 @@ class StateTests(unittest.TestCase):
         self.assertEqual(state["inn_rests"], 2)
         self.assertFalse(state["repel_forces"]["active"])
         self.assertFalse(state["repel_forces"]["pending"])
+
+    def test_frozen_recovery_thresholds_and_vpn_authority(self):
+        result = self.run_case("frozen-recovery", frozen_recovery_contract=True)["frozen_recovery_contract"]
+        for row in result["thresholds"]:
+            limit = row["limit"]
+            self.assertEqual(row["parameters"]["max_crashes"], limit)
+            self.assertTrue(row["parameters"]["vpn_required"])
+            count = 0
+            for cycle in row["cycles"]:
+                count += 1
+                force = count > limit
+                if force:
+                    count = 0
+                self.assertEqual(cycle["crashes"], count)
+                self.assertEqual(cycle["plan"]["operations"],
+                    (["RestartInstance"] if force else []) + ["EnsureVpn", "StopApplication", "StartApplication"])
+        self.assertFalse(result["disabled"]["vpn_required"])
+        self.assertEqual(result["disabled"]["vpn_application_id"], "")
+        self.assertEqual(result["invalid_profiles"], [True] * 4)
+
+    def test_last_lap_keeps_legacy_boundaries_and_frozen_name(self):
+        result = self.run_case("last-lap", last_lap_contract=True)["last_lap_contract"]
+        for key in ("fresh", "first"):
+            self.assertIsNone(result[key]["last_lap_seconds"])
+            self.assertEqual(result[key]["total_seconds"], 0)
+        self.assertEqual(result["empty_lap"]["dungeons"], 0)
+        self.assertEqual(result["empty_lap"]["last_lap_seconds"], 12.5)
+        self.assertEqual(result["recovering"]["last_lap_seconds"], 12.5)
+        for key in ("after_recovery", "replay", "after_rejection"):
+            self.assertEqual(result[key]["last_lap_seconds"], 7.5)
+            self.assertEqual(result[key]["total_seconds"], 20)
+            self.assertEqual(result[key]["dungeons"], 1)
+            self.assertEqual(result[key]["farm_target_text"], "frozen-lap-name")
+        self.assertIsNone(result["new_run"]["last_lap_seconds"])
+        self.assertEqual(result["new_run"]["total_seconds"], 0)
+        self.assertEqual(result["new_run"]["farm_target_text"], "changed-name")
 
     def test_steel_trial_keeps_pending_route_and_original_rest_interval(self):
         state = self.run_case("steel-trial-contract", steel_trial_contract=True)["steel_trial_contract"]
@@ -210,6 +258,8 @@ class StateTests(unittest.TestCase):
             self.assertEqual(r[key]["generation"], 2)
             self.assertEqual(r[key]["completed_business_units"], 2)
             self.assertEqual(r[key]["business"]["task_step"], 2)
+            self.assertEqual(r[key]["business"]["farm_target_text"], "state-fixture-name")
+            self.assertIsNone(r[key]["business"]["last_lap_seconds"])
             self.assertEqual(len(r[key]["business"]["strategy"]["current"]["skill_settings"]), 1)
         self.assertNotEqual(r["snapshot"]["business"]["run_identity"], r["second"]["business"]["run_identity"])
         direct = r["direct"]

@@ -1,5 +1,7 @@
 #include "runtime_fixture.hpp"
 #include "games/wvd/state.hpp"
+#include "games/wvd/recovery/boot.hpp"
+#include "devices/lifecycle_execution.hpp"
 #include "games/wvd/tasks/sleep_visits.hpp"
 #include "games/wvd/tasks/bounty_cycle.hpp"
 #include "games/wvd/tasks/giant.hpp"
@@ -176,8 +178,10 @@ J bull_cave_contract(const J &profile, bool rest) {
     };
     for (std::size_t cycle = 0; cycle < 2; ++cycle) {
         const auto base = cycle * (rest ? 3 : 2);
+        clock->milliseconds = cycle * 12500;
         if (cycle) state.enter_segment(contracts::SegmentBoundary::Continuation, ++generation, base);
         apply(rest ? "bull_cave_started_rest" : "bull_cave_started");
+        require(state.summary().at("last_lap_seconds") == (cycle ? J(12.5) : J(nullptr)), "BULL_LAP_BOUNDARY_CHANGED");
         apply("bull_cave_leap_prepared");
         state.enter_segment(contracts::SegmentBoundary::Recovery, ++generation, base);
         require(state.summary().at("bull_cave").at("leap_pending").get<bool>(), "BULL_RECOVERY_LOST_INTENT");
@@ -284,7 +288,9 @@ J golden_contract(const J &profile) {
     };
     for (std::size_t cycle = 0; cycle < 2; ++cycle) {
         if (cycle) state.enter_segment(contracts::SegmentBoundary::Continuation, ++generation, cycle * 2);
+        clock->milliseconds = cycle * 12500;
         apply("golden_started");
+        require(state.summary().at("last_lap_seconds") == (cycle ? J(12.5) : J(nullptr)), "GOLDEN_LAP_BOUNDARY_CHANGED");
         apply("golden_leap_prepared");
         state.enter_segment(contracts::SegmentBoundary::Recovery, ++generation, cycle * 2);
         require(state.summary().at("golden_chest").at("leap_pending").get<bool>(), "GOLDEN_RECOVERY_LOST_LEAP_INTENT");
@@ -589,6 +595,111 @@ J sleep_contract(const J &profile) {
     require(excess, "SLEEP_TEN_THOUSANDTH_VISIT");
     return state.summary();
 }
+J frozen_recovery_contract(const J &profile) {
+    runtime::BehaviorRegistry registry("frozen-recovery-contract");
+    games::recovery::register_recovery(registry);
+    registry.seal();
+    const devices::LifecycleTarget authorized{"m4-frozen-offline", "fixture-instance", "fixture.app", "fixture.vpn", true};
+    J output{{"thresholds", J::array()}, {"invalid_profiles", J::array()}};
+    for (const auto limit : {-1, 0, 2}) {
+        auto values = profile;
+        values.update({{"AUTO_START_CLASH", true}, {"MAX_CRASH_LIMIT", limit}});
+        const auto binding = games::recovery::recovery_binding(authorized, values);
+        auto clock = std::make_shared<TestClock>();
+        games::WvdRunState state(values, {"frozen-recovery", 1, clock});
+        state.enter_segment(contracts::SegmentBoundary::Initial, 1, 0);
+        values.update({{"AUTO_START_CLASH", false}, {"MAX_CRASH_LIMIT", 99}});
+        runtime::SessionDefinition previous;
+        previous.checkpoint_node = "Checkpoint";
+        std::uint64_t generation = 1;
+        J cycles = J::array();
+        for (unsigned cycle = 0; cycle < 4; ++cycle) {
+            contracts::SessionResult result;
+            result.end = contracts::SessionEnd::RecoveryRequired;
+            result.quiescent = true;
+            result.reason = "fixture.recovery";
+            result.business = state.summary();
+            const auto next = registry.recover(binding, result, previous);
+            require(next && next->lifecycle, "FROZEN_RECOVERY_PLAN_MISSING");
+            const auto plan = devices::lifecycle_plan_json(*next->lifecycle);
+            state.enter_segment(contracts::SegmentBoundary::LifecycleRecovery, ++generation, 0);
+            const auto count = state.summary().at("crashes");
+            result.business = state.summary();
+            const auto escalated = registry.recover(binding, result, *next);
+            require(escalated && escalated->lifecycle->attempt == 2, "RECOVERY_ESCALATION_MISSING");
+            state.enter_segment(contracts::SegmentBoundary::LifecycleRecovery, ++generation, 0);
+            require(state.summary().at("crashes") == count, "RECOVERY_ESCALATION_RECOUNTED");
+            state.confirm_event("restart-" + std::to_string(cycle), "game_restarted", generation, cycle + 1);
+            cycles.push_back({{"plan", plan}, {"crashes", count}});
+        }
+        output["thresholds"].push_back({{"limit", limit}, {"parameters", binding.parameters}, {"cycles", cycles}});
+    }
+    auto disabled = profile;
+    disabled["AUTO_START_CLASH"] = false;
+    auto denied = authorized;
+    denied.vpn_required = false;
+    denied.vpn_application_id.clear();
+    output["disabled"] = games::recovery::recovery_binding(denied, disabled).parameters;
+    disabled["AUTO_START_CLASH"] = true;
+    for (const bool missing_identity : {false, true}) {
+        auto target = authorized;
+        if (missing_identity) target.vpn_application_id.clear();
+        else target.vpn_required = false;
+        bool rejected = false;
+        try { games::recovery::recovery_binding(target, disabled); }
+        catch (const std::runtime_error &e) { rejected = std::string(e.what()) == "WVD_VPN_TARGET_NOT_AUTHORIZED"; }
+        require(rejected, "PROFILE_GRANTED_VPN_AUTHORITY");
+    }
+    for (const auto &patch : {J{{"AUTO_START_CLASH", "true"}}, J{{"MAX_CRASH_LIMIT", 1.5}},
+                              J{{"MAX_CRASH_LIMIT", nullptr}}, J{{"MAX_CRASH_LIMIT", std::uint64_t(-1)}}}) {
+        auto invalid = disabled;
+        invalid.update(patch);
+        bool rejected = false;
+        try { games::recovery::recovery_binding(authorized, invalid); }
+        catch (const std::runtime_error &e) { rejected = std::string(e.what()) == "WVD_RECOVERY_PROFILE_INVALID"; }
+        require(rejected, "INVALID_RECOVERY_PROFILE_ACCEPTED");
+        output["invalid_profiles"].push_back(rejected);
+    }
+    return output;
+}
+J last_lap_contract(const J &profile) {
+    auto values = profile;
+    values["FARM_TARGET_TEXT"] = "frozen-lap-name";
+    auto clock = std::make_shared<TestClock>();
+    games::WvdRunState state(values, {"last-lap", 1, clock});
+    state.enter_segment(contracts::SegmentBoundary::Initial, 1, 0);
+    values["FARM_TARGET_TEXT"] = "changed-name";
+    J output{{"fresh", state.summary()}};
+    state.confirm_event("first", "dungeon_completed", 1, 1);
+    output["first"] = state.summary();
+    clock->milliseconds = 12500;
+    state.confirm_event("empty-lap", "dungeon_completed", 1, 2);
+    output["empty_lap"] = state.summary();
+    clock->milliseconds = 15000;
+    state.enter_segment(contracts::SegmentBoundary::Continuation, 2, 1);
+    state.observe_combat();
+    clock->milliseconds = 16000;
+    state.resume_dungeon();
+    state.enter_segment(contracts::SegmentBoundary::LifecycleRecovery, 3, 1);
+    output["recovering"] = state.summary();
+    clock->milliseconds = 20000;
+    state.confirm_event("after-recovery", "dungeon_completed", 3, 3);
+    output["after_recovery"] = state.summary();
+    clock->milliseconds = 23000;
+    require(!state.confirm_event("after-recovery", "dungeon_completed", 3, 4), "LAP_RECEIPT_REPLAYED");
+    output["replay"] = state.summary();
+    clock->milliseconds = 19000;
+    bool rejected = false;
+    try { state.confirm_event("backward", "dungeon_completed", 3, 5); }
+    catch (const std::runtime_error &e) { rejected = std::string(e.what()) == "WVD_CLOCK_MOVED_BACKWARD"; }
+    require(rejected, "LAP_BACKWARD_CLOCK_ACCEPTED");
+    clock->milliseconds = 23000;
+    output["after_rejection"] = state.summary();
+    games::WvdRunState next(values, {"last-lap", 2, clock});
+    next.enter_segment(contracts::SegmentBoundary::Initial, 1, 0);
+    output["new_run"] = next.summary();
+    return output;
+}
 J direct_contract(const J &profile) {
     auto clock = std::make_shared<TestClock>();
     games::WvdRunState state(profile, {"direct", 1, clock});
@@ -710,7 +821,8 @@ J direct_contract(const J &profile) {
     {
         auto configured = profile;
         configured.update({{"ACTIVE_REST", false}, {"REST_INTERVEL", 1}});
-        games::WvdRunState giant(configured, {"giant", 1, clock});
+        auto lap_clock = std::make_shared<TestClock>();
+        games::WvdRunState giant(configured, {"giant", 1, lap_clock});
         giant.enter_segment(contracts::SegmentBoundary::Initial, 1, 0);
         const auto start = giant.confirmation_id("giant.start", "giant_cycle_started");
         giant.confirm_event(start, "giant_cycle_started", 1, 1);
@@ -733,6 +845,8 @@ J direct_contract(const J &profile) {
         const auto done = giant.confirmation_id("giant.complete", "giant_cycle_completed");
         giant.confirm_event(done, "giant_cycle_completed", 2, 8);
         require(!giant.confirm_event(done, "giant_cycle_completed", 2, 9), "GIANT_DUPLICATE_COMPLETION");
+        require(giant.summary().at("last_lap_seconds").is_null(), "GIANT_LAP_SETTLED_AT_COMPLETION");
+        lap_clock->milliseconds = 12500;
         giant.enter_segment(contracts::SegmentBoundary::Continuation, 3, 1);
         giant.confirm_event(giant.confirmation_id("giant.start", "giant_cycle_started"), "giant_cycle_started", 3, 10);
         giant.enter_dungeon();
@@ -741,9 +855,11 @@ J direct_contract(const J &profile) {
         giant.confirm_event(giant.confirmation_id("giant.route", "giant_route_completed"), "giant_route_completed", 3, 11);
         giant.confirm_event(giant.confirmation_id("giant.complete", "giant_cycle_completed"), "giant_cycle_completed", 3, 12);
         result["giant_contract"] = giant.summary();
+        require(result["giant_contract"].at("last_lap_seconds") == 12.5, "GIANT_LAP_BOUNDARY_CHANGED");
     }
     {
-        games::WvdRunState trap(profile, {"trap", 1, clock});
+        auto lap_clock = std::make_shared<TestClock>();
+        games::WvdRunState trap(profile, {"trap", 1, lap_clock});
         trap.enter_segment(contracts::SegmentBoundary::Initial, 1, 0);
         const auto started = trap.confirmation_id("trap.start", "trap_cycle_started");
         trap.confirm_event(started, "trap_cycle_started", 1, 1);
@@ -759,9 +875,12 @@ J direct_contract(const J &profile) {
         const auto completed = trap.confirmation_id("trap.complete", "trap_cycle_completed");
         trap.confirm_event(completed, "trap_cycle_completed", 2, 4);
         require(!trap.confirm_event(completed, "trap_cycle_completed", 2, 5), "TRAP_COMPLETION_REPLAYED");
+        require(trap.summary().at("last_lap_seconds").is_null(), "TRAP_LAP_SETTLED_AT_COMPLETION");
+        lap_clock->milliseconds = 12500;
         trap.enter_segment(contracts::SegmentBoundary::Continuation, 3, 1);
         trap.confirm_event(trap.confirmation_id("trap.start", "trap_cycle_started"), "trap_cycle_started", 3, 6);
         result["trap_contract"] = trap.summary();
+        require(result["trap_contract"].at("last_lap_seconds") == 12.5, "TRAP_LAP_BOUNDARY_CHANGED");
         require(result["trap_contract"].at("dungeons") == 2 && result["trap_contract"].at("trap_cycles_completed") == 1,
                 "TRAP_ATTEMPT_SUCCESS_CONFLATED");
     }
@@ -1202,6 +1321,13 @@ int main(int argc, char **argv) {
             return 0;
         }
         auto profile = importer.parse(config.at("source")).values;
+        if (config.value("frozen_recovery_contract", false) || config.value("last_lap_contract", false)) {
+            const auto key = config.value("frozen_recovery_contract", false) ? "frozen_recovery_contract" : "last_lap_contract";
+            const J output{{key, config.value("frozen_recovery_contract", false) ? frozen_recovery_contract(profile) : last_lap_contract(profile)},
+                           {"backend_inputs", 0}};
+            std::ofstream(maafw::path_from_utf8(config.at("output"))) << output.dump(2);
+            return 0;
+        }
         if (config.value("repel_forces_contract", false)) {
             const J output{{"repel_forces_contract", repel_forces_contract(profile)}, {"backend_inputs", 0}};
             std::ofstream(maafw::path_from_utf8(config.at("output"))) << output.dump(2);

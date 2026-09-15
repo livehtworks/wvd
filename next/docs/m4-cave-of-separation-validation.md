@@ -2,7 +2,7 @@
 
 ## 当前结论
 
-- COS 图、阶段对象、识别/对话停点闭环和离线测试源码已实现；主代理统一状态注册、多图发布及构建。`implementation=AWAITING_INTEGRATION_VALIDATION`、`offline=NOT_RUN`、`real=UNVERIFIED`、`release_allowed=false`。
+- COS 图、阶段对象、识别/对话停点闭环和离线测试源码已实现；主代理统一状态注册、多图发布及构建。状态绑定修正后的停点/坏图/ROI 分项已通过；首次 full 在第16输入因 fixture 遗漏 fallback 失败，本次 full 定点修补未运行。`implementation=AWAITING_INTEGRATION_VALIDATION`、`offline=FULL_FAILED_FIXTURE_RETEST_NOT_RUN`、`real=UNVERIFIED`、`release_allowed=false`。
 - 旧业务 `6585f4075f5714ab522aa582993860c09af912c1`，已实际读取私有工作包 `legacy/src/script.py:3957-4044` 和 CursedWheelTimeLeap、IdentifyState、StateDungeon。Git blob 与固定提交均为 `0f80961a63d06f26ce7d76e33677dc9cfb9bdf72`。
 - 开工 HEAD 为 `695295d81abba05b0e87d88aee06fc9d3d748d28`。并行工作区已有修改均保留；此处不是构建产物身份。
 - 本代理未改 state、CMake、CLI、已有测试或基础58项目录。按追加授权修改 vision、dialogue、资源闭包并新增测试源码。没有启动构建/测试、设备调用、生产文件写入、commit/push 或子代理。设备连接和输入均为0。
@@ -18,7 +18,7 @@
 - 修改 `native/games/wvd/vision/recognizers.cpp`：观察专用 `task_stop`、复合出口停点优先和输入条件排除；保留 EvaluationMemo、in_parallel 及专用选项批处理。Fordraig 领取识别允许 `fordraig/RequestAccept`，使用该锚点，原 LBC 限制、ROI 和阈值保留。
 - 修改 `native/games/wvd/recovery/dialogue.cpp`：默认/特殊对话入口和正常动作后继返回停点；特殊选择后需停点新帧且原选项消失才清除意图，不点击同时出现的 bondmate_close。
 - 修改 `native/games/wvd/tasks/pipeline_compiler.cpp`：仅资源索引部分的 finish/validate 增加 dialogue_task_stops；事件注册属于主代理。此前 workflow_session.cpp 增加的同类资源闭包已交主代理继续维护。
-- 新增 `tests/native/test_m4_cave_of_separation.cpp` 和 `tests/m4/test_cave_of_separation.py`，均 NOT_RUN；主代理需把前者接入 native 构建目标 `test_m4_cave_of_separation`。未修改已有 test_m4_workflow.cpp。
+- 新增 `tests/native/test_m4_cave_of_separation.cpp` 和 `tests/m4/test_cave_of_separation.py`，已由主代理统一构建并运行部分断言；本次修补 NOT_RUN。未修改已有 test_m4_workflow.cpp。
 
 ## 正常段定义
 
@@ -100,9 +100,15 @@ Fordraig 公开名称为 `DialoguePolicy::Fordraig` / `fordraig`，有序选项�
 
 ## 待验证断言与具体风险
 
-已创建测试源码但没有执行，状态一律 NOT_RUN。新增 native 入口复用现有 runtime_fixture、真实 Maa Pipeline/RunCoordinator/视觉/业务注册，不提供新运行解释器；因果 fake 仅在匹配的明确输入后推进帧。Python 独立 TestCase 不继承或重导出已有 WorkflowTests；完整六段通过组合复用其 execute 调用主代理已接入的 cave-of-separation 入口，使用私有显式 quest_catalog、with_state=True 和从旧源码/图列出的 extra_images。
+14e9 定点回归来源为 `.local/logs/m4-cos-and-composite-regression.log`、`.local/m4-cos-drltkwwo`。实际 `zero-common` 为 Completed、0输入；`zero-default` 与 `request-roi-True` 在连接前以 BUSINESS_UNIT_INVALID 拒绝，后续 special/LBC 子场景未执行。原因是 fixture 对所有 Session 无条件绑定 state_factory，而 PipelineCompiler 只对含 WvdConfirm/WvdCombat/WvdChest 的业务图生成检查点；纯默认对话和视觉探针 checkpoint 为空，违反 RunCoordinator::validate_unit。正式拒绝正确，不应补假检查点、假业务事件或放宽校验。
 
-已写断言包括：六图坐标/策略/预算；竞争帧停点零点击；AutoMove 后置停点；嵌套 Common 对话后停点；特殊意图确认与 bondmate_close 零点击；B3/Back 对同一 request 图片的不同冻结行为；未知/缺失/损坏停点；输入拒绝/UserStopped 保留意图；Fordraig 与 LBC 不同锚点 ROI；独立109输入的六段一周期及领取拒绝/停止不得进入下一段。Moving 中途才出现停点、完整双周期、慢因果及下列剩余矩阵尚未全部编写，不能把这些待验证项算作覆盖完成。
+上一轮仅修 fixture 按实际 checkpoint 绑定状态；common/special/route 保留业务状态，default/probe/map 等无业务回执子图按普通 Session 执行。inspect 和运行结果公开 checkpoint/state_bound，由 Python 按场景独立断言，完整六段仍 with_state=True。missing 用例实际命中 COMPILE_IMAGE_NOT_IN_MANIFEST；corrupt 旧用例却因 BUSINESS_UNIT_INVALID 被宽泛异常断言误判通过，不算坏图覆盖。修正为分别要求精确缺图异常及运行后 WVD_TEMPLATE_DECODE_INVALID、Failed、真静止、已保存、零输入。主代理随后在 `.local/m4-cos-9a5g_x7q` 验证 common/default/special 停点、缺图/明确坏图及 Fordraig/LBC ROI 分项通过，不替代 full 验收。
+
+首次 full 证据为 `.local/m4-cos-p8avy_c1/six-segment-cycle/output.json`：generation=1、16输入、Failed/CUSTOM_ACTION_FAILED、0完成段、COS phase=Enter。mismatch_detail.action_index=15，实际 Click(1,1)，fixture 预期 Click(420,712)。已重新读取固定 `6585f407` 的 case3957 及 FindCoordsOrElseExecuteFallbackAndWait：未找到 COS 时整批执行 `["EdgeOfTown",[1,1]]`，循环下一轮才重查目标。fixture 漏掉 EdgeOfTown 后的 (1,1)，不是识别或生产导航错误。full 修正1/最多2仅补该明确输入，目标页仍由输入推进，独立断言入洞四次输入顺序；总轨迹109→110，原6段/坐标/副作用验收不变，请求停止反例的前8次输入不受影响。本轮未构建、未执行 native、未终止主代理 batch，full 修补状态 NOT_RUN；后续段尚无完成证据。
+
+新增 native 入口复用现有 runtime_fixture、真实 Maa Pipeline/RunCoordinator/视觉/业务注册，不提供新运行解释器；因果 fake 仅在匹配的明确输入后推进帧。Python 独立 TestCase 不继承或重导出已有 WorkflowTests；完整六段通过组合复用其 execute 调用主代理已接入的 cave-of-separation 入口，使用私有显式 quest_catalog、with_state=True 和从旧源码/图列出的 extra_images。
+
+已写断言包括：六图坐标/策略/预算；竞争帧停点零点击；AutoMove 后置停点；嵌套 Common 对话后停点；特殊意图确认与 bondmate_close 零点击；B3/Back 对同一 request 图片的不同冻结行为；未知/缺失/损坏停点；输入拒绝/UserStopped 保留意图；Fordraig 与 LBC 不同锚点 ROI；独立110输入的六段一周期及领取拒绝/停止不得进入下一段。Moving 中途才出现停点、完整双周期、慢因果及下列剩余矩阵尚未全部编写，不能把这些待验证项算作覆盖完成。
 
 - 六段分别编译、注册完整、预算包含 boot 包装后<=1800秒；六份冻结策略正确，错序、缺 WvdVision、缺检查点、未知段/停点/策略、超过周期预算在输入前拒绝。基础58项目录和旧默认路线图逐字节保持原有语义。
 - 以固定 Python 源位置独立给出全部坐标、入洞次序、10秒等待和返城 trace；完整6段一周期、连续2周期；住宿每周期恰一次，不受 ACTIVE_REST 或 REST_INTERVEL 跳过，套房配置沿用现有行为。

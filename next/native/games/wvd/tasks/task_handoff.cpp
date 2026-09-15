@@ -80,12 +80,16 @@ bool handoff_has_unconfirmed_effect(const J &business) {
             return true;
     return false;
 }
-bool observe_unknown_leap(maafw::Context &context) {
+bool observe_unknown_leap(maafw::Context &context, const J &parameters) {
     if (context.cancelled())
         return false;
     const auto frame = context.capture();
     // 复用原unknown.window的计数，不能让一次模板确认算作第六次未知。
-    const auto unknown = context.recognize(frame, request({{"mode", "unknown_exhausted"}, {"max_tries", 4}}));
+    J unknown_parameters{{"mode", "unknown_exhausted"}, {"max_tries", 4}};
+    // 节点识别后会重新截图，专属正常页条件也必须随之复核，不能沿用旧帧的否定结果。
+    if (parameters.contains("extra_known"))
+        unknown_parameters["extra_known"] = parameters.at("extra_known");
+    const auto unknown = context.recognize(frame, request(unknown_parameters));
     if (unknown.outcome == contracts::RecognitionOutcome::Error)
         throw std::runtime_error(unknown.error_code);
     if (unknown.outcome != contracts::RecognitionOutcome::Hit)
@@ -116,7 +120,7 @@ bool observe_unknown_leap(maafw::Context &context) {
 }
 void register_task_handoff(runtime::BehaviorRegistry &registry) {
     registry.add_action({"wvd.unknown_leap", "1"},
-        [](maafw::Context &context, const J &, const J &) { return observe_unknown_leap(context); });
+        [](maafw::Context &context, const J &parameters, const J &) { return observe_unknown_leap(context, parameters); });
 }
 contracts::BehaviorBinding unknown_leap_binding() {
     return {"WvdUnknownLeap", {"wvd.unknown_leap", "1"}, J::object()};
@@ -213,6 +217,13 @@ std::optional<contracts::RunSnapshot> TaskHandoff::poll(const std::filesystem::p
     }
     next.policy.pack_revision = next.initial.bundle.revision;
     next.state_factory = wvd_state_binding(profile);
+    devices::LifecycleTarget lifecycle_target;
+    if (next.recover) {
+        const auto &p = next.recover->parameters;
+        lifecycle_target = {p.at("device_id"), p.at("instance_id"), p.at("application_id"),
+            p.at("vpn_application_id"), p.at("vpn_required")};
+    }
+    recovery::bind_initial_vpn(next, lifecycle_target, profile);
     auto sources = provenance_.at("profile_sources");
     sources["FARM_TARGET"] = "HANDOFF:turn_to_7000G";
     next.state_factory->parameters["handoff_parent"] = {

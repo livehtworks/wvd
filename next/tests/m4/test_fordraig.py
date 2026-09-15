@@ -7,7 +7,10 @@ import subprocess
 import tempfile
 import unittest
 
-import test_workflow as workflow_helpers
+if __package__:
+    from . import test_workflow as workflow_helpers
+else:
+    import test_workflow as workflow_helpers
 
 ROOT = Path(__file__).resolve().parents[2]
 STAGES = ["Leap", "Request", "Enter", "Trap1", "Trap2", "Trap3", "PreBoss", "Boss", "Exit", "Return"]
@@ -160,6 +163,9 @@ class FordraigTests(unittest.TestCase):
             actual_events.update(node["event"] for node in walk(stage["nodes"])
                                  if isinstance(node.get("event"), str) and node["event"].startswith("fordraig_"))
         self.assertEqual(actual_events, EVENTS)
+        self.assertEqual(stages[0]["resolved_images"]["fordraig/Leap.png"], "image/fordraig/Leap.png")
+        self.assertNotIn("Fordraig/Leap.png", stages[0]["resolved_images"])
+        self.assertEqual(stages[-1]["resolved_images"]["ReturnText.png"], "image/ReturnText.png")
         request_nodes = stages[1]["nodes"]
         accepted = [node for node in walk(request_nodes) if node.get("mode") == "featured_request_accepted"]
         self.assertTrue(accepted)
@@ -225,7 +231,8 @@ class FordraigTests(unittest.TestCase):
         source.write_text(json.dumps({"fordraig": {"_TYPE": "quest", "questName": "鸟剑"}}, ensure_ascii=False), encoding="utf-8")
         options = helper.scorpion_options(profile={**self.profile(), "RE_ASSEMBLE_PARTY": False})
         options.update(workflow="fordraig", quest_catalog=str(source))
-        options["aliases"].update({"Fordraig/Leap.png": "fordraig/Leap.png", "ReturnText.png": "returnText.png"})
+        # 只复用正式 manifest 的返城别名；Leap 直接使用规范路径，不能靠夹具别名掩盖生产错误。
+        options["aliases"].update({"returnText.png": "ReturnText.png"})
         options["extra_images"] += ["specialRequest", "fordraig/Leap", "fordraig/RequestAccept", "request_accepted",
             "fordraig/labyrinthOfFordraig", "fordraig/Entrance", "fordraig/TryPushingIt",
             "fordraig/thedagger", "fordraig/InsertTheDagger", "bondmate_close", "stair_down", "stair_teleport"]
@@ -240,7 +247,7 @@ class FordraigTests(unittest.TestCase):
             advance(dict(kind=0, x=x, y=y), page)
         def back(page):
             advance(dict(kind=5, key=4), page)
-        click(420, 712, {"Fordraig/Leap": (300, 900)})
+        click(420, 712, {"fordraig/Leap": (300, 900)})
         click(320, 912, {"leap": (400, 900)})
         click(420, 912, {"OK": (400, 700)})
         click(420, 712, {"Inn": (400, 700)})
@@ -328,7 +335,7 @@ class FordraigTests(unittest.TestCase):
 
     def test_causal_leap_rejection_keeps_pending_without_request_or_route(self):
         helper = self.workflow_helper()
-        frames = [{"cursedWheel": (400, 700)}, {"Fordraig/Leap": (300, 900)},
+        frames = [{"cursedWheel": (400, 700)}, {"fordraig/Leap": (300, 900)},
                   {"leap": (400, 900)}, {"OK": (400, 700)}]
         commands = [dict(kind=0, x=420, y=712), dict(kind=0, x=320, y=912), dict(kind=0, x=420, y=912, reject=True)]
         result = helper.execute("fordraig-leap-rejected", frames, commands,

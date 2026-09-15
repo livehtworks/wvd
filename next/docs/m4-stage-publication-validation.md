@@ -1,6 +1,13 @@
 # 分阶段图发布与续段
 
-统一构建通过，原生验证运行中；不是任务通过报告。
+统一构建通过，发布与续段两方法通过；不是完整任务通过报告。
+
+`14e9eb3`阶段产物的证据根为`m4-workflow-iglq4ii1`。正常例Completed、两个业务单元、
+两代次各一次真实受控输入，入口分别Stage0_Entry/Stage1_Entry，资源revision相同；
+持久化结果一致、mismatch=false、quiescent=true。缺第二图Economy.png的负例在连接前
+拒绝，连接/输入均为零。两份execution.json与EXE身份已在重建前核对。
+首轮`m4-workflow-gimiyrtn`因夹具缺descriptor在启动前exit1，保留失败记录；
+补明确描述表路径后取得上述证据，没有放宽发布校验。后续公共代码变更仍需回归。
 
 ## 约束与实现
 

@@ -1,6 +1,6 @@
 # Fordraig 离线实现与验证交接
 
-当前状态：PARTIAL / INTEGRATION_REQUIRED。构建 NOT_RUN；测试 NOT_RUN；真实质量 UNVERIFIED；release_allowed=false。
+当前状态：PARTIAL / FULL_WORKFLOW_BLOCKED。主代理已运行资源修正后的首次完整业务 fixture：Stage0 完成，Stage1 住宿完成后，打开公会的输入因 `STALE_ACTION_INTENT` 被门禁拒绝，根终态 `Failed / CUSTOM_ACTION_FAILED`。本次只读归因及文档更新，没有源码修正或复验；真实质量 UNVERIFIED；release_allowed=false。
 
 本专项是显式 `fordraig` quest/mod 扩展，不是基础地下城 `fordraig-B3F`。固定 58 个 ID、旧 Python 生产入口、配置、资源和用户文件不在本代理写范围内。本代理未构建、未运行测试、未调用 EXE、未操作设备、未提交或推送；主代理及其他代理的接线不作为本代理的执行证据。
 
@@ -65,7 +65,7 @@ nlohmann::json summary(std::size_t unit) const;
 
 | 段偏移 | 类型化阶段 | 业务与确认 |
 | --- | --- | --- |
-| 0 | Leap=0 | cursedWheel -> Fordraig/Leap -> 必要时 leap -> OK -> 等待 15 秒 -> Inn |
+| 0 | Leap=0 | cursedWheel -> fordraig/Leap -> 必要时 leap -> OK -> 等待 15 秒 -> Inn |
 | 1 | Request=1 | 强制住宿、领取指定请求、确认访问完成 |
 | 2 | Enter=2 | labyrinthOfFordraig -> Entrance -> GotoDung -> 地下城 |
 | 3 | Trap1Route=3、Trap1Push=4 | 左上 position (721,448)、position (720,608)，返回键关图后触发机关 |
@@ -134,8 +134,8 @@ take_turn 与 fight_encounter 已消费 `/strategy/automatic`。非 boss 强制 
 - featured_request_accepted 的参数验证和实际目标识别均允许且使用 `fordraig/RequestAccept`，保留原 LBC/request；不能仅扩白名单但继续识别 LBC。维持目标纵向 +/-200 的 request_accepted ROI 语义。
 - CMake 加入业务源码和独立 `test_m4_fordraig` 可执行目标；测试链接现有 M4 原生库、SDK/OpenCV 依赖和 UTF-8 工具链设置，不引入第二套框架。本测试有独立 main，不能把它的源码并入已有测试 main。
 - 已接的 `workflow=fordraig` 使用显式 quest_catalog，并通过 `publish_workflow_stages` 共用封存 revision、十段同一 Run。恢复选择当前 `unit % 10` 的业务图，不一律回到 Leap。
-- 固定资源解析核对 `Fordraig/Leap` 与 `fordraig/Leap`、`ReturnText` 与 returnText 的大小写/别名，不复制资产或增加自动回退。两项对话资源也须进入闭包。
-- 当前状态、扩展台账、数据权威与共享字段文档由主代理同步。以上接线尚无本轮构建或执行证据，不能据代码存在改写离线验收。
+- 生产 Leap 直接引用正式 `fordraig/Leap`；返城直接引用 `ReturnText`。共享子图的 `returnText.png` 仅使用正式 manifest 已有的 `returnText.png -> ReturnText.png` 别名；不新增大小写兼容或自动回退。两项对话资源也须进入闭包。
+- 当前状态、扩展台账、数据权威与共享字段文档由主代理同步。已有统一构建和纯状态结果不代表以上完整流程接线通过。
 
 ## 新增测试与执行协议
 
@@ -160,7 +160,46 @@ Python 测试使用 `next/.local/m4-fordraig-*` 下的独立临时目录，UTF-8
 
 ## 未验证项与发布边界
 
-所有新增测试均为 **NOT_RUN**，没有新的构建、EXE 身份或通过数。完整 fixture 是待验证输入预期，不能作为功能通过证据。
+主代理报告统一 `14e9eb3` 的纯状态 5 PASS；本代理只读核对 `next/.local/m4-fordraig-tk6nvnye/plan/native.log`，保留计划原轮的 `FORDRAIG_RESOURCE_MISSING:Fordraig/Leap.png` 失败。该通过数不归为本代理执行，也不覆盖计划或完整流程。
+
+此前资源修正仅修改 `tasks/fordraig.cpp`、`tests/m4/test_fordraig.py` 和本文档：Leap 生产引用及两个因果 fixture 统一为小写目录，删除夹具专有 Leap 别名；返城别名方向与正式 manifest 一致。计划断言同时核对 Leap/ReturnText 的精确解析路径，保留主代理的 dual import。未改资源清单、共享代码或原生测试。
+
+此前资源修正的只读静态检查：`fordraig.cpp` 的 18 个直接 `C::image` 引用均精确命中 manifest；Python AST 解析正常，仍为 8 个测试方法。没有导入或执行测试模块，没有运行原生程序；这些检查不计测试 PASS。
+
+完整 fixture 已静态核对住宿、三次带 400ms 时长的请求滚动、350/180 偏移、11 个路线点、两次机关操作、对话、两种战斗输入、返城及输入后时间事件。静态检查不证明实际 Maa 识别、后置帧或十段续接可用。完整 fixture 的首次实际失败见下节；本代理没有新增执行或通过数，也不推断同批其他测试结果。
+
+## 首次完整业务失败归因
+
+证据根：`next/.local/m4-fordraig-9v35_53l/fordraig-full`。只读核对 `input.json`、`output.json`、`execution.json`、`compiled/pipeline/stage1.json` 和 `run/CF28C9CE-8225-4A6B-8265-A37DB5776C69/1/result.json`。记录的 EXE SHA256 为 `570172a2123c8011ca34745ab69500210769d61e419305cef701f0b6c11318ec`；进程 exit=0 仅表示驱动写出结果，业务结果仍为 Failed。
+
+- backend_calls=9、cursor=9、mismatch=false、generation=2、completed_business_units=1。Stage0 四次 Leap 输入已完成；Stage1 五次住宿输入已完成。两段均使用 revision `5aeaac8aac7112e93a4337854c3f16cc97a1e15b48475101562c2b0981ea8b09`，不是多包 revision 不一致或恢复重放。
+- 第九次输入为住宿结束 BACK，frame-9 为 Inn 与 guild；下一条第十次输入预期 `(220,512)`。识别得到 guild box `[200,500,40,24]`、score 约 0.9999995，中心与预期完全一致。没有后端错点，也没有执行第十次输入。
+- 旧源 `StateAcceptRequest` 3397 起先 `StateInn()`，再以 guild 作为找到 guildRequest 的后备；fordraig 3560 起调用该函数。此处 fixture 与旧顺序相符；三次滚动、350/180 偏移和 accepted ROI 尚未执行，不能据本轮失败修改这些语义。
+- 最后确认是 `inn_rest_completed`，inn_rests=1、featured_visit.active=true、visits_completed=0、selections_confirmed=0；Fordraig 仍为 Request，completed_cycles=0。结果已落盘且 quiescent=true，无 storage_error 或 secondary_errors。
+
+首因位于 `Stage1_RequestWork_Guild` 的 GuardedAction：
+
+| 事件 seq | 事实 | 相对 frame 36 |
+| --- | --- | --- |
+| 772 | frame.captured，epoch=5 | 0ms |
+| 775 | 场景复合识别 Hit；阻塞反证、guild、guildRequest 缺失均成立 | 1604.3ms |
+| 780 | 同一帧目标 guild 再识别 Hit | 1939.5ms |
+| 783 | intent.requested，frame_id=36 | 1940.5ms |
+| 787 | input.rejected：STALE_ACTION_INTENT | 2156.6ms |
+
+场景 Custom 识别本身约 1378.4ms，目标识别约 109.2ms，另有约 669ms 的识别调用及原生动作提交间隔。seq801 的 INPUT_CLOSED 及 native.log 末尾 screencap 错误出现在首因之后，不改写为根因。
+
+当前证据指向共享 `runtime/guarded_action.cpp` 的同帧场景/目标识别与原生动作提交耗时，最终由 `devices/input_gate.cpp` 的帧龄检查正确拒绝。局部图中的 guild 重复匹配确实存在，但其场景内与菜单反证已并行，仅删一项不能证明消除 157ms 超限；不能删除阻塞/菜单反证、猜 ROI、延长 TTL、改成固定点或让 fixture 提前出现 guildRequest 来绕过本次失败。主代理需在共享所有者中核对等价去重/调用开销，本代理不改共享文件、不另造执行通道。
+
+这是首次实际业务失败；本代理本轮根因修正次数为 0，仅定位并报告权限外阻断。后续根因修正由主代理统一计入用户规定的最多两次上限，不以不同文件名或额外复跑重置计数。
+
+## 定点复验后的最小接续
+
+先重建主代理修正并运行原完整 fixture，保留其原始全部断言。当前运行批次的 Python 已加载，不能把之后的源码编辑算入该批证据。本代理不提前扩展配置矩阵。
+
+- 直接复用 full_fixture 的前十次输入：在第十次公会点击分别注入 reject=True 或 stop_after_calls=10，要求后端实际到达该输入、已住宿一次、领取/访问/周期完成仍为零、正确失败或停止且静止。不能让先前 STALE_ACTION_INTENT 导致的九次输入冒充拒绝用例通过。
+- 领取副作用反例复用到 `(770,992)` 的前缀并拒绝该输入，要求 featured_visit.pending=true、无后续 BACK/入本或重复领取。现有 Leap 拒绝用例继续保留，不重复添加同义用例。
+- 周期入口需求：当前共享 `test_m4_workflow.cpp` 对 Fordraig 调用 `configure_fordraig_units(definition, stage_sessions)`，默认一周期；normal_units=20 无效。主代理可将显式 cycles 传入既有第三参数，并按实际总段数计算测试看护，十个阶段仍共用同一封存 revision，不新建 Run。入口接妥后才拼接第二轮，处理 Inn→轮盘的真实输入、已消费角色和时间事件索引，不添加暂不生效的参数或占位测试。
 
 仍需主代理构建并串行核对：共同 revision 发布/恢复、每个真实后置帧、十段输入与真静止、pending 恢复位置、场景遮挡、Stop/拒绝/旧帧、已领取 ROI 边界、不同配置与 mod、下载/住宿矩阵。boss 路线完成不等于获胜证据，完整夹具必须实际走过战斗及其完成回执。
 

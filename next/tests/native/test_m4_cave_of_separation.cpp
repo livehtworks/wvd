@@ -142,7 +142,7 @@ int main(int argc, char **argv) {
         const auto workflow = compile(config, profile);
         if (config.value("inspect", false)) {
             output({{"images", workflow.images}, {"nodes", workflow.nodes}, {"time_limit_ms", workflow.time_limit.count()},
-                {"backend_calls", 0}, {"connections", 0}});
+                {"checkpoint", workflow.checkpoint}, {"backend_calls", 0}, {"connections", 0}});
             return 0;
         }
         require(!std::filesystem::exists(root / "compiled") && !std::filesystem::exists(root / "run"), "FIXTURE_OUTPUT_EXISTS");
@@ -166,7 +166,8 @@ int main(int argc, char **argv) {
             {contracts::ActionKind::Click, contracts::ActionKind::ClickKey, contracts::ActionKind::Swipe}, {"wvd"}, 2000ms};
         runtime::RunDefinition definition;
         definition.request_id = "cos-isolated"; definition.policy = policy; definition.initial = session;
-        definition.state_factory = games::wvd_state_binding(profile);
+        // 纯视觉/默认对话子图没有业务检查点，不声明为业务单元；带回执的图仍使用真实业务状态。
+        if (!session.checkpoint_node.empty()) definition.state_factory = games::wvd_state_binding(profile);
         runtime::RunCoordinator coordinator(root / "run", registry);
         if (config.value("stop_after_input", false)) device->after_input = [&] { coordinator.request_stop(); };
         coordinator.start(definition, device);
@@ -179,7 +180,7 @@ int main(int argc, char **argv) {
         require(before == device->calls.load(), "FIXTURE_INPUT_AFTER_QUIESCENCE");
         output({{"snapshot", storage::snapshot_json(coordinator.snapshot())}, {"events", coordinator.events()},
             {"backend_calls", before}, {"connections", device->connections.load()}, {"mismatch", device->mismatch},
-            {"cursor", device->cursor}, {"images", workflow.images}});
+            {"cursor", device->cursor}, {"images", workflow.images}, {"state_bound", definition.state_factory.has_value()}});
         return 0;
     } catch (const std::exception &error) {
         output({{"error", error.what()}, {"backend_calls", device ? device->calls.load() : 0},

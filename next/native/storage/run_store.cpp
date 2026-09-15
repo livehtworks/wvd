@@ -1,11 +1,79 @@
 #include "run_store.hpp"
 #include "platform/windows/runtime_files.hpp"
+#include "platform/windows/file_digest.hpp"
+#include "maafw/buffers.hpp"
 #include <algorithm>
+#include <array>
 #include <fstream>
+#include <windows.h>
 
 namespace wvd::storage {
 using J = nlohmann::json;
 namespace {
+void diagnostic_require(bool condition, const char *error) {
+    if (!condition) throw std::runtime_error(error);
+}
+std::string diagnostic_error(const char *text) {
+    const std::string value(text);
+    if (!value.empty() && value.size() <= 256 &&
+        std::all_of(value.begin(), value.end(), [](unsigned char c) {
+            return (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_';
+        })) return value;
+    return "DIAGNOSTIC_SAVE_FAILED";
+}
+// 不跟随junction/symlink，持有各级目录的非共享写/删除句柄直至本次原子写结束。
+struct DiagnosticDirectories {
+    std::vector<HANDLE> handles;
+    ~DiagnosticDirectories() { for (auto handle : handles) CloseHandle(handle); }
+    BY_HANDLE_FILE_INFORMATION hold(const std::filesystem::path &path) {
+        const auto handle = CreateFileW(path.c_str(), FILE_READ_ATTRIBUTES, FILE_SHARE_READ,
+            nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+        diagnostic_require(handle != INVALID_HANDLE_VALUE, "DIAGNOSTIC_DIRECTORY_LOCK_FAILED");
+        BY_HANDLE_FILE_INFORMATION info{};
+        if (!GetFileInformationByHandle(handle, &info) ||
+            !(info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) ||
+            (info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)) {
+            CloseHandle(handle);
+            throw std::runtime_error("DIAGNOSTIC_REPARSE_REJECTED");
+        }
+        try { handles.push_back(handle); }
+        catch (...) { CloseHandle(handle); throw; }
+        return info;
+    }
+    void ancestors(const std::filesystem::path &directory) {
+        const auto absolute = std::filesystem::absolute(directory).lexically_normal();
+        auto current = absolute.root_path();
+        hold(current);
+        for (const auto &part : absolute.relative_path()) {
+            diagnostic_require(handles.size() < 64, "DIAGNOSTIC_PATH_DEPTH");
+            current /= part;
+            hold(current);
+        }
+    }
+};
+void validate_diagnostic_png(const contracts::FrameEnvelope &frame, std::size_t limit) {
+    const auto &bytes = frame.encoded_image;
+    constexpr std::array<std::uint8_t, 8> signature{137, 80, 78, 71, 13, 10, 26, 10};
+    diagnostic_require(bytes.size() <= limit, "DIAGNOSTIC_FRAME_BYTES_EXCEEDED");
+    diagnostic_require(bytes.size() >= 33 &&
+        std::equal(signature.begin(), signature.end(), bytes.begin()), "DIAGNOSTIC_NOT_PNG");
+    // 先核对PNG固定IHDR，避免SDK解码前接受异常大尺寸；像素有效性仍由现有SDK验证。
+    const auto u32 = [&](std::size_t offset) {
+        return (std::uint32_t(bytes[offset]) << 24) | (std::uint32_t(bytes[offset + 1]) << 16) |
+               (std::uint32_t(bytes[offset + 2]) << 8) | bytes[offset + 3];
+    };
+    const auto size = frame.identity.recognition_size;
+    diagnostic_require(u32(8) == 13 && bytes[12] == 'I' && bytes[13] == 'H' &&
+        bytes[14] == 'D' && bytes[15] == 'R' && size.width > 0 && size.height > 0 &&
+        size.width <= 4096 && size.height <= 4096 && u32(16) == std::uint32_t(size.width) &&
+        u32(20) == std::uint32_t(size.height), "DIAGNOSTIC_PNG_SIZE_INVALID");
+    auto image = maafw::image_buffer();
+    auto owned = bytes;
+    diagnostic_require(MaaImageBufferSetEncoded(image.get(), owned.data(), owned.size()) &&
+        MaaImageBufferGetRawData(image.get()) && MaaImageBufferType(image.get()) == 16 &&
+        MaaImageBufferWidth(image.get()) == size.width && MaaImageBufferHeight(image.get()) == size.height,
+        "DIAGNOSTIC_PNG_DECODE_FAILED");
+}
 J event_record(const std::string &instance, std::uint64_t run, std::uint64_t generation,
                std::uint64_t seq, std::string type, J payload) {
     auto node = payload.is_object() ? payload.value("node", J(nullptr)) : J(nullptr);
@@ -121,7 +189,14 @@ J snapshot_json(const contracts::RunSnapshot &s) {
               {"cleanup_called", s.inputs.cleanup_called}}}};
 }
 RunStore::RunStore(const std::filesystem::path &root, const std::string &instance,
-                   std::uint64_t run, const J &definition) {
+                   std::uint64_t run, const J &definition,
+                   std::shared_ptr<const contracts::MonotonicClock> diagnostic_clock,
+                   DiagnosticLimits limits)
+    : instance_(instance), run_(run), definition_(definition),
+      diagnostic_clock_(std::move(diagnostic_clock)), diagnostic_limits_(limits) {
+    diagnostic_require(diagnostic_clock_ && limits.rewards > 0 && limits.rewards <= 128 &&
+        limits.failures > 0 && limits.failures <= 32 && limits.frame_bytes > 0 &&
+        limits.frame_bytes <= 8 * 1024 * 1024, "DIAGNOSTIC_LIMITS_INVALID");
     // root 是调用者明确指定的新数据根；只新建本实例/本运行目录，既有同名目录不接管。
     auto parent = root / instance;
     std::filesystem::create_directories(parent);
@@ -130,9 +205,131 @@ RunStore::RunStore(const std::filesystem::path &root, const std::string &instanc
         throw std::runtime_error("RUN_DIRECTORY_EXISTS");
     platform::atomic_write(
         directory_ / "run.json",
-        J{{"schema", 1}, {"instance", instance}, {"run_id", run}, {"definition", definition}}.dump(
+        J{{"schema", 1}, {"instance", instance}, {"run_id", run}, {"definition", definition},
+          {"diagnostic_policy", {{"schema", 1}, {"reward_limit", limits.rewards},
+              {"failure_limit", limits.failures}, {"frame_bytes_limit", limits.frame_bytes},
+              {"reserved_bytes_limit", std::uint64_t(limits.rewards + limits.failures) * limits.frame_bytes},
+              {"default_interval_seconds", 60}, {"pause_interval_seconds", 120}}}}.dump(
             2),
         false);
+}
+J RunStore::save_diagnostic(const contracts::FrameEnvelope *frame, const DiagnosticRequest &request) {
+    std::lock_guard lock(diagnostic_mutex_);
+    const auto skipped = [](const char *status) { return J{{"status", status}}; };
+    if (diagnostic_closed_) return skipped("closed");
+    const bool reward = request.stage == "reward";
+    if (request.run_id != run_ || !request.generation || request.task_id <= 0 || request.depth < 0 ||
+        request.node.empty() || request.node.size() > 256 || request.reason.empty() ||
+        request.reason.size() > 256 || request.operation_id.size() > 512 || request.error.size() > 256 ||
+        (reward && request.operation_id.empty()) ||
+        (request.stage != "reward" && request.stage != "pre_action" &&
+         request.stage != "postcondition" && request.stage != "recovery_entry")) {
+        ++diagnostic_unrecorded_;
+        return skipped("invalid_request");
+    }
+    if (reward && diagnostic_operations_.contains(request.operation_id)) {
+        ++diagnostic_duplicates_;
+        return skipped("duplicate");
+    }
+    const auto now = diagnostic_clock_->now();
+    const auto interval = std::chrono::seconds(request.reason.find("pause") != std::string::npos ? 120 : 60);
+    bool clock_backwards = false;
+    if (!reward) {
+        const auto found = diagnostic_times_.find(request.reason);
+        clock_backwards = found != diagnostic_times_.end() && now < found->second;
+        if (found != diagnostic_times_.end() && now >= found->second && now - found->second < interval) {
+            ++diagnostic_throttled_;
+            return skipped("throttled");
+        }
+    }
+    auto &attempts = reward ? diagnostic_rewards_ : diagnostic_failures_;
+    if (attempts >= (reward ? diagnostic_limits_.rewards : diagnostic_limits_.failures)) {
+        ++diagnostic_quota_;
+        return skipped("quota_exceeded");
+    }
+    // 失败/tmp也占一次完整单帧预算，不自动重试，不让失败绕过数量/字节上限。
+    ++attempts;
+    if (reward) diagnostic_operations_.insert(request.operation_id);
+    else diagnostic_times_[request.reason] = now;
+    J entry{{"id", diagnostic_rewards_ + diagnostic_failures_}, {"status", "failed"},
+        {"instance", instance_}, {"run_id", run_}, {"generation", request.generation},
+        {"unit_index", request.unit_index}, {"task_id", request.task_id}, {"depth", request.depth},
+        {"node", request.node}, {"reason", request.reason}, {"stage", request.stage},
+        {"operation_id", request.operation_id}};
+    try {
+        diagnostic_require(!clock_backwards, "DIAGNOSTIC_CLOCK_MOVED_BACKWARD");
+        diagnostic_require(request.error.empty(), request.error.c_str());
+        diagnostic_require(frame != nullptr, "DIAGNOSTIC_FRAME_UNAVAILABLE");
+        const auto &id = frame->identity;
+        diagnostic_require(id.generation == request.generation && id.frame_id > 0 &&
+            id.device_id == definition_.at("device_id") && id.game_id == definition_.at("game_id") &&
+            id.pack_revision == definition_.at("pack_revision") && id.color_format == "BGR8" &&
+            id.raw_size.width > 0 && id.raw_size.height > 0 &&
+            id.raw_size.width <= 16384 && id.raw_size.height <= 16384 &&
+            (definition_.value("observed_read_only_viewport", false) || id.viewport_id == definition_.at("viewport")) &&
+            id.captured_at.time_since_epoch().count() > 0 && id.captured_at <= std::chrono::steady_clock::now(),
+            "DIAGNOSTIC_FRAME_IDENTITY_INVALID");
+        entry["frame"] = {{"frame_id", id.frame_id}, {"generation", id.generation},
+            {"device_id", id.device_id}, {"game_id", id.game_id}, {"pack_revision", id.pack_revision},
+            {"viewport_id", id.viewport_id}, {"connection_generation", id.connection_generation},
+            {"action_epoch", id.action_epoch}, {"raw_size", {id.raw_size.width, id.raw_size.height}},
+            {"recognition_size", {id.recognition_size.width, id.recognition_size.height}},
+            {"color_format", id.color_format}, {"backend", id.backend},
+            {"foreground_application", id.foreground_application},
+            {"captured_at_ns", std::chrono::duration_cast<std::chrono::nanoseconds>(id.captured_at.time_since_epoch()).count()},
+            {"age_at_submit_ms", std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - id.captured_at).count()},
+            {"input_authorization", false}};
+        validate_diagnostic_png(*frame, diagnostic_limits_.frame_bytes);
+        DiagnosticDirectories directories;
+        directories.ancestors(directory_);
+        const auto folder = directory_ / "diagnostics";
+        if (!diagnostic_directory_created_) {
+            diagnostic_require(std::filesystem::create_directory(folder), "DIAGNOSTIC_DIRECTORY_EXISTS");
+            const auto info = directories.hold(folder);
+            diagnostic_volume_ = info.dwVolumeSerialNumber;
+            diagnostic_directory_id_ = (std::uint64_t(info.nFileIndexHigh) << 32) | info.nFileIndexLow;
+            diagnostic_directory_created_ = true;
+        } else {
+            const auto info = directories.hold(folder);
+            diagnostic_require(info.dwVolumeSerialNumber == diagnostic_volume_ &&
+                ((std::uint64_t(info.nFileIndexHigh) << 32) | info.nFileIndexLow) == diagnostic_directory_id_,
+                "DIAGNOSTIC_DIRECTORY_CHANGED");
+        }
+        const auto relative = "diagnostics/" + std::to_string(entry.at("id").get<std::uint64_t>()) + ".png";
+        const auto hash = platform::bytes_sha256(frame->encoded_image);
+        const std::string content(frame->encoded_image.begin(), frame->encoded_image.end());
+        platform::atomic_write(directory_ / relative, content, false);
+        entry["path"] = relative;
+        entry["sha256"] = hash;
+        entry["bytes"] = content.size();
+        entry["status"] = "saved";
+        diagnostic_bytes_ += content.size();
+    } catch (const std::exception &error) {
+        entry["error"] = diagnostic_error(error.what());
+        ++diagnostic_failed_;
+        if (!frame) ++diagnostic_unavailable_;
+    } catch (...) {
+        entry["error"] = "DIAGNOSTIC_SAVE_EXCEPTION";
+        ++diagnostic_failed_;
+    }
+    diagnostic_entries_.push_back(entry);
+    return entry;
+}
+J RunStore::diagnostic_summary() const {
+    std::lock_guard lock(diagnostic_mutex_);
+    return {{"schema", 1}, {"entries", diagnostic_entries_}, {"bytes_saved", diagnostic_bytes_},
+        {"reserved_bytes", (diagnostic_rewards_ + diagnostic_failures_) * diagnostic_limits_.frame_bytes},
+        {"reward_attempts", diagnostic_rewards_}, {"failure_attempts", diagnostic_failures_},
+        {"failed", diagnostic_failed_}, {"unavailable", diagnostic_unavailable_},
+        {"throttled", diagnostic_throttled_}, {"duplicates", diagnostic_duplicates_},
+        {"quota_exceeded", diagnostic_quota_}, {"unrecorded", diagnostic_unrecorded_},
+        {"complete", diagnostic_failed_ == 0 && diagnostic_quota_ == 0 && diagnostic_unrecorded_ == 0}};
+}
+void RunStore::note_diagnostic_hook_failure() noexcept {
+    try {
+        std::lock_guard lock(diagnostic_mutex_);
+        ++diagnostic_unrecorded_;
+    } catch (...) {}
 }
 void RunStore::save_events(const EventJournal &events) {
     platform::atomic_write(directory_ / "events.json", events.read().dump(2), true);
@@ -142,6 +339,12 @@ void RunStore::save_terminal(const contracts::RunSnapshot &snapshot,
     if (saved_)
         throw std::runtime_error("TERMINAL_ALREADY_SAVED");
     J document = snapshot_json(snapshot);
+    // 协调器在全部Session join后调用；此后拒绝任何迟到图片，索引与终态同次提交。
+    {
+        std::lock_guard lock(diagnostic_mutex_);
+        diagnostic_closed_ = true;
+    }
+    document["diagnostics"] = diagnostic_summary();
     document["result_saved"] = true;
     document["events"] = events;
     document["root_task_id"] = session.root_task_id;

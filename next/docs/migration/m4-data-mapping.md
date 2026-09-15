@@ -12,8 +12,9 @@
   `LegacyConfigImporter::parse/export_legacy` 读入/往返，新版 `ProfileStore` 保存显式副本。
 - 原 `config.json` 是生产用户配置权威；Run只消费显式冻结values。善恶经已确认回执/CAS写
   绑定的新profile，不写旧配置。来源/passthrough与当前值不构成并行写入权威。
-- **9项仅导入/导出，24项找到有范围的业务/选择读取。** 24不表示完整承接，其中包括新转交
-  未构建消费者、局部预算和语言比较。字段出现于描述、校验、导出或测试不能计作业务消费。
+- **7项无业务读取，26项找到有范围的业务/选择读取。** 7项包含3项已导入/冻结但非运行身份
+  的设备字段及4项更新/提醒字段；26项包含正在集成的新binding与摘要源码，不表示完整承接或
+  测试通过。字段出现于描述、校验、导出或测试不能计作业务消费。
 
 ## 33字段逐项摘要
 
@@ -22,20 +23,20 @@
 
 | 字段 | 旧消费者示例 | 当前业务消费者 / 差异与剩余 |
 | --- | --- | --- |
-| `EMU_PATH` | `src/script.py:716`，CheckAndRecoverDevice.StartEmulator | 无业务消费者；仅导入/导出。旧模拟器路径/实例/ADB地址（保留旧拼写和值）。 已导入/导出；新MuMu绑定使用独立显式参数，未找到本字段到真实后端的绑定；Metadata/CLEANUP阻断。 |
-| `EMU_INDEX` | `src/script.py:472`，MumuIpcScreenshotBackend.connect | 无业务消费者；仅导入/导出。旧模拟器路径/实例/ADB地址（保留旧拼写和值）。 已导入/导出；新MuMu绑定使用独立显式参数，未找到本字段到真实后端的绑定；Metadata/CLEANUP阻断。 |
-| `ADB_ADRESS` | `src/script.py:845`，CheckAndRecoverDevice | 无业务消费者；仅导入/导出。旧模拟器路径/实例/ADB地址（保留旧拼写和值）。 已导入/导出；新MuMu绑定使用独立显式参数，未找到本字段到真实后端的绑定；Metadata/CLEANUP阻断。 |
-| `AUTO_START_CLASH` | `src/script.py:308`，EnsureClashVpn | 无业务消费者；仅导入/导出。旧EnsureClashVpn开关，已连接则不重复启动。 有EnsureVpn类型及独立vpn_required，无本字段到LifecycleTarget的消费者；真实端口未接。 |
+| `EMU_PATH` | `src/script.py:716`，CheckAndRecoverDevice.StartEmulator | 已由 LegacyConfigImporter 导入/往返，并随 wvd_state_binding 的 profile 冻结；非新版运行身份来源。DevicePolicy/LifecycleTarget 使用独立显式绑定，不从旧路径自动发现或连接设备；Metadata/CLEANUP仍阻断。 |
+| `EMU_INDEX` | `src/script.py:472`，MumuIpcScreenshotBackend.connect | 已导入/往返并随 profile 冻结；旧实例索引不自动成为新版 instance_id。没有字段直接连接设备的消费者，不等于应补设备发现或旧索引隐式映射。 |
+| `ADB_ADRESS` | `src/script.py:845`，CheckAndRecoverDevice | 保留旧拼写/地址值并导入/冻结；不是新版连接授权或运行身份。真实绑定仍由独立显式参数提供，本次不开放真实端口。 |
+| `AUTO_START_CLASH` | `src/script.py:308`，EnsureClashVpn | `recovery/boot.cpp::recovery_binding/bind_initial_vpn` 已读取冻结值选择已授权目标的 EnsureVpn；`tasks/task_handoff.cpp` 已调用初始binding。Lovelace新源码正在集成、待验；配置不能授予VPN/设备身份，包发现与系统授权适配仍未开放。 |
 | `LAST_VERSION` | `src/gui.py:508`，ConfigPanelApp.__init__ | 无业务消费者；仅导入/导出。旧更新检查/展示版本字段。 原树保留；新更新/版本回写消费者缺失。 |
 | `LATEST_VERSION` | `src/gui.py:1591`，ConfigPanelApp.create_widgets | 无业务消费者；仅导入/导出。旧更新检查/展示版本字段。 原树保留；新更新/版本回写消费者缺失。 |
-| `FARM_TARGET_TEXT` | `src/script.py:1843`，Factory.DungeonCompletionCounter | 无业务消费者；仅导入/导出。旧任务显示名/统计文本。 目录标题不等于此字段被消费；新业务summary未读取该显示名，M5 UI未做。 |
+| `FARM_TARGET_TEXT` | `src/script.py:1843`，Factory.DungeonCompletionCounter | `state.cpp::summarize` 已将冻结值发布为 farm_target_text，不再是仅导入。last_lap_seconds结算/摘要也已落源码，尚待验证；不等于旧gettext统计文字或M5展示已迁移。 |
 | `FARM_TARGET` | `src/script.py:3471`，Factory.QuestFarm | `next/native/storage/legacy_import.cpp:66`、`next/native/games/wvd/tasks/task_handoff.cpp:39`、`next/native/games/wvd/tasks/task_handoff.cpp:198`。旧选择任务/任务专用区段及转7000G目标。 已选择导入区段；新转交检验/更换目标源码未构建。m4_check遍历显式目录不等于从本字段启动Farm。 |
 | `KARMA_ADJUST` | `src/script.py:2263`，Factory.IdentifyState | `next/native/games/wvd/state.cpp:13`、`next/native/games/wvd/recovery/karma_prompt.cpp:4`、`next/native/storage/karma_writer.cpp:20`。有符号字符串善恶余额：零/负走ambush，正走ignore，确认后写新值。 确认后只写显式新版profile；CAS失败保留事实不重发，完整任务矩阵未验。 |
 | `TASK_SPECIFIC_CONFIG` | `src/script.py:1764`，Factory.ReloadStrategy | `next/native/storage/legacy_import.cpp:70`、`next/native/games/wvd/combat/strategy.cpp:10`。先GENERAL后选任务/DEFAULT；策略选择同时受此开关控制。 消费者已有；完整任务及恢复/配置/mod组合仍未验，0/58不变。 |
 | `STRATEGY` | `src/script.py:1776`，Factory.ReloadStrategy | `next/native/games/wvd/combat/strategy.cpp:32`、`next/native/games/wvd/combat/turn.cpp:93`、`next/native/games/wvd/combat/strategy.cpp:69`。分组顺序/首同名深复制、技能行和complete_one_as_all。 role/skill/target/level参与真实动作；freq_var固定旧执行不读，保留但不发明频率；全组合未验。 |
 | `DEFAULT_OVERALL_STRATEGY` | `src/script.py:1765`，Factory.ReloadStrategy | `next/native/games/wvd/combat/strategy.cpp:23`。非任务专用时选默认策略组。 消费者已有；完整任务及恢复/配置/mod组合仍未验，0/58不变。 |
 | `RELOAD_STRATEGY_WHEN` | `src/script.py:3132`，Factory.StateDungeon | `next/native/games/wvd/state.cpp:123`、`next/native/games/wvd/state.cpp:167`。每次副本/每场战斗等重载时机，重启/死亡仍重载。 消费者已有；完整任务及恢复/配置/mod组合仍未验，0/58不变。 |
-| `LANGUAGE` | `src/utils.py:263`， | `next/native/games/wvd/combat/strategy.cpp:8`、`next/native/games/wvd/state.cpp:53`。旧gettext/配置显示语言；运行字符串策略名称按语言对应。 策略/枚举比较已有消费；不代表旧gettext文本、任务名和UI本地化已迁移。 |
+| `LANGUAGE` | `src/utils.py:263`， | `combat/strategy.cpp::CombatStrategy/uses_task_points` 与 `state.cpp::setting_is` 已按语言解释策略、任务点及重载枚举，属于实际combat消费者。旧gettext日志及Tk/M5本地化未完整迁移，完整配置组合仍待验。 |
 | `WEBSITE_ORG_TIME` | `src/gui.py:1366`，ConfigPanelApp.create_widgets | 无业务消费者；仅导入/导出。旧网页访问后的周/双周提醒时间。 原值可往返，新网页提醒/时间回写消费者缺失。 |
 | `AM_REFRESH_TIME` | `src/gui.py:1407`，ConfigPanelApp.create_widgets | 无业务消费者；仅导入/导出。旧网页访问后的周/双周提醒时间。 原值可往返，新网页提醒/时间回写消费者缺失。 |
 | `TASK_POINT_STRATEGY` | `src/script.py:1767`，Factory.ReloadStrategy | `next/native/games/wvd/combat/strategy.cpp:12`、`next/native/games/wvd/state.cpp:126`、`next/native/games/wvd/tasks/dungeon_route.cpp:58`。overall_strategy与task_point字符串步骤键；确认到点后切换。 消费者已有；完整任务及恢复/配置/mod组合仍未验，0/58不变。 |
@@ -48,9 +49,9 @@
 | `ACTIVE_ROYALSUITE_REST` | `src/script.py:2465`，Factory.StateInn | `next/native/games/wvd/tasks/departure.cpp:46`、`next/native/games/wvd/supply/inn.cpp:4`、`next/native/games/wvd/tasks/sleep_visits.cpp:27`。普通/套房住宿选择，不代替应否住宿判断。 消费者已有；完整任务及恢复/配置/mod组合仍未验，0/58不变。 |
 | `ACTIVE_TRIUMPH` | `src/script.py:4084`，Factory.QuestFarm | `next/native/games/wvd/tasks/bounty_cycle.cpp:71`、`next/native/games/wvd/tasks/bounty_cycle.cpp:95`。蝎女跳跃选择凯旋；BeautifulOre优先，吉尔不使用。 消费者已有；完整任务及恢复/配置/mod组合仍未验，0/58不变。 |
 | `ACTIVE_BEAUTIFUL_ORE` | `src/script.py:4083`，Factory.QuestFarm | `next/native/games/wvd/tasks/bounty_cycle.cpp:70`、`next/native/games/wvd/tasks/bounty_cycle.cpp:95`、`next/native/games/wvd/state.cpp:662`。蝎女美矿石章/跳点及跨城跳过分支，优先凯旋。 消费者已有；完整任务及恢复/配置/mod组合仍未验，0/58不变。 |
-| `ACTIVE_BEG_MONEY` | `src/script.py:2239`，Factory.IdentifyState | `next/native/games/wvd/tasks/dungeon_route.cpp:98`、`next/native/games/wvd/tasks/pipeline_compiler.cpp:568`、`next/native/games/wvd/tasks/workflow_session.cpp:81`。未知cursedWheel页转7000G，否则等待7300秒后恢复。 普通traverse_dungeon的未知页路由、binding、状态取值、转交/分段等待已静态接线，尚未构建/运行；dark_light独立未知分发未见unknown_leap调用，全任务覆盖仍有缺口。 |
-| `MAX_TRY_LIMIT` | `src/script.py:1503`，Factory.FindCoordsOrElseExecuteFallbackAndWait | `next/native/games/wvd/tasks/dungeon_route.cpp:102`、`next/native/games/wvd/tasks/dark_light.cpp:39`。旧多处寻找/状态检查的重试上限。 当前消费未知页耗尽；其它有限图使用各自hit/time预算，不能据这两处读值称旧所有重试点参数等价。 |
-| `MAX_CRASH_LIMIT` | `src/script.py:1715`，Factory.restartGame | `next/native/games/wvd/state.cpp:217`、`next/native/games/wvd/recovery/boot.cpp:106`。旧应用重启累计上限/设备升级阈值。 状态读取已接；recovery_binding的max_crashes仍由调用者另传，未证明每个入口与本配置一致。 |
+| `ACTIVE_BEG_MONEY` | `src/script.py:2239`，Factory.IdentifyState | 普通 `traverse_dungeon` 和 `dark_light` 均已有 unknown_leap 调用、binding、状态、TaskHandoff/LeapWait源码；暗灯以灯具extra_known排除已知画面。接口摘录已刷新，新调用链和全部任务/恢复/配置矩阵待验，不再记为暗灯无调用。 |
+| `MAX_TRY_LIMIT` | `src/script.py:1503`，Factory.FindCoordsOrElseExecuteFallbackAndWait | `tasks/dungeon_route.cpp::traverse_dungeon`、`tasks/dark_light.cpp::dark_light` 将冻结值传入 unknown_exhausted；`vision/recognizers.cpp` 以 max_tries<0 或 sample.samples>max_tries 判定，图进入 dungeon.unknown_try_limit。其余map/entry仍各有hit/time预算，不能宣称旧全部重试点参数等价。 |
+| `MAX_CRASH_LIMIT` | `src/script.py:1715`，Factory.restartGame | `state.cpp::restart_game`、`recovery/boot.cpp::recovery_binding/decide` 已从冻结profile及其binding消费累计上限/升级阈值，不再由入口另传独立max_crashes。新binding一致性检查待验，真实端口未开放。 |
 | `REST_INTERVEL` | `src/script.py:3617`，Factory.QuestFarm | `next/native/games/wvd/supply/policy.cpp:8`、`next/native/games/wvd/state.cpp:58`、`next/native/games/wvd/tasks/steel_trial.cpp:59`。普通本max(interval,1)，巨人/悬赏/钢试炼interval+1，击退按组数，不能混用。 负值/溢出严格拒绝与旧运行异常差异须保留；各专项全矩阵未验。 |
 | `ACTIVE_CSC` | `src/script.py:2016`，Factory.CursedWheelTimeLeap | `next/native/games/wvd/tasks/bull_cave.cpp:52`、`next/native/games/wvd/navigation/causality.cpp:5`。只有调用者提供CSC_symbol/setting时启用因果；false仅关闭调整，不取消跳跃。 牛洞调用者消费；未传CSC参数的蝎女/吉尔等走无因果是旧语义，不因出现关键词算全覆盖。 |
 | `BYPASS_THE_WALL` | `src/script.py:4525`，Factory.QuestFarm | `next/native/games/wvd/tasks/dungeon_route.cpp:140`、`next/native/games/wvd/tasks/sandman.cpp:36`、`next/native/games/wvd/navigation/wall_bypass.cpp:5`。重启后防空气墙，普通dungeon适用；沙人关闭局部值。 消费者已有；完整任务及恢复/配置/mod组合仍未验，0/58不变。 |
@@ -75,13 +76,19 @@ JSON Pointer分类；未知值不会自动变成运行参数。兼容导出修�
 已存在。图存在/可编译不代表完整任务通过，0/58不变。
 
 `fordraig/repelEnemyForces/CaveOfSeperation/steeltrail`是4个源码扩展，不加入固定58项。
-新扩展、状态、转交和`publish_workflow_stages`已接线，源码冻结并构建中；多阶段共用一个sealed
+新扩展、状态、转交和`publish_workflow_stages`已有源码接线；本次不推断其它代理的当前构建结果。多阶段共用一个sealed
 bundle revision，各正常段独立entry/checkpoint/time/dialogue binding，保留runtime同revision限制。
 未构建/未验证与没有实现是不同状态，见[审计说明](m4-semantic-audit.md)。
 
 任务mod按显式文件顺序追加，冲突名反复加`_mod`/`_自定义`，中英名称按旧规则补齐，错误项留下
 诊断，不覆盖基线。图片按基础原名、基础alias、mod原名/alias查找，由持锁发布保存实际来源。
 运行只读已封存副本，不扫描用户mod；目录模板在冻结Run前展开为派生revision，活动期不接目录。
+
+## 当前字段边界
+
+- `AUTO_START_CLASH` 新binding从冻结profile取值；开启时仍要求显式授权的VPN应用/目标，关闭时不附加EnsureVpn。恢复决策消费该binding，TaskHandoff复用初始VPN装配；Lovelace仍在集成，本次只确认源码，未验证实际执行。
+- `FARM_TARGET_TEXT` 发布为业务摘要 `farm_target_text`；`settle_legacy_lap` 结算上一圈并发布 `last_lap_seconds`，未结算为null。后者是运行字段，不新增第34项配置。仅在源码实际调用的旧结算边界更新，不把所有专项开始或完成都解释成同一圈；完整语义及落盘对账待验。
+- 固定旧源 `Factory.BagClear_Item` 是未调用的局部函数定义，未发现调用、传递或注册引用。保留原定义和记录，不计作活动功能丢失，也不据此自行退役或补造新版存仓流程。组队/LAST_BAGCLEAR不代表存仓。
 
 ## 状态与副作用
 

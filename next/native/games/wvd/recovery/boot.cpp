@@ -4,6 +4,7 @@
 #include "karma_prompt.hpp"
 #include "dialogue.hpp"
 #include "leap_wait.hpp"
+#include <limits>
 
 namespace wvd::games::recovery {
 namespace {
@@ -300,9 +301,49 @@ tasks::CompiledWorkflow with_boot_recovery(const tasks::CompiledWorkflow &task, 
 void register_recovery(runtime::BehaviorRegistry &registry) {
     registry.add_recovery({"wvd.recovery", "1"}, decide);
 }
-contracts::BehaviorBinding recovery_binding(const devices::LifecycleTarget &t, bool force, std::int64_t max_crashes) {
+contracts::BehaviorBinding recovery_binding(const devices::LifecycleTarget &t, const J &profile, bool force) {
+    if (!profile.is_object() || !profile.contains("AUTO_START_CLASH") ||
+        !profile.at("AUTO_START_CLASH").is_boolean() || !profile.contains("MAX_CRASH_LIMIT") ||
+        !profile.at("MAX_CRASH_LIMIT").is_number_integer() ||
+        profile.at("MAX_CRASH_LIMIT") > (std::numeric_limits<std::int64_t>::max)())
+        throw std::runtime_error("WVD_RECOVERY_PROFILE_INVALID");
+    const bool vpn = profile.at("AUTO_START_CLASH").get<bool>();
+    // 配置只选择已授权能力，不能授予VPN权限或推断应用身份。
+    if (vpn && (!t.vpn_required || t.vpn_application_id.empty()))
+        throw std::runtime_error("WVD_VPN_TARGET_NOT_AUTHORIZED");
     return {"WvdRecovery", {"wvd.recovery", "1"}, {{"device_id", t.device_id}, {"instance_id", t.instance_id},
         {"application_id", t.application_id}, {"vpn_application_id", t.vpn_application_id},
-        {"vpn_required", t.vpn_required}, {"force_restart_instance", force}, {"max_crashes", max_crashes}}};
+        {"vpn_required", vpn}, {"force_restart_instance", force},
+        {"max_crashes", profile.at("MAX_CRASH_LIMIT").get<std::int64_t>()}}};
+}
+void bind_initial_vpn(runtime::RunDefinition &run, const devices::LifecycleTarget &target, const J &profile) {
+    const auto expected = recovery_binding(target, profile);
+    if (!run.state_factory || run.state_factory->implementation.id != "wvd.state" ||
+        run.state_factory->parameters.at("profile") != profile)
+        throw std::runtime_error("WVD_INITIAL_PROFILE_MISMATCH");
+    if (run.initial.lifecycle)
+        throw std::runtime_error("WVD_INITIAL_LIFECYCLE_ALREADY_BOUND");
+    for (const auto &unit : run.continuation_units)
+        if (unit.lifecycle)
+            throw std::runtime_error("LIFECYCLE_REQUIRES_RECOVERY_BOUNDARY");
+    if (run.recover) {
+        if (run.recover->implementation.id != "wvd.recovery" || run.recover->implementation.revision != "1")
+            throw std::runtime_error("WVD_INITIAL_RECOVERY_MISMATCH");
+        for (const auto *field : {"device_id", "instance_id", "application_id", "vpn_application_id", "vpn_required", "max_crashes"})
+            if (!run.recover->parameters.contains(field) || run.recover->parameters.at(field) != expected.parameters.at(field))
+                throw std::runtime_error("WVD_INITIAL_RECOVERY_MISMATCH");
+    }
+    if (!profile.at("AUTO_START_CLASH").get<bool>())
+        return;
+    if (!run.recover || !run.recovery_limit)
+        throw std::runtime_error("WVD_INITIAL_RECOVERY_REQUIRED");
+    if (target.device_id != run.policy.device_id || target.application_id != run.policy.application_id)
+        throw std::runtime_error("LIFECYCLE_NOT_AUTHORIZED");
+    // 只挂已选定的首段；原入口、检查点及同revision正常续段保持不变。
+    devices::LifecyclePlan plan;
+    plan.target = target;
+    plan.attempt = 1;
+    plan.operations = {O::EnsureVpn};
+    run.initial.lifecycle = std::move(plan);
 }
 }

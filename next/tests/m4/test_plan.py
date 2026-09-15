@@ -111,6 +111,14 @@ class PlanTests(unittest.TestCase):
         all_specials = {name for name, value in self.source.items() if value["_TYPE"] == "quest"}
         self.assertEqual(set(result["unimplemented_specials"]), all_specials - set(implemented))
         self.assertFalse(result["execution_available"])
+        dark = implemented["darkLight"]["nodes"]
+        leap = dark["UnknownLeap"]
+        self.assertEqual(leap["custom_action"], "WvdUnknownLeap")
+        known = leap["custom_action_param"]["extra_known"]
+        self.assertEqual([item["image"] for item in known], ["darklight", "darklight_lightIt"])
+        self.assertEqual(leap["custom_recognition_param"]["conditions"][0]["extra_known"], known)
+        for name in ("Entry", "Dispatch", "LightDispatch"):
+            self.assertLess(dark[name]["next"].index("UnknownLeap"), dark[name]["next"].index("UnknownLimit"))
         featured = result["compiled_featured_requests"]
         self.assertEqual({row["kind"] for row in featured}, {"quest.featured.bull_cave", "quest.featured.golden_chest"})
         for row in featured:

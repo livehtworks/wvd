@@ -191,7 +191,12 @@ J evaluate_impl(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels, co
                 const J &bound, const maafw::CustomRecognitionScope &scope,
                 maafw::RecognitionCache &cache, unsigned depth, EvaluationMemo &memo) {
     check(depth <= 8, "WVD_CONDITION_DEPTH");
-    const auto key = p.dump();
+    auto identity = p;
+    // boot探针显式填写默认阈值，死亡/对话反证往往省略；二者模板计算语义相同。
+    // 只规范已确定的默认值，不合并ROI来源、不同阈值或不同预处理。
+    if (identity.value("mode", "") == "template" && !identity.contains("threshold"))
+        identity["threshold"] = .8;
+    const auto key = identity.dump();
     if (const auto found = memo.values.find(key); found != memo.values.end())
         return found->second;
     auto result = evaluate_uncached(bundle, pixels, p, bound, scope, cache, depth, memo);
@@ -339,6 +344,19 @@ J evaluate_uncached(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels
             check(result.at("outcome") != "Error", "WVD_BOOT_RECOGNITION_ERROR");
             if (result.at("outcome") == "Hit")
                 return decision(true, allowed_rect, {{"stage", name}, {"matched", result}});
+        }
+        return decision(false, {}, {{"stage", "unknown"}});
+    }
+    if (mode == "boot_ready" && p.value("parallel_basic", false)) {
+        check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");
+        const auto probes = boot_probes(false);
+        const auto matches = evaluate_batch(bundle, pixels, probes, bound, scope, cache, depth, memo, 4);
+        // 顺序消费，保持原稳定页优先级；只并行不带状态的模板/战斗标记探针。
+        for (std::size_t i = 0; i < probes.size(); ++i) {
+            const auto &result = matches.at(i);
+            check(result.at("outcome") != "Error", "WVD_BOOT_RECOGNITION_ERROR");
+            if (result.at("outcome") == "Hit")
+                return decision(true, allowed_rect, {{"stage", probes.at(i).value("image", "combat_active")}, {"matched", result}});
         }
         return decision(false, {}, {{"stage", "unknown"}});
     }
@@ -537,7 +555,7 @@ J evaluate_uncached(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels
             max_tries = p.at("max_tries").get<std::int64_t>();
         }
         // 先按已有分类识别正常页/覆盖层；已知静止页面不能成为“未知冻结”。
-        J probes = J::array({J{{"mode", "boot_ready"}}, J{{"mode", "blocking_screen"}},
+        J probes = J::array({J{{"mode", "boot_ready"}, {"parallel_basic", true}}, J{{"mode", "blocking_screen"}, {"parallel_basic", true}},
             J{{"mode", "template"}, {"image", "trait"}}, J{{"mode", "template"}, {"image", "recover"}},
             J{{"mode", "template"}, {"image", "spellskill/skillDetail"}}});
         if (p.contains("extra_known")) {
@@ -546,8 +564,15 @@ J evaluate_uncached(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels
             for (const auto &probe : p.at("extra_known"))
                 probes.push_back(probe);
         }
-        for (const auto &probe : probes) {
-            const auto known = evaluate_impl(bundle, pixels, probe, bound, scope, cache, depth + 1, memo);
+        std::optional<ProbeBatch> panel_matches;
+        for (std::size_t i = 0; i < probes.size(); ++i) {
+            // 两组正常页/覆盖层都未命中后，三个独立面板反证同步计算。
+            // 仍按原先顺序消费异常；专属extra_known可能含状态，不能一并并行。
+            if (i == 2)
+                panel_matches = evaluate_batch(bundle, pixels, J::array({probes[2], probes[3], probes[4]}),
+                    bound, scope, cache, depth, memo, 3);
+            const auto known = i >= 2 && i < 5 ? panel_matches->at(i - 2) :
+                evaluate_impl(bundle, pixels, probes[i], bound, scope, cache, depth + 1, memo);
             check(known.at("outcome") != "Error", "WVD_UNKNOWN_RECOGNITION_ERROR");
             if (known.at("outcome") == "Hit") {
                 window.clear();

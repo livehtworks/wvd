@@ -421,7 +421,48 @@ bool MaaGateway::controller_action(const contracts::Command &c) {
 }
 int Context::depth() const { return gateway_.depth_.load(); }
 bool Context::cancelled() const { return gateway_.hooks_.cancelled() || gateway_.integrity_failed_; }
-contracts::FrameEnvelope Context::capture() { return gateway_.capture(); }
+contracts::FrameEnvelope Context::capture() {
+    auto frame = gateway_.capture();
+    if (!first_frame_) first_frame_ = frame.identity;
+    last_frame_ = frame.identity;
+    return frame;
+}
+void Context::save_diagnostic(const contracts::FrameEnvelope *frame, const std::string &reason,
+                             const std::string &stage, const std::string &operation_id,
+                             const std::string &error) noexcept {
+    if (!gateway_.hooks_.diagnostic || !gateway_.gate_) return;
+    try {
+        storage::DiagnosticRequest request;
+        request.run_id = gateway_.gate_->run_id();
+        request.generation = gateway_.gate_->generation();
+        request.task_id = task_;
+        request.depth = depth();
+        request.node = node_;
+        request.reason = reason;
+        request.stage = stage;
+        request.operation_id = operation_id;
+        request.error = error.substr(0, 256);
+        const auto belongs = [&](const std::optional<contracts::FrameIdentity> &owned) {
+            if (!frame || !owned) return false;
+            const auto &id = frame->identity;
+            return id.generation == owned->generation && id.frame_id == owned->frame_id &&
+                id.action_epoch == owned->action_epoch && id.captured_at == owned->captured_at &&
+                id.device_id == owned->device_id && id.game_id == owned->game_id &&
+                id.pack_revision == owned->pack_revision && id.viewport_id == owned->viewport_id &&
+                id.connection_generation == owned->connection_generation &&
+                id.raw_size == owned->raw_size && id.recognition_size == owned->recognition_size &&
+                id.color_format == owned->color_format && id.backend == owned->backend &&
+                id.foreground_application == owned->foreground_application;
+        };
+        if (frame && !belongs(first_frame_) && !belongs(last_frame_)) {
+            request.error = "DIAGNOSTIC_CONTEXT_FRAME_MISMATCH";
+            frame = nullptr;
+        }
+        gateway_.hooks_.diagnostic(frame, request);
+    } catch (...) {
+        // 诊断不可覆盖业务首因；正常存储失败在RunStore有限索引中独立记录。
+    }
+}
 contracts::Observation Context::recognize(const contracts::FrameEnvelope &frame,
                                           const RecognitionRequest &request) {
     return gateway_.recognize(frame, gateway_.gate_->frame_identity(), request, context_);

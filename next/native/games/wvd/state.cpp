@@ -14,7 +14,8 @@ WvdRunState::WvdRunState(J profile, const contracts::StateCreationContext &creat
     if (!clock_ || creation.instance_id.empty() || !creation.run_id)
         throw std::runtime_error("WVD_STATE_CONTEXT_INVALID");
     if (!profile_.at("RELOAD_STRATEGY_WHEN").is_string() || !profile_.at("LANGUAGE").is_string() ||
-        !profile_.at("MAX_CRASH_LIMIT").is_number_integer())
+        !profile_.at("MAX_CRASH_LIMIT").is_number_integer() ||
+        !profile_.at("FARM_TARGET_TEXT").is_string())
         throw std::runtime_error("WVD_STATE_PROFILE_INVALID");
     started_ = clock_->now();
     if (!handoff_source_.is_null())
@@ -219,16 +220,19 @@ void WvdRunState::restart_game() {
     strategy_.reload(task_step_);
 }
 void WvdRunState::dungeon_completed() {
+    settle_legacy_lap(clock_->now());
     if (met_encounter_) {
         ++dungeons_;
         met_encounter_ = false;
     }
-    const auto now = clock_->now();
+}
+void WvdRunState::settle_legacy_lap(TimePoint now) {
     if (lap_started_) {
         const auto elapsed = std::chrono::duration<double>(now - *lap_started_).count();
         if (elapsed < 0)
             throw std::runtime_error("WVD_CLOCK_MOVED_BACKWARD");
         total_seconds_ += elapsed;
+        last_lap_seconds_ = elapsed;
     }
     lap_started_ = now;
 }
@@ -415,8 +419,13 @@ bool WvdRunState::confirm_event(const std::string &operation, const std::string 
                 throw std::runtime_error("COS_NEXT_CYCLE_UNIT_INVALID");
             cave_of_separation_.start(unit_index_);
         }
-        if (lap_started_) total_seconds_ += std::chrono::duration<double>(now - *lap_started_).count();
-        lap_started_ = now; ++dungeons_;
+        if (event == "cos_started")
+            settle_legacy_lap(now);
+        else {
+            if (lap_started_) total_seconds_ += std::chrono::duration<double>(now - *lap_started_).count();
+            lap_started_ = now;
+        }
+        ++dungeons_;
         inn_rest_completed_ = false; ++supply_cycle_;
     } else if (event == "fordraig_leap_prepared" || event == "fordraig_trap1_prepared" ||
                event == "fordraig_trap2_prepared") {
@@ -521,8 +530,8 @@ bool WvdRunState::confirm_event(const std::string &operation, const std::string 
         const auto now = clock_->now();
         if (lap_started_ && now < *lap_started_) throw std::runtime_error("WVD_CLOCK_MOVED_BACKWARD");
         bull_cave_.start(unit_index_, featured_visit_.summary().at("visits_completed").get<std::size_t>(), event == "bull_cave_started_rest");
-        if (lap_started_) total_seconds_ += std::chrono::duration<double>(now - *lap_started_).count();
-        lap_started_ = now; ++dungeons_;
+        settle_legacy_lap(now);
+        ++dungeons_;
     } else if (event == "bull_cave_leap_prepared") {
         bull_cave_.prepare_leap(unit_index_);
     } else if (event.starts_with("bull_cave_")) {
@@ -580,8 +589,7 @@ bool WvdRunState::confirm_event(const std::string &operation, const std::string 
         const auto now = clock_->now();
         if (lap_started_ && now < *lap_started_) throw std::runtime_error("WVD_CLOCK_MOVED_BACKWARD");
         golden_chest_.start(unit_index_, featured_visit_.summary().at("visits_completed").get<std::size_t>());
-        if (lap_started_) total_seconds_ += std::chrono::duration<double>(now - *lap_started_).count();
-        lap_started_ = now;
+        settle_legacy_lap(now);
         ++dungeons_;
     } else if (event == "golden_leap_prepared") {
         golden_chest_.prepare_leap(unit_index_);
@@ -736,13 +744,7 @@ bool WvdRunState::confirm_event(const std::string &operation, const std::string 
         if (profile_.at("REST_INTERVEL").get<std::int64_t>() < 0)
             throw std::runtime_error("GIANT_REST_INTERVAL_INVALID");
         const auto now = clock_->now();
-        if (lap_started_) {
-            const auto elapsed = std::chrono::duration<double>(now - *lap_started_).count();
-            if (elapsed < 0)
-                throw std::runtime_error("WVD_CLOCK_MOVED_BACKWARD");
-            total_seconds_ += elapsed;
-        }
-        lap_started_ = now;
+        settle_legacy_lap(now);
         ++dungeons_;
         giant_unit_ = unit_index_;
         giant_route_completed_ = false;
@@ -760,13 +762,7 @@ bool WvdRunState::confirm_event(const std::string &operation, const std::string 
         if (trap_unit_)
             throw std::runtime_error("TRAP_CYCLE_ALREADY_STARTED");
         const auto now = clock_->now();
-        if (lap_started_) {
-            const auto elapsed = std::chrono::duration<double>(now - *lap_started_).count();
-            if (elapsed < 0)
-                throw std::runtime_error("WVD_CLOCK_MOVED_BACKWARD");
-            total_seconds_ += elapsed;
-        }
-        lap_started_ = now;
+        settle_legacy_lap(now);
         // 旧陷阱任务在开始本轮时计数，不要求遭遇；另记完成数，不能把尝试当成功。
         ++dungeons_;
         trap_unit_ = unit_index_;
@@ -913,6 +909,8 @@ J WvdRunState::summarize() const {
     strategy["automatic"] = fordraig_.force_automatic() || strategy.at("automatic").get<bool>();
     return {{"kind", "wvd"},
             {"state_revision", "1"},
+            {"farm_target_text", profile_.at("FARM_TARGET_TEXT")},
+            {"last_lap_seconds", last_lap_seconds_ ? J(*last_lap_seconds_) : J(nullptr)},
             {"karma_value", karma_value_}, {"karma_pending", karma_choice_.has_value()},
             {"karma_ambush", karma_choice_ && karma_choice_->ambush},
             {"karma_sequence", karma_sequence_}, {"karma_effect", karma_effect_},

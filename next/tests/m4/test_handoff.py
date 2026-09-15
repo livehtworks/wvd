@@ -40,6 +40,8 @@ class HandoffTests(unittest.TestCase):
             process = subprocess.run([str(self.exe), str(path)], cwd=folder, env=self.env,
                                      stdout=log, stderr=log, timeout=180)
         self.assertEqual(digest(self.exe), self.exe_hash)
+        (folder / "execution.json").write_text(
+            json.dumps({"exe_sha256": self.exe_hash, "exit": process.returncode}), encoding="utf-8")
         self.assertEqual(process.returncode, 0,
                          (folder / "native.log").read_text(encoding="utf-8", errors="replace")[-4000:])
         output = json.loads((folder / "result.json").read_text(encoding="utf-8"))
@@ -49,14 +51,16 @@ class HandoffTests(unittest.TestCase):
     @staticmethod
     def profile(money):
         return {"GENERAL": {"FARM_TARGET": "fortress-B8F_trap", "ACTIVE_BEG_MONEY": money,
+                            "FARM_TARGET_TEXT": "frozen-source-name", "AUTO_START_CLASH": False,
                             "TASK_SPECIFIC_CONFIG": False, "REST_INTERVEL": 7},
                 "DEFAULT": {"MAX_CRASH_LIMIT": 11},
                 "7000G": {"REST_INTERVEL": 999, "MAX_CRASH_LIMIT": 99}}
 
-    def run_case(self, case):
-        folder = self.root / case
+    def run_case(self, case, *, initial_vpn=False, vpn_lost=False):
+        folder = self.root / (f"{case}-vpn-{vpn_lost}" if initial_vpn else case)
         folder.mkdir()
         profile = self.profile(case not in ("wait", "stop-wait", "wait-budget"))
+        profile["GENERAL"]["AUTO_START_CLASH"] = initial_vpn
         if case in ("state", "extensions"):
             return self.invoke(folder, {"case": case, "profile_source": profile})
         description = folder / "description"
@@ -89,7 +93,8 @@ class HandoffTests(unittest.TestCase):
                  for path in sorted(bundle.rglob("*.png"))]
         result = self.invoke(folder, {"case": case, "profile_source": profile, "bundle": str(bundle),
             "files": files, "before": str(folder / "before.png"), "after": str(folder / "after.png"),
-            "run_root": str(folder / "runs")})
+            "run_root": str(folder / "runs"), "authorize_vpn": initial_vpn,
+            "vpn_lost_before_handoff": vpn_lost})
         self.assertTrue(result["native_run_executed"])
         self.assertTrue(result["source"]["quiescent"])
         if case != "storage-fail":
@@ -126,12 +131,45 @@ class HandoffTests(unittest.TestCase):
         self.assertEqual(parameters["profile"]["FARM_TARGET"], "7000G")
         self.assertEqual(parameters["profile"]["REST_INTERVEL"], 7)
         self.assertEqual(parameters["profile"]["MAX_CRASH_LIMIT"], 11)
+        self.assertEqual(parameters["profile"]["FARM_TARGET_TEXT"], "frozen-source-name")
+        self.assertEqual(result["next_saved"]["business"]["farm_target_text"], "frozen-source-name")
+        self.assertIsNone(result["next_saved"]["business"]["last_lap_seconds"])
+        self.assertEqual(definition["recovery"]["parameters"]["max_crashes"], 11)
+        self.assertFalse(definition["recovery"]["parameters"]["vpn_required"])
+        self.assertNotIn("lifecycle", definition)
         self.assertEqual(parameters["handoff_parent"]["source"], source["business"]["handoff_source"])
         self.assertEqual(parameters["handoff_parent"]["profile_sources"]["FARM_TARGET"], "HANDOFF:turn_to_7000G")
         self.assertNotIn("profile_store", parameters)
         self.assertEqual(result["next_saved"]["business"]["gold_income"]["active"], True)
         # 下一任务只验证真实启动与首个受控输入，然后用户停止；不宣称完整7000G通过。
         self.assertNotEqual(result["next"]["state"], "Completed")
+
+    def test_handoff_rebinds_initial_vpn_from_frozen_target_and_profile(self):
+        for lost in (False, True):
+            with self.subTest(vpn_lost=lost):
+                result = self.run_case("money", initial_vpn=True, vpn_lost=lost)
+                source = result["source"]
+                definition = result["next_record"]["definition"]
+                self.assertEqual(source["state"], "Interrupted")
+                self.assertEqual(source["sessions"][-1]["reason"], "leap.unknown")
+                self.assertEqual(source["inputs"]["backend_called"], 0)
+                self.assertEqual(source["business"]["crashes"], 0)
+                self.assertEqual(result["next"]["business"]["crashes"], 0)
+                self.assertEqual(result["lifecycle"], ["EnsureVpn"] * (2 if lost else 1))
+                self.assertEqual(definition["lifecycle"], source["sessions"][0]["definition"]["lifecycle"])
+                self.assertEqual(definition["lifecycle"]["operations"], ["EnsureVpn"])
+                self.assertEqual(definition["lifecycle"]["attempt"], 1)
+                self.assertTrue(definition["state_factory"]["parameters"]["profile"]["AUTO_START_CLASH"])
+                self.assertTrue(definition["recovery"]["parameters"]["vpn_required"])
+                self.assertEqual(definition["recovery"]["parameters"]["max_crashes"], 11)
+                self.assertEqual(definition["continuation_units"], [])
+                self.assertGreater(result["next"]["inputs"]["backend_called"], 0)
+                self.assertNotEqual(result["next"]["state"], "Completed")
+                self.assertTrue(result["next"]["quiescent"] and result["next"]["result_saved"])
+                confirmations = [e for e in result["next_saved"]["events"]["events"] if e["type"] == "lifecycle.confirmed"]
+                self.assertEqual(len(confirmations), 1)
+                self.assertEqual(confirmations[0]["session_generation"], 1)
+                self.assertEqual(confirmations[0]["payload"]["skipped"], not lost)
 
     def test_fordraig_cos_state_two_cycles_and_pending_recovery_guards(self):
         result = self.run_case("extensions")
@@ -140,6 +178,8 @@ class HandoffTests(unittest.TestCase):
         self.assertEqual(result["fordraig"]["dungeons"], 2)
         self.assertEqual(result["CaveOfSeperation"]["dungeons"], 2)
         self.assertFalse(result["native_run_executed"])
+        self.assertIsNone(result["fordraig"]["last_lap_seconds"])
+        self.assertEqual(result["CaveOfSeperation"]["last_lap_seconds"], 12.5)
 
     def test_7300_wait_preserves_run_and_restarts_after_five_bounded_segments(self):
         result = self.run_case("wait")
@@ -180,6 +220,8 @@ class HandoffTests(unittest.TestCase):
     def test_storage_failure_never_generates_next_request(self):
         result = self.run_case("storage-fail")
         self.assertFalse(result["source"]["result_saved"])
+        self.assertEqual(result["source"]["business"]["handoff_intent"]["kind"], "turn_to_7000G")
+        self.assertEqual(result["source"]["sessions"][-1]["reason"], "leap.unknown")
         self.assertEqual(result["dispatch_error"], "HANDOFF_RESULT_NOT_COMMITTED")
         self.assertEqual(result["inputs"], 0)
         self.assertFalse(result["next_directory_exists"])

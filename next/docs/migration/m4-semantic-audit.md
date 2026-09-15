@@ -1,7 +1,8 @@
 # M4 静态语义审计
 
-本次职责：工作包section20的确定性清单/文档分工。只写本报告、m4-implementation-map.json、
-m4-data-mapping.md、architecture.md、m4-business-validation.md；不派子代理。
+本次消费者事实复核仅更新本报告、m4-implementation-map.json、m4-data-mapping.md；不修改
+根status、architecture、业务专题报告或任务台账，不派子代理。前次整表审计方法/历史证据保留，
+本次重点核对33字段分类、新binding/摘要及旧局部函数是否有活动调用，不重新认领250函数全量验证。
 未运行原生测试、构建、设备、网络、commit/push；主代理独占测试。没有import旧模块、
 写旧src/config/mod/resources/dist/logs/.vscode，或修改历史M1、m4-task-status.json和专题报告。
 
@@ -31,6 +32,10 @@ RESOURCE_UNRESOLVED、PERFORMANCE_UNRESOLVED保留。静态覆盖完成不等于
 
 ## 核对方法
 
+以下1-6保留前次整表审计的方法和结果。本次不重新执行Git对象/AST整表审核；仅只读核对
+固定旧源、33字段现有消费者摘录及重点调用链，编辑后用JSON结构、分类计数和保护摘要核对
+341个ID、验收ID、旧body hash及历史/offline/real状态不变，不据此认领原生测试通过。
+
 1. 只读工作包legacy/src/script.py、gui.py、main.py、utils.py，以UTF-8读取并将换行归一化，
    与Git `6585f4075f5714ab522aa582993860c09af912c1` 对应对象比较。4份一致；
    auto_updater.py在工作包固定副本中不存在，直接只读同一Git对象，不用当前生产源码替代。
@@ -43,53 +48,55 @@ RESOURCE_UNRESOLVED、PERFORMANCE_UNRESOLVED保留。静态覆盖完成不等于
 4. 阅读当前原生参数取值、分支、图组合、注册/发布、状态确认、恢复与保存。JSON的current_refs/
    current_business_refs保留实际文件行、符号和代码摘录；audit_chains记录实际消费者/边界。
    单纯字段声明、类型校验、测试字符串、规划owner或类名均不算语义承接。
-5. 当前原生引用来自本轮工作树，包含未提交源码；最终用户已通知源码冻结、构建中。行号可能随主代理编辑移动；
+5. 当前原生引用读取并行工作树；Lovelace的新binding及摘要源码仍待验证。JSON内旧HEAD/hash属于前次整表快照，不能代表本次新增源码。行号可能随主代理编辑移动；
    应按符号/摘录复核，不把工作树hash或最新源码追认成旧测试EXE身份。
-6. 已完成JSON结构/唯一ID检查：250+33+58不变，原body hash/验收ID/offline状态不变；191个
+6. 前次整表审计已完成JSON结构/唯一ID检查：250+33+58不变，原body hash/验收ID/offline状态不变；当时191个
    唯一原生引用均找到符号/摘录，最终移动的1个定位已刷新，静态源hash写入JSON，不是EXE证据。
    文档diff无空白错误。这不是原生测试，也不读取正在运行的临时结果来推断通过。
 
 ## 给主代理的确定缺口
 
-### 没有业务消费者的9字段
+### 无业务读取字段的实际边界
 
-全部已能导入/导出，以下是**业务绑定缺口**，不是“配置未实现”。具体行号及旧消费者在JSON。
+当前7项没有业务读取，不能一律解释为运行能力缺失。33项均已导入/往返；新增AUTO_START_CLASH
+和FARM_TARGET_TEXT源码消费者计入有范围读取的26项，但尚未通过本次执行验证。
 
-| 字段 | 缺口与实际边界 |
+| 字段 | 当前事实与边界 |
 | --- | --- |
-| EMU_PATH | 新MuMu绑定接受独立显式路径，未找到此profile字段到绑定的取值链；旧BlueStacks路径替换也不等价 |
-| EMU_INDEX | 导入实例索引没有自动成为新版LifecycleTarget/设备绑定；不允许为补证发现设备 |
-| ADB_ADRESS | 保留旧拼写/地址值，未找到profile到新版ADB连接参数的绑定 |
-| AUTO_START_CLASH | recovery_binding接受独立vpn_required；EnsureVpn枚举/离线端口不等于此开关已驱动恢复，包发现/系统授权实际适配未接 |
-| LAST_VERSION | 新版更新/版本回写未实现，M6边界 |
-| LATEST_VERSION | 新版更新提示/版本回写未实现，M6边界 |
-| FARM_TARGET_TEXT | 原统计显示名没有被新版业务summary读取；目录标题的存在不是这个字段的消费者 |
-| WEBSITE_ORG_TIME | 原每周网页提醒/点击后时间回写未接M5 |
-| AM_REFRESH_TIME | 原双周刷新提醒/点击后时间回写未接M5 |
+| EMU_PATH / EMU_INDEX / ADB_ADRESS | 3项已导入/冻结的旧设备数据，不是新版运行身份；DevicePolicy/LifecycleTarget独立显式绑定。不能为补字段覆盖而推导设备、添加发现或隐式连接 |
+| LAST_VERSION / LATEST_VERSION | 2项更新/版本回写尚无新版业务消费者，M6边界；不构成授权退役 |
+| WEBSITE_ORG_TIME / AM_REFRESH_TIME | 2项网页提醒/时间回写尚无新版业务消费者，M5边界；原值继续可往返 |
 
 ### 已有消费者但不等价完整覆盖
 
 | 字段/旧函数 | 当前实现与未承接范围 |
 | --- | --- |
-| MAX_TRY_LIMIT | dungeon_route/dark_light消费未知页耗尽；map/entry等有限图还有自己的hit/time预算，不能称旧所有FindCoords/状态重试点都受此字段控制 |
-| MAX_CRASH_LIMIT | WvdRunState消费累计上限；recovery_binding另传max_crashes，调用者需要证明与冻结profile一致，状态取值本身不证明所有恢复入口一致 |
-| LANGUAGE | CombatStrategy/setting_is按语言比较枚举/组名；旧gettext、任务显示名与Tk本地化未完整迁移 |
+| MAX_TRY_LIMIT | `tasks/dungeon_route.cpp::traverse_dungeon`、`tasks/dark_light.cpp::dark_light` 将冻结值传入 unknown_exhausted；`vision/recognizers.cpp` 以 max_tries<0 或 sample.samples>max_tries 判定，图进入 dungeon.unknown_try_limit。其余map/entry仍各有hit/time预算，不能宣称旧全部重试点参数等价。 |
+| MAX_CRASH_LIMIT | `state.cpp::restart_game`、`recovery/boot.cpp::recovery_binding/decide` 已从冻结profile及其binding消费累计上限/升级阈值，不再由入口另传独立max_crashes。新binding一致性检查待验，真实端口未开放。 |
+| LANGUAGE | `combat/strategy.cpp::CombatStrategy/uses_task_points` 与 `state.cpp::setting_is` 已按语言解释策略、任务点及重载枚举，属于实际combat消费者。旧gettext日志及Tk/M5本地化未完整迁移，完整配置组合仍待验。 |
 | FARM_TARGET | 导入时选区段，新TaskHandoff检验来源/改7000G；m4_check目录遍历/编译不等于从此字段启动生产Farm |
-| ACTIVE_BEG_MONEY | 新普通路线已有unknown_leap调用、发布binding、状态取值、TaskHandoff/LeapWait源码，未构建/运行；当前dark_light独立未知分发未见同调用，不能称全IdentifyState分支覆盖 |
+| ACTIVE_BEG_MONEY | 普通 `traverse_dungeon` 和 `dark_light` 均已有 unknown_leap 调用、binding、状态、TaskHandoff/LeapWait源码；暗灯以灯具extra_known排除已知画面。接口摘录已刷新，新调用链和全部任务/恢复/配置矩阵待验，不再记为暗灯无调用。 |
 | SaveImage / SaveDebugImage / SaveDebugImageThrottled | 结构化识别/Run结果存在；故障、稀有矿、鱼获PNG持久化与旧按reason节流尚无等价业务消费者 |
-| BagClear_Item | 旧六格物品存仓函数没有新版等价链；固定源未找到明确词法调用也不构成删除授权，不能用组队或LAST_BAGCLEAR冒充存仓 |
+| BagClear_Item | 固定旧Factory局部函数仅定义，无调用、传递或注册引用；不计作活动功能丢失。定义/历史记录保留，不授权删除，也不补造新版存仓链；组队和LAST_BAGCLEAR仍不能冒充存仓 |
 | GUI/main/日志/更新器 | RunCoordinator真实停止/原子结果不等于旧Tk start/finished队列、配置编辑、日志展示、版本下载/重启链已迁移；旧生产入口保持 |
 
 重点实现引用：`native/storage/legacy_import.cpp::parse`，
 `native/games/wvd/state.cpp::restart_game/observe_unknown_leap`，
 `tasks/dungeon_route.cpp::traverse_dungeon`，`tasks/dark_light.cpp::dark_light`，
-`recovery/boot.cpp::recovery_binding`，`tasks/task_handoff.cpp::poll`。
+`recovery/boot.cpp::recovery_binding/bind_initial_vpn`，`tasks/task_handoff.cpp::poll`。
 具体文件行和调用摘录以JSON为准，以上不是“搜索到名字即证明”的替代证据。
 
 ### 已有新代码，不能记成未实现或通过
 
+- AUTO_START_CLASH：已读到Lovelace的profile-aware recovery_binding及bind_initial_vpn，
+  将冻结开关/MAX_CRASH_LIMIT装入binding并核对目标授权；TaskHandoff已有初始装配调用。
+  源码存在不表示初始VPN、恢复/转交一致性或真实适配已验证，不再写成仅有EnsureVpn枚举。
+- FARM_TARGET_TEXT：WvdRunState已发布farm_target_text；settle_legacy_lap及last_lap_seconds
+  已承接上一圈结算/摘要源码，未结算为null。last_lap不是新配置字段；不同专项仍按实际旧结算
+  边界解释，不能据字段存在认领完整对账或M5/gettext展示通过。
+
 - Repel/Fordraig/COS/Steel均有源码。最新静态复核已见Fordraig/COS的CLI编译分支、CMake注册、
-  WvdRunState确认事件和摘要；多阶段发布及fixture接线已加入，源码冻结构建中。没有新构建/运行结果，不标PASS。
+  WvdRunState确认事件和摘要；多阶段发布及fixture接线已加入。本次不推断其它代理的当前构建/运行结果，不标PASS。
 - `publish_workflow_stages` 已有实现，将各stage节点命名空间化，发布为一个bundle revision；
   每Session独立entry/checkpoint/time/dialogue binding。离线fixture已调用该发布入口，最终装配需由当前构建/验证确认；
   保留runtime同revision限制，不能为接线绕开冻结身份。
@@ -104,12 +111,16 @@ RESOURCE_UNRESOLVED、PERFORMANCE_UNRESOLVED保留。静态覆盖完成不等于
 
 ## 验证失败不等于没有实现
 
-最新用户提供的分项统一记在[m4-business-validation.md](../m4-business-validation.md)。
-7000G 23/24输入两分支和停止/拒绝的PASS不改变0/58；Golden修正2仍13输入SCENE失败，
-达到有限修正边界BLOCKED。牛洞28输入帧龄门禁失败，REST=true未执行。
-沙人最初夹具自检失败与钢发布缺bondmate_close是独立失败类型；后续root vg19i0vi的
-沙人/钢Failed/UserStopped标签及全部5项身份/静止核对照用户原样保留，不能写全通过。
-root gqgh3uz1的17方法/24场景对话/因果/跳跃通过不能解除Golden完整任务阻断。
+分项结论来自本地执行证据，不是用户提供的外部结果；汇总入口为
+[m4-business-validation.md](../m4-business-validation.md)，具体轮次、输入数、失败原因及
+EXE身份/真静止证据以各专题当前报告为准，本表不复制会随复验过期的计数：
+
+- [7000G](../m4-gold-income-validation.md)、[Golden](../m4-golden-chest-validation.md)、[牛洞](../m4-bull-cave-validation.md)。
+- [沙人](../m4-sandman-validation.md)、[钢试炼](../m4-steel-trial-validation.md)。
+- [默认对话](../m4-default-dialogue-validation.md)、[时间跳跃](../m4-time-leap-validation.md)；因果链分项见业务汇总及对应任务专题。
+
+夹具自检、发布校验、业务输入/后置失败及UserStopped分别解释，不能合并成全通过。
+局部分项PASS不解除其他完整流程的阻断，也不改变完整任务验收 **0/58**。
 
 ## 维护约束
 

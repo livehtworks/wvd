@@ -175,6 +175,12 @@ class WorkflowTests(unittest.TestCase):
                           {"path": p.relative_to(bundle).as_posix(), "sha256": digest(p)}
                           for p in sorted(bundle.rglob("*.png"))])
         config.update(options)
+        if options.get("workflow") == "recover" or options.get("attach_recovery"):
+            # 恢复正例显式开启VPN；字段仍经正式导入和冻结绑定，false用例覆盖此值。
+            config["profile"] = {"AUTO_START_CLASH": True, **options.get("profile", {})}
+        if options.get("attach_recovery"):
+            # 非VPN专项的初始现场明确已就绪；未就绪/失联由专项用例显式注入。
+            config.setdefault("vpn_ready", True)
         if options.get("workflow") in ("steel-trial", "repel-forces"):
             # 固定源码存在case，基础目录没有此ID。隔离扩展只提供类型，不伪造路线参数。
             extension = folder / "extension-quests.json"
@@ -1164,6 +1170,95 @@ class WorkflowTests(unittest.TestCase):
                    dict(kind=0, x=520, y=812), dict(kind=5, key=4)]
         return screens, actions
 
+    def test_initial_vpn_binding_and_runtime_boundary_rejections(self):
+        r = self.execute("initial-vpn-contract", [{}], [], workflow="recover", initial_vpn_contract=True)
+        self.assertFalse(r["native_run_executed"])
+        self.assertEqual(r["connections"], 0)
+        self.assertEqual(r["backend_calls"], 0)
+        self.assertEqual(r["lifecycle_calls"], [])
+        self.assertEqual(r["valid_initial"], "")
+        self.assertEqual(r["plain_recovery"], "LIFECYCLE_NOT_AUTHORIZED")
+        for case in ("stop", "start", "reconnect", "restart", "mixed", "attempt", "continuation"):
+            self.assertEqual(r["coordinator"][case], "LIFECYCLE_REQUIRES_RECOVERY_BOUNDARY", case)
+            self.assertEqual(r["session"][case], "LIFECYCLE_NOT_AUTHORIZED", case)
+        self.assertEqual(r["coordinator"]["real"], "REAL_DEVICE_NOT_ENABLED")
+        self.assertEqual(r["coordinator"]["verified-real"], "LIFECYCLE_NOT_AUTHORIZED")
+        for case in ("real", "verified-real", "device", "application", "read-only"):
+            self.assertEqual(r["session"][case], "LIFECYCLE_NOT_AUTHORIZED", case)
+        self.assertTrue(r["coordinator"]["registry-timeout"])
+        self.assertEqual(r["coordinator"]["registry-timeout"], r["session"]["registry-timeout"])
+        expected = dict(profile="WVD_INITIAL_PROFILE_MISMATCH", unauthorized="WVD_VPN_TARGET_NOT_AUTHORIZED",
+            recovery="WVD_INITIAL_RECOVERY_MISMATCH", budget="WVD_INITIAL_RECOVERY_REQUIRED",
+            continuation="LIFECYCLE_REQUIRES_RECOVERY_BOUNDARY", device="LIFECYCLE_NOT_AUTHORIZED",
+            application="LIFECYCLE_NOT_AUTHORIZED")
+        expected.update({"vpn-id": "WVD_VPN_TARGET_NOT_AUTHORIZED", "no-recovery": "WVD_INITIAL_RECOVERY_REQUIRED",
+                         "already-bound": "WVD_INITIAL_LIFECYCLE_ALREADY_BOUND"})
+        self.assertEqual(r["helper"], expected)
+
+    def test_initial_vpn_frozen_flag_ready_skip_and_normal_continuation(self):
+        screens, actions = self.recovery_scenario()
+        frames = screens[4:] + screens[5:]
+        commands = actions[3:] * 2
+        for enabled, ready in ((False, False), (True, True), (True, False)):
+            with self.subTest(enabled=enabled, ready=ready):
+                name = f"initial-vpn-{enabled}-{ready}"
+                r = self.execute(name, frames, commands, workflow="recover", normal_units=2,
+                    profile={"AUTO_START_CLASH": enabled, "MAX_CRASH_LIMIT": 11}, vpn_ready=ready,
+                    mutate_profile_after_freeze=True, no_lifecycle_port=not enabled)
+                self.assertEqual(r["snapshot"]["state"], "Completed", r)
+                self.assertEqual(r["snapshot"]["completed_business_units"], 2)
+                self.assertEqual(r["snapshot"]["generation"], 2)
+                self.assertEqual(r["snapshot"]["business"]["crashes"], 0)
+                self.assertEqual(r["backend_calls"], 10)
+                self.assertFalse(r["mismatch"])
+                self.assertTrue(r["snapshot"]["quiescent"] and r["snapshot"]["result_saved"])
+                self.assertEqual(r["lifecycle_calls"], ["EnsureVpn"] if enabled and not ready else [])
+                records = list((self.root / name / "run").rglob("run.json"))
+                self.assertEqual(len(records), 1)
+                definition = json.loads(records[0].read_text(encoding="utf-8"))["definition"]
+                self.assertEqual("lifecycle" in definition, enabled)
+                self.assertTrue(all("lifecycle" not in unit for unit in definition["continuation_units"]))
+                self.assertEqual(definition["state_factory"]["parameters"]["profile"]["AUTO_START_CLASH"], enabled)
+                if enabled:
+                    self.assertEqual(definition["lifecycle"]["operations"], ["EnsureVpn"])
+                    saved = list((self.root / name / "run").rglob("result.json"))
+                    events = json.loads(saved[0].read_text(encoding="utf-8"))["events"]["events"]
+                    confirmations = [e for e in events if e["type"] == "lifecycle.confirmed"]
+                    self.assertEqual(len(confirmations), 1)
+                    self.assertEqual(confirmations[0]["session_generation"], 1)
+                    self.assertEqual(confirmations[0]["payload"]["skipped"], ready)
+
+    def test_initial_vpn_failure_recovers_but_success_does_not_complete_task(self):
+        screens, actions = self.recovery_scenario()
+        r = self.execute("initial-vpn-failed", screens, actions, workflow="recover", fail_vpns=1)
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["snapshot"]["sessions"][0]["reason"], "LIFECYCLE_RETRY_REQUIRED")
+        self.assertEqual(r["snapshot"]["sessions"][0]["business"]["crashes"], 0)
+        self.assertEqual(r["snapshot"]["business"]["crashes"], 1)
+        self.assertEqual(r["lifecycle_calls"], ["EnsureVpn", "EnsureVpn", "StopApplication", "StartApplication"])
+        self.assertEqual(r["backend_calls"], 8)
+        r = self.execute("initial-vpn-task-rejected", screens[4:6], [{**actions[3], "reject": True}], workflow="recover")
+        self.assertEqual(r["snapshot"]["state"], "Failed", r)
+        self.assertEqual(r["snapshot"]["completed_business_units"], 0)
+        self.assertEqual(r["snapshot"]["business"]["crashes"], 0)
+        self.assertEqual(r["lifecycle_calls"], ["EnsureVpn"])
+        self.assertEqual(r["backend_calls"], 1)
+        self.assertTrue(r["snapshot"]["quiescent"] and r["snapshot"]["result_saved"])
+
+    def test_initial_vpn_success_still_requires_fresh_business_frame(self):
+        screen = {"mapFlag": (100, 100), "cursor_0": (480, 588)}
+        r = self.execute("initial-vpn-stale-frame", [screen], [], workflow="map-confirm",
+            map_target=["position", [None], [500, 600]], returned_frame_age_ms=3000,
+            attach_recovery=True, vpn_ready=False)
+        self.assertEqual(r["snapshot"]["state"], "Failed", r)
+        self.assertEqual(r["snapshot"]["reason"], "BUSINESS_CONFIRMATION_STALE")
+        self.assertEqual(r["snapshot"]["business"]["task_step"], 0)
+        self.assertEqual(r["snapshot"]["business"]["crashes"], 0)
+        self.assertEqual(r["snapshot"]["completed_business_units"], 0)
+        self.assertEqual(r["backend_calls"], 0)
+        self.assertEqual(r["lifecycle_calls"], ["EnsureVpn"])
+        self.assertTrue(r["snapshot"]["quiescent"] and r["snapshot"]["result_saved"])
+
     def test_recovery_boot_is_followed_by_original_task_not_root_completion(self):
         screens, actions = self.recovery_scenario()
         r = self.execute("recovery-boot-rest", screens, actions, workflow="recover")
@@ -1185,7 +1280,8 @@ class WorkflowTests(unittest.TestCase):
             r = self.execute("cold-" + initial, screens, actions, workflow="recover", initial_connection=initial)
             self.assertEqual(r["snapshot"]["state"], "Completed", r)
             self.assertEqual(r["snapshot"]["generation"], generation)
-            self.assertEqual(r["snapshot"]["sessions"][0]["reason"], "CONTROLLER_CONNECT_FAILED")
+            self.assertEqual(r["snapshot"]["sessions"][0]["reason"], "LIFECYCLE_RETRY_REQUIRED")
+            self.assertEqual(r["snapshot"]["sessions"][0]["business"]["crashes"], 0)
             self.assertEqual(r["lifecycle_calls"], expected)
             self.assertEqual(r["backend_calls"], 8)
             self.assertEqual(r["cursor"], 9)
@@ -1206,7 +1302,7 @@ class WorkflowTests(unittest.TestCase):
     def test_recovery_initial_connection_requires_explicit_policy(self):
         screens, actions = self.recovery_scenario()
         r = self.execute("cold-no-policy", screens, actions, workflow="recover",
-                         initial_connection="closed", omit_recovery_policy=True)
+                         initial_connection="closed", omit_recovery_policy=True, profile={"AUTO_START_CLASH": False})
         self.assertEqual(r["snapshot"]["state"], "Failed", r)
         self.assertEqual(r["snapshot"]["reason"], "CONTROLLER_CONNECT_FAILED")
         self.assertEqual(r["snapshot"]["generation"], 1)
@@ -1215,7 +1311,7 @@ class WorkflowTests(unittest.TestCase):
 
     def test_recovery_initial_connection_callback_exception_is_not_recoverable(self):
         screens, actions = self.recovery_scenario()
-        r = self.execute("cold-exception", screens, actions, workflow="recover", initial_connection="exception")
+        r = self.execute("cold-exception", screens, actions, workflow="recover", initial_connection="exception", vpn_ready=True)
         self.assertEqual(r["snapshot"]["state"], "Failed", r)
         self.assertEqual(r["snapshot"]["reason"], "FIXTURE_CONNECTION_EXCEPTION")
         self.assertEqual(r["snapshot"]["generation"], 1)
@@ -1278,7 +1374,7 @@ class WorkflowTests(unittest.TestCase):
         screens, actions = self.recovery_scenario()
         for name, options, reason in [
             ("no-port", {"no_lifecycle_port": True}, "LIFECYCLE_NOT_AUTHORIZED"),
-            ("other-app", {"other_lifecycle_app": True}, "LIFECYCLE_NOT_AUTHORIZED"),
+            ("other-app", {"other_lifecycle_app": True, "profile": {"AUTO_START_CLASH": False}}, "LIFECYCLE_NOT_AUTHORIZED"),
             ("other-instance", {"other_lifecycle_instance": True}, "LIFECYCLE_OBSERVATION_INVALID"),
             ("stale", {"stale_lifecycle": True}, "LIFECYCLE_OBSERVATION_INVALID"),
         ]:
@@ -1295,6 +1391,8 @@ class WorkflowTests(unittest.TestCase):
         self.assertTrue(r["snapshot"]["quiescent"])
         self.assertEqual(r["lifecycle_calls"], ["EnsureVpn"])
         self.assertEqual(r["backend_calls"], 0)
+        self.assertEqual(r["snapshot"]["business"]["crashes"], 0)
+        self.assertEqual(r["connections"], 0)
 
     def test_recovery_download_missing_permission_does_not_restart_again(self):
         screens, actions = self.recovery_scenario()
@@ -1325,9 +1423,9 @@ class WorkflowTests(unittest.TestCase):
 
     def test_recovery_crash_threshold_forces_instance_once(self):
         screens, actions = self.recovery_scenario()
-        r = self.execute("recovery-crash-threshold", screens, actions, workflow="recover", max_crashes=0)
+        r = self.execute("recovery-crash-threshold", screens, actions, workflow="recover", profile={"MAX_CRASH_LIMIT": 0})
         self.assertEqual(r["snapshot"]["state"], "Completed", r)
-        self.assertEqual(r["lifecycle_calls"], ["RestartInstance", "EnsureVpn", "StartApplication"])
+        self.assertEqual(r["lifecycle_calls"], ["EnsureVpn", "RestartInstance", "EnsureVpn", "StartApplication"])
         self.assertEqual(r["snapshot"]["business"]["crashes"], 0)
         self.assertEqual(r["snapshot"]["business"]["lifecycle_recovery_sequence"], 1)
         self.assertFalse(r["mismatch"])
@@ -1340,6 +1438,23 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(r["backend_calls"], 1)
         self.assertEqual(r["lifecycle_calls"].count("StartApplication"), 1)
         self.assertTrue(r["snapshot"]["business"]["lifecycle_recovery_active"])
+
+    def test_recovery_vpn_flag_and_ready_state_use_frozen_profile(self):
+        screens, actions = self.recovery_scenario()
+        for enabled, ready in ((False, False), (True, True), (True, False)):
+            with self.subTest(enabled=enabled, ready=ready):
+                result = self.execute(f"recovery-frozen-vpn-{enabled}-{ready}", screens, actions,
+                    workflow="recover", profile={"AUTO_START_CLASH": enabled, "MAX_CRASH_LIMIT": 11,
+                        "FARM_TARGET_TEXT": "frozen-recovery-name"}, vpn_ready=ready, mutate_profile_after_freeze=True)
+                self.assertEqual(result["snapshot"]["state"], "Completed", result)
+                self.assertEqual(result["recovery_parameters"]["vpn_required"], enabled)
+                self.assertEqual(result["recovery_parameters"]["max_crashes"], 11)
+                expected = (["EnsureVpn"] if enabled and not ready else []) + ["StopApplication", "StartApplication"]
+                self.assertEqual(result["lifecycle_calls"], expected)
+                self.assertEqual(result["snapshot"]["business"]["farm_target_text"], "frozen-recovery-name")
+                self.assertIsNone(result["snapshot"]["business"]["last_lap_seconds"])
+                self.assertEqual(result["backend_calls"], 8)
+                self.assertTrue(result["snapshot"]["quiescent"] and result["snapshot"]["result_saved"])
 
     def test_recovery_new_failure_after_ready_starts_at_application_level(self):
         # 启动已完成，但原住宿业务仍不在城内；这是新恢复请求，不是旧请求第二级。
@@ -1574,7 +1689,7 @@ class WorkflowTests(unittest.TestCase):
                  ("blocked", [prompt, {"retry": (400, 800)}], [dict(kind=0, x=370, y=462)]))
         for name, screens, commands in cases:
             r = self.execute("revival-" + name, screens, commands, workflow="revival",
-                profile=self.turn_profile(), attach_recovery=True, force_instance=True, max_crashes=0)
+                profile={**self.turn_profile(), "MAX_CRASH_LIMIT": 0}, attach_recovery=True, force_instance=True)
             self.assert_uncertain_effect(r, "revival.outcome_unconfirmed", len(commands))
             self.assertEqual(r["snapshot"]["business"]["revivals"], 0)
             self.assertTrue(r["snapshot"]["business"]["revival_pending"])
@@ -3281,7 +3396,7 @@ class WorkflowTests(unittest.TestCase):
     def test_unknown_window_restart_enters_new_generation_before_completion(self):
         r = self.execute("unknown-window-recovery", [{}, {"mapFlag": (100, 100), "cursor_0": (480, 588)}], [],
             workflow="dungeon-route", profile=self.wall_profile(False),
-            route_targets=[["position", [None], [500, 600]]], attach_recovery=True)
+            route_targets=[["position", [None], [500, 600]]], attach_recovery=True, vpn_ready=False)
         self.assertEqual(r["snapshot"]["state"], "Completed", r)
         self.assertEqual(r["backend_calls"], 0)
         self.assertEqual(r["lifecycle_calls"], ["EnsureVpn", "StopApplication", "StartApplication"])
@@ -4000,7 +4115,7 @@ class WorkflowTests(unittest.TestCase):
         result = self.execute("uncertain-enemy", [self.turn_screen(), detail,
             {"dungFlag": (50, 150), "retry": (400, 800)}],
             [dict(kind=0, x=266, y=1054), dict(kind=0, x=440, y=392)],
-            workflow="turn", profile=self.turn_profile(), attach_recovery=True, force_restart=True, max_crashes=0)
+            workflow="turn", profile={**self.turn_profile(), "MAX_CRASH_LIMIT": 0}, attach_recovery=True, force_restart=True)
         self.assert_uncertain_effect(result, "combat.skill_outcome_unconfirmed", 2)
         business = result["snapshot"]["business"]
         self.assertTrue(business["has_prepared_skill"])
@@ -4024,8 +4139,8 @@ class WorkflowTests(unittest.TestCase):
                     inputs.append(dict(kind=5, key=4))
                 frames.append({"dungFlag": (50, 150), "retry": (400, 800)})
                 result = self.execute("uncertain-heal-" + str(during_back), frames, inputs,
-                    workflow="heal", profile={"RECOVER_WHEN_BEGINNING": True}, attach_recovery=True,
-                    force_restart=True, max_crashes=0)
+                    workflow="heal", profile={"RECOVER_WHEN_BEGINNING": True, "MAX_CRASH_LIMIT": 0}, attach_recovery=True,
+                    force_restart=True)
                 self.assert_uncertain_effect(result, "supply.healing_outcome_unconfirmed", len(inputs))
                 self.assertTrue(result["snapshot"]["business"]["healing_required"])
                 self.assertEqual(result["snapshot"]["business"]["healing_sequence"], 1)
@@ -4034,7 +4149,7 @@ class WorkflowTests(unittest.TestCase):
         result = self.execute("uncertain-disarm", [{"whowillopenit": (330, 450)},
             {"chestOpening": (330, 450)}, {"dungFlag": (50, 150), "retry": (400, 800)}],
             [dict(kind=0, x=258, y=1161), dict(kind=0, x=515, y=934)],
-            workflow="chest", character=1, attach_recovery=True, force_restart=True, max_crashes=0)
+            workflow="chest", character=1, profile={"MAX_CRASH_LIMIT": 0}, attach_recovery=True, force_restart=True)
         self.assert_uncertain_effect(result, "chest.disarm_outcome_unconfirmed", 2)
         self.assertEqual(result["snapshot"]["business"]["chests"], 0)
 
@@ -4082,7 +4197,7 @@ class WorkflowTests(unittest.TestCase):
         option = {"dialogueChoices/nope": (300, 700)}
         result = self.execute("dialogue-unchanged", [option],
             [dict(kind=0, x=320, y=712, stay=True)], workflow="common",
-            attach_recovery=True, force_restart=True, max_crashes=0)
+            profile={"MAX_CRASH_LIMIT": 0}, attach_recovery=True, force_restart=True)
         self.assert_uncertain_effect(result, "dialogue.choice_outcome_unconfirmed", 1)
         result = self.execute("dialogue-unknown-post", [option, {}],
             [dict(kind=0, x=320, y=712)], workflow="common", attach_recovery=True)

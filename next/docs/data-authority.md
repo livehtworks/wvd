@@ -21,6 +21,8 @@ completed_cycles只在六点及退出已确认后增加，不把任务点数或�
 | 调用者显式提供的 data_root/instance/run/run.json | 新版运行元数据；只创建，不接管同名目录 | RunStore，来自冻结 RunDefinition | 离线历史读取；关联 instance、run_id、request_id、权限、资源清单/hash、预算 |
 | 同目录 events.json | 活动诊断快照，不是最终完成权威 | EventJournal 经 RunStore 原子替换 | 诊断查看；可能停在终态提交之前，不能据此覆盖 result.json |
 | 同目录 result.json | 一次性应用终态权威，包括引擎状态、根终点证据、输入计数及完整有界终态事件快照 | RunCoordinator 确认真正静止后，RunStore 原子提交 | 历史读取、验收；与同目录 run.json 对应，不允许重复提交 |
+| 同目录 diagnostics/数字序号.png | 当前Run的私有实际截图诊断，不是输入许可或业务完成权威 | Context从本次Custom首/末实际帧提交，ExecutionSession hook同步调用本Run的RunStore；恢复入口允许单次新截图 | 诊断查看；result.json.diagnostics有限索引及EventJournal相对路径/hash关联Run、unit、Session、节点、operation和FrameIdentity |
+| run.json.diagnostic_policy、result.json.diagnostics | schema1附加的独立诊断策略/结果，不改变原运行文件schema或业务终态含义 | RunStore独占写入；终态索引只在全部Session join后封闭并随result提交 | 限频/重复/配额/失败审查；result_saved只证明结果文件提交，diagnostics.complete另述图片完整性 |
 | 同目录 *.tmp | 提交失败或进程中断的诊断证据，不是正式结果 | Windows 原子写入过程 | 只读排查，不自动续跑或覆盖已提交数据 |
 | next/.local/maafw.json 与 SDK/模型缓存 | 本机依赖准备记录及派生缓存；固定锁文件/hash 是版本权威 | prepare_maafw.py | CMake 与离线测试；含私人路径，不提交 |
 | next/.local/m2-runs/各独立测试目录 | 本轮可丢弃测试数据，绝非用户配置或业务记录 | 每次 unittest 创建新目录及合成资源 | 测试驱动、真实 Maa SDK、审核；每个用例的 run-data 是专用隔离写入根 |
@@ -61,6 +63,21 @@ completed_cycles只在六点及退出已确认后增加，不把任务点数或�
 | .local/m3fix-m4-*、m3-fixes-*、m4-data-* | 本轮隔离配置、合成图、失败复现与测试结果 | 工作包执行脚本、原生检查入口 | 私有审核证据；公开包仅收脱敏报告/索引，不包含配置原文或真实图片 |
 
 ## 一致性与边界
+
+- PNG诊断同步写入，没有后台线程/图片队列。专属mutex只保护RunStore诊断数据，
+  不在业务状态、门禁或协调器状态锁内做文件I/O；释放诊断锁后才发saved/failed事件。
+  store由协调器持有到Session及全部回调真实退出、join和结果保存完成；磁盘flush或
+  恢复截图阻塞时不能假报静止或提前开始下一Run，同步I/O可取消性尚未证明。
+- 默认每Run独立预留128张奖励、32张故障，各张最多8MiB，合计最多1280MiB预留字节。
+  失败/tmp也消耗预算，故障不会挤掉70次有效奖励。普通reason按60秒限频，pause按120秒，
+  单调时钟跨恢复保留；奖励按稳定operation ID防重，不对不同鱼获套统一时间节流。
+  超限只累计有界汇总，不无限发事件或自动清理历史；配额不足必须报告诊断不完整。
+- 图片先核对PNG签名/IHDR和实际SDK解码尺寸，再原子写入数字路径；原因文本不进入路径。
+  写入期间锁定路径各级目录，拒绝reparse和诊断目录替换/接管。失败保留tmp，不重发输入。
+  GuardedAction只保存已有前置/最后后置帧；奖励只在accepted且applied后、业务锁外保存
+  领取页；recovery_entry是新增恢复入口帧，不冒充故障原因帧，leap.wait_boundary不截图。
+  历史帧龄及原generation/epoch保留，PNG永不兑换新帧许可。真实诊断属于私有运行数据，
+  不提交源码或公开分发；当前代码待统一构建/执行，见m4-png-diagnostics-validation.md。
 
 - 专用对话策略属于冻结CompiledWorkflow及其WvdVision binding，不是GUI配置或
   全局运行变量；同一资源revision覆盖选项和关闭图。RunState唯一持有专用对话

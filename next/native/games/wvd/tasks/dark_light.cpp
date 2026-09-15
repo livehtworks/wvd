@@ -26,14 +26,16 @@ CompiledWorkflow dark_light(const WvdQuestDefinition &definition, const nlohmann
     const J blocked{{"mode", "blocking_screen"}};
     const auto lamp = C::image("darklight"), light = C::image("darklight_lightIt");
     const J known{{"mode", "dark_light_post"}};
-    graph.route("Entry", {"UnknownFrozen", "Outside", "ResumedTask", "Started", "UnknownTimeout", "UnknownLimit", "Wait"});
+    graph.route("Entry", {"UnknownFrozen", "Outside", "ResumedTask", "Started", "UnknownLeap", "UnknownTimeout", "UnknownLimit", "Wait"});
     graph.observe("ResumedTask", C::business("/dark_light_active", true), {"Dispatch"});
     graph.confirm("Started", "darklight.enter", "dark_light_entered", C::any({dungeon, encounter, light}), {"Dispatch"});
     graph.route("Dispatch", {"UnknownFrozen", "Blocked", "Outside", "Combat", "Chest", "Revive",
-        "Light", "HealingPanel", "Resume", "UnknownTimeout", "UnknownLimit", "Wait"});
+        "Light", "HealingPanel", "Resume", "UnknownLeap", "UnknownTimeout", "UnknownLimit", "Wait"});
     graph.confirm("Outside", "darklight.leave", "dark_light_completed", outside, {"Terminal"});
     graph.observe("UnknownFrozen", {{"mode", "unknown_frozen"}, {"extra_known", {lamp, light}}}, {"FrozenExit"});
     graph.recovery("FrozenExit", "dungeon.unknown_static_window");
+    graph.unknown_leap("UnknownLeap", {"UnknownLeapExit"}, {lamp, light});
+    graph.recovery("UnknownLeapExit", "leap.unknown");
     graph.observe("UnknownTimeout", C::business("/encounter_timed_out", true), {"TimeoutExit"});
     graph.recovery("TimeoutExit", "dungeon.encounter_timeout");
     graph.observe("UnknownLimit", {{"mode", "unknown_exhausted"}, {"max_tries", profile.at("MAX_TRY_LIMIT")},
@@ -62,7 +64,7 @@ CompiledWorkflow dark_light(const WvdQuestDefinition &definition, const nlohmann
     const auto healing = graph.define_child("Healing", supply::recover_in_dungeon(), {"EncounterExit", "BlockedExit"});
     graph.observe("HealingPanel", C::all({panel, C::absent(encounter), C::business("/healing_required", true)}), {"Heal"});
     graph.call_child("Heal", healing, {"LightDispatch"});
-    graph.route("LightDispatch", {"UnknownFrozen", "Blocked", "Combat", "Chest", "Revive", "Outside", "Light", "OpenLamp", "UnknownTimeout", "UnknownLimit", "LightWait"});
+    graph.route("LightDispatch", {"UnknownFrozen", "Blocked", "Combat", "Chest", "Revive", "Outside", "Light", "OpenLamp", "UnknownLeap", "UnknownTimeout", "UnknownLimit", "LightWait"});
     graph.route("LightWait", {"LightDispatch"});
     graph.delay_after("LightWait", 1000);
     const J clear_light{{"mode", "dark_light_clear"}, {"stage", "confirm"}};

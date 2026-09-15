@@ -64,6 +64,8 @@ class CaveOfSeparationTests(unittest.TestCase):
             config["condition"] = condition
         compiled = self.invoke(inspect, dict(config, inspect=True), 90)
         self.assertNotIn("error", compiled, compiled)
+        requires_state = workflow in ("common", "special", "route")
+        self.assertEqual(bool(compiled["checkpoint"]), requires_state, compiled)
         aliases = {"returntoTown.png": "returntotown.png"}
 
         def canonical(name):
@@ -97,6 +99,8 @@ class CaveOfSeparationTests(unittest.TestCase):
             dict(path=path.relative_to(bundle).as_posix(), sha256=digest(path))
             for path in sorted(bundle.rglob("*.png"))])
         output = self.invoke(folder, config, compiled["time_limit_ms"] / 1000 + 20)
+        if "error" not in output:
+            self.assertEqual(output["state_bound"], requires_state, output)
         output["case_path"] = str(folder)
         return output
 
@@ -180,7 +184,16 @@ class CaveOfSeparationTests(unittest.TestCase):
             result = self.execute("bad-stop-" + field, [{ENA: (300, 700)}], condition=dict(mode="task_stop"),
                 **{field: ENA + ".png"})
             self.assertEqual(result["backend_calls"], 0, result)
-            self.assertTrue("error" in result or result["snapshot"]["state"] == "Failed", result)
+            if field == "omit":
+                self.assertEqual(result.get("error"), "COMPILE_IMAGE_NOT_IN_MANIFEST:image/" + ENA + ".png", result)
+                self.assertEqual(result["connections"], 0, result)
+            else:
+                self.assertNotIn("error", result, result)
+                self.assertEqual(result["snapshot"]["state"], "Failed", result)
+                self.assertEqual(result["snapshot"]["reason"], "WVD_TEMPLATE_DECODE_INVALID", result)
+                self.assertTrue(result["snapshot"]["quiescent"], result)
+                self.assertTrue(result["snapshot"]["result_saved"], result)
+                self.assertEqual(result["connections"], 1, result)
 
     def test_rejected_or_stopped_dialogue_keeps_unconfirmed_intent(self):
         for stopped in (False, True):
@@ -272,6 +285,8 @@ class CaveOfSeparationTests(unittest.TestCase):
         click(420, 712, {"Stay": (400, 700)})
         advance(dict(kind=5, key=4), town)
         click(420, 1012, {"COS/COS": (400, 700)})
+        # 固定旧源码的 fallback 整批执行 EdgeOfTown、(1,1)，下一轮才重查 COS。
+        click(1, 1, {"COS/COS": (400, 700)})
         click(420, 712, {"COS/COSENT": (400, 700)})
         click(420, 712, {"mapFlag": (20, 20)})
 
@@ -320,7 +335,9 @@ class CaveOfSeparationTests(unittest.TestCase):
 
     def test_full_six_segment_cycle_keeps_causality_routes_dialogues_and_returns(self):
         frames, commands = self.full_scenario()
-        self.assertEqual(len(commands), 109)
+        self.assertEqual(len(commands), 110)
+        self.assertEqual(commands[14:18], [dict(kind=0, x=420, y=1012), dict(kind=0, x=1, y=1),
+            dict(kind=0, x=420, y=712), dict(kind=0, x=420, y=712)])
         result = self.shared_execute("six-segment-cycle", frames, commands)
         self.assertEqual(result["snapshot"]["state"], "Completed", result)
         self.assertTrue(result["snapshot"]["quiescent"])
@@ -328,7 +345,7 @@ class CaveOfSeparationTests(unittest.TestCase):
         self.assertEqual(result["snapshot"]["business"]["cave_of_separation"]["completed_cycles"], 1)
         self.assertEqual(result["snapshot"]["business"]["inn_rests"], 1)
         self.assertEqual(result["snapshot"]["business"]["special_dialogues_completed"], 2)
-        self.assertEqual(result["backend_calls"], 109)
+        self.assertEqual(result["backend_calls"], 110)
         self.assertFalse(result["mismatch"], result.get("mismatch_detail"))
 
     def test_cos_request_rejection_and_user_stop_never_start_the_next_segment(self):

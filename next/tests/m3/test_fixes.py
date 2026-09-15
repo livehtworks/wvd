@@ -275,6 +275,11 @@ class FixTests(unittest.TestCase):
                  ("empty", {"mode": "all", "conditions": []}, "Error"),
                  ("parent-roi", {"mode": "all", "conditions": [hit], "roi": [0, 0, 1, 1]}, "Error")]
         deep = hit
+        default_threshold = {key: value for key, value in hit.items() if key != "threshold"}
+        cases.append(("default-threshold-equivalent", {"mode": "all", "conditions": [
+            {**default_threshold, "threshold": .8}, default_threshold]}, "Hit"))
+        cases.append(("threshold-error-not-cached", {"mode": "any", "conditions": [
+            default_threshold, {**default_threshold, "threshold": 2.0}]}, "Error"))
         for _ in range(10):
             deep = {"mode": "not", "conditions": [deep]}
         cases.append(("depth", deep, "Error"))

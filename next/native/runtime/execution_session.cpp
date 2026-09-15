@@ -12,15 +12,21 @@ ExecutionSession::ExecutionSession(SessionDefinition definition, devices::Device
                                    InputPolicy policy, std::uint64_t run, std::uint64_t generation,
                                    storage::EventJournal &events,
                                    std::shared_ptr<const BehaviorRegistry> registry,
-                                   contracts::BusinessRunState *business, contracts::SegmentBoundary boundary)
+                                   contracts::BusinessRunState *business, contracts::SegmentBoundary boundary,
+                                   storage::RunStore *diagnostic_store, std::size_t unit_index)
     : definition_(std::move(definition)), registry_(std::move(registry)), business_(business),
-      events_(events), gate_(backend, policy, run, generation, events), backend_(backend) {
+      events_(events), diagnostic_store_(diagnostic_store), unit_index_(unit_index),
+      gate_(backend, policy, run, generation, events), backend_(backend) {
     if (!registry_)
         throw std::runtime_error("REGISTRY_REQUIRED");
     registry_->validate(definition_);
     if (definition_.lifecycle) {
-        const auto &target = definition_.lifecycle->target;
-        if (boundary != contracts::SegmentBoundary::LifecycleRecovery || !backend.offline() ||
+        const auto &plan = *definition_.lifecycle;
+        const auto &target = plan.target;
+        const bool initial_vpn = boundary == contracts::SegmentBoundary::Initial &&
+            plan.attempt == 1 && target.vpn_required && plan.operations.size() == 1 &&
+            plan.operations.front() == devices::LifecycleOperation::EnsureVpn;
+        if ((!initial_vpn && boundary != contracts::SegmentBoundary::LifecycleRecovery) || !backend.offline() ||
             policy.observed_read_only_viewport || target.device_id != policy.device_id ||
             target.application_id != policy.application_id || !backend.lifecycle_port())
             throw std::runtime_error("LIFECYCLE_NOT_AUTHORIZED");
@@ -98,6 +104,21 @@ void ExecutionSession::execute() noexcept {
         hooks.event = [this](const auto &type, const auto &data) {
             events_.emit(gate_.generation(), type, data);
         };
+        if (diagnostic_store_) {
+            // store固定属于本Run，由协调器持有到全部回调结束、Session join及终态保存后。
+            hooks.diagnostic = [this](const contracts::FrameEnvelope *frame, storage::DiagnosticRequest request) {
+                request.unit_index = unit_index_;
+                try {
+                    const auto receipt = diagnostic_store_->save_diagnostic(frame, request);
+                    const auto status = receipt.value("status", "");
+                    // save已释放专属mutex；节流/配额只累计，不能把被抑制的请求转成无限事件。
+                    if (status == "saved" || status == "failed")
+                        events_.emit(gate_.generation(), "diagnostic." + status, receipt);
+                } catch (...) {
+                    diagnostic_store_->note_diagnostic_hook_failure();
+                }
+            };
+        }
         hooks.child = [this](const maafw::ChildResult &child) {
             events_.emit(gate_.generation(), "child.result",
                          {{"id", child.id}, {"valid", child.valid}, {"status", child.status}});
@@ -142,18 +163,33 @@ void ExecutionSession::execute() noexcept {
                                            parameters.value("reset_hit_counts", std::vector<std::string>{}));
             return child.valid && child.status == MaaStatus_Succeeded;
         });
-        add("RequireRecovery", [this](maafw::Context &, const auto &parameters) {
+        add("RequireRecovery", [this](maafw::Context &context, const auto &parameters) {
             const auto reason = parameters.is_null()
                                     ? std::string("unspecified")
                                     : parameters.value("reason", std::string("unspecified"));
             if (reason.size() > 256)
                 throw std::runtime_error("RECOVERY_REASON_INVALID");
-            recovery_ = true;
-            gate_.close();
             {
                 std::lock_guard lock(mutex_);
-                result_.reason = reason;
+                if (result_.reason.empty()) result_.reason = reason;
             }
+            // capture的底层异常会先调用fail；提前保留首因，但不能提前关门/设recovery_。
+            // 这里只记录恢复入口的新图，不声称它就是触发恢复的原因帧。
+            if (diagnostic_store_ && reason != "leap.wait_boundary" && !cancelled()) {
+                try {
+                    const auto frame = context.capture();
+                    gate_.close();
+                    context.save_diagnostic(&frame, reason, "recovery_entry");
+                } catch (const std::exception &error) {
+                    gate_.close();
+                    context.save_diagnostic(nullptr, reason, "recovery_entry", {}, error.what());
+                } catch (...) {
+                    gate_.close();
+                    context.save_diagnostic(nullptr, reason, "recovery_entry", {}, "DIAGNOSTIC_CAPTURE_FAILED");
+                }
+            }
+            recovery_ = true;
+            gate_.close();
             events_.emit(gate_.generation(), "session.recovery_required", {{"reason", reason}},
                          true);
             return false;

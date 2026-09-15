@@ -2,10 +2,31 @@
 
 ## 当前结论
 
-代码状态：**PARTIAL / OFFLINE_VALIDATION_RUNNING**。
-统一构建通过，原生测试运行中，设备 **NOT_USED**，`release_allowed=false`。
+代码状态：**PARTIAL / CORRECTION_PENDING**。
+统一构建通过，首轮8方法4通过4失败，设备 **NOT_USED**，`release_allowed=false`。
 主代理构建日志为`m4-extensions-and-stages-build.log`，不包含实机或生产切换。
 未解决任意 SDK/连接/清理阻塞取消、M3 资源和长期稳定性问题。
+
+首轮证据为`m4-handoff-6ijr2s54`，产物SHA256为
+`96ac9ed2b8894d694cffd0ed71af0f839e935baaf7057bce42e7909e20fe7fb1`，
+已在重建前核对10份已有哈希记录。wait/stop-wait/wait-budget/money均在进入等待或转交前
+因`LEAP_OBSERVATION_STALE`失败：未知计数5及跳跃图标确实命中，但同帧复核超过2秒。
+四者均generation=1、Failed、静止且保存成功，backend_called=0；存在一次关闭门禁拒绝的
+输入尝试，不能写成零尝试。缺少失败用例execution.json是旧夹具记录缺口，不事后伪补。
+state/extensions为状态验证；late-connect证明限定阻塞的持有边界；storage-fail虽断言通过，
+但该轮没有生成有效转交意图，仅覆盖存储失败拒绝，不算有效转交的存储负例已验。
+
+定点修正一：未知分类的稳定页/基础覆盖层探针使用同步并行批次，仍按原顺序消费结果、
+保持2000ms帧龄和Error语义。补暗灯独立未知分支及专属正常页的重新截图复核；
+增强存储负例，必须先得到真实转交意图再验证拒绝。
+
+修正一证据根`m4-handoff-wukgf_9a`：4通过、3失败、1错误。money子项首次通过，
+旧Run保存后同一协调器启动Run=2，实际点击一次后UserStopped；重复poll返回同一Run且
+不新建目录。三种等待仍在进入等待前帧过期；存储负例增强断言正确暴露意图为空，不能标通过。
+修正一整批48份execution/11份哈希记录已在重建前核对，详见阶段汇总。
+最后一轮定点修正将等价默认模板阈值统一到同帧memo，并同步计算三个独立面板反证；
+保持原候选消费顺序，不合并不同ROI/阈值/预处理，专属有状态条件仍串行。待新产物复验，
+若同一帧过期再次失败则按工作包保留阻断，不继续无限重跑。
 
 正式`dungeon_route`未知分支已经使用`PipelineCompiler::unknown_leap`，发布器绑定
 WvdUnknownLeap，并将固定等待节点纳入同一封存revision。专项fixture已改用正式编译器
@@ -30,7 +51,7 @@ WvdUnknownLeap，并将固定等待节点纳入同一封存revision。专项fixt
 
 - `WvdRunState::observe_unknown_leap` 核对 generation/frame 与至少5次未知，只记意图，
   意图不含新 request_id；重复观察不重复写入，旧代次拒绝。
-- `tasks::observe_unknown_leap(Context&)` 使用正式 WvdVision 的 unknown_exhausted(max_tries=4)
+- `tasks::observe_unknown_leap(Context&, parameters)` 使用正式 WvdVision 的 unknown_exhausted(max_tries=4)
   读取既有 unknown.window，再从同帧识别 cursedWheel_timeLeap。它不增加未知采样次数，
   不把 boolean-only unknown 观察变成输入许可；Error/过期明确失败。
 - `freeze_handoff_source` 冻结当前任务和目录中的精确7000G定义、profile值哈希、33字段来源、

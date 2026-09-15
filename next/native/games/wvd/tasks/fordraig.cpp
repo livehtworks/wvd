@@ -38,7 +38,7 @@ CompiledWorkflow leap_to_fordraig() {
     C graph("quest.fordraig.leap", std::chrono::seconds{180});
     graph.use_dialogue(dialogue);
     const auto wheel = C::image("cursedWheel"), ruins = C::image("ruins"), special = C::image("specialRequest");
-    const auto target = C::image("Fordraig/Leap"), leap = C::image("leap"), ok = C::image("OK");
+    const auto target = C::image("fordraig/Leap"), leap = C::image("leap"), ok = C::image("OK");
     const auto opening = C::any({city(), ruins, wheel, special, target});
     const auto selection = C::any({special, target, C::image("cursedWheelTitle")});
     graph.route("Entry", {"Wheel", "Ruins", "Dismiss"});

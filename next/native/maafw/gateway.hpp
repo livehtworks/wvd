@@ -32,6 +32,9 @@ class Context {
     nlohmann::json node_data(const std::string &name) const;
     bool with_business_state(const std::function<bool(contracts::BusinessRunState &)> &operation);
     void business_event(const std::string &type, const nlohmann::json &payload);
+    void save_diagnostic(const contracts::FrameEnvelope *frame, const std::string &reason,
+                         const std::string &stage, const std::string &operation_id = {},
+                         const std::string &error = {}) noexcept;
 
   private:
     friend class MaaGateway;
@@ -41,6 +44,8 @@ class Context {
     MaaContext *context_;
     MaaTaskId task_;
     std::string node_;
+    // 仅保留本次Custom的首/末截图身份，不缓存图片，不借用其它任务的最后帧。
+    std::optional<contracts::FrameIdentity> first_frame_, last_frame_;
 };
 using CustomAction = std::function<bool(Context &, const nlohmann::json &)>;
 using ActionRegistry = std::map<std::string, CustomAction>;
@@ -50,6 +55,7 @@ struct GatewayHooks {
     std::function<void(const std::string &, const nlohmann::json &)> event = [](const auto &,
                                                                                 const auto &) {};
     std::function<void(const ChildResult &)> child = [](const auto &) {};
+    std::function<void(const contracts::FrameEnvelope *, const storage::DiagnosticRequest &)> diagnostic;
 };
 class MaaGateway {
   public:

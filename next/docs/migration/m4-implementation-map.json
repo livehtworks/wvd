@@ -12,6 +12,7 @@
     "date": "2026-09-15",
     "scope": "READ_ONLY_STATIC_250_FUNCTIONS_33_FIELDS",
     "worktree_head": "695295d81abba05b0e87d88aee06fc9d3d748d28",
+    "worktree_head_scope": "前次整表静态审计基线；本次字段消费者复核读取并行工作树，不将此HEAD或下方旧源hash当作新binding的构建身份。",
     "includes_uncommitted_sources": true,
     "inventory_complete": true,
     "semantic_equivalence_complete": false,
@@ -42,22 +43,33 @@
     ],
     "authority": "本文件semantic_audit是当前函数/字段静态去向权威；historical_verification仅保留旧局部证据，绝不据本轮静态盘点新增PASS。",
     "config_classification_counts": {
-      "import_export_only": 9,
-      "scoped_business_read": 24
+      "import_export_only": 7,
+      "scoped_business_read": 26
     },
-    "source_in_progress_note": "最终用户通知：源码已冻结，当前构建中；unknownLeap、publisher多图、boot映射已接入新版真实调用链。无本轮新增构建/运行通过证据，旧Python生产入口不切换。",
-    "config_gap_keys": [
+    "source_in_progress_note": "当前字段复核已读到Lovelace进行中的profile-aware recovery_binding/bind_initial_vpn，以及farm_target_text/last_lap_seconds源码；标为源码已接待验，不替主代理认领构建或测试。unknownLeap、多图共同revision和boot映射的源码事实保留；旧Python生产入口不切换。",
+    "config_frozen_non_identity_keys": [
       "EMU_PATH",
       "EMU_INDEX",
-      "ADB_ADRESS",
-      "AUTO_START_CLASH",
+      "ADB_ADRESS"
+    ],
+    "config_classification_note": "7项无业务读取包含3项导入/冻结但非运行身份字段及4项更新/提醒字段；26项有范围消费者包含未验证的新binding/摘要，均非全字段验收通过。",
+    "consumer_followup": {
+      "scope": "33字段现有业务摘录与重点功能消费者只读复核；仅修改实现映射、数据映射和审计说明，不重做250函数运行验证。",
+      "native_excerpt_check": "33字段current_business_refs逐项能在所列源码找到摘录；行号可能随并行编辑移动。",
+      "protected_entry_projection_sha256": "6883bc1949fec2c28d803593ba36c4b9e8d0138415db3978583d393f77d604d9",
+      "protected_entry_projection": "按原顺序投影341项inventory_id/source_body_sha256/acceptance_ids/offline_status/real_status/release_allowed/historical_verification，经PowerShell压缩JSON和UTF-8计算；编辑前后一致，仅用于本次文档保护核对。",
+      "tests_executed": false,
+      "builds_executed": false,
+      "source_status": "AUTO_START_CLASH新binding及FARM_TARGET_TEXT/last_lap_seconds源码已见，未据本次审计验证通过；0/58不变。"
+    },
+    "config_gap_keys": [
       "LAST_VERSION",
       "LATEST_VERSION",
-      "FARM_TARGET_TEXT",
       "WEBSITE_ORG_TIME",
       "AM_REFRESH_TIME"
     ],
     "static_checks": {
+      "scope": "前次250函数/33字段整表检查快照；本次局部更新不重跑整表原生引用计数或全部源hash，不将这些历史数值当作当前工作树验证结果。",
       "unique_native_references": 191,
       "missing_reference_anchors": 0,
       "counts_and_ids_preserved": true,
@@ -146,7 +158,7 @@
   },
   "audit_chains": {
     "DATA": {
-      "boundary": "显式新版副本；无旧config写回",
+      "boundary": "显式新版副本及Run冻结profile；设备三字段不作为DevicePolicy/LifecycleTarget身份；无旧config写回。",
       "refs": [
         {
           "ref": "next/native/app/m4_check.cpp:57",
@@ -338,7 +350,7 @@
       ]
     },
     "LIFECYCLE": {
-      "boundary": "WVD纯恢复决策到离线生命周期端口；真实端口未接",
+      "boundary": "冻结profile选择已授权生命周期能力；profile-aware recovery_binding/bind_initial_vpn及TaskHandoff已有源码，Lovelace集成待验；真实端口未开放，配置不授予运行身份。",
       "refs": [
         {
           "ref": "next/native/games/wvd/recovery/boot.cpp:26",
@@ -452,7 +464,7 @@
       "refs": []
     },
     "DIAGNOSTICS": {
-      "boundary": "结构化结果已有，不等价原日志文字/PNG/保留期",
+      "boundary": "结构化结果及farm_target_text/last_lap_seconds摘要源码已接，新增消费者待验；不等价原gettext日志/PNG/保留期，也不把所有专项起止当同一lap。",
       "refs": [
         {
           "ref": "next/native/storage/run_store.cpp:123",
@@ -1970,7 +1982,7 @@
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "remaining": "AUTO_START_CLASH未绑定vpn_required；实际包发现/系统授权缺失，不以EnsureVpn枚举销项。",
+      "remaining": "Lovelace正在实现的profile-aware recovery_binding/bind_initial_vpn已落源码：冻结AUTO_START_CLASH选择已授权目标的EnsureVpn，MAX_CRASH_LIMIT进入同一binding；初始段及TaskHandoff已有调用。尚未构建/验证；不能由配置授予设备/VPN身份，实际包发现和系统授权适配仍未开放。",
       "historical_verification": {
         "offline_status": "NOT_RUN",
         "verification_scope": null,
@@ -2006,6 +2018,18 @@
             "symbol": "LifecycleEnd execute_lifecycle_plan",
             "role": "definition",
             "excerpt": "LifecycleEnd execute_lifecycle_plan(const LifecyclePlan &plan, LifecyclePort &port,"
+          },
+          {
+            "ref": "next/native/games/wvd/recovery/boot.cpp:304",
+            "symbol": "recovery_binding",
+            "role": "definition",
+            "excerpt": "contracts::BehaviorBinding recovery_binding(const devices::LifecycleTarget &t, const J &profile, bool force) {"
+          },
+          {
+            "ref": "next/native/games/wvd/recovery/boot.cpp:319",
+            "symbol": "bind_initial_vpn",
+            "role": "definition",
+            "excerpt": "void bind_initial_vpn(runtime::RunDefinition &run, const devices::LifecycleTarget &target, const J &profile) {"
           }
         ],
         "legacy_contract": "旧包/Activity发现、VPN验证、授权窗与前台恢复；新版有限生命周期请求/离线观测。",
@@ -2013,7 +2037,7 @@
           "OFFLINE_PORT_ONLY",
           "CONFIG_BINDING_GAP"
         ],
-        "remaining": "AUTO_START_CLASH未绑定vpn_required；实际包发现/系统授权缺失，不以EnsureVpn枚举销项。",
+        "remaining": "Lovelace正在实现的profile-aware recovery_binding/bind_initial_vpn已落源码：冻结AUTO_START_CLASH选择已授权目标的EnsureVpn，MAX_CRASH_LIMIT进入同一binding；初始段及TaskHandoff已有调用。尚未构建/验证；不能由配置授予设备/VPN身份，实际包发现和系统授权适配仍未开放。",
         "static_status": "IMPLEMENTATION_REFERENCES_REVIEWED",
         "equivalence_status": "UNVERIFIED",
         "runtime_verification": "NOT_RUN_BY_THIS_AUDIT",
@@ -2040,7 +2064,7 @@
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "remaining": "AUTO_START_CLASH未绑定vpn_required；实际包发现/系统授权缺失，不以EnsureVpn枚举销项。",
+      "remaining": "Lovelace正在实现的profile-aware recovery_binding/bind_initial_vpn已落源码：冻结AUTO_START_CLASH选择已授权目标的EnsureVpn，MAX_CRASH_LIMIT进入同一binding；初始段及TaskHandoff已有调用。尚未构建/验证；不能由配置授予设备/VPN身份，实际包发现和系统授权适配仍未开放。",
       "historical_verification": {
         "offline_status": "NOT_RUN",
         "verification_scope": null,
@@ -2088,6 +2112,18 @@
             "symbol": "LifecycleEnd execute_lifecycle_plan",
             "role": "definition",
             "excerpt": "LifecycleEnd execute_lifecycle_plan(const LifecyclePlan &plan, LifecyclePort &port,"
+          },
+          {
+            "ref": "next/native/games/wvd/recovery/boot.cpp:304",
+            "symbol": "recovery_binding",
+            "role": "definition",
+            "excerpt": "contracts::BehaviorBinding recovery_binding(const devices::LifecycleTarget &t, const J &profile, bool force) {"
+          },
+          {
+            "ref": "next/native/games/wvd/recovery/boot.cpp:319",
+            "symbol": "bind_initial_vpn",
+            "role": "definition",
+            "excerpt": "void bind_initial_vpn(runtime::RunDefinition &run, const devices::LifecycleTarget &target, const J &profile) {"
           }
         ],
         "legacy_contract": "旧包/Activity发现、VPN验证、授权窗与前台恢复；新版有限生命周期请求/离线观测。",
@@ -2095,7 +2131,7 @@
           "OFFLINE_PORT_ONLY",
           "CONFIG_BINDING_GAP"
         ],
-        "remaining": "AUTO_START_CLASH未绑定vpn_required；实际包发现/系统授权缺失，不以EnsureVpn枚举销项。",
+        "remaining": "Lovelace正在实现的profile-aware recovery_binding/bind_initial_vpn已落源码：冻结AUTO_START_CLASH选择已授权目标的EnsureVpn，MAX_CRASH_LIMIT进入同一binding；初始段及TaskHandoff已有调用。尚未构建/验证；不能由配置授予设备/VPN身份，实际包发现和系统授权适配仍未开放。",
         "static_status": "IMPLEMENTATION_REFERENCES_REVIEWED",
         "equivalence_status": "UNVERIFIED",
         "runtime_verification": "NOT_RUN_BY_THIS_AUDIT",
@@ -2122,7 +2158,7 @@
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "remaining": "AUTO_START_CLASH未绑定vpn_required；实际包发现/系统授权缺失，不以EnsureVpn枚举销项。",
+      "remaining": "Lovelace正在实现的profile-aware recovery_binding/bind_initial_vpn已落源码：冻结AUTO_START_CLASH选择已授权目标的EnsureVpn，MAX_CRASH_LIMIT进入同一binding；初始段及TaskHandoff已有调用。尚未构建/验证；不能由配置授予设备/VPN身份，实际包发现和系统授权适配仍未开放。",
       "historical_verification": {
         "offline_status": "NOT_RUN",
         "verification_scope": null,
@@ -2158,6 +2194,18 @@
             "symbol": "LifecycleEnd execute_lifecycle_plan",
             "role": "definition",
             "excerpt": "LifecycleEnd execute_lifecycle_plan(const LifecyclePlan &plan, LifecyclePort &port,"
+          },
+          {
+            "ref": "next/native/games/wvd/recovery/boot.cpp:304",
+            "symbol": "recovery_binding",
+            "role": "definition",
+            "excerpt": "contracts::BehaviorBinding recovery_binding(const devices::LifecycleTarget &t, const J &profile, bool force) {"
+          },
+          {
+            "ref": "next/native/games/wvd/recovery/boot.cpp:319",
+            "symbol": "bind_initial_vpn",
+            "role": "definition",
+            "excerpt": "void bind_initial_vpn(runtime::RunDefinition &run, const devices::LifecycleTarget &target, const J &profile) {"
           }
         ],
         "legacy_contract": "旧包/Activity发现、VPN验证、授权窗与前台恢复；新版有限生命周期请求/离线观测。",
@@ -2165,7 +2213,7 @@
           "OFFLINE_PORT_ONLY",
           "CONFIG_BINDING_GAP"
         ],
-        "remaining": "AUTO_START_CLASH未绑定vpn_required；实际包发现/系统授权缺失，不以EnsureVpn枚举销项。",
+        "remaining": "Lovelace正在实现的profile-aware recovery_binding/bind_initial_vpn已落源码：冻结AUTO_START_CLASH选择已授权目标的EnsureVpn，MAX_CRASH_LIMIT进入同一binding；初始段及TaskHandoff已有调用。尚未构建/验证；不能由配置授予设备/VPN身份，实际包发现和系统授权适配仍未开放。",
         "static_status": "IMPLEMENTATION_REFERENCES_REVIEWED",
         "equivalence_status": "UNVERIFIED",
         "runtime_verification": "NOT_RUN_BY_THIS_AUDIT",
@@ -2192,7 +2240,7 @@
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "remaining": "AUTO_START_CLASH未绑定vpn_required；实际包发现/系统授权缺失，不以EnsureVpn枚举销项。",
+      "remaining": "Lovelace正在实现的profile-aware recovery_binding/bind_initial_vpn已落源码：冻结AUTO_START_CLASH选择已授权目标的EnsureVpn，MAX_CRASH_LIMIT进入同一binding；初始段及TaskHandoff已有调用。尚未构建/验证；不能由配置授予设备/VPN身份，实际包发现和系统授权适配仍未开放。",
       "historical_verification": {
         "offline_status": "NOT_RUN",
         "verification_scope": null,
@@ -2234,6 +2282,18 @@
             "symbol": "LifecycleEnd execute_lifecycle_plan",
             "role": "definition",
             "excerpt": "LifecycleEnd execute_lifecycle_plan(const LifecyclePlan &plan, LifecyclePort &port,"
+          },
+          {
+            "ref": "next/native/games/wvd/recovery/boot.cpp:304",
+            "symbol": "recovery_binding",
+            "role": "definition",
+            "excerpt": "contracts::BehaviorBinding recovery_binding(const devices::LifecycleTarget &t, const J &profile, bool force) {"
+          },
+          {
+            "ref": "next/native/games/wvd/recovery/boot.cpp:319",
+            "symbol": "bind_initial_vpn",
+            "role": "definition",
+            "excerpt": "void bind_initial_vpn(runtime::RunDefinition &run, const devices::LifecycleTarget &target, const J &profile) {"
           }
         ],
         "legacy_contract": "旧包/Activity发现、VPN验证、授权窗与前台恢复；新版有限生命周期请求/离线观测。",
@@ -2241,7 +2301,7 @@
           "OFFLINE_PORT_ONLY",
           "CONFIG_BINDING_GAP"
         ],
-        "remaining": "AUTO_START_CLASH未绑定vpn_required；实际包发现/系统授权缺失，不以EnsureVpn枚举销项。",
+        "remaining": "Lovelace正在实现的profile-aware recovery_binding/bind_initial_vpn已落源码：冻结AUTO_START_CLASH选择已授权目标的EnsureVpn，MAX_CRASH_LIMIT进入同一binding；初始段及TaskHandoff已有调用。尚未构建/验证；不能由配置授予设备/VPN身份，实际包发现和系统授权适配仍未开放。",
         "static_status": "IMPLEMENTATION_REFERENCES_REVIEWED",
         "equivalence_status": "UNVERIFIED",
         "runtime_verification": "NOT_RUN_BY_THIS_AUDIT",
@@ -2268,7 +2328,7 @@
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "remaining": "AUTO_START_CLASH未绑定vpn_required；实际包发现/系统授权缺失，不以EnsureVpn枚举销项。",
+      "remaining": "Lovelace正在实现的profile-aware recovery_binding/bind_initial_vpn已落源码：冻结AUTO_START_CLASH选择已授权目标的EnsureVpn，MAX_CRASH_LIMIT进入同一binding；初始段及TaskHandoff已有调用。尚未构建/验证；不能由配置授予设备/VPN身份，实际包发现和系统授权适配仍未开放。",
       "historical_verification": {
         "offline_status": "NOT_RUN",
         "verification_scope": null,
@@ -2310,6 +2370,18 @@
             "symbol": "LifecycleEnd execute_lifecycle_plan",
             "role": "definition",
             "excerpt": "LifecycleEnd execute_lifecycle_plan(const LifecyclePlan &plan, LifecyclePort &port,"
+          },
+          {
+            "ref": "next/native/games/wvd/recovery/boot.cpp:304",
+            "symbol": "recovery_binding",
+            "role": "definition",
+            "excerpt": "contracts::BehaviorBinding recovery_binding(const devices::LifecycleTarget &t, const J &profile, bool force) {"
+          },
+          {
+            "ref": "next/native/games/wvd/recovery/boot.cpp:319",
+            "symbol": "bind_initial_vpn",
+            "role": "definition",
+            "excerpt": "void bind_initial_vpn(runtime::RunDefinition &run, const devices::LifecycleTarget &target, const J &profile) {"
           }
         ],
         "legacy_contract": "旧包/Activity发现、VPN验证、授权窗与前台恢复；新版有限生命周期请求/离线观测。",
@@ -2317,7 +2389,7 @@
           "OFFLINE_PORT_ONLY",
           "CONFIG_BINDING_GAP"
         ],
-        "remaining": "AUTO_START_CLASH未绑定vpn_required；实际包发现/系统授权缺失，不以EnsureVpn枚举销项。",
+        "remaining": "Lovelace正在实现的profile-aware recovery_binding/bind_initial_vpn已落源码：冻结AUTO_START_CLASH选择已授权目标的EnsureVpn，MAX_CRASH_LIMIT进入同一binding；初始段及TaskHandoff已有调用。尚未构建/验证；不能由配置授予设备/VPN身份，实际包发现和系统授权适配仍未开放。",
         "static_status": "IMPLEMENTATION_REFERENCES_REVIEWED",
         "equivalence_status": "UNVERIFIED",
         "runtime_verification": "NOT_RUN_BY_THIS_AUDIT",
@@ -2344,7 +2416,7 @@
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "remaining": "AUTO_START_CLASH未绑定vpn_required；实际包发现/系统授权缺失，不以EnsureVpn枚举销项。",
+      "remaining": "Lovelace正在实现的profile-aware recovery_binding/bind_initial_vpn已落源码：冻结AUTO_START_CLASH选择已授权目标的EnsureVpn，MAX_CRASH_LIMIT进入同一binding；初始段及TaskHandoff已有调用。尚未构建/验证；不能由配置授予设备/VPN身份，实际包发现和系统授权适配仍未开放。",
       "historical_verification": {
         "offline_status": "NOT_RUN",
         "verification_scope": null,
@@ -2380,6 +2452,18 @@
             "symbol": "LifecycleEnd execute_lifecycle_plan",
             "role": "definition",
             "excerpt": "LifecycleEnd execute_lifecycle_plan(const LifecyclePlan &plan, LifecyclePort &port,"
+          },
+          {
+            "ref": "next/native/games/wvd/recovery/boot.cpp:304",
+            "symbol": "recovery_binding",
+            "role": "definition",
+            "excerpt": "contracts::BehaviorBinding recovery_binding(const devices::LifecycleTarget &t, const J &profile, bool force) {"
+          },
+          {
+            "ref": "next/native/games/wvd/recovery/boot.cpp:319",
+            "symbol": "bind_initial_vpn",
+            "role": "definition",
+            "excerpt": "void bind_initial_vpn(runtime::RunDefinition &run, const devices::LifecycleTarget &target, const J &profile) {"
           }
         ],
         "legacy_contract": "旧包/Activity发现、VPN验证、授权窗与前台恢复；新版有限生命周期请求/离线观测。",
@@ -2387,7 +2471,7 @@
           "OFFLINE_PORT_ONLY",
           "CONFIG_BINDING_GAP"
         ],
-        "remaining": "AUTO_START_CLASH未绑定vpn_required；实际包发现/系统授权缺失，不以EnsureVpn枚举销项。",
+        "remaining": "Lovelace正在实现的profile-aware recovery_binding/bind_initial_vpn已落源码：冻结AUTO_START_CLASH选择已授权目标的EnsureVpn，MAX_CRASH_LIMIT进入同一binding；初始段及TaskHandoff已有调用。尚未构建/验证；不能由配置授予设备/VPN身份，实际包发现和系统授权适配仍未开放。",
         "static_status": "IMPLEMENTATION_REFERENCES_REVIEWED",
         "equivalence_status": "UNVERIFIED",
         "runtime_verification": "NOT_RUN_BY_THIS_AUDIT",
@@ -8358,7 +8442,7 @@
       "legacy_symbol": "Factory.BagClear_Item",
       "source_ref": "src/script.py:1800",
       "source_body_sha256": "ee8826e15c386d6bdb28552f70f41d819d7ea2ff2717f31427116c185f2860b0",
-      "original_semantics": "旧物品列表六格循环存仓并关闭窗口，不是重新组队或补镐子。",
+      "original_semantics": "固定旧Factory内未调用的局部函数定义；函数体为物品列表六格循环存仓并关闭窗口，不是重新组队或补镐子。",
       "acceptance_ids": [
         "M4-SUPPLY"
       ],
@@ -8369,7 +8453,7 @@
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "remaining": "未找到新版通用存仓动作链；保留旧源码，LAST_BAGCLEAR/组队回执不证明存仓。",
+      "remaining": "固定旧源码中仅有Factory局部定义，无调用、传递或注册引用；不计作活动旧功能丢失。定义及历史记录保留，不新增新版存仓流程，也不据未调用自行删除或退役。LAST_BAGCLEAR/组队回执仍不能冒充存仓。",
       "historical_verification": {
         "offline_status": "NOT_RUN",
         "verification_scope": null,
@@ -8382,24 +8466,26 @@
         "legacy_reference_count": 0,
         "legacy_reference_scope": "明确词法/同类属性引用，非动态调用图",
         "protocol_note": null,
-        "consumer_resolution": "NO_STATIC_CALLSITE_IN_FIXED_FIVE_FILES",
+        "consumer_resolution": "LOCAL_FUNCTION_DEFINITION_ONLY_NO_REFERENCE_IN_FIXED_SOURCE",
         "legacy_dynamic_candidates": [],
         "legacy_dynamic_candidate_count": 0,
         "chain": "NONE",
         "current_refs": [],
-        "legacy_contract": "旧物品列表六格循环存仓并关闭窗口，不是重新组队或补镐子。",
+        "legacy_contract": "固定旧Factory内未调用的局部函数定义；函数体为物品列表六格循环存仓并关闭窗口，不是重新组队或补镐子。",
         "difference_classes": [
-          "NO_EQUIVALENT_CONSUMER"
+          "UNCALLED_LEGACY_LOCAL_FUNCTION",
+          "NO_RETIREMENT_AUTHORIZATION"
         ],
-        "remaining": "未找到新版通用存仓动作链；保留旧源码，LAST_BAGCLEAR/组队回执不证明存仓。",
-        "static_status": "NO_EQUIVALENT_NEW_ENTRY",
+        "remaining": "固定旧源码中仅有Factory局部定义，无调用、传递或注册引用；不计作活动旧功能丢失。定义及历史记录保留，不新增新版存仓流程，也不据未调用自行删除或退役。LAST_BAGCLEAR/组队回执仍不能冒充存仓。",
+        "static_status": "LEGACY_LOCAL_FUNCTION_UNCALLED",
         "equivalence_status": "UNVERIFIED",
         "runtime_verification": "NOT_RUN_BY_THIS_AUDIT",
-        "actual_entry_scope": "旧入口仍保留；规划owner不是实现",
+        "actual_entry_scope": "固定旧源局部定义无活动调用入口；本次只修正分类，不改变旧源码或授权删除。",
         "legacy_definition": "Factory.BagClear_Item"
       },
-      "implementation_extent": "NO_EQUIVALENT_NEW_ENTRY",
-      "verification_scope": "offline_status保留历史局部分项值，范围见historical_verification；本轮只读静态核对，不新增通过结论，不是完整任务验收。"
+      "implementation_extent": "LEGACY_LOCAL_FUNCTION_UNCALLED",
+      "verification_scope": "offline_status保留历史局部分项值，范围见historical_verification；本轮只读静态核对，不新增通过结论，不是完整任务验收。",
+      "implementation_status_scope": "NOT_STARTED仅描述未建立新版函数实现，不作为活动旧链缺失统计。"
     },
     {
       "inventory_id": "function:src/script.py:Factory.reunionParty:1819",
@@ -8499,7 +8585,7 @@
       "offline_status": "PASS",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "remaining": "计数消费者存在；原FARM_TARGET_TEXT文字summary和完整专项对账未闭合。",
+      "remaining": "WvdRunState摘要已读取冻结FARM_TARGET_TEXT并发布farm_target_text；last_lap_seconds已有单调结算源码。新字段/完整任务对账待验，旧gettext统计文本和M5展示未完整迁移；不是仅导入，也不能据源码新增PASS。 last_lap_seconds为上一已结算圈，首次未结算为null；只覆盖实际调用settle_legacy_lap的旧边界，不将所有专项开始/完成自动解释为同一圈。",
       "implementation_extent": "NATIVE_CHAIN_PARTIAL",
       "verification_scope": "offline_status保留历史局部分项值，范围见historical_verification；本轮只读静态核对，不新增通过结论，不是完整任务验收。",
       "evidence_report": "../m4-state-validation.md",
@@ -8544,14 +8630,33 @@
             "symbol": "RunStore::",
             "role": "owner",
             "excerpt": "RunStore::RunStore(const std::filesystem::path &root, const std::string &instance,"
+          },
+          {
+            "ref": "next/native/games/wvd/state.cpp:229",
+            "symbol": "WvdRunState::settle_legacy_lap",
+            "role": "definition",
+            "excerpt": "void WvdRunState::settle_legacy_lap(TimePoint now) {"
+          },
+          {
+            "ref": "next/native/games/wvd/state.cpp:913",
+            "symbol": "last_lap_seconds",
+            "role": "consumer",
+            "excerpt": "{\"last_lap_seconds\", last_lap_seconds_ ? J(*last_lap_seconds_) : J(nullptr)},"
+          },
+          {
+            "ref": "next/native/games/wvd/state.cpp:912",
+            "symbol": "farm_target_text",
+            "role": "consumer",
+            "excerpt": "{\"farm_target_text\", profile_.at(\"FARM_TARGET_TEXT\")},"
           }
         ],
         "legacy_contract": "遇战斗/宝箱才加普通本次数，结算上一lap；专项开始次数不等于完成次数。",
         "difference_classes": [
           "MONOTONIC_TIME",
-          "COUNTER_SCOPE"
+          "COUNTER_SCOPE",
+          "SOURCE_PENDING_VERIFICATION"
         ],
-        "remaining": "计数消费者存在；原FARM_TARGET_TEXT文字summary和完整专项对账未闭合。",
+        "remaining": "WvdRunState摘要已读取冻结FARM_TARGET_TEXT并发布farm_target_text；last_lap_seconds已有单调结算源码。新字段/完整任务对账待验，旧gettext统计文本和M5展示未完整迁移；不是仅导入，也不能据源码新增PASS。 last_lap_seconds为上一已结算圈，首次未结算为null；只覆盖实际调用settle_legacy_lap的旧边界，不将所有专项开始/完成自动解释为同一圈。",
         "static_status": "IMPLEMENTATION_REFERENCES_REVIEWED",
         "equivalence_status": "UNVERIFIED",
         "runtime_verification": "NOT_RUN_BY_THIS_AUDIT",
@@ -21176,7 +21281,7 @@
       "offline_status": "PASS",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "remaining": "已导入/导出；新MuMu绑定使用独立显式参数，未找到本字段到真实后端的绑定；Metadata/CLEANUP阻断。",
+      "remaining": "已由描述驱动导入/导出并随新版profile冻结；这三个旧设备字段不是新版运行身份来源。DevicePolicy/LifecycleTarget由调用者独立显式绑定，未自动读取本字段连接设备；不以此断言活动业务遗漏，不补设备发现或真实适配，Metadata/CLEANUP仍阻断。",
       "implementation_extent": "IMPORT_EXPORT_ONLY",
       "verification_scope": "33字段数据通过是历史导入/保存证据；本轮仅静态读取/绑定分类，不等于全部字段业务验收。",
       "data_evidence": "../m4-business-validation.md#配置与目录",
@@ -21189,10 +21294,10 @@
         "legacy_contract": "旧模拟器路径/实例/ADB地址（保留旧拼写和值）。",
         "difference_classes": [
           "DATA_ONLY",
-          "CONFIG_BINDING_GAP"
+          "FROZEN_PROFILE_NON_RUNTIME_IDENTITY"
         ],
         "current_business_refs": [],
-        "remaining": "已导入/导出；新MuMu绑定使用独立显式参数，未找到本字段到真实后端的绑定；Metadata/CLEANUP阻断。",
+        "remaining": "已由描述驱动导入/导出并随新版profile冻结；这三个旧设备字段不是新版运行身份来源。DevicePolicy/LifecycleTarget由调用者独立显式绑定，未自动读取本字段连接设备；不以此断言活动业务遗漏，不补设备发现或真实适配，Metadata/CLEANUP仍阻断。",
         "legacy_consumers": [
           {
             "ref": "src/script.py:716",
@@ -21291,13 +21396,19 @@
             "symbol": "ProfileStore::compare_exchange",
             "role": "definition",
             "excerpt": "J ProfileStore::compare_exchange(const std::string &expected, const J &document) {"
+          },
+          {
+            "ref": "next/native/games/wvd/state_factory.cpp:22",
+            "symbol": "wvd_state_binding",
+            "role": "definition",
+            "excerpt": "contracts::BehaviorBinding wvd_state_binding(const nlohmann::json &profile) {"
           }
         ],
         "static_status": "IMPORT_EXPORT_ONLY",
         "equivalence_status": "UNVERIFIED",
         "runtime_verification": "NOT_RUN_BY_THIS_AUDIT",
         "data_authority": "旧config仍生产权威；只导入显式新版副本，Run冻结values；仅已确认善恶通过CAS修改绑定的新profile。",
-        "binding_note": "类型校验/字段描述/导出/测试字符串不算业务读取；current_business_refs需结合调用链和remaining解释。"
+        "binding_note": "导入/冻结是已存在的数据消费者，不计业务读取；current_business_refs为空不表示应从旧设备字段推导新版运行身份。"
       }
     },
     {
@@ -21317,7 +21428,7 @@
       "offline_status": "PASS",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "remaining": "已导入/导出；新MuMu绑定使用独立显式参数，未找到本字段到真实后端的绑定；Metadata/CLEANUP阻断。",
+      "remaining": "已由描述驱动导入/导出并随新版profile冻结；这三个旧设备字段不是新版运行身份来源。DevicePolicy/LifecycleTarget由调用者独立显式绑定，未自动读取本字段连接设备；不以此断言活动业务遗漏，不补设备发现或真实适配，Metadata/CLEANUP仍阻断。",
       "implementation_extent": "IMPORT_EXPORT_ONLY",
       "verification_scope": "33字段数据通过是历史导入/保存证据；本轮仅静态读取/绑定分类，不等于全部字段业务验收。",
       "data_evidence": "../m4-business-validation.md#配置与目录",
@@ -21330,10 +21441,10 @@
         "legacy_contract": "旧模拟器路径/实例/ADB地址（保留旧拼写和值）。",
         "difference_classes": [
           "DATA_ONLY",
-          "CONFIG_BINDING_GAP"
+          "FROZEN_PROFILE_NON_RUNTIME_IDENTITY"
         ],
         "current_business_refs": [],
-        "remaining": "已导入/导出；新MuMu绑定使用独立显式参数，未找到本字段到真实后端的绑定；Metadata/CLEANUP阻断。",
+        "remaining": "已由描述驱动导入/导出并随新版profile冻结；这三个旧设备字段不是新版运行身份来源。DevicePolicy/LifecycleTarget由调用者独立显式绑定，未自动读取本字段连接设备；不以此断言活动业务遗漏，不补设备发现或真实适配，Metadata/CLEANUP仍阻断。",
         "legacy_consumers": [
           {
             "ref": "src/script.py:472",
@@ -21372,13 +21483,19 @@
             "symbol": "ProfileStore::compare_exchange",
             "role": "definition",
             "excerpt": "J ProfileStore::compare_exchange(const std::string &expected, const J &document) {"
+          },
+          {
+            "ref": "next/native/games/wvd/state_factory.cpp:22",
+            "symbol": "wvd_state_binding",
+            "role": "definition",
+            "excerpt": "contracts::BehaviorBinding wvd_state_binding(const nlohmann::json &profile) {"
           }
         ],
         "static_status": "IMPORT_EXPORT_ONLY",
         "equivalence_status": "UNVERIFIED",
         "runtime_verification": "NOT_RUN_BY_THIS_AUDIT",
         "data_authority": "旧config仍生产权威；只导入显式新版副本，Run冻结values；仅已确认善恶通过CAS修改绑定的新profile。",
-        "binding_note": "类型校验/字段描述/导出/测试字符串不算业务读取；current_business_refs需结合调用链和remaining解释。"
+        "binding_note": "导入/冻结是已存在的数据消费者，不计业务读取；current_business_refs为空不表示应从旧设备字段推导新版运行身份。"
       }
     },
     {
@@ -21398,7 +21515,7 @@
       "offline_status": "PASS",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "remaining": "已导入/导出；新MuMu绑定使用独立显式参数，未找到本字段到真实后端的绑定；Metadata/CLEANUP阻断。",
+      "remaining": "已由描述驱动导入/导出并随新版profile冻结；这三个旧设备字段不是新版运行身份来源。DevicePolicy/LifecycleTarget由调用者独立显式绑定，未自动读取本字段连接设备；不以此断言活动业务遗漏，不补设备发现或真实适配，Metadata/CLEANUP仍阻断。",
       "implementation_extent": "IMPORT_EXPORT_ONLY",
       "verification_scope": "33字段数据通过是历史导入/保存证据；本轮仅静态读取/绑定分类，不等于全部字段业务验收。",
       "data_evidence": "../m4-business-validation.md#配置与目录",
@@ -21411,10 +21528,10 @@
         "legacy_contract": "旧模拟器路径/实例/ADB地址（保留旧拼写和值）。",
         "difference_classes": [
           "DATA_ONLY",
-          "CONFIG_BINDING_GAP"
+          "FROZEN_PROFILE_NON_RUNTIME_IDENTITY"
         ],
         "current_business_refs": [],
-        "remaining": "已导入/导出；新MuMu绑定使用独立显式参数，未找到本字段到真实后端的绑定；Metadata/CLEANUP阻断。",
+        "remaining": "已由描述驱动导入/导出并随新版profile冻结；这三个旧设备字段不是新版运行身份来源。DevicePolicy/LifecycleTarget由调用者独立显式绑定，未自动读取本字段连接设备；不以此断言活动业务遗漏，不补设备发现或真实适配，Metadata/CLEANUP仍阻断。",
         "legacy_consumers": [
           {
             "ref": "src/script.py:845",
@@ -21477,13 +21594,19 @@
             "symbol": "ProfileStore::compare_exchange",
             "role": "definition",
             "excerpt": "J ProfileStore::compare_exchange(const std::string &expected, const J &document) {"
+          },
+          {
+            "ref": "next/native/games/wvd/state_factory.cpp:22",
+            "symbol": "wvd_state_binding",
+            "role": "definition",
+            "excerpt": "contracts::BehaviorBinding wvd_state_binding(const nlohmann::json &profile) {"
           }
         ],
         "static_status": "IMPORT_EXPORT_ONLY",
         "equivalence_status": "UNVERIFIED",
         "runtime_verification": "NOT_RUN_BY_THIS_AUDIT",
         "data_authority": "旧config仍生产权威；只导入显式新版副本，Run冻结values；仅已确认善恶通过CAS修改绑定的新profile。",
-        "binding_note": "类型校验/字段描述/导出/测试字符串不算业务读取；current_business_refs需结合调用链和remaining解释。"
+        "binding_note": "导入/冻结是已存在的数据消费者，不计业务读取；current_business_refs为空不表示应从旧设备字段推导新版运行身份。"
       }
     },
     {
@@ -21497,14 +21620,14 @@
         "M4-CONFIG-AUTO_START_CLASH"
       ],
       "planned_owner_from_baseline": "native/storage",
-      "implementation": "native/storage/legacy_import.cpp",
-      "entry": "LegacyConfigImporter::parse",
+      "implementation": "native/games/wvd/recovery/boot.cpp",
+      "entry": "recovery_binding / bind_initial_vpn",
       "implementation_status": "PARTIAL",
       "offline_status": "PASS",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "remaining": "有EnsureVpn类型及独立vpn_required，无本字段到LifecycleTarget的消费者；真实端口未接。",
-      "implementation_extent": "IMPORT_EXPORT_ONLY",
+      "remaining": "Lovelace正在实现的profile-aware recovery_binding/bind_initial_vpn已落源码：冻结AUTO_START_CLASH选择已授权目标的EnsureVpn，MAX_CRASH_LIMIT进入同一binding；初始段及TaskHandoff已有调用。尚未构建/验证；不能由配置授予设备/VPN身份，实际包发现和系统授权适配仍未开放。",
+      "implementation_extent": "DATA_WITH_SCOPED_BUSINESS_CONSUMER",
       "verification_scope": "33字段数据通过是历史导入/保存证据；本轮仅静态读取/绑定分类，不等于全部字段业务验收。",
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "historical_verification": {
@@ -21515,11 +21638,37 @@
       "semantic_audit": {
         "legacy_contract": "旧EnsureClashVpn开关，已连接则不重复启动。",
         "difference_classes": [
-          "DATA_ONLY",
-          "CONFIG_BINDING_GAP"
+          "FROZEN_PROFILE_BINDING",
+          "SOURCE_PENDING_VERIFICATION",
+          "REAL_DEVICE_BOUNDARY"
         ],
-        "current_business_refs": [],
-        "remaining": "有EnsureVpn类型及独立vpn_required，无本字段到LifecycleTarget的消费者；真实端口未接。",
+        "current_business_refs": [
+          {
+            "ref": "next/native/games/wvd/recovery/boot.cpp:310",
+            "symbol": "profile.at(\"AUTO_START_CLASH\")",
+            "role": "consumer",
+            "excerpt": "const bool vpn = profile.at(\"AUTO_START_CLASH\").get<bool>();"
+          },
+          {
+            "ref": "next/native/games/wvd/recovery/boot.cpp:304",
+            "symbol": "recovery_binding",
+            "role": "definition",
+            "excerpt": "contracts::BehaviorBinding recovery_binding(const devices::LifecycleTarget &t, const J &profile, bool force) {"
+          },
+          {
+            "ref": "next/native/games/wvd/recovery/boot.cpp:319",
+            "symbol": "bind_initial_vpn",
+            "role": "definition",
+            "excerpt": "void bind_initial_vpn(runtime::RunDefinition &run, const devices::LifecycleTarget &target, const J &profile) {"
+          },
+          {
+            "ref": "next/native/games/wvd/tasks/task_handoff.cpp:226",
+            "symbol": "recovery::bind_initial_vpn",
+            "role": "caller",
+            "excerpt": "recovery::bind_initial_vpn(next, lifecycle_target, profile);"
+          }
+        ],
+        "remaining": "Lovelace正在实现的profile-aware recovery_binding/bind_initial_vpn已落源码：冻结AUTO_START_CLASH选择已授权目标的EnsureVpn，MAX_CRASH_LIMIT进入同一binding；初始段及TaskHandoff已有调用。尚未构建/验证；不能由配置授予设备/VPN身份，实际包发现和系统授权适配仍未开放。",
         "legacy_consumers": [
           {
             "ref": "src/script.py:308",
@@ -21554,7 +21703,7 @@
             "excerpt": "J ProfileStore::compare_exchange(const std::string &expected, const J &document) {"
           }
         ],
-        "static_status": "IMPORT_EXPORT_ONLY",
+        "static_status": "BUSINESS_READ_IDENTIFIED_SCOPE_LIMITED",
         "equivalence_status": "UNVERIFIED",
         "runtime_verification": "NOT_RUN_BY_THIS_AUDIT",
         "data_authority": "旧config仍生产权威；只导入显式新版副本，Run冻结values；仅已确认善恶通过CAS修改绑定的新profile。",
@@ -21722,14 +21871,14 @@
         "M4-CONFIG-FARM_TARGET_TEXT"
       ],
       "planned_owner_from_baseline": "native/storage",
-      "implementation": "native/storage/legacy_import.cpp",
-      "entry": "LegacyConfigImporter::parse",
+      "implementation": "native/games/wvd/state.cpp",
+      "entry": "WvdRunState::summarize",
       "implementation_status": "PARTIAL",
       "offline_status": "PASS",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "remaining": "目录标题不等于此字段被消费；新业务summary未读取该显示名，M5 UI未做。",
-      "implementation_extent": "IMPORT_EXPORT_ONLY",
+      "remaining": "WvdRunState摘要已读取冻结FARM_TARGET_TEXT并发布farm_target_text；last_lap_seconds已有单调结算源码。新字段/完整任务对账待验，旧gettext统计文本和M5展示未完整迁移；不是仅导入，也不能据源码新增PASS。",
+      "implementation_extent": "DATA_WITH_SCOPED_BUSINESS_CONSUMER",
       "verification_scope": "33字段数据通过是历史导入/保存证据；本轮仅静态读取/绑定分类，不等于全部字段业务验收。",
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "historical_verification": {
@@ -21740,11 +21889,19 @@
       "semantic_audit": {
         "legacy_contract": "旧任务显示名/统计文本。",
         "difference_classes": [
-          "DATA_ONLY",
+          "FROZEN_SUMMARY_CONSUMER",
+          "SOURCE_PENDING_VERIFICATION",
           "DISPLAY_GAP"
         ],
-        "current_business_refs": [],
-        "remaining": "目录标题不等于此字段被消费；新业务summary未读取该显示名，M5 UI未做。",
+        "current_business_refs": [
+          {
+            "ref": "next/native/games/wvd/state.cpp:912",
+            "symbol": "farm_target_text",
+            "role": "consumer",
+            "excerpt": "{\"farm_target_text\", profile_.at(\"FARM_TARGET_TEXT\")},"
+          }
+        ],
+        "remaining": "WvdRunState摘要已读取冻结FARM_TARGET_TEXT并发布farm_target_text；last_lap_seconds已有单调结算源码。新字段/完整任务对账待验，旧gettext统计文本和M5展示未完整迁移；不是仅导入，也不能据源码新增PASS。",
         "legacy_consumers": [
           {
             "ref": "src/script.py:1843",
@@ -21803,7 +21960,7 @@
             "excerpt": "J ProfileStore::compare_exchange(const std::string &expected, const J &document) {"
           }
         ],
-        "static_status": "IMPORT_EXPORT_ONLY",
+        "static_status": "BUSINESS_READ_IDENTIFIED_SCOPE_LIMITED",
         "equivalence_status": "UNVERIFIED",
         "runtime_verification": "NOT_RUN_BY_THIS_AUDIT",
         "data_authority": "旧config仍生产权威；只导入显式新版副本，Run冻结values；仅已确认善恶通过CAS修改绑定的新profile。",
@@ -22641,7 +22798,7 @@
       "offline_status": "PASS",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "remaining": "策略/枚举比较已有消费；不代表旧gettext文本、任务名和UI本地化已迁移。",
+      "remaining": "CombatStrategy的english_已控制策略组/任务点及技能枚举语义，WvdRunState::setting_is控制重载枚举；这是实际combat消费者，不是仅导入。旧gettext日志和Tk/M5本地化未完整迁移；完整配置组合仍未验证。",
       "implementation_extent": "DATA_WITH_SCOPED_BUSINESS_CONSUMER",
       "verification_scope": "33字段数据通过是历史导入/保存证据；本轮仅静态读取/绑定分类，不等于全部字段业务验收。",
       "data_evidence": "../m4-business-validation.md#配置与目录",
@@ -22669,7 +22826,7 @@
             "excerpt": "return profile_.at(name) == (profile_.at(\"LANGUAGE\") == \"en_US\" ? en : zh);"
           }
         ],
-        "remaining": "策略/枚举比较已有消费；不代表旧gettext文本、任务名和UI本地化已迁移。",
+        "remaining": "CombatStrategy的english_已控制策略组/任务点及技能枚举语义，WvdRunState::setting_is控制重载枚举；这是实际combat消费者，不是仅导入。旧gettext日志和Tk/M5本地化未完整迁移；完整配置组合仍未验证。",
         "legacy_consumers": [
           {
             "ref": "src/utils.py:263",
@@ -23931,7 +24088,7 @@
       "offline_status": "PASS",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "remaining": "普通traverse_dungeon的未知页路由、binding、状态取值、转交/分段等待已静态接线，尚未构建/运行；dark_light独立未知分发未见unknown_leap调用，全任务覆盖仍有缺口。",
+      "remaining": "普通路线与dark_light均已有unknown_leap、发布binding、冻结状态及TaskHandoff/LeapWait消费者，暗灯已传灯具extra_known排除已知画面。此前摘录接口已刷新；当前新代码及全部任务/恢复/配置组合未验证，不再写为暗灯完全无调用。",
       "implementation_extent": "DATA_WITH_UNBUILT_CONSUMER",
       "verification_scope": "33字段数据通过是历史导入/保存证据；本轮仅静态读取/绑定分类，不等于全部字段业务验收。",
       "data_evidence": "../m4-business-validation.md#配置与目录",
@@ -23956,7 +24113,7 @@
             "ref": "next/native/games/wvd/tasks/pipeline_compiler.cpp:568",
             "symbol": "PipelineCompiler::unknown_leap",
             "role": "definition",
-            "excerpt": "void PipelineCompiler::unknown_leap(const std::string &name, J next) {"
+            "excerpt": "void PipelineCompiler::unknown_leap(const std::string &name, J next, J extra_known) {"
           },
           {
             "ref": "next/native/games/wvd/tasks/workflow_session.cpp:81",
@@ -23974,16 +24131,22 @@
             "ref": "next/native/games/wvd/tasks/task_handoff.cpp:83",
             "symbol": "bool observe_unknown_leap",
             "role": "definition",
-            "excerpt": "bool observe_unknown_leap(maafw::Context &context) {"
+            "excerpt": "bool observe_unknown_leap(maafw::Context &context, const J &parameters) {"
           },
           {
             "ref": "next/native/games/wvd/state.cpp:34",
             "symbol": "const bool money = profile_.at(\"ACTIVE_BEG_MONEY\")",
             "role": "consumer",
             "excerpt": "const bool money = profile_.at(\"ACTIVE_BEG_MONEY\").get<bool>();"
+          },
+          {
+            "ref": "next/native/games/wvd/tasks/dark_light.cpp:36",
+            "symbol": "graph.unknown_leap",
+            "role": "caller",
+            "excerpt": "graph.unknown_leap(\"UnknownLeap\", {\"UnknownLeapExit\"}, {lamp, light});"
           }
         ],
-        "remaining": "普通traverse_dungeon的未知页路由、binding、状态取值、转交/分段等待已静态接线，尚未构建/运行；dark_light独立未知分发未见unknown_leap调用，全任务覆盖仍有缺口。",
+        "remaining": "普通路线与dark_light均已有unknown_leap、发布binding、冻结状态及TaskHandoff/LeapWait消费者，暗灯已传灯具extra_known排除已知画面。此前摘录接口已刷新；当前新代码及全部任务/恢复/配置组合未验证，不再写为暗灯完全无调用。",
         "legacy_consumers": [
           {
             "ref": "src/script.py:2239",
@@ -24042,7 +24205,7 @@
       "offline_status": "PASS",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "remaining": "当前消费未知页耗尽；其它有限图使用各自hit/time预算，不能据这两处读值称旧所有重试点参数等价。",
+      "remaining": "traverse_dungeon/dark_light将冻结MAX_TRY_LIMIT传入unknown_exhausted；识别器以max_tries<0或sample.samples>max_tries生成耗尽结果，图进入dungeon.unknown_try_limit。其余map/entry仍各有hit/time预算；实际消费者存在，但不宣称旧所有FindCoords重试点参数等价或完整矩阵通过。",
       "implementation_extent": "DATA_WITH_SCOPED_BUSINESS_CONSUMER",
       "verification_scope": "33字段数据通过是历史导入/保存证据；本轮仅静态读取/绑定分类，不等于全部字段业务验收。",
       "data_evidence": "../m4-business-validation.md#配置与目录",
@@ -24068,9 +24231,15 @@
             "symbol": "profile.at(\"MAX_TRY_LIMIT\")",
             "role": "definition",
             "excerpt": "graph.observe(\"UnknownLimit\", {{\"mode\", \"unknown_exhausted\"}, {\"max_tries\", profile.at(\"MAX_TRY_LIMIT\")},"
+          },
+          {
+            "ref": "next/native/games/wvd/vision/recognizers.cpp:587",
+            "symbol": "const bool exhausted",
+            "role": "consumer",
+            "excerpt": "const bool exhausted = max_tries < 0 || sample.samples > static_cast<std::uint64_t>(max_tries);"
           }
         ],
-        "remaining": "当前消费未知页耗尽；其它有限图使用各自hit/time预算，不能据这两处读值称旧所有重试点参数等价。",
+        "remaining": "traverse_dungeon/dark_light将冻结MAX_TRY_LIMIT传入unknown_exhausted；识别器以max_tries<0或sample.samples>max_tries生成耗尽结果，图进入dungeon.unknown_try_limit。其余map/entry仍各有hit/time预算；实际消费者存在，但不宣称旧所有FindCoords重试点参数等价或完整矩阵通过。",
         "legacy_consumers": [
           {
             "ref": "src/script.py:1503",
@@ -24177,7 +24346,7 @@
       "offline_status": "PASS",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "remaining": "状态读取已接；recovery_binding的max_crashes仍由调用者另传，未证明每个入口与本配置一致。",
+      "remaining": "WvdRunState累计崩溃处理与profile-aware recovery_binding均读取冻结MAX_CRASH_LIMIT；decide从binding的max_crashes选择升级，不再由入口另传独立阈值。Lovelace新增绑定及初始/转交一致性检查待构建验证；真实端口未开放，不能推断全入口通过。",
       "implementation_extent": "DATA_WITH_SCOPED_BUSINESS_CONSUMER",
       "verification_scope": "33字段数据通过是历史导入/保存证据；本轮仅静态读取/绑定分类，不等于全部字段业务验收。",
       "data_evidence": "../m4-business-validation.md#配置与目录",
@@ -24189,7 +24358,9 @@
       "semantic_audit": {
         "legacy_contract": "旧应用重启累计上限/设备升级阈值。",
         "difference_classes": [
-          "PARTIAL_BUDGET_CONSUMER"
+          "FROZEN_PROFILE_BINDING",
+          "PARTIAL_BUDGET_CONSUMER",
+          "SOURCE_PENDING_VERIFICATION"
         ],
         "current_business_refs": [
           {
@@ -24203,9 +24374,21 @@
             "symbol": "const auto limit = p.at(\"max_crashes\")",
             "role": "definition",
             "excerpt": "const auto limit = p.at(\"max_crashes\").get<std::int64_t>();"
+          },
+          {
+            "ref": "next/native/games/wvd/recovery/boot.cpp:317",
+            "symbol": "profile.at(\"MAX_CRASH_LIMIT\")",
+            "role": "consumer",
+            "excerpt": "{\"max_crashes\", profile.at(\"MAX_CRASH_LIMIT\").get<std::int64_t>()}}};"
+          },
+          {
+            "ref": "next/native/games/wvd/recovery/boot.cpp:304",
+            "symbol": "recovery_binding",
+            "role": "definition",
+            "excerpt": "contracts::BehaviorBinding recovery_binding(const devices::LifecycleTarget &t, const J &profile, bool force) {"
           }
         ],
-        "remaining": "状态读取已接；recovery_binding的max_crashes仍由调用者另传，未证明每个入口与本配置一致。",
+        "remaining": "WvdRunState累计崩溃处理与profile-aware recovery_binding均读取冻结MAX_CRASH_LIMIT；decide从binding的max_crashes选择升级，不再由入口另传独立阈值。Lovelace新增绑定及初始/转交一致性检查待构建验证；真实端口未开放，不能推断全入口通过。",
         "legacy_consumers": [
           {
             "ref": "src/script.py:1715",

@@ -13,7 +13,8 @@ class ExecutionSession {
                      storage::EventJournal &events,
                      std::shared_ptr<const BehaviorRegistry> registry,
                      contracts::BusinessRunState *business = nullptr,
-                     contracts::SegmentBoundary boundary = contracts::SegmentBoundary::Initial);
+                     contracts::SegmentBoundary boundary = contracts::SegmentBoundary::Initial,
+                     storage::RunStore *diagnostic_store = nullptr, std::size_t unit_index = 0);
     ~ExecutionSession();
     void start();
     void request_stop();
@@ -31,6 +32,8 @@ class ExecutionSession {
     std::shared_ptr<const BehaviorRegistry> registry_;
     contracts::BusinessRunState *business_;
     storage::EventJournal &events_;
+    storage::RunStore *diagnostic_store_;
+    std::size_t unit_index_{};
     devices::InputGate gate_;
     devices::DeviceBackend &backend_;
     std::atomic<bool> started_{false}, user_stop_{false}, abort_{false}, recovery_{false},

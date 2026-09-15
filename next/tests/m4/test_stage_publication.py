@@ -14,7 +14,9 @@ class StagePublicationTests(unittest.TestCase):
         return runner.execute(name, [{"Inn": (100, 400)}, {"Stay": (100, 600)},
                                      {"Economy": (100, 500)}],
                               [dict(kind=0, x=120, y=412), dict(kind=0, x=120, y=612)],
-                              workflow="staged-publication", with_state=True, **options)
+                              workflow="staged-publication", with_state=True,
+                              descriptor=str(workflow_fixture.ROOT / "packs/wvd/parameters/legacy-config-fields.json"),
+                              **options)
 
     def test_two_distinct_graphs_share_revision_and_finish_separate_units(self):
         result = self.fixture("stages-normal")

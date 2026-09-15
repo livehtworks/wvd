@@ -80,8 +80,15 @@ void RunCoordinator::validate(const RunDefinition &d, const devices::DeviceBacke
         d.initial.stop_timeout <= 0ms || d.recovery_limit > 16)
         throw std::runtime_error("RUN_DEFINITION_INVALID");
     registry_->validate(d.initial);
-    if (d.initial.lifecycle)
-        throw std::runtime_error("LIFECYCLE_REQUIRES_RECOVERY_BOUNDARY");
+    if (d.initial.lifecycle) {
+        const auto &plan = *d.initial.lifecycle;
+        if (plan.attempt != 1 || !plan.target.vpn_required || plan.operations.size() != 1 ||
+            plan.operations.front() != devices::LifecycleOperation::EnsureVpn)
+            throw std::runtime_error("LIFECYCLE_REQUIRES_RECOVERY_BOUNDARY");
+        if (!backend.offline() || p.observed_read_only_viewport ||
+            plan.target.device_id != p.device_id || plan.target.application_id != p.application_id)
+            throw std::runtime_error("LIFECYCLE_NOT_AUTHORIZED");
+    }
     if (d.recover)
         registry_->validate_recovery(*d.recover);
     if (!d.max_business_units || d.max_business_units > 256 ||
@@ -91,8 +98,8 @@ void RunCoordinator::validate(const RunDefinition &d, const devices::DeviceBacke
         throw std::runtime_error("BUSINESS_STATE_REQUIRED");
     if (d.state_factory) {
         registry_->validate_state_factory(*d.state_factory);
-        auto validate_unit = [&](const SessionDefinition &unit) {
-            if (unit.lifecycle)
+        auto validate_unit = [&](const SessionDefinition &unit, bool initial) {
+            if (!initial && unit.lifecycle)
                 throw std::runtime_error("LIFECYCLE_REQUIRES_RECOVERY_BOUNDARY");
             if (unit.checkpoint_node.empty() || unit.entry.empty() || unit.terminal_node.empty() ||
                 unit.time_limit <= 0ms || unit.stop_timeout <= 0ms ||
@@ -100,9 +107,9 @@ void RunCoordinator::validate(const RunDefinition &d, const devices::DeviceBacke
                 throw std::runtime_error("BUSINESS_UNIT_INVALID");
             registry_->validate(unit);
         };
-        validate_unit(d.initial);
+        validate_unit(d.initial, true);
         for (const auto &unit : d.continuation_units)
-            validate_unit(unit);
+            validate_unit(unit, false);
     }
 }
 RunSnapshot RunCoordinator::start(RunDefinition definition,
@@ -133,7 +140,7 @@ RunSnapshot RunCoordinator::start(RunDefinition definition,
     auto lease = std::make_unique<platform::DeviceLease>(definition.policy.device_id);
     auto journal = std::make_shared<storage::EventJournal>(instance_id_, id, event_capacity_);
     journal->emit(1, "run.preparing", {}, true);
-    auto store = std::make_unique<storage::RunStore>(data_root_, instance_id_, id, immutable);
+    auto store = std::make_unique<storage::RunStore>(data_root_, instance_id_, id, immutable, clock_);
     lock.lock();
     lease_ = std::move(lease);
     store_ = std::move(store);
@@ -330,7 +337,7 @@ void RunCoordinator::drive(RunDefinition definition,
             policy.pack_revision = next.bundle.revision;
             auto session = std::make_shared<ExecutionSession>(
                 next, *backend, std::move(policy), snapshot().run_id, snapshot().generation,
-                *journal_, registry_, business_.get(), boundary);
+                *journal_, registry_, business_.get(), boundary, store_.get(), unit_index);
             {
                 std::lock_guard lock(mutex_);
                 current_definition_ = next;

@@ -1,6 +1,8 @@
 # M4 牛洞与因果调整
 
-固定旧源`6585f407`，当前实现已构建；首轮存在下面的计划与流程失败，不计入完整任务通过。
+固定旧源`6585f407`。牛洞完整链在最后允许的定点修正后仍失败，当前为
+**BLOCKED / 完整任务未通过**；保留各轮失败，不再改代码或复测本链。
+最后一轮仅运行ACTIVE_REST=false，true分支因同一测试方法前项断言失败而未触达。
 
 ## 牛洞
 
@@ -23,8 +25,8 @@
   同一帧不允许被当作滚动后新帧；副本不是业务状态/持久化数据或输入许可。
 - 有界32次滚动；CSC页面标记丢失时不继续盲滚，仍需验证真实页面滚动中标记稳定性。
 
-待验：两类牛洞路线与连续周期、付款/跳跃意图；实际Maa因果颜色、滚动区域、
-可见目标快路径、慢路径、停止/错误/范围；配置/mod/恢复矩阵及最终同构建回归。
+未完成：两类牛洞完整路线与连续周期、完整付款/跳跃及配置/mod/恢复矩阵。
+因果分项证据见下文，不能代替牛洞完整任务验收；本链不继续循环修正或复测。
 
 ## 首轮问题
 
@@ -37,9 +39,52 @@
 打开地图前Failed/SCENE_UNCONFIRMED，无错序。输入前frame86捕获至场景识别返回
 约1968毫秒，随后相同目标确认又耗约62毫秒，超过2000毫秒门禁；两项均Hit并不许可过期输入。
 本轮停止/拒绝各1输入通过并保留leap_pending；ACTIVE_REST=true完整分支因前例失败未执行。
-上述三场景已核对EXE身份和静止。准备将非并行父节点内的纯视觉子树同步分片，
-不延长TTL、不删阻塞反证；此次定点修正后仍失败则保留该链阻断，不循环重跑。
+上述三场景已核对EXE身份和静止。其后进行最后允许的定点修正：非并行父节点内的
+纯视觉子树同步分片，不延长TTL、不删阻塞反证。最后结果仍失败，见下节，保持阻断。
 因果复验`m4-workflow-gqgh3uz1`六方法通过：基础设置6输入、快路径2输入、
 ROI变化后再次滚动5输入、完整慢路径19输入、拒绝/停止各1输入、未知后置Failed/1。
 缺少symbolofalliance在发布前拒绝，连接/输入均0。七个实际执行场景已核对EXE身份与静止；
 原生与配置参数均未跳过因果步骤。这些是因果分项，不是牛洞任务恢复矩阵通过。
+
+## 最后允许修正后的失败
+
+只读核验对象：`next/.local/m4-workflow-a5by2949/bull-cave-full-False`。
+`execution.json`记录exit=0及EXE SHA256：
+`570172a2123c8011ca34745ab69500210769d61e419305cef701f0b6c11318ec`。
+核验时`next/build/m4/Release/test_m4_workflow.exe`实际hash与之相同。
+exit=0只表示原生夹具成功输出结果，不表示业务通过；
+`next/.local/logs/m4-extension-workflow-and-matrix-first.log`中牛洞方法仍为FAIL。
+
+- Run为`897D1337-C0FC-45C5-ACDD-3F74C1393F93/1`；实际result.json为
+  `Failed / BUSINESS_CONFIRMATION_STALE`，generation=2，quiescent=true、result_saved=true，
+  storage_error为空、secondary_errors为空；业务摘要与output.json.snapshot一致。
+- 完成业务单元=1：第一段17次后端输入、检查点有效；第二段8次后端输入、未达检查点。
+  全Run accepted/backend_called=25，attempted=27、rejected=2、cleanup_called=0；
+  cursor=25，对应预期37条输入，mismatch=false。不能写成零拒绝或完整路线成功。
+- bull_cave仍active=true、phase=5、completed_cycles=0、rest_enabled=false；
+  生命周期调用为空。这不是前轮的28输入SCENE_UNCONFIRMED，也不是命令错序。
+
+首因定位在第二代次`FirstDungeon_Confirm0`的实际新帧业务确认：
+
+| 事件seq | 事实 | 单调时间ns / 距本帧捕获 |
+| --- | --- | --- |
+| 2301 | custom.enter，节点FirstDungeon_Confirm0，depth=1 | 414132829967200 |
+| 2302 | frame.captured，第二代次frame_id=65 | 414132830060600 / 0ms |
+| 2305 | recognition.custom返回Hit | 414134844293300 / 2014.2327ms |
+| 2307 | 原生RecognitionNode.Succeeded返回 | 414134846972600 / 2016.9120ms |
+| 2308 | FirstDungeon_Confirm0的Action.Failed | 414134847960500 / 2017.8999ms |
+
+冻结run.json的max_frame_age_ms=2000。仅截图事件到Hit回执已超过2秒；
+结合Session/Run保存的BUSINESS_CONFIRMATION_STALE，可定位为确认帧龄保护拒绝，
+不能把Hit等同于当前有效观察。表中是事件单调时间，不伪造精确墙钟异常时间。
+
+后续2310的child.result为valid=true/status=3000、2313为Tasker.Task.Succeeded，
+均未覆盖业务首因。2316/2317是Inactive(kind=14)尝试被INPUT_CLOSED拒绝；
+2318至2320依次销毁tasker/controller/resource，2321才记录session.quiescent，
+2322的已提交run.terminal保留Failed/BUSINESS_CONFIRMATION_STALE。
+events.json仅有有界256条且resync_required=true；result.json终态事件last_seq=2322，
+不能声称保存了完整原始事件历史。
+
+该方法按False、True顺序执行，在False的Completed断言处失败退出；本证据根没有
+`bull-cave-full-True`目录。因此本轮口径为**False已运行且FAIL，True未触达/NOT_RUN**，
+不是两分支都失败或都已验证。按用户明确边界停止本链修正/复测，保留BLOCKED。

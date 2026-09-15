@@ -565,12 +565,19 @@ void PipelineCompiler::recovery(const std::string &name, const std::string &reas
     add(name, {{"action", "Custom"}, {"custom_action", "RequireRecovery"},
                {"custom_action_param", {{"reason", reason}}}});
 }
-void PipelineCompiler::unknown_leap(const std::string &name, J next) {
-    const auto condition = all({J{{"mode", "unknown_exhausted"}, {"max_tries", 4}}, image("cursedWheel_timeLeap")});
+void PipelineCompiler::unknown_leap(const std::string &name, J next, J extra_known) {
+    require(extra_known.is_array(), "COMPILE_UNKNOWN_KNOWN_INVALID");
+    J unknown{{"mode", "unknown_exhausted"}, {"max_tries", 4}};
+    J parameters = J::object();
+    if (!extra_known.empty()) {
+        unknown["extra_known"] = extra_known;
+        parameters["extra_known"] = std::move(extra_known);
+    }
+    const auto condition = all({unknown, image("cursedWheel_timeLeap")});
     add(name, {{"recognition", "Custom"}, {"custom_recognition", "WvdVision"},
         {"custom_recognition_param", condition}, {"roi", {0, 0, 900, 1600}},
         {"action", "Custom"}, {"custom_action", "WvdUnknownLeap"},
-        {"custom_action_param", J::object()}, {"next", std::move(next)}});
+        {"custom_action_param", std::move(parameters)}, {"next", std::move(next)}});
 }
 void PipelineCompiler::failure_route(const std::string &name, J next) {
     require(workflow_.nodes.contains(name) && next.is_array() && !next.empty(), "COMPILE_ERROR_ROUTE_INVALID");

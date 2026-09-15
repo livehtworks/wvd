@@ -66,12 +66,14 @@ class WorkflowDevice final : public OfflineDevice, public devices::LifecyclePort
     unsigned time_event_count{};
     bool allow_lifecycle{}, stale_lifecycle{}, wrong_instance{}, hold_lifecycle{}, ignore_lifecycle_cancel{};
     std::atomic<bool> release_lifecycle{};
-    int failed_starts{}, start_attempts{};
+    int failed_starts{}, start_attempts{}, failed_vpns{};
     std::size_t restart_frame{1}, restart_action{};
     std::chrono::milliseconds returned_frame_age{};
     std::atomic<unsigned> lifecycle_count{};
     J lifecycle_calls = J::array();
     bool enforce_connection_state{}, connection_throws{};
+    bool verified_real{};
+    bool verified_access() const override { return verified_real; }
     devices::LifecycleObservation lifecycle_state{
         {"m2-offline", "fixture-instance", "fixture.app", "fixture.vpn", true}, true, true, true, false, 1, {}, true};
     devices::LifecyclePort *lifecycle_port() override { return allow_lifecycle ? this : nullptr; }
@@ -113,8 +115,13 @@ class WorkflowDevice final : public OfflineDevice, public devices::LifecyclePort
         std::lock_guard lock(mutex);
         if (cancelled())
             return false;
-        if (operation == O::EnsureVpn)
+        if (operation == O::EnsureVpn) {
+            if (failed_vpns > 0) {
+                --failed_vpns;
+                return false;
+            }
             lifecycle_state.vpn_ready = true;
+        }
         else if (operation == O::StopApplication) {
             lifecycle_state.application_running = false;
             lifecycle_state.application_foreground = false;
@@ -185,6 +192,85 @@ class WorkflowDevice final : public OfflineDevice, public devices::LifecyclePort
         return true;
     }
 };
+J initial_vpn_contract(const runtime::RunDefinition &source, runtime::RunCoordinator &coordinator,
+                       const std::shared_ptr<WorkflowDevice> &device,
+                       const std::shared_ptr<runtime::BehaviorRegistry> &registry) {
+    using O = devices::LifecycleOperation;
+    using B = contracts::SegmentBoundary;
+    require(source.initial.lifecycle.has_value(), "INITIAL_VPN_PLAN_MISSING");
+    J output;
+    const auto rejected = [](auto action) {
+        try { action(); } catch (const std::exception &error) { return std::string(error.what()); }
+        return std::string{};
+    };
+    for (const auto *name : {"stop", "start", "reconnect", "restart", "mixed", "attempt", "continuation",
+                             "real", "verified-real", "device", "application", "read-only", "registry-timeout"}) {
+        auto run = source;
+        auto &plan = *run.initial.lifecycle;
+        if (std::string(name) == "stop") plan.operations = {O::StopApplication};
+        if (std::string(name) == "start") plan.operations = {O::StartApplication};
+        if (std::string(name) == "reconnect") plan.operations = {O::Reconnect};
+        if (std::string(name) == "restart") plan.operations = {O::RestartInstance};
+        if (std::string(name) == "mixed") plan.operations.push_back(O::StartApplication);
+        if (std::string(name) == "attempt") plan.attempt = 2;
+        if (std::string(name) == "registry-timeout") plan.step_timeout = 0ms;
+        if (std::string(name) == "device") plan.target.device_id = "other-device";
+        if (std::string(name) == "application") plan.target.application_id = "other-app";
+        if (std::string(name) == "read-only") {
+            run.policy.observed_read_only_viewport = true;
+            run.policy.permissions.clear();
+            run.policy.capabilities.clear();
+            run.policy.allowed_scenes.clear();
+        }
+        if (std::string(name) == "continuation") {
+            run.max_business_units = 2;
+            run.continuation_units = {run.initial};
+        }
+        device->verified_real = std::string(name) == "verified-real";
+        device->real = std::string(name) == "real" || device->verified_real;
+        output["coordinator"][name] = rejected([&] { coordinator.start(run, device); });
+        require(!output["coordinator"][name].get<std::string>().empty(), "INVALID_INITIAL_RUN_ACCEPTED");
+        storage::EventJournal events("initial-vpn-contract", 1, 256);
+        output["session"][name] = rejected([&] {
+            runtime::ExecutionSession session(run.initial, *device, run.policy, 1, 1, events, registry,
+                nullptr, std::string(name) == "continuation" ? B::Continuation : B::Initial);
+        });
+        require(!output["session"][name].get<std::string>().empty(), "INVALID_INITIAL_SESSION_ACCEPTED");
+        device->real = false;
+        device->verified_real = false;
+    }
+    for (const auto *name : {"profile", "unauthorized", "vpn-id", "recovery", "no-recovery", "budget",
+                             "continuation", "already-bound", "device", "application"}) {
+        auto run = source;
+        auto profile = run.state_factory->parameters.at("profile");
+        auto target = source.initial.lifecycle->target;
+        if (std::string(name) != "already-bound") run.initial.lifecycle.reset();
+        if (std::string(name) == "profile") profile["FARM_TARGET_TEXT"] = "different-profile";
+        if (std::string(name) == "unauthorized") target.vpn_required = false;
+        if (std::string(name) == "vpn-id") target.vpn_application_id.clear();
+        if (std::string(name) == "recovery") run.recover->parameters["max_crashes"] = 1234;
+        if (std::string(name) == "no-recovery") run.recover.reset();
+        if (std::string(name) == "budget") run.recovery_limit = 0;
+        if (std::string(name) == "continuation") run.continuation_units = {source.initial};
+        if (std::string(name) == "device") run.policy.device_id = "other-device";
+        if (std::string(name) == "application") run.policy.application_id = "other-app";
+        output["helper"][name] = rejected([&] { games::recovery::bind_initial_vpn(run, target, profile); });
+        require(!output["helper"][name].get<std::string>().empty(), "INVALID_INITIAL_BINDING_ACCEPTED");
+    }
+    storage::EventJournal events("initial-vpn-contract-positive", 1, 256);
+    output["valid_initial"] = rejected([&] {
+        runtime::ExecutionSession session(source.initial, *device, source.policy, 1, 1, events, registry, nullptr, B::Initial);
+    });
+    output["plain_recovery"] = rejected([&] {
+        runtime::ExecutionSession session(source.initial, *device, source.policy, 1, 1, events, registry, nullptr, B::Recovery);
+    });
+    output["connections"] = device->connections.load();
+    output["backend_calls"] = device->calls.load();
+    output["lifecycle_calls"] = device->lifecycle_calls;
+    output["native_run_executed"] = false;
+    output["loaded_modules"] = loaded_vision_modules();
+    return output;
+}
 int main(int argc, char **argv) {
     try {
         require(argc == 2, "CONFIG_REQUIRED");
@@ -197,8 +283,6 @@ int main(int argc, char **argv) {
             storage::LegacyConfigImporter importer(descriptor);
             profile = importer.parse({{"GENERAL", J::object()}}).values;
             profile.update(config.value("profile", J::object()));
-            if (config.contains("max_crashes"))
-                profile["MAX_CRASH_LIMIT"] = config.at("max_crashes");
         }
         J task_plan;
         std::vector<games::tasks::CompiledWorkflow> stage_workflows;
@@ -610,6 +694,7 @@ int main(int argc, char **argv) {
         }
         const bool recovering = config.at("workflow") == "recover" || config.value("attach_recovery", false);
         device->allow_lifecycle = recovering && !config.value("no_lifecycle_port", false);
+        device->failed_vpns = config.value("fail_vpns", 0);
         device->stale_lifecycle = config.value("stale_lifecycle", false);
         device->wrong_instance = config.value("other_lifecycle_instance", false);
         device->failed_starts = config.value("fail_starts", 0);
@@ -725,8 +810,9 @@ int main(int argc, char **argv) {
             auto target = device->lifecycle_state.target;
             if (config.value("other_lifecycle_app", false))
                 target.application_id = "not-the-game";
-            definition.recover = games::recovery::recovery_binding(target, config.value("force_restart", false),
-                config.value("max_crashes", std::int64_t(10)));
+            definition.recover = games::recovery::recovery_binding(target, profile, config.value("force_restart", false));
+            device->lifecycle_state.target.vpn_required = definition.recover->parameters.at("vpn_required").get<bool>();
+            device->lifecycle_state.vpn_ready = config.value("vpn_ready", false);
             definition.recovery_limit = 3;
             if (!stage_sessions.empty()) {
                 J entries = J::object();
@@ -739,6 +825,14 @@ int main(int argc, char **argv) {
         }
         if (config.value("with_state", false))
             definition.state_factory = games::wvd_state_binding(profile);
+        if (definition.state_factory) {
+            auto target = device->lifecycle_state.target;
+            if (config.value("other_lifecycle_app", false))
+                target.application_id = "not-the-game";
+            games::recovery::bind_initial_vpn(definition, target, profile);
+        }
+        if (config.value("mutate_profile_after_freeze", false))
+            profile.update({{"AUTO_START_CLASH", false}, {"MAX_CRASH_LIMIT", 99}, {"FARM_TARGET_TEXT", "changed-after-freeze"}});
         const auto has_unknown_leap = [](const runtime::SessionDefinition &unit) {
             return std::any_of(unit.actions.begin(), unit.actions.end(),
                 [](const auto &binding) { return binding.name == "WvdUnknownLeap"; });
@@ -781,6 +875,11 @@ int main(int argc, char **argv) {
                         require(profile_handle.value != INVALID_HANDLE_VALUE, "FIXTURE_PROFILE_LOCK_FAILED");
                     }
                 };
+        }
+        if (config.value("initial_vpn_contract", false)) {
+            std::ofstream(maafw::path_from_utf8(config.at("output"))) <<
+                initial_vpn_contract(definition, coordinator, device, registry).dump(2);
+            return 0;
         }
         coordinator.start(definition, device);
         J lifecycle_stop;
@@ -842,6 +941,7 @@ int main(int argc, char **argv) {
         J output{{"snapshot", storage::snapshot_json(coordinator.snapshot())},
                  {"task_plan", task_plan},
                  {"backend_calls", device->calls.load()},
+                 {"connections", device->connections.load()},
                  {"cursor", device->cursor},
                  {"mismatch", device->mismatch},
                  {"mismatch_detail", device->mismatch_detail},
@@ -853,6 +953,7 @@ int main(int argc, char **argv) {
                  {"time_limit_ms", workflow.time_limit.count()},
                  {"image_sources", image_sources},
                  {"lifecycle_calls", device->lifecycle_calls},
+                 {"recovery_parameters", definition.recover ? definition.recover->parameters : J(nullptr)},
                  {"lifecycle_stop", lifecycle_stop},
                  {"time_event_count", device->time_event_count},
                  {"stop_node_observed", stop_node_observed},

@@ -78,6 +78,9 @@
 - 资源完整性改为活动快照：活动写入应被 Windows 共享锁拒绝；作者副本变化不影响现有 Run，但新加载要拒绝旧 hash/复用 revision。旧“修改活动源后必须 Error”测试按此契约更新，不得干脆删除。
 - BundleLease 封存需要额外文件句柄、字节缓存和磁盘副本，不能只报告热路径变快。当前未实现自动快照清理；不要自行删旧源、配置或已有日志。
 - M4 导入只接受明确的新目的目录。`wvd_m4_check` 不连接设备也不执行任务；完整任务通过数仍为零。CAS 草稿必须含完整 33 字段，不用解析默认值替代缺字段的保存验证。
+- 原生用例必须在调用前后核对EXE哈希，并在检查退出码之前保存execution.json；否则失败分支会丢失产物身份。只有旧日志PASS而没有当时哈希的结果，保留身份未证实，不能用当前文件补造历史证据。
+- 纯视觉/默认对话探针若没有业务检查点，不应无条件绑定业务状态；带业务状态却缺检查点被BUSINESS_UNIT_INVALID拒绝是正式校验正确生效。坏图片负例必须断言具体解码错误，不能把任意启动错误算作识别器拒绝坏图。
+- 资源manifest按精确大小写闭包，Windows文件系统能打开错误大小写不代表引用有效；Fordraig跳跃图的规范名是fordraig/Leap.png。修正作者引用与夹具，不通过新增大小写别名隐藏错误。
 - 最终 build 退出后再测试；C++ 格式化与源码变更会改变 build_id，之后需要重新构建。修前/修后固定窗口各 5 次预热、30 次正式，只执行约定窗口，不追加预热或测试量解释未决内存问题。
 
 ## Next M4 状态与任务数据
@@ -94,6 +97,7 @@
 - 死亡提示首轮后置识别曾耗时 2244ms，超过 2 秒 TTL 并被 SCENE_UNCONFIRMED 拒绝。应先用 frame.captured 与 recognition.custom 事件时间定位，再收敛专用有序候选和重复计算；不延长帧 TTL，也不改通用 any/all 的错误传播来通过测试。见 m4-party-death-validation.md。
 
 - Maa 5.13.0 RunActionDirect 的参数只进入 action.param，不能用它设置节点 pre_delay；会继承默认约 200ms 输入前延迟。受控 Click/Swipe 通过 RunAction 的本次克隆节点显式设零前后延迟及冻结等待，外层业务等待保持原定义；不要放宽 2 秒 TTL 掩盖重复等待。详见 `../next/docs/m4-native-action-timing-validation.md`。
+- 前后延迟已设零之后，不能再把约200ms残差归为同一个默认等待。固定SDK的Direct识别不经过Pipeline失败轮次rate_limit，普通Click也无另一个固定200ms等待；Context克隆/override校验会合并检查整包Pipeline，是大图残差的候选来源，尚无分段计时证明占比。帧龄必须从frame.captured到识别回执/实际输入分别核对，不能只减matchTemplate耗时后断言原因。
 - `CompiledWorkflow.time_limit` 必须发布到 Session 并参与定义身份；长组合段不能继承短子流程默认预算。内联/原生子调用不重启父总计时，帧 TTL 和停止预算独立保持；测试等待依据实际有限 Run 定义，不用外层 watchdog 代替正式停止。
 - 新业务摘要字段必须同步核对 `business_condition` 的显式白名单。业务条件是只读选路信息，`action_eligible=false`；WvdConfirm 不能把业务条件和视觉条件混为许可，应先 observe 选路，再用新帧视觉确认，并在状态所有者中再次验证业务前置。角色恢复首轮曾分别因遗漏白名单和混合确认被安全拒绝，详见 m4-healing-validation.md。
 - 新确认事件须同时进入 `PipelineCompiler::confirm` 事件白名单和 `WvdRunState::confirm_event` 消费者，不能只测直接状态方法。复活接线首轮漏登 `revival_observed`，所有流程在连接前拒绝；详见 m4-revival-validation.md。

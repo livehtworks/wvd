@@ -14,7 +14,7 @@ void register_task_handoff(runtime::BehaviorRegistry &registry);
 contracts::BehaviorBinding unknown_leap_binding();
 // 仅从已走完正常分类的unknown分支调用；读取既有unknown.window，不另增样本。
 // 命中返回true后应接RequireRecovery(reason="leap.unknown")，未命中返回原unknown链。
-bool observe_unknown_leap(maafw::Context &context);
+bool observe_unknown_leap(maafw::Context &context, const nlohmann::json &parameters);
 
 class TaskHandoff {
   public:

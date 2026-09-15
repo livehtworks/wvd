@@ -50,6 +50,10 @@ class Device final : public OfflineDevice, public devices::LifecyclePort {
             lifecycle_calls.push_back("StartApplication");
             lifecycle.application_running = lifecycle.application_foreground = true;
             restarted = true;
+        } else if (operation == devices::LifecycleOperation::EnsureVpn) {
+            require(target.vpn_required && target.vpn_application_id == "fixture.vpn", "VPN_NOT_AUTHORIZED");
+            lifecycle_calls.push_back("EnsureVpn");
+            lifecycle.vpn_ready = true;
         } else
             throw std::runtime_error("UNEXPECTED_LIFECYCLE_UPGRADE");
         return true;
@@ -185,11 +189,12 @@ J extension_state_boundaries(games::WvdProfile profile,
             result.quiescent = true; result.business = state->summary();
             result.reason = "fixture.pending";
             const auto decision = registry->recover(games::recovery::recovery_binding(
-                {"m4-handoff-offline", "handoff-instance", "fixture.app", "", false}), result, {});
+                {"m4-handoff-offline", "handoff-instance", "fixture.app", "", false}, values), result, {});
             require(!decision, "EXTENSION_PENDING_RESTARTED");
             emit("game_restarted");
         };
         for (int cycle = 0; cycle < 2; ++cycle) {
+            clock->milliseconds = cycle * 12500;
             if (std::string(kind) == "fordraig") {
                 emit("fordraig_started"); emit("fordraig_leap_prepared");
                 if (cycle == 0) blocked_pending("fordraig");
@@ -273,6 +278,10 @@ int main(int argc, char **argv) {
             for (const auto &file : config.at("files")) assets.files.push_back({file.at("path"), file.at("sha256")});
             const auto folder = maafw::path_from_utf8(config.at("run_root")).parent_path();
             auto device = std::make_shared<Device>();
+            if (config.value("authorize_vpn", false)) {
+                device->lifecycle.target.vpn_application_id = "fixture.vpn";
+                device->lifecycle.target.vpn_required = true;
+            }
             device->identity = "m4-handoff-offline";
             device->before = bytes(maafw::path_from_utf8(config.at("before")));
             device->after = bytes(maafw::path_from_utf8(config.at("after")));
@@ -289,9 +298,11 @@ int main(int argc, char **argv) {
                 {contracts::ActionKind::Click, contracts::ActionKind::ClickKey, contracts::ActionKind::Swipe},
                 {contracts::ActionKind::Click, contracts::ActionKind::ClickKey, contracts::ActionKind::Swipe}, {"wvd"}, 2000ms};
             definition.state_factory = games::wvd_state_binding(profile.values);
-            definition.recover = games::recovery::recovery_binding(device->lifecycle.target);
+            definition.recover = games::recovery::recovery_binding(device->lifecycle.target, profile.values);
             definition.recovery_limit = 3;
             games::recovery::bind_leap_wait(definition);
+            games::recovery::bind_initial_vpn(definition, device->lifecycle.target, profile.values);
+            device->lifecycle.target.vpn_required = definition.recover->parameters.at("vpn_required").get<bool>();
             if (mode == "wait-budget") definition.recovery_limit = 2; // 明确注入用尽，不能继续重启。
             games::tasks::TaskHandoff handoff(coordinator, registry, assets,
                 {{"returntoTown.png", "returntotown.png"}});
@@ -329,6 +340,10 @@ int main(int argc, char **argv) {
             output["source_result_exists"] = std::filesystem::is_regular_file(device->source_result);
             if (output.at("source_result_exists").get<bool>()) output["source_saved"] = read(device->source_result);
             if (mode == "money") {
+                if (config.value("vpn_lost_before_handoff", false)) {
+                    std::lock_guard lock(device->mutex);
+                    device->lifecycle.vpn_ready = false;
+                }
                 const auto first = handoff.poll(folder / "next-compiled");
                 require(first && first->run_id == initial.run_id + 1, "NEXT_RUN_NOT_STARTED");
                 const auto replay = handoff.poll(folder / "unused-on-replay");

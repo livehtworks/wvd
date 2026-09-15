@@ -74,6 +74,8 @@ class WvdRunState final : public contracts::BusinessRunState {
         last_bag_clear_{};
     TimePoint started_;
     std::optional<TimePoint> combat_started_, chest_started_, lap_started_;
+    std::optional<double> last_lap_seconds_;
+    void settle_legacy_lap(TimePoint now);
     double combat_seconds_{}, chest_seconds_{}, total_seconds_{};
     bool pending_combat_{}, pending_chest_{}, need_initial_recover_{true}, recover_after_rez_{},
         met_encounter_{}, combat_speed_{}, zoom_world_map_{};

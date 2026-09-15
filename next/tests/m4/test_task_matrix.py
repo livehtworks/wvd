@@ -483,7 +483,7 @@ class DungeonTaskMatrixTests(unittest.TestCase):
         cls.quest_path.write_bytes(qb)
         (cls.root / "legacy-script.py").write_bytes(sb)
         # Import the module, not its TestCase symbol into this module's globals.
-        module = importlib.import_module("test_workflow")
+        module = importlib.import_module(".test_workflow", __package__) if __package__ else importlib.import_module("test_workflow")
         cls.helper = module.WorkflowTests("runTest")
         cls.helper.root = cls.root
         cls.helper.sdk = Path(json.loads((ROOT / ".local/maafw.json").read_text(encoding="utf-8"))["sdk"])

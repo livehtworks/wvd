@@ -2,12 +2,12 @@
 
 ## 当前结论
 
-2026-09-15：交付可执行夹具，**不是运行通过报告**。本轮没有构建、启动 native、连接设备、写用户配置、提交或推送；主代理持有串行测试租约。完整任务验收仍为 **0/43**，不修改 `migration/m4-task-status.json`。
+2026-09-15：按当前源码更新静态实施快照，**不是运行通过报告**。本次文档核对仅执行 `--prepare` 和只读静态检查，没有构建、启动 native、连接设备、写用户配置、提交或推送；原生验证由主代理串行安排。Dist 首批四场景尚无本报告已核验的运行结果，不登记通过。完整任务验收仍为 **0/43**，不修改 `migration/m4-task-status.json`。
 
-- 43 个真实 ID，172 个独立 unittest 方法，无 `WorkflowTests` 继承，无其数百个方法的重复发现。
-- 170 个场景已生成独立输入/图像描述，状态全部 `NOT_RUN`；`White-G-v2` 的成功和恢复场景显式 `BLOCKED`，通过断言失败报告，不使用 skip/expectedFailure。它的拒绝与停止场景仍可执行。
-- `DH-4f`、`DH-Church-upper`、`DH-Church-auto` 的**正常楼层** trace 可执行，但完整楼层恢复矩阵因真实生产缺口阻断，见后文。
-- 本轮只检查了 Python 加载、方法发现、固定 Git blob、资源名、显式宝箱落点及 trace 结构。不得把这些静态检查计入 Maa、开箱、任务成功数。
+- 43 个真实 ID，196 个独立 unittest 方法：172 个基础 S/F/T/R 方法，加三个带楼梯引用任务各八个楼层专项方法。无 `WorkflowTests` 继承，无其数百个方法的重复发现。
+- 196 个场景均已生成独立输入/图像描述，准备记录全部 `NOT_RUN`，当前静态 `BLOCKED` 数为 0。`White-G-v2` 的六视图普通地图搜索、战斗、中心变化抵达及 S/F/T/R trace 已实现，但未经本报告的原生验收。
+- `DH-4f`、`DH-Church-upper`、`DH-Church-auto` 的错误楼层两阶段哈肯搜索已接入 `navigation/map_route.cpp/.hpp`；新增 24 场景保留完整真实任务前缀，不缩为替代路线。代码和因果夹具已交付，行为仍待原生验证。
+- 本轮只检查了 Python 加载、方法发现、固定 Git blob、资源名、显式宝箱落点及 trace 结构，共 3,626 次预期输入。不得把这些静态检查计入 Maa、开箱、任务成功数；后续发现资源或 trace 阻断仍以显式失败报告，不使用 skip/expectedFailure。
 
 ## 固定权威
 
@@ -37,10 +37,11 @@
 ```powershell
 .venv-build/Scripts/python.exe -B next/tests/m4/test_task_matrix.py DungeonTaskMatrixTests.test_Dist__success -v
 .venv-build/Scripts/python.exe -B next/tests/m4/test_task_matrix.py DungeonTaskMatrixTests.test_DH_4f__recovery -v
+.venv-build/Scripts/python.exe -B next/tests/m4/test_task_matrix.py DungeonTaskMatrixTests.test_DH_4f__wrong_stair_bharken_last -v
 .venv-build/Scripts/python.exe -B -m unittest discover -s next/tests/m4 -p test_task_matrix.py -v
 ```
 
-方法名规则：`test_<TaskID 中连字符改下划线>__success/failure/stop/recovery`；ID 本身不修改。全组包含两个显式 BLOCKED 失败，**不能为了绿色全组而过滤它们后称全通过**。主代理应将长日志重定向到本轮独立 `.local` 日志，串行运行，保留确定失败，不循环重试挑 PASS。
+基础方法名规则：`test_<TaskID 中连字符改下划线>__success/failure/stop/recovery`；ID 本身不修改。三个楼层任务另有 `__wrong_stair_<case>`，八种 case 见楼层专项表。196 是当前方法分母，**不得过滤失败或阻断后称全组通过**。主代理应将长日志重定向到本轮独立 `.local` 日志，串行运行，保留确定失败，不循环重试挑 PASS。
 
 `-B` 禁止在测试目录生成 pycache。运行时只在新建 `next/.local/m4-task-matrix-*` 中写入原始基线副本、合成图、bundle/profile 副本、输入、native.log、execution.json、RunStore 和逐场景期望/结论。程序打印证据目录。依赖现有固定 SDK/OpenCV，不安装新依赖，不读取设备配置。
 
@@ -53,7 +54,7 @@
 | T / stop | 同一前缀 + 首个地下城输入，`stop_after_calls` 发正式停止；后置未知图阻止后续输入；`UserStopped`、真静止、零完成单元/宝箱/战斗/任务点 |
 | R / recovery | 七张 Pause 状态、六次真实无效恢复输入，`pause.physics_frozen`；正式 EnsureVpn/StopApplication/StartApplication 后才进入成功链起点；第二代次完整执行 S，crashes=1，第一代次无战斗/开箱结算 |
 
-模板默认 40x24，24-bit 随机确定图案，Maa/OpenCV 真匹配。`harken2`/`Bharken2` 使用 80x80 和独立 15x15 中心变化证明抵达，不篡改识别返回值。每张图保持到对应 expected 输入；被动截图次数不增加 frame cursor。运动停止由同一稳定图的实际观察判定，**没有**截图计数推进。恢复的第七帧跳转仅由已确认 StartApplication 产生，并核对准确 lifecycle 调用序列；本组无 time_events。
+模板默认 40x24，24-bit 随机确定图案，执行时由 Maa/OpenCV 真匹配。`harken2`/`Bharken2` 和 White 的规范资源 `mark_auto` 使用 80x80 模板，抵达帧合成 15x15 中心变化，不篡改识别返回值。helper 将检查整体匹配分数大于 .80、中心灰度差大于 .20，再交给正式识别器判定；本次 `--prepare` 只输出描述，不执行这些图像/原生断言。每张图保持到对应 expected 输入；被动截图次数不增加 frame cursor。运动停止由同一稳定图的实际观察判定，**没有**截图计数推进。恢复的第七帧跳转仅由已确认 StartApplication 产生，并核对准确 lifecycle 调用序列；本组无 time_events。
 
 地图规则：`position`/命名楼梯先拖动、选点、AutoMove，再经真实移动/战斗和重新开地图后证实；普通宝箱每个目标先发现并实际打开一个箱子，之后才穷尽该目标的全部旧搜索方向；`chest_auto` 先开启一个实际箱子，再第二次点击产生 `NoChestCanBeFound`。**不把只有空宝箱提示的路线当开箱通过**。正常哈肯/quit/最后出口坐标用真实外部后置图退出，不把发送移动等同目标抵达；最后出口不增加 `task_step`。`harken2/Bharken2` 是有限段地图终点，不冒称回城。
 
@@ -63,7 +64,7 @@
 
 ## 逐项矩阵
 
-下表计数是**预期 backend 输入数，不是实测结果**。`S/F/T/R` 中 F=T；B 表示该正向 trace 尚未具备。`P(x,y)` 为原坐标；`C` 为实际普通箱 + 搜索耗尽；`A` 为实际自动箱 + 第二次搜索耗尽；`H/BH/H2/BH2` 保留对应 harken 名称；箭头保留源任务点顺序。所有方向、完整 ROI 含排除区、嵌套 EOT fallback、RTT、逐次坐标/Swipe duration 在 `--prepare` 的 `<TaskID>.json` 中逐项完整保留，不由表格缩写替代。
+下表为 172 个基础场景，计数是**预期 backend 输入数，不是实测结果**。`S/F/T/R` 中 F=T；24 个追加场景另列楼层专项表。`P(x,y)` 为原坐标；`C` 为实际普通箱 + 搜索耗尽；`A` 为实际自动箱 + 第二次搜索耗尽；`H/BH/H2/BH2` 保留对应 harken 名称；箭头保留源任务点顺序。所有方向、完整 ROI 含排除区、嵌套 EOT fallback、RTT、逐次坐标/Swipe duration 在 `--prepare` 的 `<TaskID>.json` 中逐项完整保留，不由表格缩写替代。
 
 | TaskID | S/F/T/R | 原路线顺序与该项限制 |
 | --- | --- | --- |
@@ -72,15 +73,15 @@
 | fortress-B1F | 17/6/6/23 | 左下 C(0,305,900,965)→左下 H |
 | fortress-B8F_entrance | 31/6/6/37 | stair_fortress1f(720,395)→P(453,865)→P(500,918)→stair_fortressGate(720,1027)→P(720,1241) |
 | fortress-10F | 18/6/6/24 | P(560,757)→BH2；地图有限段终点，不是回城 |
-| DH-4f | 27/6/6/33 | P(500,610)→P(445,290)→P(820,605)→H(stair_DH_R4)；错误楼层退路生产缺口 |
+| DH-4f | 27/6/6/33 | P(500,610)→P(445,290)→P(820,605)→H(stair_DH_R4)；另有八项楼层 trace，待运行 |
 | DH-6f | 33/6/6/39 | stair_DH_R6→P(72,972)→右下 C→stair_DH_R5→H |
 | DH-7f-right | 61/6/6/67 | P(770,600)→P(770,1190)→P(500,1025)→右下 C→P(450,545)→P(610,1090)→P(450,925)→右上 C→H |
 | DH-7f-auto | 14/6/6/20 | A→右上 H |
 | DH-10f-test | 87/6/6/93 | stair_DH_R10→五个 P→两个左下 C→P(130,865)→左下 C→右下 C→stair_DH_R9→H；四个独立箱/排除区 |
 | DH-10f-JR | 31/6/6/37 | stair_DH_R10→P(655,330)→P(500,385)→stair_DH_R9→H |
-| DH-Church-upper | 31/6/6/37 | 左上 C→右上 C→P(816,710)→BH(stair_DH_Church)；错误楼层退路生产缺口 |
-| DH-Church-auto | 20/6/6/26 | A→P(816,710)→BH(stair_DH_Church)；错误楼层退路生产缺口 |
-| White-G-v2 | B/6/6/B | 原 `Mark_auto` 单目标，默认六方向；标记/中心变化完整独立 trace 未实现，绝不改成小写自动路线 |
+| DH-Church-upper | 31/6/6/37 | 左上 C→右上 C→P(816,710)→BH(stair_DH_Church)；另有八项楼层 trace，待运行 |
+| DH-Church-auto | 20/6/6/26 | A→P(816,710)→BH(stair_DH_Church)；另有八项楼层 trace，待运行 |
+| White-G-v2 | 15/6/6/21 | 原 `Mark_auto` 单目标；前五视图无标记，第六命中，选点/AutoMove/一战/重开地图中心变化；有限地图终点，不改成小写自动路线 |
 | FFXI-2F | 15/7/7/21 | A→P(496,447)；EVENT/ZONE2/precheck；RTT=EVENT_VNH |
 | FFXI-2F-elite | 28/7/7/34 | P(300,280)→P(670,920)→P(865,917)→P(496,447)；RTT=EVENT_VNH |
 | FFXI-5F-4Elite | 33/6/6/39 | P(30,652)→P(80,1130)→P(820,1130)→P(870,652)→P(450,392) |
@@ -111,6 +112,23 @@
 | LMG-GT | 27/6/6/33 | P(393,545)→P(657,755)→P(555,1235)→P(178,1240)；LMG1F |
 | LMG-FT | 27/6/6/33 | 同四坐标，独立 ID/FTB1F 入本定义，不能复用 GT 的执行记录 |
 
+## 楼层专项
+
+以下 24 方法均为 `NOT_RUN`；列中的数字仍是完整 iteration 的预期输入数。case 后缀统一加在 `__wrong_stair_` 后，`correct` 是同组的正常楼层回归对照。
+
+| case | DH-4f | DH-Church-upper | DH-Church-auto | 因果边界与预期 |
+| --- | --- | --- | --- | --- |
+| harken_first | 27 | 31 | 20 | 原拖图后 stair 缺失，H/BH 同时可见仍先 H；Completed/1 单元 |
+| harken_last | 32 | 36 | 25 | BH 作干扰，H 第六视图才命中；Completed/1 单元 |
+| bharken_last | 37 | 41 | 30 | H 六视图全无，再 BH 第六视图命中；BH 搜索途中出现 H 不回跳；Completed/1 单元 |
+| missing | 35 | 39 | 28 | H/BH 两轮各六视图均无；Interrupted/0 单元，RECOVERY_REQUIRED，Session 为 navigation.target_missing |
+| failure | 26 | 30 | 19 | 首次内层 H swipe 真实 backend 拒绝，帧不前进；Failed/CUSTOM_ACTION_FAILED，0 单元 |
+| stop | 26 | 30 | 19 | 同一内层 swipe 后正式停止；UserStopped、真静止，0 单元 |
+| combat | 36 | 40 | 29 | 首次内层 swipe 遇战；战后回同一目录任务点，重新开图/原方向/H 全搜索；Completed/1 单元 |
+| correct | 27 | 31 | 20 | stair 存在，选择原 H 或 BH 而非干扰标记；Completed/1 单元 |
+
+所有场景保留到最后哈肯点之前的真实路线与结算：DH-4f 为 combats=3/chests=0/task_step=3；Church-upper 为 1/2/3；Church-auto 为 1/1/2。`combat` 各增加一场战斗，failure/stop 不清零前缀已发生的战斗或开箱。后者与基础 F/T 的“首个地下城输入、零业务前缀”不是同一断言。最后退场不增加 task_step；这 24 项没有进程恢复调用，不替代基础 R 的 Pause 恢复。
+
 ## 每项资源
 
 以下为每项传给 helper 的 `extra_images`，即使与 helper 基础资源重复也保留，helper 去重。全部与固定 Git 图片目录核对；不生成未知名字、不扫描出一个“能匹配”的动态 ROI。所有任务 `_FloorCheck` 均不存在，native **不传 floor 参数**；楼层语义仅使用上表命名楼梯和哈肯 stair 引用。
@@ -122,14 +140,14 @@
 | fortress-B1F | EdgeOfTown, chest, fortressb1f, harken, impregnableFortress |
 | fortress-B8F_entrance | EdgeOfTown, fortressEntrance, impregnableFortress, stair_fortress1f, stair_fortressGate |
 | fortress-10F | Bharken2, EdgeOfTown, fortressb10f, impregnableFortress |
-| DH-4f | DH, DH-R4, EdgeOfTown, harken, stair_DH_R4 |
+| DH-4f | Bharken, DH, DH-R4, EdgeOfTown, harken, stair_DH_R4 |
 | DH-6f | DH, DH-R6, EdgeOfTown, chest, harken, stair_DH_R5, stair_DH_R6 |
 | DH-7f-right | DH, DH-R7, EdgeOfTown, chest, harken |
 | DH-7f-auto | DH, DH-R7, EdgeOfTown, chest_auto, harken |
 | DH-10f-test | DH, DH-R9, EdgeOfTown, chest, harken, stair_DH_R10, stair_DH_R9 |
 | DH-10f-JR | DH, DH-R9, EdgeOfTown, harken, stair_DH_R10, stair_DH_R9 |
-| DH-Church-upper | Bharken, DH, DH-Church, EdgeOfTown, chest, stair_DH_Church |
-| DH-Church-auto | Bharken, DH, DH-Church, EdgeOfTown, chest_auto, stair_DH_Church |
+| DH-Church-upper | Bharken, DH, DH-Church, EdgeOfTown, chest, harken, stair_DH_Church |
+| DH-Church-auto | Bharken, DH, DH-Church, EdgeOfTown, chest_auto, harken, stair_DH_Church |
 | White-G-v2 | DH, DH-Church, EdgeOfTown, Mark_auto |
 | FFXI-2F | EVENT, FFXI/EVENT_GCN, FFXI/EVENT_VNH, FFXI/GCN, FFXI/ZONE2, chest_auto |
 | FFXI-2F-elite | EVENT, FFXI/EVENT_GCN, FFXI/EVENT_VNH, FFXI/GCN, FFXI/ZONE2 |
@@ -161,15 +179,15 @@
 | LMG-GT | LMG/LMG, LMG/LMG1F |
 | LMG-FT | LMG/FTB1F, LMG/LMG |
 
-每项都传相同封存 alias 表：`returnText.png→ReturnText.png`、`returntoTown.png→returntotown.png`、`Mark_auto.png→mark_auto.png`、`malice_B3F.png→malice_b3f.png`。前两条避免 Windows 大小写文件冲突，第三条仅 White 使用，第四条仅 malice 使用；不改变任务目标的大小写语义。每项 JSON 显式保存该表。两个大模板只使用固定目录中已有 harken2/Bharken2，非新名称。
+每项都传相同封存 alias 表：`returnText.png→ReturnText.png`、`returntoTown.png→returntotown.png`、`Mark_auto.png→mark_auto.png`、`malice_B3F.png→malice_b3f.png`。前两条避免 Windows 大小写文件冲突，第三条仅 White 使用，第四条仅 malice 使用；不改变任务目标的大小写语义。每项 JSON 显式保存该表。大模板仅使用固定目录已有 harken2/Bharken2/mark_auto；三个楼层任务额外补齐已有 H/BH 两个模板，不增加未知名称。
 
 ## 未承接与限制
 
-**真实生产缺口，未改弱用例：**固定旧 `CheckIf_harkenStair` 在目标 stair 不存在时调用 `StateMap_FindSwipeClick(TargetInfo('harken', None, None))`，没找到再搜索 Bharken。当前 `native/games/wvd/vision/recognizers.cpp` 的 `harken_stair` 分支只返回 `wrong_stair=true/NoHit`；`navigation/map_route.cpp` 没有调度该两阶段全图搜索。影响 DH-4f、DH-Church-upper、DH-Church-auto。正常楼层正例不会验证这个退路，主代理必须单独承接并补因果错误楼层场景后再收口。
+**错误楼层已接线，仍待运行：**固定旧 `CheckIf_harkenStair` 在目标 stair 不存在时调用 `StateMap_FindSwipeClick(TargetInfo('harken', None, None))`，没找到再搜索 Bharken。当前 `navigation/map_route.cpp` 仅对 `StairReference` 提示增加退路：执行原任务方向后检查 stair，缺失时先 H 六视图、再 BH 六视图；首视图不拖动，其余五次沿旧默认方向。内层不复用原 stair/ROI，命中后接既有 AutoMove/外部后置；全无时接回原外层下一候选或 MissingExit。每个新增搜索/选择/未命中节点显式最多五次，拖图等待仍为 2000ms；不改帧 TTL、识别阈值、Session 或移动预算。stair 存在和非 StairReference 任务的原路径保留，实际回归由 `correct` 及基础矩阵验证，不能以静态接线替代通过。
 
-**明确夹具阻断：**White-G-v2 保留原 `Mark_auto`；旧 `startAuto` 只特殊处理小写 `mark_auto`。本文件未完成该大小写/普通地图搜索/默认六方向/中心变化组合的独立正向 trace，S/R 用 `FixtureBlocked` 失败，F/T 继续用真实全定义。已有单个 mark_auto 子图测试不能抵消此项。
+**White-G 夹具已补齐，仍待运行：**此前 BLOCKED 的原因是尚无大小写/普通地图搜索/六视图/中心变化组合的独立正向 trace，不是已证实该任务只能缩减路径。原目标仍为 `Mark_auto`；旧 `startAuto` 只特殊处理小写 `mark_auto`，资源 alias 不改变选路语义。当前 S 完整保留五次实际拖图、第六视图命中、Click(440,740)、AutoMove、一次防御战斗和重新开地图中心变化，预期 15 次输入、1 战/0 箱/1 task_step；R 加六次 Pause 恢复输入共 21 次。F/T 各 6 次。四个方法不再固定抛出 White 专属 BLOCKED，但仍受资源/trace 通用阻断检查；本次未执行真实图像识别或 native。
 
-**每项共同未覆盖：**连续周期、开启住宿/组队/治疗的 profile 矩阵、mod 来源矩阵、途中战斗或已付款后的恢复对账、错误楼层、所有 EOT fallback 重试、未知后置与冻结升级、实图质量和真设备。S 是有限 `iteration`，不是无限 DungeonFarm。R 从 Pause 故障后城内重启，不是原路线中途恢复、不证明已开宝箱不重复。F/T 不代表每个付款/开箱/战斗内部停止点。
+**未覆盖或未验收边界：**连续周期、开启住宿/组队/治疗的 profile 矩阵、mod 来源矩阵、已付款后的恢复对账、所有 EOT fallback 重试、未知后置与冻结升级、实图质量和真设备。错误楼层仅三个 StairReference 任务已有上述有限因果场景，仍全部待原生验收，不推广到其他楼层恢复。S 是有限 `iteration`，不是无限 DungeonFarm。R 从 Pause 故障后城内重启，不是原路线中途恢复、不证明已开宝箱不重复；楼层 `combat` 只覆盖该搜索处的战斗返回，不代表所有途中恢复。F/T 不代表每个付款/开箱/战斗内部停止点。
 
 EOT 正例对第一步城镇嵌套 fallback 和 EVENT 顺序发真实输入；目标直接可见时按旧规则不执行其他 fallback。intoWorldMap 的目标直接可见，未覆盖源 swipe/dismiss 候选失败重试；定义与输入 JSON 仍保留这些参数，不覆盖掉它们。`_RTT` 仅由真实 catalog 带入并核对，当前城内起步且补给关闭的场景不执行回城补给；FFXI/IWO 等不据此宣布 RTT 通过。普通 harken 的首视图命中也不证明全部其他视图重试。
 
@@ -177,12 +195,12 @@ EOT 正例对第一步城镇嵌套 fallback 和 EVENT 顺序发真实输入；�
 
 ## Native 接口与证据
 
-主代理已接好但本轮未构建的契约：`workflow="iteration"`、`catalog_task_id=<原ID>`、`quest_catalog=<隔离完整固定JSON>`，经 WvdQuestCatalog 加载全定义；输出 `task_plan` 和 `kind`。禁止 `route_targets/entry_steps/floor/return_destination/route_type` 覆盖，本文件不传这些参数，也不传 `pre_entry`。不依赖 `entry` 或 `dungeon-route` 去替代完整 iteration。
+主代理已接好的契约：`workflow="iteration"`、`catalog_task_id=<原ID>`、`quest_catalog=<隔离完整固定JSON>`，经 WvdQuestCatalog 加载全定义；输出 `task_plan` 和 `kind`。本次不构建、不将 correction1 的其他专项证据算作矩阵运行证据。禁止 `route_targets/entry_steps/floor/return_destination/route_type` 覆盖，本文件不传这些参数，也不传 `pre_entry`。196 方法均不依赖 `entry` 或 `dungeon-route` 去替代完整 iteration。
 
-其余使用已有参数：`frames/transitions/run_root/output/files/profile/aliases`、`normal_units=1`、`stop_after_calls`、`attach_recovery/restart_frame/restart_action`；`pause_frames` 由 Python helper 消费以绘制 Pause，实际恢复由原生生命周期产生，不需要新增测试专用生产参数。
+其余使用已有参数：`frames/transitions/run_root/output/files/profile/aliases`、`normal_units=1`、`stop_after_calls`、`attach_recovery/restart_frame/restart_action`。`extra_images/large_templates/focused_map_templates/pause_frames` 由 Python helper 消费以准备清单、模板和帧，White 的 large_templates 使用规范名 `mark_auto`、focused_map_templates 保留帧中的 `Mark_auto`。实际恢复由原生生命周期产生；楼层 case 只改变独立因果 frames/transitions，不新增 native 模式、路线覆盖或测试专用生产参数。
 
 每次执行保存完整 `<TaskID>--<mode>-expectation.json`：固定源、完整 frame 描述、每次输入和因果说明、exact expected、资源/alias/floor/RTT。helper 保存实际 `input.json`、图像、native.log、output.json、execution.json。矩阵断言 EXE 前后一致、SDK DLL 路径/hash、task_plan 全源一致、mismatch=false、完整 backend 数和最终 cursor、逐 Session 输入累计、业务计数、终态和真静止、唯一持久化 result 与 snapshot 一致，成功还校验 root_task_id/generation/depth/node。不能仅看 Completed 或 backend 数之一。
 
 后端拒绝也经过 InputGate 准入，所以 `inputs.accepted` 包括最后一次真实调用；它不是 backend 成功数，拒绝由指定 transition、未前进 cursor、明确失败原因及零业务完成共同证明。结果事件为有界窗口，不能要求其保留全部输入；完整顺序由 native 每次精确比对 kind/x/y/x2/y2/key/duration 和最终 cursor 证明。
 
-本轮静态证据：`next/.local/m4-task-matrix-prepare-dcrik2kn/index.json`，43 项、170 NOT_RUN、2 BLOCKED、`native_executed=false/accepted_tasks=0`。方法发现核对 172 个唯一方法且直接继承 unittest.TestCase；逐项文档/参数/边界审查核对 2,876 次预期输入，无 override/stay。更早准备轮 `m4-task-matrix-prepare-txg466c0` 是修正前 trace，保留但不作为当前期望。主代理运行后新增本轮实测结论和证据路径，不能覆写历史失败为 PASS。
+本次静态证据：`next/.local/m4-task-matrix-prepare-g0fz3hc5/index.json`，43 项、196 NOT_RUN、0 静态 BLOCKED、`native_executed=false/accepted_tasks=0`。方法发现核对 196 个唯一方法且直接继承 unittest.TestCase；独立期望共 3,626 次输入，所有场景保留因果说明，无 override/stay。该 prepare 不加载 WorkflowTests、不合成实际 PNG、不调用 native，仅生成完整描述和校验静态结构。历史准备轮 `m4-task-matrix-prepare-dcrik2kn` 和 `m4-task-matrix-prepare-txg466c0` 保留但不再作为当前期望。主代理运行后须新增实测结论和证据路径，不能覆写历史失败为 PASS；Dist 首批四场景未在本次文档中登记任何运行通过。

@@ -1,5 +1,6 @@
 #include "diagnostics.hpp"
 #include "state.hpp"
+#include "mining/progress.hpp"
 
 namespace wvd::games {
 namespace {
@@ -54,6 +55,15 @@ bool confirm(maafw::Context &context, const J &parameters, const J &) {
     });
     if (accepted)
         context.business_event("confirmed", receipt);
+    // 业务锁已释放，保留领取页的实际确认帧。图片失败不回滚事实、不重发领取输入。
+    if (accepted && receipt.at("applied").get<bool>()) {
+        const bool fish = event == "fishing_reward_prepared";
+        const bool ore = event == "mining_reward_observed" && reward_index &&
+            (mining::reward_names.at(*reward_index) == "full" || mining::reward_names.at(*reward_index) == "unknown");
+        if (fish || ore)
+            context.save_diagnostic(&frame, fish ? "fishing.reward" : "mining.reward", "reward",
+                                    receipt.at("operation_id").get<std::string>());
+    }
     return accepted;
 }
 }

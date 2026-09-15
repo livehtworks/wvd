@@ -37,7 +37,7 @@
 | 同批牛洞 | 28输入后约2030ms帧龄处门禁SCENE失败；REST=true未执行 | 失败与未执行分开，不写牛洞通过 |
 | 同批忍洞修正2 | 13输入后仍SCENE失败，达到有限修正边界 | BLOCKED，不再重跑选PASS |
 | 同批沙人/钢试炼 | 沙人两个完整例因夹具图像自检失败，非原生失败；钢试炼发布缺bondmate_close，零连接/输入 | 夹具与原生失败分开；后续复验见下一行 |
-| 旧产物root `vg19i0vi` | 用户原样提供：沙人 `noBond Failed 3`、`Bond Failed 0`；钢 `full Failed 5`、`stop Failed 4`、`UserStopped 4`；全部5项已核对EXE/hash/quiescence | 保留标签/计数及失败，不把静止或UserStopped解释为完整业务成功 |
+| 旧产物root `vg19i0vi` | 本地原生验证：沙人 `noBond Failed 3`、`Bond Failed 0`；钢 `full Failed 5`、`stop Failed 4`、`UserStopped 4`；全部5项已核对EXE/hash/quiescence | 保留标签/计数及失败，不把静止或UserStopped解释为完整业务成功 |
 | root `gqgh3uz1` | 因果/吉尔对话/Golden对话/时间跳跃17方法、24场景全PASS；23真实Run加1缺图发布负例，已核对EXE身份/计数/静止 | 对话子图通过不解除Golden完整任务BLOCKED，不覆盖新源码 |
 
 专题入口：[7000G](m4-gold-income-validation.md)、[牛洞](m4-bull-cave-validation.md)、
@@ -50,10 +50,11 @@
 
 ## 实现与未验证
 
-- **缺消费者/未实现入口**：9配置字段只有导入/导出；旧通用存仓、PNG持久化、Tk编辑/日志展示、
-  更新链无等价新版入口。逐字段/函数定位见[语义审计](migration/m4-semantic-audit.md)。
-- **已有代码但未构建/未验证**：Repel/COS/Fordraig、相应状态/恢复、转交/7300秒等待，以及
-  `publish_workflow_stages` 和CLI/fixture接线源码已冻结、构建中，不能标PASS或写“完全没有实现”。
+- **缺消费者/未实现入口**：9配置字段原先只有导入/导出；本轮补冻结VPN/崩溃阈值与任务名称、上一圈摘要，PNG持久化正在实施。Tk编辑/日志展示和更新链分别属于M5/M6，不提前开放。设备三字段保留导入/往返，不能替代显式设备身份许可。旧`BagClear_Item`经AST核对无名称读取/调用/传递，不新增自动逐件入库；六小时有效链实际为重组队伍，已单独承接，不能混记为未实现。逐项见[语义审计](migration/m4-semantic-audit.md)。
+- **已构建，验证中**：Repel/COS/Fordraig、相应状态/恢复、转交/7300秒等待，以及
+  `publish_workflow_stages` 和CLI/fixture均已构建。发布两方法通过；恢复转交首轮有帧过期失败，
+  修正一24方法20通过、3失败、1错误，后两类均为handoff意图复核帧龄问题。
+  Fordraig资源闭包与COS零输入停点/坏图/请求ROI修正验证通过，完整扩展流程正在运行。
 - **已有运行证据但未通过/范围不足**：牛洞/沙人/钢试炼/忍洞最新结果及三项原阻断分别保留；
   单场、对话、状态或计划通过不是完整任务验收。
 
