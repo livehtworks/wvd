@@ -36,7 +36,7 @@ class WorkflowTests(unittest.TestCase):
         bundle = folder / "bundle"
         (bundle / "image").mkdir(parents=True)
         resource_kind = "dungeon-route" if options.get("workflow") == "fortress-trap" else "iteration" if options.get("workflow") in ("giant", "dark-light", "mining", "manual-separation", "scorpion") else options.get("workflow")
-        if resource_kind in ("bounty-visit", "sleep-batch", "fishing-cast", "fishing-reward", "fishing-round"): resource_kind = "common"
+        if resource_kind in ("bounty-visit", "sleep-batch", "fishing-cast", "fishing-reward", "fishing-round", "fishing-seek"): resource_kind = "common"
         names = ["worldmapflag", "City_RoyalCityLuknalia", "Inn", "Stay", "Economy", "royalsuite", "OK"]
         if resource_kind in ("departure", "iteration"):
             names += ["openworldmap", "intoWorldMap", "returntoTown", "returnText", "EdgeOfTown", "dungFlag", "mapFlag", "chestFlag",
@@ -169,7 +169,7 @@ class WorkflowTests(unittest.TestCase):
                     path.write_bytes(b"changed before publication")
         if resource_kind in ("chest", "map-confirm", "state-route", "turn", "encounter", "recover", "common", "heal", "dungeon-route", "departure", "inn-tracked", "iteration", "revival"):
             config.update(with_state=True, descriptor=str(ROOT / "packs/wvd/parameters/legacy-config-fields.json"))
-        if options.get("workflow") == "fishing-cast":
+        if options.get("workflow") in ("fishing-cast", "fishing-seek"):
             config["with_state"] = False
         if "omit_image" in options:
             config["files"] = [f for f in config["files"] if f["path"] != "image/" + options["omit_image"]]
@@ -188,7 +188,7 @@ class WorkflowTests(unittest.TestCase):
                                         "giant": (route_budget + 500) * options.get("normal_units", 1),
                                         "recover": 750, "departure": 200, "heal": 260,
                                         "chest": 920 if options.get("quick") else 620,
-                                        "fishing-round": 720, "fishing-cast": 110, "fishing-reward": 80,
+                                        "fishing-round": 720, "fishing-cast": 110, "fishing-reward": 80, "fishing-seek": 200,
                                         "scorpion": (route_budget + 500) * (4 if options.get("hands") else 3), "city-travel": 140, "sleep-batch": 1620 * options.get("normal_units", 1), "bounty-visit": 200 * options.get("normal_units", 1), "manual-separation": 3620, "time-leap": 200, "mining": mining_watchdog, "common": 140, "iteration": (route_budget + 380) * options.get("normal_units", 1)}.get(options.get("workflow"), 90))
         self.assertEqual(digest(exe), before_hash)
         (folder / "execution.json").write_text(json.dumps({"exe_sha256": before_hash, "exit": result.returncode}), encoding="utf-8")
@@ -1900,8 +1900,9 @@ class WorkflowTests(unittest.TestCase):
     def test_fishing_reward_stuck_rejected_and_stopped_do_not_count(self):
         page = {"fishing/CloseFishInfo": (400, 1400), "fishing/size_average": (300, 700), "fishing/雅罗": (300, 1150)}
         for mode in ("stuck", "reject", "stop"):
+            command = dict(kind=0, x=420, y=1412, reject=mode == "reject")
             r = self.execute("fishing-reward-" + mode, [page, page if mode == "stuck" else {"fishing/cast": (400, 1300)}],
-                [dict(kind=0, x=420, y=1412)], **self.fishing_reward_options(reject_after_first=mode == "reject", stop_after_first=mode == "stop"))
+                [command], **self.fishing_reward_options(stop_after_first=mode == "stop"))
             self.assertEqual(r["snapshot"]["state"], "UserStopped" if mode == "stop" else "Failed", r)
             self.assertEqual(r["backend_calls"], 1)
             fish = r["snapshot"]["business"]["fishing"]
@@ -1935,6 +1936,31 @@ class WorkflowTests(unittest.TestCase):
         self.assertFalse(fish["waiting"])
         self.assertEqual(fish["fishinfo"]["大"]["三文鱼"], 1)
 
+    def test_fishing_seek_stops_as_soon_as_cast_page_appears(self):
+        dungeon = {"dungFlag": (50, 150)}
+        r = self.execute("fishing-seek-found", [dungeon, dungeon, {"fishing/cast": (400, 1300)}],
+            [dict(kind=0, x=250, y=1200), dict(kind=1, x=250, y=1200, x2=850, y2=1200, duration=100)],
+            workflow="fishing-seek")
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 2)
+        self.assertFalse(r["mismatch"])
+
+    def test_fishing_seek_unknown_and_already_fishing_do_not_rotate(self):
+        for name, page, expected in [("unknown", {}, "Interrupted"), ("already", {"fishing/striking": (400, 1300)}, "Completed")]:
+            r = self.execute("fishing-seek-" + name, [page], [], workflow="fishing-seek")
+            self.assertEqual(r["snapshot"]["state"], expected, r)
+            self.assertEqual(r["backend_calls"], 0)
+
+    def test_fishing_round_unknown_page_has_90_second_window_without_input(self):
+        options = self.fishing_reward_options()
+        options["workflow"] = "fishing-round"
+        options["extra_images"] += ["fishing/nobait", "fishing/8bait", "fishing/bobber"]
+        r = self.execute("fishing-round-unknown", [{}], [], **options)
+        self.assertEqual(r["snapshot"]["state"], "Interrupted", r)
+        self.assertEqual(r["snapshot"]["sessions"][-1]["reason"], "quest.fishing_unknown_timeout")
+        self.assertEqual(r["backend_calls"], 0)
+        self.assertGreaterEqual(r["snapshot"]["business"]["elapsed_seconds"], 90)
+
     @staticmethod
     def fishing_cast_scenario(far=False):
         ready = {"fishing/cast": (400, 1300), "fishing/8bait": (550, 1490)}
@@ -1956,7 +1982,7 @@ class WorkflowTests(unittest.TestCase):
             r = self.execute("fishing-cast-" + name, [frame], [], **self.fishing_cast_options())
             self.assertEqual(r["snapshot"]["state"], "Interrupted", r)
             self.assertEqual(r["backend_calls"], 0)
-            if name == "empty": self.assertEqual(r["snapshot"]["reason"], "quest.fishing_bait_required")
+            if name == "empty": self.assertEqual(r["snapshot"]["sessions"][-1]["reason"], "quest.fishing_bait_required")
 
     def test_fishing_cast_tied_zero_and_eight_scores_do_not_refill(self):
         frames, commands = self.fishing_cast_scenario()
@@ -1964,15 +1990,17 @@ class WorkflowTests(unittest.TestCase):
             frame.pop("fishing/8bait")
             frame["fishing/nobait"] = (550, 1490)
         r = self.execute("fishing-cast-tied-bait", frames, commands,
-            **self.fishing_cast_options(mod_images={"fishing/8bait": "fishing/nobait"}))
+            **self.fishing_cast_options(mod_images={"fishing/8bait": "fishing/nobait"}, mod_only_images=["fishing/8bait"]))
         self.assertEqual(r["snapshot"]["state"], "Completed", r)
         self.assertEqual(r["backend_calls"], 8)
+        self.assertEqual(r["image_sources"]["images"]["fishing/8bait.png"]["source"], "mod")
 
     def test_fishing_cast_reject_and_stop_cancel_the_remaining_swipes(self):
         for stop in (False, True):
             frames, commands = self.fishing_cast_scenario()
+            commands[0]["reject"] = not stop
             r = self.execute("fishing-cast-stop-" + str(stop), frames[:2], commands[:1],
-                **self.fishing_cast_options(stop_after_first=stop, reject_after_first=not stop))
+                **self.fishing_cast_options(stop_after_first=stop))
             self.assertEqual(r["snapshot"]["state"], "UserStopped" if stop else "Failed", r)
             self.assertEqual(r["backend_calls"], 1)
 

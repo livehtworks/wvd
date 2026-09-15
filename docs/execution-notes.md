@@ -80,6 +80,9 @@
 
 ## Next M4 状态与任务数据
 
+- 因果流程夹具的拒绝注入在单个预期command里设 `reject=true`；没有 `reject_after_first` 开关。未触发真实拒绝时不能将正常执行结果算拒绝测试。无恢复策略的Run可能归一为 `RECOVERY_REQUIRED`，具体业务原因核对 `sessions[-1].reason`。
+- 原图片来源优先级是基础图、基础别名、mod；测试mod必须明确让该基础成员缺席，并核对发布后的 `image_sources`。往mod放同名图不代表测试已经使用它，不能为使测试通过而反转正式优先级。
+
 - Windows合成图片按封存别名规范化后去重，例如 `returntoTown.png` 指向 `returntotown.png`；不能同时写仅大小写不同的文件后再声称两个成员均存在。生产资源闭包仍按精确manifest校验。
 - 固定OpenCV4.12的嵌套 `parallel_for_` 会将内层串行执行；含默认对话四路识别的复合模式不再放进外层两路并行白名单。此修正不能证明全部慢帧已归因，巨人专项两轮修正后仍保持阻断。
 

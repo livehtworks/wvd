@@ -3,6 +3,7 @@
 #include "games/wvd/tasks/sleep_visits.hpp"
 #include "games/wvd/tasks/bounty_cycle.hpp"
 #include "games/wvd/tasks/giant.hpp"
+#include "games/wvd/fishing/unknown_window.hpp"
 #include "games/wvd/vision/recognizers.hpp"
 #include "storage/legacy_import.hpp"
 #include "storage/profile_store.hpp"
@@ -78,6 +79,14 @@ std::optional<runtime::SessionDefinition> recover_unit(const contracts::SessionR
     return next;
 }
 J fishing_contract(const J &profile) {
+    games::fishing::UnknownWindow unknown;
+    const auto origin = std::chrono::steady_clock::time_point{};
+    require(!unknown.observe(false, false, origin), "FISHING_UNKNOWN_STARTED_EXPIRED");
+    require(!unknown.observe(false, false, origin + 90s), "FISHING_UNKNOWN_TIMEOUT_NOT_STRICT");
+    require(unknown.observe(false, false, origin + 90001ms), "FISHING_UNKNOWN_TIMEOUT_MISSING");
+    require(!unknown.observe(true, false, origin + 100s), "FISHING_KNOWN_DID_NOT_CLEAR_UNKNOWN");
+    require(!unknown.observe(false, true, origin + 200s), "FISHING_OTHER_HANDLER_DID_NOT_SUSPEND_UNKNOWN");
+    require(unknown.observe(false, false, origin + 201s), "FISHING_SUSPENSION_RESET_UNKNOWN_TIMER");
     auto clock = std::make_shared<TestClock>();
     games::WvdRunState state(profile, {"fishing", 1, clock});
     std::uint64_t generation = 1;

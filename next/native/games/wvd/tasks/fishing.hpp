@@ -6,5 +6,6 @@ namespace wvd::games::tasks {
 CompiledWorkflow cast_fishing_line(bool far);
 CompiledWorkflow collect_fishing_reward();
 // 一次有限钓鱼结果：已确认收获或超过300秒后的已确认收竿失败，不含补饵导航。
-CompiledWorkflow fishing_round(bool far);
+CompiledWorkflow fishing_round(bool far, bool allow_download = true);
+CompiledWorkflow seek_fishing_position();
 }

@@ -192,7 +192,9 @@ int main(int argc, char **argv) {
             if (kind == "fishing-reward")
                 return games::tasks::collect_fishing_reward();
             if (kind == "fishing-round")
-                return games::tasks::fishing_round(config.value("far", false));
+                return games::tasks::fishing_round(config.value("far", false), config.value("allow_download", true));
+            if (kind == "fishing-seek")
+                return games::tasks::seek_fishing_position();
             if (kind == "inn")
                 return games::supply::rest_at_inn(config.value("royal", false));
             if (kind == "time-leap")

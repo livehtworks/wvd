@@ -2,6 +2,7 @@
 #include "dialogue_probes.hpp"
 #include "asset_resolver.hpp"
 #include "bobber.hpp"
+#include "games/wvd/fishing/unknown_window.hpp"
 #include "boot_probes.hpp"
 #include "navigation_probes.hpp"
 #include "unknown_window.hpp"
@@ -287,6 +288,31 @@ J evaluate_uncached(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels
                 return decision(true, allowed_rect, {{"stage", name}, {"matched", result}});
         }
         return decision(false, {}, {{"stage", "unknown"}});
+    }
+    if (mode == "fishing_unknown") {
+        check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");
+        bool known = false, suspended = false;
+        for (auto name : {"fishing/cast", "fishing/striking", "fishing/CloseFishInfo"}) {
+            const auto result = evaluate_impl(bundle, pixels, {{"mode", "template"}, {"image", name}}, bound, scope, cache, depth + 1, memo);
+            check(result.at("outcome") != "Error", "FISHING_UNKNOWN_RECOGNITION_ERROR");
+            if (result.at("outcome") == "Hit") { known = true; break; }
+        }
+        if (!known) {
+            for (const auto &probe : J::array({J{{"mode", "template"}, {"image", "dungFlag"}}, J{{"mode", "blocking_screen"}, {"parallel_basic", true}}})) {
+                const auto result = evaluate_impl(bundle, pixels, probe, bound, scope, cache, depth + 1, memo);
+                check(result.at("outcome") != "Error", "FISHING_UNKNOWN_RECOGNITION_ERROR");
+                if (result.at("outcome") == "Hit") { suspended = true; break; }
+            }
+        }
+        auto found = cache.assets.find("fishing.unknown");
+        if (found == cache.assets.end()) {
+            check(cache.assets.size() < 2048, "WVD_SESSION_ASSET_CAPACITY");
+            found = cache.assets.emplace("fishing.unknown", fishing::UnknownWindow{}).first;
+        }
+        const auto expired = std::any_cast<fishing::UnknownWindow &>(found->second).observe(known, suspended, std::chrono::steady_clock::now());
+        auto result = decision(expired, allowed_rect, {{"reason", known ? "fishing_page" : suspended ? "other_handler" : "unknown_page"}, {"timeout_seconds", 90}}, false);
+        result["action_eligible"] = false;
+        return result;
     }
     if (mode == "fishing_reward") {
         check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");

@@ -1,6 +1,25 @@
 #include "fishing.hpp"
+#include "games/wvd/recovery/boot.hpp"
 
 namespace wvd::games::tasks {
+CompiledWorkflow seek_fishing_position() {
+    using C = PipelineCompiler;
+    using J = nlohmann::json;
+    C graph("quest.fishing.seek", std::chrono::seconds{180});
+    const auto fishing = C::any({C::image("fishing/cast"), C::image("fishing/striking"), C::image("fishing/CloseFishInfo")});
+    const auto dungeon = C::all({C::image("dungFlag"), C::absent(C::image("mapFlag")), C::absent(J{{"mode", "combat_active"}}), C::absent(fishing)});
+    const auto known = C::any({dungeon, fishing});
+    graph.route("Entry", {"Found", "Focus"});
+    graph.observe("Found", fishing, {"Terminal"});
+    graph.fixed_click("Focus", dungeon, known, {250, 1200}, {"Found", "Turn0"});
+    for (int i = 0; i < 40; ++i) {
+        const auto name = "Turn" + std::to_string(i);
+        graph.swipe(name, dungeon, known, {250, 1200, 850, 1200}, {"Found", i == 39 ? "TurnExhausted" : "Turn" + std::to_string(i + 1)}, 100);
+    }
+    graph.recovery("TurnExhausted", "quest.fishing_turn_incomplete");
+    graph.interrupt_on({{"mode", "blocking_screen"}, {"parallel_basic", true}}, "quest.fishing_common_screen_requires_dispatch");
+    return graph.finish();
+}
 CompiledWorkflow collect_fishing_reward() {
     using C = PipelineCompiler;
     using J = nlohmann::json;
@@ -44,21 +63,29 @@ CompiledWorkflow cast_fishing_line(bool far) {
     graph.interrupt_on({{"mode", "blocking_screen"}, {"parallel_basic", true}}, "quest.fishing_common_screen_requires_dispatch");
     return graph.finish();
 }
-CompiledWorkflow fishing_round(bool far) {
+CompiledWorkflow fishing_round(bool far, bool allow_download) {
     using C = PipelineCompiler;
     using J = nlohmann::json;
     C graph(far ? "quest.fishing.round_far" : "quest.fishing.round_near", std::chrono::seconds{700});
     const auto cast = C::image("fishing/cast"), striking = C::image("fishing/striking"), reward = C::image("fishing/CloseFishInfo");
     const auto known = C::any({cast, striking, reward});
     const J bobber{{"mode", "fishing_bobber"}}, blocked{{"mode", "blocking_screen"}, {"parallel_basic", true}};
+    const auto quiet_striking = C::all({striking, C::absent(blocked)});
     graph.route("Entry", {"PendingCast", "DispatchA"});
     graph.observe("PendingCast", C::business("/fishing/casting_pending", true), {"CastUncertain"});
     graph.recovery("CastUncertain", "quest.fishing_cast_unconfirmed");
     const auto casting = graph.define_child("Casting", cast_fishing_line(far));
     const auto collect = graph.define_child("Collect", collect_fishing_reward());
-    graph.confirm("PrepareCast", "fishing.cast.prepare", "fishing_cast_prepared", cast, {"Cast"});
+    const auto seek = graph.define_child("Seek", seek_fishing_position(), {"BlockedExit", "TurnExhausted"});
+    const auto common = graph.define_child("Common", recovery::clear_common_screens(allow_download));
+    graph.call_child("ClearCommon", common, {"DispatchA"});
+    graph.hit_limit("ClearCommon", 16);
+    graph.call_child("SeekPosition", seek, {"DispatchA"});
+    graph.hit_limit("SeekPosition", 16);
+    graph.recovery("UnknownTimeout", "quest.fishing_unknown_timeout");
+    graph.confirm("PrepareCast", "fishing.cast.prepare", "fishing_cast_prepared", C::all({cast, C::absent(blocked)}), {"Cast"});
     graph.call_child("Cast", casting, {"CastStarted"});
-    graph.confirm("CastStarted", "fishing.cast.done", "fishing_cast_completed", striking, {"DispatchA"});
+    graph.confirm("CastStarted", "fishing.cast.done", "fishing_cast_completed", quiet_striking, {"DispatchA"});
     graph.delay_after("CastStarted", 10000);
     for (const auto *name : {"PrepareCast", "Cast", "CastStarted"}) graph.hit_limit(name, 16);
     graph.call_child("CollectReward", collect, {"Terminal"});
@@ -67,25 +94,29 @@ CompiledWorkflow fishing_round(bool far) {
     // 不因单节点256次上限提前判失败，也不提高通用编译器的命中上限。
     for (const auto *side : {"A", "B"}) {
         const std::string s = side, other = s == "A" ? "B" : "A";
-        graph.route("Dispatch" + s, {"Pending" + s, "Reward" + s, "NoBait" + s, "CastPage" + s, "TimedOut" + s, "StartWait" + s, "Reel" + s, "Wait" + s});
+        graph.route("Dispatch" + s, {"Unknown" + s, "Blocked" + s, "Pending" + s, "Reward" + s, "NoBait" + s, "CastPage" + s, "TimedOut" + s, "StartWait" + s, "Reel" + s, "Wait" + s, "Dungeon" + s, "UnknownWait" + s});
+        graph.observe("Unknown" + s, {{"mode", "fishing_unknown"}}, {"UnknownTimeout"});
+        graph.observe("Blocked" + s, blocked, {"ClearCommon"});
+        graph.observe("Dungeon" + s, C::image("dungFlag"), {"SeekPosition"});
+        graph.route("UnknownWait" + s, {"Dispatch" + other});
+        graph.delay_after("UnknownWait" + s, 1000);
         graph.observe("Pending" + s, C::business("/fishing/reward_pending", true), {"CollectReward"});
         graph.observe("Reward" + s, reward, {"CollectReward"});
         graph.observe("NoBait" + s, C::all({cast, J{{"mode", "fishing_bait_empty"}}}), {"BaitExit"});
         graph.observe("CastPage" + s, cast, {"PrepareCast"});
         graph.observe("TimedOut" + s, C::all({striking, C::business("/fishing/timed_out", true)}), {"Abort"});
         graph.observe("StartWait" + s, C::all({striking, C::business("/fishing/waiting", false)}), {"ObserveWait"});
-        graph.swipe("Reel" + s, C::all({striking, C::absent(bobber)}), known, {450, 700, 450, 50}, {"Dispatch" + other}, 100);
+        graph.swipe("Reel" + s, C::all({quiet_striking, C::absent(bobber)}), C::any({known, blocked}), {450, 700, 450, 50}, {"Dispatch" + other}, 100);
         graph.delay_after("Reel" + s, 3000);
         graph.observe("Wait" + s, C::all({striking, bobber}), {"Dispatch" + other});
         graph.delay_after("Wait" + s, 1000);
-        for (const auto *prefix : {"Dispatch", "Pending", "Reward", "NoBait", "CastPage", "TimedOut", "StartWait", "Reel", "Wait"})
+        for (const auto *prefix : {"Dispatch", "Unknown", "Blocked", "Pending", "Reward", "NoBait", "CastPage", "TimedOut", "StartWait", "Reel", "Wait", "Dungeon", "UnknownWait"})
             graph.hit_limit(std::string(prefix) + s, 256);
     }
-    graph.confirm("ObserveWait", "fishing.wait", "fishing_wait_started", striking, {"DispatchA"});
-    graph.click("Abort", striking, striking, C::all({C::any({cast, reward}), C::absent(striking)}), {"FailedCast"});
+    graph.confirm("ObserveWait", "fishing.wait", "fishing_wait_started", quiet_striking, {"DispatchA"});
+    graph.click("Abort", quiet_striking, striking, C::all({C::any({cast, reward}), C::absent(striking), C::absent(blocked)}), {"FailedCast"});
     graph.delay_after("Abort", 5000);
-    graph.confirm("FailedCast", "fishing.failed", "fishing_wait_failed", C::all({C::any({cast, reward}), C::absent(striking)}), {"Terminal"});
-    graph.interrupt_on(blocked, "quest.fishing_common_screen_requires_dispatch");
+    graph.confirm("FailedCast", "fishing.failed", "fishing_wait_failed", C::all({C::any({cast, reward}), C::absent(striking), C::absent(blocked)}), {"Terminal"});
     return graph.finish();
 }
 }

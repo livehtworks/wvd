@@ -32,6 +32,11 @@ void collect_images(const J &value, std::set<std::string> &images, std::set<std:
             collect_images(J{{"mode", "blocking_screen"}}, images, expanded_modes);
         }
         if (expand && mode == "fishing_bobber") images.insert("fishing/bobber.png");
+        if (expand && mode == "fishing_unknown") {
+            for (auto name : {"fishing/cast", "fishing/striking", "fishing/CloseFishInfo", "dungFlag"})
+                images.insert(std::string(name) + ".png");
+            collect_images(J{{"mode", "blocking_screen"}}, images, expanded_modes);
+        }
         if (expand && mode == "mining_reward") {
             for (auto name : {"receive", "org_fine", "org_high", "org_mid", "org_low", "org_refine", "org_alter",
                               "org_sliver", "org_ouro", "org_lesser_full", "org_full"})
