@@ -71,8 +71,9 @@ class WorkflowTests(unittest.TestCase):
                       "chest_auto", "mark_auto", "chest_auto_minus", "resume", "returnText", "returntoTown", "openworldmap"]
         if resource_kind in ("entry", "iteration"):
             names += ["GotoDung", "openworldmap", "returntoTown", "intoWorldMap", "TradeWaterway", "Dist", "EVENT", "FFXI/EVENT_GCN", "FFXI/zone5", "preGate"]
-        if resource_kind in ("recover", "common", "iteration", "dungeon-route", "map", "map-confirm", "state-route",
-                                      "auto-route", "auto", "turn", "encounter", "chest", "heal", "revival"):
+        if options.get("attach_recovery") or resource_kind in (
+                "recover", "common", "iteration", "dungeon-route", "map", "map-confirm", "state-route",
+                "auto-route", "auto", "turn", "encounter", "chest", "heal", "revival"):
             names += ["dungFlag", "openworldmap", "returnText", "returntoTown", "mapFlag", "chestFlag", "whowillopenit",
                       "fishing/cast", "fishing/striking", "fishing/CloseFishInfo", "combatActive", "combatActive_2",
                       "combatActive_3", "combatActive_4", "boot_title_logo", "boot_attention", "startdownload",
