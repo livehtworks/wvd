@@ -21,4 +21,8 @@
 `business.` 前缀，轮询遗漏该前缀导致 `CHECKPOINT_TIMEOUT`，不是游戏输入或停止成功。
 私有根 `m4-state-tests-k7tohd39`，日志 `m4-stop-boundary-correction1.log`；新增截图阻塞
 所有权测试已通过。修正二仅对齐实际事件名，待构建复验。两轮后不重复运行挑PASS。
-M2的102项同产物回归已通过，但不替代上述M4失败记录。
+修正二随正式源码 `fbc6196` 构建后，状态全组22方法通过（6.887秒，
+`m4-stop-boundary-correction2-giant-state.log`，私有根 `m4-state-tests-79jqn0_z`）。
+协作回调停止为UserStopped；受控截图阻塞先保持未静止，再由测试释放后真正静止，
+最终仍为Failed/STOP_TIMEOUT。没有放宽200ms预算，没有强杀或丢弃会话所有权。
+该定点复验完成，不再重跑原失败组挑结果；生产原生取消能力仍未放行。
