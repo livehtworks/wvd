@@ -84,6 +84,10 @@ class WorkflowTests(unittest.TestCase):
         names += options.get("extra_images", [])
         if resource_kind == "revival":
             names.append("RiseAgain")
+        # Windows 不允许同时保存仅大小写不同的两张图；按封存别名生成同一规范资源。
+        def image_name(name):
+            return options.get("aliases", {}).get(name + ".png", name + ".png")[:-4]
+        names = list(dict.fromkeys(image_name(name) for name in names))
         rng = np.random.default_rng(90614)
         patterns = {name: rng.integers(30, 255, (24, 40, 3), dtype=np.uint8) for name in names}
         for name in options.get("large_templates", []):
@@ -104,7 +108,7 @@ class WorkflowTests(unittest.TestCase):
         for i, screen in enumerate(screens):
             pixels = np.zeros((1600, 900, 3), dtype=np.uint8)
             for key, (x, y) in screen.items():
-                pattern = patterns[key.split("@", 1)[0]]
+                pattern = patterns[image_name(key.split("@", 1)[0])]
                 if key == "chest_auto_minus":
                     pattern = pattern + np.uint8(90)
                 if key == "next" and i in options.get("degraded_next_frames", []):
@@ -1768,6 +1772,7 @@ class WorkflowTests(unittest.TestCase):
         return dict(workflow="giant", quest_catalog=str(ROOT / "packs/wvd/parameters/legacy-quests.json"),
             profile={**self.wall_profile(False), "REST_INTERVEL": 1, "ACTIVE_REST": False},
             extra_images=["impregnableFortress", "fortressb7f", "harken2", "returntotown", "leaveDung"],
+            aliases={"returntoTown.png": "returntotown.png"},
             large_templates=["harken2"], **extra)
 
     def test_giant_full_cycle_and_cold_start(self):
