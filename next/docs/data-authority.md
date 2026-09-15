@@ -53,6 +53,14 @@
 
 ## 一致性与边界
 
+- `snapshot.business.sleep`由WvdRunState内的SleepVisits唯一持有，记录固定9999次目标、
+  当前住宿意图及完成数；每次退出旅店的新帧确认后递增。`tasks::configure_sleep_units`
+  只定义250个有限正常段，不新增调度器。已完成批次的住宿签名在正常换批时释放，
+  同批次恢复保留；该事实不改变旧配置或允许从历史文件重放付款。
+- `snapshot.business.bounty_reveals/bounty_reports/bounty_report_pending`为揭榜退出、
+  已确认交付次数和交付前意图；WvdConfirm生产，悬赏图/恢复策略与离线审查消费。
+  揭榜不是指定任务已接取，交付按钮可见也不是报酬到账，不能混用这三个字段。
+
 - `prepare_pipeline_bundle` 显式新目录及其 `parameters/template-expansion.json` 是准备阶段的派生资源，
   由storage持锁复制作者文件、冻结目录模板顺序并生成新revision；M4只读检查CLI/离线运行消费。
   不是正式账号数据或历史恢复点，不覆盖源目录，只有新revision可进入随后冻结的Run权限。

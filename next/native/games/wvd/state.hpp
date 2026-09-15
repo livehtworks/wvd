@@ -7,6 +7,7 @@
 #include "karma.hpp"
 #include "mining/progress.hpp"
 #include "quests/manual_separation.hpp"
+#include "quests/sleep_visits.hpp"
 #include <map>
 
 namespace wvd::games {
@@ -67,6 +68,7 @@ class WvdRunState final : public contracts::BusinessRunState {
     bool dark_light_active_{};
     mining::Progress mining_;
     quests::ManualSeparation manual_separation_;
+    quests::SleepVisits sleep_;
     std::size_t bounty_reports_{};
     std::size_t bounty_reveals_{};
     bool bounty_report_pending_{};

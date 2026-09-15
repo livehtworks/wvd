@@ -17,4 +17,7 @@ CompletionReported和600/1400→300/1400横向菜单滑动；未知页不发送�
 揭榜在设备连接前因 `BUSINESS_UNIT_INVALID` 被拒绝：其图没有任何业务确认，
 因此未生成检查点，却配置了WvdRunState。修正加入 `bounty_revealed` 独立回执，
 只表示已操作揭榜菜单并回到EdgeOfTown，不声称某个指定悬赏已经接取，也不增加奖励计数。
-此修正尚待原生复验。完整任务分母仍是58，不能因该子流程而关闭整任务。
+修正一 `d88a348`：五方法/七场景全部通过（249.348秒，
+`m4-bounty-correction1-workflow.log`、`m4-workflow-ex7o57pz`），其中揭榜4输入、
+reveals=1/reports=0。七例均在重建前核对EXE身份、输入、无错点与静止。
+完整任务分母仍是58，不能因该子流程而关闭整任务。

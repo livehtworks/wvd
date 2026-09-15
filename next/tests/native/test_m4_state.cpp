@@ -1,5 +1,6 @@
 #include "runtime_fixture.hpp"
 #include "games/wvd/state.hpp"
+#include "games/wvd/tasks/sleep_visits.hpp"
 #include "games/wvd/vision/recognizers.hpp"
 #include "storage/legacy_import.hpp"
 #include "storage/profile_store.hpp"
@@ -73,6 +74,56 @@ std::optional<runtime::SessionDefinition> recover_unit(const contracts::SessionR
     auto next = previous;
     next.entry = "Recovered";
     return next;
+}
+J sleep_contract(const J &profile) {
+    auto clock = std::make_shared<TestClock>();
+    games::WvdRunState state(profile, {"sleep-contract", 1, clock});
+    std::uint64_t generation = 0;
+    std::size_t completed = 0;
+    runtime::RunDefinition definition;
+    games::tasks::configure_sleep_units(definition);
+    require(definition.max_business_units == 250 && definition.continuation_units.size() == 249, "SLEEP_FULL_SCHEDULE_MISSING");
+    bool duplicate_configuration = false;
+    try { games::tasks::configure_sleep_units(definition); }
+    catch (const std::exception &e) { duplicate_configuration = std::string(e.what()) == "SLEEP_UNITS_ALREADY_CONFIGURED"; }
+    require(duplicate_configuration, "SLEEP_DUPLICATE_SCHEDULE_ACCEPTED");
+    for (std::size_t unit = 0; unit < games::quests::SleepVisits::units; ++unit) {
+        state.enter_segment(unit ? contracts::SegmentBoundary::Continuation : contracts::SegmentBoundary::Initial, ++generation, unit);
+        auto emit = [&](const char *event) {
+            return state.confirm_event(state.confirmation_id(event, event), event, generation, 1);
+        };
+        const auto end = std::min(games::quests::SleepVisits::total, (unit + 1) * games::quests::SleepVisits::batch_size);
+        while (completed < end) {
+            emit("sleep_visit_started");
+            require(!emit("sleep_visit_started"), "SLEEP_DUPLICATE_START");
+            if (completed == 3) {
+                state.enter_segment(contracts::SegmentBoundary::LifecycleRecovery, ++generation, unit);
+                require(state.summary().at("sleep").at("visit_active").get<bool>(), "SLEEP_RECOVERY_LOST_VISIT");
+                require(!emit("sleep_visit_started"), "SLEEP_RECOVERY_REPLAYED_START");
+                bool stale = false;
+                try { state.confirm_event("old-frame", "sleep_visit_completed", generation - 1, 1); }
+                catch (const std::exception &e) { stale = std::string(e.what()) == "BUSINESS_CONFIRMATION_IDENTITY_INVALID"; }
+                require(stale, "SLEEP_OLD_GENERATION_ACCEPTED");
+                bool early = false;
+                try { emit("sleep_visit_completed"); }
+                catch (const std::exception &e) { early = std::string(e.what()) == "SLEEP_VISIT_NOT_CONFIRMED"; }
+                require(early, "SLEEP_UNPAID_COMPLETION");
+            }
+            emit("inn_payment_prepared");
+            emit("inn_rest_completed");
+            emit("sleep_visit_completed");
+            require(!emit("sleep_visit_completed"), "SLEEP_DUPLICATE_COMPLETION");
+            ++completed;
+        }
+        require(state.summary().at("sleep").at("batch_complete").get<bool>(), "SLEEP_BATCH_NOT_COMPLETE");
+    }
+    require(state.summary().at("sleep").at("completed").get<bool>(), "SLEEP_TOTAL_NOT_COMPLETE");
+    require(state.summary().at("inn_rests").get<int>() == 9999, "SLEEP_PAYMENT_COUNT_WRONG");
+    bool excess = false;
+    try { state.confirm_event("extra-visit", "sleep_visit_started", generation, 1); }
+    catch (const std::exception &e) { excess = std::string(e.what()) == "SLEEP_VISIT_BOUNDARY_INVALID"; }
+    require(excess, "SLEEP_TEN_THOUSANDTH_VISIT");
+    return state.summary();
 }
 J direct_contract(const J &profile) {
     auto clock = std::make_shared<TestClock>();
@@ -687,6 +738,11 @@ int main(int argc, char **argv) {
             return 0;
         }
         auto profile = importer.parse(config.at("source")).values;
+        if (config.value("sleep_contract", false)) {
+            const J output{{"sleep_contract", sleep_contract(profile)}, {"backend_inputs", 0}};
+            std::ofstream(maafw::path_from_utf8(config.at("output"))) << output.dump(2);
+            return 0;
+        }
         if (config.contains("karma_cases")) {
             J output{{"karma_cases", J::array()}, {"backend_inputs", 0}};
             for (const auto &value : config.at("karma_cases")) {

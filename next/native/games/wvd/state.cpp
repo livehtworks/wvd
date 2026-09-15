@@ -43,6 +43,17 @@ void WvdRunState::on_segment(contracts::SegmentBoundary boundary, std::uint64_t 
                              std::size_t unit) {
     if (generation <= generation_)
         throw std::runtime_error("WVD_STATE_GENERATION_REUSED");
+    if (boundary == contracts::SegmentBoundary::Continuation && sleep_.completed() != 0) {
+        if (unit != unit_index_ + 1 || !sleep_.batch_complete(unit_index_) || inn_payment_pending_)
+            throw std::runtime_error("SLEEP_CONTINUATION_NOT_CONFIRMED");
+        // 前段已真正静止，旧generation的回调不能进入当前状态。仅释放该住宿批次
+        // 的幂等明细，累计次数、付款事实及其它业务回执保留；同批次恢复不清理。
+        std::erase_if(confirmations_, [](const auto &entry) {
+            const auto event = entry.second.value("event", "");
+            return event == "sleep_visit_started" || event == "sleep_visit_completed" ||
+                event == "inn_payment_prepared" || event == "inn_rest_completed";
+        });
+    }
     generation_ = generation;
     unit_index_ = unit;
     prepared_.reset();
@@ -277,6 +288,8 @@ std::string WvdRunState::confirmation_id(const std::string &operation, const std
         id += ":mining:" + std::to_string(mining_.reward_sequence(event == "mining_reward_observed"));
     if (event == "bounty_report_prepared" || event == "bounty_report_completed")
         id += ":report:" + std::to_string(bounty_reports_ + (event == "bounty_report_prepared" || bounty_report_pending_ ? 1 : 0));
+    if (event == "sleep_visit_started" || event == "sleep_visit_completed")
+        id += ":sleep:" + std::to_string(sleep_.completed() + (event == "sleep_visit_started" || sleep_.active() ? 1 : 0));
     return id;
 }
 bool WvdRunState::confirm_event(const std::string &operation, const std::string &event,
@@ -300,7 +313,14 @@ bool WvdRunState::confirm_event(const std::string &operation, const std::string 
         throw std::runtime_error("BUSINESS_CONFIRMATION_CAPACITY");
     if (expected_step && *expected_step != task_step_)
         throw std::runtime_error("BUSINESS_TASK_STEP_MISMATCH");
-    if (event == "bounty_revealed") {
+    if (event == "sleep_visit_started") {
+        if (inn_payment_pending_) throw std::runtime_error("INN_PAYMENT_UNCONFIRMED");
+        sleep_.start(unit_index_);
+        inn_rest_completed_ = false;
+        ++supply_cycle_;
+    } else if (event == "sleep_visit_completed") {
+        sleep_.finish(inn_rest_completed_ && !inn_payment_pending_);
+    } else if (event == "bounty_revealed") {
         // 仅记录揭榜子流程到达城内的回执，不代表接取了某个指定悬赏或获得奖励。
         ++bounty_reveals_;
     } else if (event == "bounty_report_prepared") {
@@ -550,6 +570,7 @@ J WvdRunState::summarize() const {
             {"manual_separation", manual_separation_.summary()},
             {"bounty_reports", bounty_reports_},
             {"bounty_reveals", bounty_reveals_},
+            {"sleep", sleep_.summary(unit_index_)},
             {"bounty_report_pending", bounty_report_pending_},
             {"encounter_timed_out", encounter_timed_out()},
             {"combats", combats_},

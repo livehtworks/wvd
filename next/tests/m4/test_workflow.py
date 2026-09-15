@@ -36,7 +36,7 @@ class WorkflowTests(unittest.TestCase):
         bundle = folder / "bundle"
         (bundle / "image").mkdir(parents=True)
         resource_kind = "dungeon-route" if options.get("workflow") == "fortress-trap" else "iteration" if options.get("workflow") in ("giant", "dark-light", "mining", "manual-separation") else options.get("workflow")
-        if resource_kind == "bounty-visit": resource_kind = "common"
+        if resource_kind in ("bounty-visit", "sleep-batch"): resource_kind = "common"
         names = ["worldmapflag", "City_RoyalCityLuknalia", "Inn", "Stay", "Economy", "royalsuite", "OK"]
         if resource_kind in ("departure", "iteration"):
             names += ["openworldmap", "intoWorldMap", "returntoTown", "returnText", "EdgeOfTown", "dungFlag", "mapFlag", "chestFlag",
@@ -186,7 +186,7 @@ class WorkflowTests(unittest.TestCase):
                                         "giant": (route_budget + 500) * options.get("normal_units", 1),
                                         "recover": 750, "departure": 200, "heal": 260,
                                         "chest": 920 if options.get("quick") else 620,
-                                        "bounty-visit": 200 * options.get("normal_units", 1), "manual-separation": 3620, "time-leap": 200, "mining": mining_watchdog, "common": 140, "iteration": (route_budget + 380) * options.get("normal_units", 1)}.get(options.get("workflow"), 90))
+                                        "sleep-batch": 1620 * options.get("normal_units", 1), "bounty-visit": 200 * options.get("normal_units", 1), "manual-separation": 3620, "time-leap": 200, "mining": mining_watchdog, "common": 140, "iteration": (route_budget + 380) * options.get("normal_units", 1)}.get(options.get("workflow"), 90))
         self.assertEqual(digest(exe), before_hash)
         (folder / "execution.json").write_text(json.dumps({"exe_sha256": before_hash, "exit": result.returncode}), encoding="utf-8")
         self.assertEqual(result.returncode, 0, (folder / "native.log").read_text(encoding="utf-8", errors="replace")[-3000:])
@@ -216,6 +216,49 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(r["backend_calls"], 5)
         self.assertEqual(r["snapshot"]["business"]["inn_rests"], 1)
         self.assertTrue(r["snapshot"]["business"]["inn_rest_completed"])
+
+    def sleep_options(self, **extra):
+        return dict(workflow="sleep-batch", quest_catalog=str(ROOT / "packs/wvd/parameters/legacy-quests.json"), **extra)
+
+    def test_sleep_batch_forty_real_inn_visits_are_not_one_receipt(self):
+        frames, commands = self.inn_sequence()
+        screens = frames[:1] + frames[1:] * 40
+        r = self.execute("sleep-forty", screens, commands * 40, **self.sleep_options())
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 200)
+        self.assertFalse(r["mismatch"])
+        self.assertEqual(r["snapshot"]["business"]["inn_rests"], 40)
+        self.assertEqual(r["snapshot"]["business"]["sleep"]["completed_visits"], 40)
+        self.assertFalse(r["snapshot"]["business"]["sleep"]["completed"])
+
+    def test_sleep_stop_and_rejected_payment_do_not_retry_or_count(self):
+        frames, commands = self.inn_sequence()
+        for stop in (False, True):
+            actions = commands[:4]
+            actions[-1] = dict(actions[-1], reject=not stop, stay=stop)
+            r = self.execute("sleep-payment-" + str(stop), frames[:5], actions,
+                **self.sleep_options(**({"stop_after_calls": 4} if stop else {})))
+            self.assertEqual(r["snapshot"]["state"], "UserStopped" if stop else "Failed", r)
+            self.assertEqual(r["backend_calls"], 4)
+            self.assertFalse(r["mismatch"])
+            self.assertTrue(r["snapshot"]["business"]["inn_payment_pending"])
+            self.assertEqual(r["snapshot"]["business"]["sleep"]["completed_visits"], 0)
+
+    def test_sleep_paid_without_exit_never_counts_full_visit(self):
+        frames, commands = self.inn_sequence()
+        commands[-1] = dict(commands[-1], reject=True)
+        r = self.execute("sleep-exit-rejected", frames, commands, **self.sleep_options())
+        self.assertEqual(r["snapshot"]["state"], "Failed", r)
+        self.assertEqual(r["backend_calls"], 5)
+        self.assertFalse(r["mismatch"])
+        self.assertEqual(r["snapshot"]["business"]["inn_rests"], 1)
+        self.assertEqual(r["snapshot"]["business"]["sleep"]["completed_visits"], 0)
+
+    def test_sleep_unknown_page_never_opens_inn(self):
+        r = self.execute("sleep-unknown", [{}], [], **self.sleep_options())
+        self.assertEqual(r["snapshot"]["state"], "Interrupted", r)
+        self.assertEqual(r["backend_calls"], 0)
+        self.assertEqual(r["snapshot"]["business"]["sleep"]["completed_visits"], 0)
 
     def test_departure_paid_but_exit_failed_preserves_receipt(self):
         frames, commands = self.inn_sequence()

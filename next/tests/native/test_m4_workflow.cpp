@@ -29,6 +29,7 @@
 #include "games/wvd/tasks/mining.hpp"
 #include "games/wvd/tasks/manual_separation.hpp"
 #include "games/wvd/tasks/bounty_visit.hpp"
+#include "games/wvd/tasks/sleep_visits.hpp"
 #include "games/wvd/vision/recognizers.hpp"
 #include "platform/windows/file_digest.hpp"
 #include <iostream>
@@ -191,6 +192,11 @@ int main(int argc, char **argv) {
                     config.value("leap_chapter", "cursedwheel_impregnableFortress"), config.value("allow_download", true));
             if (kind == "bounty-visit")
                 return games::tasks::visit_bounty_board(config.value("report", false) ? games::tasks::BountyVisit::Report : games::tasks::BountyVisit::Reveal);
+            if (kind == "sleep-batch") {
+                nlohmann::ordered_json source;
+                std::ifstream(maafw::path_from_utf8(config.at("quest_catalog"))) >> source;
+                return games::tasks::sleep_visits(games::WvdQuestCatalog(source).at("lovesleep"), profile);
+            }
             if (kind == "inn-tracked") {
                 using C = games::tasks::PipelineCompiler;
                 C graph("fixture.tracked_inn");

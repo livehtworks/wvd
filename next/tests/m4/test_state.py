@@ -69,6 +69,15 @@ class StateTests(unittest.TestCase):
         self.assertEqual(result["backend_inputs"], 0)
         return result
 
+    def test_sleep_all_9999_receipts_and_250_units_are_bounded(self):
+        state = self.run_case("sleep-contract", sleep_contract=True)["sleep_contract"]
+        self.assertEqual(state["sleep"]["completed_visits"], 9999)
+        self.assertTrue(state["sleep"]["completed"])
+        self.assertFalse(state["sleep"]["visit_active"])
+        self.assertEqual(state["unit_index"], 249)
+        self.assertEqual(state["inn_rests"], 9999)
+        self.assertEqual(state["dungeons"], 0)
+
     def test_karma_rules_and_confirmed_profile_idempotency(self):
         values = ["0", "+0", "-0", "-1", "-2", "-3", "+1", "+2", "3", "+0002", "-0003",
                   "+99999999999999999999999999999", " 2 ", "1_000", "", "bad", "+-2", "1__0", "_1"]
