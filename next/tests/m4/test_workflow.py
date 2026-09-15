@@ -35,7 +35,7 @@ class WorkflowTests(unittest.TestCase):
         folder = self.root / name
         bundle = folder / "bundle"
         (bundle / "image").mkdir(parents=True)
-        resource_kind = "dungeon-route" if options.get("workflow") == "fortress-trap" else "iteration" if options.get("workflow") in ("giant", "dark-light", "mining", "manual-separation", "scorpion", "fishing-cycle", "jier", "golden-chest", "sandman") else options.get("workflow")
+        resource_kind = "dungeon-route" if options.get("workflow") == "fortress-trap" else "iteration" if options.get("workflow") in ("giant", "dark-light", "mining", "manual-separation", "scorpion", "fishing-cycle", "jier", "golden-chest", "sandman", "gold-income", "bull-cave") else options.get("workflow")
         if resource_kind in ("bounty-visit", "featured-request", "sleep-batch", "fishing-cast", "fishing-reward", "fishing-round", "fishing-seek"): resource_kind = "common"
         names = ["worldmapflag", "City_RoyalCityLuknalia", "Inn", "Stay", "Economy", "royalsuite", "OK"]
         if resource_kind in ("departure", "iteration"):
@@ -87,6 +87,8 @@ class WorkflowTests(unittest.TestCase):
             names += ["City_fortress", "City_DHI", "City_portTownGrandLegion"]
             names += ["dialogueChoices/" + name for name in self.default_dialogues]
         names += options.get("extra_images", [])
+        if options.get("causality") or resource_kind == "causality":
+            names += ["CSC", "leap", "didnottakethequest", "LBC/symbolofalliance", "LBC/EnaWasSaved"]
         if resource_kind == "revival":
             names.append("RiseAgain")
         # Windows 不允许同时保存仅大小写不同的两张图；按封存别名生成同一规范资源。
@@ -95,6 +97,9 @@ class WorkflowTests(unittest.TestCase):
         names = list(dict.fromkeys(image_name(name) for name in names))
         rng = np.random.default_rng(90614)
         patterns = {name: rng.integers(30, 255, (24, 40, 3), dtype=np.uint8) for name in names}
+        if options.get("causality") or resource_kind == "causality":
+            patterns["didnottakethequest"][:, :, :2] = 0
+            patterns["LBC/EnaWasSaved"][:, :, 0] = 0
         if options.get("real_bobber"):
             patterns["fishing/bobber"] = cv2.imdecode(np.fromfile(ROOT / "packs/wvd/image/fishing/bobber.png", dtype=np.uint8), cv2.IMREAD_COLOR)
         for name in options.get("large_templates", []):
@@ -116,6 +121,9 @@ class WorkflowTests(unittest.TestCase):
             pixels = np.zeros((1600, 900, 3), dtype=np.uint8)
             for key, (x, y) in screen.items():
                 pattern = patterns[image_name(key.split("@", 1)[0])]
+                if (options.get("causality") or resource_kind == "causality") and key in ("didnottakethequest", "LBC/EnaWasSaved"):
+                    pattern = pattern.copy()
+                    pattern[:, :, 2] //= 2
                 if key == "fishing/bobber" and options.get("real_bobber"):
                     # 逆变换旧算法的红通道归一化；使用真实模板，识别结果仍由正式C++产生。
                     gray = cv2.cvtColor(pattern, cv2.COLOR_BGR2GRAY)
@@ -198,8 +206,9 @@ class WorkflowTests(unittest.TestCase):
                                         "fishing-round": 720, "fishing-cast": 110, "fishing-reward": 80, "fishing-seek": 200,
                                         "fishing-cycle": (route_budget + 520) * options.get("normal_units", 1),
                                         "jier": (route_budget + 500) * 3,
-                                        "golden-chest": (route_budget + 740) * 2, "sandman": route_budget + 740, "featured-request": 260,
-                                        "scorpion": (route_budget + 500) * (4 if options.get("hands") else 3), "city-travel": 140, "sleep-batch": 1620 * options.get("normal_units", 1), "bounty-visit": 200 * options.get("normal_units", 1), "manual-separation": 3620, "time-leap": 200, "mining": mining_watchdog, "common": 140, "iteration": (route_budget + 380) * options.get("normal_units", 1)}.get(options.get("workflow"), 90))
+                                        "golden-chest": (route_budget + 740) * 2, "sandman": (route_budget + 200) * 2, "gold-income": 1520, "featured-request": 260,
+                                        "bull-cave": (route_budget + 400) * (3 if options.get("profile", {}).get("ACTIVE_REST") else 2), "causality": 320,
+                                        "scorpion": (route_budget + 500) * (4 if options.get("hands") else 3), "city-travel": 140, "sleep-batch": 1620 * options.get("normal_units", 1), "bounty-visit": 200 * options.get("normal_units", 1), "manual-separation": 3620, "time-leap": 500 if options.get("causality") else 200, "mining": mining_watchdog, "common": 140, "iteration": (route_budget + 380) * options.get("normal_units", 1)}.get(options.get("workflow"), 90))
         self.assertEqual(digest(exe), before_hash)
         (folder / "execution.json").write_text(json.dumps({"exe_sha256": before_hash, "exit": result.returncode}), encoding="utf-8")
         self.assertEqual(result.returncode, 0, (folder / "native.log").read_text(encoding="utf-8", errors="replace")[-3000:])
@@ -2228,6 +2237,155 @@ class WorkflowTests(unittest.TestCase):
         self.assertFalse(r["mismatch"])
         self.assertEqual(r["snapshot"]["business"]["special_dialogues_completed"], 2)
         self.assertFalse(r["snapshot"]["business"]["special_dialogue_pending"])
+
+    def test_causality_disables_then_enables_with_rgb_and_fixed_roi_stop(self):
+        symbol = {"LBC/symbolofalliance": (100, 200)}
+        frames = [{"CSC": (300, 700), "leap": (400, 900)},
+            {**symbol, "didnottakethequest": (400, 700)}, symbol,
+            {**symbol, "LBC/EnaWasSaved": (400, 800)}, symbol, symbol, {"leap": (400, 900)}]
+        commands = [dict(kind=0, x=320, y=712), dict(kind=0, x=420, y=712),
+            dict(kind=1, x=150, y=500, x2=150, y2=400, duration=400), dict(kind=0, x=420, y=812),
+            dict(kind=1, x=150, y=400, x2=150, y2=500, duration=400), dict(kind=5, key=4)]
+        r = self.execute("causality-settings", frames, commands, workflow="causality")
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 6)
+        self.assertFalse(r["mismatch"])
+
+    def test_causality_fast_visible_leap_does_not_open_settings(self):
+        r = self.execute("causality-fast", [{"cursedWheelTitle": (200, 100), "GhostsOfYore": (300, 900)},
+            {"cursedWheelTitle": (200, 100), "leap": (400, 900)}, {"Inn": (400, 700)}],
+            [dict(kind=0, x=320, y=912), dict(kind=0, x=420, y=912)], workflow="time-leap", leap_target="GhostsOfYore", causality=True)
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 2)
+        self.assertFalse(r["mismatch"])
+
+    def bull_cave_options(self, rest, **extra):
+        profile = extra.pop("profile", {})
+        profile.update(ACTIVE_REST=rest)
+        options = self.scorpion_options(profile=profile, **extra)
+        options["workflow"] = "bull-cave"
+        options["extra_images"] += ["LBC/LBC", "LBC/LBC_quit", "LBC/request", "SSC/Request", "request_accepted",
+            "CSC", "didnottakethequest", "LBC/symbolofalliance", "LBC/EnaWasSaved"]
+        return options
+
+    def bull_cave_scenario(self, rest):
+        frames = [{"cursedWheelTitle": (200, 100), "GhostsOfYore": (300, 900)}]
+        commands = []
+        def advance(command, page):
+            commands.append(command)
+            frames.append(page)
+        def click(x, y, page): advance(dict(kind=0, x=x, y=y), page)
+        click(320, 912, {"cursedWheelTitle": (200, 100), "leap": (400, 900)})
+        click(420, 912, {"Inn": (400, 700), "intoWorldMap": (300, 600)})
+        click(320, 612, {"worldmapflag": (80, 100), "City_RoyalCityLuknalia": (132, 1352)})
+        click(152, 1364, {"Inn": (400, 700), "guild": (200, 500)})
+        visit, inputs, _ = self.featured_scenario()
+        frames += visit[1:]
+        commands += inputs
+        frames[-1]["intoWorldMap"] = (300, 600)
+        routes = [[(134, 342, "left-up")], [(500, 395, "right-up"), (340, 1027, "right-down")]] if rest else [[(134, 342, "left-up"), (500, 395, "right-up"), (340, 1027, "right-down")]]
+        gestures = {"left-up": (100, 250, 700, 1200), "right-up": (700, 250, 100, 1200), "right-down": (700, 1200, 100, 250)}
+        for index, route in enumerate(routes):
+            click(320, 612, {"worldmapflag": (80, 100), "LBC/LBC": (400, 700)})
+            page = {"mapFlag": (100, 100)}
+            click(420, 712, page)
+            for x, y, direction in route:
+                sx, sy, tx, ty = gestures[direction]
+                swipe = dict(kind=1, x=sx, y=sy, x2=tx, y2=ty, duration=400)
+                advance(swipe.copy(), page)
+                click(x, y, page)
+                click(136, 1431, {"dungFlag": (50, 150)})
+                reached = {**page, "cursor_0": (x - 20, y - 12)}
+                if (x, y) == route[-1][:2]: reached["LBC/LBC_quit"] = (400, 700)
+                click(777, 150, reached)
+                advance(swipe.copy(), reached)
+            click(420, 712, reached)
+            click(136, 1431, {"Inn": (400, 700), "intoWorldMap": (300, 600)})
+            if rest and index == 0:
+                sleep, inputs = self.inn_sequence()
+                frames += sleep[1:]
+                commands += inputs
+                frames[-1]["intoWorldMap"] = (300, 600)
+        return frames, commands
+
+    def test_bull_cave_both_rest_routes_keep_request_and_separate_inn_receipts(self):
+        for rest in (False, True):
+            frames, commands = self.bull_cave_scenario(rest)
+            r = self.execute("bull-cave-full-" + str(rest), frames, commands, **self.bull_cave_options(rest))
+            self.assertEqual(r["snapshot"]["state"], "Completed", r)
+            self.assertEqual(r["backend_calls"], 45 if rest else 36)
+            self.assertFalse(r["mismatch"])
+            self.assertEqual(r["snapshot"]["business"]["bull_cave"]["completed_cycles"], 1)
+            self.assertEqual(r["snapshot"]["business"]["inn_rests"], 2 if rest else 1)
+            self.assertEqual(len(r["snapshot"]["sessions"]), 3 if rest else 2)
+
+    def test_bull_cave_stop_and_rejected_leap_keep_pending(self):
+        for stop in (False, True):
+            frames, commands = self.bull_cave_scenario(False)
+            r = self.execute("bull-cave-stop-" + str(stop), frames[:2], [dict(commands[0], reject=not stop)],
+                **self.bull_cave_options(False, stop_after_first=stop))
+            self.assertEqual(r["snapshot"]["state"], "UserStopped" if stop else "Failed", r)
+            self.assertEqual(r["backend_calls"], 1)
+            self.assertFalse(r["mismatch"])
+            self.assertTrue(r["snapshot"]["business"]["bull_cave"]["leap_pending"])
+
+    def gold_income_options(self, **extra):
+        options = self.scorpion_options(**extra)
+        options["workflow"] = "gold-income"
+        options["extra_images"] += ["FortressArrival", "fastforward"] + ["7000G/" + x for x in
+            ("illgonow", "olddist", "iminhungry", "royalcapital", "why", "leavethechild", "icantagreewithU", "illgo", "noeasytask")]
+        return options
+
+    def gold_income_scenario(self, hungry=False):
+        frames = [{"cursedWheelTitle": (200, 100), "FortressArrival": (300, 900)}]
+        commands = []
+        def click(x, y, page):
+            commands.append(dict(kind=0, x=x, y=y))
+            frames.append(page)
+        def choice(name): return {"7000G/" + name: (400, 700)}
+        fast = {"fastforward": (700, 1400)}
+        world = {"intoWorldMap": (300, 600)}
+        click(320, 912, {"cursedWheelTitle": (200, 100), "leap": (400, 900)})
+        click(420, 912, {"Inn": (400, 700), **world})
+        click(320, 612, {"worldmapflag": (80, 100), "City_RoyalCityLuknalia": (132, 1352)})
+        click(152, 1364, {"Inn": (400, 700), "guild": (200, 500)})
+        click(220, 512, choice("illgonow"))
+        click(420, 712, choice("iminhungry" if hungry else "olddist"))
+        if hungry: click(420, 712, choice("olddist"))
+        click(420, 712, fast)
+        click(1, 1, fast)
+        click(1, 1, choice("royalcapital"))
+        click(420, 712, world)
+        for person, (x, y) in enumerate(((450, 1111), (200, 1180), (680, 1200))):
+            click(x, y, fast)
+            click(1, 1, choice("why"))
+            click(420, 712, choice("leavethechild") if person == 2 else world)
+        click(420, 712, choice("icantagreewithU"))
+        click(420, 712, choice("illgo"))
+        click(420, 712, choice("noeasytask"))
+        click(420, 712, {"ruins": (100, 300)})
+        return frames, commands
+
+    def test_gold_income_full_story_preserves_all_three_people_and_estimate(self):
+        for hungry in (False, True):
+            frames, commands = self.gold_income_scenario(hungry)
+            r = self.execute("gold-income-full-" + str(hungry), frames, commands, **self.gold_income_options())
+            self.assertEqual(r["snapshot"]["state"], "Completed", r)
+            self.assertEqual(r["backend_calls"], 24 if hungry else 23)
+            self.assertFalse(r["mismatch"])
+            self.assertEqual(r["snapshot"]["business"]["gold_income"]["estimated_income"], 7000)
+            self.assertEqual(r["snapshot"]["business"]["gold_income"]["completed_cycles"], 1)
+
+    def test_gold_income_rejected_or_stopped_leap_preserves_intent_without_income(self):
+        for stop in (False, True):
+            frames, commands = self.gold_income_scenario()
+            r = self.execute("gold-income-stop-" + str(stop), frames[:2], [dict(commands[0], reject=not stop)],
+                **self.gold_income_options(stop_after_first=stop))
+            self.assertEqual(r["snapshot"]["state"], "UserStopped" if stop else "Failed", r)
+            self.assertEqual(r["backend_calls"], 1)
+            self.assertFalse(r["mismatch"])
+            self.assertTrue(r["snapshot"]["business"]["gold_income"]["pending"])
+            self.assertEqual(r["snapshot"]["business"]["gold_income"]["estimated_income"], 0)
 
     def sandman_options(self, **extra):
         options = self.scorpion_options(**extra)

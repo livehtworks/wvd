@@ -95,6 +95,23 @@ class StateTests(unittest.TestCase):
         self.assertFalse(state["sandman"]["active"])
         self.assertFalse(state["sandman"]["leap_pending"])
 
+    def test_gold_income_is_only_estimated_after_complete_cycle(self):
+        state = self.run_case("gold-income-contract", gold_income_contract=True)["gold_income_contract"]
+        self.assertEqual(state["gold_income"]["completed_cycles"], 2)
+        self.assertEqual(state["gold_income"]["estimated_income"], 14000)
+        self.assertTrue(state["gold_income"]["income_is_estimate"])
+        self.assertFalse(state["gold_income"]["pending"])
+        self.assertEqual(state["dungeons"], 2)
+
+    def test_bull_cave_rest_setting_separates_routes_units_and_payment_receipts(self):
+        for rest in (False, True):
+            state = self.run_case("bull-cave-contract-" + str(rest), bull_cave_contract=True, rest=rest)["bull_cave_contract"]
+            self.assertEqual(state["bull_cave"]["completed_cycles"], 2)
+            self.assertEqual(state["inn_rests"], 4 if rest else 2)
+            self.assertEqual(state["dungeons"], 2)
+            self.assertFalse(state["bull_cave"]["active"])
+            self.assertFalse(state["bull_cave"]["leap_pending"])
+
     def test_golden_cycle_preserves_leap_intent_and_requires_two_units(self):
         state = self.run_case("golden-contract", golden_contract=True)["golden_contract"]
         self.assertEqual(state["golden_chest"]["completed_cycles"], 2)

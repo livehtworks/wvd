@@ -66,6 +66,10 @@ if(WVD_BUILD_M4)
     ../games/wvd/tasks/featured_request.cpp
     ../games/wvd/tasks/golden_chest.cpp
     ../games/wvd/tasks/sandman.cpp
+    ../games/wvd/tasks/gold_income.cpp
+    ../games/wvd/tasks/bull_cave.cpp
+    ../games/wvd/navigation/causality.cpp
+    ../games/wvd/navigation/return_city.cpp
     ../games/wvd/quests/bounty_cycle.cpp
     ../games/wvd/tasks/bounty_cycle.cpp
     ../games/wvd/tasks/fishing.cpp

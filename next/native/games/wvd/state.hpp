@@ -12,6 +12,8 @@
 #include "quests/featured_visit.hpp"
 #include "quests/golden_chest.hpp"
 #include "quests/sandman.hpp"
+#include "quests/gold_income.hpp"
+#include "quests/bull_cave.hpp"
 #include "fishing/progress.hpp"
 #include <map>
 
@@ -84,6 +86,8 @@ class WvdRunState final : public contracts::BusinessRunState {
     quests::FeaturedVisit featured_visit_;
     quests::GoldenChestCycle golden_chest_;
     quests::SandmanCycle sandman_;
+    quests::GoldIncomeCycle gold_income_;
+    quests::BullCaveCycle bull_cave_;
     bool setting_is(const char *name, const char *zh, const char *en) const;
     std::map<std::string, nlohmann::json> confirmations_;
     nlohmann::json last_confirmation_;

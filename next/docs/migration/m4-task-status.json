@@ -2939,17 +2939,19 @@
         "M4-TASK-7000G"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "TYPED_PLAN_DATA",
+      "implementation_extent": "FINITE_GOLD_INCOME_PENDING_VALIDATION",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "new_entry": null,
+      "new_entry": "tasks::gold_income_cycle",
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
-        "native/games/wvd/tasks/task_plan.cpp"
+        "native/games/wvd/tasks/task_plan.cpp",
+        "native/games/wvd/tasks/gold_income.cpp",
+        "native/games/wvd/quests/gold_income.hpp"
       ],
       "source_fields": [
         "questName",
@@ -2963,9 +2965,8 @@
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
       "blockers": [
-        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "BUSINESS_ACTIONS_NOT_IMPLEMENTED",
-        "SPECIAL_CASE_NOT_IMPLEMENTED"
+        "CURRENT_IMPLEMENTATION_NOT_BUILT_OR_VERIFIED",
+        "FULL_SUCCESS_FAILURE_STOP_RECOVERY_CONFIG_MOD_MATRIX"
       ],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md"
@@ -3081,17 +3082,19 @@
         "M4-TASK-LBC-oneGorgon"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "TYPED_PLAN_DATA",
+      "implementation_extent": "FINITE_BULL_CAVE_PENDING_VALIDATION",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "new_entry": null,
+      "new_entry": "tasks::bull_cave_cycle",
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
-        "native/games/wvd/tasks/task_plan.cpp"
+        "native/games/wvd/tasks/task_plan.cpp",
+        "native/games/wvd/tasks/bull_cave.cpp",
+        "native/games/wvd/quests/bull_cave.hpp"
       ],
       "source_fields": [
         "questName",
@@ -3105,9 +3108,8 @@
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
       "blockers": [
-        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "BUSINESS_ACTIONS_NOT_IMPLEMENTED",
-        "SPECIAL_CASE_NOT_IMPLEMENTED"
+        "CURRENT_IMPLEMENTATION_NOT_BUILT_OR_VERIFIED",
+        "FULL_SUCCESS_FAILURE_STOP_RECOVERY_CONFIG_MOD_MATRIX"
       ],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md"
@@ -3471,17 +3473,19 @@
         "M4-TASK-sandman"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "TYPED_PLAN_DATA",
+      "implementation_extent": "FINITE_SANDMAN_PENDING_VALIDATION",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "new_entry": null,
+      "new_entry": "tasks::sandman_cycle",
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
-        "native/games/wvd/tasks/task_plan.cpp"
+        "native/games/wvd/tasks/task_plan.cpp",
+        "native/games/wvd/tasks/sandman.cpp",
+        "native/games/wvd/quests/sandman.hpp"
       ],
       "source_fields": [
         "questName",
@@ -3495,9 +3499,8 @@
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
       "blockers": [
-        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "BUSINESS_ACTIONS_NOT_IMPLEMENTED",
-        "SPECIAL_CASE_NOT_IMPLEMENTED"
+        "CURRENT_IMPLEMENTATION_NOT_BUILT_OR_VERIFIED",
+        "FULL_SUCCESS_FAILURE_STOP_RECOVERY_CONFIG_MOD_MATRIX"
       ],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md"

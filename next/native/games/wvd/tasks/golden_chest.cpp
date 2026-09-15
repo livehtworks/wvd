@@ -3,6 +3,7 @@
 #include "games/wvd/quests/golden_chest.hpp"
 #include "games/wvd/navigation/world_travel.hpp"
 #include "games/wvd/navigation/map_route.hpp"
+#include <algorithm>
 
 namespace wvd::games::tasks {
 namespace {
@@ -63,7 +64,8 @@ CompiledWorkflow golden_chest_cycle(const WvdQuestDefinition &definition, const 
     const std::set<std::string> &images, bool allow_download) {
     const auto plan = golden_chest_plan(definition);
     const auto route = traverse_dungeon(plan.with_route(points), profile, images, allow_download, recovery::DialoguePolicy::GoldenChest);
-    C graph("tasks.SSC-goldenchest", route.time_limit + std::chrono::seconds{600});
+    // 领取与路线分属两个Session。按较大的单段预算计算，不能把两段相加超过30分钟上限。
+    C graph("tasks.SSC-goldenchest", std::max(route.time_limit + std::chrono::seconds{300}, std::chrono::milliseconds{600000}));
     const auto inn = C::image("Inn"), dung = C::image("dungFlag"), map = C::image("mapFlag");
     const auto leap_page = C::any({C::image("ruins"), C::image("cursedWheel")});
     graph.route("Entry", {"PendingLeap", "Active", "Start"});

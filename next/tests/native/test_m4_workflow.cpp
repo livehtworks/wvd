@@ -4,6 +4,7 @@
 #include "games/wvd/navigation/map_route.hpp"
 #include "games/wvd/navigation/auto_route.hpp"
 #include "games/wvd/navigation/time_leap.hpp"
+#include "games/wvd/navigation/causality.hpp"
 #include "games/wvd/navigation/dungeon_entry.hpp"
 #include "games/wvd/navigation/world_travel.hpp"
 #include "games/wvd/supply/party.hpp"
@@ -36,6 +37,8 @@
 #include "games/wvd/tasks/featured_request.hpp"
 #include "games/wvd/tasks/golden_chest.hpp"
 #include "games/wvd/tasks/sandman.hpp"
+#include "games/wvd/tasks/gold_income.hpp"
+#include "games/wvd/tasks/bull_cave.hpp"
 #include "games/wvd/vision/recognizers.hpp"
 #include "platform/windows/file_digest.hpp"
 #include <iostream>
@@ -201,6 +204,12 @@ int main(int argc, char **argv) {
                 return games::tasks::seek_fishing_position();
             if (kind == "inn")
                 return games::supply::rest_at_inn(config.value("royal", false));
+            if (kind == "causality")
+                return games::navigation::adjust_causality({"LBC/symbolofalliance", {{"LBC/EnaWasSaved", {2, 1, 0}}}});
+            if (kind == "time-leap" && config.value("causality", false))
+                return games::navigation::time_leap_with_causality(config.at("leap_target"),
+                    {"LBC/symbolofalliance", {{"LBC/EnaWasSaved", {2, 1, 0}}}},
+                    config.value("leap_chapter", "cursedwheel_impregnableFortress"), config.value("allow_download", true));
             if (kind == "time-leap")
                 return games::navigation::time_leap_without_causality(config.at("leap_target"),
                     config.value("leap_chapter", "cursedwheel_impregnableFortress"), config.value("allow_download", true));
@@ -238,16 +247,21 @@ int main(int argc, char **argv) {
             if (kind == "common")
                 return games::recovery::clear_common_screens(config.value("allow_download", true),
                     config.value("golden_dialogue", false) ? games::recovery::DialoguePolicy::GoldenChest : config.value("jier_dialogue", false) ? games::recovery::DialoguePolicy::Jier : games::recovery::DialoguePolicy::Default);
-            if (kind == "fortress-trap" || kind == "giant" || kind == "dark-light" || kind == "mining" || kind == "manual-separation" || kind == "scorpion" || kind == "fishing-cycle" || kind == "jier" || kind == "golden-chest" || kind == "sandman") {
+            if (kind == "fortress-trap" || kind == "giant" || kind == "dark-light" || kind == "mining" || kind == "manual-separation" || kind == "scorpion" || kind == "fishing-cycle" || kind == "jier" || kind == "golden-chest" || kind == "sandman" || kind == "gold-income" || kind == "bull-cave") {
                 nlohmann::ordered_json source;
                 std::ifstream(maafw::path_from_utf8(config.at("quest_catalog"))) >> source;
                 games::WvdQuestCatalog catalog(source);
-                const auto &task = catalog.at(kind == "sandman" ? "sandman" : kind == "golden-chest" ? "SSC-goldenchest" : kind == "jier" ? "jier" : kind == "fishing-cycle" ? (config.value("far", false) ? "fishing2" : "fishing") : kind == "scorpion" ? (config.value("hands", false) ? "Scorpionesses_plus_6_hands" : "Scorpionesses") : kind == "manual-separation" ? "manualSepDemon" : kind == "mining" ? "FFXI-Org" : kind == "dark-light" ? "darkLight" : kind == "giant" ? "gaintKiller" : "fortress-B8F_trap");
+                const auto &task = catalog.at(kind == "bull-cave" ? "LBC-oneGorgon" : kind == "gold-income" ? "7000G" : kind == "sandman" ? "sandman" : kind == "golden-chest" ? "SSC-goldenchest" : kind == "jier" ? "jier" : kind == "fishing-cycle" ? (config.value("far", false) ? "fishing2" : "fishing") : kind == "scorpion" ? (config.value("hands", false) ? "Scorpionesses_plus_6_hands" : "Scorpionesses") : kind == "manual-separation" ? "manualSepDemon" : kind == "mining" ? "FFXI-Org" : kind == "dark-light" ? "darkLight" : kind == "giant" ? "gaintKiller" : "fortress-B8F_trap");
                 std::set<std::string> images;
                 for (const auto &file : config.at("files")) {
                     const auto path = file.at("path").get<std::string>();
                     if (path.starts_with("image/"))
                         images.insert(path.substr(6));
+                }
+                if (kind == "gold-income") return games::tasks::gold_income_cycle(task, config.value("allow_download", true));
+                if (kind == "bull-cave") {
+                    task_plan = games::tasks::bull_cave_plan(task).inspect();
+                    return games::tasks::bull_cave_cycle(task, profile, images, config.value("allow_download", true));
                 }
                 if (kind == "sandman") {
                     task_plan = games::tasks::sandman_plan(task).inspect();
@@ -576,8 +590,8 @@ int main(int argc, char **argv) {
         definition.request_id = "m4-causal";
         definition.policy = policy;
         definition.initial = std::move(session);
-        const auto units = config.at("workflow") == "jier" ? 3u : config.at("workflow") == "scorpion" ? (config.value("hands", false) ? 4u : 3u) :
-            config.at("workflow") == "manual-separation" || config.at("workflow") == "golden-chest" ? 2u : config.value("normal_units", 1u);
+        const auto units = config.at("workflow") == "bull-cave" ? (profile.at("ACTIVE_REST").get<bool>() ? 3u : 2u) : config.at("workflow") == "jier" ? 3u : config.at("workflow") == "scorpion" ? (config.value("hands", false) ? 4u : 3u) :
+            config.at("workflow") == "manual-separation" || config.at("workflow") == "golden-chest" || config.at("workflow") == "sandman" ? 2u : config.value("normal_units", 1u);
         require(units > 0 && units <= 4, "FIXTURE_NORMAL_UNITS_INVALID");
         if (config.at("workflow") == "manual-separation")
             games::tasks::configure_manual_separation_units(definition);
@@ -587,6 +601,10 @@ int main(int argc, char **argv) {
             games::tasks::configure_fishing_units(definition, units);
         else if (config.at("workflow") == "golden-chest")
             games::tasks::configure_golden_chest_units(definition);
+        else if (config.at("workflow") == "sandman")
+            games::tasks::configure_sandman_units(definition);
+        else if (config.at("workflow") == "bull-cave")
+            games::tasks::configure_bull_cave_units(definition, profile.at("ACTIVE_REST").get<bool>());
         else {
             definition.max_business_units = units;
             for (unsigned i = 1; i < units; ++i)

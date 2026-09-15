@@ -21,6 +21,12 @@ WvdTaskPlan sandman_plan(const WvdQuestDefinition &definition) {
         .with_entry({{"press", "impregnableFortress", {"EdgeOfTown", {1, 1}}, 1},
                      {"press", "fortressb3f", "input swipe 650 250 650 900", 1}}).with_route(points);
 }
+void configure_sandman_units(runtime::RunDefinition &definition, std::size_t visits) {
+    if (!visits || visits > 128 || definition.max_business_units != 1 || !definition.continuation_units.empty())
+        throw std::runtime_error("SANDMAN_UNIT_BUDGET_INVALID");
+    definition.max_business_units = visits * 2;
+    definition.continuation_units.assign(visits * 2 - 1, definition.initial);
+}
 CompiledWorkflow sandman_cycle(const WvdQuestDefinition &definition, const J &profile,
     const std::set<std::string> &images, bool allow_download) {
     const auto plan = sandman_plan(definition);
@@ -29,12 +35,13 @@ CompiledWorkflow sandman_cycle(const WvdQuestDefinition &definition, const J &pr
     local["RE_ASSEMBLE_PARTY"] = false;
     local["BYPASS_THE_WALL"] = false;
     const auto route = traverse_dungeon(plan.with_route(positions), local, images, allow_download, recovery::DialoguePolicy::Sandman);
-    C graph("tasks.sandman", route.time_limit + std::chrono::seconds{600});
+    C graph("tasks.sandman", route.time_limit + std::chrono::seconds{180});
     graph.use_dialogue(recovery::DialoguePolicy::Sandman);
     const auto map = C::image("mapFlag"), inn = C::image("Inn"), dung = C::image("dungFlag");
     const auto city = C::all({inn, C::absent(map), C::absent(C::image("Stay"))});
     const auto entry_page = C::any({C::image("EdgeOfTown"), C::image("impregnableFortress"), C::image("fortressb3f"), dung, map});
-    graph.route("Entry", {"Pending", "Active", "Start"});
+    graph.route("Entry", {"Pending", "CompletedVisit", "Active", "Start"});
+    graph.observe("CompletedVisit", C::business("/sandman/completed_unit_matches", true), {"Terminal"});
     graph.observe("Pending", C::business("/sandman/leap_pending", true), {"Uncertain"});
     graph.recovery("Uncertain", "quest.sandman_leap_unconfirmed");
     graph.observe("Active", C::business("/sandman/active", true), {"Stage"});
@@ -56,9 +63,8 @@ CompiledWorkflow sandman_cycle(const WvdQuestDefinition &definition, const J &pr
     const auto outside = C::all({C::any({inn, C::image("EdgeOfTown"), C::image("returnText"), C::image("openworldmap")}), C::absent(map)});
     graph.confirm("Exited", "sandman.exit", "sandman_exited", outside, {"DecidePhase"});
     graph.observe("DecidePhase", phase(Phase::Decide), {"Decided"});
-    graph.confirm("Decided", "sandman.decide", "sandman_decided", outside, {"HasBond", "NoBond"});
-    graph.observe("NoBond", C::business("/sandman/active", false), {"Terminal"});
-    graph.observe("HasBond", C::business("/sandman/bondmate_confirmed", true), {"RestDukePhase"});
+    // 寻缘和跳跃分开有限正常段；无缘的第二段只核对访问回执，不发出住宿/跳跃输入。
+    graph.confirm("Decided", "sandman.decide", "sandman_decided", outside, {"Terminal"});
     const auto rest = graph.define_child("Inn", supply::rest_at_inn(local.at("ACTIVE_ROYALSUITE_REST").get<bool>(), true));
     for (const bool triumph : {false, true}) {
         const std::string name = triumph ? "Triumph" : "Duke";

@@ -1,13 +1,16 @@
 #include "time_leap.hpp"
+#include "causality.hpp"
 
 namespace wvd::games::navigation {
-tasks::CompiledWorkflow time_leap_without_causality(const std::string &target_name,
-    const std::string &chapter_name, bool allow_download) {
+namespace {
+tasks::CompiledWorkflow compile_time_leap(const std::string &target_name,
+    const std::string &chapter_name, bool allow_download, const CausalitySettings *causality) {
     using C = tasks::PipelineCompiler;
     using J = nlohmann::json;
     if (target_name.empty() || chapter_name.empty() || target_name == chapter_name)
         throw std::runtime_error("TIME_LEAP_TARGET_INVALID");
-    C graph("navigation.time_leap_without_causality", std::chrono::seconds{180});
+    C graph(causality ? "navigation.time_leap_with_causality" : "navigation.time_leap_without_causality",
+        causality ? std::chrono::seconds{480} : std::chrono::seconds{180});
     const auto title = C::image("cursedWheelTitle"), wheel = C::image("cursedWheel");
     const auto target = C::image(target_name), chapter = C::image(chapter_name), leap = C::image("leap");
     const auto right = C::image("cursedWheelTapRight"), ruins = C::image("ruins");
@@ -51,14 +54,18 @@ tasks::CompiledWorkflow time_leap_without_causality(const std::string &target_na
         graph.delay_after(name, 2000);
     }
     graph.route("FindTarget", {"SelectTarget", "FineScroll"});
-    graph.click("SelectTarget", C::all({title, target}), target, leap, {"Leap"});
+    graph.click("SelectTarget", C::all({title, target}), target, leap, causality ? J{"Causality"} : J{"Leap"});
     graph.delay_after("SelectTarget", 1000);
     graph.swipe("FineScroll", C::all({title, C::absent(target), C::absent(leap)}), title,
         {50, 1200, 50, 1300}, {"FindTarget"});
     graph.delay_after("FineScroll", 1000);
-    graph.click("Leap", leap, leap, after_leap, {"Done", "Reselect", "Leap"});
+    if (causality) {
+        const auto child = graph.define_child("CausalitySettings", adjust_causality(*causality));
+        graph.call_child("Causality", child, {"Leap"});
+    }
+    graph.click("Leap", leap, leap, after_leap, causality ? J{"Done", "Reselect", "Causality"} : J{"Done", "Reselect", "Leap"});
     graph.delay_after("Leap", 2000);
-    graph.click("Reselect", C::all({title, target}), target, leap, {"Leap"});
+    graph.click("Reselect", C::all({title, target}), target, leap, causality ? J{"Causality"} : J{"Leap"});
     // 离开按钮不是充分条件。只有已执行跳跃路径之后的新帧正常游戏锚点才是终点。
     // 启动时的城市画面不能直达这里，未知加载帧也不能算业务完成。
     graph.observe("Done", outside, {"Terminal"});
@@ -66,5 +73,14 @@ tasks::CompiledWorkflow time_leap_without_causality(const std::string &target_na
         "NextTab", "ReopenWheel", "FindTarget", "FineScroll", "Leap", "Reselect"})
         graph.hit_limit(name, 32);
     return graph.finish();
+}
+}
+tasks::CompiledWorkflow time_leap_without_causality(const std::string &target,
+    const std::string &chapter, bool allow_download) {
+    return compile_time_leap(target, chapter, allow_download, nullptr);
+}
+tasks::CompiledWorkflow time_leap_with_causality(const std::string &target, const CausalitySettings &settings,
+    const std::string &chapter, bool allow_download) {
+    return compile_time_leap(target, chapter, allow_download, &settings);
 }
 }

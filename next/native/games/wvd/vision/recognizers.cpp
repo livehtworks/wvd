@@ -22,6 +22,10 @@ struct MovementSample {
     cv::Mat gray;
     std::chrono::steady_clock::time_point at;
 };
+struct CausalityScrollSample {
+    cv::Mat bgr;
+    std::string frame_key;
+};
 void check(bool ok, const char *error) {
     if (!ok)
         throw std::runtime_error(error);
@@ -296,6 +300,37 @@ J evaluate_uncached(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels
                 return decision(true, allowed_rect, {{"stage", name}, {"matched", result}});
         }
         return decision(false, {}, {{"stage", "unknown"}});
+    }
+    if (mode == "causality_scroll") {
+        check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");
+        check(image.cols == 900 && image.rows == 1600, "WVD_VIEWPORT_INVALID");
+        const auto operation = p.at("operation").get<std::string>();
+        const auto direction = p.at("direction").get<std::string>();
+        check((operation == "reference" || operation == "unchanged") && (direction == "up" || direction == "down"), "CAUSALITY_SCROLL_OPERATION_INVALID");
+        const cv::Rect area(77, 349, 757, 1068);
+        check((area & allowed_rect) == area, "WVD_ROI_OUTSIDE_SCOPE");
+        const auto marker = evaluate_impl(bundle, pixels, {{"mode", "template"}, {"image", p.at("image")}}, bound, scope, cache, depth + 1, memo);
+        check(marker.at("outcome") != "Error", "CAUSALITY_PAGE_ERROR");
+        if (marker.at("outcome") != "Hit") return decision(false, {}, {{"reason", "causality_page_not_confirmed"}});
+        const std::string key = "causality.scroll:" + p.at("image").get<std::string>() + ":" + direction;
+        auto found = cache.assets.find(key);
+        if (operation == "reference") {
+            check(found != cache.assets.end() || cache.assets.size() < 2048, "WVD_SESSION_ASSET_CAPACITY");
+            cache.assets.insert_or_assign(key, CausalityScrollSample{image(area).clone(), cache.frame_key});
+            auto result = decision(true, area, {{"reference_captured", true}}, false);
+            result["action_eligible"] = false;
+            return result;
+        }
+        check(found != cache.assets.end(), "CAUSALITY_REFERENCE_MISSING");
+        const auto &reference = std::any_cast<const CausalityScrollSample &>(found->second);
+        check(reference.frame_key != cache.frame_key, "CAUSALITY_NEW_FRAME_REQUIRED");
+        cv::Mat difference;
+        cv::absdiff(image(area), reference.bgr, difference);
+        const auto channels = cv::mean(difference);
+        const auto mean = (channels[0] + channels[1] + channels[2]) / (3 * 255);
+        auto result = decision(mean < .006, area, {{"mean_difference", mean}, {"threshold", .006}}, false);
+        result["action_eligible"] = false;
+        return result;
     }
     if (mode == "fishing_unknown") {
         check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");

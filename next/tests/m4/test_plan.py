@@ -96,7 +96,7 @@ class PlanTests(unittest.TestCase):
         result = self.inspect("specials", compile_specials_manifest=str(ROOT / "packs/wvd/manifest.json"))
         self.assertEqual(result["outcome"], "PASS", result)
         implemented = {row["task_id"]: row for row in result["compiled_specials"]}
-        self.assertEqual(set(implemented), {"fortress-B8F_trap", "gaintKiller", "darkLight", "FFXI-Org", "manualSepDemon", "lovesleep", "Scorpionesses", "Scorpionesses_plus_6_hands", "fishing", "fishing2", "jier", "SSC-goldenchest", "sandman"})
+        self.assertEqual(set(implemented), {"fortress-B8F_trap", "7000G", "LBC-oneGorgon", "gaintKiller", "darkLight", "FFXI-Org", "manualSepDemon", "lovesleep", "Scorpionesses", "Scorpionesses_plus_6_hands", "fishing", "fishing2", "jier", "SSC-goldenchest", "sandman"})
         sandman = implemented["sandman"]["nodes"]
         self.assertEqual(sandman["Start"]["custom_action_param"]["event"], "sandman_started")
         self.assertEqual(sandman["DukeRested"]["custom_action_param"]["event"], "sandman_duke_rested")

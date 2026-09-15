@@ -15,6 +15,8 @@
 #include "games/wvd/tasks/featured_request.hpp"
 #include "games/wvd/tasks/golden_chest.hpp"
 #include "games/wvd/tasks/sandman.hpp"
+#include "games/wvd/tasks/gold_income.hpp"
+#include "games/wvd/tasks/bull_cave.hpp"
 #include "games/wvd/quests/sleep_visits.hpp"
 #include "games/wvd/tasks/bounty_cycle.hpp"
 #include "games/wvd/navigation/dungeon_entry.hpp"
@@ -125,7 +127,7 @@ int main(int argc, char **argv) {
                     const bool scorpion = task.id == "Scorpionesses" || task.id == "Scorpionesses_plus_6_hands";
                     const bool bounty = scorpion || task.id == "jier";
                     const bool fishing = task.id == "fishing" || task.id == "fishing2";
-                    if (specials && !bounty && !fishing && task.id != "sandman" && task.id != "SSC-goldenchest" && task.id != "fortress-B8F_trap" && task.id != "gaintKiller" && task.id != "darkLight" && task.id != "FFXI-Org" && task.id != "manualSepDemon" && task.id != "lovesleep") {
+                    if (specials && !bounty && !fishing && task.id != "LBC-oneGorgon" && task.id != "7000G" && task.id != "sandman" && task.id != "SSC-goldenchest" && task.id != "fortress-B8F_trap" && task.id != "gaintKiller" && task.id != "darkLight" && task.id != "FFXI-Org" && task.id != "manualSepDemon" && task.id != "lovesleep") {
                         result["unimplemented_specials"].push_back(task.id);
                         continue;
                     }
@@ -140,6 +142,8 @@ int main(int argc, char **argv) {
                         if (fishing) return games::tasks::fishing_cycle(task, profile.values, images);
                         if (task.id == "SSC-goldenchest") return games::tasks::golden_chest_cycle(task, profile.values, images);
                         if (task.id == "sandman") return games::tasks::sandman_cycle(task, profile.values, images);
+                        if (task.id == "7000G") return games::tasks::gold_income_cycle(task);
+                        if (task.id == "LBC-oneGorgon") return games::tasks::bull_cave_cycle(task, profile.values, images);
                         if (task.id == "lovesleep") return games::tasks::sleep_visits(task, profile.values);
                         if (task.id == "manualSepDemon") return games::tasks::manual_separation(task, profile.values, images);
                         if (task.id == "FFXI-Org") return games::tasks::mining_iteration(task, profile.values);
@@ -156,7 +160,7 @@ int main(int argc, char **argv) {
                     result[key].push_back({{"task_id", task.id}, {"nodes", graph.nodes},
                         {"images", graph.images}, {"required_actions", graph.required_actions},
                         {"missing_images", missing}, {"scope", specials ? "FINITE_SPECIAL_ITERATION_NOT_FULL_TASK" : iterations ? "NORMAL_FARM_ITERATION_NOT_FULL_TASK" : routes ? "DUNGEON_ROUTE_ONLY_NOT_FULL_TASK" : "ENTRY_ONLY_NOT_FULL_TASK"},
-                        {"required_normal_units", bounty ? (task.id == "Scorpionesses_plus_6_hands" ? 4 : 3) : task.id == "lovesleep" ? games::quests::SleepVisits::units : task.id == "manualSepDemon" || task.id == "SSC-goldenchest" ? 2 : 1}, {"executed", false}});
+                        {"required_normal_units", task.id == "LBC-oneGorgon" ? (profile.values.at("ACTIVE_REST").get<bool>() ? 3 : 2) : bounty ? (task.id == "Scorpionesses_plus_6_hands" ? 4 : 3) : task.id == "lovesleep" ? games::quests::SleepVisits::units : task.id == "manualSepDemon" || task.id == "SSC-goldenchest" || task.id == "sandman" ? 2 : 1}, {"executed", false}});
                 }
             }
         }

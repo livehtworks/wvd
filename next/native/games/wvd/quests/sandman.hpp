@@ -36,12 +36,14 @@ class SandmanCycle {
     }
     std::size_t sequence(bool starting = false) const { return sequence_ + (starting && !active_ ? 1 : 0); }
     nlohmann::json summary(std::size_t unit) const {
-        return {{"active", active_}, {"phase", static_cast<int>(phase_)}, {"unit_matches", active_ && unit == unit_},
+        return {{"active", active_}, {"phase", static_cast<int>(phase_)}, {"unit_matches", active_ && unit == expected_unit()},
+            {"completed_unit_matches", sequence_ > 0 && !active_ && phase_ == Phase::Completed && unit == unit_ + 1},
             {"bondmate_confirmed", bond_}, {"leap_pending", pending_}, {"attempts", attempts_}, {"completed_cycles", completed_}};
     }
   private:
+    std::size_t expected_unit() const { return unit_ + (phase_ >= Phase::RestDuke ? 1 : 0); }
     void require(Phase phase, std::size_t unit) const {
-        if (!active_ || phase_ != phase || unit != unit_) throw std::runtime_error("SANDMAN_PHASE_INVALID");
+        if (!active_ || phase_ != phase || unit != expected_unit()) throw std::runtime_error("SANDMAN_PHASE_INVALID");
     }
     bool active_{}, pending_{}, bond_{};
     Phase phase_{Phase::Completed};

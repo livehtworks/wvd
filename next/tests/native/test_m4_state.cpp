@@ -80,6 +80,68 @@ std::optional<runtime::SessionDefinition> recover_unit(const contracts::SessionR
     next.entry = "Recovered";
     return next;
 }
+J bull_cave_contract(const J &profile, bool rest) {
+    auto clock = std::make_shared<TestClock>();
+    games::WvdRunState state(profile, {"bull-cave-contract", 1, clock});
+    std::uint64_t generation = 1;
+    state.enter_segment(contracts::SegmentBoundary::Initial, generation, 0);
+    auto apply = [&](const char *event) {
+        const auto id = state.confirmation_id(event, event);
+        require(state.confirm_event(id, event, generation, 1), "BULL_EVENT_NOT_APPLIED");
+        require(!state.confirm_event(id, event, generation, 2), "BULL_EVENT_REPLAYED");
+    };
+    for (std::size_t cycle = 0; cycle < 2; ++cycle) {
+        const auto base = cycle * (rest ? 3 : 2);
+        if (cycle) state.enter_segment(contracts::SegmentBoundary::Continuation, ++generation, base);
+        apply(rest ? "bull_cave_started_rest" : "bull_cave_started");
+        apply("bull_cave_leap_prepared");
+        state.enter_segment(contracts::SegmentBoundary::Recovery, ++generation, base);
+        require(state.summary().at("bull_cave").at("leap_pending").get<bool>(), "BULL_RECOVERY_LOST_INTENT");
+        apply("bull_cave_leaped"); apply("bull_cave_fortress"); apply("bull_cave_royal");
+        apply("featured_visit_started"); apply("inn_payment_prepared"); apply("inn_rest_completed");
+        apply("featured_request_prepared"); apply("featured_request_completed"); apply("featured_visit_completed");
+        apply("bull_cave_requested");
+        state.enter_segment(contracts::SegmentBoundary::Continuation, ++generation, base + 1);
+        apply("bull_cave_first_entered"); state.enter_dungeon();
+        for (int i = 0; i < (rest ? 1 : 3); ++i) state.target_point_completed();
+        apply("bull_cave_first_routed"); apply("bull_cave_first_exited");
+        if (rest) {
+            require(!state.summary().at("inn_rest_completed").get<bool>(), "BULL_REUSED_ACCEPTANCE_REST");
+            apply("inn_payment_prepared"); apply("inn_rest_completed"); apply("bull_cave_rested");
+            state.enter_segment(contracts::SegmentBoundary::Continuation, ++generation, base + 2);
+            apply("bull_cave_second_entered"); state.enter_dungeon();
+            state.target_point_completed(); state.target_point_completed();
+            apply("bull_cave_second_routed"); apply("bull_cave_completed");
+        }
+    }
+    return state.summary();
+}
+J gold_income_contract(const J &profile) {
+    auto clock = std::make_shared<TestClock>();
+    games::WvdRunState state(profile, {"gold-income-contract", 1, clock});
+    std::uint64_t generation = 1;
+    state.enter_segment(contracts::SegmentBoundary::Initial, generation, 0);
+    auto apply = [&](const std::string &operation, const char *event) {
+        const auto id = state.confirmation_id(operation, event);
+        require(state.confirm_event(id, event, generation, 1), "GOLD_INCOME_EVENT_NOT_APPLIED");
+        require(!state.confirm_event(id, event, generation, 2), "GOLD_INCOME_EVENT_REPLAYED");
+        return id;
+    };
+    for (std::size_t unit = 0; unit < 2; ++unit) {
+        if (unit) state.enter_segment(contracts::SegmentBoundary::Continuation, ++generation, unit);
+        apply("start", "gold_income_started");
+        for (int phase = 0; phase < 10; ++phase) {
+            require(state.summary().at("gold_income").at("estimated_income") == unit * 7000, "GOLD_INCOME_EARLY_COUNT");
+            const auto suffix = std::to_string(phase);
+            apply("prepare" + suffix, "gold_income_prepared");
+            state.enter_segment(contracts::SegmentBoundary::Recovery, ++generation, unit);
+            require(state.summary().at("gold_income").at("pending").get<bool>(), "GOLD_INCOME_LOST_INTENT");
+            const auto old = apply("done" + suffix, "gold_income_advanced");
+            require(old == state.confirmation_id("done" + suffix, "gold_income_advanced"), "GOLD_INCOME_CHANGED_REPLAY_KEY");
+        }
+    }
+    return state.summary();
+}
 J sandman_contract(const J &profile) {
     auto clock = std::make_shared<TestClock>();
     games::WvdRunState state(profile, {"sandman-contract", 1, clock});
@@ -91,7 +153,7 @@ J sandman_contract(const J &profile) {
         require(!state.confirm_event(id, event, generation, 2), "SANDMAN_EVENT_REPLAYED");
     };
     for (std::size_t unit = 0; unit < 3; ++unit) {
-        if (unit) state.enter_segment(contracts::SegmentBoundary::Continuation, ++generation, unit);
+        if (unit) state.enter_segment(contracts::SegmentBoundary::Continuation, ++generation, unit * 2);
         apply("sandman_started");
         apply("sandman_entered");
         state.enter_dungeon();
@@ -103,6 +165,7 @@ J sandman_contract(const J &profile) {
         apply("sandman_routed");
         apply("sandman_exited");
         apply("sandman_decided");
+        state.enter_segment(contracts::SegmentBoundary::Continuation, ++generation, unit * 2 + 1);
         if (!unit) {
             require(!state.summary().at("sandman").at("active").get<bool>(), "SANDMAN_WITHOUT_BOND_RESTED");
             require(state.summary().at("inn_rests") == 0, "SANDMAN_WITHOUT_BOND_PAID");
@@ -118,7 +181,7 @@ J sandman_contract(const J &profile) {
             apply("inn_payment_prepared"); apply("inn_rest_completed");
             apply(triumph ? "sandman_triumph_rested" : "sandman_duke_rested");
             apply(triumph ? "sandman_triumph_prepared" : "sandman_duke_prepared");
-            state.enter_segment(contracts::SegmentBoundary::Recovery, ++generation, unit);
+            state.enter_segment(contracts::SegmentBoundary::Recovery, ++generation, unit * 2 + 1);
             require(state.summary().at("sandman").at("leap_pending").get<bool>(), "SANDMAN_RECOVERY_LOST_INTENT");
             apply(triumph ? "sandman_completed" : "sandman_duke_leaped");
         }
@@ -1055,6 +1118,16 @@ int main(int argc, char **argv) {
             return 0;
         }
         auto profile = importer.parse(config.at("source")).values;
+        if (config.value("bull_cave_contract", false)) {
+            const J output{{"bull_cave_contract", bull_cave_contract(profile, config.value("rest", false))}, {"backend_inputs", 0}};
+            std::ofstream(maafw::path_from_utf8(config.at("output"))) << output.dump(2);
+            return 0;
+        }
+        if (config.value("gold_income_contract", false)) {
+            const J output{{"gold_income_contract", gold_income_contract(profile)}, {"backend_inputs", 0}};
+            std::ofstream(maafw::path_from_utf8(config.at("output"))) << output.dump(2);
+            return 0;
+        }
         if (config.value("sandman_contract", false)) {
             const J output{{"sandman_contract", sandman_contract(profile)}, {"backend_inputs", 0}};
             std::ofstream(maafw::path_from_utf8(config.at("output"))) << output.dump(2);

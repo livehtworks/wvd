@@ -81,6 +81,12 @@ completed_cycles只在六点及退出已确认后增加，不把任务点数或�
   completed_cycles仅在缘专用选项回执、两次独立住宿和两次跳跃全部确认后累计。
   当前阶段与leap_pending由WvdConfirm更新，任务图和恢复策略消费；历史摘要只读，
   不允许据它重放跳跃或付款，也不是账号缘等级的权威数据。
+- `snapshot.business.gold_income`由GoldIncomeCycle持有，记录十段剧情的当前阶段/待确认意图。
+  完整剧情终点才产生每次7000的估算收益，不是账号余额。`snapshot.business.bull_cave`
+  由BullCaveCycle持有，记录两/三正常段、路线、跳跃意图；付款仍由原住宿回执权威持有。
+  两者均由WvdConfirm生产、任务/恢复决策和结果审查消费，不从历史摘要重放账号操作。
+- 因果滚动的BGR参考ROI只存在当前Gateway的RecognitionCache，固定每方向一份，
+  Session销毁即释放；不进入WvdRunState、profile或RunStore，不作为跨代次恢复点。
 
 - `snapshot.business.sleep`由WvdRunState内的SleepVisits唯一持有，记录固定9999次目标、
   当前住宿意图及完成数；每次退出旅店的新帧确认后递增。`tasks::configure_sleep_units`

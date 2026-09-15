@@ -6691,14 +6691,14 @@
         "M4-TASK-7000G"
       ],
       "planned_owner_from_baseline": "native/games/wvd/tasks",
-      "implementation": "native/games/wvd/tasks/task_plan.cpp",
-      "entry": "WvdTaskPlan::parse",
+      "implementation": "native/games/wvd/tasks/gold_income.cpp",
+      "entry": "tasks::gold_income_cycle",
       "implementation_status": "PARTIAL",
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "remaining": "任务数据已类型化，执行图和业务动作未实现。",
-      "implementation_extent": "TYPED_PLAN_DATA"
+      "remaining": "有限图已接线，当前改动待构建、实际Maa流程及失败/停止/恢复/配置/mod矩阵验证。",
+      "implementation_extent": "FINITE_GOLD_INCOME_PENDING_VALIDATION"
     },
     {
       "inventory_id": "task:manualSepDemon",
@@ -6751,14 +6751,14 @@
         "M4-TASK-LBC-oneGorgon"
       ],
       "planned_owner_from_baseline": "native/games/wvd/tasks",
-      "implementation": "native/games/wvd/tasks/task_plan.cpp",
-      "entry": "WvdTaskPlan::parse",
+      "implementation": "native/games/wvd/tasks/bull_cave.cpp",
+      "entry": "tasks::bull_cave_cycle",
       "implementation_status": "PARTIAL",
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "remaining": "任务数据已类型化，执行图和业务动作未实现。",
-      "implementation_extent": "TYPED_PLAN_DATA"
+      "remaining": "有限图已接线，当前改动待构建、实际Maa流程及失败/停止/恢复/配置/mod矩阵验证。",
+      "implementation_extent": "FINITE_BULL_CAVE_PENDING_VALIDATION"
     },
     {
       "inventory_id": "task:SSC-goldenchest",
@@ -6911,14 +6911,14 @@
         "M4-TASK-sandman"
       ],
       "planned_owner_from_baseline": "native/games/wvd/tasks",
-      "implementation": "native/games/wvd/tasks/task_plan.cpp",
-      "entry": "WvdTaskPlan::parse",
+      "implementation": "native/games/wvd/tasks/sandman.cpp",
+      "entry": "tasks::sandman_cycle",
       "implementation_status": "PARTIAL",
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "remaining": "任务数据已类型化，执行图和业务动作未实现。",
-      "implementation_extent": "TYPED_PLAN_DATA"
+      "remaining": "有限图已接线，当前改动待构建、实际Maa流程及失败/停止/恢复/配置/mod矩阵验证。",
+      "implementation_extent": "FINITE_SANDMAN_PENDING_VALIDATION"
     },
     {
       "inventory_id": "task:fishing",

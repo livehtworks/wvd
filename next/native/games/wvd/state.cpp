@@ -294,6 +294,10 @@ std::string WvdRunState::confirmation_id(const std::string &operation, const std
         id += ":golden:" + std::to_string(golden_chest_.sequence(event == "golden_started"));
     if (event.starts_with("sandman_") && event != "sandman_bondmate_completed")
         id += ":sandman:" + std::to_string(sandman_.sequence(event == "sandman_started"));
+    if (event.starts_with("gold_income_"))
+        id += ":gold-income:" + std::to_string(gold_income_.sequence(event == "gold_income_started"));
+    if (event.starts_with("bull_cave_"))
+        id += ":bull:" + std::to_string(bull_cave_.sequence(event == "bull_cave_started" || event == "bull_cave_started_rest"));
     if (event == "fishing_reward_prepared" || event == "fishing_reward_completed")
         id += ":fishing:" + std::to_string(fishing_.sequence(event == "fishing_reward_prepared"));
     if (event == "fishing_wait_started" || event == "fishing_wait_failed")
@@ -338,7 +342,40 @@ bool WvdRunState::confirm_event(const std::string &operation, const std::string 
         throw std::runtime_error("BUSINESS_CONFIRMATION_CAPACITY");
     if (expected_step && *expected_step != task_step_)
         throw std::runtime_error("BUSINESS_TASK_STEP_MISMATCH");
-    if (event == "sandman_bondmate_completed") {
+    if (event == "bull_cave_started" || event == "bull_cave_started_rest") {
+        if (inn_payment_pending_ || featured_visit_.summary().at("active").get<bool>()) throw std::runtime_error("BULL_CAVE_SIDE_EFFECT_PENDING");
+        const auto now = clock_->now();
+        if (lap_started_ && now < *lap_started_) throw std::runtime_error("WVD_CLOCK_MOVED_BACKWARD");
+        bull_cave_.start(unit_index_, featured_visit_.summary().at("visits_completed").get<std::size_t>(), event == "bull_cave_started_rest");
+        if (lap_started_) total_seconds_ += std::chrono::duration<double>(now - *lap_started_).count();
+        lap_started_ = now; ++dungeons_;
+    } else if (event == "bull_cave_leap_prepared") {
+        bull_cave_.prepare_leap(unit_index_);
+    } else if (event.starts_with("bull_cave_")) {
+        using Phase = quests::BullCaveCycle::Phase;
+        const std::map<std::string, Phase> events{{"bull_cave_leaped", Phase::Leap}, {"bull_cave_fortress", Phase::Fortress},
+            {"bull_cave_royal", Phase::RoyalCity}, {"bull_cave_requested", Phase::Request}, {"bull_cave_first_entered", Phase::EnterFirst},
+            {"bull_cave_first_routed", Phase::FirstRoute}, {"bull_cave_first_exited", Phase::FirstExit}, {"bull_cave_rested", Phase::Rest},
+            {"bull_cave_second_entered", Phase::EnterSecond}, {"bull_cave_second_routed", Phase::SecondRoute}, {"bull_cave_completed", Phase::SecondExit}};
+        const auto found = events.find(event);
+        if (found == events.end()) throw std::runtime_error("BULL_CAVE_EVENT_INVALID");
+        bull_cave_.advance(found->second, unit_index_, featured_visit_.summary().at("visits_completed").get<std::size_t>(), task_step_, inn_rest_completed_ && !inn_payment_pending_);
+        if (event == "bull_cave_first_exited" && bull_cave_.summary(unit_index_).at("active").get<bool>()) {
+            inn_rest_completed_ = false; ++supply_cycle_;
+        }
+    } else if (event == "gold_income_started") {
+        if (inn_payment_pending_ || special_dialogue_pending_) throw std::runtime_error("GOLD_INCOME_SIDE_EFFECT_PENDING");
+        const auto now = clock_->now();
+        if (lap_started_ && now < *lap_started_) throw std::runtime_error("WVD_CLOCK_MOVED_BACKWARD");
+        gold_income_.start(unit_index_);
+        if (lap_started_) total_seconds_ += std::chrono::duration<double>(now - *lap_started_).count();
+        lap_started_ = now;
+        ++dungeons_;
+    } else if (event == "gold_income_prepared") {
+        gold_income_.prepare(unit_index_);
+    } else if (event == "gold_income_advanced") {
+        gold_income_.advance(unit_index_);
+    } else if (event == "sandman_bondmate_completed") {
         if (!special_dialogue_pending_) throw std::runtime_error("SPECIAL_DIALOGUE_NOT_PREPARED");
         sandman_.bondmate();
         special_dialogue_pending_ = false;
@@ -722,6 +759,8 @@ J WvdRunState::summarize() const {
             {"featured_visit", featured_visit_.summary()},
             {"golden_chest", golden_chest_.summary(unit_index_)},
             {"sandman", sandman_.summary(unit_index_)},
+            {"gold_income", gold_income_.summary(unit_index_)},
+            {"bull_cave", bull_cave_.summary(unit_index_)},
             {"bounty_reveals", bounty_reveals_},
             {"sleep", sleep_.summary(unit_index_)},
             {"bounty_cycle", bounty_cycle_.summary(unit_index_, bounty_reports_)},
