@@ -169,7 +169,7 @@ bool pure_condition(const J &p, unsigned depth = 0) {
            mode == "boot_post" || mode == "blocking_screen" || mode == "party_death" ||
            mode == "party_defeat" || mode == "party_death_post" || mode == "pause" ||
            mode == "pause_negative" || mode == "auto_route_post" || mode == "focus_cursor" ||
-           mode == "reached" || mode == "through_stair" || mode == "default_dialogue";
+           mode == "reached" || mode == "through_stair";
 }
 J evaluate_uncached(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels, const J &p,
                     const J &bound, const maafw::CustomRecognitionScope &scope,
@@ -184,6 +184,47 @@ J evaluate_impl(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels, co
     auto result = evaluate_uncached(bundle, pixels, p, bound, scope, cache, depth, memo);
     memo.emplace(key, result);
     return result;
+}
+struct ProbeBatch {
+    std::vector<J> results;
+    std::vector<std::exception_ptr> errors;
+    const J &at(std::size_t index) const {
+        if (errors.at(index))
+            std::rethrow_exception(errors.at(index));
+        return results.at(index);
+    }
+};
+ProbeBatch evaluate_batch(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels,
+                         const J &probes, const J &bound, const maafw::CustomRecognitionScope &scope,
+                         maafw::RecognitionCache &cache, unsigned depth, const EvaluationMemo &memo,
+                         int partitions) {
+    check(partitions >= 1 && partitions <= 4, "WVD_PROBE_PARTITIONS_INVALID");
+    ProbeBatch batch{std::vector<J>(probes.size()), std::vector<std::exception_ptr>(probes.size())};
+    std::vector<maafw::RecognitionCache> workers(partitions);
+    std::vector<EvaluationMemo> worker_memos(partitions, memo);
+    // 只借用 OpenCV 的同步分片。每路模板索引和 memo 独占；没有线程/会话所有权转交。
+    for (auto &worker : workers)
+        for (const auto &[key, value] : cache.assets)
+            if (key.starts_with("template:") || key.starts_with("mask:"))
+                worker.assets.emplace(key, value);
+    cv::parallel_for_(cv::Range(0, partitions), [&](const cv::Range &range) {
+        for (int worker = range.start; worker < range.end; ++worker)
+            for (std::size_t i = worker; i < probes.size(); i += partitions) {
+                try {
+                    batch.results[i] = evaluate_impl(bundle, pixels, probes[i], bound, scope,
+                        workers[worker], depth + 1, worker_memos[worker]);
+                } catch (...) {
+                    batch.errors[i] = std::current_exception();
+                }
+            }
+    }, partitions);
+    for (const auto &worker : workers)
+        for (const auto &[key, value] : worker.assets) {
+            check(cache.assets.contains(key) || cache.assets.size() < 2048, "WVD_SESSION_ASSET_CAPACITY");
+            cache.assets.try_emplace(key, value);
+        }
+    // 有序候选只消费优先级到达的结果/异常；all/any 调用者必须消费全部结果。
+    return batch;
 }
 J evaluate_uncached(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels, const J &p,
                     const J &bound, const maafw::CustomRecognitionScope &scope,
@@ -288,32 +329,35 @@ J evaluate_uncached(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels
         if (p.contains("selected"))
             check(p.at("selected").is_string() && std::find(default_dialogue_names.begin(), default_dialogue_names.end(),
                   p.at("selected").get<std::string>()) != default_dialogue_names.end(), "WVD_DIALOGUE_OPTION_INVALID");
-        // 旧 IdentifyState 先返回正常地图/战斗/城镇，再考虑未知页上的默认对话。
-        auto inspect = [&](const J &probe) {
-            auto result = evaluate_impl(bundle, pixels, probe, bound, scope, cache, depth + 1, memo);
+        const auto candidates = default_dialogue_probes();
+        const auto matches = evaluate_batch(bundle, pixels, candidates, bound, scope, cache, depth, memo, 4);
+        std::optional<std::size_t> selected;
+        for (std::size_t i = 0; i < candidates.size(); ++i) {
+            const auto &result = matches.at(i);
             check(result.at("outcome") != "Error", "WVD_DIALOGUE_RECOGNITION_ERROR");
-            return result;
-        };
-        for (const auto &probe : default_dialogue_normal_probes())
-            if (inspect(probe).at("outcome") == "Hit")
-                return decision(false, {}, {{"reason", "normal_scene"}});
-        // false 排除死亡/默认对话本身，既保留已知覆盖层优先级，也避免递归调用。
-        for (const auto &probe : blocking_probes(false))
-            if (inspect(probe).at("outcome") == "Hit")
-                return decision(false, {}, {{"reason", "higher_priority_prompt"}});
-        if (inspect({{"mode", "party_death"}}).at("outcome") == "Hit")
-            return decision(false, {}, {{"reason", "single_death_prompt_first"}});
-        for (const auto &probe : default_dialogue_probes()) {
-            auto result = inspect(probe);
-            if (result.at("outcome") != "Hit")
-                continue;
-            const auto name = probe.at("image").get<std::string>().substr(std::string_view("dialogueChoices/").size());
-            if (p.contains("selected") && p.at("selected").get<std::string>() != name)
-                return decision(false, {}, {{"reason", "option_changed"}, {"selected", name}});
-            result["evidence"]["selected"] = name;
-            return result;
+            if (result.at("outcome") == "Hit") { selected = i; break; }
         }
-        return decision(false, {}, {{"reason", "no_default_option"}});
+        // 无选项的普通帧不用再扫描整份启动候选；候选命中仍不能直接授权输入。
+        if (!selected)
+            return decision(false, {}, {{"reason", "no_default_option"}});
+        auto guards = default_dialogue_normal_probes();
+        const auto normal_count = guards.size();
+        for (const auto &probe : blocking_probes(false))
+            guards.push_back(probe);
+        guards.push_back({{"mode", "party_death"}});
+        const auto guarded = evaluate_batch(bundle, pixels, guards, bound, scope, cache, depth, memo, 4);
+        for (std::size_t i = 0; i < guards.size(); ++i) {
+            const auto &result = guarded.at(i);
+            check(result.at("outcome") != "Error", "WVD_DIALOGUE_RECOGNITION_ERROR");
+            if (result.at("outcome") == "Hit")
+                return decision(false, {}, {{"reason", i < normal_count ? "normal_scene" : "higher_priority_prompt"}});
+        }
+        const auto name = std::string(default_dialogue_names[*selected]);
+        if (p.contains("selected") && p.at("selected").get<std::string>() != name)
+            return decision(false, {}, {{"reason", "option_changed"}, {"selected", name}});
+        auto result = matches.at(*selected);
+        result["evidence"]["selected"] = name;
+        return result;
     }
     if (mode == "boot_ready" || mode == "boot_post" || mode == "blocking_screen") {
         check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");
@@ -338,36 +382,9 @@ J evaluate_uncached(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels
         std::vector<J> evaluated(children.size());
         const bool parallel_conditions = depth == 0 && children.size() > 1 && pure_condition(p);
         if (parallel_conditions) {
-            // OpenCV 的两条同步工作分片，不创建新执行器、不 detach、不更改全局线程数。
-            // 每路独占临时 memo/模板索引，只共享只读像素和不可变 lease；合流后才写回
-            // 资源缓存。不会把历史观察或 stateful 特征带入另一条线程。
-            std::array<maafw::RecognitionCache, 2> workers;
-            std::array<EvaluationMemo, 2> worker_memos;
-            std::vector<std::exception_ptr> errors(children.size());
-            for (auto &worker : workers)
-                for (const auto &[key, value] : cache.assets)
-                    if (key.starts_with("template:") || key.starts_with("mask:"))
-                        worker.assets.emplace(key, value);
-            cv::parallel_for_(cv::Range(0, 2), [&](const cv::Range &range) {
-                for (int worker = range.start; worker < range.end; ++worker)
-                    for (std::size_t i = static_cast<std::size_t>(worker); i < children.size(); i += 2) {
-                        try {
-                            evaluated[i] = evaluate_impl(bundle, pixels, children[i], bound, scope,
-                                workers[worker], depth + 1, worker_memos[worker]);
-                        } catch (...) {
-                            errors[i] = std::current_exception();
-                        }
-                    }
-            }, 2);
-            // 按原条件顺序报告异常。不能因另一分片 Hit 就掩盖缺图或非法范围。
-            for (const auto &error : errors)
-                if (error)
-                    std::rethrow_exception(error);
-            for (const auto &worker : workers)
-                for (const auto &[key, value] : worker.assets) {
-                    check(cache.assets.contains(key) || cache.assets.size() < 2048, "WVD_SESSION_ASSET_CAPACITY");
-                    cache.assets.try_emplace(key, value);
-                }
+            const auto batch = evaluate_batch(bundle, pixels, children, bound, scope, cache, depth, memo, 2);
+            for (std::size_t i = 0; i < children.size(); ++i)
+                evaluated[i] = batch.at(i);
         } else {
             for (std::size_t i = 0; i < children.size(); ++i)
                 evaluated[i] = evaluate_impl(bundle, pixels, children[i], bound, scope, cache, depth + 1, memo);

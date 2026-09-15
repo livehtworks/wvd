@@ -256,6 +256,16 @@ class StateTests(unittest.TestCase):
         self.assertEqual(r["snapshot"]["completed_business_units"], 0)
         self.assertEqual(r["snapshot"]["generation"], 1)
 
+    def test_stop_in_native_capture_keeps_ownership_until_return(self):
+        r = self.run_case("stop-capture", stop=True, stop_during_capture=True)
+        self.assertFalse(r["stop_pending"]["quiescent"])
+        self.assertEqual(r["stop_pending"]["reason"], "STOP_TIMEOUT")
+        self.assertEqual(r["snapshot"]["state"], "Failed")
+        self.assertEqual(r["snapshot"]["reason"], "STOP_TIMEOUT")
+        self.assertTrue(r["snapshot"]["quiescent"])
+        self.assertEqual(r["snapshot"]["completed_business_units"], 0)
+        self.assertEqual(r["snapshot"]["generation"], 1)
+
     def test_wall_bypass_order_replay_and_restart_boundary(self):
         r = self.run_case("wall-state")
         self.assertEqual(r["snapshot"]["state"], "Completed", r)

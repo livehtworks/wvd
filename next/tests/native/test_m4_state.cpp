@@ -19,6 +19,16 @@ class TestClock final : public contracts::MonotonicClock {
         return TimePoint{} + std::chrono::milliseconds(milliseconds.load());
     }
 };
+class StateDevice final : public OfflineDevice {
+  public:
+    std::atomic<bool> block_capture{}, capture_waiting{}, release_capture{};
+    devices::RawFrame capture() override {
+        capture_waiting = true;
+        while (block_capture && !release_capture)
+            std::this_thread::sleep_for(5ms);
+        return OfflineDevice::capture();
+    }
+};
 
 // 测试绑定只驱动真实状态 API；不代替技能输入、识别或完整任务完成的验收。
 bool state_probe(maafw::Context &context, const J &node, const J &) {
@@ -600,6 +610,7 @@ int main(int argc, char **argv) {
         games::vision::register_wvd(*registry);
         registry->add_action({"test.state", "1"}, state_probe);
         registry->add_action({"test.wait", "1"}, [](maafw::Context &context, const J &, const J &) {
+            context.business_event("fixture.wait_entered", J::object());
             while (!context.cancelled())
                 std::this_thread::sleep_for(5ms);
             return false;
@@ -607,7 +618,8 @@ int main(int argc, char **argv) {
         registry->add_recovery({"test.recover_unit", "1"}, recover_unit);
         registry->seal();
         output["registry"] = registry->manifest();
-        auto device = std::make_shared<OfflineDevice>();
+        auto device = std::make_shared<StateDevice>();
+        device->block_capture = config.value("stop_during_capture", false);
         device->before = bytes(maafw::path_from_utf8(config.at("frame")));
         device->after = device->before;
         maafw::Bundle bundle{maafw::path_from_utf8(config.at("bundle")), "m4-state-fixture", {}};
@@ -643,12 +655,31 @@ int main(int argc, char **argv) {
         if (config.value("unknown_factory", false))
             definition.state_factory->implementation.revision = "unknown";
         runtime::RunCoordinator coordinator(maafw::path_from_utf8(config.at("run_root")), registry);
+        struct ReleaseCapture {
+            std::shared_ptr<StateDevice> device;
+            ~ReleaseCapture() { device->release_capture = true; }
+        } release_capture{device};
         try {
             coordinator.start(definition, device);
             if (config.value("mutate_definition", false))
                 definition.state_factory->parameters["profile"]["STRATEGY"] = J::array();
-            if (config.value("stop", false)) {
-                until([&] { return coordinator.snapshot().state == contracts::RunState::Running; });
+            if (config.value("stop_during_capture", false)) {
+                until([&] { return device->capture_waiting.load(); });
+                coordinator.request_stop();
+                until([&] { return coordinator.snapshot().reason == "STOP_TIMEOUT"; });
+                const auto pending = coordinator.snapshot();
+                require(!pending.quiescent && pending.generation == 1, "BLOCKED_CAPTURE_RELEASED_EARLY");
+                output["stop_pending"] = storage::snapshot_json(pending);
+                device->release_capture = true;
+            } else if (config.value("stop", false)) {
+                // Running 早于首个 Custom 进入；不能把原生截图等待误当成协作取消回调。
+                until([&] {
+                    const auto events = coordinator.events();
+                    for (const auto &event : events.at("events"))
+                        if (event.at("type") == "fixture.wait_entered")
+                            return true;
+                    return false;
+                });
                 coordinator.request_stop();
             }
             require(coordinator.wait_for(10000ms), "RUN_NOT_FINISHED");
