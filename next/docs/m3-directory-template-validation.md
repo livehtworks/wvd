@@ -26,3 +26,7 @@ M4离线检查CLI的 `prepare_pipeline_bundle` 请求可消费它；只准备派
 
 首轮构建 `524e52d` 在SetEncoded的const指针处失败，未运行测试；沿用既有preflight做法，
 只复制单张编码图给固定C ABI，不使用const_cast暴露源lease。修正后再构建和执行。
+
+`4972ff6` 构建后，目录模板两方法/五场景通过（2.981秒，`m3-fixes-1ly984rz`），
+包含两场真正Maa Pipeline执行；CLI准备一方法通过（0.486秒）。运行时DLL路径/hash由
+既有夹具逐项核对固定SDK，零底层输入。随后补目的目录不得嵌入源包的身份检查与CLI负例，待新构建。

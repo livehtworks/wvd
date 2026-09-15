@@ -85,6 +85,10 @@ class DataTests(unittest.TestCase):
             self.assertEqual(hashlib.sha256((destination / file["path"]).read_bytes()).hexdigest(), file["sha256"])
         rejected = self.run_data("directory-cli-existing", prepare_pipeline_bundle=request)
         self.assertEqual(rejected["error"], "PIPELINE_DESTINATION_EXISTS_OR_INVALID")
+        nested = source / "new/derived"
+        rejected = self.run_data("directory-cli-nested", prepare_pipeline_bundle={**request, "destination": str(nested)})
+        self.assertEqual(rejected["error"], "PIPELINE_DESTINATION_INSIDE_SOURCE")
+        self.assertFalse((source / "new").exists())
 
     def test_sections_unknown_and_roundtrip(self):
         for specific in (False, True):

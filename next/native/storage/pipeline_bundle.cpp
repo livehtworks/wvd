@@ -73,6 +73,14 @@ maafw::Bundle prepare_pipeline_bundle(const maafw::Bundle &source,
                                       const std::filesystem::path &destination) {
     require(!source.lease, "BUNDLE_ALREADY_MATERIALIZED");
     require(destination.is_absolute() && !std::filesystem::exists(destination), "PIPELINE_DESTINATION_EXISTS_OR_INVALID");
+    // 新目录也不能建在作者包里。用已存在祖先的文件身份检查，涵盖Windows大小写/路径别名。
+    for (auto parent = std::filesystem::weakly_canonical(destination).parent_path(); !parent.empty();) {
+        if (std::filesystem::exists(parent))
+            require(!std::filesystem::equivalent(parent, source.root), "PIPELINE_DESTINATION_INSIDE_SOURCE");
+        const auto next = parent.parent_path();
+        if (next == parent) break;
+        parent = next;
+    }
     Manifest manifest;
     for (const auto &file : source.files)
         require(manifest.emplace(file.relative_path, file.sha256).second, "BUNDLE_DUPLICATE_FILE");
