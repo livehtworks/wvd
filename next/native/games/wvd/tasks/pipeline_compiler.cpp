@@ -509,7 +509,7 @@ void PipelineCompiler::confirm(const std::string &name, const std::string &opera
                                const std::string &event, const J &condition, J next, J step) {
     const std::set<std::string> events{"target_completed", "dungeon_entered", "combat_observed",
                                       "chest_observed", "dungeon_resumed", "dungeon_completed", "revival_observed", "resurrected", "game_restarted",
-                                      "healing_requested", "healing_completed", "inn_rest_completed", "party_reassembled", "chest_character_attempted",
+                                      "healing_requested", "healing_completed", "inn_payment_prepared", "inn_rest_completed", "party_reassembled", "chest_character_attempted",
                                       "party_death_observed", "party_death_cleared", "party_defeat_observed",
                                       "wall_turn_completed", "wall_left_completed", "wall_right_completed",
                                       "karma_observed", "karma_completed", "trap_cycle_started", "trap_cycle_completed"};

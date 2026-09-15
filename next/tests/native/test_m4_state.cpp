@@ -143,7 +143,16 @@ J direct_contract(const J &profile) {
     supply_state.resume_dungeon();
     require(supply_state.summary().at("ordinary_rest_due").get<bool>(), "ORDINARY_REST_MISSING");
     const auto receipt = supply_state.confirmation_id("inn", "inn_rest_completed");
+    bool unprepared_rejected = false;
+    try { supply_state.confirm_event(receipt, "inn_rest_completed", 1, 1); }
+    catch (const std::exception &e) { unprepared_rejected = std::string(e.what()) == "INN_PAYMENT_NOT_PREPARED"; }
+    require(unprepared_rejected, "UNPREPARED_INN_COMPLETED");
+    const auto payment = supply_state.confirmation_id("inn.prepare", "inn_payment_prepared");
+    supply_state.confirm_event(payment, "inn_payment_prepared", 1, 1);
+    require(supply_state.summary().at("inn_payment_pending").get<bool>(), "PAYMENT_INTENT_MISSING");
+    require(!supply_state.confirm_event(payment, "inn_payment_prepared", 1, 1), "PAYMENT_INTENT_REPLAYED");
     supply_state.confirm_event(receipt, "inn_rest_completed", 1, 1);
+    require(!supply_state.summary().at("inn_payment_pending").get<bool>(), "CONFIRMED_PAYMENT_STILL_PENDING");
     require(!supply_state.summary().at("ordinary_rest_due").get<bool>(), "PAID_REST_REPEATED");
     supply_state.enter_segment(contracts::SegmentBoundary::Continuation, 2, 1);
     require(supply_state.summary().at("inn_rest_completed").get<bool>(), "RECEIPT_LOST_ON_CONTINUATION");
@@ -158,6 +167,18 @@ J direct_contract(const J &profile) {
     supply_state.confirm_event(party_receipt, "party_reassembled", 2, 4);
     require(!supply_state.summary().at("party_refresh_due").get<bool>(), "PARTY_PERIOD_NOT_COMMITTED");
     result["supply_receipts"] = supply_state.summary();
+    games::WvdRunState interrupted_payment(supply_profile, {"unconfirmed-payment", 1, clock});
+    interrupted_payment.enter_segment(contracts::SegmentBoundary::Initial, 1, 0);
+    const auto unpaid = interrupted_payment.confirmation_id("inn.prepare", "inn_payment_prepared");
+    interrupted_payment.confirm_event(unpaid, "inn_payment_prepared", 1, 1);
+    interrupted_payment.enter_segment(contracts::SegmentBoundary::LifecycleRecovery, 2, 0);
+    require(interrupted_payment.summary().at("inn_payment_pending").get<bool>(), "RESTART_LOST_PAYMENT_INTENT");
+    bool new_lap_rejected = false;
+    try { interrupted_payment.enter_dungeon(); }
+    catch (const std::exception &e) { new_lap_rejected = std::string(e.what()) == "INN_PAYMENT_UNCONFIRMED"; }
+    require(new_lap_rejected && interrupted_payment.summary().at("inn_rests") == 0, "PENDING_PAYMENT_COUNTED_OR_DISCARDED");
+    require(!interrupted_payment.confirm_event(unpaid, "inn_payment_prepared", 2, 2), "RESTART_REPLAYED_PAYMENT_INTENT");
+    result["unconfirmed_payment"] = interrupted_payment.summary();
     clock->milliseconds = 0;
     games::WvdRunState recurring(profile, {"recurring", 1, clock});
     recurring.enter_segment(contracts::SegmentBoundary::Initial, 1, 0);

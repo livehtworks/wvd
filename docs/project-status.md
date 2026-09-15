@@ -11,6 +11,8 @@
 
 ## 当前阶段
 
+- 住宿已补付款前待确认意图及恢复重放拒绝，状态与流程负例待构建验证，见 `../next/docs/m4-inn-payment-validation.md`。不把无法确认付款的状态自动清零或再次消费。
+
 - 默认对话十四个基础选项已按冻结资源排序接入纯视觉/有限子图，输入前新帧复核优先级，结果不明不重放；五方法/二十二场景测试已写，尚待构建，见 `../next/docs/m4-default-dialogue-validation.md`。专项对话和强制停点不在此完成范围内。
 
 - 新增资源入口审计复现原生 Pipeline 模板/OCR 漏检成员变化：direct/Custom 拒绝时，原生节点仍继续。跨包同名模板、延后调用和既有 lease 负例通过；已写 Gateway 入口修正及提交后变化负例，尚待构建复验，见 `../next/docs/m3-integrity-entry-validation.md`。不改变资源成本和发现链阻断，不把修正前 M4 产物结果套到新源码。

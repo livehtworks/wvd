@@ -580,10 +580,12 @@ int main(int argc, char **argv) {
                 }
             }
         }
-        if (config.value("stop_after_first", false)) {
+        if (config.value("stop_after_first", false) || config.contains("stop_after_calls")) {
             // 前置观察可能超过通用夹具的 5 秒。等待本 Session 公开预算内的首个输入，
             // 停止响应时间仍由 request_stop 后的正式 stop_timeout 约束。
-            until([&] { return device->calls.load() > 0 || coordinator.snapshot().quiescent; }, definition.initial.time_limit);
+            const auto stop_after = config.value("stop_after_calls", 1u);
+            require(stop_after > 0 && stop_after <= device->transitions.size(), "FIXTURE_STOP_COUNT_INVALID");
+            until([&] { return device->calls.load() >= stop_after || coordinator.snapshot().quiescent; }, definition.initial.time_limit);
             coordinator.request_stop();
         }
         bool stop_node_observed = false;

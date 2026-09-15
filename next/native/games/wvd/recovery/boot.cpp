@@ -33,6 +33,9 @@ std::optional<runtime::SessionDefinition> decide(const contracts::SessionResult 
     if (!result.business.is_object() || result.business.value("kind", "") != "wvd" ||
         !result.business.at("lifecycle_recovery_active").is_boolean())
         throw std::runtime_error("WVD_RECOVERY_STATE_INVALID");
+    // 付款意图跨代次保留；重启无法证明付款未发生，不能借恢复重新住宿。
+    if (result.business.at("inn_payment_pending").get<bool>())
+        return std::nullopt;
     const bool continuing = previous.lifecycle && result.business.at("lifecycle_recovery_active").get<bool>();
     const unsigned attempt = continuing ? previous.lifecycle->attempt + 1 : 1;
     if (attempt > 3)

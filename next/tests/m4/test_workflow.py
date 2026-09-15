@@ -210,6 +210,34 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(r["backend_calls"], 5)
         self.assertEqual(r["snapshot"]["business"]["inn_rests"], 1)
 
+    def test_departure_payment_intent_survives_stop_and_reject(self):
+        for stopped in (False, True):
+            with self.subTest(stopped=stopped):
+                frames, commands = self.inn_sequence()
+                if not stopped:
+                    commands[3] = {**commands[3], "reject": True}
+                options = {"stop_after_calls": 4} if stopped else {}
+                result = self.execute("inn-payment-stop-" + str(stopped), frames, commands,
+                    workflow="departure", force_rest=True, attach_recovery=True, **options)
+                self.assertEqual(result["snapshot"]["state"], "UserStopped" if stopped else "Failed", result)
+                self.assertEqual(result["backend_calls"], 4)
+                self.assertFalse(result["mismatch"])
+                self.assertTrue(result["snapshot"]["business"]["inn_payment_pending"])
+                self.assertFalse(result["snapshot"]["business"]["inn_rest_completed"])
+                self.assertEqual(result["snapshot"]["business"]["inn_rests"], 0)
+                self.assertEqual(result["lifecycle_calls"], [])
+
+    def test_departure_unknown_payment_post_does_not_retry(self):
+        frames, commands = self.inn_sequence()
+        result = self.execute("inn-payment-unknown", frames[:4] + [{}], commands[:4],
+            workflow="departure", force_rest=True, attach_recovery=True)
+        self.assertEqual(result["snapshot"]["state"], "Failed", result)
+        self.assertEqual(result["backend_calls"], 4)
+        self.assertFalse(result["mismatch"])
+        self.assertTrue(result["snapshot"]["business"]["inn_payment_pending"])
+        self.assertEqual(result["snapshot"]["business"]["inn_rests"], 0)
+        self.assertEqual(result["lifecycle_calls"], [])
+
     def test_departure_initial_skips_without_encounter(self):
         for symbol in ("Inn", "returntoTown", "openworldmap", "EdgeOfTown"):
             with self.subTest(symbol=symbol):

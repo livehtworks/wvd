@@ -91,6 +91,12 @@ class StateTests(unittest.TestCase):
         self.assertEqual(r["direct"]["trap_contract"]["dungeons"], 2)
         self.assertEqual(r["direct"]["trap_contract"]["trap_cycles_completed"], 1)
 
+    def test_inn_pending_payment_is_not_lost_or_counted_after_restart(self):
+        r = self.run_case("inn-pending-contract")
+        self.assertTrue(r["direct"]["unconfirmed_payment"]["inn_payment_pending"])
+        self.assertFalse(r["direct"]["unconfirmed_payment"]["inn_rest_completed"])
+        self.assertEqual(r["direct"]["unconfirmed_payment"]["inn_rests"], 0)
+
     def test_strategy_consumption_and_run_isolation(self):
         r = self.run_case("normal", new_run=True, mutate_definition=True)
         for key in ("snapshot", "second"):

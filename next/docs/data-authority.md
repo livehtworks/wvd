@@ -40,6 +40,7 @@
 | WvdRunState trap_unit / trap_cycles_completed、陷阱任务的 dungeons | 专项本轮归属、确认完成数及旧开始次数口径，三者不等价 | 陷阱图在已知本内场景开始时增加开始次数，七点完成才提交完成回执 | 同轮恢复不重计开始；普通下一轮另计，提前回城不能 Completed；当前实现待专项离线验收 |
 | WvdRunState 确认签名、business.confirmed 事件、snapshot.business.last_confirmation | 本 Run 的操作去重与确认诊断；不是跨进程恢复数据库 | WvdConfirm 在实际新帧识别后生成；状态最多保存 4096 个签名，EventJournal 有界 | 任务步/宝箱计数与终态审查；摘要不等于持久化 profile 回执，不允许据此启动实机重放 |
 | snapshot.business.inn_rest_completed/inn_rests/supply_cycle、last_bag_clear | 本 Run 已确认住宿与队伍周期；不是装备或游戏资产权威 | 新帧确认后由 WvdRunState 更新，入本开始新补给周期 | 回城补给和旅店子图避免已确认住宿重付；跨普通段/恢复代次保留，不从磁盘历史自动重建许可 |
+| snapshot.business.inn_payment_pending | 本 Run 在付款前记录的待确认意图，不证明已付或未付 | 旅店子图的 inn_payment_prepared 确认置位，付款后新帧 inn_rest_completed 清除 | 跨停止/恢复保留；导航、旅店与恢复策略阻止重付，未确认前入本也拒绝，不从历史文件自动重放 |
 | WvdRunState prepared 选择及 business.combat 事件 | 本代次未完成技能意图和已确认消费诊断；不是恢复许可 | WvdCombat 在同帧头像匹配后选择；新帧后置确认后消费 | 技能图读取只读摘要并重新识别原角色；不保存旧帧/坐标，段边界清除未完成选择 |
 | snapshot.business.combat_sequence/chest_sequence、revival_sequence/pending/revivals | 本 Run 遭遇身份与复活确认；序号不是成功统计，也不授权重放 | WvdRunState 根据新帧 WvdConfirm 事件更新 | 失败遭遇不重用 ID；复活图和外层恢复读取，已有成功计数不倒扣；不是跨进程断点 |
 | WvdRunState 的 chest::Selection、snapshot.business.chest_character/available_mask/character_attempts | 当前宝箱候选池与选择意图，不含坐标或图片 | WvdChest 同帧恐惧观察更新候选池，受控输入后由 WvdConfirm 登记尝试 | 开箱图只读选路；切换代次清意图，新箱重置候选池；编号不能代替新帧点击许可 |

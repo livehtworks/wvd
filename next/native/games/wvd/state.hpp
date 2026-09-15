@@ -66,7 +66,7 @@ class WvdRunState final : public contracts::BusinessRunState {
     std::size_t lifecycle_recovery_sequence_{};
     bool healing_pending_{}, healing_active_{};
     std::size_t healing_sequence_{};
-    bool inn_rest_completed_{};
+    bool inn_rest_completed_{}, inn_payment_pending_{};
     std::size_t supply_cycle_{}, inn_rests_{};
     enum class Encounter { None, Combat, Chest } last_encounter_{Encounter::None};
     // 遭遇编号不等于成功次数：复活取消一次待计数事件后仍不能重用其幂等 ID。

@@ -39,6 +39,8 @@ void WvdRunState::on_segment(contracts::SegmentBoundary boundary, std::uint64_t 
     }
 }
 void WvdRunState::enter_dungeon() {
+    if (inn_payment_pending_)
+        throw std::runtime_error("INN_PAYMENT_UNCONFIRMED");
     prepared_.reset();
     task_step_ = 0;
     need_initial_recover_ = true;
@@ -244,7 +246,7 @@ std::string WvdRunState::confirmation_id(const std::string &operation, const std
         id += ":heal:" + std::to_string(healing_sequence_ + (healing_active_ ? 0 : 1));
     else if (event == "healing_completed")
         id += ":heal:" + std::to_string(healing_sequence_);
-    else if (event == "inn_rest_completed")
+    else if (event == "inn_rest_completed" || event == "inn_payment_prepared")
         id += ":supply:" + std::to_string(supply_cycle_);
     else if (event == "party_reassembled")
         id += ":party:" + std::to_string(static_cast<std::size_t>(total_seconds_ / 21600));
@@ -360,11 +362,20 @@ bool WvdRunState::confirm_event(const std::string &operation, const std::string 
             throw std::runtime_error("WALL_BYPASS_STEP_MISMATCH");
         ++wall_bypass_step_;
     }
+    else if (event == "inn_payment_prepared") {
+        if (inn_rest_completed_ || inn_payment_pending_)
+            throw std::runtime_error("INN_PAYMENT_ALREADY_PREPARED_OR_COMPLETED");
+        // 在可能消费的输入之前留下事实。后置观察失败不证明“没付款”，不能自动清掉。
+        inn_payment_pending_ = true;
+    }
     else if (event == "inn_rest_completed") {
+        if (!inn_payment_pending_)
+            throw std::runtime_error("INN_PAYMENT_NOT_PREPARED");
         // 换 generation 或换普通段均保留已住宿事实；真正再次入本才开始新补给周期。
         if (!inn_rest_completed_)
             ++inn_rests_;
         inn_rest_completed_ = true;
+        inn_payment_pending_ = false;
     }
     else if (event == "healing_requested") {
         if (!healing_required())
@@ -438,6 +449,7 @@ J WvdRunState::summarize() const {
             {"party_refresh_due", party},
             {"city_supply_due", ordinary || party},
             {"inn_rest_completed", inn_rest_completed_},
+            {"inn_payment_pending", inn_payment_pending_},
             {"inn_rests", inn_rests_},
             {"supply_cycle", supply_cycle_},
             {"confirmed_operations", confirmations_.size()},

@@ -17,7 +17,8 @@ CompiledWorkflow prepare_departure(const WvdTaskPlan &plan, const nlohmann::json
     const auto outside = C::all({C::absent(inside), C::absent(world), C::absent(prompt)});
     const auto eot = C::all({outside, C::image("EdgeOfTown"), C::absent(C::image("Inn"))});
     const auto known = C::any({city, world, open, town, prompt, eot, inside});
-    graph.route("Entry", {"Dispatch"});
+    graph.route("Entry", {"PaymentUnconfirmed", "Dispatch"});
+    graph.observe("PaymentUnconfirmed", C::business("/inn_payment_pending", true), {"InnUncertain"});
     graph.route("Dispatch", {"Inside", "Prompt", "PendingInn", "City", "Town", "World", "Open", "Edge"});
     graph.hit_limit("Dispatch", 32);
     graph.observe("Inside", inside, {"InsideExit"});
