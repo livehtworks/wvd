@@ -17,7 +17,7 @@ Gateway 提交根任务、Context 提交子任务前核对资源快照。原生 
 
 新增“任务已提交、首次截图时新增成员”的故障，防止只在 `post()` 增加一次检查就把漏洞算修好。该故障不改变截图内容，不根据截图次数推进剧情。
 
-SDK direct 在参数/资源预检之外也会经过原生事件校验，可能增加一次轻量目录核对；没有重复全量文件哈希。direct→Custom 的原有单次完整性边界必须继续通过。本项不是成本放行，`PERFORMANCE_UNRESOLVED` 与 `RESOURCE_UNRESOLVED` 保留。
+SDK direct 的目录成员检查统一在原生开始事件执行，不在 direct 预检重复遍历；参数预检仍校验具体文件与闭合引用。direct→Custom 继续消费一次性凭据。新增 SDK/Offline 单次目录检查断言，首个原生入口错误必须保留到观察结果。以上仍待构建实测，不是成本放行，`PERFORMANCE_UNRESOLVED` 与 `RESOURCE_UNRESOLVED` 保留。
 
 ## 当前状态
 

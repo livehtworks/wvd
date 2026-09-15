@@ -193,8 +193,10 @@ contracts::Observation MaaGateway::recognize(const contracts::FrameEnvelope &fra
         auto image = validate_frame(frame, current, bundle_.revision);
         stage("frame_decode_preflight");
         result.error_stage = "resource_preflight";
-        // 资源是发布快照，不允许运行期间替换磁盘文件后继续沿用引擎缓存。
-        verify_bundle(bundle_);
+        // Custom 通过一次性凭据复用这次检查。SDK 内置识别没有 Custom 回调，
+        // 在 Node.Recognition.Starting 检查一次；这里不再重复遍历目录。
+        if (std::holds_alternative<RecognitionRequest::CustomParameters>(request.parameters))
+            verify_bundle(bundle_);
         stage("bundle_verification");
         result.error_stage = "parameter_preflight";
         if (const auto *custom =
@@ -229,7 +231,8 @@ contracts::Observation MaaGateway::recognize(const contracts::FrameEnvelope &fra
             result.engine_status = MaaTaskerWait(tasker_.get(), result.engine_task_id);
             require(result.engine_status == MaaStatus_Succeeded, "RECO_NATIVE_FAILED");
         }
-        require(!integrity_failed_, "BUNDLE_INTEGRITY_INVALIDATED");
+        if (integrity_failed_)
+            throw std::runtime_error(integrity_error());
         result.error_stage = "recognition_detail";
         stage("native_recognition_including_custom_preflight");
         read_detail(tasker_.get(), result);

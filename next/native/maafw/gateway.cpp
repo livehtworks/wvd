@@ -328,22 +328,31 @@ void MaaGateway::context_event_callback(void *handle, const char *message, const
         }
         event_callback(handle, message, payload, pointer);
     } catch (const std::exception &e) {
-        self.integrity_failed_ = true;
-        if (self.gate_)
-            self.gate_->close();
-        try {
-            self.hooks_.failure(e.what());
-        } catch (...) {
-        }
+        self.fail_integrity(e.what());
     } catch (...) {
-        self.integrity_failed_ = true;
-        if (self.gate_)
-            self.gate_->close();
-        try {
-            self.hooks_.failure("PIPELINE_INTEGRITY_EXCEPTION");
-        } catch (...) {
-        }
+        self.fail_integrity("PIPELINE_INTEGRITY_EXCEPTION");
     }
+}
+void MaaGateway::fail_integrity(const std::string &error) noexcept {
+    // 错误与关闭状态一起发布；后续观察保留首因，而不是覆盖成普通未命中。
+    try {
+        std::lock_guard lock(integrity_mutex_);
+        if (integrity_error_.empty())
+            integrity_error_ = error;
+        integrity_failed_ = true;
+    } catch (...) {
+        integrity_failed_ = true;
+    }
+    if (gate_)
+        gate_->close();
+    try {
+        hooks_.failure(error);
+    } catch (...) {
+    }
+}
+std::string MaaGateway::integrity_error() const {
+    std::lock_guard lock(integrity_mutex_);
+    return integrity_error_.empty() ? "BUNDLE_INTEGRITY_INVALIDATED" : integrity_error_;
 }
 contracts::FrameEnvelope MaaGateway::capture() {
     require(controller_ && gate_ && !hooks_.cancelled(), "CAPTURE_NOT_AVAILABLE");

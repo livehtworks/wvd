@@ -304,7 +304,8 @@ class FixTests(unittest.TestCase):
         result = self.execute(folder, {"mode": "integrity", "request": request,
                                       "native_request": native_request, "protected_paths": protected}, nodes)
         self.assertEqual(result["protected_files"], {name: True for name in protected})
-        for key in ("write_blocked", "delete_blocked", "replace_blocked", "one_boundary", "author_change_ignored", "released_write_succeeded"):
+        for key in ("write_blocked", "delete_blocked", "replace_blocked", "one_boundary", "sdk_one_boundary",
+                    "offline_one_boundary", "author_change_ignored", "released_write_succeeded"):
             self.assertTrue(result[key], result)
         self.assertEqual(result["matched"], 0)
         self.assertEqual(result["member_change_error"], "RESOURCE_NOT_IN_MANIFEST")

@@ -138,8 +138,12 @@ int main(int argc, char **argv) {
             }
             const auto native_request = maafw::parse_recognition_request(config.at("native_request"));
             // SDK 模板的首次实际识别发生在作者文件改变以后，不借前一次命中暖缓存。
+            const auto sdk_checks_before = gateway.bundle_status().at("directory_checks").get<int>();
             output["delayed_sdk_direct"] = int(gateway.recognize(frame, gate.frame_identity(), native_request).outcome);
+            output["sdk_one_boundary"] = gateway.bundle_status().at("directory_checks").get<int>() - sdk_checks_before == 1;
+            const auto offline_checks_before = offline.bundle_status().at("directory_checks").get<int>();
             output["delayed_offline"] = int(offline.evaluate(frame, frame.identity, native_request).outcome);
+            output["offline_one_boundary"] = offline.bundle_status().at("directory_checks").get<int>() - offline_checks_before == 1;
             auto pipeline = [&](const std::string &entry) {
                 const auto before = reached.load();
                 {
@@ -172,9 +176,10 @@ int main(int argc, char **argv) {
             }
             auto changed = gateway.recognize(frame, gate.frame_identity(), request);
             output["member_change_error"] = changed.error_code;
-            output["sdk_member_change_error"] = gateway.recognize(frame, gate.frame_identity(), native_request).error_code;
             output["sdk_pipeline_changed"] = pipeline("SdkEntry");
             output["custom_pipeline_changed"] = pipeline("CustomEntry");
+            // 原生开始事件失败会永久关闭本 Gateway；放在其余独立入口断言之后。
+            output["sdk_member_change_error"] = gateway.recognize(frame, gate.frame_identity(), native_request).error_code;
             const auto offline_root = maafw::path_from_utf8(offline.bundle_status().at("root"));
             {
                 std::ofstream extra(offline_root / "image/extra.png", std::ios::binary);
