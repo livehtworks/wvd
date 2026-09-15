@@ -273,7 +273,7 @@ J evaluate_uncached(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels
             conditions.push_back(image_probe("dungFlag"));
             for (auto name : {"mapFlag", "trait", "recover"}) excluded.push_back(image_probe(name));
         }
-        conditions.push_back({{"mode", "not"}, {"conditions", excluded}});
+        conditions.push_back({{"mode", "not"}, {"conditions", J::array({J{{"mode", "any"}, {"conditions", excluded}}})}});
         auto scene = evaluate_impl(bundle, pixels, {{"mode", "all"}, {"conditions", conditions}},
             bound, scope, cache, depth + 1, memo);
         check(scene.at("outcome") != "Error", "WVD_DARK_LIGHT_RECOGNITION_ERROR");
