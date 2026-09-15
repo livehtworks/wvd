@@ -586,6 +586,7 @@ void PipelineCompiler::confirm(const std::string &name, const std::string &opera
                                       "sandman_duke_rested", "sandman_duke_prepared", "sandman_duke_leaped", "sandman_triumph_rested",
                                       "sandman_triumph_prepared", "sandman_completed", "sandman_bondmate_completed",
                                       "gold_income_started", "gold_income_prepared", "gold_income_advanced",
+                                      "steel_trial_started", "steel_trial_prepared", "steel_trial_entered", "steel_trial_routed", "steel_trial_returned", "steel_trial_completed",
                                       "bull_cave_started", "bull_cave_started_rest", "bull_cave_leap_prepared", "bull_cave_leaped",
                                       "bull_cave_fortress", "bull_cave_royal", "bull_cave_requested", "bull_cave_first_entered",
                                       "bull_cave_first_routed", "bull_cave_first_exited", "bull_cave_rested", "bull_cave_second_entered",

@@ -39,6 +39,7 @@
 #include "games/wvd/tasks/sandman.hpp"
 #include "games/wvd/tasks/gold_income.hpp"
 #include "games/wvd/tasks/bull_cave.hpp"
+#include "games/wvd/tasks/steel_trial.hpp"
 #include "games/wvd/vision/recognizers.hpp"
 #include "platform/windows/file_digest.hpp"
 #include <iostream>
@@ -53,6 +54,7 @@ class WorkflowDevice final : public OfflineDevice, public devices::LifecyclePort
     std::size_t cursor{};
     std::size_t action_cursor{};
     bool mismatch{};
+    J mismatch_detail;
     J time_event;
     std::optional<std::chrono::steady_clock::time_point> time_event_due;
     unsigned time_event_count{};
@@ -147,8 +149,10 @@ class WorkflowDevice final : public OfflineDevice, public devices::LifecyclePort
         std::lock_guard lock(mutex);
         ++calls;
         sent.push_back(c);
+        const J actual{{"kind", int(c.kind)}, {"x", c.x}, {"y", c.y}, {"x2", c.x2}, {"y2", c.y2}, {"key", c.key}, {"duration", c.duration}};
         if (action_cursor >= transitions.size()) {
             mismatch = true;
+            mismatch_detail = {{"action_index", action_cursor}, {"expected", nullptr}, {"actual", actual}};
             return false;
         }
         const auto &expected = transitions.at(action_cursor);
@@ -157,6 +161,7 @@ class WorkflowDevice final : public OfflineDevice, public devices::LifecyclePort
             c.x2 != expected.value("x2", 0) || c.y2 != expected.value("y2", 0) ||
             c.duration != expected.value("duration", 0)) {
             mismatch = true;
+            mismatch_detail = {{"action_index", action_cursor}, {"expected", expected}, {"actual", actual}};
             return false;
         }
         if (expected.value("reject", false))
@@ -247,11 +252,11 @@ int main(int argc, char **argv) {
             if (kind == "common")
                 return games::recovery::clear_common_screens(config.value("allow_download", true),
                     config.value("golden_dialogue", false) ? games::recovery::DialoguePolicy::GoldenChest : config.value("jier_dialogue", false) ? games::recovery::DialoguePolicy::Jier : games::recovery::DialoguePolicy::Default);
-            if (kind == "fortress-trap" || kind == "giant" || kind == "dark-light" || kind == "mining" || kind == "manual-separation" || kind == "scorpion" || kind == "fishing-cycle" || kind == "jier" || kind == "golden-chest" || kind == "sandman" || kind == "gold-income" || kind == "bull-cave") {
+            if (kind == "steel-trial" || kind == "fortress-trap" || kind == "giant" || kind == "dark-light" || kind == "mining" || kind == "manual-separation" || kind == "scorpion" || kind == "fishing-cycle" || kind == "jier" || kind == "golden-chest" || kind == "sandman" || kind == "gold-income" || kind == "bull-cave") {
                 nlohmann::ordered_json source;
                 std::ifstream(maafw::path_from_utf8(config.at("quest_catalog"))) >> source;
                 games::WvdQuestCatalog catalog(source);
-                const auto &task = catalog.at(kind == "bull-cave" ? "LBC-oneGorgon" : kind == "gold-income" ? "7000G" : kind == "sandman" ? "sandman" : kind == "golden-chest" ? "SSC-goldenchest" : kind == "jier" ? "jier" : kind == "fishing-cycle" ? (config.value("far", false) ? "fishing2" : "fishing") : kind == "scorpion" ? (config.value("hands", false) ? "Scorpionesses_plus_6_hands" : "Scorpionesses") : kind == "manual-separation" ? "manualSepDemon" : kind == "mining" ? "FFXI-Org" : kind == "dark-light" ? "darkLight" : kind == "giant" ? "gaintKiller" : "fortress-B8F_trap");
+                const auto &task = catalog.at(kind == "steel-trial" ? "steeltrail" : kind == "bull-cave" ? "LBC-oneGorgon" : kind == "gold-income" ? "7000G" : kind == "sandman" ? "sandman" : kind == "golden-chest" ? "SSC-goldenchest" : kind == "jier" ? "jier" : kind == "fishing-cycle" ? (config.value("far", false) ? "fishing2" : "fishing") : kind == "scorpion" ? (config.value("hands", false) ? "Scorpionesses_plus_6_hands" : "Scorpionesses") : kind == "manual-separation" ? "manualSepDemon" : kind == "mining" ? "FFXI-Org" : kind == "dark-light" ? "darkLight" : kind == "giant" ? "gaintKiller" : "fortress-B8F_trap");
                 std::set<std::string> images;
                 for (const auto &file : config.at("files")) {
                     const auto path = file.at("path").get<std::string>();
@@ -259,6 +264,10 @@ int main(int argc, char **argv) {
                         images.insert(path.substr(6));
                 }
                 if (kind == "gold-income") return games::tasks::gold_income_cycle(task, config.value("allow_download", true));
+                if (kind == "steel-trial") {
+                    task_plan = games::tasks::steel_trial_plan(task).inspect();
+                    return games::tasks::steel_trial_cycle(task, profile, images, config.value("allow_download", true));
+                }
                 if (kind == "bull-cave") {
                     task_plan = games::tasks::bull_cave_plan(task).inspect();
                     return games::tasks::bull_cave_cycle(task, profile, images, config.value("allow_download", true));
@@ -718,6 +727,7 @@ int main(int argc, char **argv) {
                  {"backend_calls", device->calls.load()},
                  {"cursor", device->cursor},
                  {"mismatch", device->mismatch},
+                 {"mismatch_detail", device->mismatch_detail},
                  {"captures", device->captures.load()},
                  {"images", workflow.images},
                  {"required_actions", workflow.required_actions},

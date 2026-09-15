@@ -80,6 +80,40 @@ std::optional<runtime::SessionDefinition> recover_unit(const contracts::SessionR
     next.entry = "Recovered";
     return next;
 }
+J steel_trial_contract(const J &profile) {
+    auto settings = profile;
+    settings["ACTIVE_REST"] = false;
+    settings["REST_INTERVEL"] = 1;
+    auto clock = std::make_shared<TestClock>();
+    games::WvdRunState state(settings, {"steel-trial-contract", 1, clock});
+    std::uint64_t generation = 0;
+    auto apply = [&](const char *event) {
+        const auto id = state.confirmation_id(event, event);
+        require(state.confirm_event(id, event, generation, 1), "STEEL_EVENT_NOT_APPLIED");
+        require(!state.confirm_event(id, event, generation, 2), "STEEL_EVENT_REPLAYED");
+    };
+    for (std::size_t unit = 0; unit < 3; ++unit) {
+        state.enter_segment(unit ? contracts::SegmentBoundary::Continuation : contracts::SegmentBoundary::Initial, ++generation, unit);
+        apply("steel_trial_started"); apply("steel_trial_prepared");
+        state.enter_segment(contracts::SegmentBoundary::Recovery, ++generation, unit);
+        require(state.summary().at("steel_trial").at("pending").get<bool>(), "STEEL_RECOVERY_LOST_INTENT");
+        apply("steel_trial_entered"); state.enter_dungeon();
+        bool premature = false;
+        try { apply("steel_trial_routed"); } catch (const std::runtime_error &e) { premature = std::string(e.what()) == "STEEL_TRIAL_ROUTE_INCOMPLETE"; }
+        require(premature, "STEEL_EARLY_ROUTE_ACCEPTED");
+        for (int i = 0; i < 4; ++i) state.target_point_completed();
+        apply("steel_trial_routed"); apply("steel_trial_returned");
+        require(state.summary().at("steel_trial").at("rest_due") == (unit % 2 == 0), "STEEL_REST_INTERVAL_CHANGED");
+        if (unit % 2 == 0) {
+            bool missing = false;
+            try { apply("steel_trial_completed"); } catch (const std::runtime_error &e) { missing = std::string(e.what()) == "STEEL_TRIAL_REST_REQUIRED"; }
+            require(missing, "STEEL_MISSING_REST_ACCEPTED");
+            apply("inn_payment_prepared"); apply("inn_rest_completed");
+        }
+        apply("steel_trial_completed");
+    }
+    return state.summary();
+}
 J bull_cave_contract(const J &profile, bool rest) {
     auto clock = std::make_shared<TestClock>();
     games::WvdRunState state(profile, {"bull-cave-contract", 1, clock});
@@ -1118,6 +1152,11 @@ int main(int argc, char **argv) {
             return 0;
         }
         auto profile = importer.parse(config.at("source")).values;
+        if (config.value("steel_trial_contract", false)) {
+            const J output{{"steel_trial_contract", steel_trial_contract(profile)}, {"backend_inputs", 0}};
+            std::ofstream(maafw::path_from_utf8(config.at("output"))) << output.dump(2);
+            return 0;
+        }
         if (config.value("bull_cave_contract", false)) {
             const J output{{"bull_cave_contract", bull_cave_contract(profile, config.value("rest", false))}, {"backend_inputs", 0}};
             std::ofstream(maafw::path_from_utf8(config.at("output"))) << output.dump(2);

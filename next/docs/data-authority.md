@@ -87,6 +87,10 @@ completed_cycles只在六点及退出已确认后增加，不把任务点数或�
   两者均由WvdConfirm生产、任务/恢复决策和结果审查消费，不从历史摘要重放账号操作。
 - 因果滚动的BGR参考ROI只存在当前Gateway的RecognitionCache，固定每方向一份，
   Session销毁即释放；不进入WvdRunState、profile或RunStore，不作为跨代次恢复点。
+- `snapshot.business.steel_trial`由WvdRunState内SteelTrial持有，记录源码扩展的选择意图、
+  四点路线、返回与住宿阶段；WvdConfirm是生产者，专项图、恢复策略和结果审查为消费者。
+  选择待确认跨恢复保留；completed_cycles只表示本次离线业务终点，不是账号试炼成绩。
+  扩展任务由显式提供的新目录加载，基础58项目录不自动增补，历史结果不用于自动续跑。
 
 - `snapshot.business.sleep`由WvdRunState内的SleepVisits唯一持有，记录固定9999次目标、
   当前住宿意图及完成数；每次退出旅店的新帧确认后递增。`tasks::configure_sleep_units`

@@ -69,6 +69,15 @@ class StateTests(unittest.TestCase):
         self.assertEqual(result["backend_inputs"], 0)
         return result
 
+    def test_steel_trial_keeps_pending_route_and_original_rest_interval(self):
+        state = self.run_case("steel-trial-contract", steel_trial_contract=True)["steel_trial_contract"]
+        self.assertEqual(state["steel_trial"]["completed_cycles"], 3)
+        self.assertEqual(state["steel_trial"]["attempts"], 3)
+        self.assertFalse(state["steel_trial"]["active"])
+        self.assertFalse(state["steel_trial"]["pending"])
+        self.assertEqual(state["dungeons"], 3)
+        self.assertEqual(state["inn_rests"], 2)
+
     def test_sleep_all_9999_receipts_and_250_units_are_bounded(self):
         state = self.run_case("sleep-contract", sleep_contract=True)["sleep_contract"]
         self.assertEqual(state["sleep"]["completed_visits"], 9999)

@@ -22,6 +22,7 @@ inline bool business_condition(const nlohmann::json &summary, const nlohmann::js
         "/sandman/completed_unit_matches",
         "/gold_income/phase", "/gold_income/active", "/gold_income/unit_matches", "/gold_income/pending",
         "/bull_cave/phase", "/bull_cave/active", "/bull_cave/unit_matches", "/bull_cave/leap_pending",
+        "/steel_trial/phase", "/steel_trial/active", "/steel_trial/unit_matches", "/steel_trial/pending", "/steel_trial/rest_due",
         "/fishing/reward_pending",
         "/fishing/waiting", "/fishing/timed_out",
         "/fishing/casting_pending",

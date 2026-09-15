@@ -298,6 +298,8 @@ std::string WvdRunState::confirmation_id(const std::string &operation, const std
         id += ":gold-income:" + std::to_string(gold_income_.sequence(event == "gold_income_started"));
     if (event.starts_with("bull_cave_"))
         id += ":bull:" + std::to_string(bull_cave_.sequence(event == "bull_cave_started" || event == "bull_cave_started_rest"));
+    if (event.starts_with("steel_trial_"))
+        id += ":steel:" + std::to_string(steel_trial_.sequence(event == "steel_trial_started"));
     if (event == "fishing_reward_prepared" || event == "fishing_reward_completed")
         id += ":fishing:" + std::to_string(fishing_.sequence(event == "fishing_reward_prepared"));
     if (event == "fishing_wait_started" || event == "fishing_wait_failed")
@@ -342,7 +344,29 @@ bool WvdRunState::confirm_event(const std::string &operation, const std::string 
         throw std::runtime_error("BUSINESS_CONFIRMATION_CAPACITY");
     if (expected_step && *expected_step != task_step_)
         throw std::runtime_error("BUSINESS_TASK_STEP_MISMATCH");
-    if (event == "bull_cave_started" || event == "bull_cave_started_rest") {
+    if (event == "steel_trial_started") {
+        if (inn_payment_pending_ || special_dialogue_pending_) throw std::runtime_error("STEEL_TRIAL_SIDE_EFFECT_PENDING");
+        const auto interval = profile_.at("REST_INTERVEL").get<std::int64_t>();
+        if (interval < 0) throw std::runtime_error("STEEL_TRIAL_REST_INTERVAL_INVALID");
+        const auto now = clock_->now();
+        if (lap_started_ && now < *lap_started_) throw std::runtime_error("WVD_CLOCK_MOVED_BACKWARD");
+        // 原钢试炼不读取ACTIVE_REST；首轮及每interval+1轮住宿。
+        steel_trial_.start(unit_index_, dungeons_ % (static_cast<std::uint64_t>(interval) + 1) == 0);
+        if (lap_started_) total_seconds_ += std::chrono::duration<double>(now - *lap_started_).count();
+        lap_started_ = now; ++dungeons_;
+        inn_rest_completed_ = false; ++supply_cycle_;
+    } else if (event == "steel_trial_prepared") {
+        steel_trial_.prepare(unit_index_);
+    } else if (event == "steel_trial_entered") {
+        steel_trial_.entered(unit_index_);
+    } else if (event == "steel_trial_routed") {
+        steel_trial_.routed(unit_index_, task_step_);
+    } else if (event == "steel_trial_returned") {
+        steel_trial_.returned(unit_index_);
+    } else if (event == "steel_trial_completed") {
+        if (inn_payment_pending_ || special_dialogue_pending_) throw std::runtime_error("STEEL_TRIAL_SIDE_EFFECT_PENDING");
+        steel_trial_.complete(unit_index_, inn_rest_completed_);
+    } else if (event == "bull_cave_started" || event == "bull_cave_started_rest") {
         if (inn_payment_pending_ || featured_visit_.summary().at("active").get<bool>()) throw std::runtime_error("BULL_CAVE_SIDE_EFFECT_PENDING");
         const auto now = clock_->now();
         if (lap_started_ && now < *lap_started_) throw std::runtime_error("WVD_CLOCK_MOVED_BACKWARD");
@@ -761,6 +785,7 @@ J WvdRunState::summarize() const {
             {"sandman", sandman_.summary(unit_index_)},
             {"gold_income", gold_income_.summary(unit_index_)},
             {"bull_cave", bull_cave_.summary(unit_index_)},
+            {"steel_trial", steel_trial_.summary(unit_index_)},
             {"bounty_reveals", bounty_reveals_},
             {"sleep", sleep_.summary(unit_index_)},
             {"bounty_cycle", bounty_cycle_.summary(unit_index_, bounty_reports_)},

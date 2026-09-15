@@ -17,6 +17,7 @@
 #include "games/wvd/tasks/sandman.hpp"
 #include "games/wvd/tasks/gold_income.hpp"
 #include "games/wvd/tasks/bull_cave.hpp"
+#include "games/wvd/tasks/steel_trial.hpp"
 #include "games/wvd/quests/sleep_visits.hpp"
 #include "games/wvd/tasks/bounty_cycle.hpp"
 #include "games/wvd/navigation/dungeon_entry.hpp"
@@ -127,7 +128,7 @@ int main(int argc, char **argv) {
                     const bool scorpion = task.id == "Scorpionesses" || task.id == "Scorpionesses_plus_6_hands";
                     const bool bounty = scorpion || task.id == "jier";
                     const bool fishing = task.id == "fishing" || task.id == "fishing2";
-                    if (specials && !bounty && !fishing && task.id != "LBC-oneGorgon" && task.id != "7000G" && task.id != "sandman" && task.id != "SSC-goldenchest" && task.id != "fortress-B8F_trap" && task.id != "gaintKiller" && task.id != "darkLight" && task.id != "FFXI-Org" && task.id != "manualSepDemon" && task.id != "lovesleep") {
+                    if (specials && !bounty && !fishing && task.id != "steeltrail" && task.id != "LBC-oneGorgon" && task.id != "7000G" && task.id != "sandman" && task.id != "SSC-goldenchest" && task.id != "fortress-B8F_trap" && task.id != "gaintKiller" && task.id != "darkLight" && task.id != "FFXI-Org" && task.id != "manualSepDemon" && task.id != "lovesleep") {
                         result["unimplemented_specials"].push_back(task.id);
                         continue;
                     }
@@ -144,6 +145,7 @@ int main(int argc, char **argv) {
                         if (task.id == "sandman") return games::tasks::sandman_cycle(task, profile.values, images);
                         if (task.id == "7000G") return games::tasks::gold_income_cycle(task);
                         if (task.id == "LBC-oneGorgon") return games::tasks::bull_cave_cycle(task, profile.values, images);
+                        if (task.id == "steeltrail") return games::tasks::steel_trial_cycle(task, profile.values, images);
                         if (task.id == "lovesleep") return games::tasks::sleep_visits(task, profile.values);
                         if (task.id == "manualSepDemon") return games::tasks::manual_separation(task, profile.values, images);
                         if (task.id == "FFXI-Org") return games::tasks::mining_iteration(task, profile.values);

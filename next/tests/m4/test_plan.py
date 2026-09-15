@@ -127,6 +127,18 @@ class PlanTests(unittest.TestCase):
         self.assertEqual(giant["Completed"]["custom_action_param"]["event"], "giant_cycle_completed")
         self.assertEqual(giant["RestDue"]["custom_recognition_param"]["field"], "/giant_rest_due")
 
+    def test_steel_trial_source_extension_compiles_without_changing_base_catalog(self):
+        self.assertNotIn("steeltrail", self.source)
+        result = self.inspect("steel-extension", {"steeltrail": {"_TYPE": "quest"}},
+            compile_specials_manifest=str(ROOT / "packs/wvd/manifest.json"))
+        self.assertEqual(result["outcome"], "PASS", result)
+        rows = result["compiled_specials"]
+        self.assertEqual([row["task_id"] for row in rows], ["steeltrail"])
+        self.assertEqual(rows[0]["missing_images"], [])
+        self.assertIn("Steel.png", rows[0]["images"])
+        self.assertFalse(rows[0]["executed"])
+        self.assertEqual(len(self.source), 58)
+
     def test_special_negative_interval_is_not_silently_reinterpreted(self):
         result = self.inspect("specials-negative-interval", changed_values={"REST_INTERVEL": -1},
             compile_specials_manifest=str(ROOT / "packs/wvd/manifest.json"))

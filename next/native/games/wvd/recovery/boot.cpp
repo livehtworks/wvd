@@ -56,6 +56,8 @@ std::optional<runtime::SessionDefinition> decide(const contracts::SessionResult 
         return std::nullopt;
     if (result.business.at("bull_cave").at("leap_pending").get<bool>())
         return std::nullopt;
+    if (result.business.at("steel_trial").at("pending").get<bool>())
+        return std::nullopt;
     if (result.business.at("bounty_cycle").at("transfer_pending").get<bool>())
         return std::nullopt;
     if (result.business.at("fishing").at("casting_pending").get<bool>() ||

@@ -35,7 +35,7 @@ class WorkflowTests(unittest.TestCase):
         folder = self.root / name
         bundle = folder / "bundle"
         (bundle / "image").mkdir(parents=True)
-        resource_kind = "dungeon-route" if options.get("workflow") == "fortress-trap" else "iteration" if options.get("workflow") in ("giant", "dark-light", "mining", "manual-separation", "scorpion", "fishing-cycle", "jier", "golden-chest", "sandman", "gold-income", "bull-cave") else options.get("workflow")
+        resource_kind = "dungeon-route" if options.get("workflow") == "fortress-trap" else "iteration" if options.get("workflow") in ("giant", "dark-light", "mining", "manual-separation", "scorpion", "fishing-cycle", "jier", "golden-chest", "sandman", "gold-income", "bull-cave", "steel-trial") else options.get("workflow")
         if resource_kind in ("bounty-visit", "featured-request", "sleep-batch", "fishing-cast", "fishing-reward", "fishing-round", "fishing-seek"): resource_kind = "common"
         names = ["worldmapflag", "City_RoyalCityLuknalia", "Inn", "Stay", "Economy", "royalsuite", "OK"]
         if resource_kind in ("departure", "iteration"):
@@ -119,6 +119,11 @@ class WorkflowTests(unittest.TestCase):
         frames = []
         for i, screen in enumerate(screens):
             pixels = np.zeros((1600, 900, 3), dtype=np.uint8)
+            # 明确合成背景变化，之后再绘制模板；不让识别器按测试预期直接返回结果。
+            for x, y, w, h, value in options.get("frame_rectangles", {}).get(str(i), []):
+                self.assertTrue(0 <= x < x+w <= 900 and 0 <= y < y+h <= 1600)
+                self.assertTrue(0 <= value <= 255)
+                pixels[y:y+h, x:x+w] = value
             for key, (x, y) in screen.items():
                 pattern = patterns[image_name(key.split("@", 1)[0])]
                 if (options.get("causality") or resource_kind == "causality") and key in ("didnottakethequest", "LBC/EnaWasSaved"):
@@ -170,6 +175,11 @@ class WorkflowTests(unittest.TestCase):
                           {"path": p.relative_to(bundle).as_posix(), "sha256": digest(p)}
                           for p in sorted(bundle.rglob("*.png"))])
         config.update(options)
+        if options.get("workflow") == "steel-trial":
+            # 固定源码存在case，基础目录没有此ID。隔离扩展只提供类型，不伪造路线参数。
+            extension = folder / "extension-quests.json"
+            extension.write_text(json.dumps({"steeltrail": {"_TYPE": "quest"}}), encoding="utf-8")
+            config["quest_catalog"] = str(extension)
         if "mod_images" in options:
             mod = folder / "private-mod"
             (mod / "image").mkdir(parents=True)
@@ -208,6 +218,7 @@ class WorkflowTests(unittest.TestCase):
                                         "jier": (route_budget + 500) * 3,
                                         "golden-chest": (route_budget + 740) * 2, "sandman": (route_budget + 200) * 2, "gold-income": 1520, "featured-request": 260,
                                         "bull-cave": (route_budget + 400) * (3 if options.get("profile", {}).get("ACTIVE_REST") else 2), "causality": 320,
+                                        "steel-trial": (route_budget + 500) * options.get("normal_units", 1),
                                         "scorpion": (route_budget + 500) * (4 if options.get("hands") else 3), "city-travel": 140, "sleep-batch": 1620 * options.get("normal_units", 1), "bounty-visit": 200 * options.get("normal_units", 1), "manual-separation": 3620, "time-leap": 500 if options.get("causality") else 200, "mining": mining_watchdog, "common": 140, "iteration": (route_budget + 380) * options.get("normal_units", 1)}.get(options.get("workflow"), 90))
         self.assertEqual(digest(exe), before_hash)
         (folder / "execution.json").write_text(json.dumps({"exe_sha256": before_hash, "exit": result.returncode}), encoding="utf-8")
@@ -2259,6 +2270,121 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(r["backend_calls"], 2)
         self.assertFalse(r["mismatch"])
 
+    def test_causality_changed_roi_requires_another_scroll_before_closing(self):
+        symbol = {"LBC/symbolofalliance": (100, 200)}
+        # 两个方向都先有大区域变化，再保持不变。变化位于旧固定ROI内且不遮挡页签。
+        frames = [symbol] * 5 + [{"leap": (400, 900)}]
+        commands = [dict(kind=1, x=150, y=500, x2=150, y2=400, duration=400)] * 2
+        commands += [dict(kind=1, x=150, y=400, x2=150, y2=500, duration=400)] * 2
+        commands += [dict(kind=5, key=4)]
+        regions = {str(i): [[200, 500, 500, 500, value]] for i, value in ((1, 100), (2, 100), (3, 200), (4, 200))}
+        self.assertGreater(100 * 500 * 500 / (255 * 757 * 1068), .006)
+        r = self.execute("causality-changing", frames, commands, workflow="causality", frame_rectangles=regions)
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 5)
+        self.assertFalse(r["mismatch"], r.get("mismatch_detail"))
+
+    def test_causality_slow_leap_completes_settings_before_leap(self):
+        title = {"cursedWheelTitle": (200, 100)}
+        chapter = {**title, "cursedwheel_impregnableFortress": (300, 500)}
+        target = {**title, "GhostsOfYore": (300, 900)}
+        menu = {**title, "CSC": (300, 700), "leap": (400, 900)}
+        symbol = {"LBC/symbolofalliance": (100, 200)}
+        frames = [title] * 10 + [chapter, target, menu,
+            {**symbol, "didnottakethequest": (400, 700)}, symbol,
+            {**symbol, "LBC/EnaWasSaved": (400, 800)}, symbol, symbol, menu, {"Inn": (400, 700)}]
+        commands = [dict(kind=0, x=105, y=230)] * 10
+        commands += [dict(kind=0, x=320, y=512), dict(kind=0, x=320, y=912),
+            dict(kind=0, x=320, y=712), dict(kind=0, x=420, y=712),
+            dict(kind=1, x=150, y=500, x2=150, y2=400, duration=400), dict(kind=0, x=420, y=812),
+            dict(kind=1, x=150, y=400, x2=150, y2=500, duration=400), dict(kind=5, key=4),
+            dict(kind=0, x=420, y=912)]
+        r = self.execute("causality-slow", frames, commands, workflow="time-leap", leap_target="GhostsOfYore", causality=True)
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 19)
+        self.assertFalse(r["mismatch"], r.get("mismatch_detail"))
+
+    def test_causality_stop_or_rejection_never_scrolls_or_leaps_after_open(self):
+        for stop in (False, True):
+            r = self.execute("causality-stop-" + str(stop),
+                [{"CSC": (300, 700), "leap": (400, 900)}, {"LBC/symbolofalliance": (100, 200)}],
+                [dict(kind=0, x=320, y=712, reject=not stop)], workflow="causality",
+                **({"stop_after_calls": 1} if stop else {}))
+            self.assertEqual(r["snapshot"]["state"], "UserStopped" if stop else "Failed", r)
+            self.assertEqual(r["backend_calls"], 1)
+            self.assertFalse(r["mismatch"])
+
+    def test_causality_unknown_postcondition_and_missing_template_are_not_success(self):
+        for missing in (False, True):
+            r = self.execute("causality-invalid-" + str(missing),
+                [{"CSC": (300, 700), "leap": (400, 900)}, {}], [dict(kind=0, x=320, y=712)], workflow="causality",
+                **({"omit_image": "LBC/symbolofalliance.png"} if missing else {}))
+            self.assertEqual(r["backend_calls"], 0 if missing else 1)
+            if missing:
+                self.assertEqual(r["publish_error"], "COMPILE_IMAGE_NOT_IN_MANIFEST:image/LBC/symbolofalliance.png")
+                self.assertEqual(r["connections"], 0)
+            else:
+                self.assertEqual(r["snapshot"]["state"], "Failed", r)
+                self.assertFalse(r["mismatch"])
+                self.assertEqual(r["snapshot"]["sessions"][-1]["reason"], "POSTCONDITION_TIMEOUT")
+
+    def steel_trial_options(self, **extra):
+        options = self.scorpion_options(**extra)
+        options["workflow"] = "steel-trial"
+        options["extra_images"] += ["gradeexam", "Steel", "ready", "noneed", "quit"]
+        return options
+
+    def steel_trial_scenario(self):
+        frames = [{"guild": (400, 700), "Inn": (200, 500)}]
+        commands = []
+        def advance(command, page):
+            commands.append(command)
+            frames.append(page)
+        def click(x, y, page): advance(dict(kind=0, x=x, y=y), page)
+        click(420, 712, {"guildRequest": (400, 700)})
+        click(420, 712, {"gradeexam": (400, 700)})
+        click(420, 712, {"Steel": (400, 700)})
+        click(726, 970, {"ready": (500, 900)})
+        page = {"mapFlag": (100, 100)}
+        click(520, 912, page)
+        for x, y, upper in ((131, 769, True), (827, 447, True), (131, 769, True), (719, 1080, False)):
+            swipe = dict(kind=1, x=100, y=250 if upper else 1200, x2=700, y2=1200 if upper else 250, duration=400)
+            advance(swipe.copy(), page)
+            click(x, y, page)
+            click(136, 1431, {"dungFlag": (50, 150)})
+            reached = {**page, "cursor_0": (x-20, y-12)}
+            click(777, 150, reached)
+            advance(swipe.copy(), reached)
+        click(1, 1, {"quit": (500, 900)})
+        click(520, 912, {"Inn": (400, 700)})
+        sleep, inputs = self.inn_sequence()
+        frames += sleep[1:]
+        commands += inputs
+        return frames, commands
+
+    def test_steel_trial_full_route_dialogue_and_rest_even_when_general_rest_disabled(self):
+        frames, commands = self.steel_trial_scenario()
+        r = self.execute("steel-trial-full", frames, commands,
+            **self.steel_trial_options(profile=dict(ACTIVE_REST=False, REST_INTERVEL=1)))
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 32)
+        self.assertFalse(r["mismatch"], r.get("mismatch_detail"))
+        self.assertEqual(r["snapshot"]["business"]["steel_trial"]["completed_cycles"], 1)
+        self.assertEqual(r["snapshot"]["business"]["inn_rests"], 1)
+        self.assertEqual(r["snapshot"]["business"]["special_dialogues_completed"], 2)
+
+    def test_steel_trial_rejected_or_stopped_selection_never_starts_route(self):
+        for stop in (False, True):
+            frames, commands = self.steel_trial_scenario()
+            commands[3] = dict(commands[3], reject=not stop)
+            r = self.execute("steel-trial-stop-" + str(stop), frames[:5], commands[:4],
+                **self.steel_trial_options(**({"stop_after_calls": 4} if stop else {})))
+            self.assertEqual(r["snapshot"]["state"], "UserStopped" if stop else "Failed", r)
+            self.assertEqual(r["backend_calls"], 4)
+            self.assertFalse(r["mismatch"])
+            self.assertTrue(r["snapshot"]["business"]["steel_trial"]["pending"])
+            self.assertEqual(r["snapshot"]["business"]["steel_trial"]["completed_cycles"], 0)
+
     def bull_cave_options(self, rest, **extra):
         profile = extra.pop("profile", {})
         profile.update(ACTIVE_REST=rest)
@@ -2288,7 +2414,8 @@ class WorkflowTests(unittest.TestCase):
         for index, route in enumerate(routes):
             click(320, 612, {"worldmapflag": (80, 100), "LBC/LBC": (400, 700)})
             page = {"mapFlag": (100, 100)}
-            click(420, 712, page)
+            click(420, 712, {"dungFlag": (50, 150)})
+            click(777, 150, page)
             for x, y, direction in route:
                 sx, sy, tx, ty = gestures[direction]
                 swipe = dict(kind=1, x=sx, y=sy, x2=tx, y2=ty, duration=400)
@@ -2313,7 +2440,7 @@ class WorkflowTests(unittest.TestCase):
             frames, commands = self.bull_cave_scenario(rest)
             r = self.execute("bull-cave-full-" + str(rest), frames, commands, **self.bull_cave_options(rest))
             self.assertEqual(r["snapshot"]["state"], "Completed", r)
-            self.assertEqual(r["backend_calls"], 45 if rest else 36)
+            self.assertEqual(r["backend_calls"], 47 if rest else 37)
             self.assertFalse(r["mismatch"])
             self.assertEqual(r["snapshot"]["business"]["bull_cave"]["completed_cycles"], 1)
             self.assertEqual(r["snapshot"]["business"]["inn_rests"], 2 if rest else 1)

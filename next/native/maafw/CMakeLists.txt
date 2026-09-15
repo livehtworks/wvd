@@ -68,6 +68,7 @@ if(WVD_BUILD_M4)
     ../games/wvd/tasks/sandman.cpp
     ../games/wvd/tasks/gold_income.cpp
     ../games/wvd/tasks/bull_cave.cpp
+    ../games/wvd/tasks/steel_trial.cpp
     ../games/wvd/navigation/causality.cpp
     ../games/wvd/navigation/return_city.cpp
     ../games/wvd/quests/bounty_cycle.cpp

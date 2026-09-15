@@ -15,8 +15,11 @@ CompiledWorkflow accept_job() {
     const auto story = C::any({C::image("fastforward"), option("royalcapital")});
     graph.route("Entry", {"Guild", "Go", "District", "Hungry"});
     graph.click("Guild", guild, guild, go, {"Go"});
-    graph.click("Go", go, go, C::any({district, hungry}), {"District", "Hungry"});
-    graph.delay_after("Go", 15000); graph.postcondition_budget("Go", 22000);
+    graph.click("Go", go, go, C::any({district, hungry}), {"WaitForStory"});
+    // 旧流程等待15秒；拆开保留单节点10秒上限，并在后半段重新确认页面。
+    graph.delay_after("Go", 10000); graph.postcondition_budget("Go", 22000);
+    graph.observe("WaitForStory", C::any({district, hungry}), {"District", "Hungry"});
+    graph.delay_after("WaitForStory", 5000);
     graph.click("Hungry", C::all({hungry, C::absent(district)}), hungry, district, {"District"});
     graph.click("District", district, district, story, {"Terminal"});
     return graph.finish();
@@ -118,6 +121,8 @@ CompiledWorkflow gold_income_cycle(const WvdQuestDefinition &definition, bool al
         if (i == 0) graph.delay_after("Confirmed" + n, 10000);
     }
     graph.route("Stage", stages);
+    // 十个真实业务阶段共用此路由；默认五次节点命中不能截断第六阶段。
+    graph.hit_limit("Stage", static_cast<int>(steps.size()));
     // 默认对话不能代替7000G明确的剧情阶段；未确认输入保留pending，不借重启重放。
     graph.interrupt_on({{"mode", "blocking_screen"}, {"parallel_basic", true}}, "quest.gold_income_common_screen_requires_dispatch");
     return graph.finish();

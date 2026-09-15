@@ -33,7 +33,8 @@ CompiledWorkflow bull_cave_cycle(const WvdQuestDefinition &definition, const J &
     const std::set<std::string> &images, bool allow_download) {
     const auto plan = bull_cave_plan(definition);
     const bool rest = profile.at("ACTIVE_REST").get<bool>();
-    const auto first_points = rest ? J{positions[0]} : positions;
+    // 单个json值的大括号构造可能走复制构造；显式保留“路线包含一个目标”的数组层。
+    const auto first_points = rest ? J::array({positions[0]}) : positions;
     const auto route = traverse_dungeon(plan.with_route(first_points), profile, images, allow_download);
     C graph("tasks.LBC-oneGorgon", std::max(route.time_limit + std::chrono::seconds{300}, std::chrono::milliseconds{900000}));
     const auto inn = C::image("Inn"), dung = C::image("dungFlag"), map = C::image("mapFlag");
@@ -75,7 +76,7 @@ CompiledWorkflow bull_cave_cycle(const WvdQuestDefinition &definition, const J &
         graph.call_child(name + "Enter", enter, {name + "Entered"});
         graph.confirm(name + "Entered", "bull.enter." + name, second ? "bull_cave_second_entered" : "bull_cave_first_entered", C::any({map, dung}), {name + "RoutePhase"});
         graph.observe(name + "RoutePhase", phase(second ? Phase::SecondRoute : Phase::FirstRoute), {name + "Route"});
-        const auto child = graph.define_child(name + "Dungeon", second ? traverse_dungeon(plan.with_route({positions[1], positions[2]}), profile, images, allow_download) : route);
+        const auto child = graph.define_child(name + "Dungeon", second ? traverse_dungeon(plan.with_route(J::array({positions[1], positions[2]})), profile, images, allow_download) : route);
         graph.call_child(name + "Route", child, {name + "Points", "Incomplete"});
         graph.observe(name + "Points", C::business("/task_step", second ? 2 : rest ? 1 : 3), {name + "Routed"});
         graph.confirm(name + "Routed", "bull.route." + name, second ? "bull_cave_second_routed" : "bull_cave_first_routed", map, {name + "ExitPhase"});
