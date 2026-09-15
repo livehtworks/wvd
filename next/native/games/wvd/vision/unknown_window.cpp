@@ -1,6 +1,7 @@
 #include "unknown_window.hpp"
 #include <algorithm>
 #include <numeric>
+#include <limits>
 #include <stdexcept>
 #include <opencv2/imgproc.hpp>
 
@@ -33,13 +34,15 @@ UnknownSample UnknownWindow::observe(const cv::Mat &bgr, std::chrono::steady_clo
     batch_count_ = (batch_count_ + 1) % 10;
     const bool evaluated = window_size_ == 10 && batch_count_ == 0;
     const auto total = std::accumulate(differences_.begin(), differences_.end(), 0.0);
-    last_ = {true, evaluated, evaluated && total <= .15, window_size_, total};
+    if (samples_ < std::numeric_limits<std::uint64_t>::max()) ++samples_;
+    last_ = {true, evaluated, evaluated && total <= .15, window_size_, total, samples_};
     return last_;
 }
 void UnknownWindow::clear() {
     previous_.release();
     differences_.fill(0);
     window_size_ = next_difference_ = batch_count_ = 0;
+    samples_ = 0;
     sampled_at_ = {};
     last_ = {};
 }

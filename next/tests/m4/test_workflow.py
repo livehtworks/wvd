@@ -1789,6 +1789,26 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(r["lifecycle_calls"], [])
         self.assertEqual(r["snapshot"]["business"]["task_step"], 0)
 
+    def test_unknown_limit_requests_recovery_before_static_window(self):
+        for limit in (0, 2):
+            r = self.execute("unknown-limit-" + str(limit), [{}], [], workflow="dungeon-route",
+                profile={**self.wall_profile(False), "MAX_TRY_LIMIT": limit},
+                route_targets=[["position", [None], [500, 600]]])
+            self.assertEqual(r["snapshot"]["state"], "Interrupted", r)
+            self.assertEqual(r["snapshot"]["sessions"][-1]["reason"], "dungeon.unknown_try_limit")
+            self.assertEqual(r["backend_calls"], 0)
+            self.assertEqual(r["lifecycle_calls"], [])
+            self.assertEqual(r["snapshot"]["business"]["task_step"], 0)
+            self.assertTrue(r["snapshot"]["quiescent"])
+
+    def test_unknown_limit_does_not_override_known_scene_even_at_zero(self):
+        r = self.execute("unknown-limit-known", [{"Inn": (400, 700)}], [], workflow="dungeon-route",
+            profile={**self.wall_profile(False), "MAX_TRY_LIMIT": 0},
+            route_targets=[["position", [None], [500, 600]]])
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 0)
+        self.assertEqual(r["lifecycle_calls"], [])
+
     def test_auto_map_stopped_mark_is_confirmed_on_map_without_repressing_auto(self):
         r = self.execute("auto-map-mark", [{"dungFlag": (50, 150), "mark_auto": (760, 350)},
             {"dungFlag": (50, 150)}, {"mapFlag": (100, 100), "mark_auto": (400, 700)}],

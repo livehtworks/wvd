@@ -72,6 +72,7 @@ int main(int argc, char **argv) {
                 cv::Mat image(1600, 900, CV_8UC3, cv::Scalar::all(i < 10 ? 30 : (i % 2 ? 220 : 10)));
                 const auto now = start + std::chrono::seconds{i};
                 const auto actual = window.observe(image, now);
+                require(actual.samples == i + 1, "UNKNOWN_SAMPLE_COUNT_INVALID");
                 cv::Mat gray, difference;
                 cv::cvtColor(image, gray, cv::COLOR_BGR2GRAY);
                 if (!previous.empty()) {

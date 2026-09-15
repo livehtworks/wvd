@@ -308,7 +308,7 @@ J evaluate_uncached(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels
         }
         return decision(false, {}, {{"stage", "unknown"}});
     }
-    if (mode == "unknown_frozen") {
+    if (mode == "unknown_frozen" || mode == "unknown_exhausted") {
         check(!p.contains("roi") && !p.contains("preprocess") &&
             image.size() == cv::Size(900, 1600) &&
             allowed_rect == cv::Rect(0, 0, 900, 1600), "WVD_UNKNOWN_SCOPE_INVALID");
@@ -319,6 +319,11 @@ J evaluate_uncached(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels
             found = cache.assets.emplace(key, UnknownWindow{}).first;
         }
         auto &window = std::any_cast<UnknownWindow &>(found->second);
+        std::int64_t max_tries = 0;
+        if (mode == "unknown_exhausted") {
+            check(p.contains("max_tries") && p.at("max_tries").is_number_integer(), "WVD_UNKNOWN_LIMIT_INVALID");
+            max_tries = p.at("max_tries").get<std::int64_t>();
+        }
         // 先按已有分类识别正常页/覆盖层；已知静止页面不能成为“未知冻结”。
         J probes = J::array({J{{"mode", "boot_ready"}}, J{{"mode", "blocking_screen"}},
             J{{"mode", "template"}, {"image", "trait"}}, J{{"mode", "template"}, {"image", "recover"}},
@@ -340,8 +345,12 @@ J evaluate_uncached(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels
             }
         }
         const auto sample = window.observe(image, std::chrono::steady_clock::now());
-        auto result = decision(sample.frozen, allowed_rect, {{"reason", sample.frozen ? "unknown_static_window" : "observing"},
+        // 旧counter从0起，在本次检查末尾比较>=上限；因此上限N允许前N次未知观察。
+        const bool exhausted = max_tries < 0 || sample.samples > static_cast<std::uint64_t>(max_tries);
+        const bool hit = mode == "unknown_exhausted" ? exhausted : sample.frozen;
+        auto result = decision(hit, allowed_rect, {{"reason", hit ? (mode == "unknown_exhausted" ? "unknown_try_limit" : "unknown_static_window") : "observing"},
             {"sampled", sample.sampled}, {"evaluated", sample.evaluated}, {"window_size", sample.window_size},
+            {"samples", sample.samples}, {"max_tries", mode == "unknown_exhausted" ? J(max_tries) : J(nullptr)},
             {"total_difference", sample.total_difference}, {"threshold", .15}});
         result["action_eligible"] = false;
         return result;

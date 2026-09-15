@@ -34,7 +34,7 @@ void collect_images(const J &value, std::set<std::string> &images, std::set<std:
             collect_images(J{{"mode", "boot_ready"}}, images, expanded_modes);
             collect_images(J{{"mode", "blocking_screen"}}, images, expanded_modes);
         }
-        if (expand && mode == "unknown_frozen") {
+        if (expand && (mode == "unknown_frozen" || mode == "unknown_exhausted")) {
             collect_images(J{{"mode", "boot_ready"}}, images, expanded_modes);
             collect_images(J{{"mode", "blocking_screen"}}, images, expanded_modes);
             for (const auto *name : {"trait", "recover", "spellskill/skillDetail"})

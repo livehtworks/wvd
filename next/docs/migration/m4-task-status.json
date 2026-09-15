@@ -3022,10 +3022,10 @@
         "M4-TASK-darkLight"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "TYPED_PLAN_DATA",
+      "implementation_extent": "FINITE_SPECIAL_ITERATION_BLOCKED",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
-      "offline_status": "NOT_RUN",
+      "offline_status": "BLOCKED",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
       "new_entry": null,
@@ -3051,7 +3051,15 @@
         "SPECIAL_CASE_NOT_IMPLEMENTED"
       ],
       "plan_data_status": "PASS",
-      "plan_evidence": "../m4-plan-validation.md"
+      "plan_evidence": "../m4-plan-validation.md",
+      "iteration_implementation": {
+        "status": "BLOCKED_SCENE_CONFIRMATION",
+        "entry": "tasks::dark_light",
+        "source": "native/games/wvd/tasks/dark_light.cpp",
+        "scope": "FINITE_ITERATION_NOT_FULL_TASK_ACCEPTANCE",
+        "evidence_report": "../m4-dark-light-validation.md",
+        "remaining": "FULL_SUCCESS_COLD_START_HEALING_AND_CONFIRMATION_NOT_VERIFIED"
+      }
     },
     {
       "task_id": "LBC-oneGorgon",
@@ -3268,7 +3276,7 @@
         "M4-TASK-gaintKiller"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "FINITE_SPECIAL_ITERATION_PENDING_VALIDATION",
+      "implementation_extent": "FINITE_SPECIAL_ITERATION_BLOCKED",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
       "offline_status": "NOT_RUN",
@@ -3300,7 +3308,7 @@
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
       "iteration_implementation": {
-        "status": "IMPLEMENTED_NOT_VALIDATED",
+        "status": "BLOCKED_SCENE_CONFIRMATION",
         "entry": "tasks::giant_iteration",
         "scope": "FINITE_ITERATION_NOT_FULL_TASK_ACCEPTANCE",
         "evidence_report": "../m4-giant-validation.md"
