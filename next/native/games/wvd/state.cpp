@@ -286,6 +286,12 @@ std::string WvdRunState::confirmation_id(const std::string &operation, const std
         id += ":karma:" + std::to_string(karma_sequence_);
     if (event == "mining_reward_observed" || event == "mining_reward_dismissed")
         id += ":mining:" + std::to_string(mining_.reward_sequence(event == "mining_reward_observed"));
+    if (event == "fishing_reward_prepared" || event == "fishing_reward_completed")
+        id += ":fishing:" + std::to_string(fishing_.sequence(event == "fishing_reward_prepared"));
+    if (event == "fishing_wait_started" || event == "fishing_wait_failed")
+        id += ":cast:" + std::to_string(fishing_.cast_sequence(event == "fishing_wait_started"));
+    if (event == "fishing_cast_prepared" || event == "fishing_cast_completed")
+        id += ":cast:" + std::to_string(fishing_.cast_intent_sequence(event == "fishing_cast_prepared"));
     if (event == "bounty_report_prepared" || event == "bounty_report_completed")
         id += ":report:" + std::to_string(bounty_reports_ + (event == "bounty_report_prepared" || bounty_report_pending_ ? 1 : 0));
     if (event == "sleep_visit_started" || event == "sleep_visit_completed")
@@ -304,7 +310,7 @@ bool WvdRunState::confirm_event(const std::string &operation, const std::string 
         throw std::runtime_error("BUSINESS_CONFIRMATION_IDENTITY_INVALID");
     J effect{{"event", event}, {"expected_step", expected_step ? J(*expected_step) : J(nullptr)}};
     if (reward_index) {
-        if (event != "mining_reward_observed") throw std::runtime_error("MINING_REWARD_EVENT_INVALID");
+        if (event != "mining_reward_observed" && event != "fishing_reward_prepared") throw std::runtime_error("MINING_REWARD_EVENT_INVALID");
         effect["reward_index"] = *reward_index;
     }
     if (karma_effect_.is_object() && karma_effect_.value("save_status", "") == "Failed")
@@ -318,7 +324,20 @@ bool WvdRunState::confirm_event(const std::string &operation, const std::string 
         throw std::runtime_error("BUSINESS_CONFIRMATION_CAPACITY");
     if (expected_step && *expected_step != task_step_)
         throw std::runtime_error("BUSINESS_TASK_STEP_MISMATCH");
-    if (event == "scorpion_started" || event == "scorpion_hands_started") {
+    if (event == "fishing_cast_prepared") {
+        fishing_.prepare_cast();
+    } else if (event == "fishing_cast_completed") {
+        fishing_.cast_completed(clock_->now());
+    } else if (event == "fishing_wait_started") {
+        fishing_.begin_wait(clock_->now());
+    } else if (event == "fishing_wait_failed") {
+        fishing_.failed(clock_->now());
+    } else if (event == "fishing_reward_prepared") {
+        if (!reward_index) throw std::runtime_error("FISHING_REWARD_INDEX_REQUIRED");
+        fishing_.prepare(*reward_index);
+    } else if (event == "fishing_reward_completed") {
+        fishing_.complete();
+    } else if (event == "scorpion_started" || event == "scorpion_hands_started") {
         if (inn_payment_pending_ || bounty_report_pending_) throw std::runtime_error("BOUNTY_SIDE_EFFECT_PENDING");
         const auto interval = profile_.at("REST_INTERVEL").get<std::int64_t>();
         if (interval < 0) throw std::runtime_error("BOUNTY_REST_INTERVAL_INVALID");
@@ -605,6 +624,7 @@ J WvdRunState::summarize() const {
             {"mining", mining_.summary()},
             {"manual_separation", manual_separation_.summary()},
             {"bounty_reports", bounty_reports_},
+            {"fishing", fishing_.summary(clock_->now())},
             {"bounty_reveals", bounty_reveals_},
             {"sleep", sleep_.summary(unit_index_)},
             {"bounty_cycle", bounty_cycle_.summary(unit_index_, bounty_reports_)},

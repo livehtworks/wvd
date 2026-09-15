@@ -77,6 +77,63 @@ std::optional<runtime::SessionDefinition> recover_unit(const contracts::SessionR
     next.entry = "Recovered";
     return next;
 }
+J fishing_contract(const J &profile) {
+    auto clock = std::make_shared<TestClock>();
+    games::WvdRunState state(profile, {"fishing", 1, clock});
+    std::uint64_t generation = 1;
+    state.enter_segment(contracts::SegmentBoundary::Initial, generation, 0);
+    for (std::size_t index = 0; index < 25; ++index) {
+        const auto prepared = state.confirmation_id("prepare", "fishing_reward_prepared");
+        require(state.confirm_event(prepared, "fishing_reward_prepared", generation, 1, {}, index), "FISHING_PREPARE_MISSING");
+        require(!state.confirm_event(prepared, "fishing_reward_prepared", generation, 2, {}, index), "FISHING_PREPARE_REPLAYED");
+        require(state.summary().at("fishing").at("caught") == index, "FISHING_COUNT_BEFORE_DISMISSAL");
+        bool rejected = false;
+        try { state.confirm_event(prepared, "fishing_reward_prepared", generation, 2, {}, (index + 1) % 25); }
+        catch (const std::exception &e) { rejected = std::string(e.what()) == "BUSINESS_OPERATION_CONFLICT"; }
+        require(rejected, "FISHING_CONFLICT_ACCEPTED");
+        state.enter_segment(contracts::SegmentBoundary::Recovery, ++generation, 0);
+        rejected = false;
+        try { state.confirm_event("stale", "fishing_reward_completed", generation - 1, 3); }
+        catch (const std::exception &e) { rejected = std::string(e.what()) == "BUSINESS_CONFIRMATION_IDENTITY_INVALID"; }
+        require(rejected, "FISHING_OLD_GENERATION_ACCEPTED");
+        const auto completed = state.confirmation_id("complete", "fishing_reward_completed");
+        require(state.confirm_event(completed, "fishing_reward_completed", generation, 3), "FISHING_COMPLETION_MISSING");
+        require(!state.confirm_event(completed, "fishing_reward_completed", generation, 4), "FISHING_COMPLETION_REPLAYED");
+    }
+    bool rejected = false;
+    try { state.confirm_event("invalid-index", "fishing_reward_prepared", generation, 1, {}, 25); }
+    catch (const std::exception &e) { rejected = std::string(e.what()) == "FISHING_REWARD_INDEX_INVALID"; }
+    require(rejected, "FISHING_INVALID_INDEX_ACCEPTED");
+    const auto wait = state.confirmation_id("wait", "fishing_wait_started");
+    state.confirm_event(wait, "fishing_wait_started", generation, 1);
+    clock->milliseconds = 300000;
+    require(!state.summary().at("fishing").at("timed_out").get<bool>(), "FISHING_TIMEOUT_NOT_STRICT");
+    clock->milliseconds = 300001;
+    require(state.summary().at("fishing").at("timed_out").get<bool>(), "FISHING_TIMEOUT_MISSING");
+    state.enter_segment(contracts::SegmentBoundary::Recovery, ++generation, 0);
+    require(state.summary().at("fishing").at("timed_out").get<bool>(), "FISHING_RECOVERY_RESET_WAIT");
+    const auto failed = state.confirmation_id("failed", "fishing_wait_failed");
+    state.confirm_event(failed, "fishing_wait_failed", generation, 2);
+    require(!state.confirm_event(failed, "fishing_wait_failed", generation, 3), "FISHING_FAILURE_REPLAYED");
+    for (int cast = 0; cast < 2; ++cast) {
+        const auto intent = state.confirmation_id("cast.prepare", "fishing_cast_prepared");
+        state.confirm_event(intent, "fishing_cast_prepared", generation, 4);
+        require(!state.confirm_event(intent, "fishing_cast_prepared", generation, 5), "FISHING_CAST_REPLAYED");
+        require(state.summary().at("fishing").at("casting_pending").get<bool>(), "FISHING_CAST_INTENT_MISSING");
+        clock->milliseconds += 310000;
+        state.confirm_event(state.confirmation_id("cast.done", "fishing_cast_completed"), "fishing_cast_completed", generation, 6);
+        require(!state.summary().at("fishing").at("timed_out").get<bool>(), "FISHING_RECAST_DID_NOT_RESET_TIME");
+    }
+    // 编译器默认地图滑动不变；钓鱼允许的显式时长仍受输入门禁原上限约束。
+    for (const int duration : {0, -1, 60001}) {
+        games::tasks::PipelineCompiler compiler("fishing.duration.negative");
+        rejected = false;
+        try { compiler.swipe("Entry", compiler.image("fish"), compiler.image("fish"), {50, 1200, 850, 1200}, {"Terminal"}, duration); }
+        catch (const std::exception &e) { rejected = std::string(e.what()) == "COMPILE_SWIPE_DURATION_INVALID"; }
+        require(rejected, "FISHING_INVALID_DURATION_ACCEPTED");
+    }
+    return state.summary().at("fishing");
+}
 J bounty_cycle_contract(const J &profile) {
     J results = J::array();
     auto negative = profile;
@@ -810,6 +867,11 @@ int main(int argc, char **argv) {
             return 0;
         }
         auto profile = importer.parse(config.at("source")).values;
+        if (config.value("fishing_contract", false)) {
+            const J output{{"fishing_contract", fishing_contract(profile)}, {"backend_inputs", 0}};
+            std::ofstream(maafw::path_from_utf8(config.at("output"))) << output.dump(2);
+            return 0;
+        }
         if (config.value("bounty_cycle_contract", false)) {
             const J output{{"bounty_cycle_contract", bounty_cycle_contract(profile)}, {"backend_inputs", 0}};
             std::ofstream(maafw::path_from_utf8(config.at("output"))) << output.dump(2);

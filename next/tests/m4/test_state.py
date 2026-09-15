@@ -78,6 +78,18 @@ class StateTests(unittest.TestCase):
         self.assertEqual(state["inn_rests"], 9999)
         self.assertEqual(state["dungeons"], 0)
 
+    def test_fishing_all_classifications_pending_recovery_and_receipt_replay(self):
+        fish = self.run_case("fishing-contract", fishing_contract=True)["fishing_contract"]
+        self.assertEqual(fish["caught"], 25)
+        self.assertEqual(fish["unclassified_size"], 1)
+        self.assertFalse(fish["reward_pending"])
+        self.assertEqual(fish["reward_sequence"], 25)
+        self.assertEqual(fish["failed"], 1)
+        self.assertTrue(fish["waiting"])
+        self.assertFalse(fish["casting_pending"])
+        self.assertEqual(fish["cast_sequence"], 3)
+        self.assertEqual(sum(sum(group.values()) for group in fish["fishinfo"].values()), 24)
+
     def test_scorpion_two_cycles_preserve_routes_reports_and_rest_interval(self):
         results = self.run_case("bounty-cycle-contract", bounty_cycle_contract=True)["bounty_cycle_contract"]
         for hands, state in zip((False, True), results):

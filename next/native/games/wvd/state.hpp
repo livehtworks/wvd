@@ -9,6 +9,7 @@
 #include "quests/manual_separation.hpp"
 #include "quests/sleep_visits.hpp"
 #include "quests/bounty_cycle.hpp"
+#include "fishing/progress.hpp"
 #include <map>
 
 namespace wvd::games {
@@ -68,6 +69,7 @@ class WvdRunState final : public contracts::BusinessRunState {
     bool encounter_timed_out() const;
     bool dark_light_active_{};
     mining::Progress mining_;
+    fishing::Progress fishing_;
     quests::ManualSeparation manual_separation_;
     quests::SleepVisits sleep_;
     quests::BountyCycle bounty_cycle_;

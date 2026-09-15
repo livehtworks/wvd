@@ -53,6 +53,11 @@
 
 ## 一致性与边界
 
+- `snapshot.business.fishing`由WvdRunState内Fishing Progress唯一持有：待确认分类、
+  收获页序号、已关闭后的鱼数/分类、等待起点的派生超时和失败数。
+  新帧WvdConfirm生产，钓鱼图与结果审查消费；恢复不清待确认收获和计时。
+  这是离线Run状态，不是背包权威或可执行的跨进程恢复点。
+
 - `snapshot.business.bounty_cycle`由WvdRunState内BountyCycle持有，区分跳跃、跨城、
   揭榜、两条路线/返回、交付和住宿阶段。图中的新帧确认推进；每阶段校验所属正常段，
   交付份数读取同一bounty_reports权威。转场待确认时恢复策略不重发，结果仅供审查，

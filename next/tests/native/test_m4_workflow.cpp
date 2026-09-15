@@ -31,6 +31,7 @@
 #include "games/wvd/tasks/bounty_visit.hpp"
 #include "games/wvd/tasks/sleep_visits.hpp"
 #include "games/wvd/tasks/bounty_cycle.hpp"
+#include "games/wvd/tasks/fishing.hpp"
 #include "games/wvd/vision/recognizers.hpp"
 #include "platform/windows/file_digest.hpp"
 #include <iostream>
@@ -186,6 +187,12 @@ int main(int argc, char **argv) {
             const auto kind = config.at("workflow").get<std::string>();
             if (kind == "city")
                 return games::navigation::enter_city(config.at("city"));
+            if (kind == "fishing-cast")
+                return games::tasks::cast_fishing_line(config.value("far", false));
+            if (kind == "fishing-reward")
+                return games::tasks::collect_fishing_reward();
+            if (kind == "fishing-round")
+                return games::tasks::fishing_round(config.value("far", false));
             if (kind == "inn")
                 return games::supply::rest_at_inn(config.value("royal", false));
             if (kind == "time-leap")

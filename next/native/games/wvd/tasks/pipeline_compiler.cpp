@@ -22,6 +22,16 @@ void collect_images(const J &value, std::set<std::string> &images, std::set<std:
         // 常量隐式依赖在本次收集内只展开一次；显式 image/动态参数仍逐项收集。
         // 不缓存整份图或跨编译共享结果，validate 仍独立重算完整资源集合。
         const bool expand = expanded_modes.insert(mode).second;
+        if (expand && mode == "fishing_bait_empty") {
+            images.insert("fishing/nobait.png");
+            images.insert("fishing/8bait.png");
+        }
+        if (expand && mode == "fishing_reward") {
+            for (auto name : {"CloseFishInfo", "size_small", "size_average", "size_large", "鲈鱼", "雅罗", "鲶鱼", "鳟鱼", "鳗鱼", "三文鱼", "杂鱼"})
+                images.insert(std::string("fishing/") + name + ".png");
+            collect_images(J{{"mode", "blocking_screen"}}, images, expanded_modes);
+        }
+        if (expand && mode == "fishing_bobber") images.insert("fishing/bobber.png");
         if (expand && mode == "mining_reward") {
             for (auto name : {"receive", "org_fine", "org_high", "org_mid", "org_low", "org_refine", "org_alter",
                               "org_sliver", "org_ouro", "org_lesser_full", "org_full"})
@@ -446,14 +456,15 @@ void PipelineCompiler::chest_selection(const std::string &name, const J &conditi
                                  {"seed", seed}, {"image", "chestfear"}}}, {"next", std::move(next)}});
 }
 void PipelineCompiler::swipe(const std::string &name, const J &scene, const J &post,
-                             J coordinates, J next) {
+                             J coordinates, J next, int duration) {
+    require(duration >= 1 && duration <= 60000, "COMPILE_SWIPE_DURATION_INVALID");
     require(coordinates.is_array() && coordinates.size() == 4, "COMPILE_SWIPE_INVALID");
     for (std::size_t i = 0; i < 4; ++i)
         require(coordinates[i].is_number_integer() && coordinates[i] >= 1 &&
                     coordinates[i] <= (i % 2 == 0 ? 898 : 1598), "COMPILE_SWIPE_INVALID");
     action(name, scene, scene, post,
            {{"kind", "Swipe"}, {"x", coordinates[0]}, {"y", coordinates[1]},
-            {"x2", coordinates[2]}, {"y2", coordinates[3]}, {"duration", 400}},
+            {"x2", coordinates[2]}, {"y2", coordinates[3]}, {"duration", duration}},
            std::move(next), nullptr);
 }
 std::string PipelineCompiler::append(const std::string &prefix, const CompiledWorkflow &child,
@@ -554,6 +565,9 @@ void PipelineCompiler::confirm(const std::string &name, const std::string &opera
                                       "karma_observed", "karma_completed", "trap_cycle_started", "trap_cycle_completed",
                                       "giant_cycle_started", "giant_route_completed", "giant_cycle_completed",
                                       "bounty_revealed", "bounty_report_prepared", "bounty_report_completed",
+                                      "fishing_reward_prepared", "fishing_reward_completed",
+                                      "fishing_wait_started", "fishing_wait_failed",
+                                      "fishing_cast_prepared", "fishing_cast_completed",
                                       "sleep_visit_started", "sleep_visit_completed",
                                       "scorpion_started", "scorpion_hands_started", "bounty_leap_prepared", "bounty_leap_completed",
                                       "bounty_travel_prepared", "bounty_travel_completed", "bounty_cycle_revealed", "bounty_route_completed",
@@ -571,6 +585,8 @@ void PipelineCompiler::confirm(const std::string &name, const std::string &opera
     require(event != "target_completed" || !step.is_null(), "COMPILE_TASK_STEP_REQUIRED");
     require(event != "mining_reward_observed" || (condition.value("mode", "") == "mining_reward" && step.is_null()),
             "COMPILE_MINING_REWARD_RECOGNITION_REQUIRED");
+    require(event != "fishing_reward_prepared" || (condition.value("mode", "") == "fishing_reward" && step.is_null()),
+            "COMPILE_FISHING_REWARD_RECOGNITION_REQUIRED");
     J parameters{{"event", event}, {"operation", operation}, {"confirmation", request(condition)}};
     if (!step.is_null())
         parameters["expected_step"] = step;

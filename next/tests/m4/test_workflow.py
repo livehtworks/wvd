@@ -36,7 +36,7 @@ class WorkflowTests(unittest.TestCase):
         bundle = folder / "bundle"
         (bundle / "image").mkdir(parents=True)
         resource_kind = "dungeon-route" if options.get("workflow") == "fortress-trap" else "iteration" if options.get("workflow") in ("giant", "dark-light", "mining", "manual-separation", "scorpion") else options.get("workflow")
-        if resource_kind in ("bounty-visit", "sleep-batch"): resource_kind = "common"
+        if resource_kind in ("bounty-visit", "sleep-batch", "fishing-cast", "fishing-reward", "fishing-round"): resource_kind = "common"
         names = ["worldmapflag", "City_RoyalCityLuknalia", "Inn", "Stay", "Economy", "royalsuite", "OK"]
         if resource_kind in ("departure", "iteration"):
             names += ["openworldmap", "intoWorldMap", "returntoTown", "returnText", "EdgeOfTown", "dungFlag", "mapFlag", "chestFlag",
@@ -169,6 +169,8 @@ class WorkflowTests(unittest.TestCase):
                     path.write_bytes(b"changed before publication")
         if resource_kind in ("chest", "map-confirm", "state-route", "turn", "encounter", "recover", "common", "heal", "dungeon-route", "departure", "inn-tracked", "iteration", "revival"):
             config.update(with_state=True, descriptor=str(ROOT / "packs/wvd/parameters/legacy-config-fields.json"))
+        if options.get("workflow") == "fishing-cast":
+            config["with_state"] = False
         if "omit_image" in options:
             config["files"] = [f for f in config["files"] if f["path"] != "image/" + options["omit_image"]]
         source = folder / "input.json"
@@ -1870,6 +1872,104 @@ class WorkflowTests(unittest.TestCase):
     def bounty_options(self, report=False, **extra):
         return dict(workflow="bounty-visit", report=report, profile=self.wall_profile(False),
             extra_images=["guild", "guildRequest", "guildFeatured", "Bounties", "CompletionReported", "EdgeOfTown"], **extra)
+
+    def fishing_cast_options(self, **extra):
+        return dict(workflow="fishing-cast", extra_images=["fishing/cast", "fishing/striking", "fishing/nobait", "fishing/8bait"], **extra)
+
+    def fishing_reward_options(self, **extra):
+        names = ["CloseFishInfo", "cast", "striking", "size_small", "size_average", "size_large", "鲈鱼", "雅罗", "鲶鱼", "鳟鱼", "鳗鱼", "三文鱼", "杂鱼"]
+        return dict(workflow="fishing-reward", extra_images=["fishing/" + name for name in names], **extra)
+
+    def test_fishing_reward_classification_unknowns_and_species_roi(self):
+        for name, markers, size, species in [
+            ("large-salmon", {"fishing/size_large": (300, 700), "fishing/三文鱼": (300, 1150)}, "大", "三文鱼"),
+            ("species-outside-roi", {"fishing/size_small": (300, 700), "fishing/鲈鱼": (300, 1000)}, "小", "未收录"),
+            ("size-unknown", {"fishing/鲶鱼": (300, 1150)}, None, None)]:
+            page = {"fishing/CloseFishInfo": (400, 1400), **markers}
+            r = self.execute("fishing-reward-" + name, [page, {"fishing/cast": (400, 1300)}],
+                [dict(kind=0, x=420, y=1412)], **self.fishing_reward_options())
+            self.assertEqual(r["snapshot"]["state"], "Completed", r)
+            self.assertEqual(r["backend_calls"], 1)
+            fish = r["snapshot"]["business"]["fishing"]
+            self.assertEqual(fish["caught"], 1)
+            self.assertFalse(fish["reward_pending"])
+            self.assertEqual(fish["unclassified_size"], int(size is None))
+            if size: self.assertEqual(fish["fishinfo"][size][species], 1)
+
+    def test_fishing_reward_stuck_rejected_and_stopped_do_not_count(self):
+        page = {"fishing/CloseFishInfo": (400, 1400), "fishing/size_average": (300, 700), "fishing/雅罗": (300, 1150)}
+        for mode in ("stuck", "reject", "stop"):
+            r = self.execute("fishing-reward-" + mode, [page, page if mode == "stuck" else {"fishing/cast": (400, 1300)}],
+                [dict(kind=0, x=420, y=1412)], **self.fishing_reward_options(reject_after_first=mode == "reject", stop_after_first=mode == "stop"))
+            self.assertEqual(r["snapshot"]["state"], "UserStopped" if mode == "stop" else "Failed", r)
+            self.assertEqual(r["backend_calls"], 1)
+            fish = r["snapshot"]["business"]["fishing"]
+            self.assertEqual(fish["caught"], 0)
+            self.assertTrue(fish["reward_pending"])
+
+    def test_fishing_reward_closed_page_without_receipt_is_not_success(self):
+        r = self.execute("fishing-reward-no-receipt", [{"fishing/cast": (400, 1300)}], [], **self.fishing_reward_options())
+        self.assertEqual(r["snapshot"]["state"], "Interrupted", r)
+        self.assertEqual(r["backend_calls"], 0)
+        self.assertEqual(r["snapshot"]["business"]["fishing"]["caught"], 0)
+
+    def test_fishing_round_cast_reel_and_collect_uses_roi_and_new_frames(self):
+        frames, commands = self.fishing_cast_scenario()
+        # ROI外的浮标图案不应阻止拉杆；中央水域保持全黑，真实算法应返回NoHit。
+        frames[-1]["fishing/bobber"] = (100, 200)
+        frames.append({"fishing/CloseFishInfo": (400, 1400), "fishing/size_large": (300, 700), "fishing/三文鱼": (300, 1150)})
+        frames.append({"fishing/cast": (400, 1300)})
+        commands += [dict(kind=1, x=450, y=700, x2=450, y2=50, duration=100), dict(kind=0, x=420, y=1412)]
+        options = self.fishing_reward_options()
+        options["workflow"] = "fishing-round"
+        options["extra_images"] += ["fishing/nobait", "fishing/8bait", "fishing/bobber"]
+        r = self.execute("fishing-round-near", frames, commands, **options)
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 10)
+        self.assertFalse(r["mismatch"])
+        fish = r["snapshot"]["business"]["fishing"]
+        self.assertEqual(fish["caught"], 1)
+        self.assertEqual(fish["cast_sequence"], 1)
+        self.assertEqual(fish["failed"], 0)
+        self.assertFalse(fish["waiting"])
+        self.assertEqual(fish["fishinfo"]["大"]["三文鱼"], 1)
+
+    @staticmethod
+    def fishing_cast_scenario(far=False):
+        ready = {"fishing/cast": (400, 1300), "fishing/8bait": (550, 1490)}
+        frames = [ready.copy() for _ in range(8)] + [{"fishing/striking": (400, 1300)}]
+        commands = [dict(kind=1, x=50 if i < 5 else 850, y=1200, x2=850 if i < 5 else 50, y2=1200, duration=100) for i in range(7)]
+        commands.append(dict(kind=1, x=400, y=1200, x2=450, y2=1250, duration=2250 if far else 4000))
+        return frames, commands
+
+    def test_fishing_cast_near_and_far_preserve_all_durations(self):
+        for far in (False, True):
+            frames, commands = self.fishing_cast_scenario(far)
+            r = self.execute("fishing-cast-" + str(far), frames, commands, **self.fishing_cast_options(far=far))
+            self.assertEqual(r["snapshot"]["state"], "Completed", r)
+            self.assertEqual(r["backend_calls"], 8)
+            self.assertFalse(r["mismatch"])
+
+    def test_fishing_cast_empty_bait_or_unknown_never_sends_swipes(self):
+        for name, frame in [("empty", {"fishing/cast": (400, 1300), "fishing/nobait": (550, 1490)}), ("unknown", {})]:
+            r = self.execute("fishing-cast-" + name, [frame], [], **self.fishing_cast_options())
+            self.assertEqual(r["snapshot"]["state"], "Interrupted", r)
+            self.assertEqual(r["backend_calls"], 0)
+            if name == "empty": self.assertEqual(r["snapshot"]["reason"], "quest.fishing_bait_required")
+
+    def test_fishing_cast_reject_and_stop_cancel_the_remaining_swipes(self):
+        for stop in (False, True):
+            frames, commands = self.fishing_cast_scenario()
+            r = self.execute("fishing-cast-stop-" + str(stop), frames[:2], commands[:1],
+                **self.fishing_cast_options(stop_after_first=stop, reject_after_first=not stop))
+            self.assertEqual(r["snapshot"]["state"], "UserStopped" if stop else "Failed", r)
+            self.assertEqual(r["backend_calls"], 1)
+
+    def test_fishing_cast_changed_scene_cannot_continue_adjusting(self):
+        frames, commands = self.fishing_cast_scenario()
+        r = self.execute("fishing-cast-scene-changed", [frames[0], {"Inn": (400, 700)}], commands[:1], **self.fishing_cast_options())
+        self.assertEqual(r["snapshot"]["state"], "Failed", r)
+        self.assertEqual(r["backend_calls"], 1)
 
     def scorpion_options(self, **extra):
         profile = self.wall_profile(False)

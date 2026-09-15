@@ -288,6 +288,52 @@ J evaluate_uncached(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels
         }
         return decision(false, {}, {{"stage", "unknown"}});
     }
+    if (mode == "fishing_reward") {
+        check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");
+        const auto page = evaluate_impl(bundle, pixels, {{"mode", "template"}, {"image", "fishing/CloseFishInfo"}}, bound, scope, cache, depth + 1, memo);
+        check(page.at("outcome") != "Error", "FISHING_REWARD_RECOGNITION_ERROR");
+        if (page.at("outcome") != "Hit") return decision(false, {}, {{"reason", "no_fish_page"}});
+        const auto blocked = evaluate_impl(bundle, pixels, {{"mode", "blocking_screen"}, {"parallel_basic", true}}, bound, scope, cache, depth + 1, memo);
+        check(blocked.at("outcome") != "Error", "FISHING_REWARD_RECOGNITION_ERROR");
+        if (blocked.at("outcome") == "Hit") return decision(false, {}, {{"reason", "blocking_screen"}});
+        J candidates = J::array();
+        for (auto name : {"size_small", "size_average", "size_large"})
+            candidates.push_back({{"mode", "template"}, {"image", std::string("fishing/") + name}});
+        for (auto name : {"鲈鱼", "雅罗", "鲶鱼", "鳟鱼", "鳗鱼", "三文鱼", "杂鱼"})
+            candidates.push_back({{"mode", "template"}, {"image", std::string("fishing/") + name}, {"roi", {0, 1100, 900, 150}}});
+        const auto matches = evaluate_batch(bundle, pixels, candidates, bound, scope, cache, depth, memo, 4);
+        J scores = J::array();
+        double size_score = -1, species_score = -1;
+        std::size_t size = 3, species = 7;
+        for (std::size_t i = 0; i < candidates.size(); ++i) {
+            const auto &result = matches.at(i);
+            check(result.at("outcome") != "Error", "FISHING_REWARD_RECOGNITION_ERROR");
+            const auto score = result.at("evidence").at("best_score").get<double>();
+            scores.push_back(score);
+            if (i < 3 && score > size_score) { size = i; size_score = score; }
+            if (i >= 3 && score > species_score) { species = i - 3; species_score = score; }
+        }
+        if (species_score <= .9) species = 7;
+        const auto selected = size_score <= .9 ? 24 : size * 8 + species;
+        return decision(true, allowed_rect, {{"selected_index", selected}, {"scores", scores}, {"threshold", .9}}, false);
+    }
+    if (mode == "fishing_bait_empty") {
+        check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");
+        const auto probe = [&](const char *name) {
+            return evaluate_impl(bundle, pixels, {{"mode", "template"}, {"image", name},
+                {"roi", {530, 1469, 120, 120}}, {"threshold", .8}}, bound, scope, cache, depth + 1, memo);
+        };
+        const auto empty = probe("fishing/nobait");
+        check(empty.at("outcome") != "Error", "FISHING_BAIT_RECOGNITION_ERROR");
+        if (empty.at("outcome") != "Hit") return decision(false, {}, {{"reason", "no_empty_marker"}});
+        const auto eight = probe("fishing/8bait");
+        check(eight.at("outcome") != "Error", "FISHING_BAIT_RECOGNITION_ERROR");
+        const auto empty_score = empty.at("evidence").at("best_score").get<double>();
+        const auto eight_score = eight.at("evidence").at("best_score").get<double>();
+        // 0和8的轮廓接近；旧算法是同一ROI的严格分数比较，不能只见nobait就补饵。
+        return decision(empty_score > eight_score, allowed_rect,
+            {{"empty_score", empty_score}, {"eight_score", eight_score}}, false);
+    }
     if (mode == "mining_reward") {
         check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");
         auto probe = [](const std::string &name) {
@@ -598,6 +644,15 @@ J evaluate_uncached(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels
                                               {"evaluation", parallel_conditions ? "opencv_two_way" : "sequential"}}, false);
         result["action_eligible"] = action_eligible;
         return result;
+    }
+    if (mode == "fishing_bobber") {
+        check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");
+        const cv::Rect field(250, 500, 400, 600);
+        check((field & allowed_rect) == field, "WVD_ROI_OUTSIDE_SCOPE");
+        const auto result = detect_bobber(image(field), assets.load("fishing/bobber"));
+        // 原Farm先CutRoI再调用浮标算法。这里输出存在性，不把局部坐标当全屏点击点。
+        return decision(result.at("outcome") == "Hit", allowed_rect,
+            {{"roi", {250, 500, 400, 600}}, {"local_detections", result.at("evidence").at("detections")}}, false);
     }
     if (mode == "bobber") {
         check(allowed_rect == cv::Rect(0, 0, image.cols, image.rows), "WVD_ROI_OUTSIDE_SCOPE");

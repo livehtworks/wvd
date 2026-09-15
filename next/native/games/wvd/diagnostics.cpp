@@ -26,6 +26,11 @@ bool confirm(maafw::Context &context, const J &parameters, const J &) {
             throw std::runtime_error("MINING_REWARD_RECOGNITION_REQUIRED");
         reward_index = observed.evidence.at("evidence").at("selected_index").get<std::size_t>();
     }
+    if (event == "fishing_reward_prepared") {
+        if (parameters.at("confirmation").at("parameters").value("mode", "") != "fishing_reward")
+            throw std::runtime_error("FISHING_REWARD_RECOGNITION_REQUIRED");
+        reward_index = observed.evidence.at("evidence").at("selected_index").get<std::size_t>();
+    }
     if (parameters.contains("expected_step")) {
         const auto &value = parameters.at("expected_step");
         if (!value.is_number_integer() || value < 0 || value > 4096)

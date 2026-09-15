@@ -30,7 +30,8 @@ std::optional<runtime::SessionDefinition> decide(const contracts::SessionResult 
         result.reason == "karma.choice_outcome_unconfirmed" ||
         result.reason == "dialogue.choice_outcome_unconfirmed" ||
         result.reason == "quest.manual_transfer_unconfirmed" || result.reason == "quest.bounty_report_unconfirmed" ||
-        result.reason == "quest.bounty_transfer_unconfirmed")
+        result.reason == "quest.bounty_transfer_unconfirmed" || result.reason == "quest.fishing_cast_unconfirmed" ||
+        result.reason == "quest.fishing_bait_required")
         return std::nullopt;
     if (!result.business.is_object() || result.business.value("kind", "") != "wvd" ||
         !result.business.at("lifecycle_recovery_active").is_boolean())
@@ -43,6 +44,9 @@ std::optional<runtime::SessionDefinition> decide(const contracts::SessionResult 
     if (result.business.at("bounty_report_pending").get<bool>())
         return std::nullopt;
     if (result.business.at("bounty_cycle").at("transfer_pending").get<bool>())
+        return std::nullopt;
+    if (result.business.at("fishing").at("casting_pending").get<bool>() ||
+        result.business.at("fishing").at("reward_pending").get<bool>())
         return std::nullopt;
     const bool continuing = previous.lifecycle && result.business.at("lifecycle_recovery_active").get<bool>();
     const unsigned attempt = continuing ? previous.lifecycle->attempt + 1 : 1;

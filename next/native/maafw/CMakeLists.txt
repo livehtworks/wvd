@@ -65,6 +65,8 @@ if(WVD_BUILD_M4)
     ../games/wvd/tasks/sleep_visits.cpp
     ../games/wvd/quests/bounty_cycle.cpp
     ../games/wvd/tasks/bounty_cycle.cpp
+    ../games/wvd/tasks/fishing.cpp
+    ../games/wvd/fishing/progress.cpp
     ../games/wvd/tasks/pipeline_compiler.cpp ../games/wvd/navigation/world_map.cpp ../games/wvd/supply/inn.cpp
     ../games/wvd/tasks/dungeon_route.cpp
     ../games/wvd/tasks/departure.cpp

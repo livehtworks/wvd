@@ -37,7 +37,7 @@ class PipelineCompiler {
     void fixed_click(const std::string &name, const nlohmann::json &scene,
                      const nlohmann::json &post, nlohmann::json position, nlohmann::json next);
     void swipe(const std::string &name, const nlohmann::json &scene,
-               const nlohmann::json &post, nlohmann::json coordinates, nlohmann::json next);
+               const nlohmann::json &post, nlohmann::json coordinates, nlohmann::json next, int duration = 400);
     // 内联的是 Maa 图，不是第二个执行器；子终点只能进入调用者指定后继。
     std::string append(const std::string &prefix, const CompiledWorkflow &child,
                        nlohmann::json next, const nlohmann::json &normal_exits = nlohmann::json::object());
