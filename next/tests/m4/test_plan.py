@@ -118,7 +118,8 @@ class PlanTests(unittest.TestCase):
         result = self.inspect("specials-negative-interval", changed_values={"REST_INTERVEL": -1},
             compile_specials_manifest=str(ROOT / "packs/wvd/manifest.json"))
         self.assertEqual(result["outcome"], "Error")
-        self.assertEqual(result["error"], "GIANT_REST_INTERVAL_INVALID")
+        # 全目录按原顺序验证；新增蝎女后由它先拒绝。巨人的独立拒绝仍由原生状态组调用正式编译器验证。
+        self.assertEqual(result["error"], "BOUNTY_REST_INTERVAL_INVALID")
 
     def test_all_43_dungeon_routes_bind_each_original_target(self):
         result = self.inspect("routes", compile_routes_manifest=str(ROOT / "packs/wvd/manifest.json"))

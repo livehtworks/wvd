@@ -3204,7 +3204,7 @@
         "M4-TASK-Scorpionesses"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "TYPED_PLAN_DATA",
+      "implementation_extent": "FINITE_SCORPION_CYCLE_PENDING_VALIDATION",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
       "offline_status": "NOT_RUN",
@@ -3214,7 +3214,10 @@
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
-        "native/games/wvd/tasks/task_plan.cpp"
+        "native/games/wvd/tasks/task_plan.cpp",
+        "native/games/wvd/tasks/bounty_cycle.cpp",
+        "native/games/wvd/quests/bounty_cycle.cpp",
+        "native/games/wvd/tasks/bounty_visit.cpp"
       ],
       "source_fields": [
         "questName",
@@ -3228,12 +3231,19 @@
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
       "blockers": [
-        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "BUSINESS_ACTIONS_NOT_IMPLEMENTED",
-        "SPECIAL_CASE_NOT_IMPLEMENTED"
+        "SCORPION_NATIVE_CYCLE_VALIDATION_PENDING",
+        "FULL_STOP_RECOVERY_CONFIG_MATRIX_PENDING"
       ],
       "plan_data_status": "PASS",
-      "plan_evidence": "../m4-plan-validation.md"
+      "plan_evidence": "../m4-plan-validation.md",
+      "iteration_compilation": {
+        "status": "NOT_RUN",
+        "entry": "tasks::scorpion_cycle",
+        "schedule": "tasks::configure_scorpion_units",
+        "required_normal_units": 3,
+        "executed": false,
+        "evidence_report": "../m4-scorpion-validation.md"
+      }
     },
     {
       "task_id": "Scorpionesses_plus_6_hands",
@@ -3245,7 +3255,7 @@
         "M4-TASK-Scorpionesses_plus_6_hands"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "TYPED_PLAN_DATA",
+      "implementation_extent": "FINITE_SCORPION_CYCLE_PENDING_VALIDATION",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
       "offline_status": "NOT_RUN",
@@ -3255,7 +3265,10 @@
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
-        "native/games/wvd/tasks/task_plan.cpp"
+        "native/games/wvd/tasks/task_plan.cpp",
+        "native/games/wvd/tasks/bounty_cycle.cpp",
+        "native/games/wvd/quests/bounty_cycle.cpp",
+        "native/games/wvd/tasks/bounty_visit.cpp"
       ],
       "source_fields": [
         "questName",
@@ -3269,12 +3282,19 @@
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
       "blockers": [
-        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "BUSINESS_ACTIONS_NOT_IMPLEMENTED",
-        "SPECIAL_CASE_NOT_IMPLEMENTED"
+        "SCORPION_NATIVE_CYCLE_VALIDATION_PENDING",
+        "FULL_STOP_RECOVERY_CONFIG_MATRIX_PENDING"
       ],
       "plan_data_status": "PASS",
-      "plan_evidence": "../m4-plan-validation.md"
+      "plan_evidence": "../m4-plan-validation.md",
+      "iteration_compilation": {
+        "status": "NOT_RUN",
+        "entry": "tasks::scorpion_cycle",
+        "schedule": "tasks::configure_scorpion_units",
+        "required_normal_units": 4,
+        "executed": false,
+        "evidence_report": "../m4-scorpion-validation.md"
+      }
     },
     {
       "task_id": "gaintKiller",
@@ -3366,7 +3386,7 @@
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
       "iteration_compilation": {
-        "status": "NOT_RUN",
+        "status": "PASS",
         "entry": "tasks::sleep_visits",
         "schedule": "tasks::configure_sleep_units",
         "required_normal_units": 250,

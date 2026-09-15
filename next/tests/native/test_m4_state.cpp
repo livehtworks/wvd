@@ -2,6 +2,7 @@
 #include "games/wvd/state.hpp"
 #include "games/wvd/tasks/sleep_visits.hpp"
 #include "games/wvd/tasks/bounty_cycle.hpp"
+#include "games/wvd/tasks/giant.hpp"
 #include "games/wvd/vision/recognizers.hpp"
 #include "storage/legacy_import.hpp"
 #include "storage/profile_store.hpp"
@@ -78,6 +79,12 @@ std::optional<runtime::SessionDefinition> recover_unit(const contracts::SessionR
 }
 J bounty_cycle_contract(const J &profile) {
     J results = J::array();
+    auto negative = profile;
+    negative["REST_INTERVEL"] = -1;
+    bool giant_rejected = false;
+    try { games::tasks::giant_iteration({"gaintKiller", "quest", J::object()}, negative, {}); }
+    catch (const std::exception &e) { giant_rejected = std::string(e.what()) == "GIANT_REST_INTERVAL_INVALID"; }
+    require(giant_rejected, "GIANT_NEGATIVE_INTERVAL_ACCEPTED");
     for (const bool hands : {false, true}) {
         auto clock = std::make_shared<TestClock>();
         games::WvdRunState state(profile, {hands ? "hands" : "scorpion", 1, clock});
@@ -89,8 +96,8 @@ J bounty_cycle_contract(const J &profile) {
         for (std::size_t cycle = 0; cycle < 2; ++cycle) {
             const auto base = cycle * units;
             state.enter_segment(cycle ? contracts::SegmentBoundary::Continuation : contracts::SegmentBoundary::Initial, ++generation, base);
-            auto emit = [&](const char *event, const std::string &operation = "") {
-                return state.confirm_event(state.confirmation_id(operation.empty() ? event : operation, event), event, generation, 1);
+            auto emit = [&](const char *event, const std::string &operation = "", std::optional<std::size_t> step = {}) {
+                return state.confirm_event(state.confirmation_id(operation.empty() ? event : operation, event), event, generation, 1, step);
             };
             emit(hands ? "scorpion_hands_started" : "scorpion_started");
             require(!emit(hands ? "scorpion_hands_started" : "scorpion_started"), "BOUNTY_START_REPLAY");
@@ -105,12 +112,12 @@ J bounty_cycle_contract(const J &profile) {
             for (std::size_t route = 0; route < (hands ? 2u : 1u); ++route) {
                 state.enter_segment(contracts::SegmentBoundary::Continuation, ++generation, base + 1 + route);
                 emit("dungeon_entered");
-                emit("target_completed", "point0");
+                emit("target_completed", "point0", 0);
                 bool early = false;
                 try { emit("bounty_route_completed"); }
                 catch (const std::exception &e) { early = std::string(e.what()) == "BOUNTY_ROUTE_NOT_COMPLETED"; }
                 require(early, "BOUNTY_INCOMPLETE_ROUTE_ACCEPTED");
-                emit("target_completed", "point1");
+                emit("target_completed", "point1", 1);
                 emit("bounty_route_completed");
                 emit("bounty_return_completed");
             }

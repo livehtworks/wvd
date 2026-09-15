@@ -156,7 +156,9 @@ CompiledWorkflow traverse_dungeon(const WvdTaskPlan &plan, const J &profile,
         graph.observe("Point" + suffix, C::business("/task_step", i), {route});
         graph.hit_limit("Point" + suffix, 128);
         graph.confirm("Confirm" + suffix, "point." + suffix, "target_completed",
-            C::all({C::absent(J{{"mode", "blocking_screen"}}), point_confirmation(target, map)}), {"Dispatch"}, i);
+            // 确认动作另取新帧。基础弹窗探针沿用已有并行实现，避免串行扫描耗尽
+            // 观察有效期；仍检查全部原有弹窗，不复用子图的旧帧或放宽TTL。
+            C::all({C::absent(J{{"mode", "blocking_screen"}, {"parallel_basic", true}}), point_confirmation(target, map)}), {"Dispatch"}, i);
     }
     if (plan.floor()) {
         const auto retreat = graph.append("WrongFloor", navigation::auto_route("dungFlag"), {"Outside", "Dispatch"},
