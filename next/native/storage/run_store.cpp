@@ -262,11 +262,13 @@ J RunStore::save_diagnostic(const contracts::FrameEnvelope *frame, const Diagnos
         diagnostic_require(frame != nullptr, "DIAGNOSTIC_FRAME_UNAVAILABLE");
         const auto &id = frame->identity;
         diagnostic_require(id.generation == request.generation && id.frame_id > 0 &&
-            id.device_id == definition_.at("device_id") && id.game_id == definition_.at("game_id") &&
-            id.pack_revision == definition_.at("pack_revision") && id.color_format == "BGR8" &&
+            id.device_id == definition_.at("device_id").get<std::string>() &&
+            id.game_id == definition_.at("game_id").get<std::string>() &&
+            id.pack_revision == definition_.at("pack_revision").get<std::string>() && id.color_format == "BGR8" &&
             id.raw_size.width > 0 && id.raw_size.height > 0 &&
             id.raw_size.width <= 16384 && id.raw_size.height <= 16384 &&
-            (definition_.value("observed_read_only_viewport", false) || id.viewport_id == definition_.at("viewport")) &&
+            (definition_.value("observed_read_only_viewport", false) ||
+                id.viewport_id == definition_.at("viewport").get<std::string>()) &&
             id.captured_at.time_since_epoch().count() > 0 && id.captured_at <= std::chrono::steady_clock::now(),
             "DIAGNOSTIC_FRAME_IDENTITY_INVALID");
         entry["frame"] = {{"frame_id", id.frame_id}, {"generation", id.generation},
