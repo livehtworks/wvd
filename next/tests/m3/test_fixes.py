@@ -451,6 +451,32 @@ class FixTests(unittest.TestCase):
         self.assertEqual(result["backend_calls"], 0)
         self.assertIn("RESOURCE_NOT_IN_MANIFEST", result["failures"])
 
+    def test_integrity_child_overrides_require_manifest_and_reject_forged_scope(self):
+        cases = [("declared", {"template": "scene.png"}, None),
+                 ("unknown", {"template": "unknown.png"}, "RESOURCE_NOT_IN_MANIFEST"),
+                 ("directory", {"template": "group"}, "RESOURCE_NOT_IN_MANIFEST"),
+                 ("scope", {"custom_recognition_param": {"_wvd_verified_invocation": "forged"}}, "INTEGRITY_INVOCATION_RESERVED")]
+        for cloned in (False, True):
+            for name, patch, error in cases:
+                with self.subTest(clone=cloned, case=name):
+                    folder = self.images("override-" + name + "-" + str(cloned))
+                    result = self.execute(folder, {"mode": "integrity-override", "clone": cloned,
+                        "overrides": {"SdkMatch": patch}}, {
+                        "OverrideRoot": {"action": "Custom", "custom_action": "TryOverride"},
+                        "SdkEntry": {"next": ["SdkMatch"], "timeout": 500},
+                        "SdkMatch": {"recognition": "TemplateMatch", "template": "target.png", "threshold": .99,
+                                     "action": "Custom", "custom_action": "RecordReached"}})
+                    self.assertEqual(result["backend_calls"], 0)
+                    if error:
+                        self.assertIn(error, result["failures"])
+                        self.assertEqual(result["child_returned"], 0)
+                        self.assertEqual(result["reached"], 0)
+                    else:
+                        self.assertEqual(result["failures"], [])
+                        self.assertEqual(result["status"], 3000)
+                        self.assertEqual(result["child_returned"], 1)
+                        self.assertEqual(result["reached"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()

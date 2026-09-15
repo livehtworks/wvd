@@ -129,6 +129,41 @@ int main(int argc, char **argv) {
             output = {{"snapshot", storage::snapshot_json(coordinator.snapshot())},
                       {"backend_calls", device->calls.load()},
                       {"mismatch", device->mismatch}};
+        } else if (config.at("mode") == "integrity-override") {
+            storage::EventJournal events("integrity-override", 1);
+            devices::InputGate gate(*device, policy, 1, 1, events);
+            std::mutex result_mutex;
+            J failures = J::array();
+            std::atomic<unsigned> reached{}, returned{};
+            maafw::GatewayHooks hooks;
+            hooks.failure = [&](const std::string &code) {
+                std::lock_guard lock(result_mutex);
+                failures.push_back(code);
+            };
+            maafw::ActionRegistry actions{
+                {"TryOverride", [&](maafw::Context &context, const J &) {
+                    const auto child = context.run_child("SdkEntry", config.at("overrides"), config.at("clone").get<bool>());
+                    ++returned;
+                    return child.valid && child.status == MaaStatus_Succeeded;
+                }},
+                {"RecordReached", [&](maafw::Context &, const J &) { ++reached; return true; }}};
+            maafw::MaaGateway gateway(bundle, &gate, hooks, std::move(actions),
+                registry->bind_recognitions({games::vision::binding(J::object())}));
+            gateway.initialize();
+            const auto task = gateway.post("OverrideRoot");
+            until([&] {
+                const auto status = gateway.status(task);
+                return status != MaaStatus_Pending && status != MaaStatus_Running && gateway.active_callbacks() == 0;
+            });
+            output = {{"status", gateway.status(task)}, {"reached", reached.load()},
+                {"child_returned", returned.load()}, {"backend_calls", device->calls.load()}};
+            {
+                std::lock_guard lock(result_mutex);
+                output["failures"] = failures;
+            }
+            gate.close();
+            gateway.close();
+            gate.disconnect_backend();
         } else if (config.at("mode") == "integrity") {
             storage::EventJournal events("integrity", 1);
             devices::InputGate gate(*device, policy, 1, 1, events);
