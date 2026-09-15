@@ -100,5 +100,6 @@
 - 旧 TargetInfo 的第三个参数并不总是 ROI：position/stair 为点，harken/Bharken 可以是楼梯资源名。旧 EOT 和嵌套 fallback 是顺序列表，不可直接作为 Maa 候选 next。
 - m4_inventory.py 使用本轮 data/state/plan 证据更新叠加表；implementation_status 与 implementation_extent 分开，纯数据 PASS 不填写任务 offline_status=PASS。未实现专项仍保留在全部 58 项分母内。
 - M4 有限业务测试使用发布产物的 Session 时间预算；不要在测试驱动另设较短总限时后，又要求走完更长的候选重试链。无恢复策略的 RecoveryRequired 按现有契约返回 Interrupted，不是 Failed 或 Completed。
+- 多轮陷阱流程的外层看护需随 normal_units 计算，不能沿用单轮预算截断第二轮；只调整隔离测试看护，不改变生产 Session/帧 TTL/停止预算。发现时正在运行的旧轮次保持原样，不改写结果。
 - 固定 SDK 提供的 JSON 头是 `<json.hpp>`，不是 `<nlohmann/json.hpp>`；新游戏模块沿用现有 include，不另装第二份依赖。
 - Maa 节点未提供 custom_action_param 时，现有 Context 可传入 JSON null；给 RequireRecovery 增加可选原因时须保留这一无参数契约，不能直接对 null 调用 value()。

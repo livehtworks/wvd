@@ -170,7 +170,9 @@ class WorkflowTests(unittest.TestCase):
         route_budget = 1300 if options.get("profile", {}).get("QUICK_DISARM_CHEST", False) else 1000
         with (folder / "native.log").open("wb") as log:
             result = subprocess.run([str(exe), str(source)], cwd=folder, env=self.env,
-                                    stdout=log, stderr=log, timeout={"dungeon-route": route_budget + 20, "fortress-trap": route_budget + 260, "recover": 750, "departure": 200, "heal": 260,
+                                    stdout=log, stderr=log, timeout={"dungeon-route": route_budget + 20,
+                                        "fortress-trap": (route_budget + 260) * options.get("normal_units", 1),
+                                        "recover": 750, "departure": 200, "heal": 260,
                                         "chest": 920 if options.get("quick") else 620,
                                         "common": 140, "iteration": (route_budget + 380) * options.get("normal_units", 1)}.get(options.get("workflow"), 90))
         self.assertEqual(digest(exe), before_hash)
