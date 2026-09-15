@@ -3204,7 +3204,7 @@
         "M4-TASK-Scorpionesses"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "FINITE_SCORPION_CYCLE_PENDING_VALIDATION",
+      "implementation_extent": "FINITE_SCORPION_CYCLE_PARTIAL_VALIDATION",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
       "offline_status": "NOT_RUN",
@@ -3231,17 +3231,18 @@
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
       "blockers": [
-        "SCORPION_NATIVE_CYCLE_VALIDATION_PENDING",
+        "SCORPION_ALTERNATE_ENTRY_AND_CONTINUATION_PENDING",
         "FULL_STOP_RECOVERY_CONFIG_MATRIX_PENDING"
       ],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
       "iteration_compilation": {
-        "status": "NOT_RUN",
+        "status": "PASS",
         "entry": "tasks::scorpion_cycle",
         "schedule": "tasks::configure_scorpion_units",
         "required_normal_units": 3,
-        "executed": false,
+        "executed": true,
+        "scope": "ONE_ORE_CYCLE_NOT_FULL_TASK_MATRIX",
         "evidence_report": "../m4-scorpion-validation.md"
       }
     },
@@ -3255,7 +3256,7 @@
         "M4-TASK-Scorpionesses_plus_6_hands"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "FINITE_SCORPION_CYCLE_PENDING_VALIDATION",
+      "implementation_extent": "FINITE_SCORPION_CYCLE_PARTIAL_VALIDATION",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
       "offline_status": "NOT_RUN",
@@ -3282,17 +3283,18 @@
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
       "blockers": [
-        "SCORPION_NATIVE_CYCLE_VALIDATION_PENDING",
+        "SCORPION_ALTERNATE_ENTRY_AND_CONTINUATION_PENDING",
         "FULL_STOP_RECOVERY_CONFIG_MATRIX_PENDING"
       ],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
       "iteration_compilation": {
-        "status": "NOT_RUN",
+        "status": "PASS",
         "entry": "tasks::scorpion_cycle",
         "schedule": "tasks::configure_scorpion_units",
         "required_normal_units": 4,
-        "executed": false,
+        "executed": true,
+        "scope": "ONE_ORE_CYCLE_NOT_FULL_TASK_MATRIX",
         "evidence_report": "../m4-scorpion-validation.md"
       }
     },

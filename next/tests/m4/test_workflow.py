@@ -188,6 +188,7 @@ class WorkflowTests(unittest.TestCase):
                                         "giant": (route_budget + 500) * options.get("normal_units", 1),
                                         "recover": 750, "departure": 200, "heal": 260,
                                         "chest": 920 if options.get("quick") else 620,
+                                        "fishing-round": 720, "fishing-cast": 110, "fishing-reward": 80,
                                         "scorpion": (route_budget + 500) * (4 if options.get("hands") else 3), "city-travel": 140, "sleep-batch": 1620 * options.get("normal_units", 1), "bounty-visit": 200 * options.get("normal_units", 1), "manual-separation": 3620, "time-leap": 200, "mining": mining_watchdog, "common": 140, "iteration": (route_budget + 380) * options.get("normal_units", 1)}.get(options.get("workflow"), 90))
         self.assertEqual(digest(exe), before_hash)
         (folder / "execution.json").write_text(json.dumps({"exe_sha256": before_hash, "exit": result.returncode}), encoding="utf-8")
@@ -1956,6 +1957,16 @@ class WorkflowTests(unittest.TestCase):
             self.assertEqual(r["snapshot"]["state"], "Interrupted", r)
             self.assertEqual(r["backend_calls"], 0)
             if name == "empty": self.assertEqual(r["snapshot"]["reason"], "quest.fishing_bait_required")
+
+    def test_fishing_cast_tied_zero_and_eight_scores_do_not_refill(self):
+        frames, commands = self.fishing_cast_scenario()
+        for frame in frames[:-1]:
+            frame.pop("fishing/8bait")
+            frame["fishing/nobait"] = (550, 1490)
+        r = self.execute("fishing-cast-tied-bait", frames, commands,
+            **self.fishing_cast_options(mod_images={"fishing/8bait": "fishing/nobait"}))
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 8)
 
     def test_fishing_cast_reject_and_stop_cancel_the_remaining_swipes(self):
         for stop in (False, True):
