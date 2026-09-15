@@ -23,7 +23,7 @@ CompiledWorkflow mining_iteration(const WvdQuestDefinition &definition, const nl
                                    scoped("FFXI/nothingToDig2", {320, 667, 423, 474})});
     const auto dungeon = C::image("dungFlag"), inn = C::image("Inn"), world = C::image("openworldmap");
     const auto return_text = C::image("returnText"), leave = C::image("leaveDung");
-    const J blocked{{"mode", "blocking_screen"}};
+    const J blocked{{"mode", "mining_blocked"}};
     const auto site = C::all({dungeon, position, C::absent(C::image("mapFlag")), C::absent(J{{"mode", "combat_active"}})});
     const auto quiet_site = C::all({site, C::absent(C::any({receive, no_pick, exhausted, blocked}))});
     const auto mine_page = C::any({site, receive, no_pick, exhausted});

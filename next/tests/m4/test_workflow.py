@@ -179,7 +179,7 @@ class WorkflowTests(unittest.TestCase):
                                         "giant": (route_budget + 500) * options.get("normal_units", 1),
                                         "recover": 750, "departure": 200, "heal": 260,
                                         "chest": 920 if options.get("quick") else 620,
-                                        "common": 140, "iteration": (route_budget + 380) * options.get("normal_units", 1)}.get(options.get("workflow"), 90))
+                                        "mining": 920, "common": 140, "iteration": (route_budget + 380) * options.get("normal_units", 1)}.get(options.get("workflow"), 90))
         self.assertEqual(digest(exe), before_hash)
         (folder / "execution.json").write_text(json.dumps({"exe_sha256": before_hash, "exit": result.returncode}), encoding="utf-8")
         self.assertEqual(result.returncode, 0, (folder / "native.log").read_text(encoding="utf-8", errors="replace")[-3000:])
@@ -1737,7 +1737,7 @@ class WorkflowTests(unittest.TestCase):
             self.assertEqual(r["snapshot"]["business"]["mining"]["rewards"]["fine"], 1)
             self.assertEqual(r["snapshot"]["business"]["mining"]["completed_cycles"], 1)
             self.assertEqual(r["snapshot"]["business"]["dungeons"], 0)
-            self.assertEqual(r["lifecycle_calls"], ["EnsureVpn", "StopApplication", "StartApplication"] if cold else [])
+            self.assertEqual(r["lifecycle_calls"], ["RestartInstance", "EnsureVpn", "StartApplication"] if cold else [])
 
     def test_mining_unknown_and_repeated_equal_rewards_are_not_confused(self):
         for unknown in (False, True):
@@ -1784,7 +1784,7 @@ class WorkflowTests(unittest.TestCase):
             {"Stay": (400, 700)}, {"Economy": (400, 700)}, {"OK": (400, 700)}, {"Stay": (400, 700)}, inn]
         commands = [dict(kind=0, x=x, y=y) for x, y in [(450, 600), (1, 1), (420, 712), (420, 712),
             (420, 712), (420, 712), (520, 712), (420, 712), (420, 712), (320, 712), (420, 862), (420, 962)]]
-        commands += [dict(kind=1, key=4)] + [dict(kind=0, x=420, y=712)] * 4 + [dict(kind=1, key=4)]
+        commands += [dict(kind=5, key=4)] + [dict(kind=0, x=420, y=712)] * 4 + [dict(kind=5, key=4)]
         r = self.execute("mining-refill", frames, commands, **self.mining_options())
         self.assertEqual(r["snapshot"]["state"], "Completed", r)
         self.assertEqual(r["backend_calls"], 18)
