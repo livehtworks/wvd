@@ -59,7 +59,7 @@ tasks::CompiledWorkflow auto_route(const std::string &target) {
         graph.hit_limit("Moving", 100);
         graph.observe("Stopped", C::all({moving, J{{"mode", "movement_stopped"}}}), {"StoppedExit"});
     }
-    graph.interrupt_on({{"mode", "blocking_screen"}}, "navigation.common_screen_requires_dispatch");
+    graph.interrupt_on({{"mode", "blocking_screen"}, {"parallel_basic", true}}, "navigation.common_screen_requires_dispatch");
     return graph.finish();
 }
 }

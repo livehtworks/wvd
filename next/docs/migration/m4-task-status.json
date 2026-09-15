@@ -3047,8 +3047,8 @@
       "semantic_differences": [],
       "blockers": [
         "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "BUSINESS_ACTIONS_NOT_IMPLEMENTED",
-        "SPECIAL_CASE_NOT_IMPLEMENTED"
+        "SCENE_CONFIRMATION_CORRECTION_LIMIT_REACHED",
+        "FULL_CONFIGURATION_AND_RECOVERY_MATRIX_INCOMPLETE"
       ],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
@@ -3279,7 +3279,7 @@
       "implementation_extent": "FINITE_SPECIAL_ITERATION_BLOCKED",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
-      "offline_status": "NOT_RUN",
+      "offline_status": "BLOCKED",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
       "new_entry": null,
@@ -3365,17 +3365,19 @@
         "M4-TASK-FFXI-Org"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "TYPED_PLAN_DATA",
+      "implementation_extent": "FINITE_SPECIAL_ITERATION_PARTIAL",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
-      "offline_status": "NOT_RUN",
+      "offline_status": "PARTIAL",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
       "new_entry": null,
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
-        "native/games/wvd/tasks/task_plan.cpp"
+        "native/games/wvd/tasks/task_plan.cpp",
+        "native/games/wvd/tasks/mining.cpp",
+        "native/games/wvd/mining/progress.cpp"
       ],
       "source_fields": [
         "questName",
@@ -3394,11 +3396,19 @@
       "semantic_differences": [],
       "blockers": [
         "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "BUSINESS_ACTIONS_NOT_IMPLEMENTED",
-        "SPECIAL_CASE_NOT_IMPLEMENTED"
+        "MINING_EOT_SEEK_SCENE_CONFIRMATION_FAILED",
+        "FULL_CONFIGURATION_AND_RECOVERY_MATRIX_INCOMPLETE"
       ],
       "plan_data_status": "PASS",
-      "plan_evidence": "../m4-plan-validation.md"
+      "plan_evidence": "../m4-plan-validation.md",
+      "iteration_implementation": {
+        "status": "PARTIAL_OFFLINE_VERIFIED",
+        "entry": "tasks::mining_iteration",
+        "source": "native/games/wvd/tasks/mining.cpp",
+        "scope": "FINITE_ITERATION_NOT_FULL_TASK_ACCEPTANCE",
+        "evidence_report": "../m4-mining-validation.md",
+        "remaining": "FULL_EOT_SEEK_AND_MID_RUN_RECOVERY_MATRIX"
+      }
     },
     {
       "task_id": "sandman",

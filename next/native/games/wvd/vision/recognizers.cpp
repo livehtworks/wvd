@@ -261,7 +261,7 @@ J evaluate_uncached(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels
         result["action_eligible"] = false;
         return result;
     }
-    if (mode == "mining_blocked") {
+    if (mode == "blocking_screen" && p.value("parallel_basic", false)) {
         check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");
         // 条件和消费优先级与 blocking_screen 相同。基础探针同步分片，包含嵌套
         // 默认对话的后三项仍串行调用，避免 OpenCV 嵌套并行使内层退化。
@@ -269,13 +269,13 @@ J evaluate_uncached(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels
         const auto matches = evaluate_batch(bundle, pixels, probes, bound, scope, cache, depth, memo, 4);
         for (std::size_t i = 0; i < probes.size(); ++i) {
             const auto &result = matches.at(i);
-            check(result.at("outcome") != "Error", "MINING_RECOGNITION_ERROR");
+            check(result.at("outcome") != "Error", "WVD_BOOT_RECOGNITION_ERROR");
             if (result.at("outcome") == "Hit")
                 return decision(true, allowed_rect, {{"stage", probes.at(i).value("image", probes.at(i).value("mode", "unknown"))}, {"matched", result}});
         }
         for (const auto *name : {"party_death", "default_dialogue", "party_defeat"}) {
             const auto result = evaluate_impl(bundle, pixels, {{"mode", name}}, bound, scope, cache, depth + 1, memo);
-            check(result.at("outcome") != "Error", "MINING_RECOGNITION_ERROR");
+            check(result.at("outcome") != "Error", "WVD_BOOT_RECOGNITION_ERROR");
             if (result.at("outcome") == "Hit")
                 return decision(true, allowed_rect, {{"stage", name}, {"matched", result}});
         }
@@ -289,7 +289,7 @@ J evaluate_uncached(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels
         auto received = evaluate_impl(bundle, pixels, probe("receive"), bound, scope, cache, depth + 1, memo);
         check(received.at("outcome") != "Error", "MINING_RECOGNITION_ERROR");
         if (received.at("outcome") != "Hit") return decision(false, {}, {{"reason", "no_reward_page"}});
-        const auto blocked = evaluate_impl(bundle, pixels, {{"mode", "mining_blocked"}}, bound, scope, cache, depth + 1, memo);
+        const auto blocked = evaluate_impl(bundle, pixels, {{"mode", "blocking_screen"}, {"parallel_basic", true}}, bound, scope, cache, depth + 1, memo);
         check(blocked.at("outcome") != "Error", "MINING_RECOGNITION_ERROR");
         if (blocked.at("outcome") == "Hit") return decision(false, {}, {{"reason", "blocking_screen"}});
         J candidates = J::array();

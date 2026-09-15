@@ -63,3 +63,16 @@
 | 首次挖取拒绝/停止 | Failed或UserStopped/各1 | 奖励总数零、周期不完成 |
 
 完整EOT到矿点、中途恢复、各矿物边界/mod与当前全量回归仍待完成，整任务仍PARTIAL。
+
+## 完整入口与分类扩展
+
+正式源码`8651c50`构建、夹具`8071bbc`：三方法两通过、一失败（274.872秒，
+`m4-workflow-l07wlk3m`、`m4-mining-entry-rewards.log`）。十种矿物加ROI外干扰共25输入，
+每类一次、未知一次；baseline缺失的fine由封存mod提供，保持旧图片优先级。
+错位置标记零输入Interrupted。两通过场景均在重建前核对实际EXE身份与静止。
+
+完整EOT已正确执行GCN/EVENT/活动/ZONE2五次输入，进入自动寻路后准备点击mark_auto时，
+场景确认帧龄2531.074ms、目标完成2556.924ms，被SCENE_UNCONFIRMED拒绝。
+修正一复用基础阻塞探针四路计算，作为blocking_screen的显式parallel_basic参数，
+仅挖矿及自动寻路调用启用；不改条件、顺序、阈值或TTL。原挖矿临时专用mode同步退出，
+没有保留兼容别名或另一套阻塞规则。完整入本链待复验。
