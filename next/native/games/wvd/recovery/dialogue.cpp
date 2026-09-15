@@ -24,7 +24,8 @@ tasks::CompiledWorkflow choose_special_dialogue(DialoguePolicy policy) {
         graph.postcondition_budget("Choose" + suffix, 10000);
         graph.route("AfterChoice" + suffix, {"CloseBond" + suffix, "Completed" + suffix, "Unconfirmed"});
         graph.click("CloseBond" + suffix, C::all({close, C::absent(marker)}), close, after, {"Completed" + suffix, "Unconfirmed"});
-        graph.confirm("Completed" + suffix, "dialogue.special.done", "special_dialogue_completed",
+        graph.confirm("Completed" + suffix, "dialogue.special.done",
+            option == "sandman/sandman_bondmate" ? "sandman_bondmate_completed" : "special_dialogue_completed",
             C::all({after, C::absent(close), C::absent(marker)}), {"Terminal"});
     }
     graph.route("Entry", entry);

@@ -35,7 +35,7 @@ class WorkflowTests(unittest.TestCase):
         folder = self.root / name
         bundle = folder / "bundle"
         (bundle / "image").mkdir(parents=True)
-        resource_kind = "dungeon-route" if options.get("workflow") == "fortress-trap" else "iteration" if options.get("workflow") in ("giant", "dark-light", "mining", "manual-separation", "scorpion", "fishing-cycle", "jier", "golden-chest") else options.get("workflow")
+        resource_kind = "dungeon-route" if options.get("workflow") == "fortress-trap" else "iteration" if options.get("workflow") in ("giant", "dark-light", "mining", "manual-separation", "scorpion", "fishing-cycle", "jier", "golden-chest", "sandman") else options.get("workflow")
         if resource_kind in ("bounty-visit", "featured-request", "sleep-batch", "fishing-cast", "fishing-reward", "fishing-round", "fishing-seek"): resource_kind = "common"
         names = ["worldmapflag", "City_RoyalCityLuknalia", "Inn", "Stay", "Economy", "royalsuite", "OK"]
         if resource_kind in ("departure", "iteration"):
@@ -198,6 +198,7 @@ class WorkflowTests(unittest.TestCase):
                                         "fishing-round": 720, "fishing-cast": 110, "fishing-reward": 80, "fishing-seek": 200,
                                         "fishing-cycle": (route_budget + 520) * options.get("normal_units", 1),
                                         "jier": (route_budget + 500) * 3,
+                                        "golden-chest": (route_budget + 740) * 2, "sandman": route_budget + 740, "featured-request": 260,
                                         "scorpion": (route_budget + 500) * (4 if options.get("hands") else 3), "city-travel": 140, "sleep-batch": 1620 * options.get("normal_units", 1), "bounty-visit": 200 * options.get("normal_units", 1), "manual-separation": 3620, "time-leap": 200, "mining": mining_watchdog, "common": 140, "iteration": (route_budget + 380) * options.get("normal_units", 1)}.get(options.get("workflow"), 90))
         self.assertEqual(digest(exe), before_hash)
         (folder / "execution.json").write_text(json.dumps({"exe_sha256": before_hash, "exit": result.returncode}), encoding="utf-8")
@@ -2170,7 +2171,7 @@ class WorkflowTests(unittest.TestCase):
         advance(dict(kind=0, x=420, y=512), {"guildFeatured": (100, 300)})
         advance(dict(kind=0, x=120, y=312), listing)
         for _ in range(3 if bull else 1):
-            advance(dict(kind=1, x=150, y=1000 if bull else 1300, x2=150, y2=200), listing)
+            advance(dict(kind=1, x=150, y=1000 if bull else 1300, x2=150, y2=200, duration=400), listing)
         selected = not bull or accepted is None or accepted[1] < 612
         if selected:
             advance(dict(kind=0, x=686 if bull else 720, y=1069 if bull else 962), {"guildRequest": (400, 500)})
@@ -2227,6 +2228,152 @@ class WorkflowTests(unittest.TestCase):
         self.assertFalse(r["mismatch"])
         self.assertEqual(r["snapshot"]["business"]["special_dialogues_completed"], 2)
         self.assertFalse(r["snapshot"]["business"]["special_dialogue_pending"])
+
+    def sandman_options(self, **extra):
+        options = self.scorpion_options(**extra)
+        options["workflow"] = "sandman"
+        options["extra_images"] += ["stair_fortress3f", "impregnableFortress", "fortressb3f", "harken2",
+            "requestToRescueTheDuke", "sandman/sandman_1", "sandman/sandman_2", "sandman/sandman_bondmate", "bondmate_close"]
+        return options
+
+    def sandman_scenario(self, bond):
+        page = {"mapFlag": (100, 100), "stair_fortress3f": (200, 300)}
+        frames, commands = [page], []
+        def advance(command, after):
+            commands.append(command)
+            frames.append(after)
+        def click(x, y, after): advance(dict(kind=0, x=x, y=y), after)
+        swipe = dict(kind=1, x=100, y=1200, x2=700, y2=250, duration=400)
+        for i, (x, y) in enumerate(((133, 814), (238, 1076), (450, 924))):
+            advance(swipe.copy(), page)
+            click(x, y, page)
+            if bond and i == 0:
+                click(136, 1431, {"sandman/sandman_1": (400, 600)})
+                click(420, 612, {"sandman/sandman_2": (400, 700)})
+                click(420, 712, {"sandman/sandman_bondmate": (400, 800)})
+                click(420, 812, {"bondmate_close": (400, 900)})
+                click(420, 912, {"dungFlag": (50, 150)})
+            else:
+                click(136, 1431, {"dungFlag": (50, 150)})
+            reached = {**page, "cursor_0": (x - 20, y - 12)}
+            click(777, 150, reached)
+            advance(swipe.copy(), reached)
+        gate = {**page, "harken2": (400, 700)}
+        advance(swipe.copy(), gate)
+        click(420, 712, gate)
+        city = {"Inn": (400, 700), "ruins": (100, 300)}
+        click(136, 1431, city)
+        if bond:
+            for target in ("requestToRescueTheDuke", "Triumph"):
+                rest, inputs = self.inn_sequence()
+                frames += rest[1:]
+                commands += inputs
+                frames[-1]["ruins"] = (100, 300)
+                click(120, 312, {"cursedWheelTitle": (200, 100), target: (300, 900)})
+                click(320, 912, {"cursedWheelTitle": (200, 100), "leap": (400, 900)})
+                click(420, 912, city)
+        return frames, commands
+
+    def test_sandman_without_bondmate_finishes_visit_without_rest_or_leap(self):
+        frames, commands = self.sandman_scenario(False)
+        r = self.execute("sandman-no-bond", frames, commands, **self.sandman_options())
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 18)
+        self.assertFalse(r["mismatch"])
+        self.assertEqual(r["snapshot"]["business"]["sandman"]["completed_cycles"], 0)
+        self.assertEqual(r["snapshot"]["business"]["inn_rests"], 0)
+
+    def test_sandman_bondmate_route_two_rests_and_ordered_leaps(self):
+        frames, commands = self.sandman_scenario(True)
+        r = self.execute("sandman-bond", frames, commands, **self.sandman_options())
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 38)
+        self.assertFalse(r["mismatch"])
+        state = r["snapshot"]["business"]
+        self.assertEqual(state["sandman"]["completed_cycles"], 1)
+        self.assertEqual(state["inn_rests"], 2)
+        self.assertEqual(state["special_dialogues_completed"], 3)
+        self.assertFalse(state["sandman"]["leap_pending"])
+
+    def test_sandman_rejected_and_stopped_map_input_does_not_count_bondmate(self):
+        for stop in (False, True):
+            frames, commands = self.sandman_scenario(False)
+            r = self.execute("sandman-stop-" + str(stop), frames[:2], [dict(commands[0], reject=not stop)],
+                **self.sandman_options(stop_after_first=stop))
+            self.assertEqual(r["snapshot"]["state"], "UserStopped" if stop else "Failed", r)
+            self.assertEqual(r["backend_calls"], 1)
+            self.assertFalse(r["mismatch"])
+            self.assertEqual(r["snapshot"]["business"]["sandman"]["completed_cycles"], 0)
+
+    def golden_options(self, **extra):
+        options = self.scorpion_options(**extra)
+        options["workflow"] = "golden-chest"
+        options["extra_images"] += ["SSC/Leap", "SSC/Request", "SSC/SSC", "SSC/SSC_quit",
+            "SSC/trapdeactived", "SSC/dotdotdot", "SSC/shadow", "bondmate_close", "specialRequest"]
+        return options
+
+    def test_golden_two_units_follow_route_when_all_four_chest_searches_are_empty(self):
+        frames = [{"cursedWheel": (400, 700)}]
+        commands = []
+        def advance(command, page):
+            commands.append(command)
+            frames.append(page)
+        def click(x, y, page): advance(dict(kind=0, x=x, y=y), page)
+        click(420, 712, {"SSC/Leap": (300, 900)})
+        click(320, 912, {"OK": (400, 900)})
+        click(420, 912, {"Inn": (400, 700), "intoWorldMap": (300, 600)})
+        click(320, 612, {"worldmapflag": (80, 100), "City_RoyalCityLuknalia": (132, 1352)})
+        click(152, 1364, {"Inn": (400, 700), "guild": (200, 500)})
+        visit, inputs, _ = self.featured_scenario(False)
+        frames += visit[1:]
+        commands += inputs
+        frames[-1]["intoWorldMap"] = (300, 600)
+        boundary = len(commands)
+        click(320, 612, {"worldmapflag": (80, 100), "SSC/SSC": (400, 700)})
+        dung = {"dungFlag": (50, 150)}
+        click(420, 712, dung)
+        advance(dict(kind=1, x=450, y=1050, x2=450, y2=850, duration=400), dung)
+        click(445, 721, {"SSC/trapdeactived": (400, 700)})
+        click(1, 1, dung)
+        page = {"mapFlag": (100, 100)}
+        click(777, 150, page)
+        left_up = dict(kind=1, x=100, y=250, x2=700, y2=1200, duration=400)
+        for x, y in ((719, 1088), (346, 874)):
+            advance(left_up, page)
+            click(x, y, page)
+            click(136, 1431, dung)
+            reached = {**page, "cursor_0": (x - 20, y - 12)}
+            click(777, 150, reached)
+            advance(left_up, reached)
+        for swipe in ((100, 250, 700, 1200), (700, 250, 100, 1200),
+                      (700, 1200, 100, 250), (100, 1200, 700, 250)):
+            advance(dict(kind=1, x=swipe[0], y=swipe[1], x2=swipe[2], y2=swipe[3], duration=400), page)
+        exit_page = {**page, "SSC/SSC_quit": (400, 700)}
+        advance(dict(kind=1, x=700, y=1200, x2=100, y2=250, duration=400), exit_page)
+        click(420, 712, exit_page)
+        click(136, 1431, {"Inn": (400, 700)})
+        r = self.execute("golden-route-empty-chests", frames, commands, **self.golden_options())
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], len(commands))
+        self.assertFalse(r["mismatch"])
+        self.assertEqual([row["inputs"]["backend_called"] for row in r["snapshot"]["sessions"]],
+                         [boundary, len(commands) - boundary])
+        state = r["snapshot"]["business"]
+        self.assertEqual(state["golden_chest"]["completed_cycles"], 1)
+        self.assertEqual(state["chests"], 0)
+        self.assertEqual(state["task_step"], 6)
+        self.assertEqual(state["featured_visit"]["visits_completed"], 1)
+        self.assertEqual(state["inn_rests"], 1)
+
+    def test_golden_stop_or_rejected_leap_preserves_intent(self):
+        for stop in (False, True):
+            r = self.execute("golden-stop-" + str(stop), [{"cursedWheel": (400, 700)}, {"SSC/Leap": (300, 900)}],
+                [dict(kind=0, x=420, y=712, reject=not stop)], **self.golden_options(stop_after_first=stop))
+            self.assertEqual(r["snapshot"]["state"], "UserStopped" if stop else "Failed", r)
+            self.assertEqual(r["backend_calls"], 1)
+            self.assertFalse(r["mismatch"])
+            self.assertTrue(r["snapshot"]["business"]["golden_chest"]["leap_pending"])
+            self.assertEqual(r["snapshot"]["business"]["golden_chest"]["completed_cycles"], 0)
 
     def test_jier_dialogue_precedes_karma_without_mutating_karma(self):
         r = self.execute("jier-dialogue-karma-priority",

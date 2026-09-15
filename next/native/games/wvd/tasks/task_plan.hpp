@@ -45,6 +45,7 @@ class WvdTaskPlan {
     // 专项代码中的 StateDungeon([...]) 是局部路线，不改写目录中的原始任务树。
     WvdTaskPlan with_route(const nlohmann::json &targets) const;
     WvdTaskPlan with_entry(const nlohmann::json &steps) const;
+    WvdTaskPlan with_floor(const std::string &image) const;
     nlohmann::json inspect() const;
     const std::vector<EntryStep> &entry_steps() const { return entry_; }
     const std::vector<MapTarget> &route() const { return route_; }

@@ -645,8 +645,8 @@ J evaluate_uncached(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels
         // 旧 IdentifyState 的专用选项先于善恶/祝福/沙人兜底，晚于正常场景、启动阻塞和死亡提示。
         auto guards = default_dialogue_normal_probes();
         for (const auto &probe : blocking_probes(false)) {
-            const auto image = probe.value("image", "");
-            if (image != "ambush" && image != "ignore" && image != "blessing" && image != "sandman_recover")
+            const auto image_name = probe.value("image", "");
+            if (image_name != "ambush" && image_name != "ignore" && image_name != "blessing" && image_name != "sandman_recover")
                 guards.push_back(probe);
         }
         guards.push_back({{"mode", "party_death"}});

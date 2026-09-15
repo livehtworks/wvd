@@ -18,6 +18,7 @@ inline bool business_condition(const nlohmann::json &summary, const nlohmann::js
         "/special_dialogue_pending",
         "/featured_visit/pending", "/featured_visit/active",
         "/golden_chest/phase", "/golden_chest/active", "/golden_chest/unit_matches", "/golden_chest/leap_pending",
+        "/sandman/phase", "/sandman/active", "/sandman/unit_matches", "/sandman/leap_pending", "/sandman/bondmate_confirmed",
         "/fishing/reward_pending",
         "/fishing/waiting", "/fishing/timed_out",
         "/fishing/casting_pending",

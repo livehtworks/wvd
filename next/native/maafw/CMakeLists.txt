@@ -65,6 +65,7 @@ if(WVD_BUILD_M4)
     ../games/wvd/tasks/sleep_visits.cpp
     ../games/wvd/tasks/featured_request.cpp
     ../games/wvd/tasks/golden_chest.cpp
+    ../games/wvd/tasks/sandman.cpp
     ../games/wvd/quests/bounty_cycle.cpp
     ../games/wvd/tasks/bounty_cycle.cpp
     ../games/wvd/tasks/fishing.cpp

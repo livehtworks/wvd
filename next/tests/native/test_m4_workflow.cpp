@@ -35,6 +35,7 @@
 #include "games/wvd/tasks/fishing_supply.hpp"
 #include "games/wvd/tasks/featured_request.hpp"
 #include "games/wvd/tasks/golden_chest.hpp"
+#include "games/wvd/tasks/sandman.hpp"
 #include "games/wvd/vision/recognizers.hpp"
 #include "platform/windows/file_digest.hpp"
 #include <iostream>
@@ -237,20 +238,24 @@ int main(int argc, char **argv) {
             if (kind == "common")
                 return games::recovery::clear_common_screens(config.value("allow_download", true),
                     config.value("golden_dialogue", false) ? games::recovery::DialoguePolicy::GoldenChest : config.value("jier_dialogue", false) ? games::recovery::DialoguePolicy::Jier : games::recovery::DialoguePolicy::Default);
-            if (kind == "fortress-trap" || kind == "giant" || kind == "dark-light" || kind == "mining" || kind == "manual-separation" || kind == "scorpion" || kind == "fishing-cycle" || kind == "jier" || kind == "golden-chest") {
+            if (kind == "fortress-trap" || kind == "giant" || kind == "dark-light" || kind == "mining" || kind == "manual-separation" || kind == "scorpion" || kind == "fishing-cycle" || kind == "jier" || kind == "golden-chest" || kind == "sandman") {
                 nlohmann::ordered_json source;
                 std::ifstream(maafw::path_from_utf8(config.at("quest_catalog"))) >> source;
                 games::WvdQuestCatalog catalog(source);
-                const auto &task = catalog.at(kind == "golden-chest" ? "SSC-goldenchest" : kind == "jier" ? "jier" : kind == "fishing-cycle" ? (config.value("far", false) ? "fishing2" : "fishing") : kind == "scorpion" ? (config.value("hands", false) ? "Scorpionesses_plus_6_hands" : "Scorpionesses") : kind == "manual-separation" ? "manualSepDemon" : kind == "mining" ? "FFXI-Org" : kind == "dark-light" ? "darkLight" : kind == "giant" ? "gaintKiller" : "fortress-B8F_trap");
-                if (kind == "golden-chest") {
-                    task_plan = games::tasks::golden_chest_plan(task).inspect();
-                    return games::tasks::golden_chest_cycle(task, profile, images, config.value("allow_download", true));
-                }
+                const auto &task = catalog.at(kind == "sandman" ? "sandman" : kind == "golden-chest" ? "SSC-goldenchest" : kind == "jier" ? "jier" : kind == "fishing-cycle" ? (config.value("far", false) ? "fishing2" : "fishing") : kind == "scorpion" ? (config.value("hands", false) ? "Scorpionesses_plus_6_hands" : "Scorpionesses") : kind == "manual-separation" ? "manualSepDemon" : kind == "mining" ? "FFXI-Org" : kind == "dark-light" ? "darkLight" : kind == "giant" ? "gaintKiller" : "fortress-B8F_trap");
                 std::set<std::string> images;
                 for (const auto &file : config.at("files")) {
                     const auto path = file.at("path").get<std::string>();
                     if (path.starts_with("image/"))
                         images.insert(path.substr(6));
+                }
+                if (kind == "sandman") {
+                    task_plan = games::tasks::sandman_plan(task).inspect();
+                    return games::tasks::sandman_cycle(task, profile, images, config.value("allow_download", true));
+                }
+                if (kind == "golden-chest") {
+                    task_plan = games::tasks::golden_chest_plan(task).inspect();
+                    return games::tasks::golden_chest_cycle(task, profile, images, config.value("allow_download", true));
                 }
                 if (kind == "fishing-cycle") {
                     task_plan = games::WvdTaskPlan::parse(task).inspect();

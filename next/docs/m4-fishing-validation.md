@@ -84,6 +84,17 @@
 修正为先observe业务阶段，再对新帧视觉执行fixed_click；不改变business或低置信目标的授权。
 夹具同步改用已有`state`/`backend_calls`字段并检查mismatch，不能把这次失败说成转交拒绝通过。
 
-仍需补饵新产物验证、普通覆盖层的新验证、
+修正一五方法三通过两失败，日志`m4-fishing-supply-correction1-workflow.log`，
+私有根`m4-workflow-o6qb7dor`，五份实际EXE/终态/输入/静止已在重建前核对。
+真实300秒浮标等待Completed/1输入/失败抛竿数1；转交拒绝Failed/11输入、pending保留；
+未知入口Interrupted/0输入。全链Failed/80输入，70笔已确认、phase=3、pending=false，
+尚未回到旅店或钓点。返回前场景识别2047ms，被2秒帧龄门禁正确拒绝。
+修正二将返回页按box/recipient/transfer/icon/itemList分别识别，不放宽TTL。
+
+下载插入首轮Failed/1输入，后置从frame.captured到识别Hit为2524.701ms，
+随后SCENE_UNCONFIRMED。对应修正先识别正常游戏后置，再查其它已知覆盖层；
+后置只判断已知页，输入场景的覆盖层优先级不变。修正待真实Maa回归，不以此宣布解决。
+
+仍需补饵修正二、普通覆盖层的新验证、
 重复抛竿/连续轮次、实际Maa超时等待与中途恢复矩阵。
 未把有限抛竿或一鱼结果注册成完整fishing任务；任务分母仍为58，放行仍为false。

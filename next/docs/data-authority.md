@@ -77,6 +77,11 @@ completed_cycles只在六点及退出已确认后增加，不把任务点数或�
   交付份数读取同一bounty_reports权威。转场待确认时恢复策略不重发，结果仅供审查，
   不允许从历史文件自动恢复领取、交付或付款。
 
+- `snapshot.business.sandman`由WvdRunState内SandmanCycle唯一持有：attempts为寻缘访问次数，
+  completed_cycles仅在缘专用选项回执、两次独立住宿和两次跳跃全部确认后累计。
+  当前阶段与leap_pending由WvdConfirm更新，任务图和恢复策略消费；历史摘要只读，
+  不允许据它重放跳跃或付款，也不是账号缘等级的权威数据。
+
 - `snapshot.business.sleep`由WvdRunState内的SleepVisits唯一持有，记录固定9999次目标、
   当前住宿意图及完成数；每次退出旅店的新帧确认后递增。`tasks::configure_sleep_units`
   只定义250个有限正常段，不新增调度器。已完成批次的住宿签名在正常换批时释放，

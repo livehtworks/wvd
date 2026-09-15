@@ -11,6 +11,7 @@
 #include "quests/bounty_cycle.hpp"
 #include "quests/featured_visit.hpp"
 #include "quests/golden_chest.hpp"
+#include "quests/sandman.hpp"
 #include "fishing/progress.hpp"
 #include <map>
 
@@ -82,6 +83,7 @@ class WvdRunState final : public contracts::BusinessRunState {
     std::size_t special_dialogue_sequence_{}, special_dialogues_completed_{};
     quests::FeaturedVisit featured_visit_;
     quests::GoldenChestCycle golden_chest_;
+    quests::SandmanCycle sandman_;
     bool setting_is(const char *name, const char *zh, const char *en) const;
     std::map<std::string, nlohmann::json> confirmations_;
     nlohmann::json last_confirmation_;

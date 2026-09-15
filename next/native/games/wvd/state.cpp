@@ -286,12 +286,14 @@ std::string WvdRunState::confirmation_id(const std::string &operation, const std
         id += ":karma:" + std::to_string(karma_sequence_);
     if (event == "mining_reward_observed" || event == "mining_reward_dismissed")
         id += ":mining:" + std::to_string(mining_.reward_sequence(event == "mining_reward_observed"));
-    if (event == "special_dialogue_prepared" || event == "special_dialogue_completed")
+    if (event == "special_dialogue_prepared" || event == "special_dialogue_completed" || event == "sandman_bondmate_completed")
         id += ":dialogue:" + std::to_string(special_dialogue_sequence_ + (event == "special_dialogue_prepared" && !special_dialogue_pending_ ? 1 : 0));
     if (event.starts_with("featured_"))
         id += ":featured:" + std::to_string(featured_visit_.sequence(event == "featured_visit_started"));
     if (event.starts_with("golden_"))
         id += ":golden:" + std::to_string(golden_chest_.sequence(event == "golden_started"));
+    if (event.starts_with("sandman_") && event != "sandman_bondmate_completed")
+        id += ":sandman:" + std::to_string(sandman_.sequence(event == "sandman_started"));
     if (event == "fishing_reward_prepared" || event == "fishing_reward_completed")
         id += ":fishing:" + std::to_string(fishing_.sequence(event == "fishing_reward_prepared"));
     if (event == "fishing_wait_started" || event == "fishing_wait_failed")
@@ -336,7 +338,32 @@ bool WvdRunState::confirm_event(const std::string &operation, const std::string 
         throw std::runtime_error("BUSINESS_CONFIRMATION_CAPACITY");
     if (expected_step && *expected_step != task_step_)
         throw std::runtime_error("BUSINESS_TASK_STEP_MISMATCH");
-    if (event == "golden_started") {
+    if (event == "sandman_bondmate_completed") {
+        if (!special_dialogue_pending_) throw std::runtime_error("SPECIAL_DIALOGUE_NOT_PREPARED");
+        sandman_.bondmate();
+        special_dialogue_pending_ = false;
+        ++special_dialogues_completed_;
+    } else if (event == "sandman_started") {
+        if (inn_payment_pending_ || special_dialogue_pending_) throw std::runtime_error("SANDMAN_SIDE_EFFECT_PENDING");
+        sandman_.start(unit_index_);
+    } else if (event == "sandman_duke_prepared" || event == "sandman_triumph_prepared") {
+        const auto expected = event == "sandman_duke_prepared" ? quests::SandmanCycle::Phase::LeapDuke : quests::SandmanCycle::Phase::LeapTriumph;
+        if (sandman_.summary(unit_index_).at("phase") != static_cast<int>(expected)) throw std::runtime_error("SANDMAN_PHASE_INVALID");
+        sandman_.prepare_leap(unit_index_);
+    } else if (event.starts_with("sandman_")) {
+        using Phase = quests::SandmanCycle::Phase;
+        const std::map<std::string, Phase> events{{"sandman_entered", Phase::Enter}, {"sandman_routed", Phase::Route},
+            {"sandman_exited", Phase::Exit}, {"sandman_decided", Phase::Decide}, {"sandman_duke_rested", Phase::RestDuke},
+            {"sandman_duke_leaped", Phase::LeapDuke}, {"sandman_triumph_rested", Phase::RestTriumph}, {"sandman_completed", Phase::LeapTriumph}};
+        const auto found = events.find(event);
+        if (found == events.end()) throw std::runtime_error("SANDMAN_EVENT_INVALID");
+        sandman_.advance(found->second, unit_index_, inn_rest_completed_ && !inn_payment_pending_, task_step_);
+        // 每个真实住宿阶段有独立付款幂等域，不能让第一次回执跳过第二次住宿。
+        if ((event == "sandman_decided" && sandman_.summary(unit_index_).at("active").get<bool>()) || event == "sandman_duke_leaped") {
+            inn_rest_completed_ = false;
+            ++supply_cycle_;
+        }
+    } else if (event == "golden_started") {
         if (inn_payment_pending_ || featured_visit_.summary().at("active").get<bool>())
             throw std::runtime_error("GOLDEN_SIDE_EFFECT_PENDING");
         const auto now = clock_->now();
@@ -694,6 +721,7 @@ J WvdRunState::summarize() const {
             {"special_dialogues_completed", special_dialogues_completed_},
             {"featured_visit", featured_visit_.summary()},
             {"golden_chest", golden_chest_.summary(unit_index_)},
+            {"sandman", sandman_.summary(unit_index_)},
             {"bounty_reveals", bounty_reveals_},
             {"sleep", sleep_.summary(unit_index_)},
             {"bounty_cycle", bounty_cycle_.summary(unit_index_, bounty_reports_)},

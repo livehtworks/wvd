@@ -96,7 +96,12 @@ class PlanTests(unittest.TestCase):
         result = self.inspect("specials", compile_specials_manifest=str(ROOT / "packs/wvd/manifest.json"))
         self.assertEqual(result["outcome"], "PASS", result)
         implemented = {row["task_id"]: row for row in result["compiled_specials"]}
-        self.assertEqual(set(implemented), {"fortress-B8F_trap", "gaintKiller", "darkLight", "FFXI-Org", "manualSepDemon", "lovesleep", "Scorpionesses", "Scorpionesses_plus_6_hands", "fishing", "fishing2", "jier", "SSC-goldenchest"})
+        self.assertEqual(set(implemented), {"fortress-B8F_trap", "gaintKiller", "darkLight", "FFXI-Org", "manualSepDemon", "lovesleep", "Scorpionesses", "Scorpionesses_plus_6_hands", "fishing", "fishing2", "jier", "SSC-goldenchest", "sandman"})
+        sandman = implemented["sandman"]["nodes"]
+        self.assertEqual(sandman["Start"]["custom_action_param"]["event"], "sandman_started")
+        self.assertEqual(sandman["DukeRested"]["custom_action_param"]["event"], "sandman_duke_rested")
+        self.assertEqual(sandman["TriumphRested"]["custom_action_param"]["event"], "sandman_triumph_rested")
+        self.assertIn("sandman/sandman_bondmate.png", implemented["sandman"]["images"])
         self.assertEqual(implemented["SSC-goldenchest"]["required_normal_units"], 2)
         self.assertEqual(implemented["manualSepDemon"]["required_normal_units"], 2)
         self.assertEqual(implemented["lovesleep"]["required_normal_units"], 250)

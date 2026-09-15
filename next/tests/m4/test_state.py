@@ -86,6 +86,15 @@ class StateTests(unittest.TestCase):
         self.assertFalse(state["featured_visit"]["pending"])
         self.assertFalse(state["featured_visit"]["active"])
 
+    def test_sandman_requires_bondmate_and_two_distinct_rests(self):
+        state = self.run_case("sandman-contract", sandman_contract=True)["sandman_contract"]
+        self.assertEqual(state["sandman"]["attempts"], 3)
+        self.assertEqual(state["sandman"]["completed_cycles"], 2)
+        self.assertEqual(state["inn_rests"], 4)
+        self.assertEqual(state["special_dialogues_completed"], 2)
+        self.assertFalse(state["sandman"]["active"])
+        self.assertFalse(state["sandman"]["leap_pending"])
+
     def test_golden_cycle_preserves_leap_intent_and_requires_two_units(self):
         state = self.run_case("golden-contract", golden_contract=True)["golden_contract"]
         self.assertEqual(state["golden_chest"]["completed_cycles"], 2)

@@ -31,11 +31,17 @@ CompiledWorkflow transfer_bait() {
     graph.delay_after("Give", 500);
     graph.confirm("Given", "fishing.bait.given", "fishing_transferred", box, {"Box"});
     graph.confirm("Finished", "fishing.supplies.finished", "fishing_supplies_finished", box, {"Exit"});
-    graph.route("Exit", {"AtInn", "Return"});
+    graph.route("Exit", {"AtInn", "Return0", "Return1", "Return2", "Return3", "Return4"});
     graph.confirm("AtInn", "fishing.supplies.returned", "fishing_supplies_returned", C::all({inn, C::absent(menu)}), {"Terminal"});
     // 旧 fallback 的字符串return是Android返回键，不是名为return的模板。
-    graph.back("Return", C::all({menu, C::absent(inn)}), C::any({menu, inn}), {"Exit"});
-    for (const auto *name : {"Find", "Recipient", "Transfer", "Icon", "OpenBag", "SelectBag", "Exit", "Return"}) graph.hit_limit(name, 16);
+    // 各页分别证明场景，避免输入前把所有菜单模板都重扫一遍而使当前帧过期。
+    const std::array<J, 5> exit_pages{box, recipient, transfer, icon, items};
+    for (std::size_t i = 0; i < exit_pages.size(); ++i) {
+        const auto name = "Return" + std::to_string(i);
+        graph.back(name, C::all({exit_pages[i], C::absent(inn)}), C::any({menu, inn}), {"Exit"});
+        graph.hit_limit(name, 16);
+    }
+    for (const auto *name : {"Find", "Recipient", "Transfer", "Icon", "OpenBag", "SelectBag", "Exit"}) graph.hit_limit(name, 16);
     for (const auto *name : {"Box", "Prepare", "Give", "Given"}) graph.hit_limit(name, 71);
     graph.interrupt_on({{"mode", "blocking_screen"}, {"parallel_basic", true}}, "quest.fishing_transfer_unconfirmed");
     return graph.finish();

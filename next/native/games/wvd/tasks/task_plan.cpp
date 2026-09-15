@@ -236,6 +236,11 @@ WvdTaskPlan WvdTaskPlan::with_entry(const J &steps) const {
     // 局部编译参数不回写源任务树；检查报告仍可追溯目录没有声明 EOT 的事实。
     return plan;
 }
+WvdTaskPlan WvdTaskPlan::with_floor(const std::string &image) const {
+    auto plan = *this;
+    plan.floor_ = pattern(image);
+    return plan;
+}
 nlohmann::json WvdTaskPlan::inspect() const {
     J entries = J::array(), targets = J::array();
     for (const auto &step : entry_)

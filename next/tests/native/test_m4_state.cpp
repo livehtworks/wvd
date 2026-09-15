@@ -80,6 +80,51 @@ std::optional<runtime::SessionDefinition> recover_unit(const contracts::SessionR
     next.entry = "Recovered";
     return next;
 }
+J sandman_contract(const J &profile) {
+    auto clock = std::make_shared<TestClock>();
+    games::WvdRunState state(profile, {"sandman-contract", 1, clock});
+    std::uint64_t generation = 1;
+    state.enter_segment(contracts::SegmentBoundary::Initial, generation, 0);
+    auto apply = [&](const char *event) {
+        const auto id = state.confirmation_id(event, event);
+        require(state.confirm_event(id, event, generation, 1), "SANDMAN_EVENT_NOT_APPLIED");
+        require(!state.confirm_event(id, event, generation, 2), "SANDMAN_EVENT_REPLAYED");
+    };
+    for (std::size_t unit = 0; unit < 3; ++unit) {
+        if (unit) state.enter_segment(contracts::SegmentBoundary::Continuation, ++generation, unit);
+        apply("sandman_started");
+        apply("sandman_entered");
+        state.enter_dungeon();
+        if (unit) {
+            apply("special_dialogue_prepared");
+            apply("sandman_bondmate_completed");
+        }
+        for (int i = 0; i < 3; ++i) state.target_point_completed();
+        apply("sandman_routed");
+        apply("sandman_exited");
+        apply("sandman_decided");
+        if (!unit) {
+            require(!state.summary().at("sandman").at("active").get<bool>(), "SANDMAN_WITHOUT_BOND_RESTED");
+            require(state.summary().at("inn_rests") == 0, "SANDMAN_WITHOUT_BOND_PAID");
+            continue;
+        }
+        for (const bool triumph : {false, true}) {
+            require(!state.summary().at("inn_rest_completed").get<bool>(), "SANDMAN_REUSED_REST_RECEIPT");
+            bool premature = false;
+            try { state.confirm_event("premature-" + std::to_string(unit) + std::to_string(triumph),
+                triumph ? "sandman_triumph_rested" : "sandman_duke_rested", generation, 3); }
+            catch (const std::runtime_error &) { premature = true; }
+            require(premature, "SANDMAN_MISSING_REST_ACCEPTED");
+            apply("inn_payment_prepared"); apply("inn_rest_completed");
+            apply(triumph ? "sandman_triumph_rested" : "sandman_duke_rested");
+            apply(triumph ? "sandman_triumph_prepared" : "sandman_duke_prepared");
+            state.enter_segment(contracts::SegmentBoundary::Recovery, ++generation, unit);
+            require(state.summary().at("sandman").at("leap_pending").get<bool>(), "SANDMAN_RECOVERY_LOST_INTENT");
+            apply(triumph ? "sandman_completed" : "sandman_duke_leaped");
+        }
+    }
+    return state.summary();
+}
 J golden_contract(const J &profile) {
     auto clock = std::make_shared<TestClock>();
     games::WvdRunState state(profile, {"golden-contract", 1, clock});
@@ -1010,6 +1055,11 @@ int main(int argc, char **argv) {
             return 0;
         }
         auto profile = importer.parse(config.at("source")).values;
+        if (config.value("sandman_contract", false)) {
+            const J output{{"sandman_contract", sandman_contract(profile)}, {"backend_inputs", 0}};
+            std::ofstream(maafw::path_from_utf8(config.at("output"))) << output.dump(2);
+            return 0;
+        }
         if (config.value("featured_contract", false)) {
             const J output{{"featured_contract", featured_contract(profile)}, {"backend_inputs", 0}};
             std::ofstream(maafw::path_from_utf8(config.at("output"))) << output.dump(2);
