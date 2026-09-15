@@ -165,9 +165,10 @@ bool pure_condition(const J &p, unsigned depth = 0) {
     }
     // 只有已核对不读写时序状态的视觉模式可并行。business、movement_stopped、
     // 浮标历史等仍在原线程执行；未登记的新模式默认不并行。
+    // blocking_screen/boot_post/party_death_post 会间接进入默认对话的四路扫描。
+    // OpenCV 的嵌套 parallel_for_ 会串行执行内层，不能再将它们放入外层二路分片。
     return mode == "template" || mode == "combat_active" || mode == "boot_ready" ||
-           mode == "boot_post" || mode == "blocking_screen" || mode == "party_death" ||
-           mode == "party_defeat" || mode == "party_death_post" || mode == "pause" ||
+           mode == "party_death" || mode == "party_defeat" || mode == "pause" ||
            mode == "pause_negative" || mode == "auto_route_post" || mode == "focus_cursor" ||
            mode == "reached" || mode == "through_stair";
 }
