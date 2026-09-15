@@ -108,7 +108,9 @@ std::filesystem::path BundleLease::checked_relative(const std::string &value) {
                 value.find('\0') == std::string::npos,
             "RESOURCE_PATH_INVALID");
     auto path = maafw::path_from_utf8(value);
-    require(!path.is_absolute() && !path.has_root_name(), "RESOURCE_PATH_INVALID");
+    // Windows 的 /foo 没有盘符，不满足 is_absolute，却会覆盖拼接路径的根目录。
+    // manifest 成员必须完全相对，同时拒绝 root_name 与 root_directory。
+    require(!path.has_root_path(), "RESOURCE_PATH_INVALID");
     for (const auto &part : path) {
         auto text = part.wstring();
         auto stem = fold(part.stem());

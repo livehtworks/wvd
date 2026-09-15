@@ -17,5 +17,16 @@ MetadataQuery测试。全部文件操作仅限本例新建的资源副本和独�
 
 ## 证据状态
 
-新增断言已经接入现有测试方法和原生夹具，尚待构建执行。没有新增生产分支或替代运行所有者。
-通过前不宣布完整性矩阵完成；资源成本与发现链的既有未决项独立保留。
+`4420fcf` 构建成功。完整性六方法五通过、一失败（16.670秒，`m3-fixes-55vpf4_f`，
+日志 `m3-integrity-lifetime.log`）：十三种非法路径中 `/absolute.png` 被漏检，实际到了
+打开文件步骤才报INTEGRITY_SHARING_CONFLICT，而不是预期的RESOURCE_PATH_INVALID。
+没有向根目录写入测试文件。其它路径、全成员操作保护、双只读者、延后SDK/Custom识别通过。
+
+根因：Windows的带根目录但无盘符路径不满足is_absolute且没有root_name，却不允许作为
+包内相对路径拼接。修正一使用has_root_path同时拒绝root_directory/root_name；不改manifest
+或降低测试断言。待复验，不把错误类型不正确的负例算PASS。
+
+同构建M2的三个timeout方法通过（2.896秒，`m3-integrity-timeout-lifetime.log`）。
+新增资源锁断言分别随stop-timeout、release-timeout执行；原生输入阻塞和触点释放失败时
+全部快照成员都无法取得写句柄，真实静止后均可打开。不代表任意原生等待可被及时取消。
+资源成本与发现链的既有未决项独立保留。
