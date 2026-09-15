@@ -96,11 +96,12 @@ class PlanTests(unittest.TestCase):
         result = self.inspect("specials", compile_specials_manifest=str(ROOT / "packs/wvd/manifest.json"))
         self.assertEqual(result["outcome"], "PASS", result)
         implemented = {row["task_id"]: row for row in result["compiled_specials"]}
-        self.assertEqual(set(implemented), {"fortress-B8F_trap", "gaintKiller", "darkLight", "FFXI-Org", "manualSepDemon", "lovesleep", "Scorpionesses", "Scorpionesses_plus_6_hands", "fishing", "fishing2"})
+        self.assertEqual(set(implemented), {"fortress-B8F_trap", "gaintKiller", "darkLight", "FFXI-Org", "manualSepDemon", "lovesleep", "Scorpionesses", "Scorpionesses_plus_6_hands", "fishing", "fishing2", "jier"})
         self.assertEqual(implemented["manualSepDemon"]["required_normal_units"], 2)
         self.assertEqual(implemented["lovesleep"]["required_normal_units"], 250)
         self.assertEqual(implemented["Scorpionesses"]["required_normal_units"], 3)
         self.assertEqual(implemented["Scorpionesses_plus_6_hands"]["required_normal_units"], 4)
+        self.assertEqual(implemented["jier"]["required_normal_units"], 3)
         all_specials = {name for name, value in self.source.items() if value["_TYPE"] == "quest"}
         self.assertEqual(set(result["unimplemented_specials"]), all_specials - set(implemented))
         self.assertFalse(result["execution_available"])

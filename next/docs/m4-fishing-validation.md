@@ -76,6 +76,14 @@
 据此修正正式补饵编译器与因果测试，未增加伪造资源、未削弱缺图断言；
 首轮日志`m4-fishing-supply-plan.log`保留，修正后需重建复验。
 
+资源修正后8个计划方法通过（34.320秒）。随后首轮补饵流程3方法均报告夹具字段错误，
+日志`m4-fishing-supply-workflow.log`，根`next/.local/m4-workflow-rho2mp65`。
+结果文件独立核对：未知入口Interrupted/0输入；完整例和拒绝例均Failed/7输入，
+原因`TARGET_REQUIRES_CONFIRMATION`，均未开始转交。三份实际产物身份/静止已核对。
+根因是OpenInventory把business条件混入fixed_click的目标证明，正确被门禁拒绝。
+修正为先observe业务阶段，再对新帧视觉执行fixed_click；不改变business或低置信目标的授权。
+夹具同步改用已有`state`/`backend_calls`字段并检查mismatch，不能把这次失败说成转交拒绝通过。
+
 仍需补饵新产物验证、普通覆盖层的新验证、
 重复抛竿/连续轮次、实际Maa超时等待与中途恢复矩阵。
 未把有限抛竿或一鱼结果注册成完整fishing任务；任务分母仍为58，放行仍为false。

@@ -286,6 +286,8 @@ std::string WvdRunState::confirmation_id(const std::string &operation, const std
         id += ":karma:" + std::to_string(karma_sequence_);
     if (event == "mining_reward_observed" || event == "mining_reward_dismissed")
         id += ":mining:" + std::to_string(mining_.reward_sequence(event == "mining_reward_observed"));
+    if (event == "special_dialogue_prepared" || event == "special_dialogue_completed")
+        id += ":dialogue:" + std::to_string(special_dialogue_sequence_ + (event == "special_dialogue_prepared" && !special_dialogue_pending_ ? 1 : 0));
     if (event == "fishing_reward_prepared" || event == "fishing_reward_completed")
         id += ":fishing:" + std::to_string(fishing_.sequence(event == "fishing_reward_prepared"));
     if (event == "fishing_wait_started" || event == "fishing_wait_failed")
@@ -304,9 +306,9 @@ std::string WvdRunState::confirmation_id(const std::string &operation, const std
         id += ":sleep:" + std::to_string(sleep_.completed() + (event == "sleep_visit_started" || sleep_.active() ? 1 : 0));
     if (event.starts_with("bounty_cycle_") || event.starts_with("bounty_leap_") || event.starts_with("bounty_travel_") ||
         event == "bounty_route_completed" || event == "bounty_return_completed" ||
-        event == "scorpion_started" || event == "scorpion_hands_started")
+        event == "scorpion_started" || event == "scorpion_hands_started" || event == "jier_started")
         id += ":bounty_cycle:" + std::to_string(bounty_cycle_.sequence() +
-            ((event == "scorpion_started" || event == "scorpion_hands_started") && !bounty_cycle_.active() ? 1 : 0));
+            ((event == "scorpion_started" || event == "scorpion_hands_started" || event == "jier_started") && !bounty_cycle_.active() ? 1 : 0));
     return id;
 }
 bool WvdRunState::confirm_event(const std::string &operation, const std::string &event,
@@ -330,7 +332,15 @@ bool WvdRunState::confirm_event(const std::string &operation, const std::string 
         throw std::runtime_error("BUSINESS_CONFIRMATION_CAPACITY");
     if (expected_step && *expected_step != task_step_)
         throw std::runtime_error("BUSINESS_TASK_STEP_MISMATCH");
-    if (event == "fishing_bait_requested") {
+    if (event == "special_dialogue_prepared") {
+        if (special_dialogue_pending_) throw std::runtime_error("SPECIAL_DIALOGUE_ALREADY_PENDING");
+        special_dialogue_pending_ = true;
+        ++special_dialogue_sequence_;
+    } else if (event == "special_dialogue_completed") {
+        if (!special_dialogue_pending_) throw std::runtime_error("SPECIAL_DIALOGUE_NOT_PREPARED");
+        special_dialogue_pending_ = false;
+        ++special_dialogues_completed_;
+    } else if (event == "fishing_bait_requested") {
         fishing_.request_bait();
     } else if (event == "fishing_supplies_entered") {
         fishing_.supplies_entered();
@@ -357,7 +367,7 @@ bool WvdRunState::confirm_event(const std::string &operation, const std::string 
         fishing_.prepare(*reward_index);
     } else if (event == "fishing_reward_completed") {
         fishing_.complete();
-    } else if (event == "scorpion_started" || event == "scorpion_hands_started") {
+    } else if (event == "scorpion_started" || event == "scorpion_hands_started" || event == "jier_started") {
         if (inn_payment_pending_ || bounty_report_pending_) throw std::runtime_error("BOUNTY_SIDE_EFFECT_PENDING");
         const auto interval = profile_.at("REST_INTERVEL").get<std::int64_t>();
         if (interval < 0) throw std::runtime_error("BOUNTY_REST_INTERVAL_INVALID");
@@ -645,6 +655,9 @@ J WvdRunState::summarize() const {
             {"manual_separation", manual_separation_.summary()},
             {"bounty_reports", bounty_reports_},
             {"fishing", fishing_.summary(clock_->now())},
+            {"special_dialogue_pending", special_dialogue_pending_},
+            {"special_dialogue_sequence", special_dialogue_sequence_},
+            {"special_dialogues_completed", special_dialogues_completed_},
             {"bounty_reveals", bounty_reveals_},
             {"sleep", sleep_.summary(unit_index_)},
             {"bounty_cycle", bounty_cycle_.summary(unit_index_, bounty_reports_)},

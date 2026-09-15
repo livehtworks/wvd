@@ -76,6 +76,8 @@ class WvdRunState final : public contracts::BusinessRunState {
     std::size_t bounty_reports_{};
     std::size_t bounty_reveals_{};
     bool bounty_report_pending_{};
+    bool special_dialogue_pending_{};
+    std::size_t special_dialogue_sequence_{}, special_dialogues_completed_{};
     bool setting_is(const char *name, const char *zh, const char *en) const;
     std::map<std::string, nlohmann::json> confirmations_;
     nlohmann::json last_confirmation_;

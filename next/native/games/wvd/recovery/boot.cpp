@@ -44,6 +44,8 @@ std::optional<runtime::SessionDefinition> decide(const contracts::SessionResult 
         return std::nullopt;
     if (result.business.at("bounty_report_pending").get<bool>())
         return std::nullopt;
+    if (result.business.at("special_dialogue_pending").get<bool>())
+        return std::nullopt;
     if (result.business.at("bounty_cycle").at("transfer_pending").get<bool>())
         return std::nullopt;
     if (result.business.at("fishing").at("casting_pending").get<bool>() ||
@@ -81,8 +83,9 @@ std::optional<runtime::SessionDefinition> decide(const contracts::SessionResult 
 }
 }
 namespace {
-tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common) {
+tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, DialoguePolicy policy = DialoguePolicy::Default) {
     C graph(common ? "recovery.common_screens" : "recovery.boot_ready", std::chrono::seconds{120});
+    graph.use_dialogue(policy);
     const auto panel = C::any({C::image("trait"), C::image("recover")});
     const J ready = C::all({common ? C::any({J{{"mode", "boot_ready"}}, panel, C::image("RiseAgain")}) : J{{"mode", "boot_ready"}},
                            C::absent(J{{"mode", "blocking_screen"}})});
@@ -96,8 +99,17 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common) {
     low_retry["threshold"] = .60;
     const auto to_title = C::image("totitle"), resume = C::image("resume");
     const J recognized = common ? C::any({J{{"mode", "boot_post"}}, panel}) : J{{"mode", "boot_post"}};
-    graph.route("Entry", common ? J{"Download", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title", "Pause", "Death", "Sandman", "Blessing", "Karma", "Dialogue", "Defeat", "Ready"}
-                                 : J{"Ready", "Download", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title", "Pause", "Sandman", "Blessing", "Karma", "Dialogue"});
+    J entry = common ? J{"Download", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title", "Pause", "Death", "Sandman", "Blessing", "Karma", "Dialogue", "Defeat", "Ready"}
+                     : J{"Ready", "Download", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title", "Pause", "Sandman", "Blessing", "Karma", "Dialogue"};
+    if (policy != DialoguePolicy::Default) {
+        entry.insert(entry.begin(), "SpecialDialogue");
+        const auto special = graph.define_child("SpecialChoice", choose_special_dialogue(policy));
+        graph.observe("SpecialDialogue", {{"mode", "special_dialogue"}}, {"ChooseSpecial"});
+        graph.call_child("ChooseSpecial", special, {"Entry"});
+        graph.hit_limit("SpecialDialogue", 6);
+        graph.hit_limit("ChooseSpecial", 6);
+    }
+    graph.route("Entry", entry);
     const auto dialogue = graph.define_child("DefaultDialogue", choose_default_dialogue());
     graph.observe("Dialogue", {{"mode", "default_dialogue"}}, {"ChooseDialogue"});
     graph.call_child("ChooseDialogue", dialogue, {"Entry"});
@@ -178,15 +190,15 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common) {
 tasks::CompiledWorkflow wait_boot_ready(bool allow_download) {
     return boot_workflow(allow_download, false);
 }
-tasks::CompiledWorkflow clear_common_screens(bool allow_download) {
-    return boot_workflow(allow_download, true);
+tasks::CompiledWorkflow clear_common_screens(bool allow_download, DialoguePolicy policy) {
+    return boot_workflow(allow_download, true, policy);
 }
 tasks::CompiledWorkflow with_boot_recovery(const tasks::CompiledWorkflow &task, bool allow_download) {
     task.validate();
     C graph("recovery.restartable_task", task.time_limit + std::chrono::seconds{120});
     const auto task_entry = graph.append("Task", task, {"Terminal"});
     graph.confirm("RestartConfirmed", "game.restart", "game_restarted", {{"mode", "boot_ready"}}, {task_entry});
-    const auto boot = graph.append("Boot", wait_boot_ready(allow_download), {"RestartConfirmed"});
+    const auto boot = graph.append("Boot", boot_workflow(allow_download, false, task.dialogue_policy), {"RestartConfirmed"});
     // Boot 在正常候选链不是默认动作；恢复策略只在新代次选择这个已封存入口。
     graph.route("Entry", {task_entry, boot});
     return graph.finish();

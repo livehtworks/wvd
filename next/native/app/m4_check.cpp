@@ -107,8 +107,9 @@ int main(int argc, char **argv) {
                     if (task.type != (specials ? "quest" : "dungeon"))
                         continue;
                     const bool scorpion = task.id == "Scorpionesses" || task.id == "Scorpionesses_plus_6_hands";
+                    const bool bounty = scorpion || task.id == "jier";
                     const bool fishing = task.id == "fishing" || task.id == "fishing2";
-                    if (specials && !scorpion && !fishing && task.id != "fortress-B8F_trap" && task.id != "gaintKiller" && task.id != "darkLight" && task.id != "FFXI-Org" && task.id != "manualSepDemon" && task.id != "lovesleep") {
+                    if (specials && !bounty && !fishing && task.id != "fortress-B8F_trap" && task.id != "gaintKiller" && task.id != "darkLight" && task.id != "FFXI-Org" && task.id != "manualSepDemon" && task.id != "lovesleep") {
                         result["unimplemented_specials"].push_back(task.id);
                         continue;
                     }
@@ -119,7 +120,7 @@ int main(int argc, char **argv) {
                             if (routes) return games::tasks::traverse_dungeon(plan, profile.values, images);
                             return games::navigation::enter_dungeon(plan);
                         }
-                        if (scorpion) return games::tasks::scorpion_cycle(task, profile.values, images);
+                        if (bounty) return games::tasks::bounty_cycle(task, profile.values, images);
                         if (fishing) return games::tasks::fishing_cycle(task, profile.values, images);
                         if (task.id == "lovesleep") return games::tasks::sleep_visits(task, profile.values);
                         if (task.id == "manualSepDemon") return games::tasks::manual_separation(task, profile.values, images);
@@ -137,7 +138,7 @@ int main(int argc, char **argv) {
                     result[key].push_back({{"task_id", task.id}, {"nodes", graph.nodes},
                         {"images", graph.images}, {"required_actions", graph.required_actions},
                         {"missing_images", missing}, {"scope", specials ? "FINITE_SPECIAL_ITERATION_NOT_FULL_TASK" : iterations ? "NORMAL_FARM_ITERATION_NOT_FULL_TASK" : routes ? "DUNGEON_ROUTE_ONLY_NOT_FULL_TASK" : "ENTRY_ONLY_NOT_FULL_TASK"},
-                        {"required_normal_units", scorpion ? (task.id == "Scorpionesses" ? 3 : 4) : task.id == "lovesleep" ? games::quests::SleepVisits::units : task.id == "manualSepDemon" ? 2 : 1}, {"executed", false}});
+                        {"required_normal_units", bounty ? (task.id == "Scorpionesses_plus_6_hands" ? 4 : 3) : task.id == "lovesleep" ? games::quests::SleepVisits::units : task.id == "manualSepDemon" ? 2 : 1}, {"executed", false}});
                 }
             }
         }

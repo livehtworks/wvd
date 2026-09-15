@@ -53,6 +53,10 @@
 
 ## 一致性与边界
 
+- 专用对话策略属于冻结CompiledWorkflow及其WvdVision binding，不是GUI配置或
+  全局运行变量；同一资源revision覆盖选项和关闭图。RunState唯一持有专用对话
+  待确认意图、序号与完成数，WvdConfirm写入、公共处理/恢复读取；不代表悬赏已交付。
+
 - `snapshot.business.fishing`由WvdRunState内Fishing Progress唯一持有：待确认分类、
   收获页序号、已关闭后的鱼数/分类、等待起点的派生超时和失败数；以及补饵阶段、
   转交待确认意图、已确认输入数（不是物品数）、完成返钓次数。

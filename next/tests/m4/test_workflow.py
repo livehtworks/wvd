@@ -35,7 +35,7 @@ class WorkflowTests(unittest.TestCase):
         folder = self.root / name
         bundle = folder / "bundle"
         (bundle / "image").mkdir(parents=True)
-        resource_kind = "dungeon-route" if options.get("workflow") == "fortress-trap" else "iteration" if options.get("workflow") in ("giant", "dark-light", "mining", "manual-separation", "scorpion", "fishing-cycle") else options.get("workflow")
+        resource_kind = "dungeon-route" if options.get("workflow") == "fortress-trap" else "iteration" if options.get("workflow") in ("giant", "dark-light", "mining", "manual-separation", "scorpion", "fishing-cycle", "jier") else options.get("workflow")
         if resource_kind in ("bounty-visit", "sleep-batch", "fishing-cast", "fishing-reward", "fishing-round", "fishing-seek"): resource_kind = "common"
         names = ["worldmapflag", "City_RoyalCityLuknalia", "Inn", "Stay", "Economy", "royalsuite", "OK"]
         if resource_kind in ("departure", "iteration"):
@@ -95,6 +95,8 @@ class WorkflowTests(unittest.TestCase):
         names = list(dict.fromkeys(image_name(name) for name in names))
         rng = np.random.default_rng(90614)
         patterns = {name: rng.integers(30, 255, (24, 40, 3), dtype=np.uint8) for name in names}
+        if options.get("real_bobber"):
+            patterns["fishing/bobber"] = cv2.imdecode(np.fromfile(ROOT / "packs/wvd/image/fishing/bobber.png", dtype=np.uint8), cv2.IMREAD_COLOR)
         for name in options.get("large_templates", []):
             patterns[name] = rng.integers(30, 255, (80, 80, 3), dtype=np.uint8)
         if "chest_auto_minus" in patterns:
@@ -114,6 +116,11 @@ class WorkflowTests(unittest.TestCase):
             pixels = np.zeros((1600, 900, 3), dtype=np.uint8)
             for key, (x, y) in screen.items():
                 pattern = patterns[image_name(key.split("@", 1)[0])]
+                if key == "fishing/bobber" and options.get("real_bobber"):
+                    # 逆变换旧算法的红通道归一化；使用真实模板，识别结果仍由正式C++产生。
+                    gray = cv2.cvtColor(pattern, cv2.COLOR_BGR2GRAY)
+                    pattern = np.zeros_like(pattern)
+                    pattern[:, :, 2] = (14 + gray.astype(float) * 86 / 255).astype(np.uint8)
                 if key == "chest_auto_minus":
                     pattern = pattern + np.uint8(90)
                 if key == "next" and i in options.get("degraded_next_frames", []):
@@ -190,6 +197,7 @@ class WorkflowTests(unittest.TestCase):
                                         "chest": 920 if options.get("quick") else 620,
                                         "fishing-round": 720, "fishing-cast": 110, "fishing-reward": 80, "fishing-seek": 200,
                                         "fishing-cycle": (route_budget + 520) * options.get("normal_units", 1),
+                                        "jier": (route_budget + 500) * 3,
                                         "scorpion": (route_budget + 500) * (4 if options.get("hands") else 3), "city-travel": 140, "sleep-batch": 1620 * options.get("normal_units", 1), "bounty-visit": 200 * options.get("normal_units", 1), "manual-separation": 3620, "time-leap": 200, "mining": mining_watchdog, "common": 140, "iteration": (route_budget + 380) * options.get("normal_units", 1)}.get(options.get("workflow"), 90))
         self.assertEqual(digest(exe), before_hash)
         (folder / "execution.json").write_text(json.dumps({"exe_sha256": before_hash, "exit": result.returncode}), encoding="utf-8")
@@ -1952,6 +1960,39 @@ class WorkflowTests(unittest.TestCase):
             self.assertEqual(r["snapshot"]["state"], expected, r)
             self.assertEqual(r["backend_calls"], 0)
 
+    def test_fishing_round_real_bobber_waits_300_seconds_before_failed_cast(self):
+        options = self.fishing_reward_options()
+        options.update(workflow="fishing-round", real_bobber=True)
+        options["extra_images"] += ["fishing/nobait", "fishing/8bait", "fishing/bobber"]
+        r = self.execute("fishing-round-timeout", [{"fishing/striking": (400, 1300), "fishing/bobber": (400, 700)},
+            {"fishing/cast": (400, 1300)}], [dict(kind=0, x=420, y=1312)], **options)
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 1)
+        self.assertFalse(r["mismatch"])
+        self.assertGreaterEqual(r["snapshot"]["business"]["elapsed_seconds"], 300)
+        fish = r["snapshot"]["business"]["fishing"]
+        self.assertEqual(fish["failed"], 1)
+        self.assertEqual(fish["caught"], 0)
+        self.assertFalse(fish["waiting"])
+
+    def test_fishing_round_common_download_returns_to_same_round(self):
+        frames, commands = self.fishing_cast_scenario()
+        frames.insert(0, {"startdownload": (240, 920)})
+        commands.insert(0, dict(kind=0, x=260, y=932))
+        frames.extend([{"fishing/CloseFishInfo": (400, 1400), "fishing/size_large": (300, 700), "fishing/三文鱼": (300, 1150)},
+            {"fishing/cast": (400, 1300)}])
+        commands.extend([dict(kind=1, x=450, y=700, x2=450, y2=50, duration=100), dict(kind=0, x=420, y=1412)])
+        options = self.fishing_reward_options()
+        options["workflow"] = "fishing-round"
+        options["extra_images"] += ["fishing/nobait", "fishing/8bait", "fishing/bobber"]
+        r = self.execute("fishing-round-download", frames, commands, **options)
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 11)
+        self.assertFalse(r["mismatch"])
+        self.assertEqual(r["snapshot"]["business"]["fishing"]["caught"], 1)
+        self.assertEqual(len(r["snapshot"]["sessions"]), 1)
+        self.assertEqual(r["lifecycle_calls"], [])
+
     def test_fishing_round_unknown_page_has_90_second_window_without_input(self):
         options = self.fishing_reward_options()
         options["workflow"] = "fishing-round"
@@ -2069,8 +2110,9 @@ class WorkflowTests(unittest.TestCase):
         commands.extend([dict(kind=1, x=450, y=700, x2=450, y2=50, duration=100), dict(kind=0, x=420, y=1412)])
         r = self.execute("fishing-supply-full", frames, commands, **self.fishing_cycle_options(normal_units=3))
         self.assertEqual(boundaries, [81, 91])
-        self.assertEqual(r["snapshot"]["terminal"], "Completed", r)
-        self.assertEqual(r["commands_consumed"], 101)
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 101)
+        self.assertFalse(r["mismatch"])
         self.assertEqual(len(r["snapshot"]["sessions"]), 3)
         fish = r["snapshot"]["business"]["fishing"]
         self.assertEqual(fish["transfer_inputs_confirmed"], 70)
@@ -2084,8 +2126,9 @@ class WorkflowTests(unittest.TestCase):
         # 第一笔实际转交是第11次输入；拒绝发生后不得继续后面的69次。
         commands[10]["reject"] = True
         r = self.execute("fishing-supply-rejected", frames[:12], commands[:11], **self.fishing_cycle_options())
-        self.assertEqual(r["snapshot"]["terminal"], "Failed", r)
-        self.assertEqual(r["commands_consumed"], 11)
+        self.assertEqual(r["snapshot"]["state"], "Failed", r)
+        self.assertEqual(r["backend_calls"], 11)
+        self.assertFalse(r["mismatch"])
         fish = r["snapshot"]["business"]["fishing"]
         self.assertTrue(fish["transfer_pending"])
         self.assertEqual(fish["transfer_inputs_confirmed"], 0)
@@ -2093,9 +2136,101 @@ class WorkflowTests(unittest.TestCase):
 
     def test_fishing_supply_unknown_entry_does_not_touch_inventory(self):
         r = self.execute("fishing-supply-unknown", [{}], [], **self.fishing_cycle_options())
-        self.assertEqual(r["snapshot"]["terminal"], "Interrupted", r)
-        self.assertEqual(r["commands_consumed"], 0)
+        self.assertEqual(r["snapshot"]["state"], "Interrupted", r)
+        self.assertEqual(r["backend_calls"], 0)
+        self.assertFalse(r["mismatch"])
         self.assertEqual(r["snapshot"]["business"]["fishing"]["refill_phase"], 0)
+
+    def test_jier_dialogue_scoped_choice_and_bondmate_close(self):
+        option = {"bounty/cuthimdown": (400, 600), "dialogueChoices/nope": (400, 1000)}
+        close = {"bondmate_close": (400, 900)}
+        r = self.execute("jier-dialogue-bondmate", [option, close, {"dungFlag": (50, 150)}],
+            [dict(kind=0, x=420, y=612), dict(kind=0, x=420, y=912)], workflow="common", jier_dialogue=True,
+            extra_images=["bounty/cuthimdown", "bondmate_close"])
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 2)
+        self.assertFalse(r["mismatch"])
+        self.assertEqual(r["snapshot"]["business"]["special_dialogues_completed"], 1)
+        self.assertFalse(r["snapshot"]["business"]["special_dialogue_pending"])
+
+    def test_jier_dialogue_not_enabled_cannot_choose_special_option(self):
+        r = self.execute("jier-dialogue-unbound", [{"bounty/cuthimdown": (400, 600)}], [], workflow="common",
+            extra_images=["bounty/cuthimdown", "bondmate_close"])
+        self.assertEqual(r["snapshot"]["state"], "Interrupted", r)
+        self.assertEqual(r["backend_calls"], 0)
+        self.assertEqual(r["snapshot"]["business"]["special_dialogues_completed"], 0)
+
+    def test_jier_dialogue_rejected_or_stopped_choice_keeps_pending(self):
+        for stop in (False, True):
+            r = self.execute("jier-dialogue-stop-" + str(stop), [{"bounty/cuthimdown": (400, 600)}, {"dungFlag": (50, 150)}],
+                [dict(kind=0, x=420, y=612, reject=not stop)], workflow="common", jier_dialogue=True,
+                extra_images=["bounty/cuthimdown", "bondmate_close"], stop_after_first=stop)
+            self.assertEqual(r["snapshot"]["state"], "UserStopped" if stop else "Failed", r)
+            self.assertEqual(r["backend_calls"], 1)
+            self.assertFalse(r["mismatch"])
+            self.assertTrue(r["snapshot"]["business"]["special_dialogue_pending"])
+            self.assertEqual(r["snapshot"]["business"]["special_dialogues_completed"], 0)
+
+    def test_jier_dialogue_normal_scene_and_outside_close_roi_not_clicked(self):
+        for name, frames, commands, expected in [
+            ("normal", [{"Inn": (400, 700), "bounty/cuthimdown": (400, 600)}], [], "Completed"),
+            ("close-outside", [{"bounty/cuthimdown": (400, 600)}, {"bondmate_close": (100, 900)}], [dict(kind=0, x=420, y=612)], "Failed")]:
+            r = self.execute("jier-dialogue-" + name, frames, commands, workflow="common", jier_dialogue=True,
+                extra_images=["bounty/cuthimdown", "bondmate_close"])
+            self.assertEqual(r["snapshot"]["state"], expected, r)
+            self.assertEqual(r["backend_calls"], len(commands))
+            self.assertFalse(r["mismatch"])
+            self.assertEqual(r["snapshot"]["business"]["special_dialogues_completed"], 0)
+
+    def test_jier_full_leap_city_two_positions_harken_report_and_rest(self):
+        frames = [{"cursedWheelTitle": (200, 100), "requestToRescueTheDuke": (300, 900)}]
+        commands = []
+        def advance(command, page):
+            commands.append(command)
+            frames.append(page)
+        def click(x, y, page): advance(dict(kind=0, x=x, y=y), page)
+        click(320, 912, {"cursedWheelTitle": (200, 100), "leap": (400, 900)})
+        click(420, 912, {"Inn": (100, 400), "intoWorldMap": (300, 600)})
+        click(320, 612, {"worldmapflag": (80, 100), "City_RoyalCityLuknalia": (132, 1352)})
+        click(152, 1364, {"Inn": (400, 700), "guild": (200, 500)})
+        click(220, 512, {"guildRequest": (400, 700)})
+        click(420, 712, {"Bounties": (300, 800)})
+        click(320, 812, {"Bounties": (300, 800)})
+        advance(dict(kind=5, key=4), {"EdgeOfTown": (100, 300), "beginningAbyss": (400, 700)})
+        click(420, 712, {"B4FLabyrinth": (400, 700)})
+        click(420, 712, {"GotoDung": (400, 700)})
+        click(420, 712, {"mapFlag": (100, 100)})
+        swipe = dict(kind=1, x=100, y=1200, x2=700, y2=250, duration=400)
+        for x, y in [(452, 545), (452, 1026)]:
+            advance(swipe.copy(), {"mapFlag": (100, 100)})
+            click(x, y, {"mapFlag": (100, 100)})
+            click(136, 1431, {"dungFlag": (50, 150)})
+            reached = {"mapFlag": (100, 100), "cursor_0": (x - 20, y - 12)}
+            click(777, 150, reached)
+            advance(swipe.copy(), reached)
+        gate = {"mapFlag": (100, 100), "harken": (400, 700)}
+        advance(dict(kind=1, x=100, y=250, x2=700, y2=1200, duration=400), gate)
+        click(420, 712, gate)
+        click(136, 1431, {"Inn": (400, 700), "guild": (200, 500)})
+        click(220, 512, {"guildRequest": (400, 700)})
+        click(420, 712, {"Bounties": (300, 800)})
+        click(320, 812, {"CompletionReported": (500, 900)})
+        click(520, 912, {"Bounties": (300, 800)})
+        advance(dict(kind=5, key=4), {"guildRequest": (400, 700)})
+        advance(dict(kind=5, key=4), {"EdgeOfTown": (100, 300), "Inn": (400, 700)})
+        for name in ("Stay", "Economy", "OK", "Stay"): click(420, 712, {name: (400, 700)})
+        advance(dict(kind=5, key=4), {"Inn": (400, 700)})
+        options = self.scorpion_options()
+        options["workflow"] = "jier"
+        options["extra_images"] += ["requestToRescueTheDuke", "B4FLabyrinth", "bounty/cuthimdown", "bondmate_close"]
+        r = self.execute("jier-full", frames, commands, **options)
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 35)
+        self.assertFalse(r["mismatch"])
+        self.assertEqual(len(r["snapshot"]["sessions"]), 3)
+        self.assertEqual(r["snapshot"]["business"]["bounty_reports"], 1)
+        self.assertEqual(r["snapshot"]["business"]["bounty_cycle"]["completed_cycles"], 1)
+        self.assertEqual(r["snapshot"]["business"]["inn_rests"], 1)
 
     def scorpion_options(self, **extra):
         profile = self.wall_profile(False)

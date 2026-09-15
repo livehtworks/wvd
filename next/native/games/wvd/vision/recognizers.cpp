@@ -261,6 +261,13 @@ J evaluate_uncached(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels
         check((explicit_roi & allowed_rect) == explicit_roi, "WVD_ROI_OUTSIDE_SCOPE");
     }
     auto mode = p.at("mode").get<std::string>();
+    if (!bound.value("dialogue_task", "").empty() &&
+        (mode == "blocking_screen" || mode == "boot_ready" || mode == "boot_post" || mode == "dialogue_post")) {
+        const auto special = evaluate_impl(bundle, pixels, {{"mode", "special_dialogue"}}, bound, scope, cache, depth + 1, memo);
+        check(special.at("outcome") != "Error", "WVD_DIALOGUE_RECOGNITION_ERROR");
+        if (special.at("outcome") == "Hit")
+            return decision(mode != "boot_ready", allowed_rect, {{"stage", "special_dialogue"}});
+    }
     if (mode == "business") {
         check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");
         const auto hit = games::business_condition(scope.business_summary(), p);
@@ -588,7 +595,31 @@ J evaluate_uncached(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels
         }
         return decision(false, {}, {{"stage", "unknown"}});
     }
+    if (mode == "special_dialogue") {
+        check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");
+        const auto task = bound.value("dialogue_task", "");
+        check(task.empty() || task == "jier", "WVD_DIALOGUE_POLICY_INVALID");
+        if (task.empty()) return decision(false, {}, {{"reason", "no_special_dialogue"}});
+        const auto candidate = evaluate_impl(bundle, pixels, {{"mode", "template"}, {"image", "bounty/cuthimdown"}}, bound, scope, cache, depth + 1, memo);
+        check(candidate.at("outcome") != "Error", "WVD_DIALOGUE_RECOGNITION_ERROR");
+        if (candidate.at("outcome") != "Hit") return candidate;
+        // 沿用旧正常场景优先边界；剧情选项不覆盖已确认的战斗、地图、旅店或系统覆盖层。
+        auto guards = default_dialogue_normal_probes();
+        for (const auto &probe : blocking_probes(false)) guards.push_back(probe);
+        const auto checked = evaluate_batch(bundle, pixels, guards, bound, scope, cache, depth, memo, 4);
+        for (std::size_t i = 0; i < guards.size(); ++i) {
+            const auto &result = checked.at(i);
+            check(result.at("outcome") != "Error", "WVD_DIALOGUE_RECOGNITION_ERROR");
+            if (result.at("outcome") == "Hit") return decision(false, {}, {{"reason", "normal_or_system_scene"}});
+        }
+        return candidate;
+    }
     if (mode == "default_dialogue") {
+        if (!bound.value("dialogue_task", "").empty()) {
+            const auto special = evaluate_impl(bundle, pixels, {{"mode", "special_dialogue"}}, bound, scope, cache, depth + 1, memo);
+            check(special.at("outcome") != "Error", "WVD_DIALOGUE_RECOGNITION_ERROR");
+            if (special.at("outcome") == "Hit") return decision(false, {}, {{"reason", "special_dialogue_priority"}});
+        }
         check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");
         if (p.contains("selected"))
             check(p.at("selected").is_string() && std::find(default_dialogue_names.begin(), default_dialogue_names.end(),

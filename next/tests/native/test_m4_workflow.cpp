@@ -230,12 +230,13 @@ int main(int argc, char **argv) {
             if (kind == "revival")
                 return games::recovery::revive_after_defeat();
             if (kind == "common")
-                return games::recovery::clear_common_screens(config.value("allow_download", true));
-            if (kind == "fortress-trap" || kind == "giant" || kind == "dark-light" || kind == "mining" || kind == "manual-separation" || kind == "scorpion" || kind == "fishing-cycle") {
+                return games::recovery::clear_common_screens(config.value("allow_download", true),
+                    config.value("jier_dialogue", false) ? games::recovery::DialoguePolicy::Jier : games::recovery::DialoguePolicy::Default);
+            if (kind == "fortress-trap" || kind == "giant" || kind == "dark-light" || kind == "mining" || kind == "manual-separation" || kind == "scorpion" || kind == "fishing-cycle" || kind == "jier") {
                 nlohmann::ordered_json source;
                 std::ifstream(maafw::path_from_utf8(config.at("quest_catalog"))) >> source;
                 games::WvdQuestCatalog catalog(source);
-                const auto &task = catalog.at(kind == "fishing-cycle" ? (config.value("far", false) ? "fishing2" : "fishing") : kind == "scorpion" ? (config.value("hands", false) ? "Scorpionesses_plus_6_hands" : "Scorpionesses") : kind == "manual-separation" ? "manualSepDemon" : kind == "mining" ? "FFXI-Org" : kind == "dark-light" ? "darkLight" : kind == "giant" ? "gaintKiller" : "fortress-B8F_trap");
+                const auto &task = catalog.at(kind == "jier" ? "jier" : kind == "fishing-cycle" ? (config.value("far", false) ? "fishing2" : "fishing") : kind == "scorpion" ? (config.value("hands", false) ? "Scorpionesses_plus_6_hands" : "Scorpionesses") : kind == "manual-separation" ? "manualSepDemon" : kind == "mining" ? "FFXI-Org" : kind == "dark-light" ? "darkLight" : kind == "giant" ? "gaintKiller" : "fortress-B8F_trap");
                 std::set<std::string> images;
                 for (const auto &file : config.at("files")) {
                     const auto path = file.at("path").get<std::string>();
@@ -246,9 +247,9 @@ int main(int argc, char **argv) {
                     task_plan = games::WvdTaskPlan::parse(task).inspect();
                     return games::tasks::fishing_cycle(task, profile, images, config.value("allow_download", true));
                 }
-                if (kind == "scorpion") {
-                    task_plan = games::tasks::scorpion_plan(task).inspect();
-                    return games::tasks::scorpion_cycle(task, profile, images, config.value("allow_download", true));
+                if (kind == "scorpion" || kind == "jier") {
+                    task_plan = (kind == "jier" ? games::tasks::jier_plan(task) : games::tasks::scorpion_plan(task)).inspect();
+                    return games::tasks::bounty_cycle(task, profile, images, config.value("allow_download", true));
                 }
                 if (kind == "manual-separation") {
                     task_plan = J::array({games::tasks::manual_separation_plan(task, false).inspect(),
@@ -561,13 +562,13 @@ int main(int argc, char **argv) {
         definition.request_id = "m4-causal";
         definition.policy = policy;
         definition.initial = std::move(session);
-        const auto units = config.at("workflow") == "scorpion" ? (config.value("hands", false) ? 4u : 3u) :
+        const auto units = config.at("workflow") == "jier" ? 3u : config.at("workflow") == "scorpion" ? (config.value("hands", false) ? 4u : 3u) :
             config.at("workflow") == "manual-separation" ? 2u : config.value("normal_units", 1u);
         require(units > 0 && units <= 4, "FIXTURE_NORMAL_UNITS_INVALID");
         if (config.at("workflow") == "manual-separation")
             games::tasks::configure_manual_separation_units(definition);
-        else if (config.at("workflow") == "scorpion")
-            games::tasks::configure_scorpion_units(definition, config.value("hands", false));
+        else if (config.at("workflow") == "scorpion" || config.at("workflow") == "jier")
+            games::tasks::configure_bounty_units(definition, config.value("hands", false));
         else if (config.at("workflow") == "fishing-cycle")
             games::tasks::configure_fishing_units(definition, units);
         else {

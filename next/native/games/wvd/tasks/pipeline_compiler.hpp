@@ -4,6 +4,7 @@
 #include <json.hpp>
 #include <string>
 #include <vector>
+#include "games/wvd/recovery/dialogue_policy.hpp"
 
 namespace wvd::games::tasks {
 // 编译产物不执行节点；推进、等待和候选优先级仍由 Maa Pipeline 持有。
@@ -16,6 +17,7 @@ struct CompiledWorkflow {
     std::vector<std::string> images;
     std::vector<std::string> required_actions;
     std::chrono::milliseconds time_limit{60000};
+    recovery::DialoguePolicy dialogue_policy{recovery::DialoguePolicy::Default};
     void validate() const;
 };
 
@@ -57,6 +59,7 @@ class PipelineCompiler {
     // 显式启用本作用域的普通插入出口；不改子图、不吞掉错误或伪造业务完成。
     // 调用者必须把 BlockedExit 绑定到重新观察入口；独立运行则报告需要外层处理。
     void interrupt_on(nlohmann::json condition, std::string reason);
+    void use_dialogue(recovery::DialoguePolicy policy);
     // 此节点已可能产生副作用。后继遇覆盖层只能报告结果未确认，不能正常返回后重放。
     void stop_if_interrupted_after(const std::string &name, std::string reason);
     // 固定游戏行为 binding；不开放任意动作/任意实现名称。

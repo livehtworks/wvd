@@ -48,7 +48,7 @@ J point_confirmation(const MapTarget &target, const J &map) {
 }
 }
 CompiledWorkflow traverse_dungeon(const WvdTaskPlan &plan, const J &profile,
-                                 const std::set<std::string> &available_images, bool allow_download) {
+                                 const std::set<std::string> &available_images, bool allow_download, recovery::DialoguePolicy dialogue) {
     if (plan.route().empty() || plan.route().size() > 64)
         throw std::runtime_error("DUNGEON_ROUTE_SIZE_INVALID");
     const auto chest_workflow = wvd::games::chest::open_chest(profile.at("WHO_WILL_OPEN_IT").get<int>(),
@@ -81,7 +81,7 @@ CompiledWorkflow traverse_dungeon(const WvdTaskPlan &plan, const J &profile,
     graph.hit_limit("UnknownWait", 128);
     graph.confirm("Entered", "dungeon.enter", "dungeon_entered", inside, {"Dispatch"});
     graph.route("Dispatch", {"UnknownFrozen", "Blocked", "Combat", "Chest", "Revive", "Outside", "HealingPanel", "Resume", "Map", "UnknownTimeout", "UnknownLimit", "UnknownWait"});
-    const auto common = graph.define_child("Common", recovery::clear_common_screens(allow_download));
+    const auto common = graph.define_child("Common", recovery::clear_common_screens(allow_download, dialogue));
     graph.observe("Blocked", {{"mode", "blocking_screen"}}, {"ClearBlocking"});
     graph.call_child("ClearBlocking", common, {"Dispatch"});
     graph.hit_limit("Blocked", 32);

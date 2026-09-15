@@ -206,11 +206,12 @@ J bounty_cycle_contract(const J &profile) {
     try { games::tasks::giant_iteration({"gaintKiller", "quest", J::object()}, negative, {}); }
     catch (const std::exception &e) { giant_rejected = std::string(e.what()) == "GIANT_REST_INTERVAL_INVALID"; }
     require(giant_rejected, "GIANT_NEGATIVE_INTERVAL_ACCEPTED");
-    for (const bool hands : {false, true}) {
+    for (int variant = 0; variant < 3; ++variant) {
+        const bool hands = variant == 1, jier = variant == 2;
         auto clock = std::make_shared<TestClock>();
         games::WvdRunState state(profile, {hands ? "hands" : "scorpion", 1, clock});
         runtime::RunDefinition run;
-        games::tasks::configure_scorpion_units(run, hands, 2);
+        games::tasks::configure_bounty_units(run, hands, 2);
         require(run.max_business_units == (hands ? 8 : 6), "BOUNTY_SCHEDULE_TRUNCATED");
         std::uint64_t generation = 0;
         const std::size_t units = hands ? 4 : 3;
@@ -220,8 +221,17 @@ J bounty_cycle_contract(const J &profile) {
             auto emit = [&](const char *event, const std::string &operation = "", std::optional<std::size_t> step = {}) {
                 return state.confirm_event(state.confirmation_id(operation.empty() ? event : operation, event), event, generation, 1, step);
             };
-            emit(hands ? "scorpion_hands_started" : "scorpion_started");
-            require(!emit(hands ? "scorpion_hands_started" : "scorpion_started"), "BOUNTY_START_REPLAY");
+            const auto start = jier ? "jier_started" : hands ? "scorpion_hands_started" : "scorpion_started";
+            emit(start);
+            require(!emit(start), "BOUNTY_START_REPLAY");
+            if (jier) {
+                emit("special_dialogue_prepared");
+                require(!emit("special_dialogue_prepared"), "SPECIAL_DIALOGUE_PREPARE_REPLAY");
+                state.enter_segment(contracts::SegmentBoundary::Recovery, ++generation, base);
+                require(state.summary().at("special_dialogue_pending").get<bool>(), "SPECIAL_DIALOGUE_RECOVERY_LOST_INTENT");
+                emit("special_dialogue_completed");
+                require(!emit("special_dialogue_completed"), "SPECIAL_DIALOGUE_COMPLETION_REPLAY");
+            }
             require(state.summary().at("bounty_cycle").at("rest_due").get<bool>() == (cycle == 0), "BOUNTY_INTERVAL_CHANGED");
             emit("bounty_leap_prepared");
             require(state.summary().at("bounty_cycle").at("transfer_pending").get<bool>(), "BOUNTY_TRANSFER_INTENT_MISSING");

@@ -3163,17 +3163,19 @@
         "M4-TASK-jier"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "TYPED_PLAN_DATA",
+      "implementation_extent": "FINITE_BOUNTY_AND_SCOPED_DIALOGUE_PENDING_VALIDATION",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "new_entry": null,
+      "new_entry": "tasks::bounty_cycle",
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
-        "native/games/wvd/tasks/task_plan.cpp"
+        "native/games/wvd/tasks/task_plan.cpp",
+        "native/games/wvd/tasks/bounty_cycle.cpp",
+        "native/games/wvd/recovery/dialogue.cpp"
       ],
       "source_fields": [
         "questName",
@@ -3187,9 +3189,9 @@
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
       "blockers": [
-        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "BUSINESS_ACTIONS_NOT_IMPLEMENTED",
-        "SPECIAL_CASE_NOT_IMPLEMENTED"
+        "JIER_CAUSAL_WORKFLOW_VALIDATION_PENDING",
+        "SPECIAL_DIALOGUE_INSERTION_RECOVERY_MATRIX_PENDING",
+        "FULL_TASK_ACCEPTANCE_PENDING"
       ],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md"

@@ -78,11 +78,14 @@ CompiledWorkflow fishing_cycle(const WvdQuestDefinition &definition, const J &pr
     graph.click("QuitFishing", fishing, C::image("fishing/quit"), C::any({dungeon, map}), {"ApproachShop"});
     const auto travel_shop = graph.define_child("Approach", approach);
     graph.call_child("ApproachShop", travel_shop, {"Inventory"});
-    graph.route("Inventory", {"AtMenu", "CityMenu", "OpenInventory"});
-    graph.fixed_click("CityMenu", world, C::any({city, menu}), {50, 1535}, {"AtMenu", "OpenInventory"});
+    graph.route("Inventory", {"AtMenu", "CityMenu", "InventoryReady"});
+    graph.fixed_click("CityMenu", world, C::any({city, menu}), {50, 1535}, {"AtMenu", "InventoryReady"});
     // 只在已完成接近路线的地图/本内页或已确认城内菜单执行原固定点，不在未知页连点。
-    graph.fixed_click("OpenInventory", C::any({city, C::all({C::any({map, dungeon}), C::business("/task_step", 1)})}),
-        C::any({city, menu, map, dungeon}), {860, 1150}, {"AtMenu", "OpenInventory"});
+    // 业务条件只能选分支，不能变成动作目标；输入仍单独读取新帧的视觉正证据。
+    graph.observe("InventoryReady", C::any({city, C::all({C::any({map, dungeon}), C::business("/task_step", 1)})}), {"OpenInventory"});
+    graph.fixed_click("OpenInventory", C::any({city, map, dungeon}),
+        C::any({city, menu, map, dungeon}), {860, 1150}, {"AtMenu", "InventoryReady"});
+    graph.hit_limit("InventoryReady", 16);
     graph.hit_limit("OpenInventory", 16);
     graph.confirm("SuppliesEntered", "fishing.supplies.entered", "fishing_supplies_entered", menu, {"TransferBait"});
     graph.observe("Transferring", phase(2), {"TransferBait"});

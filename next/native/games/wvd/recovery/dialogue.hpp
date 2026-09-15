@@ -3,4 +3,5 @@
 
 namespace wvd::games::recovery {
 tasks::CompiledWorkflow choose_default_dialogue();
+tasks::CompiledWorkflow choose_special_dialogue(DialoguePolicy policy);
 }

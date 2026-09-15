@@ -101,6 +101,11 @@ class StateTests(unittest.TestCase):
 
     def test_scorpion_two_cycles_preserve_routes_reports_and_rest_interval(self):
         results = self.run_case("bounty-cycle-contract", bounty_cycle_contract=True)["bounty_cycle_contract"]
+        self.assertEqual(len(results), 3)
+        self.assertEqual(results[2]["special_dialogues_completed"], 2)
+        self.assertFalse(results[2]["special_dialogue_pending"])
+        self.assertEqual(results[2]["bounty_reports"], 2)
+        self.assertEqual(results[2]["bounty_cycle"]["completed_cycles"], 2)
         for hands, state in zip((False, True), results):
             self.assertEqual(state["bounty_cycle"]["completed_cycles"], 2)
             self.assertFalse(state["bounty_cycle"]["active"])

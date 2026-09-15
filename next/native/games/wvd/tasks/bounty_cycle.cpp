@@ -1,6 +1,7 @@
 #include "bounty_cycle.hpp"
 #include "bounty_visit.hpp"
 #include "games/wvd/navigation/dungeon_entry.hpp"
+#include "games/wvd/navigation/map_route.hpp"
 #include "games/wvd/navigation/time_leap.hpp"
 #include "games/wvd/navigation/world_travel.hpp"
 #include "games/wvd/quests/bounty_cycle.hpp"
@@ -11,6 +12,7 @@ namespace {
 using C = PipelineCompiler;
 using J = nlohmann::json;
 using Phase = quests::BountyCycle::Phase;
+const J jier_positions{{"position", "左下", {452, 545}}, {"position", "左下", {452, 1026}}};
 J phase(Phase value) { return C::all({C::business("/bounty_cycle/phase", static_cast<int>(value)), C::business("/bounty_cycle/unit_matches", true)}); }
 CompiledWorkflow return_to_bounty_city(bool guild) {
     C graph(guild ? "quest.bounty.return_guild" : "quest.bounty.return_fortress");
@@ -45,21 +47,31 @@ WvdTaskPlan scorpion_plan(const WvdQuestDefinition &definition, bool hands_route
         .with_route(hands_route ? J{{"position", "左上", {454, 662}}, {"position", "左上", {135, 714}}}
             : J{{"position", "左下", {505, 760}}, {"position", "左上", {506, 821}}});
 }
-void configure_scorpion_units(runtime::RunDefinition &definition, bool hands, std::size_t cycles) {
+WvdTaskPlan jier_plan(const WvdQuestDefinition &definition) {
+    if (definition.type != "quest" || definition.id != "jier") throw std::runtime_error("JIER_TASK_INVALID");
+    auto points = jier_positions;
+    points.push_back({"harken", "左上", nullptr});
+    return WvdTaskPlan::parse(definition).with_entry({{"press", "beginningAbyss", {"EdgeOfTown", {1, 1}}, 1},
+        {"press", "B4FLabyrinth", {{1, 1}}, 1}}).with_route(points);
+}
+void configure_bounty_units(runtime::RunDefinition &definition, bool hands, std::size_t cycles) {
     const auto units = hands ? 4u : 3u;
     if (!cycles || cycles > 256 / units || definition.max_business_units != 1 || !definition.continuation_units.empty())
-        throw std::runtime_error("SCORPION_UNIT_BUDGET_INVALID");
+        throw std::runtime_error("BOUNTY_UNIT_BUDGET_INVALID");
     definition.max_business_units = cycles * units;
     definition.continuation_units.assign(definition.max_business_units - 1, definition.initial);
 }
-CompiledWorkflow scorpion_cycle(const WvdQuestDefinition &definition, const J &profile,
+CompiledWorkflow bounty_cycle(const WvdQuestDefinition &definition, const J &profile,
     const std::set<std::string> &images, bool allow_download) {
-    const auto first_plan = scorpion_plan(definition);
+    const bool jier = definition.id == "jier";
+    const auto first_plan = jier ? jier_plan(definition) : scorpion_plan(definition);
+    const auto dialogue = jier ? recovery::DialoguePolicy::Jier : recovery::DialoguePolicy::Default;
     const bool hands = definition.id == "Scorpionesses_plus_6_hands";
-    const bool ore = profile.at("ACTIVE_BEAUTIFUL_ORE").get<bool>();
-    const bool triumph = profile.at("ACTIVE_TRIUMPH").get<bool>();
+    const bool ore = !jier && profile.at("ACTIVE_BEAUTIFUL_ORE").get<bool>();
+    const bool triumph = !jier && profile.at("ACTIVE_TRIUMPH").get<bool>();
     if (profile.at("REST_INTERVEL").get<std::int64_t>() < 0) throw std::runtime_error("BOUNTY_REST_INTERVAL_INVALID");
-    const auto first_route = traverse_dungeon(first_plan, profile, images, allow_download);
+    // harken是退出动作，不是假装仍在地图上确认的第三个坐标点。两点完成后独立执行它。
+    const auto first_route = traverse_dungeon(jier ? first_plan.with_route(jier_positions) : first_plan, profile, images, allow_download, dialogue);
     C graph("tasks." + definition.id, first_route.time_limit + std::chrono::seconds{360});
     const auto inn = C::image("Inn"), guild = C::image("guild"), edge = C::image("EdgeOfTown"), map = C::image("mapFlag");
     const auto leap_page = C::any({C::image("cursedWheelTitle"), C::image("cursedWheel"), C::image("ruins")});
@@ -72,7 +84,7 @@ CompiledWorkflow scorpion_cycle(const WvdQuestDefinition &definition, const J &p
     graph.observe("PendingReport", C::business("/bounty_report_pending", true), {"ReportUncertain"});
     graph.recovery("ReportUncertain", "quest.bounty_report_unconfirmed");
     graph.observe("Resume", C::business("/bounty_cycle/active", true), {"Stage"});
-    graph.confirm("Start", "bounty.cycle.start", hands ? "scorpion_hands_started" : "scorpion_started", leap_page, {"Stage"});
+    graph.confirm("Start", "bounty.cycle.start", jier ? "jier_started" : hands ? "scorpion_hands_started" : "scorpion_started", leap_page, {"Stage"});
     graph.route("Stage", hands ? J{"LeapPhase", "TravelPhase", "RevealPhase", "FirstRoutePhase", "FirstReturnPhase",
         "SecondRoutePhase", "SecondReturnPhase", "ReportsPhase", "RestPhase"} :
         J{"LeapPhase", "TravelPhase", "RevealPhase", "FirstRoutePhase", "FirstReturnPhase", "ReportsPhase", "RestPhase"});
@@ -80,7 +92,7 @@ CompiledWorkflow scorpion_cycle(const WvdQuestDefinition &definition, const J &p
     graph.confirm("PrepareLeap", "bounty.leap.prepare", "bounty_leap_prepared", leap_page, {"Leap"});
     // 这两个原case没有传CSC_symbol，即便ACTIVE_CSC开启也不修改因果；并非忽略配置。
     const auto leap = graph.define_child("TimeLeap", navigation::time_leap_without_causality(
-        ore ? "BeautifulOre" : triumph ? "Triumph" : "GhostsOfYore", ore ? "cursedwheel_dhi" : "cursedwheel_impregnableFortress", allow_download));
+        jier ? "requestToRescueTheDuke" : ore ? "BeautifulOre" : triumph ? "Triumph" : "GhostsOfYore", ore ? "cursedwheel_dhi" : "cursedwheel_impregnableFortress", allow_download));
     graph.call_child("Leap", leap, {"Leaped"});
     graph.confirm("Leaped", "bounty.leap.done", "bounty_leap_completed", outside, {"TravelPhase"});
     graph.delay_after("Leaped", 10000);
@@ -108,8 +120,13 @@ CompiledWorkflow scorpion_cycle(const WvdQuestDefinition &definition, const J &p
         graph.call_child(name + "Enter", entry, {name + "Traverse"});
         const auto route = graph.define_child(name + "Dungeon", second ? traverse_dungeon(plan, profile, images, allow_download) : first_route);
         graph.call_child(name + "Traverse", route, {name + "Points", "Incomplete"});
-        graph.observe(name + "Points", C::business("/task_step", 2), {name + "RouteDone"});
-        graph.confirm(name + "RouteDone", "bounty.route." + name, "bounty_route_completed", map, {name + "ReturnPhase"});
+        graph.observe(name + "Points", C::business("/task_step", 2), {jier ? "LeaveByHarken" : name + "RouteDone"});
+        if (jier) {
+            const auto exit = graph.define_child("HarkenExit", navigation::reach_map_target(first_plan.route().back()));
+            graph.call_child("LeaveByHarken", exit, {name + "RouteDone"});
+        }
+        graph.confirm(name + "RouteDone", "bounty.route." + name, "bounty_route_completed",
+            jier ? C::all({C::any({inn, guild, edge, C::image("returnText"), C::image("openworldmap")}), C::absent(map)}) : map, {name + "ReturnPhase"});
         graph.observe(name + "ReturnPhase", phase(second ? Phase::SecondReturn : Phase::FirstReturn), {name + "Return"});
         graph.call_child(name + "Return", return_guild, {name + "Returned"});
         graph.confirm(name + "Returned", "bounty.return." + name, "bounty_return_completed", guild, {"Terminal"});

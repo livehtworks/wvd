@@ -159,6 +159,7 @@ std::set<std::string> collect_actions(const J &nodes) {
 }
 } // namespace
 void CompiledWorkflow::validate() const {
+    (void)recovery::dialogue_policy_name(dialogue_policy);
     require(time_limit > std::chrono::milliseconds::zero() && time_limit <= std::chrono::minutes{30},
             "COMPILE_SESSION_BUDGET_INVALID");
     require(!kind.empty() && nodes.is_object() && nodes.contains(entry) && nodes.contains(terminal),
@@ -269,6 +270,10 @@ void CompiledWorkflow::validate() const {
                 "COMPILE_CHECKPOINT_INVALID");
     std::set<std::string> actual_images;
     collect_images(nodes, actual_images);
+    if (dialogue_policy == recovery::DialoguePolicy::Jier) {
+        actual_images.insert("bounty/cuthimdown.png");
+        actual_images.insert("bondmate_close.png");
+    }
     require(std::vector<std::string>(actual_images.begin(), actual_images.end()) == images,
             "COMPILE_RESOURCE_INDEX_STALE");
     const auto actions = collect_actions(nodes);
@@ -478,6 +483,7 @@ std::string PipelineCompiler::append(const std::string &prefix, const CompiledWo
                 "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_") == std::string::npos,
             "COMPILE_PREFIX_INVALID");
     child.validate();
+    use_dialogue(child.dialogue_policy);
     require(normal_exits.is_object(), "COMPILE_EXIT_BINDINGS_INVALID");
     for (const auto &[name, successors] : normal_exits.items())
         require(child.nodes.contains(name) && child.nodes.at(name).value("custom_action", "") == "RequireRecovery" &&
@@ -570,6 +576,7 @@ void PipelineCompiler::confirm(const std::string &name, const std::string &opera
                                       "karma_observed", "karma_completed", "trap_cycle_started", "trap_cycle_completed",
                                       "giant_cycle_started", "giant_route_completed", "giant_cycle_completed",
                                       "bounty_revealed", "bounty_report_prepared", "bounty_report_completed",
+                                      "special_dialogue_prepared", "special_dialogue_completed",
                                       "fishing_reward_prepared", "fishing_reward_completed",
                                       "fishing_wait_started", "fishing_wait_failed",
                                       "fishing_cast_prepared", "fishing_cast_completed",
@@ -577,6 +584,7 @@ void PipelineCompiler::confirm(const std::string &name, const std::string &opera
                                       "fishing_supplies_finished", "fishing_supplies_returned", "fishing_refilled",
                                       "sleep_visit_started", "sleep_visit_completed",
                                       "scorpion_started", "scorpion_hands_started", "bounty_leap_prepared", "bounty_leap_completed",
+                                      "jier_started",
                                       "bounty_travel_prepared", "bounty_travel_completed", "bounty_cycle_revealed", "bounty_route_completed",
                                       "bounty_travel_skipped",
                                       "bounty_return_completed", "bounty_cycle_reported", "bounty_cycle_completed",
@@ -602,6 +610,12 @@ void PipelineCompiler::confirm(const std::string &name, const std::string &opera
                {"action", "Custom"}, {"custom_action", "WvdConfirm"},
                {"custom_action_param", parameters}, {"next", std::move(next)}});
 }
+void PipelineCompiler::use_dialogue(recovery::DialoguePolicy policy) {
+    (void)recovery::dialogue_policy_name(policy);
+    require(workflow_.dialogue_policy == recovery::DialoguePolicy::Default ||
+        policy == recovery::DialoguePolicy::Default || workflow_.dialogue_policy == policy, "COMPILE_DIALOGUE_POLICY_CONFLICT");
+    if (policy != recovery::DialoguePolicy::Default) workflow_.dialogue_policy = policy;
+}
 CompiledWorkflow PipelineCompiler::finish() {
     compile_interruption();
     bool business = false;
@@ -626,6 +640,10 @@ CompiledWorkflow PipelineCompiler::finish() {
          {"custom_action_param", {{"reason", workflow_.kind + ".budget_exhausted"}}}});
     std::set<std::string> images;
     collect_images(workflow_.nodes, images);
+    if (workflow_.dialogue_policy == recovery::DialoguePolicy::Jier) {
+        images.insert("bounty/cuthimdown.png");
+        images.insert("bondmate_close.png");
+    }
     workflow_.images.assign(images.begin(), images.end());
     const auto actions = collect_actions(workflow_.nodes);
     workflow_.required_actions.assign(actions.begin(), actions.end());

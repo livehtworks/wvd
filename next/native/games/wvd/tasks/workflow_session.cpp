@@ -28,6 +28,8 @@ runtime::SessionDefinition publish_workflow(const CompiledWorkflow &workflow,
     session.checkpoint_node = workflow.checkpoint;
     session.time_limit = workflow.time_limit;
     session.recognitions = {vision::binding(aliases)};
+    const auto dialogue = recovery::dialogue_policy_name(workflow.dialogue_policy);
+    if (!dialogue.empty()) session.recognitions.front().parameters["dialogue_task"] = dialogue;
     std::set<std::string> bound_actions;
     for (const auto &node : workflow.nodes) {
         if (node.value("custom_action", "") == "WvdConfirm") {
@@ -88,6 +90,7 @@ runtime::SessionDefinition publish_workflow(const CompiledWorkflow &workflow,
                {"required_actions", workflow.required_actions},
                {"pipeline", workflow.nodes},
                {"aliases", aliases},
+               {"dialogue_task", dialogue},
                {"registry", registry.manifest()}};
     const auto serialized = identity.dump();
     const auto revision = platform::bytes_sha256(
