@@ -9,7 +9,7 @@
 | 原 TaskID / 源码行 | 不可遗漏的主链与分支 | 计数或特殊边界 |
 | --- | --- | --- |
 | fortress-B8F_trap / 4365 | 七个目标：一层楼梯、mark_auto、四个固定点、要塞门楼梯；不回城 | 每轮开始增加旧次数，完成数另记；同轮恢复重入局部路线，不重复开始计数 |
-| 7000G / 3470 | FortressArrival 跳跃、返回要塞、王城、公会剧情；依 stepMark 顺序选 illgonow、olddist/iminhungry、royalcapital、三处剧情、leavethechild、icantagreewithU、illgo、noeasytask，最后确认 ruins | 开始计次；7000G 收益只能在整段剧情终点确认，不在看见选项时计入 |
+| 7000G / 3472 | FortressArrival 跳跃、返回要塞、王城、公会剧情；依 stepMark 顺序选 illgonow、olddist/iminhungry、royalcapital、三处剧情、leavethechild、icantagreewithU、illgo、noeasytask，最后确认 ruins | 开始计次；7000G 收益只能在整段剧情终点确认，不在看见选项时计入 |
 | manualSepDemon / 3803 | stair_2→harken；两次返回、住宿；DHI/BeautifulOre 跳跃；覆盖局部 EOT 为 COS/COS→COSB2F；stair_3→固定点 | 一次性链，不包装成无限循环；各段局部路线和来源原树分开 |
 | darkLight / 3680 | 本内循环：未知检测、战斗/宝箱、计时结算、按开箱/战后配置恢复、darkLight→darklight_lightIt；返回旅店结束 | 不套普通入本/任务点路线；没有普通 dungeon 开始计数；保留 400 秒无进展检查与未知诊断 |
 | LBC-oneGorgon / 3827 | GhostsOfYore＋symbolofalliance 因果（EnaWasSaved，RGB=2/1/0）、返回要塞/王城、住宿并领任务（偏移266/257）、牛洞 | ACTIVE_REST 真：第一牛→退出→住宿→再入→第二/三牛→退出；否则三牛连打；每轮开始计数 |
@@ -20,7 +20,7 @@
 | gaintKiller / 4045 | 局部 EOT 要塞七层、固定点560/982、harken2、返回旅店、按专用间隔住宿 | 源码已经跳过巨人检测，默认灯怪路线；保留 gaint 拼写；不新增旧源码已不执行的分支 |
 | lovesleep / 4353 | 连续 9999 次完整 StateInn；每轮前后检查停止 | 不受普通“已住宿”回执永久抑制；每次独立住宿周期；不能把现有256段上限当成删减9999功能的授权 |
 | FFXI-Org / 4385 | EOT→自动到矿点→小地图确认→挖取循环→无矿/无镐子退出；无镐子则 RTT、重组FFXIStone队伍、真实住宿补镐子 | org_position ROI=[692,68,140,140]；领取前后都检查；十种奖励最高分且>0.9，否则未知；resetBag 只能住宿完成后清除 |
-| sandman / 4519 | 禁用组队刷新/空气墙；局部要塞三层 EOT、楼层检查、四点；三项专用对话 | bondmate 回调后才住宿→requestToRescueTheDuke→等待10秒→住宿→Triumph→完成计数；路由完成不等于缘完成 |
+| sandman / 4521 | 禁用组队刷新/空气墙；局部要塞三层 EOT、楼层检查、四点；三项专用对话 | bondmate 回调后才住宿→requestToRescueTheDuke→等待10秒→住宿→Triumph→完成计数；路由完成不等于缘完成 |
 | fishing / 4574 | 近端抛竿4000ms、补饵、浮标、收杆、鱼获结果、未知页安全转向 | 见下方钓鱼完整边界；不把浮标 NoHit 当已经获得鱼 |
 | fishing2 / 4574 | 同链远端抛竿2250ms | 保留独立 TaskID/模式统计，参数化差异，不复制第二套执行器 |
 
