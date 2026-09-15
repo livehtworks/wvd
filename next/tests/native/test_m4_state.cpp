@@ -676,7 +676,7 @@ int main(int argc, char **argv) {
                 until([&] {
                     const auto events = coordinator.events();
                     for (const auto &event : events.at("events"))
-                        if (event.at("type") == "fixture.wait_entered")
+                        if (event.at("type") == "business.fixture.wait_entered")
                             return true;
                     return false;
                 });
