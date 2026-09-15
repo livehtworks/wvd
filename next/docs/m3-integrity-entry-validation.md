@@ -17,10 +17,12 @@ Gateway 提交根任务、Context 提交子任务前核对资源快照。原生 
 
 新增“任务已提交、首次截图时新增成员”的故障，防止只在 `post()` 增加一次检查就把漏洞算修好。该故障不改变截图内容，不根据截图次数推进剧情。
 
-SDK direct 的目录成员检查统一在原生开始事件执行，不在 direct 预检重复遍历；参数预检仍校验具体文件与闭合引用。direct→Custom 继续消费一次性凭据。新增 SDK/Offline 单次目录检查断言，首个原生入口错误必须保留到观察结果。以上仍待构建实测，不是成本放行，`PERFORMANCE_UNRESOLVED` 与 `RESOURCE_UNRESOLVED` 保留。
+SDK direct 的目录成员检查统一在原生开始事件执行，不在 direct 预检重复遍历；参数预检仍校验具体文件与闭合引用。direct→Custom 继续消费一次性凭据。新增 SDK/Offline 单次目录检查断言，首个原生入口错误必须保留到观察结果。这不是成本放行，`PERFORMANCE_UNRESOLVED` 与 `RESOURCE_UNRESOLVED` 保留。
 
 ## 当前状态
 
-首次审计产物已保留。入口修正与中途变化负例已写入，尚待构建和实际复验；不宣布修复通过。当前运行中的陷阱测试使用修正前已封存的 M4 EXE，不混用证据。
+首次审计产物已保留。入口修正复验五方法全部通过，耗时12.849秒；日志 `m3-integrity-entry-correction1.log`，私有证据根 `m3-fixes-k_cwwi73`。实际使用正式源码 `3158e44`、测试检查点 `347bf56` 构建的原生程序，不沿用首次审计或陷阱组产物。
+
+复验覆盖模板与延后OCR的锁定快照、九项lease负例、两个同名跨包场景，以及提交后首次截图时新增文件的入口故障。新增成员不能到达后续动作，原始错误保留；SDK direct和Offline识别各执行一次成员核对。该入口缺口已修复，不等于其余资源矩阵、成本或发现链已通过。同一构建的M2全组102方法通过（94.963秒，`m4-dialogue-payment-m2.log`）。
 
 固定 SDK 的 Context/GetNodeData 和事件 handle 以本机已锁定头文件为准；行为另对照 [官方 Context 实现](https://github.com/MaaXYZ/MaaFramework/blob/2bcfa85c66a2eac6ca3e5937f175495275ee0643/source/MaaFramework/Task/Context.cpp)。M3 查询所有权、其余资源矩阵、真实设备与生产切换边界不变。
