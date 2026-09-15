@@ -39,3 +39,10 @@ Session上限。它不是把两条路线放进一个无限Session，也不更改
 
 修正一整组三方法一通过、两失败，183.260秒。停止/拒绝两场景分别UserStopped/Failed，
 各1输入且无错点，已在重建前核对EXE身份与真正静止；这两例不代表完整路线通过。
+
+修正二产物`74b99fb`：三方法均失败（203.838秒，`m4-manual-correction2-workflow.log`、
+`m4-workflow-8qtzoenz`）。完整链五输入后BUSINESS_CONFIRMATION_STALE，提前退出一输入后
+SCENE_UNCONFIRMED，拒绝场景零输入CUSTOM_ACTION_FAILED；都未到达整任务终点。
+已达到本包该问题两次定点修正边界，保留BLOCKED，不再复跑挑PASS，也不延长TTL。
+同产物M2 104方法通过（96.477秒），移动/地图后置谓词两方法通过（50.121秒）；
+这不能替代完整任务失败结果。
