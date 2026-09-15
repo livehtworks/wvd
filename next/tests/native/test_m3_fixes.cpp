@@ -12,6 +12,12 @@ class CausalDevice final : public OfflineDevice {
   public:
     J expected;
     bool mismatch{};
+    std::function<void()> capture_fault;
+    devices::RawFrame capture() override {
+        if (capture_fault)
+            capture_fault();
+        return OfflineDevice::capture();
+    }
     bool execute(const contracts::Command &c) override {
         if (changed || int(c.kind) != expected.at("kind").get<int>() ||
             c.x != expected.value("x", 0) || c.y != expected.value("y", 0)) {
@@ -73,13 +79,32 @@ int main(int argc, char **argv) {
         } else if (config.at("mode") == "integrity") {
             storage::EventJournal events("integrity", 1);
             devices::InputGate gate(*device, policy, 1, 1, events);
+            std::mutex evidence_mutex;
+            J failures = J::array();
+            std::atomic<unsigned> reached{};
+            maafw::GatewayHooks hooks;
+            hooks.failure = [&](const std::string &code) {
+                std::lock_guard lock(evidence_mutex);
+                failures.push_back(code);
+            };
+            maafw::ActionRegistry actions{{"RecordReached", [&](maafw::Context &, const J &) {
+                ++reached;
+                return true;
+            }}};
             maafw::MaaGateway gateway(
-                bundle, &gate, {}, {},
+                bundle, &gate, hooks, std::move(actions),
                 registry->bind_recognitions({games::vision::binding(J::object())}));
             gateway.initialize();
+            // 第二个入口只有 Resource，无 Controller；它也必须封存独立资源副本。
+            maafw::OfflineRecognizer offline(bundle);
             output["active"] = gateway.bundle_status();
             auto root = maafw::path_from_utf8(output["active"].at("root"));
             auto file = root / "image/target.png";
+            output["protected_files"] = J::object();
+            for (const auto &relative : config.value("protected_paths", std::vector<std::string>{})) {
+                std::ofstream write(root / maafw::path_from_utf8(relative), std::ios::binary);
+                output["protected_files"][relative] = !write;
+            }
             {
                 std::ofstream write(file, std::ios::binary);
                 output["write_blocked"] = !write;
@@ -105,12 +130,57 @@ int main(int argc, char **argv) {
             }
             output["author_change_ignored"] =
                 int(gateway.recognize(frame, gate.frame_identity(), request).outcome) == 0;
+            for (const auto &relative : config.value("protected_paths", std::vector<std::string>{})) {
+                std::ofstream author(bundle.root / maafw::path_from_utf8(relative), std::ios::binary);
+                author << "changed author before first native recognition";
+                author.close();
+                require(bool(author), "TEST_AUTHOR_WRITE_FAILED");
+            }
+            const auto native_request = maafw::parse_recognition_request(config.at("native_request"));
+            // SDK 模板的首次实际识别发生在作者文件改变以后，不借前一次命中暖缓存。
+            output["delayed_sdk_direct"] = int(gateway.recognize(frame, gate.frame_identity(), native_request).outcome);
+            output["delayed_offline"] = int(offline.evaluate(frame, frame.identity, native_request).outcome);
+            auto pipeline = [&](const std::string &entry) {
+                const auto before = reached.load();
+                {
+                    std::lock_guard lock(evidence_mutex);
+                    failures = J::array();
+                }
+                J result;
+                try {
+                    const auto task = gateway.post(entry);
+                    until([&] {
+                        const auto status = gateway.status(task);
+                        return status != MaaStatus_Pending && status != MaaStatus_Running &&
+                               gateway.active_callbacks() == 0;
+                    });
+                    result["status"] = gateway.status(task);
+                } catch (const std::exception &e) {
+                    result["error"] = e.what();
+                }
+                result["reached"] = reached.load() - before;
+                std::lock_guard lock(evidence_mutex);
+                result["failures"] = failures;
+                return result;
+            };
+            output["delayed_sdk_pipeline"] = pipeline("SdkEntry");
+            output["delayed_custom_pipeline"] = pipeline("CustomEntry");
+            frame = gateway.capture();
             {
                 std::ofstream extra(root / "image/extra.png", std::ios::binary);
                 extra << "extra";
             }
             auto changed = gateway.recognize(frame, gate.frame_identity(), request);
             output["member_change_error"] = changed.error_code;
+            output["sdk_member_change_error"] = gateway.recognize(frame, gate.frame_identity(), native_request).error_code;
+            output["sdk_pipeline_changed"] = pipeline("SdkEntry");
+            output["custom_pipeline_changed"] = pipeline("CustomEntry");
+            const auto offline_root = maafw::path_from_utf8(offline.bundle_status().at("root"));
+            {
+                std::ofstream extra(offline_root / "image/extra.png", std::ios::binary);
+                extra << "extra";
+            }
+            output["offline_member_change_error"] = offline.evaluate(frame, frame.identity, native_request).error_code;
             gate.close();
             gateway.close();
             gate.disconnect_backend();
@@ -131,6 +201,80 @@ int main(int argc, char **argv) {
             maafw::OfflineRecognizer reused_revision(revised);
             output["reused_revision_error"] =
                 reused_revision.evaluate(frame, frame.identity, request).error_code;
+            output["backend_calls"] = device->calls.load();
+        } else if (config.at("mode") == "integrity-mid-call") {
+            storage::EventJournal events("integrity-mid-call", 1);
+            devices::InputGate gate(*device, policy, 1, 1, events);
+            std::atomic<unsigned> reached{};
+            std::mutex evidence_mutex;
+            J failures = J::array();
+            maafw::GatewayHooks hooks;
+            hooks.failure = [&](const std::string &reason) {
+                std::lock_guard lock(evidence_mutex);
+                failures.push_back(reason);
+            };
+            maafw::MaaGateway gateway(bundle, &gate, hooks,
+                {{"RecordReached", [&](maafw::Context &, const J &) { ++reached; return true; }}});
+            gateway.initialize();
+            const auto active = maafw::path_from_utf8(gateway.bundle_status().at("root"));
+            bool mutated = false;
+            // 明确的文件系统故障发生在 post 的预检之后、原生识别之前，截图内容不变。
+            device->capture_fault = [&] {
+                if (!mutated) {
+                    std::ofstream extra(active / "image/unexpected.png", std::ios::binary);
+                    extra << "added between submit and recognition";
+                    extra.close();
+                    require(bool(extra), "TEST_MEMBER_WRITE_FAILED");
+                    mutated = true;
+                }
+            };
+            const auto task = gateway.post("SdkEntry");
+            until([&] {
+                const auto status = gateway.status(task);
+                return status != MaaStatus_Pending && status != MaaStatus_Running && gateway.active_callbacks() == 0;
+            });
+            output = {{"reached", reached.load()}, {"status", gateway.status(task)},
+                      {"mutated", mutated}, {"gate_closed", gate.closed()}, {"backend_calls", device->calls.load()}};
+            {
+                std::lock_guard lock(evidence_mutex);
+                output["failures"] = failures;
+            }
+            gate.close();
+            gateway.close();
+            gate.disconnect_backend();
+        } else if (config.at("mode") == "cross-bundle") {
+            maafw::Bundle other{maafw::path_from_utf8(config.at("other_bundle")), config.at("other_revision"), {}};
+            for (const auto &f : config.at("other_files"))
+                other.files.push_back({f.at("path"), f.at("sha256")});
+            // 无 Controller 的实际 Gateway/OfflineRecognizer；同名资源不能串包或版本。
+            maafw::MaaGateway first(bundle, nullptr, {}, {},
+                registry->bind_recognitions({games::vision::binding(J::object())}));
+            maafw::MaaGateway second(other, nullptr, {}, {},
+                registry->bind_recognitions({games::vision::binding(J::object())}));
+            first.initialize();
+            second.initialize();
+            maafw::OfflineRecognizer offline_first(bundle), offline_second(other);
+            const auto sdk = maafw::parse_recognition_request(config.at("native_request"));
+            const auto custom = maafw::parse_recognition_request(config.at("request"));
+            output["observations"] = J::array();
+            for (const auto index : {0, 1, 0}) {
+                auto &gateway = index == 0 ? first : second;
+                auto &offline = index == 0 ? offline_first : offline_second;
+                const auto &selected = index == 0 ? bundle : other;
+                for (unsigned image_index = 0; image_index < 2; ++image_index) {
+                    contracts::FrameIdentity identity{"m2-offline", "wvd", selected.revision, "portrait",
+                        1, image_index + 1, 0, {900, 1600}, {900, 1600}, std::chrono::steady_clock::now(), "BGR8"};
+                    contracts::FrameEnvelope frame{identity, image_index == 0 ? device->before : device->after};
+                    const auto a = gateway.recognize(frame, identity, sdk);
+                    const auto b = gateway.recognize(frame, identity, custom);
+                    const auto c = offline.evaluate(frame, identity, sdk);
+                    output["observations"].push_back({{"bundle", index}, {"image", image_index},
+                        {"sdk", int(a.outcome)}, {"custom", int(b.outcome)}, {"offline", int(c.outcome)},
+                        {"errors", J::array({a.error_code, b.error_code, c.error_code})}});
+                }
+            }
+            first.close();
+            second.close();
             output["backend_calls"] = device->calls.load();
         } else {
             storage::EventJournal events("fixes", 1);

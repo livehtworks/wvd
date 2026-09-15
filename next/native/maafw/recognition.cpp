@@ -188,7 +188,7 @@ contracts::Observation MaaGateway::recognize(const contracts::FrameEnvelope &fra
                 std::chrono::duration<double, std::milli>(now - checkpoint).count();
             checkpoint = now;
         };
-        require(initialized_ && !hooks_.cancelled(), "SESSION_NOT_RUNNING");
+        require(initialized_ && !hooks_.cancelled() && !integrity_failed_, "SESSION_NOT_RUNNING");
         result.error_stage = "frame_preflight";
         auto image = validate_frame(frame, current, bundle_.revision);
         stage("frame_decode_preflight");
@@ -229,6 +229,7 @@ contracts::Observation MaaGateway::recognize(const contracts::FrameEnvelope &fra
             result.engine_status = MaaTaskerWait(tasker_.get(), result.engine_task_id);
             require(result.engine_status == MaaStatus_Succeeded, "RECO_NATIVE_FAILED");
         }
+        require(!integrity_failed_, "BUNDLE_INTEGRITY_INVALIDATED");
         result.error_stage = "recognition_detail";
         stage("native_recognition_including_custom_preflight");
         read_detail(tasker_.get(), result);

@@ -11,6 +11,8 @@
 
 ## 当前阶段
 
+- 新增资源入口审计复现原生 Pipeline 模板/OCR 漏检成员变化：direct/Custom 拒绝时，原生节点仍继续。跨包同名模板、延后调用和既有 lease 负例通过；已写 Gateway 入口修正及提交后变化负例，尚待构建复验，见 `../next/docs/m3-integrity-entry-validation.md`。不改变资源成本和发现链阻断，不把修正前 M4 产物结果套到新源码。
+
 - 自动移动地图两轮定点修正后，检查点 `197f531` 的 6 方法/11 场景通过，组合条件/门禁/ROI 定点 3 方法通过；见 `../next/docs/m4-auto-map-validation.md`。另发现业务确认未检查帧龄，已补检查，流程 4 方法/5 场景与同产物 M2 102 方法通过，见 `../next/docs/m4-confirmation-freshness-validation.md`；其它 WVD 组合回归仍需验证。要塞八层陷阱专项检查点 `492322c` 状态 19 方法通过，完整流程正在确认修正后的产物上验证；见 `../next/docs/m4-fortress-trap-validation.md`。
 
 - 善恶选择与新版 profile 写回已接通，状态 18、流程 6 方法/13 场景、配置数据 11 方法通过；见 `../next/docs/m4-karma-validation.md`，实现检查点 `d5404bd`。纯规则、状态确认和存储 CAS 分层；保存失败不重发动作，未知后置保留门禁 Failed；不是完整任务/跨进程恢复通过。

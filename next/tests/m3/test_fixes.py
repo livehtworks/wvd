@@ -265,8 +265,45 @@ class FixTests(unittest.TestCase):
             self.assertEqual(case["handles_after"] - case["handles_before"], control["delta"] if index == 0 else 0, case)
 
     def test_integrity_snapshot(self):
-        folder = self.images("integrity")
-        result = self.execute(folder, {"mode": "integrity", "request": reco("target")}, {"Entry": {"action": "DoNothing"}})
+        self.check_integrity_recognition(False)
+
+    def test_integrity_delayed_ocr_uses_locked_models_and_rejects_membership_change(self):
+        self.check_integrity_recognition(True)
+
+    def check_integrity_recognition(self, ocr):
+        folder = self.images("integrity-ocr" if ocr else "integrity")
+        request = reco("target")
+        native_request = {"id": "sdk-target", "revision": "1", "image": "target.png", "threshold": .99,
+                          "roi": [0, 0, 900, 1600]}
+        nodes = {
+            "SdkEntry": {"next": ["SdkMatch"], "timeout": 500},
+            "SdkMatch": {"recognition": "TemplateMatch", "template": "target.png", "threshold": .99,
+                         "action": "Custom", "custom_action": "RecordReached"},
+            "CustomEntry": {"next": ["CustomMatch"], "timeout": 500},
+            "CustomMatch": {"recognition": "Custom", "custom_recognition": "WvdVision",
+                            "custom_recognition_param": request["parameters"], "roi": request["roi"],
+                            "action": "Custom", "custom_action": "RecordReached"},
+        }
+        protected = []
+        if ocr:
+            model_config = json.loads((ROOT / ".local/maafw.json").read_text(encoding="utf-8"))
+            model = folder / "bundle/model/ocr"
+            model.mkdir(parents=True)
+            for name in model_config["ocr_files"]:
+                shutil.copyfile(Path(model_config["ocr"]) / name, model / name)
+                protected.append("model/ocr/" + name)
+            for name in ("before", "after"):
+                image = cv2.imdecode(np.frombuffer((folder / (name + ".png")).read_bytes(), dtype=np.uint8), cv2.IMREAD_COLOR)
+                image[800:1200, 100:800] = 255
+                cv2.putText(image, "Pause", (280, 1000), cv2.FONT_HERSHEY_SIMPLEX, 3., (0, 0, 0), 5, cv2.LINE_AA)
+                (folder / (name + ".png")).write_bytes(cv2.imencode(".png", image)[1].tobytes())
+            native_request = {"id": "sdk-ocr", "revision": "1", "type": "ocr", "expected": ["Pause"],
+                              "roi": [100, 800, 700, 400]}
+            nodes["SdkMatch"] = {"recognition": "OCR", "expected": ["Pause"], "roi": [100, 800, 700, 400],
+                                 "action": "Custom", "custom_action": "RecordReached"}
+        result = self.execute(folder, {"mode": "integrity", "request": request,
+                                      "native_request": native_request, "protected_paths": protected}, nodes)
+        self.assertEqual(result["protected_files"], {name: True for name in protected})
         for key in ("write_blocked", "delete_blocked", "replace_blocked", "one_boundary", "author_change_ignored", "released_write_succeeded"):
             self.assertTrue(result[key], result)
         self.assertEqual(result["matched"], 0)
@@ -275,6 +312,15 @@ class FixTests(unittest.TestCase):
         self.assertEqual(result["reused_revision_error"], "BUNDLE_REVISION_REUSED")
         self.assertFalse(result["closed"]["active"])
         self.assertEqual(result["backend_calls"], 0)
+        self.assertEqual(result["delayed_sdk_direct"], 0)
+        self.assertEqual(result["delayed_offline"], 0)
+        for channel in ("sdk", "custom"):
+            self.assertEqual(result["delayed_" + channel + "_pipeline"]["reached"], 1)
+            changed = result[channel + "_pipeline_changed"]
+            self.assertEqual(changed["reached"], 0, changed)
+            self.assertIn("RESOURCE_NOT_IN_MANIFEST", changed["failures"] + [changed.get("error")])
+        self.assertEqual(result["sdk_member_change_error"], "RESOURCE_NOT_IN_MANIFEST")
+        self.assertEqual(result["offline_member_change_error"], "RESOURCE_NOT_IN_MANIFEST")
 
     def test_integrity_negative_matrix_and_failed_initialization_release(self):
         expected = {"valid": None, "writer-held": "INTEGRITY_SHARING_CONFLICT",
@@ -291,6 +337,41 @@ class FixTests(unittest.TestCase):
                 self.assertEqual(result["backend_calls"], 0)
                 if case == "directory-rename":
                     self.assertTrue(result["rename_blocked"])
+
+    def test_integrity_same_name_isolated_across_bundles_and_revisions(self):
+        for revision in ("fixes-fixture-1", "fixes-fixture-2"):
+            with self.subTest(revision=revision):
+                folder = self.images("cross-" + revision)
+                other = folder / "other-bundle"
+                shutil.copytree(folder / "bundle", other)
+                (other / "pipeline").mkdir()
+                (other / "pipeline/main.json").write_text("{}", encoding="utf-8")
+                # 原 before 含 target，after 含 post；第二包同名 target 的字节来自 post。
+                shutil.copyfile(other / "image/post.png", other / "image/target.png")
+                result = self.execute(folder, {"mode": "cross-bundle", "request": reco("target"),
+                    "native_request": {"id": "sdk-target", "revision": "1", "image": "target.png",
+                                       "threshold": .99, "roi": [0, 0, 900, 1600]},
+                    "other_bundle": str(other), "other_revision": revision,
+                    "other_files": [{"path": f.relative_to(other).as_posix(), "sha256": digest(f)}
+                                    for f in sorted(other.rglob("*")) if f.is_file()]}, {})
+                self.assertEqual(result["backend_calls"], 0)
+                self.assertEqual(len(result["observations"]), 6)
+                for observed in result["observations"]:
+                    expected = 0 if observed["bundle"] == observed["image"] else 1
+                    self.assertEqual([observed[key] for key in ("sdk", "custom", "offline")], [expected] * 3, observed)
+                    self.assertEqual(observed["errors"], ["", "", ""])
+
+    def test_integrity_native_pipeline_detects_change_after_submission(self):
+        folder = self.images("integrity-mid-call")
+        result = self.execute(folder, {"mode": "integrity-mid-call"}, {
+            "SdkEntry": {"next": ["SdkMatch"], "timeout": 500},
+            "SdkMatch": {"recognition": "TemplateMatch", "template": "target.png", "threshold": .99,
+                         "action": "Custom", "custom_action": "RecordReached"}})
+        self.assertTrue(result["mutated"])
+        self.assertTrue(result["gate_closed"])
+        self.assertEqual(result["reached"], 0)
+        self.assertEqual(result["backend_calls"], 0)
+        self.assertIn("RESOURCE_NOT_IN_MANIFEST", result["failures"])
 
 
 if __name__ == "__main__":

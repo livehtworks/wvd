@@ -79,6 +79,7 @@ class MaaGateway {
     static MaaBool action_callback(MaaContext *, MaaTaskId, const char *, const char *,
                                    const char *, MaaRecoId, const MaaRect *, void *) noexcept;
     static void event_callback(void *, const char *, const char *, void *) noexcept;
+    static void context_event_callback(void *, const char *, const char *, void *) noexcept;
     static MaaBool recognition_callback(MaaContext *, MaaTaskId, const char *, const char *,
                                         const char *, const MaaImageBuffer *, const MaaRect *,
                                         void *, MaaRect *, MaaStringBuffer *) noexcept;
@@ -102,6 +103,7 @@ class MaaGateway {
     std::optional<VerifiedInvocation> verified_invocation_;
     CallbackActivity activity_;
     std::atomic<int> depth_{};
+    std::atomic<bool> integrity_failed_{};
     Handle<MaaResource, MaaResourceDestroy> resource_{nullptr, MaaResourceDestroy};
     std::unique_ptr<GuardedController> controller_callbacks_;
     Handle<MaaController, MaaControllerDestroy> controller_{nullptr, MaaControllerDestroy};

@@ -88,7 +88,7 @@ void MaaGateway::initialize() {
                 MaaTaskerInited(tasker_.get()),
             "TASKER_INITIALIZATION_FAILED");
     sink_ = MaaTaskerAddSink(tasker_.get(), event_callback, this);
-    context_sink_ = MaaTaskerAddContextSink(tasker_.get(), event_callback, this);
+    context_sink_ = MaaTaskerAddContextSink(tasker_.get(), context_event_callback, this);
     initialized_ = true;
 }
 MaaBool MaaGateway::recognition_callback(MaaContext *, MaaTaskId, const char *, const char *name,
@@ -190,7 +190,8 @@ MaaBool MaaGateway::recognition_callback(MaaContext *, MaaTaskId, const char *, 
     }
 }
 std::int64_t MaaGateway::post(const std::string &entry) {
-    require(initialized_ && !hooks_.cancelled(), "SESSION_NOT_RUNNING");
+    require(initialized_ && !hooks_.cancelled() && !integrity_failed_, "SESSION_NOT_RUNNING");
+    verify_bundle(bundle_);
     auto id = MaaTaskerPostTask(tasker_.get(), entry.c_str(), "{}");
     require(id != MaaInvalidId, "TASK_POST_FAILED");
     return id;
@@ -271,7 +272,7 @@ MaaBool MaaGateway::action_callback(MaaContext *native, MaaTaskId task, const ch
                           {{"node", node}, {"task_id", task}, {"depth", context.depth()}});
         auto action = self.actions_.find(custom);
         require(action != self.actions_.end(), "CUSTOM_ACTION_NOT_FOUND");
-        if (self.hooks_.cancelled())
+        if (self.hooks_.cancelled() || self.integrity_failed_)
             return false;
         auto ok = action->second(context, nlohmann::json::parse(parameters));
         // 子调用返回 false 的语义由 run_child 的真实 TaskDetail 判定，不能抢先写泛化错误。
@@ -301,6 +302,45 @@ void MaaGateway::event_callback(void *, const char *message, const char *payload
     } catch (...) {
         try {
             self.hooks_.failure("EVENT_CALLBACK_EXCEPTION");
+        } catch (...) {
+        }
+    }
+}
+void MaaGateway::context_event_callback(void *handle, const char *message, const char *payload,
+                                        void *pointer) noexcept {
+    auto &self = *static_cast<MaaGateway *>(pointer);
+    CallbackScope scope(self.activity_);
+    try {
+        if (std::string_view(message) == "Node.Recognition.Starting") {
+            // Context sink 的 handle 才是 MaaContext；不能把 Tasker sink 的 handle 强转。
+            require(handle != nullptr, "PIPELINE_CONTEXT_MISSING");
+            const auto data = nlohmann::json::parse(payload);
+            auto node = string_buffer();
+            require(MaaContextGetNodeData(static_cast<MaaContext *>(handle),
+                        data.at("name").get<std::string>().c_str(), node.get()),
+                    "PIPELINE_NODE_DATA_UNAVAILABLE");
+            const auto definition = nlohmann::json::parse(MaaStringBufferGet(node.get()));
+            const auto type = definition.at("recognition").at("type").get<std::string>();
+            // Custom 自行消费精确绑定的本次凭据；DirectHit 不读取图像资源。
+            // SDK 自带识别没有 Custom 回调，必须在这里检查，不能只验证任务提交时刻。
+            if (type != "Custom" && type != "DirectHit")
+                verify_bundle(self.bundle_);
+        }
+        event_callback(handle, message, payload, pointer);
+    } catch (const std::exception &e) {
+        self.integrity_failed_ = true;
+        if (self.gate_)
+            self.gate_->close();
+        try {
+            self.hooks_.failure(e.what());
+        } catch (...) {
+        }
+    } catch (...) {
+        self.integrity_failed_ = true;
+        if (self.gate_)
+            self.gate_->close();
+        try {
+            self.hooks_.failure("PIPELINE_INTEGRITY_EXCEPTION");
         } catch (...) {
         }
     }
@@ -371,7 +411,7 @@ bool MaaGateway::controller_action(const contracts::Command &c) {
     return id != MaaInvalidId && MaaControllerWait(controller_.get(), id) == MaaStatus_Succeeded;
 }
 int Context::depth() const { return gateway_.depth_.load(); }
-bool Context::cancelled() const { return gateway_.hooks_.cancelled(); }
+bool Context::cancelled() const { return gateway_.hooks_.cancelled() || gateway_.integrity_failed_; }
 contracts::FrameEnvelope Context::capture() { return gateway_.capture(); }
 contracts::Observation Context::recognize(const contracts::FrameEnvelope &frame,
                                           const RecognitionRequest &request) {
@@ -382,6 +422,8 @@ bool Context::current_observation(const contracts::Observation &observation) con
 }
 ChildResult Context::run_child(const std::string &entry, const nlohmann::json &overrides,
                                bool clone, const std::vector<std::string> &reset_hit_counts) {
+    require(!cancelled(), "SESSION_CANCELLED");
+    verify_bundle(gateway_.bundle_);
     storage::validate_bundle_references(gateway_.bundle_, overrides);
     struct Depth {
         std::atomic<int> &depth;
