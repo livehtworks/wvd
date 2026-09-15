@@ -69,6 +69,15 @@ class StateTests(unittest.TestCase):
         self.assertEqual(result["backend_inputs"], 0)
         return result
 
+    def test_repel_forces_counts_observed_battles_and_preserves_intents_across_units(self):
+        state = self.run_case("repel-forces-contract", repel_forces_contract=True)["repel_forces_contract"]
+        self.assertEqual(state["repel_forces"]["completed_cycles"], 2)
+        self.assertEqual(state["repel_forces"]["confirmed_battles"], 8)
+        self.assertEqual(state["combats"], 8)
+        self.assertEqual(state["inn_rests"], 2)
+        self.assertFalse(state["repel_forces"]["active"])
+        self.assertFalse(state["repel_forces"]["pending"])
+
     def test_steel_trial_keeps_pending_route_and_original_rest_interval(self):
         state = self.run_case("steel-trial-contract", steel_trial_contract=True)["steel_trial_contract"]
         self.assertEqual(state["steel_trial"]["completed_cycles"], 3)

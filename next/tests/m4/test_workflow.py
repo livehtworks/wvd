@@ -35,7 +35,7 @@ class WorkflowTests(unittest.TestCase):
         folder = self.root / name
         bundle = folder / "bundle"
         (bundle / "image").mkdir(parents=True)
-        resource_kind = "dungeon-route" if options.get("workflow") == "fortress-trap" else "iteration" if options.get("workflow") in ("giant", "dark-light", "mining", "manual-separation", "scorpion", "fishing-cycle", "jier", "golden-chest", "sandman", "gold-income", "bull-cave", "steel-trial") else options.get("workflow")
+        resource_kind = "dungeon-route" if options.get("workflow") == "fortress-trap" else "iteration" if options.get("workflow") in ("giant", "dark-light", "mining", "manual-separation", "scorpion", "fishing-cycle", "jier", "golden-chest", "sandman", "gold-income", "bull-cave", "steel-trial", "repel-forces", "fordraig", "cave-of-separation") else options.get("workflow")
         if resource_kind in ("bounty-visit", "featured-request", "sleep-batch", "fishing-cast", "fishing-reward", "fishing-round", "fishing-seek"): resource_kind = "common"
         names = ["worldmapflag", "City_RoyalCityLuknalia", "Inn", "Stay", "Economy", "royalsuite", "OK"]
         if resource_kind in ("departure", "iteration"):
@@ -51,7 +51,7 @@ class WorkflowTests(unittest.TestCase):
                       "RiseAgain", "supportSkillCheck", "notenoughsp", "notenoughmp", "next", "combatTarget", "combatSpd", "combatSpd_DHI"]
             names += [f"spellskill/skillLvl/{prefix}{level}" for prefix in ("lv", "s_lv") for level in range(1, 10)]
         if resource_kind in ("map", "map-confirm", "state-route", "dungeon-route", "iteration"):
-            names += ["mapFlag", "dungFlag", "chest", "chestFlag", "chestOpening", "whowillopenit",
+            names += ["cursedWheel_timeLeap", "mapFlag", "dungFlag", "chest", "chestFlag", "chestOpening", "whowillopenit",
                       "AutoMove", "EdgeOfTown", "combatActive", "combatActive_2", "combatActive_3", "combatActive_4",
                       "cursor_0", "cursor_1", "cursor_2", "cursor_3", "stair_up", "stair_floor", "harken",
                       "returnText", "returntoTown", "openworldmap"]
@@ -175,10 +175,11 @@ class WorkflowTests(unittest.TestCase):
                           {"path": p.relative_to(bundle).as_posix(), "sha256": digest(p)}
                           for p in sorted(bundle.rglob("*.png"))])
         config.update(options)
-        if options.get("workflow") == "steel-trial":
+        if options.get("workflow") in ("steel-trial", "repel-forces"):
             # 固定源码存在case，基础目录没有此ID。隔离扩展只提供类型，不伪造路线参数。
             extension = folder / "extension-quests.json"
-            extension.write_text(json.dumps({"steeltrail": {"_TYPE": "quest"}}), encoding="utf-8")
+            extension_id = "steeltrail" if options["workflow"] == "steel-trial" else "repelEnemyForces"
+            extension.write_text(json.dumps({extension_id: {"_TYPE": "quest"}}), encoding="utf-8")
             config["quest_catalog"] = str(extension)
         if "mod_images" in options:
             mod = folder / "private-mod"
@@ -219,6 +220,8 @@ class WorkflowTests(unittest.TestCase):
                                         "golden-chest": (route_budget + 740) * 2, "sandman": (route_budget + 200) * 2, "gold-income": 1520, "featured-request": 260,
                                         "bull-cave": (route_budget + 400) * (3 if options.get("profile", {}).get("ACTIVE_REST") else 2), "causality": 320,
                                         "steel-trial": (route_budget + 500) * options.get("normal_units", 1),
+                                        "repel-forces": (route_budget + 420) * (max(1, options.get("profile", {}).get("REST_INTERVEL", 1)) + 2),
+                                        "fordraig": 1820 * 10, "cave-of-separation": 1820 * 6,
                                         "scorpion": (route_budget + 500) * (4 if options.get("hands") else 3), "city-travel": 140, "sleep-batch": 1620 * options.get("normal_units", 1), "bounty-visit": 200 * options.get("normal_units", 1), "manual-separation": 3620, "time-leap": 500 if options.get("causality") else 200, "mining": mining_watchdog, "common": 140, "iteration": (route_budget + 380) * options.get("normal_units", 1)}.get(options.get("workflow"), 90))
         self.assertEqual(digest(exe), before_hash)
         (folder / "execution.json").write_text(json.dumps({"exe_sha256": before_hash, "exit": result.returncode}), encoding="utf-8")
@@ -2328,10 +2331,78 @@ class WorkflowTests(unittest.TestCase):
                 self.assertFalse(r["mismatch"])
                 self.assertEqual(r["snapshot"]["sessions"][-1]["reason"], "POSTCONDITION_TIMEOUT")
 
+    def repel_forces_options(self, **extra):
+        profile = extra.pop("profile", {})
+        profile.update(DEFAULT_OVERALL_STRATEGY="全自动战斗", STRATEGY=[], REST_INTERVEL=1)
+        options = self.scorpion_options(profile=profile, **extra)
+        options["workflow"] = "repel-forces"
+        options["extra_images"] += ["7thDist", "icanstillgo", "letswithdraw", "leaveDung"]
+        return options
+
+    def repel_forces_scenario(self):
+        frames, commands = self.inn_sequence()
+        frames[-1] = {"Inn": (400, 700), "TradeWaterway": (300, 800)}
+        events = []
+        def advance(command, page):
+            commands.append(command); frames.append(page)
+        def click(x, y, page): advance(dict(kind=0, x=x, y=y), page)
+        click(320, 812, {"7thDist": (400, 700)})
+        click(420, 712, {"dungFlag": (50, 150)})
+        page = {"mapFlag": (100, 100)}
+        click(777, 150, page)
+        def point(x, y, upper):
+            swipe = dict(kind=1, x=100, y=250 if upper else 1200, x2=700, y2=1200 if upper else 250, duration=400)
+            advance(swipe.copy(), page)
+            click(x, y, page)
+            click(136, 1431, {"dungFlag": (50, 150)})
+            reached = {**page, "cursor_0": (x-20, y-12)}
+            click(777, 150, reached)
+            advance(swipe.copy(), reached)
+        point(559, 599, False); point(186, 813, False)
+        prompt = {"icanstillgo": (300, 700), "letswithdraw": (400, 900)}
+        click(1, 1, prompt)
+        for _ in range(2):
+            click(320, 712, self.turn_screen(**{"spellskill/CombatAutoDisable": (800, 1070)}))
+            click(850, 1100, self.turn_screen(**{"spellskill/CombatAutoEnable": (800, 1070)}))
+            # 先真实确认Auto，再由“该输入之后经过四秒”的独立事件结束动画。
+            # 重复capture不改变剧情；双战各自必须产生对应的Auto输入。
+            frames.append(prompt)
+            events.append(dict(after_input=len(commands), delay_ms=4000, frame=len(frames)-1))
+        click(420, 912, {"dungFlag": (50, 150)})
+        click(777, 150, page)
+        point(612, 448, True)
+        click(1, 1, {"returnText": (400, 700)})
+        click(420, 712, {"Inn": (400, 700)})
+        return frames, commands, events
+
+    def test_repel_forces_full_two_battles_then_withdraw_and_return(self):
+        frames, commands, events = self.repel_forces_scenario()
+        r = self.execute("repel-forces-full", frames, commands, time_events=events, **self.repel_forces_options())
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 32)
+        self.assertEqual(r["time_event_count"], 2)
+        self.assertFalse(r["mismatch"], r.get("mismatch_detail"))
+        self.assertEqual(len(r["snapshot"]["sessions"]), 3)
+        self.assertEqual(r["snapshot"]["business"]["repel_forces"]["completed_cycles"], 1)
+        self.assertEqual(r["snapshot"]["business"]["combats"], 2)
+        self.assertEqual(r["snapshot"]["business"]["inn_rests"], 1)
+
+    def test_repel_forces_stop_or_rejection_preserves_first_battle_intent(self):
+        for stop in (False, True):
+            frames, commands, _ = self.repel_forces_scenario()
+            commands[19] = dict(commands[19], reject=not stop)
+            r = self.execute("repel-forces-stop-" + str(stop), frames[:21], commands[:20],
+                **self.repel_forces_options(**({"stop_after_calls": 20} if stop else {})))
+            self.assertEqual(r["snapshot"]["state"], "UserStopped" if stop else "Failed", r)
+            self.assertEqual(r["backend_calls"], 20)
+            self.assertFalse(r["mismatch"])
+            self.assertTrue(r["snapshot"]["business"]["repel_forces"]["pending"])
+            self.assertEqual(r["snapshot"]["business"]["repel_forces"]["confirmed_battles"], 0)
+
     def steel_trial_options(self, **extra):
         options = self.scorpion_options(**extra)
         options["workflow"] = "steel-trial"
-        options["extra_images"] += ["gradeexam", "Steel", "ready", "noneed", "quit"]
+        options["extra_images"] += ["gradeexam", "Steel", "ready", "noneed", "quit", "bondmate_close"]
         return options
 
     def steel_trial_scenario(self):
@@ -2543,6 +2614,7 @@ class WorkflowTests(unittest.TestCase):
             reached = {**page, "cursor_0": (x - 20, y - 12)}
             click(777, 150, reached)
             advance(swipe.copy(), reached)
+        # 未到达时图标中心仍和模板相同；中心被光标覆盖才表示已到达，不能提前合成。
         gate = {**page, "harken2": (400, 700)}
         advance(swipe.copy(), gate)
         click(420, 712, gate)
@@ -2561,7 +2633,8 @@ class WorkflowTests(unittest.TestCase):
 
     def test_sandman_without_bondmate_finishes_visit_without_rest_or_leap(self):
         frames, commands = self.sandman_scenario(False)
-        r = self.execute("sandman-no-bond", frames, commands, **self.sandman_options())
+        r = self.execute("sandman-no-bond", frames, commands,
+            **self.sandman_options())
         self.assertEqual(r["snapshot"]["state"], "Completed", r)
         self.assertEqual(r["backend_calls"], 18)
         self.assertFalse(r["mismatch"])
@@ -2570,7 +2643,8 @@ class WorkflowTests(unittest.TestCase):
 
     def test_sandman_bondmate_route_two_rests_and_ordered_leaps(self):
         frames, commands = self.sandman_scenario(True)
-        r = self.execute("sandman-bond", frames, commands, **self.sandman_options())
+        r = self.execute("sandman-bond", frames, commands,
+            **self.sandman_options())
         self.assertEqual(r["snapshot"]["state"], "Completed", r)
         self.assertEqual(r["backend_calls"], 38)
         self.assertFalse(r["mismatch"])

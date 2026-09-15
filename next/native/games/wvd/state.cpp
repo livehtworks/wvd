@@ -1,13 +1,15 @@
 #include "state.hpp"
+#include "tasks/task_handoff.hpp"
 #include <algorithm>
 
 namespace wvd::games {
 using J = nlohmann::json;
 WvdRunState::WvdRunState(J profile, const contracts::StateCreationContext &creation,
-                       std::unique_ptr<KarmaCommitPort> karma_writer)
+                       std::unique_ptr<KarmaCommitPort> karma_writer, J handoff_source)
     : profile_(std::move(profile)),
       identity_(creation.instance_id + ":" + std::to_string(creation.run_id)),
-      clock_(creation.clock), strategy_(profile_), karma_writer_(std::move(karma_writer)),
+      clock_(creation.clock), handoff_source_(std::move(handoff_source)),
+      strategy_(profile_), karma_writer_(std::move(karma_writer)),
       karma_value_(profile_.at("KARMA_ADJUST").get<std::string>()) {
     if (!clock_ || creation.instance_id.empty() || !creation.run_id)
         throw std::runtime_error("WVD_STATE_CONTEXT_INVALID");
@@ -15,7 +17,37 @@ WvdRunState::WvdRunState(J profile, const contracts::StateCreationContext &creat
         !profile_.at("MAX_CRASH_LIMIT").is_number_integer())
         throw std::runtime_error("WVD_STATE_PROFILE_INVALID");
     started_ = clock_->now();
+    if (!handoff_source_.is_null())
+        tasks::validate_handoff_source(handoff_source_, profile_);
     strategy_.reload(task_step_);
+}
+bool WvdRunState::observe_unknown_leap(std::uint64_t samples, std::uint64_t generation,
+                                      std::uint64_t frame_id) {
+    if (!generation || generation != generation_ || !frame_id)
+        throw std::runtime_error("LEAP_OBSERVATION_STALE");
+    if (samples < 5)
+        return false;
+    if (!handoff_intent_.is_null())
+        return false;
+    if (tasks::handoff_has_unconfirmed_effect(summarize()))
+        throw std::runtime_error("LEAP_SIDE_EFFECT_UNCONFIRMED");
+    const bool money = profile_.at("ACTIVE_BEG_MONEY").get<bool>();
+    if (money && handoff_source_.is_null())
+        throw std::runtime_error("HANDOFF_SOURCE_REQUIRED");
+    ++leap_sequence_;
+    // 此时只记录意图，不能生成request_id或调用start；旧Run仍拥有设备和结果。
+    handoff_intent_ = {{"kind", money ? "turn_to_7000G" : "wait_7300"},
+        {"intent_id", identity_ + ":leap:" + std::to_string(leap_sequence_)},
+        {"origin", "legacy/src/script.py:2238"}, {"run_identity", identity_},
+        {"generation", generation}, {"frame_id", frame_id}, {"unknown_samples", samples}};
+    if (!money)
+        leap_wait_.begin(clock_->now());
+    return true;
+}
+bool WvdRunState::poll_leap_wait() {
+    if (!handoff_intent_.is_object() || handoff_intent_.at("kind") != "wait_7300")
+        throw std::runtime_error("LEAP_WAIT_INTENT_REQUIRED");
+    return leap_wait_.poll(clock_->now(), generation_);
 }
 bool WvdRunState::setting_is(const char *name, const char *zh, const char *en) const {
     return profile_.at(name) == (profile_.at("LANGUAGE") == "en_US" ? en : zh);
@@ -43,6 +75,16 @@ void WvdRunState::on_segment(contracts::SegmentBoundary boundary, std::uint64_t 
                              std::size_t unit) {
     if (generation <= generation_)
         throw std::runtime_error("WVD_STATE_GENERATION_REUSED");
+    if (boundary == contracts::SegmentBoundary::Continuation) {
+        // 终点后unit_matches已经指向下一段；只核对上一段的真实业务回执。
+        // 根检查点和真静止仍由同一个RunCoordinator证明，恢复不能冒充正常续段。
+        if (fordraig_.sequence() && (unit != unit_index_ + 1 ||
+            !fordraig_.continuation_ready(unit_index_)))
+            throw std::runtime_error("FORDRAIG_CONTINUATION_NOT_CONFIRMED");
+        if (cave_of_separation_.sequence() && (unit != unit_index_ + 1 ||
+            !cave_of_separation_.segment_complete(unit_index_)))
+            throw std::runtime_error("COS_CONTINUATION_NOT_CONFIRMED");
+    }
     if (boundary == contracts::SegmentBoundary::Continuation && sleep_.completed() != 0) {
         if (unit != unit_index_ + 1 || !sleep_.batch_complete(unit_index_) || inn_payment_pending_)
             throw std::runtime_error("SLEEP_CONTINUATION_NOT_CONFIRMED");
@@ -300,6 +342,15 @@ std::string WvdRunState::confirmation_id(const std::string &operation, const std
         id += ":bull:" + std::to_string(bull_cave_.sequence(event == "bull_cave_started" || event == "bull_cave_started_rest"));
     if (event.starts_with("steel_trial_"))
         id += ":steel:" + std::to_string(steel_trial_.sequence(event == "steel_trial_started"));
+    if (event.starts_with("fordraig_"))
+        id += ":fordraig:" + std::to_string(fordraig_.sequence(event == "fordraig_started"));
+    if (event.starts_with("cos_"))
+        id += ":cos:" + std::to_string(cave_of_separation_.sequence(event == "cos_started"));
+    if (event.starts_with("repel_")) {
+        id += ":repel:" + std::to_string(repel_forces_.sequence(event == "repel_started"));
+        if (event == "repel_battle_prepared" || event == "repel_battle_observed" || event == "repel_battle_completed")
+            id += ":battle:" + std::to_string(repel_forces_.fight_sequence(event == "repel_battle_prepared"));
+    }
     if (event == "fishing_reward_prepared" || event == "fishing_reward_completed")
         id += ":fishing:" + std::to_string(fishing_.sequence(event == "fishing_reward_prepared"));
     if (event == "fishing_wait_started" || event == "fishing_wait_failed")
@@ -344,7 +395,106 @@ bool WvdRunState::confirm_event(const std::string &operation, const std::string 
         throw std::runtime_error("BUSINESS_CONFIRMATION_CAPACITY");
     if (expected_step && *expected_step != task_step_)
         throw std::runtime_error("BUSINESS_TASK_STEP_MISMATCH");
-    if (event == "steel_trial_started") {
+    if (event == "fordraig_started" || event == "cos_started") {
+        const auto visit = featured_visit_.summary();
+        if (pending_combat_ || pending_chest_ || visit.at("active").get<bool>() ||
+            tasks::handoff_has_unconfirmed_effect(summarize()))
+            throw std::runtime_error("EXTENSION_SIDE_EFFECT_PENDING");
+        const auto now = clock_->now();
+        if (lap_started_ && now < *lap_started_)
+            throw std::runtime_error("WVD_CLOCK_MOVED_BACKWARD");
+        if (event == "fordraig_started") {
+            if (cave_of_separation_.summary(unit_index_).at("active").get<bool>())
+                throw std::runtime_error("EXTENSION_CYCLE_CONFLICT");
+            fordraig_.start(unit_index_, visit.at("visits_completed").get<std::size_t>());
+        } else {
+            if (fordraig_.summary(unit_index_).at("active").get<bool>())
+                throw std::runtime_error("EXTENSION_CYCLE_CONFLICT");
+            if (cave_of_separation_.sequence() && (!unit_index_ ||
+                !cave_of_separation_.segment_complete(unit_index_ - 1)))
+                throw std::runtime_error("COS_NEXT_CYCLE_UNIT_INVALID");
+            cave_of_separation_.start(unit_index_);
+        }
+        if (lap_started_) total_seconds_ += std::chrono::duration<double>(now - *lap_started_).count();
+        lap_started_ = now; ++dungeons_;
+        inn_rest_completed_ = false; ++supply_cycle_;
+    } else if (event == "fordraig_leap_prepared" || event == "fordraig_trap1_prepared" ||
+               event == "fordraig_trap2_prepared") {
+        if (inn_payment_pending_ || special_dialogue_pending_ || pending_combat_ || pending_chest_)
+            throw std::runtime_error("FORDRAIG_SIDE_EFFECT_PENDING");
+        using Phase = quests::FordraigCycle::Phase;
+        fordraig_.prepare(event == "fordraig_leap_prepared" ? Phase::Leap :
+            event == "fordraig_trap1_prepared" ? Phase::Trap1Push : Phase::Trap2Push, unit_index_);
+    } else if (event.starts_with("fordraig_")) {
+        using Phase = quests::FordraigCycle::Phase;
+        static const std::map<std::string, Phase> events{
+            {"fordraig_leaped", Phase::Leap}, {"fordraig_requested", Phase::Request},
+            {"fordraig_entered", Phase::Enter}, {"fordraig_trap1_routed", Phase::Trap1Route},
+            {"fordraig_trap1_completed", Phase::Trap1Push}, {"fordraig_trap2_routed", Phase::Trap2Route},
+            {"fordraig_trap2_completed", Phase::Trap2Push}, {"fordraig_trap3_completed", Phase::Trap3},
+            {"fordraig_preboss_completed", Phase::PreBoss}, {"fordraig_boss_completed", Phase::Boss},
+            {"fordraig_exited", Phase::Exit}, {"fordraig_completed", Phase::Return}};
+        const auto phase = events.find(event);
+        if (phase == events.end()) throw std::runtime_error("FORDRAIG_EVENT_INVALID");
+        const auto visit = featured_visit_.summary();
+        if (inn_payment_pending_ || special_dialogue_pending_ || pending_combat_ || pending_chest_ ||
+            visit.at("active").get<bool>() || visit.at("pending").get<bool>())
+            throw std::runtime_error("FORDRAIG_SIDE_EFFECT_PENDING");
+        fordraig_.advance(phase->second, unit_index_, visit.at("visits_completed").get<std::size_t>(), task_step_);
+    } else if (event == "cos_leap_prepared" || event == "cos_request_observed" ||
+               event == "cos_request_prepared" || event == "cos_guild_prepared") {
+        if (inn_payment_pending_ || special_dialogue_pending_ || pending_combat_ || pending_chest_)
+            throw std::runtime_error("COS_SIDE_EFFECT_PENDING");
+        if (event == "cos_leap_prepared") cave_of_separation_.prepare_leap(unit_index_);
+        else if (event == "cos_request_observed") cave_of_separation_.request_observed(unit_index_);
+        else if (event == "cos_request_prepared") cave_of_separation_.prepare_request(unit_index_);
+        else cave_of_separation_.prepare_guild(unit_index_);
+    } else if (event.starts_with("cos_")) {
+        using Phase = quests::CaveOfSeparation::Phase;
+        static const std::map<std::string, Phase> events{
+            {"cos_leaped", Phase::Leap}, {"cos_fortress", Phase::Fortress}, {"cos_royal", Phase::RoyalCity},
+            {"cos_requested", Phase::Request}, {"cos_rested", Phase::Rest}, {"cos_entered", Phase::Enter},
+            {"cos_b1_completed", Phase::B1}, {"cos_ena_confirmed", Phase::B2},
+            {"cos_request_confirmed", Phase::B3}, {"cos_back_completed", Phase::Back},
+            {"cos_guild_entered", Phase::ReturnGuild}, {"cos_completed", Phase::ReturnInn}};
+        const auto phase = events.find(event);
+        if (phase == events.end()) throw std::runtime_error("COS_EVENT_INVALID");
+        const auto visit = featured_visit_.summary();
+        if (inn_payment_pending_ || special_dialogue_pending_ || pending_combat_ || pending_chest_ ||
+            visit.at("active").get<bool>() || visit.at("pending").get<bool>())
+            throw std::runtime_error("COS_SIDE_EFFECT_PENDING");
+        // 停点图片只由这两个已注册的新帧事件确定，不接受可编辑参数伪造停点。
+        const std::string_view stop = event == "cos_ena_confirmed" ? "COS/EnaTheAdventurer" :
+            event == "cos_request_confirmed" ? "COS/requestwasfor" : "";
+        cave_of_separation_.advance(phase->second, unit_index_, task_step_,
+            inn_rest_completed_ && !inn_payment_pending_, stop);
+    } else if (event == "repel_started") {
+        if (inn_payment_pending_ || special_dialogue_pending_) throw std::runtime_error("REPEL_SIDE_EFFECT_PENDING");
+        repel_forces_.start(unit_index_, quests::RepelForces::rounds(profile_));
+        inn_rest_completed_ = false; ++supply_cycle_;
+    } else if (event == "repel_rested") {
+        repel_forces_.rested(unit_index_, inn_rest_completed_ && !inn_payment_pending_);
+    } else if (event == "repel_arrived") {
+        repel_forces_.arrived(unit_index_, task_step_);
+    } else if (event == "repel_battle_prepared") {
+        repel_forces_.prepare(unit_index_);
+        // 原专项每场显式ReloadStrategy，不受通用“每副本”配置影响。
+        prepared_.reset(); strategy_.reload(task_step_);
+    } else if (event == "repel_battle_observed") {
+        repel_forces_.observed(unit_index_); observe_combat();
+    } else if (event == "repel_battle_completed") {
+        if (!pending_combat_) throw std::runtime_error("REPEL_ENCOUNTER_NOT_OBSERVED");
+        repel_forces_.fought(unit_index_);
+        // 明确的战后对话也是这项任务的遭遇终点；复用计时结算，不伪造地下城识别。
+        resume_dungeon();
+    } else if (event == "repel_pair_completed") {
+        repel_forces_.withdrawn(unit_index_);
+    } else if (event == "repel_exited") {
+        repel_forces_.exited(unit_index_, task_step_);
+    } else if (event == "repel_completed") {
+        if (inn_payment_pending_ || special_dialogue_pending_) throw std::runtime_error("REPEL_SIDE_EFFECT_PENDING");
+        repel_forces_.complete(unit_index_);
+    } else if (event == "steel_trial_started") {
         if (inn_payment_pending_ || special_dialogue_pending_) throw std::runtime_error("STEEL_TRIAL_SIDE_EFFECT_PENDING");
         const auto interval = profile_.at("REST_INTERVEL").get<std::int64_t>();
         if (interval < 0) throw std::runtime_error("STEEL_TRIAL_REST_INTERVAL_INVALID");
@@ -729,6 +879,11 @@ bool WvdRunState::confirm_event(const std::string &operation, const std::string 
     else if (event == "game_restarted") {
         if (!lifecycle_recovery_active_)
             throw std::runtime_error("GAME_RESTART_NOT_REQUESTED");
+        const auto now = clock_->now();
+        if (leap_wait_.summary(now).at("active").get<bool>()) {
+            leap_wait_.restarted(now);
+            handoff_intent_ = nullptr;
+        }
         lifecycle_recovery_active_ = false;
     }
     else
@@ -753,16 +908,21 @@ J WvdRunState::summarize() const {
     const supply::SupplyFacts facts{dungeons_, met_encounter_, total_seconds_, last_bag_clear_};
     const bool ordinary = !inn_rest_completed_ && supply::ordinary_rest_due(profile_, facts);
     const bool party = supply::decide_rest(profile_, facts).reassemble;
+    auto strategy = strategy_.summary();
+    // Fordraig仅在非Boss阶段派生Auto；Boss保留原策略及已消耗次数，不写冻结profile。
+    strategy["automatic"] = fordraig_.force_automatic() || strategy.at("automatic").get<bool>();
     return {{"kind", "wvd"},
             {"state_revision", "1"},
             {"karma_value", karma_value_}, {"karma_pending", karma_choice_.has_value()},
             {"karma_ambush", karma_choice_ && karma_choice_->ambush},
             {"karma_sequence", karma_sequence_}, {"karma_effect", karma_effect_},
             {"run_identity", identity_},
+            {"handoff_source", handoff_source_}, {"handoff_intent", handoff_intent_},
+            {"leap_wait", leap_wait_.summary(clock_->now())},
             {"generation", generation_},
             {"unit_index", unit_index_},
             {"task_step", task_step_},
-            {"strategy", strategy_.summary()},
+            {"strategy", std::move(strategy)},
             {"has_prepared_skill", prepared_.has_value()},
             {"prepared_skill_index", prepared_ ? J(prepared_index_) : J(nullptr)},
             {"prepared_portrait", prepared_ ? prepared_portrait_ : ""},
@@ -786,6 +946,9 @@ J WvdRunState::summarize() const {
             {"gold_income", gold_income_.summary(unit_index_)},
             {"bull_cave", bull_cave_.summary(unit_index_)},
             {"steel_trial", steel_trial_.summary(unit_index_)},
+            {"repel_forces", repel_forces_.summary(unit_index_)},
+            {"fordraig", fordraig_.summary(unit_index_)},
+            {"cave_of_separation", cave_of_separation_.summary(unit_index_)},
             {"bounty_reveals", bounty_reveals_},
             {"sleep", sleep_.summary(unit_index_)},
             {"bounty_cycle", bounty_cycle_.summary(unit_index_, bounty_reports_)},

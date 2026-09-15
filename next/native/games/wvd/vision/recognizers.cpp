@@ -159,7 +159,12 @@ J layout(const cv::Mat &source) {
                      {"text_height", bounds.height}},
                     false);
 }
-using EvaluationMemo = std::map<std::string, J>;
+struct EvaluationMemo {
+    std::map<std::string, J> values;
+    // 语法树深度不等于正在并行。阻塞反证之后的纯子树也可同步分片，
+    // 但已经进入分片的工作项不能再启动嵌套并行。
+    bool in_parallel{};
+};
 bool pure_condition(const J &p, unsigned depth = 0) {
     if (depth > 8 || !p.is_object() || !p.contains("mode") || !p.at("mode").is_string())
         return false;
@@ -187,10 +192,10 @@ J evaluate_impl(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels, co
                 maafw::RecognitionCache &cache, unsigned depth, EvaluationMemo &memo) {
     check(depth <= 8, "WVD_CONDITION_DEPTH");
     const auto key = p.dump();
-    if (const auto found = memo.find(key); found != memo.end())
+    if (const auto found = memo.values.find(key); found != memo.values.end())
         return found->second;
     auto result = evaluate_uncached(bundle, pixels, p, bound, scope, cache, depth, memo);
-    memo.emplace(key, result);
+    memo.values.emplace(key, result);
     return result;
 }
 struct ProbeBatch {
@@ -210,6 +215,7 @@ ProbeBatch evaluate_batch(const maafw::Bundle &bundle, maafw::RecognitionPixels 
     ProbeBatch batch{std::vector<J>(probes.size()), std::vector<std::exception_ptr>(probes.size())};
     std::vector<maafw::RecognitionCache> workers(partitions);
     std::vector<EvaluationMemo> worker_memos(partitions, memo);
+    for (auto &worker : worker_memos) worker.in_parallel = true;
     // 只借用 OpenCV 的同步分片。每路模板索引和 memo 独占；没有线程/会话所有权转交。
     for (auto &worker : workers)
         for (const auto &[key, value] : cache.assets)
@@ -235,9 +241,9 @@ ProbeBatch evaluate_batch(const maafw::Bundle &bundle, maafw::RecognitionPixels 
     // 复用；否则后继反证会重做刚才的matchTemplate。只合并叶节点，不合并复合模式，
     // 避免其内部深度校验/时序状态被缓存绕过。异常不缓存，仍由消费顺序传播。
     for (const auto &worker : worker_memos)
-        for (const auto &[key, value] : worker)
+        for (const auto &[key, value] : worker.values)
             if (J::parse(key).value("mode", "") == "template")
-                memo.try_emplace(key, value);
+                memo.values.try_emplace(key, value);
     // 有序候选只消费优先级到达的结果/异常；all/any 调用者必须消费全部结果。
     return batch;
 }
@@ -266,6 +272,41 @@ J evaluate_uncached(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels
         check((explicit_roi & allowed_rect) == explicit_roi, "WVD_ROI_OUTSIDE_SCOPE");
     }
     auto mode = p.at("mode").get<std::string>();
+    if (mode == "task_stop") {
+        check(p.size() == 1, "WVD_TASK_STOP_PARAMETERS_INVALID");
+        const auto policy = recovery::dialogue_policy_from_name(bound.value("dialogue_task", ""));
+        for (const auto marker : recovery::dialogue_task_stops(policy)) {
+            const auto observed = evaluate_impl(bundle, pixels, {{"mode", "template"}, {"image", marker}},
+                bound, scope, cache, depth + 1, memo);
+            check(observed.at("outcome") != "Error", "WVD_TASK_STOP_RECOGNITION_ERROR");
+            if (observed.at("outcome") == "Hit") {
+                auto result = decision(true, allowed_rect, {{"stage", "task_stop"}, {"image", marker}, {"matched", observed}}, false);
+                // 停点只有观察权，不提供点击中心或固定坐标动作许可。
+                result["action_eligible"] = false;
+                return result;
+            }
+        }
+        return decision(false, {}, {{"stage", "no_task_stop"}}, false);
+    }
+    const bool stop_post = mode == "blocking_screen" || mode == "boot_post" || mode == "dialogue_post" ||
+        mode == "special_dialogue_post" || mode == "map_route_post" || mode == "auto_route_post";
+    const bool stop_excluded = mode == "boot_ready" || mode == "default_dialogue" || mode == "special_dialogue" ||
+        mode == "auto_route_moving" || mode == "movement_stopped" || mode == "reached" || mode == "through_stair";
+    if ((stop_post || stop_excluded) && !bound.value("dialogue_task", "").empty()) {
+        const auto policy = recovery::dialogue_policy_from_name(bound.at("dialogue_task").get<std::string>());
+        if (!recovery::dialogue_task_stops(policy).empty()) {
+            // 先消费本阶段停点，再扫描普通场景/选项。只有后置分类允许返回停点；
+            // 导航和对话的输入条件必须否定它，不能把停点当到达或已停止移动。
+            check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");
+            const auto stopped = evaluate_impl(bundle, pixels, {{"mode", "task_stop"}}, bound, scope, cache, depth + 1, memo);
+            check(stopped.at("outcome") != "Error", "WVD_TASK_STOP_RECOGNITION_ERROR");
+            if (stopped.at("outcome") == "Hit") {
+                if (mode == "movement_stopped") cache.assets.erase("movement.sample");
+                return decision(stop_post, stop_post ? allowed_rect : cv::Rect{},
+                    {{"stage", "task_stop"}, {"matched", stopped}}, false);
+            }
+        }
+    }
     if (!bound.value("dialogue_task", "").empty() &&
         (mode == "blocking_screen" || mode == "boot_ready" || mode == "boot_post" || mode == "dialogue_post")) {
         const auto special = evaluate_impl(bundle, pixels, {{"mode", "special_dialogue"}}, bound, scope, cache, depth + 1, memo);
@@ -632,9 +673,11 @@ J evaluate_uncached(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels
         return decision(false, {}, {{"stage", "unknown"}});
     }
     if (mode == "featured_request_accepted") {
-        check(!p.contains("roi") && !p.contains("preprocess") && p.value("image", "") == "LBC/request" &&
+        const auto target_image = p.value("image", "");
+        check(!p.contains("roi") && !p.contains("preprocess") &&
+            (target_image == "LBC/request" || target_image == "fordraig/RequestAccept") &&
             p.contains("accepted") && p.at("accepted").is_boolean(), "WVD_FEATURED_REQUEST_INVALID");
-        const auto target = evaluate_impl(bundle, pixels, {{"mode", "template"}, {"image", "LBC/request"}}, bound, scope, cache, depth + 1, memo);
+        const auto target = evaluate_impl(bundle, pixels, {{"mode", "template"}, {"image", target_image}}, bound, scope, cache, depth + 1, memo);
         check(target.at("outcome") != "Error", "WVD_FEATURED_RECOGNITION_ERROR");
         if (target.at("outcome") != "Hit") return decision(false, {}, {{"reason", "request_missing"}});
         const auto position = target.at("box").get<std::vector<int>>();
@@ -669,10 +712,15 @@ J evaluate_uncached(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels
             std::find(options.begin(), options.end(), p.at("selected").get<std::string>()) != options.end(), "WVD_DIALOGUE_OPTION_INVALID");
         J candidate;
         std::string selected;
-        for (const auto option : options) {
-            candidate = evaluate_impl(bundle, pixels, {{"mode", "template"}, {"image", option}}, bound, scope, cache, depth + 1, memo);
+        J probes = J::array();
+        for (const auto option : options) probes.push_back({{"mode", "template"}, {"image", option}});
+        // 专用选项最多三张，沿用默认对话的同步批处理；选择和Error优先级仍按原列表。
+        // 不把包含此批处理的复合模式加入外层并行白名单，避免嵌套并行退化。
+        const auto matches = evaluate_batch(bundle, pixels, probes, bound, scope, cache, depth, memo, 4);
+        for (std::size_t i = 0; i < options.size(); ++i) {
+            candidate = matches.at(i);
             check(candidate.at("outcome") != "Error", "WVD_DIALOGUE_RECOGNITION_ERROR");
-            if (candidate.at("outcome") == "Hit") { selected = option; break; }
+            if (candidate.at("outcome") == "Hit") { selected = options[i]; break; }
         }
         if (selected.empty()) return decision(false, {}, {{"reason", "no_special_option"}});
         if (p.contains("selected") && p.at("selected").get<std::string>() != selected)
@@ -765,7 +813,7 @@ J evaluate_uncached(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels
         bool all = true, any = false, action_eligible = true;
         J evidence = J::array();
         std::vector<J> evaluated(children.size());
-        const bool parallel_conditions = depth == 0 && children.size() > 1 && pure_condition(p);
+        const bool parallel_conditions = !memo.in_parallel && children.size() > 1 && pure_condition(p);
         if (parallel_conditions) {
             const auto batch = evaluate_batch(bundle, pixels, children, bound, scope, cache, depth, memo, 2);
             for (std::size_t i = 0; i < children.size(); ++i)

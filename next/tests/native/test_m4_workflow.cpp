@@ -40,6 +40,12 @@
 #include "games/wvd/tasks/gold_income.hpp"
 #include "games/wvd/tasks/bull_cave.hpp"
 #include "games/wvd/tasks/steel_trial.hpp"
+#include "games/wvd/tasks/repel_forces.hpp"
+#include "games/wvd/tasks/fordraig.hpp"
+#include "games/wvd/tasks/cave_of_separation.hpp"
+#include "games/wvd/tasks/task_handoff.hpp"
+#include "games/wvd/recovery/leap_wait.hpp"
+#include "games/wvd/quests/repel_forces.hpp"
 #include "games/wvd/vision/recognizers.hpp"
 #include "platform/windows/file_digest.hpp"
 #include <iostream>
@@ -55,7 +61,7 @@ class WorkflowDevice final : public OfflineDevice, public devices::LifecyclePort
     std::size_t action_cursor{};
     bool mismatch{};
     J mismatch_detail;
-    J time_event;
+    J time_events = J::array();
     std::optional<std::chrono::steady_clock::time_point> time_event_due;
     unsigned time_event_count{};
     bool allow_lifecycle{}, stale_lifecycle{}, wrong_instance{}, hold_lifecycle{}, ignore_lifecycle_cancel{};
@@ -136,7 +142,7 @@ class WorkflowDevice final : public OfflineDevice, public devices::LifecyclePort
         std::lock_guard lock(mutex);
         // 只按显式时钟事件推进动画；重复截图本身不能产生业务进展。
         if (time_event_due && std::chrono::steady_clock::now() >= *time_event_due) {
-            cursor = time_event.at("frame").get<std::size_t>();
+            cursor = time_events.at(time_event_count).at("frame").get<std::size_t>();
             time_event_due.reset();
             ++time_event_count;
         }
@@ -172,10 +178,10 @@ class WorkflowDevice final : public OfflineDevice, public devices::LifecyclePort
             ++cursor;
             ++action_cursor;
         }
-        if (time_event.is_object() && !time_event_count && !time_event_due &&
-            action_cursor == time_event.at("after_input").get<std::size_t>())
+        if (time_event_count < time_events.size() && !time_event_due &&
+            action_cursor == time_events.at(time_event_count).at("after_input").get<std::size_t>())
             time_event_due = std::chrono::steady_clock::now() +
-                             std::chrono::milliseconds(time_event.at("delay_ms").get<int>());
+                             std::chrono::milliseconds(time_events.at(time_event_count).at("delay_ms").get<int>());
         return true;
     }
 };
@@ -195,8 +201,45 @@ int main(int argc, char **argv) {
                 profile["MAX_CRASH_LIMIT"] = config.at("max_crashes");
         }
         J task_plan;
+        std::vector<games::tasks::CompiledWorkflow> stage_workflows;
         auto workflow = [&] {
             const auto kind = config.at("workflow").get<std::string>();
+            if (kind == "staged-publication") {
+                using C = games::tasks::PipelineCompiler;
+                const std::array<std::string, 3> images{"Inn", "Stay", "Economy"};
+                for (unsigned i = 0; i < 2; ++i) {
+                    C graph("fixture.stage" + std::to_string(i));
+                    graph.route("Entry", {"Click"});
+                    graph.click("Click", C::image(images[i]), C::image(images[i]), C::image(images[i + 1]), {"Confirm"});
+                    graph.confirm("Confirm", "observed", "dungeon_entered", C::image(images[i + 1]), {"Terminal"});
+                    stage_workflows.push_back(graph.finish());
+                }
+                return stage_workflows.front();
+            }
+            if (kind == "fordraig" || kind == "cave-of-separation") {
+                nlohmann::ordered_json source;
+                std::ifstream(maafw::path_from_utf8(config.at("quest_catalog"))) >> source;
+                games::WvdQuestCatalog catalog(source);
+                const auto &task = catalog.at(kind == "fordraig" ? "fordraig" : "CaveOfSeperation");
+                std::set<std::string> images;
+                for (const auto &file : config.at("files")) {
+                    const auto path = file.at("path").get<std::string>();
+                    if (path.starts_with("image/")) images.insert(path.substr(6));
+                }
+                if (kind == "fordraig") {
+                    task_plan = games::tasks::fordraig_plan(task).inspect();
+                    stage_workflows = games::tasks::fordraig_cycle(task, profile, images, config.value("allow_download", true));
+                } else {
+                    task_plan = J::array();
+                    for (unsigned i = 0; i < games::quests::CaveOfSeparation::segments_per_cycle; ++i) {
+                        const auto segment = static_cast<games::tasks::CaveOfSeparationSegment>(i);
+                        task_plan.push_back(games::tasks::cave_of_separation_plan(task, segment).inspect());
+                        stage_workflows.push_back(games::tasks::cave_of_separation_segment(task, profile, images,
+                            segment, config.value("allow_download", true)));
+                    }
+                }
+                return stage_workflows.front();
+            }
             if (kind == "city")
                 return games::navigation::enter_city(config.at("city"));
             if (kind == "fishing-cast")
@@ -252,11 +295,11 @@ int main(int argc, char **argv) {
             if (kind == "common")
                 return games::recovery::clear_common_screens(config.value("allow_download", true),
                     config.value("golden_dialogue", false) ? games::recovery::DialoguePolicy::GoldenChest : config.value("jier_dialogue", false) ? games::recovery::DialoguePolicy::Jier : games::recovery::DialoguePolicy::Default);
-            if (kind == "steel-trial" || kind == "fortress-trap" || kind == "giant" || kind == "dark-light" || kind == "mining" || kind == "manual-separation" || kind == "scorpion" || kind == "fishing-cycle" || kind == "jier" || kind == "golden-chest" || kind == "sandman" || kind == "gold-income" || kind == "bull-cave") {
+            if (kind == "repel-forces" || kind == "steel-trial" || kind == "fortress-trap" || kind == "giant" || kind == "dark-light" || kind == "mining" || kind == "manual-separation" || kind == "scorpion" || kind == "fishing-cycle" || kind == "jier" || kind == "golden-chest" || kind == "sandman" || kind == "gold-income" || kind == "bull-cave") {
                 nlohmann::ordered_json source;
                 std::ifstream(maafw::path_from_utf8(config.at("quest_catalog"))) >> source;
                 games::WvdQuestCatalog catalog(source);
-                const auto &task = catalog.at(kind == "steel-trial" ? "steeltrail" : kind == "bull-cave" ? "LBC-oneGorgon" : kind == "gold-income" ? "7000G" : kind == "sandman" ? "sandman" : kind == "golden-chest" ? "SSC-goldenchest" : kind == "jier" ? "jier" : kind == "fishing-cycle" ? (config.value("far", false) ? "fishing2" : "fishing") : kind == "scorpion" ? (config.value("hands", false) ? "Scorpionesses_plus_6_hands" : "Scorpionesses") : kind == "manual-separation" ? "manualSepDemon" : kind == "mining" ? "FFXI-Org" : kind == "dark-light" ? "darkLight" : kind == "giant" ? "gaintKiller" : "fortress-B8F_trap");
+                const auto &task = catalog.at(kind == "repel-forces" ? "repelEnemyForces" : kind == "steel-trial" ? "steeltrail" : kind == "bull-cave" ? "LBC-oneGorgon" : kind == "gold-income" ? "7000G" : kind == "sandman" ? "sandman" : kind == "golden-chest" ? "SSC-goldenchest" : kind == "jier" ? "jier" : kind == "fishing-cycle" ? (config.value("far", false) ? "fishing2" : "fishing") : kind == "scorpion" ? (config.value("hands", false) ? "Scorpionesses_plus_6_hands" : "Scorpionesses") : kind == "manual-separation" ? "manualSepDemon" : kind == "mining" ? "FFXI-Org" : kind == "dark-light" ? "darkLight" : kind == "giant" ? "gaintKiller" : "fortress-B8F_trap");
                 std::set<std::string> images;
                 for (const auto &file : config.at("files")) {
                     const auto path = file.at("path").get<std::string>();
@@ -264,6 +307,10 @@ int main(int argc, char **argv) {
                         images.insert(path.substr(6));
                 }
                 if (kind == "gold-income") return games::tasks::gold_income_cycle(task, config.value("allow_download", true));
+                if (kind == "repel-forces") {
+                    task_plan = games::tasks::repel_forces_plan(task).inspect();
+                    return games::tasks::repel_forces_cycle(task, profile, images, config.value("allow_download", true));
+                }
                 if (kind == "steel-trial") {
                     task_plan = games::tasks::steel_trial_plan(task).inspect();
                     return games::tasks::steel_trial_cycle(task, profile, images, config.value("allow_download", true));
@@ -309,14 +356,25 @@ int main(int argc, char **argv) {
                 return games::tasks::fortress_trap_iteration(task, profile, images, config.value("allow_download", true));
             }
             if (kind == "dungeon-route" || kind == "iteration") {
-                games::WvdQuestDefinition definition{"route-fixture", config.value("route_type", std::string("dungeon")),
-                    {{"_EOT", {{"press", "Dist", {1, 1}, 1}}}, {"_TARGETINFOLIST", config.at("route_targets")}}};
-                if (config.contains("floor"))
-                    definition.source["_FloorCheck"] = config.at("floor");
-                if (config.contains("entry_steps"))
-                    definition.source["_EOT"] = config.at("entry_steps");
-                if (config.contains("return_destination"))
-                    definition.source["_RTT"] = config.at("return_destination");
+                auto definition = [&] {
+                    if (config.contains("catalog_task_id")) {
+                        for (const auto *field : {"route_targets", "entry_steps", "floor", "return_destination", "route_type"})
+                            require(!config.contains(field), "FIXTURE_CATALOG_OVERRIDE_FORBIDDEN");
+                        nlohmann::ordered_json source;
+                        std::ifstream(maafw::path_from_utf8(config.at("quest_catalog"))) >> source;
+                        const games::WvdQuestCatalog catalog(source);
+                        const auto task = catalog.at(config.at("catalog_task_id").get<std::string>());
+                        require(task.type == "dungeon", "FIXTURE_CATALOG_DUNGEON_REQUIRED");
+                        return task;
+                    }
+                    games::WvdQuestDefinition task{"route-fixture", config.value("route_type", std::string("dungeon")),
+                        {{"_EOT", {{"press", "Dist", {1, 1}, 1}}}, {"_TARGETINFOLIST", config.at("route_targets")}}};
+                    if (config.contains("floor")) task.source["_FloorCheck"] = config.at("floor");
+                    if (config.contains("entry_steps")) task.source["_EOT"] = config.at("entry_steps");
+                    if (config.contains("return_destination")) task.source["_RTT"] = config.at("return_destination");
+                    return task;
+                }();
+                task_plan = games::WvdTaskPlan::parse(definition).inspect();
                 std::set<std::string> images;
                 for (const auto &file : config.at("files")) {
                     const auto path = file.at("path").get<std::string>();
@@ -355,10 +413,22 @@ int main(int argc, char **argv) {
             if (kind == "auto-route")
                 return games::navigation::auto_route(config.value("auto_target", "chest_auto"));
             if (kind == "entry") {
-                games::WvdQuestDefinition definition{"entry-fixture", "dungeon",
-                    {{"_EOT", config.at("entry_steps")}, {"_TARGETINFOLIST", {{"chest"}}}}};
-                if (config.contains("pre_entry"))
-                    definition.source["_preEOTcheck"] = config.at("pre_entry");
+                auto definition = [&] {
+                    if (config.contains("catalog_task_id")) {
+                        require(!config.contains("entry_steps") && !config.contains("pre_entry"), "FIXTURE_CATALOG_OVERRIDE_FORBIDDEN");
+                        nlohmann::ordered_json source;
+                        std::ifstream(maafw::path_from_utf8(config.at("quest_catalog"))) >> source;
+                        const games::WvdQuestCatalog catalog(source);
+                        const auto task = catalog.at(config.at("catalog_task_id").get<std::string>());
+                        require(task.type == "dungeon", "FIXTURE_CATALOG_DUNGEON_REQUIRED");
+                        return task;
+                    }
+                    games::WvdQuestDefinition task{"entry-fixture", "dungeon",
+                        {{"_EOT", config.at("entry_steps")}, {"_TARGETINFOLIST", {{"chest"}}}}};
+                    if (config.contains("pre_entry")) task.source["_preEOTcheck"] = config.at("pre_entry");
+                    return task;
+                }();
+                task_plan = games::WvdTaskPlan::parse(definition).inspect();
                 return games::navigation::enter_dungeon(games::WvdTaskPlan::parse(definition));
             }
             if (kind == "turn" || kind == "encounter") {
@@ -444,8 +514,15 @@ int main(int argc, char **argv) {
             }
             throw std::runtime_error("WORKFLOW_UNKNOWN");
         }();
-        if (config.value("attach_recovery", false))
-            workflow = games::recovery::with_boot_recovery(workflow, config.value("allow_download", true));
+        if (config.value("attach_recovery", false)) {
+            if (stage_workflows.empty())
+                workflow = games::recovery::with_boot_recovery(workflow, config.value("allow_download", true));
+            else {
+                for (auto &stage : stage_workflows)
+                    stage = games::recovery::with_boot_recovery(stage, config.value("allow_download", true));
+                workflow = stage_workflows.front();
+            }
+        }
         if (config.contains("invalid")) {
             if (config["invalid"] == "raw-input")
                 workflow.nodes["Entry"]["action"] = "Click";
@@ -518,13 +595,18 @@ int main(int argc, char **argv) {
         for (const auto &frame : config.at("frames"))
             device->frames.push_back(bytes(maafw::path_from_utf8(frame)));
         device->transitions = config.at("transitions");
-        if (config.contains("time_event")) {
-            device->time_event = config.at("time_event");
-            require(device->time_event.at("after_input").get<std::size_t>() > 0 &&
-                        device->time_event.at("after_input").get<std::size_t>() <= device->transitions.size() &&
-                        device->time_event.at("frame").get<std::size_t>() < device->frames.size() &&
-                        device->time_event.at("delay_ms").get<int>() > 0 &&
-                        device->time_event.at("delay_ms").get<int>() <= 10000, "FIXTURE_TIME_EVENT_INVALID");
+        require(!(config.contains("time_event") && config.contains("time_events")), "FIXTURE_TIME_EVENT_AMBIGUOUS");
+        if (config.contains("time_event")) device->time_events.push_back(config.at("time_event"));
+        if (config.contains("time_events")) device->time_events = config.at("time_events");
+        require(device->time_events.is_array(), "FIXTURE_TIME_EVENTS_INVALID");
+        std::size_t previous_input = 0;
+        for (const auto &event : device->time_events) {
+            const auto after = event.at("after_input").get<std::size_t>();
+            require(after > previous_input && after <= device->transitions.size() &&
+                        event.at("frame").get<std::size_t>() < device->frames.size() &&
+                        event.at("delay_ms").get<int>() > 0 &&
+                        event.at("delay_ms").get<int>() <= 10000, "FIXTURE_TIME_EVENT_INVALID");
+            previous_input = after;
         }
         const bool recovering = config.at("workflow") == "recover" || config.value("attach_recovery", false);
         device->allow_lifecycle = recovering && !config.value("no_lifecycle_port", false);
@@ -557,10 +639,15 @@ int main(int argc, char **argv) {
         games::recovery::register_recovery(*registry);
         registry->seal();
         runtime::SessionDefinition session;
+        std::vector<runtime::SessionDefinition> stage_sessions;
         if (config.value("destination_exists", false))
             std::filesystem::create_directory(root.parent_path() / "compiled");
         try {
-            session = games::tasks::publish_workflow(workflow, bundle, *registry,
+            if (!stage_workflows.empty()) {
+                stage_sessions = games::tasks::publish_workflow_stages(stage_workflows, bundle, *registry,
+                    root.parent_path() / "compiled", config.value("aliases", J::object()), mod ? &*mod : nullptr);
+                session = stage_sessions.front();
+            } else session = games::tasks::publish_workflow(workflow, bundle, *registry,
                                                      root.parent_path() / "compiled",
                                                      config.value("aliases", J::object()), mod ? &*mod : nullptr);
         } catch (const std::exception &e) {
@@ -590,7 +677,10 @@ int main(int argc, char **argv) {
             {"wvd"},
             2000ms};
         policy.permissions.clear();
-        for (const auto &kind : workflow.required_actions)
+        auto actions = workflow.required_actions;
+        for (const auto &stage : stage_workflows)
+            actions.insert(actions.end(), stage.required_actions.begin(), stage.required_actions.end());
+        for (const auto &kind : actions)
             policy.permissions.insert(kind == "Click"      ? contracts::ActionKind::Click
                                       : kind == "ClickKey" ? contracts::ActionKind::ClickKey
                                                            : contracts::ActionKind::Swipe);
@@ -599,10 +689,20 @@ int main(int argc, char **argv) {
         definition.request_id = "m4-causal";
         definition.policy = policy;
         definition.initial = std::move(session);
-        const auto units = config.at("workflow") == "bull-cave" ? (profile.at("ACTIVE_REST").get<bool>() ? 3u : 2u) : config.at("workflow") == "jier" ? 3u : config.at("workflow") == "scorpion" ? (config.value("hands", false) ? 4u : 3u) :
+        const auto units = !stage_sessions.empty() ? stage_sessions.size() : config.at("workflow") == "repel-forces" ? games::quests::RepelForces::rounds(profile) + 2 : config.at("workflow") == "bull-cave" ? (profile.at("ACTIVE_REST").get<bool>() ? 3u : 2u) : config.at("workflow") == "jier" ? 3u : config.at("workflow") == "scorpion" ? (config.value("hands", false) ? 4u : 3u) :
             config.at("workflow") == "manual-separation" || config.at("workflow") == "golden-chest" || config.at("workflow") == "sandman" ? 2u : config.value("normal_units", 1u);
-        require(units > 0 && units <= 4, "FIXTURE_NORMAL_UNITS_INVALID");
-        if (config.at("workflow") == "manual-separation")
+        require(units > 0 && units <= (!stage_sessions.empty() || config.at("workflow") == "repel-forces" ? 256 : 4), "FIXTURE_NORMAL_UNITS_INVALID");
+        if (config.at("workflow") == "fordraig")
+            games::tasks::configure_fordraig_units(definition, stage_sessions);
+        else if (config.at("workflow") == "cave-of-separation") {
+            std::array<runtime::SessionDefinition, games::quests::CaveOfSeparation::segments_per_cycle> stages;
+            require(stage_sessions.size() == stages.size(), "FIXTURE_SEGMENTS_INVALID");
+            std::copy(stage_sessions.begin(), stage_sessions.end(), stages.begin());
+            games::tasks::configure_cave_of_separation_units(definition, stages);
+        } else if (config.at("workflow") == "staged-publication") {
+            definition.max_business_units = stage_sessions.size();
+            definition.continuation_units.assign(stage_sessions.begin() + 1, stage_sessions.end());
+        } else if (config.at("workflow") == "manual-separation")
             games::tasks::configure_manual_separation_units(definition);
         else if (config.at("workflow") == "scorpion" || config.at("workflow") == "jier")
             games::tasks::configure_bounty_units(definition, config.value("hands", false));
@@ -614,6 +714,8 @@ int main(int argc, char **argv) {
             games::tasks::configure_sandman_units(definition);
         else if (config.at("workflow") == "bull-cave")
             games::tasks::configure_bull_cave_units(definition, profile.at("ACTIVE_REST").get<bool>());
+        else if (config.at("workflow") == "repel-forces")
+            games::tasks::configure_repel_forces_units(definition, profile);
         else {
             definition.max_business_units = units;
             for (unsigned i = 1; i < units; ++i)
@@ -626,9 +728,24 @@ int main(int argc, char **argv) {
             definition.recover = games::recovery::recovery_binding(target, config.value("force_restart", false),
                 config.value("max_crashes", std::int64_t(10)));
             definition.recovery_limit = 3;
+            if (!stage_sessions.empty()) {
+                J entries = J::object();
+                for (std::size_t i = 0; i < stage_sessions.size(); ++i) {
+                    require(stage_workflows[i].nodes.contains("Boot_Entry"), "FIXTURE_STAGE_BOOT_NOT_WRAPPED");
+                    entries[stage_sessions[i].checkpoint_node] = "Stage" + std::to_string(i) + "_Boot_Entry";
+                }
+                definition.recover->parameters["boot_entries"] = std::move(entries);
+            }
         }
         if (config.value("with_state", false))
             definition.state_factory = games::wvd_state_binding(profile);
+        const auto has_unknown_leap = [](const runtime::SessionDefinition &unit) {
+            return std::any_of(unit.actions.begin(), unit.actions.end(),
+                [](const auto &binding) { return binding.name == "WvdUnknownLeap"; });
+        };
+        if (definition.recover && definition.state_factory && (has_unknown_leap(definition.initial) ||
+            std::any_of(definition.continuation_units.begin(), definition.continuation_units.end(), has_unknown_leap)))
+            games::recovery::bind_leap_wait(definition);
         std::unique_ptr<storage::ProfileStore> karma_store;
         J original_profile;
         struct HeldFile {

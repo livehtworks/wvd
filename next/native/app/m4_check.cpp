@@ -18,6 +18,10 @@
 #include "games/wvd/tasks/gold_income.hpp"
 #include "games/wvd/tasks/bull_cave.hpp"
 #include "games/wvd/tasks/steel_trial.hpp"
+#include "games/wvd/tasks/repel_forces.hpp"
+#include "games/wvd/tasks/fordraig.hpp"
+#include "games/wvd/tasks/cave_of_separation.hpp"
+#include "games/wvd/quests/repel_forces.hpp"
 #include "games/wvd/quests/sleep_visits.hpp"
 #include "games/wvd/tasks/bounty_cycle.hpp"
 #include "games/wvd/navigation/dungeon_entry.hpp"
@@ -128,11 +132,38 @@ int main(int argc, char **argv) {
                     const bool scorpion = task.id == "Scorpionesses" || task.id == "Scorpionesses_plus_6_hands";
                     const bool bounty = scorpion || task.id == "jier";
                     const bool fishing = task.id == "fishing" || task.id == "fishing2";
-                    if (specials && !bounty && !fishing && task.id != "steeltrail" && task.id != "LBC-oneGorgon" && task.id != "7000G" && task.id != "sandman" && task.id != "SSC-goldenchest" && task.id != "fortress-B8F_trap" && task.id != "gaintKiller" && task.id != "darkLight" && task.id != "FFXI-Org" && task.id != "manualSepDemon" && task.id != "lovesleep") {
+                    if (specials && !bounty && !fishing && task.id != "fordraig" && task.id != "CaveOfSeperation" && task.id != "repelEnemyForces" && task.id != "steeltrail" && task.id != "LBC-oneGorgon" && task.id != "7000G" && task.id != "sandman" && task.id != "SSC-goldenchest" && task.id != "fortress-B8F_trap" && task.id != "gaintKiller" && task.id != "darkLight" && task.id != "FFXI-Org" && task.id != "manualSepDemon" && task.id != "lovesleep") {
                         result["unimplemented_specials"].push_back(task.id);
                         continue;
                     }
                     const auto plan = games::WvdTaskPlan::parse(task);
+                    // 分阶段任务必须逐图检查资源和预算；首图通过不等于后续段可执行。
+                    if (specials && (task.id == "fordraig" || task.id == "CaveOfSeperation")) {
+                        std::vector<games::tasks::CompiledWorkflow> stages;
+                        if (task.id == "fordraig")
+                            stages = games::tasks::fordraig_cycle(task, profile.values, images);
+                        else
+                            for (unsigned i = 0; i < games::quests::CaveOfSeparation::segments_per_cycle; ++i)
+                                stages.push_back(games::tasks::cave_of_separation_segment(task, profile.values, images,
+                                    static_cast<games::tasks::CaveOfSeparationSegment>(i)));
+                        J compiled = J::array();
+                        std::set<std::string> missing, all_images, actions;
+                        for (const auto &stage : stages) {
+                            for (const auto &image : stage.images) {
+                                all_images.insert(image);
+                                const auto selected = games::vision::resolve_image_source(manifest_bundle, aliases, image);
+                                if (!files.contains(selected.relative_path)) missing.insert(image);
+                            }
+                            actions.insert(stage.required_actions.begin(), stage.required_actions.end());
+                            compiled.push_back({{"kind", stage.kind}, {"nodes", stage.nodes}, {"images", stage.images},
+                                {"time_limit_ms", stage.time_limit.count()}});
+                        }
+                        result[key].push_back({{"task_id", task.id}, {"stages", compiled},
+                            {"images", all_images}, {"required_actions", actions}, {"missing_images", missing},
+                            {"scope", "FINITE_SPECIAL_ITERATION_NOT_FULL_TASK"},
+                            {"required_normal_units", stages.size()}, {"executed", false}});
+                        continue;
+                    }
                     const auto graph = [&] {
                         if (!specials) {
                             if (iterations) return games::tasks::dungeon_iteration(plan, profile.values, images);
@@ -146,6 +177,7 @@ int main(int argc, char **argv) {
                         if (task.id == "7000G") return games::tasks::gold_income_cycle(task);
                         if (task.id == "LBC-oneGorgon") return games::tasks::bull_cave_cycle(task, profile.values, images);
                         if (task.id == "steeltrail") return games::tasks::steel_trial_cycle(task, profile.values, images);
+                        if (task.id == "repelEnemyForces") return games::tasks::repel_forces_cycle(task, profile.values, images);
                         if (task.id == "lovesleep") return games::tasks::sleep_visits(task, profile.values);
                         if (task.id == "manualSepDemon") return games::tasks::manual_separation(task, profile.values, images);
                         if (task.id == "FFXI-Org") return games::tasks::mining_iteration(task, profile.values);
@@ -162,7 +194,7 @@ int main(int argc, char **argv) {
                     result[key].push_back({{"task_id", task.id}, {"nodes", graph.nodes},
                         {"images", graph.images}, {"required_actions", graph.required_actions},
                         {"missing_images", missing}, {"scope", specials ? "FINITE_SPECIAL_ITERATION_NOT_FULL_TASK" : iterations ? "NORMAL_FARM_ITERATION_NOT_FULL_TASK" : routes ? "DUNGEON_ROUTE_ONLY_NOT_FULL_TASK" : "ENTRY_ONLY_NOT_FULL_TASK"},
-                        {"required_normal_units", task.id == "LBC-oneGorgon" ? (profile.values.at("ACTIVE_REST").get<bool>() ? 3 : 2) : bounty ? (task.id == "Scorpionesses_plus_6_hands" ? 4 : 3) : task.id == "lovesleep" ? games::quests::SleepVisits::units : task.id == "manualSepDemon" || task.id == "SSC-goldenchest" || task.id == "sandman" ? 2 : 1}, {"executed", false}});
+                        {"required_normal_units", task.id == "repelEnemyForces" ? games::quests::RepelForces::rounds(profile.values) + 2 : task.id == "LBC-oneGorgon" ? (profile.values.at("ACTIVE_REST").get<bool>() ? 3 : 2) : bounty ? (task.id == "Scorpionesses_plus_6_hands" ? 4 : 3) : task.id == "lovesleep" ? games::quests::SleepVisits::units : task.id == "manualSepDemon" || task.id == "SSC-goldenchest" || task.id == "sandman" ? 2 : 1}, {"executed", false}});
                 }
             }
         }

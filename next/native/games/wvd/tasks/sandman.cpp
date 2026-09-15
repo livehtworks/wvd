@@ -39,13 +39,17 @@ CompiledWorkflow sandman_cycle(const WvdQuestDefinition &definition, const J &pr
     graph.use_dialogue(recovery::DialoguePolicy::Sandman);
     const auto map = C::image("mapFlag"), inn = C::image("Inn"), dung = C::image("dungFlag");
     const auto city = C::all({inn, C::absent(map), C::absent(C::image("Stay"))});
-    const auto entry_page = C::any({C::image("EdgeOfTown"), C::image("impregnableFortress"), C::image("fortressb3f"), dung, map});
-    graph.route("Entry", {"Pending", "CompletedVisit", "Active", "Start"});
+    graph.route("Entry", {"Pending", "CompletedVisit", "Active", "Start", "StartDungeon", "StartEdge", "StartFortress", "StartFloor"});
     graph.observe("CompletedVisit", C::business("/sandman/completed_unit_matches", true), {"Terminal"});
     graph.observe("Pending", C::business("/sandman/leap_pending", true), {"Uncertain"});
     graph.recovery("Uncertain", "quest.sandman_leap_unconfirmed");
     graph.observe("Active", C::business("/sandman/active", true), {"Stage"});
-    graph.confirm("Start", "sandman.start", "sandman_started", entry_page, {"Stage"});
+    // 五种入口分别确认，避免一次确认扫描所有互斥页面而耗尽帧有效期。
+    graph.confirm("Start", "sandman.start", "sandman_started", map, {"Stage"});
+    graph.confirm("StartDungeon", "sandman.start", "sandman_started", dung, {"Stage"});
+    graph.confirm("StartEdge", "sandman.start", "sandman_started", C::image("EdgeOfTown"), {"Stage"});
+    graph.confirm("StartFortress", "sandman.start", "sandman_started", C::image("impregnableFortress"), {"Stage"});
+    graph.confirm("StartFloor", "sandman.start", "sandman_started", C::image("fortressb3f"), {"Stage"});
     graph.route("Stage", {"EnterPhase", "RoutePhase", "ExitPhase", "DecidePhase", "RestDukePhase", "LeapDukePhase", "RestTriumphPhase", "LeapTriumphPhase"});
     graph.observe("EnterPhase", phase(Phase::Enter), {"Enter"});
     const auto entry = graph.define_child("DungeonEntry", navigation::enter_dungeon(plan));

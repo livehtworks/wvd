@@ -182,6 +182,7 @@ void CompiledWorkflow::validate() const {
                                             node.value("custom_action", "") == "WvdConfirm" ||
                                             node.value("custom_action", "") == "WvdCombat" ||
                                             node.value("custom_action", "") == "WvdChest" ||
+                                            node.value("custom_action", "") == "WvdUnknownLeap" ||
                                             node.value("custom_action", "") == "BusinessCheckpoint" ||
                                             node.value("custom_action", "") == "RequireRecovery")),
                 "COMPILE_UNGUARDED_ACTION");
@@ -273,6 +274,7 @@ void CompiledWorkflow::validate() const {
     collect_images(nodes, actual_images);
     if (dialogue_policy != recovery::DialoguePolicy::Default) {
         for (const auto name : recovery::special_dialogue_options(dialogue_policy)) actual_images.insert(std::string(name) + ".png");
+        for (const auto name : recovery::dialogue_task_stops(dialogue_policy)) actual_images.insert(std::string(name) + ".png");
         actual_images.insert("bondmate_close.png");
     }
     require(std::vector<std::string>(actual_images.begin(), actual_images.end()) == images,
@@ -563,6 +565,13 @@ void PipelineCompiler::recovery(const std::string &name, const std::string &reas
     add(name, {{"action", "Custom"}, {"custom_action", "RequireRecovery"},
                {"custom_action_param", {{"reason", reason}}}});
 }
+void PipelineCompiler::unknown_leap(const std::string &name, J next) {
+    const auto condition = all({J{{"mode", "unknown_exhausted"}, {"max_tries", 4}}, image("cursedWheel_timeLeap")});
+    add(name, {{"recognition", "Custom"}, {"custom_recognition", "WvdVision"},
+        {"custom_recognition_param", condition}, {"roi", {0, 0, 900, 1600}},
+        {"action", "Custom"}, {"custom_action", "WvdUnknownLeap"},
+        {"custom_action_param", J::object()}, {"next", std::move(next)}});
+}
 void PipelineCompiler::failure_route(const std::string &name, J next) {
     require(workflow_.nodes.contains(name) && next.is_array() && !next.empty(), "COMPILE_ERROR_ROUTE_INVALID");
     workflow_.nodes[name]["on_error"] = std::move(next);
@@ -587,6 +596,15 @@ void PipelineCompiler::confirm(const std::string &name, const std::string &opera
                                       "sandman_triumph_prepared", "sandman_completed", "sandman_bondmate_completed",
                                       "gold_income_started", "gold_income_prepared", "gold_income_advanced",
                                       "steel_trial_started", "steel_trial_prepared", "steel_trial_entered", "steel_trial_routed", "steel_trial_returned", "steel_trial_completed",
+                                      "repel_started", "repel_rested", "repel_arrived", "repel_battle_prepared", "repel_battle_observed", "repel_battle_completed", "repel_pair_completed", "repel_exited", "repel_completed",
+                                      "fordraig_started", "fordraig_leap_prepared", "fordraig_leaped", "fordraig_requested",
+                                      "fordraig_entered", "fordraig_trap1_routed", "fordraig_trap1_prepared", "fordraig_trap1_completed",
+                                      "fordraig_trap2_routed", "fordraig_trap2_prepared", "fordraig_trap2_completed", "fordraig_trap3_completed",
+                                      "fordraig_preboss_completed", "fordraig_boss_completed", "fordraig_exited", "fordraig_completed",
+                                      "cos_started", "cos_leap_prepared", "cos_leaped", "cos_fortress", "cos_royal",
+                                      "cos_request_observed", "cos_request_prepared", "cos_requested", "cos_rested", "cos_entered",
+                                      "cos_b1_completed", "cos_ena_confirmed", "cos_request_confirmed", "cos_back_completed",
+                                      "cos_guild_prepared", "cos_guild_entered", "cos_completed",
                                       "bull_cave_started", "bull_cave_started_rest", "bull_cave_leap_prepared", "bull_cave_leaped",
                                       "bull_cave_fortress", "bull_cave_royal", "bull_cave_requested", "bull_cave_first_entered",
                                       "bull_cave_first_routed", "bull_cave_first_exited", "bull_cave_rested", "bull_cave_second_entered",
@@ -656,6 +674,7 @@ CompiledWorkflow PipelineCompiler::finish() {
     collect_images(workflow_.nodes, images);
     if (workflow_.dialogue_policy != recovery::DialoguePolicy::Default) {
         for (const auto name : recovery::special_dialogue_options(workflow_.dialogue_policy)) images.insert(std::string(name) + ".png");
+        for (const auto name : recovery::dialogue_task_stops(workflow_.dialogue_policy)) images.insert(std::string(name) + ".png");
         images.insert("bondmate_close.png");
     }
     workflow_.images.assign(images.begin(), images.end());

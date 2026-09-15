@@ -47,8 +47,28 @@ J point_confirmation(const MapTarget &target, const J &map) {
     return C::all({map, image, C::absent(focus)});
 }
 }
+std::string dungeon_task_stop_image(DungeonTaskStop stop) {
+    switch (stop) {
+    case DungeonTaskStop::None: return "";
+    case DungeonTaskStop::CaveEna: return "COS/EnaTheAdventurer";
+    case DungeonTaskStop::CaveRequest: return "COS/requestwasfor";
+    }
+    throw std::runtime_error("DUNGEON_TASK_STOP_INVALID");
+}
 CompiledWorkflow traverse_dungeon(const WvdTaskPlan &plan, const J &profile,
-                                 const std::set<std::string> &available_images, bool allow_download, recovery::DialoguePolicy dialogue) {
+                                 const std::set<std::string> &available_images, bool allow_download,
+                                 recovery::DialoguePolicy dialogue, DungeonTaskStop task_stop) {
+    const auto stop_image = dungeon_task_stop_image(task_stop);
+    const bool stopping = !stop_image.empty();
+    const auto policy_stops = recovery::dialogue_task_stops(dialogue);
+    if ((stopping && (policy_stops.size() != 1 || policy_stops.front() != stop_image)) ||
+        (!stopping && !policy_stops.empty()))
+        throw std::runtime_error("DUNGEON_TASK_STOP_POLICY_MISMATCH");
+    const auto stop = stopping ? C::image(stop_image) : J{};
+    const auto candidates = [&](J next) {
+        if (stopping) next.insert(next.begin(), "TaskStop");
+        return next;
+    };
     if (plan.route().empty() || plan.route().size() > 64)
         throw std::runtime_error("DUNGEON_ROUTE_SIZE_INVALID");
     const auto chest_workflow = wvd::games::chest::open_chest(profile.at("WHO_WILL_OPEN_IT").get<int>(),
@@ -67,10 +87,16 @@ CompiledWorkflow traverse_dungeon(const WvdTaskPlan &plan, const J &profile,
                                         C::image("openworldmap"), C::image("worldmapflag")}),
                                  C::absent(C::image("mapFlag")), C::absent(encounter)});
     const auto inside = C::any({map, dungeon, encounter});
-    graph.route("Entry", {"UnknownFrozen", "Outside", "Entered", "UnknownTimeout", "UnknownLimit", "UnknownWait"});
+    graph.route("Entry", candidates({"UnknownFrozen", "Outside", "Entered", "UnknownLeap", "UnknownTimeout", "UnknownLimit", "UnknownWait"}));
+    if (stopping) {
+        graph.observe("TaskStop", stop, {"Terminal"});
+        graph.hit_limit("TaskStop", 128);
+    }
     graph.hit_limit("Entry", 128);
     graph.observe("UnknownFrozen", {{"mode", "unknown_frozen"}}, {"UnknownFrozenExit"});
     graph.recovery("UnknownFrozenExit", "dungeon.unknown_static_window");
+    graph.unknown_leap("UnknownLeap", {"UnknownLeapExit"});
+    graph.recovery("UnknownLeapExit", "leap.unknown");
     graph.observe("UnknownTimeout", C::business("/encounter_timed_out", true), {"UnknownTimeoutExit"});
     graph.recovery("UnknownTimeoutExit", "dungeon.encounter_timeout");
     graph.observe("UnknownLimit", {{"mode", "unknown_exhausted"}, {"max_tries", profile.at("MAX_TRY_LIMIT")}}, {"UnknownLimitExit"});
@@ -80,7 +106,7 @@ CompiledWorkflow traverse_dungeon(const WvdTaskPlan &plan, const J &profile,
     graph.delay_after("UnknownWait", 1000);
     graph.hit_limit("UnknownWait", 128);
     graph.confirm("Entered", "dungeon.enter", "dungeon_entered", inside, {"Dispatch"});
-    graph.route("Dispatch", {"UnknownFrozen", "Blocked", "Combat", "Chest", "Revive", "Outside", "HealingPanel", "Resume", "Map", "UnknownTimeout", "UnknownLimit", "UnknownWait"});
+    graph.route("Dispatch", candidates({"UnknownFrozen", "Blocked", "Combat", "Chest", "Revive", "Outside", "HealingPanel", "Resume", "Map", "UnknownLeap", "UnknownTimeout", "UnknownLimit", "UnknownWait"}));
     const auto common = graph.define_child("Common", recovery::clear_common_screens(allow_download, dialogue));
     graph.observe("Blocked", {{"mode", "blocking_screen"}}, {"ClearBlocking"});
     graph.call_child("ClearBlocking", common, {"Dispatch"});
@@ -112,7 +138,7 @@ CompiledWorkflow traverse_dungeon(const WvdTaskPlan &plan, const J &profile,
     graph.confirm("Resume", "dungeon.resume", "dungeon_resumed", dungeon, {"Heal"});
     graph.hit_limit("Resume", 128);
     const bool bypass = profile.at("BYPASS_THE_WALL").get<bool>() && plan.definition().type == "dungeon";
-    graph.call_child("Heal", heal, {bypass ? "BypassWall" : "SelectPoint"});
+    graph.call_child("Heal", heal, candidates({bypass ? "BypassWall" : "SelectPoint"}));
     graph.hit_limit("Heal", 128);
     if (bypass) {
         const auto wall = graph.define_child("Wall", navigation::bypass_wall_after_restart(), {"InterruptedExit"});
@@ -123,7 +149,7 @@ CompiledWorkflow traverse_dungeon(const WvdTaskPlan &plan, const J &profile,
     graph.observe("Map", map, {"SelectPoint"});
     graph.hit_limit("Map", 128);
 
-    J points{"Blocked", "Combat", "Chest", "Revive", "Outside", "Finished"};
+    J points = candidates({"Blocked", "Combat", "Chest", "Revive", "Outside", "Finished"});
     for (std::size_t i = 0; i < plan.route().size(); ++i)
         points.push_back("Point" + std::to_string(i));
     graph.route("SelectPoint", points);
@@ -145,14 +171,14 @@ CompiledWorkflow traverse_dungeon(const WvdTaskPlan &plan, const J &profile,
                 if (plan.floor())
                     exits["FloorExit"] = {"Retreat"};
                 const auto map_entry = graph.append("AutoMap" + suffix,
-                    navigation::reach_map_target(target, plan.floor()), {"Blocked", "Outside", "Confirm" + suffix}, exits);
+                    navigation::reach_map_target(target, plan.floor()), candidates({"Blocked", "Outside", "Confirm" + suffix}), exits);
                 normal["StoppedExit"] = {map_entry};
                 if (target.target == "chest_auto")
                     normal["UnavailableExit"] = {map_entry};
             }
         } else if (plan.floor())
             normal["FloorExit"] = {"Retreat"};
-        const auto route = graph.append("Route" + suffix, child, {"Blocked", "Outside", "Confirm" + suffix}, normal);
+        const auto route = graph.append("Route" + suffix, child, candidates({"Blocked", "Outside", "Confirm" + suffix}), normal);
         graph.observe("Point" + suffix, C::business("/task_step", i), {route});
         graph.hit_limit("Point" + suffix, 128);
         graph.confirm("Confirm" + suffix, "point." + suffix, "target_completed",

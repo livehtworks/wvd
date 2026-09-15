@@ -1,6 +1,6 @@
 # M4 7000G 剧情链
 
-固定旧源`6585f407`，当前接线已构建，首轮存在下面两类失败，不计入完整任务通过。
+固定旧源`6585f407`，十阶段正常剧情两分支已在实际Maa通过，完整任务矩阵尚未通过。
 
 - `tasks/gold_income`编译十个明确阶段；`quests/GoldIncomeCycle`由WvdRunState独占。
   先FortressArrival跳跃、返回要塞、进入王城，再接取、旧区、王城、三个人物、拒绝、答应任务。
@@ -13,8 +13,8 @@
 - `estimated_income`仅在最后noeasytask后真实识别ruins才按7000递增，明确
   `income_is_estimate=true`，不是账号余额或真实奖励到账证明。
 
-待验：状态两周期/20阶段/恢复意图/重复回执；23/24输入完整路线两分支；
-停止/拒绝、未知后置、配置/mod及任务交接。没有从旧Python运行任何游戏逻辑。
+状态两周期/20阶段/恢复意图/重复回执已有分项证据；23/24输入完整剧情两分支及
+首个跳跃停止/拒绝已通过。待验未知后置、配置/mod及任务交接；没有从旧Python运行游戏逻辑。
 
 ## 实测与定点修正
 
@@ -23,5 +23,10 @@
 重建后单任务资源图可编译。流程首轮`m4-workflow-4o72cdln/gold-income-full-False`
 Interrupted/10输入，没有命令不匹配，phase=5、pending=false、估算收益0。
 事件显示Confirmed4之后进入RecoveryRequired：十阶段共用Stage的默认max_hit=5，
-并非实际达到1500秒上限。修正Stage为十次，等待重建复验。
+并非实际达到1500秒上限。修正Stage为十次后重新构建并执行如下验证。
 同轮停止/拒绝各1输入、pending保留；不能以负例通过替代完整正例。
+
+`m4-workflow-7g_0bqno`（`m4-specials-correction-workflow.log`）两条完整剧情
+分别Completed/23与24输入；停止UserStopped/1、拒绝Failed/1且不继续剧情。
+四场景已核对当前测试EXE哈希、准确输入、无错序及真正静止，不改写首轮失败结果。
+同产物M2 104方法通过；该轮其它专项失败不能改为整组通过。

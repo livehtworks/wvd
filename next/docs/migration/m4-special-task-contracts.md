@@ -75,4 +75,9 @@
 - CaveOfSeperation：分层变更对话及强制停点；EnaTheAdventurer/requestwasfor 停点不能继续盲点。
 - steeltrail：公会gradeexam、Steel偏移306/258，ready/noneed/quit对话，四点及专用休息间隔。
 
-这里没有宣称额外 case 已实现、已获真实操作许可或已通过离线验收。
+钢试炼已构建，状态及计划检查通过，专项流程复验中，见`../m4-steel-trial-validation.md`。
+击退敌势力已接入独立阶段对象和双战终点，待构建及离线验证，见`../m4-repel-forces-validation.md`。
+fordraig十段与CaveOfSeperation六段已实现并接入状态所有者、CLI、共用封存发布及离线入口，
+当前构建和验证未完成；分别见对应专题及`../m4-stage-publication-validation.md`。
+分段保持同一个Run/资源revision，各段冻结独立对话策略；上述接线不改变基础58项分母。
+没有为这些额外case开放真实操作许可，也没有登记完整离线验收通过。

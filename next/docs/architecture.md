@@ -43,7 +43,8 @@ OfflineRecognizer -> 同一 MaaGateway / preflight / RecognitionDetail 三态转
 `wvd_core` 是单独的原生库，构建选项默认关闭；M1 `automationd` 不链接该库。
 默认离线请求仍在连接前拒绝真实后端；仅显式 M3 本地入口可组装经重新核实的 MuMu 后端。
 测试提供隔离设备，Maa Pipeline/识别/回调本身不是 Mock。M1 服务不连接设备。
-只启用固定 CPU OCR 模型；WVD 专用视觉见下节，没有任务业务或第二套节点调度器。
+只启用固定 CPU OCR 模型；WVD 专用视觉见下节。M4 已有原生业务图与状态消费者，
+仍只有 Maa 推进节点，没有第二套节点调度器；这不代表完整任务验收通过。
 
 ## M3 设备与视觉
 
@@ -75,7 +76,8 @@ SDK 提供的调用 ROI 由独立 CustomRecognitionScope 传入，不再覆盖�
 OpenCV 头文件/导入库来自固定 MaaDeps，运行时复用与 SDK 同 hash 的 DLL，不装第二套 ABI。
 
 基线图片由固定 Git 对象生成到 `packs/wvd/image`，作者 manifest 不加入运行 Bundle 内容树。
-完整业务仍未实现，M4 已开始离线配置与任务目录数据迁移；静态索引保持原状。
+M4 已有配置、状态、导航/补给、战斗/宝箱、恢复及专项有限业务图；完整迁移仍未完成，
+完整任务验收保持 0/58。固定 M1 静态索引保持原状。
 当前实现与缺口见 `docs/migration/m3-implementation-map.json`、`m4-implementation-map.json`，
 最新验收以 `m3-fix-validation.md` 和 `m4-business-validation.md` 为准。
 
@@ -83,9 +85,11 @@ OpenCV 头文件/导入库来自固定 MaaDeps，运行时复用与 SDK 同 hash
 首次进程句柄增量仍未归因；绑定入口的局部 Query 遇到 CLEANUP_PENDING 时，析构等待可能继续阻塞。
 因此该发现链仍阻断，不能把 helper 的正常超时回收当成任意底层取消保证。
 
-### 离线 M4 数据与状态
+### 离线 M4 数据与业务
 
-`wvd_m4_check` 只组装导入器、ProfileStore 和 WvdQuestCatalog，不注册业务动作，不创建 Run。
+`wvd_m4_check` 组装导入器、ProfileStore、WvdQuestCatalog 和任务编译器，支持计划检查、
+入本/路线/正常迭代/专项图编译、资源闭包检查及准备阶段目录模板展开；不创建 Run，
+仍拒绝 device、binding、execute。它不是业务执行入口，也不只是早期的目录读取器。
 `games/wvd/profile` 与 `tasks/quest_catalog` 保存游戏字段和目录；`storage` 负责严格解析、来源、
 复制导入、原子保存及 revision/CAS。仅显式 `--m4` 编译此数据模块，默认服务仍只读。
 `BusinessRunState` 是无游戏知识的运行契约。非捕获状态工厂注册在封存 BehaviorRegistry，
@@ -99,8 +103,12 @@ OpenCV 头文件/导入库来自固定 MaaDeps，运行时复用与 SDK 同 hash
 正常续段必须同时满足 Completed、真正静止和本根任务检查点；新段更新 generation、保留业务事实，
 不复用帧、识别缓存或目标。正常续段不借用 RecoveryRequired；停止与创建工作线程有唯一先后顺序。
 M4 状态测试使用真实 Maa 离线 Controller。WvdTaskPlan 已解析旧任务的顺序动作、目标提示和地图参数，
-保留源树。已有独立有限子流程 PipelineCompiler 与 publish_workflow，但尚无完整任务动作图，
-不把状态/数据或单个子流程测试当任务通过。
+保留源树。PipelineCompiler 与 publish_workflow 已把参数、资源、权限和注册表接到有限图。
+43 个普通 dungeon 有入本/路线/正常迭代图，15 个基础 quest 均有专项源码。最新源码已冻结、
+构建中；扩展、unknownLeap、publisher多图和boot映射已有新版调用接线，无新增运行通过证据。
+真实 Maa 离线执行由 `tests/native/test_m4_workflow.cpp` 装配注册表、发布图、冻结状态/恢复绑定
+并调用 RunCoordinator；它是隔离验证消费者，不是已开放的 M5 API 或生产入口。
+不把图存在、可编译、状态/数据或子流程证据当作完整任务通过。
 `navigation/world_map`、`supply/inn`、`combat/auto_combat` 输出静态 Maa 图；所有输入使用
 GuardedAction，目标偏移只能基于新识别且在合法区域裁剪。组合条件没有位置中心，
 不短路掩盖 Error，也不提升低置信子识别的授权级别。
@@ -148,7 +156,7 @@ RunCoordinator 的监督线程不调用 SDK 阻塞等待；会话工作线程持
 | native/maafw | 已实现统一 Gateway、三态识别、回调和停止映射 | M2 |
 | native/devices | 门禁、帧身份、单次原始坐标转换；真实 Controller 适配在 maafw | M2/M3 |
 | native/platform | Windows / Linux 平台机制 | 分平台验收 |
-| native/storage | 已实现运行快照、原子结果、有界事件、资源快照和离线配置副本；业务写回未实现 | M2/M4 |
+| native/storage | 运行快照、原子结果、有界事件、资源快照和离线配置副本；善恶确认后经 KarmaCommitPort/ProfileStore 对新版副本 CAS，非任意旧配置写回 | M2/M4 |
 | native/games/wvd | 视觉、战斗、路线、补给、恢复和任务业务 | M3/M4 |
 | packs/wvd | 可验证的游戏包内容 | M3/M4 |
 | web/src/features | 流程/视觉编辑草稿及调试呈现 | M5 |
@@ -164,6 +172,12 @@ WVD 业务提供决策与领域结果，不让通用 runtime 判断技能、地�
 - 原 `config.json`、mod、任务入口和更新/打包链仍归 Python 生产程序，本轮完全未切换。
 - M1 没有数据库或用户配置写入。基线权威是报告里的固定 Git commit，不是前端状态。
 - `feature_inventory.json` 是生成的迁移索引，条目状态全为 MAPPED_NOT_IMPLEMENTED。
+- 当前 250 函数/33 字段的消费者与差异以 `migration/m4-implementation-map.json` 的
+  `semantic_audit` 为准；方法与确定缺口见 [静态语义审计](migration/m4-semantic-audit.md)。
+  字段描述、导入成功和同名关键词均不能代替业务取值/调用证据。
+- `migration/m4-task-status.json` 仍是逐任务验收权威，本次文档审计不修改它；完整任务
+  0/58、release_allowed=false，M3 Metadata/CLEANUP、RESOURCE_UNRESOLVED、
+  PERFORMANCE_UNRESOLVED 均保留，不因已有离线图解除。
 - 预览 PNG 来自原 Git 资源，不是实机识别证据；不将用户截图或本机目录加入清单。
 - 前端不拥有 C++ 指针、不发任意 shell、不决定游戏循环，不重试任何启动任务命令。
 

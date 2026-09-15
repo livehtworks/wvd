@@ -69,6 +69,11 @@ if(WVD_BUILD_M4)
     ../games/wvd/tasks/gold_income.cpp
     ../games/wvd/tasks/bull_cave.cpp
     ../games/wvd/tasks/steel_trial.cpp
+    ../games/wvd/tasks/repel_forces.cpp
+    ../games/wvd/tasks/fordraig.cpp
+    ../games/wvd/tasks/cave_of_separation.cpp
+    ../games/wvd/tasks/task_handoff.cpp
+    ../games/wvd/recovery/leap_wait.cpp
     ../games/wvd/navigation/causality.cpp
     ../games/wvd/navigation/return_city.cpp
     ../games/wvd/quests/bounty_cycle.cpp
@@ -150,6 +155,13 @@ if(WVD_BUILD_M3)
     target_compile_options(test_m4_workflow PRIVATE /utf-8 /W4 /EHsc)
     target_link_options(test_m4_workflow PRIVATE "/MANIFEST:EMBED" "/MANIFESTINPUT:${PROJECT_SOURCE_DIR}/native/platform/windows/app.manifest")
     set_target_properties(test_m4_workflow PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/m4")
+    foreach(NAME handoff fordraig cave_of_separation)
+      add_executable(test_m4_${NAME} "${PROJECT_SOURCE_DIR}/tests/native/test_m4_${NAME}.cpp")
+      target_link_libraries(test_m4_${NAME} PRIVATE wvd_business wvd_vision)
+      target_compile_options(test_m4_${NAME} PRIVATE /utf-8 /W4 /EHsc)
+      target_link_options(test_m4_${NAME} PRIVATE "/MANIFEST:EMBED" "/MANIFESTINPUT:${PROJECT_SOURCE_DIR}/native/platform/windows/app.manifest")
+      set_target_properties(test_m4_${NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/m4")
+    endforeach()
   endif()
   add_library(wvd_device adb_backend.cpp ../platform/windows/mumu_binding.cpp ../platform/windows/metadata_query.cpp)
   target_link_libraries(wvd_device PUBLIC wvd_core)

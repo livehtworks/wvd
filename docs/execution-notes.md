@@ -43,6 +43,8 @@
 ## Next M2 离线核心
 
 - 只在 `prepare_maafw.py` 校验固定 SDK/模型后用 `--m2-offline` 显式构建和验收；未准备不是跳过测试的理由。默认构建明确关闭该 CMake 选项，避免继承缓存 ON 状态。
+- M2测试组用现有`unittest discover -s next/tests/m2`入口。test_runtime按该目录导入test_recognition，不用仓库级dotted模块名混跑，否则运行组会在加载时失败；这属于调用错误，不能算核心测试已执行。
+- 专项夹具可能在图像合成自检或发布校验阶段失败，此时没有原生Run结果，不能把缺少snapshot写成核心崩溃。先核对具体异常、EXE身份及零连接/输入。focus_cursor的中心差异小于0.2表示仍与模板相同；在map_target中“不再匹配焦点”才是已到达，不可提前合成已到达状态。
 - SDK/模型缓存、完整日志和合成样本在 `next/.local`，不提交私人路径或二进制。M1 服务不链接离线识别库；不能根据离线测试通过而连接游戏。
 - Maa 5.13.0 的 `MaaSetGlobalOption` 会先向 stdout 输出弃用日志；使用 `MaaGlobalSetOption`，结构化测试结果单独落盘，不混用 SDK stdout 作为 JSON 协议。
 - C++20 中文路径用 `std::u8string` 构造 filesystem::path，配合进程 UTF-8 manifest；不使用已弃用的 u8path，也不关闭警告掩盖问题。
@@ -97,6 +99,9 @@
 - 新确认事件须同时进入 `PipelineCompiler::confirm` 事件白名单和 `WvdRunState::confirm_event` 消费者，不能只测直接状态方法。复活接线首轮漏登 `revival_observed`，所有流程在连接前拒绝；详见 m4-revival-validation.md。
 - M2/M3/M4 离线夹具可能使用相同设备身份，Windows 设备租约仍是跨进程互斥。不同临时数据目录不代表可以同时运行这些组；必须等上一组进程完成再启动下一组。曾重叠运行 M3 与 M4 状态组导致 DEVICE_BUSY，保留该轮证据，串行补验；不能关闭租约或把这个拒绝当产品崩溃。
 - Maa 5.13.0 的 Context 子任务共享节点命中计数，不能用“新 Task ID”推断 max_hit 已重置。编译器为有限原生子调用封存精确的局部节点清单，经 ClearHitCount 清理局部次数；父预算、业务策略和观察许可不清理。子图作用域与最长调用深度都须发布前验证。
+- 新专项的共用Stage路由须按实际阶段数设置有限max_hit。默认五次会截断第六阶段，并落入通用budget_exhausted；该原因不一定是墙钟超时，应核对最后节点与已确认phase。7000G首轮复现于Confirmed4之后。
+- 单个json数组值用大括号构造可能复制该数组本身，而非创建一层外部数组。单点路线须用`J::array({point})`明确维度；牛洞ACTIVE_REST=true分支曾因此TASK_TARGET_ARGUMENTS，而false分支可编译。
+- 因果输入夹具的Swipe须显式记录duration；默认0不能匹配正式400ms滑动。世界跳转到地下城画面后，打开地图是一次独立真实输入，不能直接给mapFlag跳过它。错误夹具轮次保留，不放宽正式后置条件来迎合测试。
 - 嵌套 GuardedAction 的底层失败不能只返回 false：SDK 可能先转 on_error，将其误归为可重试恢复。非取消输入失败显式报错；普通测试子动作 false 仍按真实 TaskDetail 判断，不统一提前写入失败。
 - 启动就绪候选包含许多模板，按通用 any 全部计算会使后置帧过期。WVD boot_ready/boot_post 保留旧判断顺序，遇首个命中即结束，并从同一 probe 定义收集隐式资源；不放宽 2 秒 TTL。实际执行过的探针 Error 不作 NoHit。
 - 恢复升级不能只看上一 Session 是否带 lifecycle：原任务已恢复后可能再次故障。以业务摘要中的活动恢复标志区分同次升级和新请求；启动成功必须同时证明进程运行和前台正确。

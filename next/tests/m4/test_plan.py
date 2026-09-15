@@ -139,6 +139,20 @@ class PlanTests(unittest.TestCase):
         self.assertFalse(rows[0]["executed"])
         self.assertEqual(len(self.source), 58)
 
+    def test_repel_forces_source_extension_has_explicit_double_battle_endpoints(self):
+        result = self.inspect("repel-extension", {"repelEnemyForces": {"_TYPE": "quest"}},
+            changed_values={"ACTIVE_REST": True, "REST_INTERVEL": 2},
+            compile_specials_manifest=str(ROOT / "packs/wvd/manifest.json"))
+        self.assertEqual(result["outcome"], "PASS", result)
+        row, = result["compiled_specials"]
+        self.assertEqual(row["missing_images"], [])
+        self.assertEqual(row["required_normal_units"], 4)
+        self.assertIn("icanstillgo.png", row["images"])
+        self.assertIn("letswithdraw.png", row["images"])
+        self.assertFalse(row["executed"])
+        self.assertNotIn("repelEnemyForces", self.source)
+        self.assertEqual(len(self.source), 58)
+
     def test_special_negative_interval_is_not_silently_reinterpreted(self):
         result = self.inspect("specials-negative-interval", changed_values={"REST_INTERVEL": -1},
             compile_specials_manifest=str(ROOT / "packs/wvd/manifest.json"))

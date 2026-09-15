@@ -280,6 +280,12 @@ class FixTests(unittest.TestCase):
         cases.append(("depth", deep, "Error"))
         cases.append(("parallel-depth", {"mode": "all", "conditions": [hit, deep]}, "Error"))
         cases.append(("first-error-not-hidden", {"mode": "all", "conditions": [invalid, hit]}, "Error"))
+        # 非并行父节点并不代表整个调用已在工作线程里；其纯子树仍应同步分片。
+        positional = {**hit, "mode": "multiple"}
+        nested = {"mode": "all", "conditions": [hit, {"mode": "all", "conditions": [hit, hit]}]}
+        cases.append(("nested-pure-subtree", {"mode": "all", "conditions": [positional, nested]}, "Hit"))
+        cases.append(("nested-error", {"mode": "all", "conditions": [positional,
+            {"mode": "any", "conditions": [hit, invalid]}]}, "Error"))
         nodes, requests = {}, []
         for name, parameters, _ in cases:
             request = {**reco(name), "parameters": parameters}
@@ -297,6 +303,11 @@ class FixTests(unittest.TestCase):
 
         for value in result["cases"][:3]:
             self.assertEqual(value["evidence"]["evidence"]["evaluation"], "opencv_two_way")
+        nested_result = result["cases"][-2]["evidence"]["evidence"]
+        self.assertEqual(nested_result["evaluation"], "sequential")
+        child = nested_result["conditions"][1]["evidence"]
+        self.assertEqual(child["evaluation"], "opencv_two_way")
+        self.assertEqual(child["conditions"][1]["evidence"]["evaluation"], "sequential")
 
     def test_metadata_helper_only(self):
         folder = self.root / "metadata-中文 空格"

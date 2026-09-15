@@ -71,6 +71,8 @@ tasks::CompiledWorkflow reach_map_target(const MapTarget &target,
         const auto choose = "Choose" + n;
         const auto selected = "Select" + n;
         J candidates = interrupted;
+        if (target.hint == MapTarget::Hint::StairReference)
+            candidates.push_back("WrongStair" + n);
         if (!done.is_null())
             candidates.push_back("Arrived" + n);
         candidates.push_back(selected);
@@ -100,6 +102,45 @@ tasks::CompiledWorkflow reach_map_target(const MapTarget &target,
                          : target.target == "chest" ? J{"Terminal"} : J{"MissingExit"};
         if (!positional)
             graph.observe("Miss" + n, C::all({correct_map, C::absent(target_match)}), next);
+        if (target.hint == MapTarget::Hint::StairReference) {
+            const auto fallback = "WrongStair" + n;
+            // 旧 CheckIf_harkenStair 在本任务的拖图之后，先完整搜索 harken，
+            // 全部未命中才搜索 Bharken；内层不再检查原 stair，也不复用原 ROI。
+            graph.observe(fallback, C::all({correct_map, C::absent(C::image(target.stair_reference))}),
+                          {fallback + "harkenSearch0"});
+            graph.hit_limit(fallback, 5);
+            constexpr std::array<std::array<int, 4>, 5> swipes{{
+                {100, 100, 700, 1200}, {400, 1200, 400, 100}, {700, 800, 100, 800},
+                {400, 100, 400, 1200}, {100, 800, 700, 800}}};
+            for (const auto *symbol : {"harken", "Bharken"}) {
+                const auto prefix = fallback + symbol;
+                const auto image = C::image(symbol);
+                for (std::size_t view = 0; view <= swipes.size(); ++view) {
+                    const auto suffix = std::to_string(view);
+                    const auto scan = prefix + "Search" + suffix;
+                    const auto probe = prefix + "Choose" + suffix;
+                    const auto select = prefix + "Select" + suffix;
+                    const auto miss = prefix + "Miss" + suffix;
+                    if (view == 0)
+                        graph.route(scan, {probe});
+                    else {
+                        graph.swipe(scan, correct_map, C::any({map, encounter}), swipes[view - 1], {probe});
+                        graph.delay_after(scan, 2000);
+                    }
+                    auto choices = interrupted;
+                    choices.push_back(select);
+                    choices.push_back(miss);
+                    graph.route(probe, choices);
+                    graph.click(select, correct_map, image, C::any({map, encounter}), after_select);
+                    const J following = view < swipes.size() ? J{prefix + "Search" + std::to_string(view + 1)}
+                        : std::string(symbol) == "harken" ? J{fallback + "BharkenSearch0"} : next;
+                    graph.observe(miss, C::all({correct_map, C::absent(image)}), following);
+                    // 固定六视图、每节点至多五次；既有 Session/移动预算保持不变。
+                    for (const auto &node : {scan, probe, select, miss})
+                        graph.hit_limit(node, 5);
+                }
+            }
+        }
     }
     if (!positional && target.target != "chest")
         graph.recovery("MissingExit", "navigation.target_missing");

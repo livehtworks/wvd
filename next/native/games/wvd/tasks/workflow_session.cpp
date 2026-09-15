@@ -4,6 +4,8 @@
 #include "games/wvd/diagnostics.hpp"
 #include "games/wvd/combat/turn.hpp"
 #include "games/wvd/chest/chest.hpp"
+#include "task_handoff.hpp"
+#include "games/wvd/recovery/leap_wait.hpp"
 #include "platform/windows/bundle_lease.hpp"
 #include "platform/windows/file_digest.hpp"
 #include "maafw/preflight.hpp"
@@ -12,38 +14,79 @@
 
 namespace wvd::games::tasks {
 using J = nlohmann::json;
-runtime::SessionDefinition publish_workflow(const CompiledWorkflow &workflow,
+namespace {
+CompiledWorkflow scoped_stage(const CompiledWorkflow &source, std::size_t index) {
+    source.validate();
+    auto result = source;
+    const auto prefix = "Stage" + std::to_string(index) + "_";
+    result.entry = prefix + source.entry;
+    result.terminal = prefix + source.terminal;
+    if (!source.checkpoint.empty()) result.checkpoint = prefix + source.checkpoint;
+    result.nodes = J::object();
+    // 只改编译契约声明的节点引用；不能全局替换字符串，图片和条件参数不是节点名。
+    for (const auto &[name, original] : source.nodes.items()) {
+        auto node = original;
+        for (const auto *edge : {"next", "on_error"})
+            if (node.contains(edge))
+                for (auto &target : node[edge]) target = prefix + target.get<std::string>();
+        if (node.value("custom_action", "") == "RunChild") {
+            auto &parameters = node["custom_action_param"];
+            parameters["entry"] = prefix + parameters.at("entry").get<std::string>();
+            for (auto &target : parameters["reset_hit_counts"]) target = prefix + target.get<std::string>();
+        }
+        if (node.value("custom_action", "") == "WvdConfirm") {
+            auto &operation = node["custom_action_param"]["operation"];
+            operation = prefix + operation.get<std::string>();
+            if (operation.get<std::string>().size() > 128)
+                throw std::runtime_error("COMPILE_BUSINESS_EVENT_INVALID");
+        }
+        result.nodes[prefix + name] = std::move(node);
+    }
+    result.validate();
+    return result;
+}
+std::vector<runtime::SessionDefinition> publish(const std::vector<CompiledWorkflow> &workflows,
                                             const maafw::Bundle &source,
                                             const runtime::BehaviorRegistry &registry,
                                             const std::filesystem::path &destination,
                                             const J &aliases, const maafw::Bundle *mod) {
-    workflow.validate();
+    const auto &workflow = workflows.front();
+    for (const auto &stage : workflows) stage.validate();
     if (!destination.is_absolute() || std::filesystem::exists(destination))
         throw std::runtime_error("COMPILE_DESTINATION_EXISTS_OR_INVALID");
     if (!aliases.is_object())
         throw std::runtime_error("COMPILE_ALIASES_INVALID");
-    runtime::SessionDefinition session;
-    session.entry = workflow.entry;
-    session.terminal_node = workflow.terminal;
-    session.checkpoint_node = workflow.checkpoint;
-    session.time_limit = workflow.time_limit;
-    session.recognitions = {vision::binding(aliases)};
-    const auto dialogue = recovery::dialogue_policy_name(workflow.dialogue_policy);
-    if (!dialogue.empty()) session.recognitions.front().parameters["dialogue_task"] = dialogue;
-    std::set<std::string> bound_actions;
-    for (const auto &node : workflow.nodes) {
-        if (node.value("custom_action", "") == "WvdConfirm") {
-            if (bound_actions.insert("WvdConfirm").second)
-                session.actions.push_back(wvd_confirmation_binding());
+    std::vector<runtime::SessionDefinition> sessions;
+    bool needs_leap_wait = false;
+    for (const auto &stage : workflows) {
+        runtime::SessionDefinition session;
+        session.entry = stage.entry;
+        session.terminal_node = stage.terminal;
+        session.checkpoint_node = stage.checkpoint;
+        session.time_limit = stage.time_limit;
+        session.recognitions = {vision::binding(aliases)};
+        const auto dialogue = recovery::dialogue_policy_name(stage.dialogue_policy);
+        if (!dialogue.empty()) session.recognitions.front().parameters["dialogue_task"] = dialogue;
+        std::set<std::string> bound_actions;
+        for (const auto &node : stage.nodes) {
+            if (node.value("custom_action", "") == "WvdConfirm") {
+                if (bound_actions.insert("WvdConfirm").second)
+                    session.actions.push_back(wvd_confirmation_binding());
+            }
+            if (node.value("custom_action", "") == "WvdCombat" && bound_actions.insert("WvdCombat").second)
+                session.actions.push_back(combat::combat_binding());
+            if (node.value("custom_action", "") == "WvdChest" && bound_actions.insert("WvdChest").second)
+                session.actions.push_back(chest::chest_binding());
+            if (node.value("custom_action", "") == "WvdUnknownLeap" && bound_actions.insert("WvdUnknownLeap").second) {
+                session.actions.push_back(unknown_leap_binding());
+                needs_leap_wait = true;
+            }
         }
-        if (node.value("custom_action", "") == "WvdCombat" && bound_actions.insert("WvdCombat").second)
-            session.actions.push_back(combat::combat_binding());
-        if (node.value("custom_action", "") == "WvdChest" && bound_actions.insert("WvdChest").second)
-            session.actions.push_back(chest::chest_binding());
+        // 缺失或不同修订的 binding 在连接前拒绝，不等候 SDK 首次执行才暴露。
+        registry.bind_recognitions(session.recognitions);
+        registry.validate(session);
+        sessions.push_back(std::move(session));
     }
-    // 缺失或不同修订的 binding 在连接前拒绝，不等候 SDK 首次执行才暴露。
-    registry.bind_recognitions(session.recognitions);
-    registry.validate(session);
     platform::BundleLease::Manifest manifest;
     for (const auto &file : source.files) {
         if (file.relative_path.starts_with("pipeline/"))
@@ -63,7 +106,14 @@ runtime::SessionDefinition publish_workflow(const CompiledWorkflow &workflow,
         }
     auto published_manifest = manifest;
     J image_sources = J::object();
-    for (const auto &image : workflow.images) {
+    std::set<std::string> required_images;
+    // 冻结策略的隐式停点同样走基础图/别名/mod 的唯一解析链，不能在活动期补图。
+    for (const auto &stage : workflows) {
+        required_images.insert(stage.images.begin(), stage.images.end());
+        for (const auto marker : recovery::dialogue_task_stops(stage.dialogue_policy))
+            required_images.insert(std::string(marker) + ".png");
+    }
+    for (const auto &image : required_images) {
         const auto selected = vision::resolve_image_source(source, aliases, image, mod);
         const bool from_mod = mod && selected.bundle == mod;
         const auto &files = from_mod ? mod_manifest : manifest;
@@ -79,7 +129,7 @@ runtime::SessionDefinition publish_workflow(const CompiledWorkflow &workflow,
     std::unique_ptr<platform::BundleLease> mod_origin;
     if (mod)
         mod_origin = std::make_unique<platform::BundleLease>(mod->root, mod->revision, mod_manifest);
-    const auto pipeline = workflow.nodes.dump(2);
+    const auto dialogue = recovery::dialogue_policy_name(workflow.dialogue_policy);
     J identity{{"source_revision", source.revision},
                {"source_files", manifest},
                {"mod_revision", mod ? J(mod->revision) : J(nullptr)},
@@ -92,6 +142,24 @@ runtime::SessionDefinition publish_workflow(const CompiledWorkflow &workflow,
                {"aliases", aliases},
                {"dialogue_task", dialogue},
                {"registry", registry.manifest()}};
+    std::map<std::string, std::string> pipelines;
+    if (workflows.size() == 1) pipelines["pipeline/workflow.json"] = workflow.nodes.dump(2);
+    else {
+        identity["stages"] = J::array();
+        for (std::size_t i = 0; i < workflows.size(); ++i) {
+            const auto &stage = workflows[i];
+            pipelines["pipeline/stage" + std::to_string(i) + ".json"] = stage.nodes.dump(2);
+            identity["stages"].push_back({{"kind", stage.kind}, {"entry", stage.entry},
+                {"terminal", stage.terminal}, {"checkpoint", stage.checkpoint}, {"pipeline", stage.nodes},
+                {"time_limit_ms", stage.time_limit.count()}, {"required_actions", stage.required_actions},
+                {"dialogue_task", recovery::dialogue_policy_name(stage.dialogue_policy)}});
+        }
+    }
+    if (needs_leap_wait) {
+        const auto wait_nodes = recovery::leap_wait_nodes();
+        identity["leap_wait"] = wait_nodes;
+        pipelines["pipeline/leap-wait.json"] = wait_nodes.dump(2);
+    }
     const auto serialized = identity.dump();
     const auto revision = platform::bytes_sha256(
         {reinterpret_cast<const std::uint8_t *>(serialized.data()), serialized.size()});
@@ -110,24 +178,43 @@ runtime::SessionDefinition publish_workflow(const CompiledWorkflow &workflow,
         const auto &bytes = manifest.contains(relative) ? origin.bytes(relative) : mod_origin->bytes(relative);
         write(relative, bytes.data(), bytes.size());
     }
-    write("pipeline/workflow.json", reinterpret_cast<const std::uint8_t *>(pipeline.data()),
-          pipeline.size());
-    session.bundle = {destination, revision, {}};
+    maafw::Bundle published{destination, revision, {}};
+    for (const auto &[path, pipeline] : pipelines) {
+        write(path, reinterpret_cast<const std::uint8_t *>(pipeline.data()), pipeline.size());
+        published.files.push_back({path, platform::file_sha256(destination / maafw::path_from_utf8(path))});
+    }
     for (const auto &[relative, hash] : published_manifest)
-        session.bundle.files.push_back({relative, hash});
+        published.files.push_back({relative, hash});
     // 发布后只读一个完整包，不在识别期间继续读取或扫描用户 mod 目录。
     if (mod) {
         const auto provenance = J{{"schema", 1}, {"baseline_revision", source.revision},
                                   {"mod_revision", mod->revision}, {"images", image_sources}}.dump(2);
         write("parameters/image-sources.json", reinterpret_cast<const std::uint8_t *>(provenance.data()), provenance.size());
-        session.bundle.files.push_back({"parameters/image-sources.json",
+        published.files.push_back({"parameters/image-sources.json",
             platform::file_sha256(destination / "parameters/image-sources.json")});
     }
-    session.bundle.snapshot_parent = destination.parent_path() / "active-snapshots";
-    session.bundle.files.push_back(
-        {"pipeline/workflow.json", platform::file_sha256(destination / "pipeline/workflow.json")});
-    maafw::verify_bundle(session.bundle);
-    registry.validate(session);
-    return session;
+    published.snapshot_parent = destination.parent_path() / "active-snapshots";
+    maafw::verify_bundle(published);
+    for (auto &session : sessions) {
+        session.bundle = published;
+        registry.validate(session);
+    }
+    return sessions;
+}
+}
+runtime::SessionDefinition publish_workflow(const CompiledWorkflow &workflow, const maafw::Bundle &source,
+    const runtime::BehaviorRegistry &registry, const std::filesystem::path &destination,
+    const J &aliases, const maafw::Bundle *mod) {
+    return publish({workflow}, source, registry, destination, aliases, mod).front();
+}
+std::vector<runtime::SessionDefinition> publish_workflow_stages(const std::vector<CompiledWorkflow> &stages,
+    const maafw::Bundle &source, const runtime::BehaviorRegistry &registry,
+    const std::filesystem::path &destination, const J &aliases, const maafw::Bundle *mod) {
+    if (stages.size() < 2 || stages.size() > 256)
+        throw std::runtime_error("COMPILE_STAGE_COUNT_INVALID");
+    std::vector<CompiledWorkflow> scoped;
+    scoped.reserve(stages.size());
+    for (std::size_t i = 0; i < stages.size(); ++i) scoped.push_back(scoped_stage(stages[i], i));
+    return publish(scoped, source, registry, destination, aliases, mod);
 }
 } // namespace wvd::games::tasks

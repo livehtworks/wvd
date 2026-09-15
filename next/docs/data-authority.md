@@ -91,6 +91,18 @@ completed_cycles只在六点及退出已确认后增加，不把任务点数或�
   四点路线、返回与住宿阶段；WvdConfirm是生产者，专项图、恢复策略和结果审查为消费者。
   选择待确认跨恢复保留；completed_cycles只表示本次离线业务终点，不是账号试炼成绩。
   扩展任务由显式提供的新目录加载，基础58项目录不自动增补，历史结果不用于自动续跑。
+- `snapshot.business.repel_forces`由WvdRunState内RepelForces持有：每组双战进度、开战意图、
+  已观察战斗、完成战斗和周期数。WvdConfirm按新帧生产，专项图/恢复策略/结果审查消费。
+  只有战斗出现后返回指定对话才计数，未确认意图禁止生命周期恢复后重发。
+  住宿付款沿用同一inn回执权威，不另外记录账号资源；历史摘要不允许自动续跑。
+
+- `snapshot.business.fordraig/cave_of_separation`分别由WvdRunState中的类型化周期状态持有。
+  WvdConfirm依据新帧生产阶段、机关/领取/跳跃意图与业务回执，续段和恢复读取同一对象。
+  Fordraig非boss自动战斗是当前阶段派生值，不覆盖冻结profile或原策略；
+  分离洞窟的途中停点与真正任务完成分别记录，不能把Ena/请求对话出现当成整轮完成。
+- 多阶段发布的`pipeline/stageN.json`属于同一个派生封存包，所有正常段共享revision，
+  不存在每段的第二份资源权威。各Session只拥有本段入口/终点/对话绑定；
+  活动期不得修改任意阶段文件或补图，详见`m4-stage-publication-validation.md`。
 
 - `snapshot.business.sleep`由WvdRunState内的SleepVisits唯一持有，记录固定9999次目标、
   当前住宿意图及完成数；每次退出旅店的新帧确认后递增。`tasks::configure_sleep_units`

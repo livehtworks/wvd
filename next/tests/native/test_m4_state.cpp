@@ -80,6 +80,56 @@ std::optional<runtime::SessionDefinition> recover_unit(const contracts::SessionR
     next.entry = "Recovered";
     return next;
 }
+J repel_forces_contract(const J &profile) {
+    auto settings = profile;
+    settings["ACTIVE_REST"] = true; settings["REST_INTERVEL"] = 2;
+    require(games::quests::RepelForces::rounds(settings) == 2, "REPEL_INTERVAL_LOST");
+    auto disabled = settings; disabled["ACTIVE_REST"] = false;
+    require(games::quests::RepelForces::rounds(disabled) == 1, "REPEL_DISABLED_REST_CHANGED");
+    disabled["ACTIVE_REST"] = true; disabled["REST_INTERVEL"] = 0;
+    require(games::quests::RepelForces::rounds(disabled) == 1, "REPEL_ZERO_REST_CHANGED");
+    for (const auto value : {-1, 255}) {
+        disabled["REST_INTERVEL"] = value;
+        bool rejected = false;
+        try { games::quests::RepelForces::rounds(disabled); } catch (const std::runtime_error &) { rejected = true; }
+        require(rejected, "REPEL_INVALID_BUDGET_ACCEPTED");
+    }
+    auto clock = std::make_shared<TestClock>();
+    games::WvdRunState state(settings, {"repel-contract", 1, clock});
+    std::uint64_t generation = 0;
+    auto apply = [&](const char *event) {
+        const auto id = state.confirmation_id(event, event);
+        require(state.confirm_event(id, event, generation, 1), "REPEL_EVENT_NOT_APPLIED");
+        require(!state.confirm_event(id, event, generation, 2), "REPEL_EVENT_REPLAYED");
+    };
+    for (std::size_t cycle = 0; cycle < 2; ++cycle) {
+        const auto base = cycle * 4;
+        state.enter_segment(cycle ? contracts::SegmentBoundary::Continuation : contracts::SegmentBoundary::Initial, ++generation, base);
+        apply("repel_started");
+        bool premature = false;
+        try { apply("repel_rested"); } catch (const std::runtime_error &e) { premature = std::string(e.what()) == "REPEL_REST_NOT_CONFIRMED"; }
+        require(premature, "REPEL_REST_SKIPPED");
+        apply("inn_payment_prepared"); apply("inn_rest_completed"); apply("repel_rested");
+        state.enter_dungeon(); state.target_point_completed(); state.target_point_completed(); apply("repel_arrived");
+        for (std::size_t pair = 0; pair < 2; ++pair) {
+            state.enter_segment(contracts::SegmentBoundary::Continuation, ++generation, base + 1 + pair);
+            for (int battle = 0; battle < 2; ++battle) {
+                apply("repel_battle_prepared");
+                state.enter_segment(contracts::SegmentBoundary::Recovery, ++generation, base + 1 + pair);
+                require(state.summary().at("repel_forces").at("pending").get<bool>(), "REPEL_INTENT_LOST_ON_RECOVERY");
+                bool missing = false;
+                try { apply("repel_battle_completed"); } catch (const std::runtime_error &e) { missing = std::string(e.what()) == "REPEL_ENCOUNTER_NOT_OBSERVED"; }
+                require(missing, "REPEL_PROMPT_COUNTED_WITHOUT_BATTLE");
+                apply("repel_battle_observed"); apply("repel_battle_completed");
+                require(state.summary().at("repel_forces").at("battles_in_pair") == battle + 1, "REPEL_FIGHT_NOT_COUNTED");
+            }
+            apply("repel_pair_completed");
+        }
+        state.enter_segment(contracts::SegmentBoundary::Continuation, ++generation, base + 3);
+        state.enter_dungeon(); state.target_point_completed(); apply("repel_exited"); apply("repel_completed");
+    }
+    return state.summary();
+}
 J steel_trial_contract(const J &profile) {
     auto settings = profile;
     settings["ACTIVE_REST"] = false;
@@ -1152,6 +1202,11 @@ int main(int argc, char **argv) {
             return 0;
         }
         auto profile = importer.parse(config.at("source")).values;
+        if (config.value("repel_forces_contract", false)) {
+            const J output{{"repel_forces_contract", repel_forces_contract(profile)}, {"backend_inputs", 0}};
+            std::ofstream(maafw::path_from_utf8(config.at("output"))) << output.dump(2);
+            return 0;
+        }
         if (config.value("steel_trial_contract", false)) {
             const J output{{"steel_trial_contract", steel_trial_contract(profile)}, {"backend_inputs", 0}};
             std::ofstream(maafw::path_from_utf8(config.at("output"))) << output.dump(2);

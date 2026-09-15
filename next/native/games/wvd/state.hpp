@@ -15,7 +15,11 @@
 #include "quests/gold_income.hpp"
 #include "quests/bull_cave.hpp"
 #include "quests/steel_trial.hpp"
+#include "quests/repel_forces.hpp"
+#include "quests/fordraig.hpp"
+#include "quests/cave_of_separation.hpp"
 #include "fishing/progress.hpp"
+#include "recovery/leap_wait.hpp"
 #include <map>
 
 namespace wvd::games {
@@ -23,7 +27,11 @@ namespace wvd::games {
 class WvdRunState final : public contracts::BusinessRunState {
   public:
     WvdRunState(nlohmann::json profile, const contracts::StateCreationContext &creation,
-                std::unique_ptr<KarmaCommitPort> karma_writer = {});
+                std::unique_ptr<KarmaCommitPort> karma_writer = {},
+                nlohmann::json handoff_source = nullptr);
+    bool observe_unknown_leap(std::uint64_t unknown_samples, std::uint64_t generation,
+                              std::uint64_t frame_id);
+    bool poll_leap_wait();
     void enter_dungeon();
     void target_point_completed();
     void observe_combat();
@@ -56,6 +64,10 @@ class WvdRunState final : public contracts::BusinessRunState {
     const nlohmann::json profile_;
     const std::string identity_;
     const std::shared_ptr<const contracts::MonotonicClock> clock_;
+    const nlohmann::json handoff_source_;
+    nlohmann::json handoff_intent_;
+    recovery::LeapWait leap_wait_;
+    std::size_t leap_sequence_{};
     CombatStrategy strategy_;
     std::uint64_t generation_{};
     std::size_t unit_index_{}, task_step_{}, dungeons_{}, combats_{}, chests_{}, crashes_{},
@@ -90,6 +102,9 @@ class WvdRunState final : public contracts::BusinessRunState {
     quests::GoldIncomeCycle gold_income_;
     quests::BullCaveCycle bull_cave_;
     quests::SteelTrial steel_trial_;
+    quests::RepelForces repel_forces_;
+    quests::FordraigCycle fordraig_;
+    quests::CaveOfSeparation cave_of_separation_;
     bool setting_is(const char *name, const char *zh, const char *en) const;
     std::map<std::string, nlohmann::json> confirmations_;
     nlohmann::json last_confirmation_;

@@ -3,6 +3,7 @@
 #include "global_prompt.hpp"
 #include "karma_prompt.hpp"
 #include "dialogue.hpp"
+#include "leap_wait.hpp"
 
 namespace wvd::games::recovery {
 namespace {
@@ -14,6 +15,13 @@ J scoped(const char *name, J roi, double threshold) {
     result["roi"] = roi;
     result["threshold"] = threshold;
     return result;
+}
+J task_stop_condition(DialoguePolicy policy) {
+    J stops = J::array();
+    for (auto name : dialogue_task_stops(policy))
+        stops.push_back(C::image(std::string(name)));
+    return stops.empty() ? J(nullptr) : C::all({C::any(std::move(stops)),
+        C::absent(J{{"mode", "combat_active"}}), C::absent(C::image("RiseAgain"))});
 }
 std::optional<runtime::SessionDefinition> decide(const contracts::SessionResult &result,
                                                 const runtime::SessionDefinition &previous, const J &p) {
@@ -58,12 +66,31 @@ std::optional<runtime::SessionDefinition> decide(const contracts::SessionResult 
         return std::nullopt;
     if (result.business.at("steel_trial").at("pending").get<bool>())
         return std::nullopt;
+    if (result.business.at("repel_forces").at("pending").get<bool>())
+        return std::nullopt;
+    // Leap/机关/领取/guild点击的意图跨恢复保留；未知后置不能通过重启重发。
+    if (result.business.at("fordraig").at("pending").get<bool>() ||
+        result.business.at("cave_of_separation").at("pending").get<bool>())
+        return std::nullopt;
     if (result.business.at("bounty_cycle").at("transfer_pending").get<bool>())
         return std::nullopt;
     if (result.business.at("fishing").at("casting_pending").get<bool>() ||
         result.business.at("fishing").at("reward_pending").get<bool>() ||
         result.business.at("fishing").at("transfer_pending").get<bool>())
         return std::nullopt;
+    // 转任务必须交给旧Run退出、结果保存后的调度入口，不能被普通重启吞掉。
+    const auto intent = result.business.value("handoff_intent", J(nullptr));
+    if (intent.is_object() && intent.at("kind") == "turn_to_7000G")
+        return std::nullopt;
+    const auto wait = result.business.value("leap_wait", J::object());
+    if (wait.value("active", false) && !wait.at("ready").get<bool>()) {
+        // 只承接本恢复链的明确边界；连接异常等不能借等待隐藏或自动升级。
+        if (result.reason != "leap.unknown" && result.reason != "leap.wait_boundary")
+            return std::nullopt;
+        if (wait.at("slices").get<std::size_t>() >= LeapWait::max_slices)
+            throw std::runtime_error("LEAP_WAIT_SLICE_BUDGET_EXHAUSTED");
+        return leap_wait_session(previous);
+    }
     const bool continuing = previous.lifecycle && result.business.at("lifecycle_recovery_active").get<bool>();
     const unsigned attempt = continuing ? previous.lifecycle->attempt + 1 : 1;
     if (attempt > 3)
@@ -89,8 +116,22 @@ std::optional<runtime::SessionDefinition> decide(const contracts::SessionResult 
     plan.operations.push_back(O::StopApplication);
     plan.operations.push_back(O::StartApplication);
     auto next = previous;
+    if (previous.entry == "LeapWait_Entry")
+        restore_leap_session_budget(next);
     next.lifecycle = std::move(plan);
-    next.entry = "Boot_Entry";
+    if (p.contains("boot_entries")) {
+        // 同revision多阶段使用显式冻结映射，不按unit猜名称，也不缺键退回首段。
+        const auto &entries = p.at("boot_entries");
+        if (!entries.is_object() || !entries.contains(previous.checkpoint_node) ||
+            !entries.at(previous.checkpoint_node).is_string() ||
+            entries.at(previous.checkpoint_node).get<std::string>().empty())
+            throw std::runtime_error("WVD_BOOT_ENTRY_MAPPING_INVALID");
+        next.entry = entries.at(previous.checkpoint_node).get<std::string>();
+    } else {
+        if (previous.checkpoint_node != "Checkpoint")
+            throw std::runtime_error("WVD_BOOT_ENTRY_MAPPING_REQUIRED");
+        next.entry = "Boot_Entry";
+    }
     return next;
 }
 }
@@ -98,6 +139,7 @@ namespace {
 tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, DialoguePolicy policy = DialoguePolicy::Default) {
     C graph(common ? "recovery.common_screens" : "recovery.boot_ready", std::chrono::seconds{120});
     graph.use_dialogue(policy);
+    const auto task_stop = task_stop_condition(policy);
     const auto panel = C::any({C::image("trait"), C::image("recover")});
     const J ready = C::all({common ? C::any({J{{"mode", "boot_ready"}}, panel, C::image("RiseAgain")}) : J{{"mode", "boot_ready"}},
                            C::absent(J{{"mode", "blocking_screen"}})});
@@ -110,7 +152,9 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, Dialogue
     auto low_retry = retry;
     low_retry["threshold"] = .60;
     const auto to_title = C::image("totitle"), resume = C::image("resume");
-    const J recognized = common ? C::any({J{{"mode", "boot_post"}}, panel}) : J{{"mode", "boot_post"}};
+    J recognized = common ? C::any({J{{"mode", "boot_post"}}, panel}) : J{{"mode", "boot_post"}};
+    if (!task_stop.is_null())
+        recognized = C::any({task_stop, recognized});
     J entry = common ? J{"Download", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title", "Pause", "Death", "Sandman", "Blessing", "Karma", "Dialogue", "Defeat", "Ready"}
                      : J{"Ready", "Download", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title", "Pause", "Sandman", "Blessing", "Karma", "Dialogue"};
     if (policy != DialoguePolicy::Default) {
@@ -120,6 +164,11 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, Dialogue
         graph.call_child("ChooseSpecial", special, {"Entry"});
         graph.hit_limit("SpecialDialogue", 6);
         graph.hit_limit("ChooseSpecial", 6);
+    }
+    if (!task_stop.is_null()) {
+        // 任务停点先于普通/特殊对话。这里只正常返回子流程，不写UserStopped或COS完成。
+        entry.insert(entry.begin(), "TaskStop");
+        graph.observe("TaskStop", task_stop, {"Terminal"});
     }
     graph.route("Entry", entry);
     const auto dialogue = graph.define_child("DefaultDialogue", choose_default_dialogue());
@@ -196,7 +245,31 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, Dialogue
         graph.delay_after(name, 1500);
         graph.postcondition_budget(name, 10000);
     }
-    return graph.finish();
+    auto result = graph.finish();
+    if (!task_stop.is_null()) {
+        // 候选命中后到输入前仍可能出现停点，所有输入都用新帧重新排除。
+        for (auto &node : result.nodes) {
+            if (node.value("custom_action", "") != "GuardedAction") continue;
+            auto &scene = node["custom_action_param"]["scene_recognition"]["parameters"];
+            scene = C::all({scene, C::absent(task_stop)});
+            node["custom_recognition_param"] = C::all({node.at("custom_recognition_param"), C::absent(task_stop)});
+        }
+        // 动作可能直接到达停点；例如Pause动作的后继不能继续点击或先选对话。
+        std::vector<std::string> actions{"ChooseSpecial", "ChooseDialogue", "ChooseKarma",
+            "SandmanHandle", "BlessingHandle", "DismissDeath", "AcknowledgeDefeat", "Download",
+            "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title"};
+        for (unsigned i = 0; i < 6; ++i) actions.push_back("ResumePause" + std::to_string(i));
+        for (const auto &name : actions) {
+            if (!result.nodes.contains(name)) continue;
+            auto &node = result.nodes.at(name);
+            if (node.value("custom_action", "") != "GuardedAction" &&
+                node.value("custom_action", "") != "RunChild") continue;
+            // 仅本层成功后继可正常返回；错误不能跳过失败记录，也不能越出子图。
+            if (node.contains("next")) node["next"].insert(node["next"].begin(), "TaskStop");
+        }
+        result.validate();
+    }
+    return result;
 }
 }
 tasks::CompiledWorkflow wait_boot_ready(bool allow_download) {
@@ -208,9 +281,18 @@ tasks::CompiledWorkflow clear_common_screens(bool allow_download, DialoguePolicy
 tasks::CompiledWorkflow with_boot_recovery(const tasks::CompiledWorkflow &task, bool allow_download) {
     task.validate();
     C graph("recovery.restartable_task", task.time_limit + std::chrono::seconds{120});
+    graph.use_dialogue(task.dialogue_policy);
     const auto task_entry = graph.append("Task", task, {"Terminal"});
+    const auto stop = task_stop_condition(task.dialogue_policy);
+    // Boot停点证明回到该任务的稳定游戏页；仍须回任务入口，由任务自身确认阶段终点。
+    // 停点的boot_ready是boolean-only NoHit，不能与图片放进any后当作确认许可。
+    J confirmed{"RestartConfirmed"};
+    if (!stop.is_null()) {
+        graph.confirm("RestartAtTaskStop", "game.restart", "game_restarted", stop, {task_entry});
+        confirmed.insert(confirmed.begin(), "RestartAtTaskStop");
+    }
     graph.confirm("RestartConfirmed", "game.restart", "game_restarted", {{"mode", "boot_ready"}}, {task_entry});
-    const auto boot = graph.append("Boot", boot_workflow(allow_download, false, task.dialogue_policy), {"RestartConfirmed"});
+    const auto boot = graph.append("Boot", boot_workflow(allow_download, false, task.dialogue_policy), confirmed);
     // Boot 在正常候选链不是默认动作；恢复策略只在新代次选择这个已封存入口。
     graph.route("Entry", {task_entry, boot});
     return graph.finish();
