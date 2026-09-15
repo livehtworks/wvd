@@ -57,6 +57,35 @@ class DataTests(unittest.TestCase):
         self.assertEqual(result["values"], expected)
         self.assertEqual(result["export"], {})
 
+    def test_native_pipeline_preparation_cli_preserves_author_and_has_no_execution(self):
+        import cv2
+        import numpy as np
+        source = self.root / "directory-author"
+        (source / "image/group").mkdir(parents=True)
+        (source / "pipeline").mkdir()
+        template = np.random.default_rng(95615).integers(0, 255, (24, 40, 3), dtype=np.uint8)
+        (source / "image/group/target.png").write_bytes(cv2.imencode(".png", template)[1].tobytes())
+        original = {"Match": {"recognition": "TemplateMatch", "template": "group", "threshold": .99}}
+        (source / "pipeline/main.json").write_text(json.dumps(original), encoding="utf-8")
+        files = [{"path": p.relative_to(source).as_posix(), "sha256": hashlib.sha256(p.read_bytes()).hexdigest()}
+                 for p in source.rglob("*") if p.is_file()]
+        destination = self.root / "directory-prepared"
+        request = dict(root=str(source), revision="author-1", files=files, destination=str(destination))
+        result = self.run_data("directory-cli", prepare_pipeline_bundle=request)
+        self.assertEqual(result["outcome"], "PASS", result)
+        prepared = result["prepared_pipeline_bundle"]
+        self.assertFalse(prepared["executed"])
+        self.assertFalse(result["execution_available"])
+        self.assertNotEqual(prepared["revision"], "author-1")
+        self.assertEqual(json.loads((destination / "pipeline/main.json").read_text())["Match"]["template"],
+                         ["group/target.png"])
+        for file in files:
+            self.assertEqual(hashlib.sha256((source / file["path"]).read_bytes()).hexdigest(), file["sha256"])
+        for file in prepared["files"]:
+            self.assertEqual(hashlib.sha256((destination / file["path"]).read_bytes()).hexdigest(), file["sha256"])
+        rejected = self.run_data("directory-cli-existing", prepare_pipeline_bundle=request)
+        self.assertEqual(rejected["error"], "PIPELINE_DESTINATION_EXISTS_OR_INVALID")
+
     def test_sections_unknown_and_roundtrip(self):
         for specific in (False, True):
             source = {"GENERAL": {"FARM_TARGET": "Dist", "TASK_SPECIFIC_CONFIG": specific, "LANGUAGE": "en_US",

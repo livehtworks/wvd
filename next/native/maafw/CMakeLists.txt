@@ -34,7 +34,7 @@ string(SHA256 WVD_BUILD_ID "${WVD_ID_INPUT}")
 file(CONFIGURE OUTPUT "${PROJECT_BINARY_DIR}/generated/core_build_id.hpp" CONTENT "#pragma once\n#define WVD_CORE_BUILD_ID \"@WVD_BUILD_ID@\"\n" @ONLY)
 add_library(wvd_core recognition.cpp preflight.cpp gateway.cpp guarded_controller.cpp
   ../platform/windows/file_digest.cpp ../platform/windows/runtime_files.cpp
-  ../storage/run_store.cpp ../storage/runtime_bundle.cpp ../platform/windows/bundle_lease.cpp
+  ../storage/run_store.cpp ../storage/runtime_bundle.cpp ../storage/pipeline_bundle.cpp ../platform/windows/bundle_lease.cpp
   ../devices/input_gate.cpp ../devices/lifecycle_execution.cpp ../runtime/guarded_action.cpp
   ../runtime/execution_session.cpp ../runtime/run_coordinator.cpp ../runtime/behavior_registry.cpp)
 target_include_directories(wvd_core PUBLIC "${PROJECT_SOURCE_DIR}/native" "${PROJECT_BINARY_DIR}/generated")

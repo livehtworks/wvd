@@ -53,6 +53,12 @@
 
 ## 一致性与边界
 
+- `prepare_pipeline_bundle` 显式新目录及其 `parameters/template-expansion.json` 是准备阶段的派生资源，
+  由storage持锁复制作者文件、冻结目录模板顺序并生成新revision；M4只读检查CLI/离线运行消费。
+  不是正式账号数据或历史恢复点，不覆盖源目录，只有新revision可进入随后冻结的Run权限。
+- `snapshot.business.dark_light_active` 是当前Run暗灯阶段；恢复保留、回城确认清除。
+  `encounter_timed_out` 是未结算遭遇计时的只读派生值，不是另一份计时权威或输入许可。
+
 - SDK 对象、帧、识别缓存不是数据权威，不反写源图片或模型。
 - WvdConfirm、WvdCombat 和 WvdChest 修改运行状态前复核当前观察的代次、epoch、应用与帧龄；识别曾经 Hit 不等于提交时仍有效。此检查不创建输入许可，过期不得计数或写回 profile。
 - 运行中的事实由 RunCoordinator 提供；历史目录没有已提交 result.json 时读为 Interrupted，禁止从未确认点击续跑。

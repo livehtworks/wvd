@@ -91,6 +91,49 @@ class FixTests(unittest.TestCase):
         self.assertEqual(result["reversed_clock"], "WVD_UNKNOWN_CLOCK_REVERSED")
         self.assertEqual(result["backend_calls"], 0)
 
+    def directory_nodes(self, names):
+        return {"Entry": {"next": ["Match"]},
+                "Match": {"recognition": "TemplateMatch", "template": names,
+                          "threshold": [.98, .99], "next": ["Terminal"]},
+                "Terminal": {"action": "Custom", "custom_action": "RootTerminal"}}
+
+    def test_directory_templates_are_frozen_before_real_pipeline_execution(self):
+        for change_author in (False, True):
+            with self.subTest(change_author=change_author):
+                folder = self.images("directory-" + str(change_author))
+                group = folder / "bundle/image/group"
+                (group / "nested").mkdir(parents=True)
+                shutil.copyfile(folder / "bundle/image/post.png", group / "nested/miss.png")
+                shutil.copyfile(folder / "bundle/image/target.png", group / "target.png")
+                result = self.execute(folder, {"mode": "directory-bundle", "change_author": change_author},
+                                      self.directory_nodes(["post.png", "group", "target.png"]))
+                self.assertEqual(result["snapshot"]["state"], "Completed", result)
+                self.assertTrue(result["snapshot"]["quiescent"])
+                self.assertEqual(result["backend_calls"], 0)
+                self.assertNotEqual(result["source_revision"], result["prepared_revision"])
+                members = result["expansion"]["directory_templates"]["group"]
+                self.assertEqual(set(members), {"group/nested/miss.png", "group/target.png"})
+                self.assertEqual(result["pipeline"]["Match"]["template"], ["post.png", *members, "target.png"])
+                self.assertEqual(result["pipeline"]["Match"]["threshold"], [.98, .99])
+                self.assertEqual(result["existing_destination_error"], "PIPELINE_DESTINATION_EXISTS_OR_INVALID")
+                if change_author:
+                    self.assertIn(result["stale_source_error"], ("RESOURCE_HASH_MISMATCH", "INTEGRITY_FILE_SET_CHANGED"))
+
+    def test_directory_templates_reject_empty_corrupt_and_escaping_paths(self):
+        for case, reference, expected in (("empty", "empty", "TEMPLATE_DIRECTORY_EMPTY"),
+                ("bad", "bad", "TEMPLATE_DIRECTORY_IMAGE_INVALID"),
+                ("escape", "../outside", "RESOURCE_PATH_INVALID")):
+            with self.subTest(case=case):
+                folder = self.images("directory-" + case)
+                if case != "escape":
+                    directory = folder / "bundle/image" / case
+                    directory.mkdir()
+                    if case == "bad": (directory / "broken.png").write_bytes(b"broken image")
+                result = self.execute(folder, {"mode": "directory-bundle"}, self.directory_nodes(reference))
+                self.assertEqual(result["preparation_error"], expected)
+                self.assertEqual(result["backend_calls"], 0)
+                self.assertNotIn("snapshot", result)
+
     def test_auto_route_post_matches_legacy_boolean_layouts(self):
         def image(name):
             return {"mode": "template", "image": name, "threshold": .8}

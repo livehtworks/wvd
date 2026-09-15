@@ -1,5 +1,6 @@
 #include "storage/legacy_import.hpp"
 #include "storage/profile_store.hpp"
+#include "storage/pipeline_bundle.hpp"
 #include "games/wvd/tasks/quest_catalog.hpp"
 #include "games/wvd/tasks/task_plan.hpp"
 #include "games/wvd/tasks/dungeon_route.hpp"
@@ -122,6 +123,18 @@ int main(int argc, char **argv) {
                         {"executed", false}});
                 }
             }
+        }
+        if (config.contains("prepare_pipeline_bundle")) {
+            const auto &request = config.at("prepare_pipeline_bundle");
+            maafw::Bundle source{maafw::path_from_utf8(request.at("root")), request.at("revision"), {}};
+            for (const auto &file : request.at("files"))
+                source.files.push_back({file.at("path"), file.at("sha256")});
+            const auto prepared = storage::prepare_pipeline_bundle(source, maafw::path_from_utf8(request.at("destination")));
+            J files = J::array();
+            for (const auto &file : prepared.files)
+                files.push_back({{"path", file.relative_path}, {"sha256", file.sha256}});
+            result["prepared_pipeline_bundle"] = {{"revision", prepared.revision}, {"files", files},
+                {"scope", "PREPARED_BEFORE_RUN_DEFINITION"}, {"executed", false}};
         }
         if (config.contains("profile_path")) {
             storage::ProfileStore store(maafw::path_from_utf8(config.at("profile_path")),

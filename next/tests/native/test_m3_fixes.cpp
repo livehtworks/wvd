@@ -5,6 +5,7 @@
 #include "platform/windows/bundle_lease.hpp"
 #include "loaded_modules.hpp"
 #include "integrity_lease_cases.hpp"
+#include "directory_bundle_cases.hpp"
 #include <iostream>
 #include <cmath>
 #include <opencv2/imgproc.hpp>
@@ -58,7 +59,9 @@ int main(int argc, char **argv) {
             {"battle"},
             2000ms};
         J output;
-        if (config.at("mode") == "unknown-window") {
+        if (config.at("mode") == "directory-bundle") {
+            output = directory_bundle_case(bundle, config, registry, device, policy);
+        } else if (config.at("mode") == "unknown-window") {
             games::vision::UnknownWindow window;
             cv::Mat previous;
             std::vector<double> reference;
