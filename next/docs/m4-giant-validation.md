@@ -32,6 +32,11 @@ ACTIVE_REST关闭不取消该case的专用住宿条件；负间隔明确拒绝�
 日志 `m4-giant-workflow.log`，私有根 `m4-workflow-h1tth04c`；各方法首场景失败后未执行
 其后场景。原因是Windows合成资源同时写returntoTown与returntotown，只保留一个文件名。
 修正一令测试按正式包既有别名生成规范资源，不改生产资源校验；实际流程仍待复验。
+修正一复验三方法24.563秒失败，私有根 `m4-workflow-g4o9xi44`，日志
+`m4-giant-workflow-correction1.log`：资源发布已通过，开始确认返回
+`BUSINESS_CONFIRMATION_STALE`，零输入。首场景确认新帧耗时2290.603ms，超过2000ms。
+这是另一项真实业务识别成本问题，不是别名修正无效。开始条件拆成五个具体场景分支，
+仍覆盖原条件并集、排除全部阻塞层并共享同一回执；不延长TTL，待定点复验。
 离线检查器另新增 compile_specials_manifest，复核已实现的陷阱/巨人资源与图，
 同时列出其余十三项；不建Run、不提供执行入口。此编译专项及负间隔测试待下一次构建。
 

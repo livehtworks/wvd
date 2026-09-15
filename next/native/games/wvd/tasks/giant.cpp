@@ -26,8 +26,8 @@ CompiledWorkflow giant_iteration(const WvdQuestDefinition &definition, const nlo
     const J combat{{"mode", "combat_active"}};
     const auto inside = C::any({map, C::image("dungFlag"), combat, C::image("chestFlag"), C::image("whowillopenit")});
     const auto city = C::all({inn, C::absent(inside), C::absent(C::image("Stay"))});
-    const auto start = C::any({inside, city, C::image("EdgeOfTown"), C::image("impregnableFortress"), C::image("fortressb7f")});
-    graph.route("Entry", {"PaymentPending", "Blocked", "Resume", "Started"});
+    graph.route("Entry", {"PaymentPending", "Blocked", "Resume", "Started", "StartedInside",
+        "StartedEdge", "StartedFortress", "StartedFloor"});
     graph.observe("PaymentPending", C::business("/inn_payment_pending", true), {"PaymentUncertain"});
     graph.recovery("PaymentUncertain", "departure.inn_payment_unconfirmed");
     graph.observe("Blocked", {{"mode", "blocking_screen"}}, {"ClearBlocking"});
@@ -36,8 +36,13 @@ CompiledWorkflow giant_iteration(const WvdQuestDefinition &definition, const nlo
     for (const auto *node : {"Entry", "Blocked", "ClearBlocking"})
         graph.hit_limit(node, 32);
     graph.observe("Resume", C::business("/giant_cycle_active", true), {"ReturnPhase", "RoutePhase"});
-    graph.confirm("Started", "giant.start", "giant_cycle_started",
-        C::all({start, C::absent(J{{"mode", "blocking_screen"}})}), {"ReturnPhase", "RoutePhase"});
+    // 先按具体场景选路，再用新帧确认该场景；不在每个确认中重复匹配全部入口。
+    // 五个分支的并集与原开始条件相同，且共享同一开始回执和阻塞层反证。
+    for (const auto &[name, scene] : std::vector<std::pair<std::string, J>>{
+        {"Started", city}, {"StartedInside", inside}, {"StartedEdge", C::image("EdgeOfTown")},
+        {"StartedFortress", C::image("impregnableFortress")}, {"StartedFloor", C::image("fortressb7f")}})
+        graph.confirm(name, "giant.start", "giant_cycle_started",
+            C::all({scene, C::absent(J{{"mode", "blocking_screen"}})}), {"ReturnPhase", "RoutePhase"});
     graph.observe("ReturnPhase", C::business("/giant_route_completed", true), {"Return"});
     graph.observe("RoutePhase", C::business("/giant_route_completed", false), {"Enter"});
     const auto enter = graph.append("DungeonEntry", navigation::enter_dungeon(plan), {"Traverse"});

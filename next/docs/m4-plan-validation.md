@@ -38,8 +38,6 @@ TeleportFromCityToWorldLocation（1935 行）、TeleportFromDungeonToCity（1973
 同构建的数据证据 `m4-data-9k5_p23l`，状态证据 `m4-state-tests-18qm7y86`；
 日志统一在 `next/.local/m4-state-31d6be223ee5454daa24b726aad9c20c/`。
 
-## 未完成
-
 ## 当前专项静态检查与编译成本
 
 正式源码 `f83a747`，日志 `m4-special-plan.log`，私有根 `m4-plan-nphew16v`：
@@ -49,7 +47,12 @@ TeleportFromCityToWorldLocation（1935 行）、TeleportFromDungeonToCity（1973
 
 定位到常量识别模式的隐式资源依赖在每个节点反复展开。修正一仅在一次资源收集内去重
 常量模式展开，显式图片及依赖参数的技能等级/楼梯目标仍逐项收集；独立validate仍重新
-收集并检查完整资源集合。不延长测试看护或修改运行预算，待构建后复验及产物逐图比对。
+收集并检查完整资源集合。不延长测试看护或修改运行预算。
+
+修正一正式源码 `f37b487`，日志 `m4-special-plan-correction1.log`，私有根
+`m4-plan-lxk2h4i1`，八方法全部通过，30.319秒。独立逐对象比较修正前已产出的
+43入本、43普通迭代、2专项：88份图的全部节点、资源、权限等编译结果完全一致。
+此前超时的43路线本轮保留逐目标断言通过，不能将前轮缺少的产物补写为历史通过。
 
 ## 剩余边界
 
