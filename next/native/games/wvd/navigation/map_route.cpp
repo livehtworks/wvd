@@ -108,7 +108,7 @@ tasks::CompiledWorkflow reach_map_target(const MapTarget &target,
     J after_move = {"Exited", "Encounter", "Frozen", "CloseStaleMap", "Moving"};
     graph.observe("Exited", outside, {"Terminal"});
     graph.fixed_click("AutoMove", correct_map,
-                      C::any({map, moving, encounter, outside}),
+                      {{"mode", "map_route_post"}},
                       {136, 1431}, {"WaitAfterMove"});
     graph.route("WaitAfterMove", after_move);
     graph.delay_after("AutoMove", 3000);

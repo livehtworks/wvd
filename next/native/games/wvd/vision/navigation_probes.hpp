@@ -29,4 +29,13 @@ inline nlohmann::json auto_route_moving_probes() {
     for (const auto &probe : auto_route_outside_probes()) probes.push_back(probe);
     return probes;
 }
+inline nlohmann::json map_route_post_probes() {
+    using J = nlohmann::json;
+    J probes = J::array({J{{"mode", "template"}, {"image", "mapFlag"}, {"threshold", .8}},
+        J{{"mode", "template"}, {"image", "dungFlag"}, {"threshold", .8}}, J{{"mode", "combat_active"}}});
+    for (const auto *name : {"chestFlag", "whowillopenit", "chestOpening"})
+        probes.push_back({{"mode", "template"}, {"image", name}, {"threshold", .8}});
+    for (const auto &probe : auto_route_outside_probes()) probes.push_back(probe);
+    return probes;
+}
 }

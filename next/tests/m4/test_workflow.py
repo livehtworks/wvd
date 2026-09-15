@@ -176,6 +176,8 @@ class WorkflowTests(unittest.TestCase):
         before_hash = digest(exe)
         # 测试看护预算跟随正式有限定义；不把较短测试超时伪装成产品停止。
         route_budget = 1300 if options.get("profile", {}).get("QUICK_DISARM_CHEST", False) else 1000
+        mining_watchdog = (1020 if options.get("attach_recovery") else 900) * (
+            options.get("normal_units", 1) + (3 if options.get("attach_recovery") else 0)) + 20
         with (folder / "native.log").open("wb") as log:
             result = subprocess.run([str(exe), str(source)], cwd=folder, env=self.env,
                                     stdout=log, stderr=log, timeout={"dungeon-route": route_budget + 20,
@@ -183,7 +185,7 @@ class WorkflowTests(unittest.TestCase):
                                         "giant": (route_budget + 500) * options.get("normal_units", 1),
                                         "recover": 750, "departure": 200, "heal": 260,
                                         "chest": 920 if options.get("quick") else 620,
-                                        "manual-separation": 3620, "time-leap": 200, "mining": 920, "common": 140, "iteration": (route_budget + 380) * options.get("normal_units", 1)}.get(options.get("workflow"), 90))
+                                        "manual-separation": 3620, "time-leap": 200, "mining": mining_watchdog, "common": 140, "iteration": (route_budget + 380) * options.get("normal_units", 1)}.get(options.get("workflow"), 90))
         self.assertEqual(digest(exe), before_hash)
         (folder / "execution.json").write_text(json.dumps({"exe_sha256": before_hash, "exit": result.returncode}), encoding="utf-8")
         self.assertEqual(result.returncode, 0, (folder / "native.log").read_text(encoding="utf-8", errors="replace")[-3000:])
@@ -1952,6 +1954,42 @@ class WorkflowTests(unittest.TestCase):
         self.assertFalse(r["mismatch"])
         self.assertEqual(r["snapshot"]["business"]["mining"]["rewards"]["fine"], 1)
         self.assertEqual(r["snapshot"]["business"]["mining"]["completed_cycles"], 1)
+
+    def test_mining_continuation_starts_a_new_cycle_without_reusing_reward(self):
+        first, actions = self.mining_scenario()
+        second, later = self.mining_scenario()
+        first[-1]["FFXI/GCN"] = (400, 700)
+        entry = [{"EVENT": (200, 500)}, {"EVENT": (200, 500)},
+                 {"FFXI/EVENT_GCN": (300, 700)}, {"openworldmap": (300, 100), "FFXI/ZONE2": (400, 700)},
+                 {"dungFlag": (50, 150), "mark_auto": (740, 300)}]
+        second[0]["theRouteToTheDestinationCannotBeFound"] = (300, 700)
+        inputs = [dict(kind=0, x=x, y=y) for x, y in
+                  [(420, 712), (1, 1), (220, 512), (320, 712), (420, 712), (760, 312)]]
+        r = self.execute("mining-two-cycles", first + entry + second, actions + inputs + later,
+            **self.mining_options(normal_units=2))
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 16)
+        self.assertFalse(r["mismatch"])
+        self.assertEqual(len(r["snapshot"]["sessions"]), 2)
+        state = r["snapshot"]["business"]
+        self.assertEqual(state["mining"]["rewards"]["fine"], 2)
+        self.assertEqual(state["mining"]["completed_cycles"], 2)
+        self.assertEqual(state["dungeons"], 0)
+
+    def test_mining_mid_run_unknown_recovers_without_fabricating_reward(self):
+        frames, actions = self.mining_scenario()
+        # 第一镐只进入未知页。生命周期端口显式重建现场后，真正挖到的下一份矿才计数。
+        r = self.execute("mining-mid-recovery", [frames[0], {}] + frames, [actions[0]] + actions,
+            **self.mining_options(attach_recovery=True, restart_frame=2, restart_action=1))
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 6)
+        self.assertFalse(r["mismatch"])
+        state = r["snapshot"]["business"]
+        self.assertEqual(state["crashes"], 1)
+        self.assertEqual(state["mining"]["rewards"]["fine"], 1)
+        self.assertEqual(state["mining"]["completed_cycles"], 1)
+        self.assertEqual(state["dungeons"], 0)
+        self.assertEqual(len(r["snapshot"]["sessions"]), 2)
 
     def test_mining_wrong_mark_position_never_digs(self):
         r = self.execute("mining-wrong-position", [{"dungFlag": (50, 150),

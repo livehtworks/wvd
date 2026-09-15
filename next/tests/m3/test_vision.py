@@ -174,6 +174,16 @@ class VisionTests(unittest.TestCase):
                 dict(id="flat", expected=expected, parameters=dict(mode="auto_route_moving")),
             ], full=True, patches=patches)
 
+    def test_map_route_post_keeps_original_anchor_union(self):
+        for marker in (None, "mapFlag", "dungFlag", "Inn", "chestFlag", "RiseAgain", "NoChestCanBeFound"):
+            patches = []
+            if marker:
+                patch = cv2.imdecode(np.frombuffer((ROOT / ("packs/wvd/image/" + marker + ".png")).read_bytes(), np.uint8), cv2.IMREAD_COLOR)
+                patches = [(250, 500, patch)]
+            self.run_fixture("map-post-" + str(marker), [dict(id="post",
+                expected="Hit" if marker in ("mapFlag", "dungFlag", "Inn", "chestFlag") else "NoHit",
+                parameters=dict(mode="map_route_post"))], full=True, patches=patches)
+
     def test_resource_source_and_aliases(self):
         for file in self.manifest["files"]:
             self.assertEqual(sha(ROOT / "packs/wvd" / file["path"]), file["sha256"])

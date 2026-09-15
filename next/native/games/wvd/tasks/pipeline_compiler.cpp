@@ -62,6 +62,8 @@ void collect_images(const J &value, std::set<std::string> &images, std::set<std:
         }
         if (expand && mode == "auto_route_moving")
             collect_images(vision::auto_route_moving_probes(), images, expanded_modes);
+        if (expand && mode == "map_route_post")
+            collect_images(vision::map_route_post_probes(), images, expanded_modes);
         if (expand && mode == "auto_route_post") {
             images.insert("mapFlag.png");
             images.insert("dungFlag.png");

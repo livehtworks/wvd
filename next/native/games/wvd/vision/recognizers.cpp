@@ -455,6 +455,19 @@ J evaluate_uncached(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels
         }
         return decision(false, {}, {{"stage", "unknown"}});
     }
+    if (mode == "map_route_post") {
+        check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");
+        // map | moving | encounter | outside 等价为下面的锚点并集。
+        // 与auto_route_post不同：这里允许地图，但不额外加入复活/无目标提示。
+        // 这是输入后的分类，不是下一次输入许可；实际执行的探针Error仍上报。
+        for (const auto &probe : map_route_post_probes()) {
+            const auto result = evaluate_impl(bundle, pixels, probe, bound, scope, cache, depth + 1, memo);
+            check(result.at("outcome") != "Error", "WVD_NAVIGATION_RECOGNITION_ERROR");
+            if (result.at("outcome") == "Hit")
+                return decision(true, allowed_rect, {{"stage", probe.value("image", "combat_active")}}, false);
+        }
+        return decision(false, {}, {{"stage", "unknown"}}, false);
+    }
     if (mode == "auto_route_moving") {
         check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");
         const auto probes = auto_route_moving_probes();
