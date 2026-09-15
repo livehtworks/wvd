@@ -277,7 +277,7 @@
     {
       "task_id": "fortress-B8F_trap",
       "iteration_implementation": {
-        "status": "AWAITING_NATIVE_VALIDATION",
+        "status": "FINITE_ITERATION_VALIDATED",
         "entry": "tasks::fortress_trap_iteration",
         "file": "native/games/wvd/tasks/fortress_trap.cpp",
         "evidence_report": "../m4-fortress-trap-validation.md",
