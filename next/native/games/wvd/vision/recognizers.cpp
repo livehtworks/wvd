@@ -1,4 +1,5 @@
 #include "recognizers.hpp"
+#include "dialogue_probes.hpp"
 #include "asset_resolver.hpp"
 #include "bobber.hpp"
 #include "boot_probes.hpp"
@@ -168,7 +169,7 @@ bool pure_condition(const J &p, unsigned depth = 0) {
            mode == "boot_post" || mode == "blocking_screen" || mode == "party_death" ||
            mode == "party_defeat" || mode == "party_death_post" || mode == "pause" ||
            mode == "pause_negative" || mode == "auto_route_post" || mode == "focus_cursor" ||
-           mode == "reached" || mode == "through_stair";
+           mode == "reached" || mode == "through_stair" || mode == "default_dialogue";
 }
 J evaluate_uncached(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels, const J &p,
                     const J &bound, const maafw::CustomRecognitionScope &scope,
@@ -281,6 +282,38 @@ J evaluate_uncached(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels
                 if (observe(probe))
                     return decision(true, allowed_rect, {{"stage", probe.at("image")}});
         return decision(false, {}, {{"stage", "unknown_or_map_only"}});
+    }
+    if (mode == "default_dialogue") {
+        check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");
+        if (p.contains("selected"))
+            check(p.at("selected").is_string() && std::find(default_dialogue_names.begin(), default_dialogue_names.end(),
+                  p.at("selected").get<std::string>()) != default_dialogue_names.end(), "WVD_DIALOGUE_OPTION_INVALID");
+        // 旧 IdentifyState 先返回正常地图/战斗/城镇，再考虑未知页上的默认对话。
+        auto inspect = [&](const J &probe) {
+            auto result = evaluate_impl(bundle, pixels, probe, bound, scope, cache, depth + 1, memo);
+            check(result.at("outcome") != "Error", "WVD_DIALOGUE_RECOGNITION_ERROR");
+            return result;
+        };
+        for (const auto &probe : default_dialogue_normal_probes())
+            if (inspect(probe).at("outcome") == "Hit")
+                return decision(false, {}, {{"reason", "normal_scene"}});
+        // false 排除死亡/默认对话本身，既保留已知覆盖层优先级，也避免递归调用。
+        for (const auto &probe : blocking_probes(false))
+            if (inspect(probe).at("outcome") == "Hit")
+                return decision(false, {}, {{"reason", "higher_priority_prompt"}});
+        if (inspect({{"mode", "party_death"}}).at("outcome") == "Hit")
+            return decision(false, {}, {{"reason", "single_death_prompt_first"}});
+        for (const auto &probe : default_dialogue_probes()) {
+            auto result = inspect(probe);
+            if (result.at("outcome") != "Hit")
+                continue;
+            const auto name = probe.at("image").get<std::string>().substr(std::string_view("dialogueChoices/").size());
+            if (p.contains("selected") && p.at("selected").get<std::string>() != name)
+                return decision(false, {}, {{"reason", "option_changed"}, {"selected", name}});
+            result["evidence"]["selected"] = name;
+            return result;
+        }
+        return decision(false, {}, {{"reason", "no_default_option"}});
     }
     if (mode == "boot_ready" || mode == "boot_post" || mode == "blocking_screen") {
         check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");

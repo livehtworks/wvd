@@ -1,6 +1,7 @@
 #include "pipeline_compiler.hpp"
 #include "games/wvd/vision/boot_probes.hpp"
 #include "games/wvd/vision/navigation_probes.hpp"
+#include "games/wvd/vision/dialogue_probes.hpp"
 #include <algorithm>
 #include <functional>
 #include <map>
@@ -22,6 +23,12 @@ void collect_images(const J &value, std::set<std::string> &images) {
             collect_images(vision::boot_probes(mode == "boot_post"), images);
         if (mode == "blocking_screen")
             collect_images(vision::blocking_probes(), images);
+        if (mode == "default_dialogue") {
+            collect_images(vision::default_dialogue_probes(), images);
+            collect_images(vision::default_dialogue_normal_probes(), images);
+            collect_images(vision::blocking_probes(false), images);
+            collect_images(J{{"mode", "party_death"}}, images);
+        }
         if (mode == "auto_route_post") {
             images.insert("mapFlag.png");
             images.insert("dungFlag.png");

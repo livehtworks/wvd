@@ -2,6 +2,7 @@
 #include "party_death.hpp"
 #include "global_prompt.hpp"
 #include "karma_prompt.hpp"
+#include "dialogue.hpp"
 
 namespace wvd::games::recovery {
 namespace {
@@ -26,7 +27,8 @@ std::optional<runtime::SessionDefinition> decide(const contracts::SessionResult 
         result.reason == "chest.retry_pending" ||
         result.reason == "revival.outcome_unconfirmed" ||
         result.reason == "departure.inn_payment_unconfirmed" ||
-        result.reason == "karma.choice_outcome_unconfirmed")
+        result.reason == "karma.choice_outcome_unconfirmed" ||
+        result.reason == "dialogue.choice_outcome_unconfirmed")
         return std::nullopt;
     if (!result.business.is_object() || result.business.value("kind", "") != "wvd" ||
         !result.business.at("lifecycle_recovery_active").is_boolean())
@@ -77,8 +79,13 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common) {
     low_retry["threshold"] = .60;
     const auto to_title = C::image("totitle"), resume = C::image("resume");
     const J recognized = common ? C::any({J{{"mode", "boot_post"}}, panel}) : J{{"mode", "boot_post"}};
-    graph.route("Entry", common ? J{"Download", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title", "Pause", "Death", "Defeat", "Sandman", "Blessing", "Karma", "Ready"}
-                                 : J{"Ready", "Download", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title", "Pause", "Sandman", "Blessing", "Karma"});
+    graph.route("Entry", common ? J{"Download", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title", "Pause", "Death", "Sandman", "Blessing", "Karma", "Dialogue", "Defeat", "Ready"}
+                                 : J{"Ready", "Download", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title", "Pause", "Sandman", "Blessing", "Karma", "Dialogue"});
+    const auto dialogue = graph.define_child("DefaultDialogue", choose_default_dialogue());
+    graph.observe("Dialogue", {{"mode", "default_dialogue"}}, {"ChooseDialogue"});
+    graph.call_child("ChooseDialogue", dialogue, {"Entry"});
+    graph.hit_limit("Dialogue", 6);
+    graph.hit_limit("ChooseDialogue", 6);
     const auto karma = graph.define_child("KarmaPrompt", choose_karma_prompt());
     graph.observe("Karma", C::any({C::image("ambush"), C::image("ignore")}), {"ChooseKarma"});
     graph.call_child("ChooseKarma", karma, {"Entry"});

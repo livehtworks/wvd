@@ -76,6 +76,7 @@ if(WVD_BUILD_M4)
     ../games/wvd/recovery/revival.cpp
     ../games/wvd/recovery/party_death.cpp
     ../games/wvd/recovery/global_prompt.cpp
+    ../games/wvd/recovery/dialogue.cpp
     ../games/wvd/navigation/wall_bypass.cpp
     ../games/wvd/state.cpp ../games/wvd/state_factory.cpp ../games/wvd/karma.cpp ../games/wvd/tasks/fortress_trap.cpp
     ../games/wvd/recovery/karma_prompt.cpp ../storage/karma_writer.cpp

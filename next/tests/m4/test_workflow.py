@@ -24,6 +24,11 @@ class WorkflowTests(unittest.TestCase):
         cls.root = Path(tempfile.mkdtemp(prefix="m4-workflow-", dir=ROOT / ".local"))
         cls.sdk = Path(json.loads((ROOT / ".local/maafw.json").read_text(encoding="utf-8"))["sdk"])
         cls.env = dict(os.environ, PATH=str(cls.sdk / "bin") + os.pathsep + os.environ.get("PATH", ""))
+        baseline_images = subprocess.check_output(["git", "ls-tree", "-r", "--name-only",
+            "6585f4075f5714ab522aa582993860c09af912c1", "resources/images/dialogueChoices"], cwd=ROOT.parent).decode("utf-8")
+        cls.default_dialogues = sorted(Path(name).stem for name in baseline_images.splitlines() if name.endswith(".png"))
+        if len(cls.default_dialogues) != 14:
+            raise AssertionError("legacy dialogue inventory changed")
         print("M4 workflow evidence: " + str(cls.root), flush=True)
 
     def execute(self, name, screens, transitions, **options):
@@ -73,6 +78,8 @@ class WorkflowTests(unittest.TestCase):
                       "combatActive_3", "combatActive_4", "boot_title_logo", "boot_attention", "startdownload",
                       "retry", "retry_blank", "totitle", "resume", "trait", "recover", "spellskill/skillDetail", "close", "someonedead", "RiseAgain",
                       "multipeopledead", "skull", "sandman_recover", "blessing", "combatClose", "ambush", "ignore"]
+            names += ["City_fortress", "City_DHI", "City_portTownGrandLegion"]
+            names += ["dialogueChoices/" + name for name in self.default_dialogues]
         names += options.get("extra_images", [])
         if resource_kind == "revival":
             names.append("RiseAgain")
@@ -2272,6 +2279,61 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(result["backend_calls"], 2)
         self.assertEqual(result["lifecycle_calls"], [])
         self.assertTrue(result["snapshot"]["business"]["has_prepared_skill"])
+
+    def test_dialogue_all_legacy_default_options(self):
+        # 候选集合来自冻结 Git 资源，而非 C++ 列表，避免少迁一项仍测试全绿。
+        for index, name in enumerate(self.default_dialogues):
+            with self.subTest(option=name):
+                result = self.execute("dialogue-option-" + str(index),
+                    [{"dialogueChoices/" + name: (300, 700)}, {"Inn": (400, 700)}],
+                    [dict(kind=0, x=320, y=712)], workflow="common")
+                self.assertEqual(result["snapshot"]["state"], "Completed", result)
+                self.assertEqual(result["backend_calls"], 1)
+                self.assertFalse(result["mismatch"])
+                self.assertEqual(result["lifecycle_calls"], [])
+
+    def test_dialogue_order_and_multiple_pages(self):
+        first, second = ("dialogueChoices/" + name for name in self.default_dialogues[:2])
+        result = self.execute("dialogue-ordered-pages", [{first: (200, 600), second: (500, 800)},
+            {second: (500, 800)}, {"Inn": (400, 700)}],
+            [dict(kind=0, x=220, y=612), dict(kind=0, x=520, y=812)], workflow="common")
+        self.assertEqual(result["snapshot"]["state"], "Completed", result)
+        self.assertEqual(result["backend_calls"], 2)
+        self.assertFalse(result["mismatch"])
+        self.assertEqual(result["lifecycle_calls"], [])
+
+    def test_dialogue_does_not_override_normal_scene(self):
+        for scene in ("Inn", "trait", "recover"):
+            with self.subTest(scene=scene):
+                result = self.execute("dialogue-normal-" + scene,
+                    [{scene: (400, 700), "dialogueChoices/nope": (200, 900)}], [], workflow="common")
+                self.assertEqual(result["snapshot"]["state"], "Completed", result)
+                self.assertEqual(result["backend_calls"], 0)
+
+    def test_dialogue_unconfirmed_effect_is_not_replayed(self):
+        option = {"dialogueChoices/nope": (300, 700)}
+        result = self.execute("dialogue-unchanged", [option],
+            [dict(kind=0, x=320, y=712, stay=True)], workflow="common",
+            attach_recovery=True, force_restart=True, max_crashes=0)
+        self.assert_uncertain_effect(result, "dialogue.choice_outcome_unconfirmed", 1)
+        result = self.execute("dialogue-unknown-post", [option, {}],
+            [dict(kind=0, x=320, y=712)], workflow="common", attach_recovery=True)
+        self.assertEqual(result["snapshot"]["state"], "Failed", result)
+        self.assertEqual(result["backend_calls"], 1)
+        self.assertEqual(result["lifecycle_calls"], [])
+        self.assertFalse(result["mismatch"])
+
+    def test_dialogue_stop_and_rejected_click(self):
+        for stopped in (False, True):
+            with self.subTest(stopped=stopped):
+                result = self.execute("dialogue-stop-" + str(stopped),
+                    [{"dialogueChoices/nope": (300, 700)}, {"Inn": (400, 700)}],
+                    [dict(kind=0, x=320, y=712, reject=not stopped)], workflow="common",
+                    stop_after_first=stopped, attach_recovery=True)
+                self.assertEqual(result["snapshot"]["state"], "UserStopped" if stopped else "Failed", result)
+                self.assertEqual(result["backend_calls"], 1)
+                self.assertEqual(result["lifecycle_calls"], [])
+                self.assertFalse(result["mismatch"])
 
     def test_common_title_attention_download_are_normal_inputs(self):
         frames = [{"boot_title_logo": (200, 350)}, {"boot_attention": (300, 450)},
