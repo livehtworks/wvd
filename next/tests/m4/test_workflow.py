@@ -1793,6 +1793,57 @@ class WorkflowTests(unittest.TestCase):
         self.assertFalse(r["snapshot"]["business"]["mining"]["refill_pending"])
         self.assertEqual(r["snapshot"]["business"]["mining"]["completed_cycles"], 1)
 
+    def test_mining_eot_and_mark_navigation_reach_the_verified_site(self):
+        frames, actions = self.mining_scenario()
+        # 独立沿用旧EOT事件顺序：前置GCN、关闭覆盖层、EVENT、活动、ZONE2。
+        # 地图标记输入之后才出现寻路结束提示；截图次数不能使场景前进。
+        entry = [{"FFXI/GCN": (400, 700)}, {"EVENT": (200, 500)}, {"EVENT": (200, 500)},
+                 {"FFXI/EVENT_GCN": (300, 700)}, {"openworldmap": (300, 100), "FFXI/ZONE2": (400, 700)},
+                 {"dungFlag": (50, 150), "mark_auto": (740, 300)}]
+        frames[0]["theRouteToTheDestinationCannotBeFound"] = (300, 700)
+        inputs = [dict(kind=0, x=x, y=y) for x, y in
+                  [(420, 712), (1, 1), (220, 512), (320, 712), (420, 712), (760, 312)]]
+        r = self.execute("mining-eot", entry + frames, inputs + actions, **self.mining_options())
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 11)
+        self.assertFalse(r["mismatch"])
+        self.assertEqual(r["snapshot"]["business"]["mining"]["rewards"]["fine"], 1)
+        self.assertEqual(r["snapshot"]["business"]["mining"]["completed_cycles"], 1)
+
+    def test_mining_wrong_mark_position_never_digs(self):
+        r = self.execute("mining-wrong-position", [{"dungFlag": (50, 150),
+            "theRouteToTheDestinationCannotBeFound": (300, 700), "FFXI/org_position": (100, 400)}], [],
+            **self.mining_options())
+        self.assertEqual(r["snapshot"]["state"], "Interrupted", r)
+        self.assertEqual(r["snapshot"]["sessions"][0]["reason"], "quest.mining_position_not_confirmed")
+        self.assertEqual(r["backend_calls"], 0)
+        self.assertFalse(r["mismatch"])
+        self.assertEqual(sum(r["snapshot"]["business"]["mining"]["rewards"].values()), 0)
+
+    def test_mining_all_reward_classes_use_published_mod_and_roi(self):
+        names = ("fine", "high", "mid", "low", "refine", "alter", "sliver", "ouro", "lesser_full", "full")
+        original, _ = self.mining_scenario()
+        site = original[0]
+        frames, commands = [site], []
+        for i, name in enumerate(names):
+            reward_image = "alternate_fine" if name == "fine" else "FFXI/org_" + name
+            frames += [{**site, "FFXI/receive": (330, 700), reward_image: (480, 780)}, site]
+            commands += [dict(kind=0, x=450, y=600)] * 2
+        # 第十一页仅有ROI外的已知矿物；仍应归为unknown，不受界面其它区域干扰。
+        frames += [{**site, "FFXI/receive": (330, 700), "FFXI/org_high": (480, 200)}] + original[2:]
+        commands += [dict(kind=0, x=450, y=600)] * 2 + [dict(kind=0, x=1, y=1)] + [dict(kind=0, x=420, y=712)] * 2
+        options = self.mining_options(mod_images={"FFXI/org_fine": "alternate_fine"}, mod_only_images=["FFXI/org_fine"])
+        options["extra_images"] += ["alternate_fine"]
+        r = self.execute("mining-all-rewards", frames, commands, **options)
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 25)
+        self.assertFalse(r["mismatch"])
+        mining = r["snapshot"]["business"]["mining"]
+        self.assertEqual(mining["rewards"], {name: 1 for name in (*names, "unknown")})
+        self.assertEqual(mining["reward_sequence"], 11)
+        self.assertEqual(mining["completed_cycles"], 1)
+        self.assertEqual(r["image_sources"]["images"]["FFXI/org_fine.png"]["source"], "mod")
+
     def dark_scenario(self, heal=False):
         dungeon = {"dungFlag": (50, 150), "darklight": (400, 700)}
         light = {"darklight_lightIt": (400, 700)}
