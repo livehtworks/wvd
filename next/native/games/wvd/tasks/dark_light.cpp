@@ -24,7 +24,7 @@ CompiledWorkflow dark_light(const WvdQuestDefinition &definition, const nlohmann
     const auto outside = C::all({C::any({C::image("Inn"), C::image("EdgeOfTown"), C::image("openworldmap"),
         C::image("returnText"), C::image("returntoTown")}), C::absent(map), C::absent(encounter)});
     const J blocked{{"mode", "blocking_screen"}};
-    const auto lamp = C::image("darkLight"), light = C::image("darklight_lightIt");
+    const auto lamp = C::image("darklight"), light = C::image("darklight_lightIt");
     const J known{{"mode", "dark_light_post"}};
     graph.route("Entry", {"UnknownFrozen", "Outside", "ResumedTask", "Started", "UnknownTimeout", "Wait"});
     graph.observe("ResumedTask", C::business("/dark_light_active", true), {"Dispatch"});
@@ -62,10 +62,10 @@ CompiledWorkflow dark_light(const WvdQuestDefinition &definition, const nlohmann
     graph.route("LightDispatch", {"UnknownFrozen", "Blocked", "Combat", "Chest", "Revive", "Outside", "Light", "OpenLamp", "UnknownTimeout", "LightWait"});
     graph.route("LightWait", {"LightDispatch"});
     graph.delay_after("LightWait", 1000);
-    const auto clear_light = C::all({light, C::absent(encounter), C::absent(blocked)});
+    const J clear_light{{"mode", "dark_light_clear"}, {"stage", "confirm"}};
     graph.click("Light", clear_light, light, C::all({known, C::absent(light)}), {"Dispatch"});
     graph.postcondition_budget("Light", 10000);
-    graph.click("OpenLamp", C::all({dungeon, lamp, C::absent(blocked)}), lamp,
+    graph.click("OpenLamp", {{"mode", "dark_light_clear"}, {"stage", "open"}}, lamp,
         C::any({light, encounter, outside, blocked}), {"LightDispatch"});
     graph.delay_after("OpenLamp", 1000);
     graph.postcondition_budget("OpenLamp", 10000);

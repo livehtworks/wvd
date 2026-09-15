@@ -261,6 +261,42 @@ J evaluate_uncached(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels
         result["action_eligible"] = false;
         return result;
     }
+    if (mode == "dark_light_clear") {
+        check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");
+        const auto stage = p.at("stage").get<std::string>();
+        check(stage == "open" || stage == "confirm", "WVD_DARK_LIGHT_STAGE_INVALID");
+        auto image_probe = [](const char *name) { return J{{"mode", "template"}, {"image", name}}; };
+        J conditions = J::array({image_probe(stage == "open" ? "darklight" : "darklight_lightIt")});
+        J excluded = J::array({J{{"mode", "combat_active"}}, image_probe("chestFlag"),
+            image_probe("whowillopenit"), image_probe("chestOpening"), image_probe("RiseAgain")});
+        if (stage == "open") {
+            conditions.push_back(image_probe("dungFlag"));
+            for (auto name : {"mapFlag", "trait", "recover"}) excluded.push_back(image_probe(name));
+        }
+        conditions.push_back({{"mode", "not"}, {"conditions", excluded}});
+        auto scene = evaluate_impl(bundle, pixels, {{"mode", "all"}, {"conditions", conditions}},
+            bound, scope, cache, depth + 1, memo);
+        check(scene.at("outcome") != "Error", "WVD_DARK_LIGHT_RECOGNITION_ERROR");
+        if (scene.at("outcome") != "Hit") return scene;
+        // 基础覆盖层可同帧四路扫描，仍按原优先级消费结果/错误。
+        // 打开灯已证明Dungeon；按旧分类顺序，死亡和默认对话不能抢占正常Dungeon。
+        const auto probes = blocking_probes(false);
+        const auto matches = evaluate_batch(bundle, pixels, probes, bound, scope, cache, depth, memo, 4);
+        for (std::size_t i = 0; i < probes.size(); ++i) {
+            const auto &result = matches.at(i);
+            check(result.at("outcome") != "Error", "WVD_DARK_LIGHT_RECOGNITION_ERROR");
+            if (result.at("outcome") == "Hit")
+                return decision(false, {}, {{"reason", "blocking_screen"}, {"matched", result}});
+        }
+        if (stage == "confirm")
+            for (auto prompt : {"party_death", "default_dialogue", "party_defeat"}) {
+                const auto result = evaluate_impl(bundle, pixels, {{"mode", prompt}}, bound, scope, cache, depth + 1, memo);
+                check(result.at("outcome") != "Error", "WVD_DARK_LIGHT_RECOGNITION_ERROR");
+                if (result.at("outcome") == "Hit")
+                    return decision(false, {}, {{"reason", "higher_priority_prompt"}, {"matched", result}});
+            }
+        return decision(true, allowed_rect, {{"stage", stage}}, false);
+    }
     if (mode == "dark_light_post") {
         check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");
         for (const auto &probe : J::array({J{{"mode", "template"}, {"image", "darklight_lightIt"}},

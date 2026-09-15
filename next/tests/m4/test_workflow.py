@@ -1699,12 +1699,12 @@ class WorkflowTests(unittest.TestCase):
     def dark_options(self, **extra):
         options = dict(workflow="dark-light", quest_catalog=str(ROOT / "packs/wvd/parameters/legacy-quests.json"),
             profile={**self.wall_profile(False), "RECOVER_WHEN_BEGINNING": True},
-            extra_images=["darkLight", "darklight_lightIt"])
+            extra_images=["darklight", "darklight_lightIt"])
         options.update(extra)
         return options
 
     def dark_scenario(self, heal=False):
-        dungeon = {"dungFlag": (50, 150), "darkLight": (400, 700)}
+        dungeon = {"dungFlag": (50, 150), "darklight": (400, 700)}
         light = {"darklight_lightIt": (400, 700)}
         frames = [dungeon, dungeon, light, self.turn_screen(), dungeon, dungeon]
         commands = [dict(kind=0, x=x, y=y) for x, y in [(1, 1), (420, 712), (420, 712), (513, 1200), (1, 1)]]
