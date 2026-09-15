@@ -1,6 +1,7 @@
 #include "runtime_fixture.hpp"
 #include "games/wvd/state.hpp"
 #include "games/wvd/tasks/sleep_visits.hpp"
+#include "games/wvd/tasks/bounty_cycle.hpp"
 #include "games/wvd/vision/recognizers.hpp"
 #include "storage/legacy_import.hpp"
 #include "storage/profile_store.hpp"
@@ -74,6 +75,70 @@ std::optional<runtime::SessionDefinition> recover_unit(const contracts::SessionR
     auto next = previous;
     next.entry = "Recovered";
     return next;
+}
+J bounty_cycle_contract(const J &profile) {
+    J results = J::array();
+    for (const bool hands : {false, true}) {
+        auto clock = std::make_shared<TestClock>();
+        games::WvdRunState state(profile, {hands ? "hands" : "scorpion", 1, clock});
+        runtime::RunDefinition run;
+        games::tasks::configure_scorpion_units(run, hands, 2);
+        require(run.max_business_units == (hands ? 8 : 6), "BOUNTY_SCHEDULE_TRUNCATED");
+        std::uint64_t generation = 0;
+        const std::size_t units = hands ? 4 : 3;
+        for (std::size_t cycle = 0; cycle < 2; ++cycle) {
+            const auto base = cycle * units;
+            state.enter_segment(cycle ? contracts::SegmentBoundary::Continuation : contracts::SegmentBoundary::Initial, ++generation, base);
+            auto emit = [&](const char *event, const std::string &operation = "") {
+                return state.confirm_event(state.confirmation_id(operation.empty() ? event : operation, event), event, generation, 1);
+            };
+            emit(hands ? "scorpion_hands_started" : "scorpion_started");
+            require(!emit(hands ? "scorpion_hands_started" : "scorpion_started"), "BOUNTY_START_REPLAY");
+            require(state.summary().at("bounty_cycle").at("rest_due").get<bool>() == (cycle == 0), "BOUNTY_INTERVAL_CHANGED");
+            emit("bounty_leap_prepared");
+            require(state.summary().at("bounty_cycle").at("transfer_pending").get<bool>(), "BOUNTY_TRANSFER_INTENT_MISSING");
+            emit("bounty_leap_completed");
+            emit("bounty_travel_prepared");
+            emit("bounty_travel_completed");
+            emit("bounty_revealed");
+            emit("bounty_cycle_revealed");
+            for (std::size_t route = 0; route < (hands ? 2u : 1u); ++route) {
+                state.enter_segment(contracts::SegmentBoundary::Continuation, ++generation, base + 1 + route);
+                emit("dungeon_entered");
+                emit("target_completed", "point0");
+                bool early = false;
+                try { emit("bounty_route_completed"); }
+                catch (const std::exception &e) { early = std::string(e.what()) == "BOUNTY_ROUTE_NOT_COMPLETED"; }
+                require(early, "BOUNTY_INCOMPLETE_ROUTE_ACCEPTED");
+                emit("target_completed", "point1");
+                emit("bounty_route_completed");
+                emit("bounty_return_completed");
+            }
+            state.enter_segment(contracts::SegmentBoundary::Continuation, ++generation, base + units - 1);
+            bool early = false;
+            try { emit("bounty_cycle_reported"); }
+            catch (const std::exception &e) { early = std::string(e.what()) == "BOUNTY_REPORT_COUNT_INVALID"; }
+            require(early, "BOUNTY_UNDELIVERED_COMPLETION");
+            for (std::size_t report = 0; report < (hands ? 2u : 1u); ++report) {
+                emit("bounty_report_prepared");
+                emit("bounty_report_completed");
+                require(!emit("bounty_report_completed"), "BOUNTY_DUPLICATE_REPORT");
+            }
+            emit("bounty_cycle_reported");
+            if (cycle == 0) {
+                bool unpaid = false;
+                try { emit("bounty_cycle_completed"); }
+                catch (const std::exception &e) { unpaid = std::string(e.what()) == "BOUNTY_REST_NOT_COMPLETED"; }
+                require(unpaid, "BOUNTY_SKIPPED_REQUIRED_REST");
+                emit("inn_payment_prepared");
+                emit("inn_rest_completed");
+            }
+            emit("bounty_cycle_completed");
+            require(!emit("bounty_cycle_completed"), "BOUNTY_CYCLE_REPLAY");
+        }
+        results.push_back(state.summary());
+    }
+    return results;
 }
 J sleep_contract(const J &profile) {
     auto clock = std::make_shared<TestClock>();
@@ -738,6 +803,11 @@ int main(int argc, char **argv) {
             return 0;
         }
         auto profile = importer.parse(config.at("source")).values;
+        if (config.value("bounty_cycle_contract", false)) {
+            const J output{{"bounty_cycle_contract", bounty_cycle_contract(profile)}, {"backend_inputs", 0}};
+            std::ofstream(maafw::path_from_utf8(config.at("output"))) << output.dump(2);
+            return 0;
+        }
         if (config.value("sleep_contract", false)) {
             const J output{{"sleep_contract", sleep_contract(profile)}, {"backend_inputs", 0}};
             std::ofstream(maafw::path_from_utf8(config.at("output"))) << output.dump(2);

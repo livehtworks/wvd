@@ -35,7 +35,7 @@ class WorkflowTests(unittest.TestCase):
         folder = self.root / name
         bundle = folder / "bundle"
         (bundle / "image").mkdir(parents=True)
-        resource_kind = "dungeon-route" if options.get("workflow") == "fortress-trap" else "iteration" if options.get("workflow") in ("giant", "dark-light", "mining", "manual-separation") else options.get("workflow")
+        resource_kind = "dungeon-route" if options.get("workflow") == "fortress-trap" else "iteration" if options.get("workflow") in ("giant", "dark-light", "mining", "manual-separation", "scorpion") else options.get("workflow")
         if resource_kind in ("bounty-visit", "sleep-batch"): resource_kind = "common"
         names = ["worldmapflag", "City_RoyalCityLuknalia", "Inn", "Stay", "Economy", "royalsuite", "OK"]
         if resource_kind in ("departure", "iteration"):
@@ -61,7 +61,7 @@ class WorkflowTests(unittest.TestCase):
         if resource_kind in ("heal", "dungeon-route", "iteration"):
             names += ["mapFlag", "dungFlag", "trait", "recover", "story", "chestFlag", "whowillopenit", "chestOpening", "RiseAgain",
                       "combatActive", "combatActive_2", "combatActive_3", "combatActive_4"]
-        if resource_kind == "travel":
+        if resource_kind in ("travel", "city-travel"):
             names += ["openworldmap", "intoWorldMap", "dungFlag"]
         if resource_kind == "time-leap":
             names += ["cursedWheelTitle", "cursedWheel", "cursedWheelTapRight", "leap", "ruins", "startdownload",
@@ -186,7 +186,7 @@ class WorkflowTests(unittest.TestCase):
                                         "giant": (route_budget + 500) * options.get("normal_units", 1),
                                         "recover": 750, "departure": 200, "heal": 260,
                                         "chest": 920 if options.get("quick") else 620,
-                                        "sleep-batch": 1620 * options.get("normal_units", 1), "bounty-visit": 200 * options.get("normal_units", 1), "manual-separation": 3620, "time-leap": 200, "mining": mining_watchdog, "common": 140, "iteration": (route_budget + 380) * options.get("normal_units", 1)}.get(options.get("workflow"), 90))
+                                        "scorpion": (route_budget + 500) * (4 if options.get("hands") else 3), "city-travel": 140, "sleep-batch": 1620 * options.get("normal_units", 1), "bounty-visit": 200 * options.get("normal_units", 1), "manual-separation": 3620, "time-leap": 200, "mining": mining_watchdog, "common": 140, "iteration": (route_budget + 380) * options.get("normal_units", 1)}.get(options.get("workflow"), 90))
         self.assertEqual(digest(exe), before_hash)
         (folder / "execution.json").write_text(json.dumps({"exe_sha256": before_hash, "exit": result.returncode}), encoding="utf-8")
         self.assertEqual(result.returncode, 0, (folder / "native.log").read_text(encoding="utf-8", errors="replace")[-3000:])
@@ -575,6 +575,30 @@ class WorkflowTests(unittest.TestCase):
             result = self.execute(name, [screen], [])
             self.assertEqual(result["snapshot"]["state"], state, result)
             self.assertEqual(result["backend_calls"], 0)
+
+    def test_city_travel_start_inn_is_not_destination(self):
+        start = {"Inn": (100, 400), "intoWorldMap": (300, 600)}
+        world = {"worldmapflag": (80, 100), "City_RoyalCityLuknalia": (132, 1352)}
+        r = self.execute("city-travel-full", [start, world, {"Inn": (100, 400)}],
+            [dict(kind=0, x=320, y=612), dict(kind=0, x=152, y=1364)], workflow="city-travel")
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 2)
+        self.assertFalse(r["mismatch"])
+
+    def test_city_travel_unknown_or_inn_without_world_button_is_not_arrival(self):
+        for name, screen in [("unknown", {}), ("inn-only", {"Inn": (100, 400)})]:
+            r = self.execute("city-travel-" + name, [screen], [], workflow="city-travel")
+            self.assertEqual(r["snapshot"]["state"], "Interrupted", r)
+            self.assertEqual(r["backend_calls"], 0)
+
+    def test_city_travel_stop_and_reject_do_not_click_destination(self):
+        start = {"Inn": (100, 400), "intoWorldMap": (300, 600)}
+        for stop in (False, True):
+            r = self.execute("city-travel-stop-" + str(stop), [start, start],
+                [dict(kind=0, x=320, y=612, reject=not stop)], workflow="city-travel", stop_after_first=stop)
+            self.assertEqual(r["snapshot"]["state"], "UserStopped" if stop else "Failed", r)
+            self.assertEqual(r["backend_calls"], 1)
+            self.assertFalse(r["mismatch"])
 
     def test_city_offset_clipping(self):
         world = {"worldmapflag": (80, 100), "City_RoyalCityLuknalia": (0, 0)}
@@ -1846,6 +1870,98 @@ class WorkflowTests(unittest.TestCase):
     def bounty_options(self, report=False, **extra):
         return dict(workflow="bounty-visit", report=report, profile=self.wall_profile(False),
             extra_images=["guild", "guildRequest", "guildFeatured", "Bounties", "CompletionReported", "EdgeOfTown"], **extra)
+
+    def scorpion_options(self, **extra):
+        profile = self.wall_profile(False)
+        profile.update(ACTIVE_BEAUTIFUL_ORE=True)
+        profile.update(extra.pop("profile", {}))
+        return dict(workflow="scorpion", quest_catalog=str(ROOT / "packs/wvd/parameters/legacy-quests.json"),
+            profile=profile, aliases={"returntoTown.png": "returntotown.png"},
+            extra_images=["beginningAbyss", "B2FTemple", "B5FWarpedOnesNest", "guild", "guildRequest",
+                "guildFeatured", "Bounties", "CompletionReported", "leaveDung", "cursedWheelTitle", "cursedWheel",
+                "cursedWheelTapRight", "leap", "ruins", "BeautifulOre", "Triumph", "GhostsOfYore",
+                "cursedwheel_dhi", "cursedwheel_impregnableFortress"], **extra)
+
+    @staticmethod
+    def scorpion_scenario(hands=False):
+        frames = [{"cursedWheelTitle": (200, 100), "BeautifulOre": (300, 900)}]
+        commands = []
+        def advance(command, frame):
+            commands.append(command)
+            frames.append(frame)
+        def click(x, y, frame):
+            advance(dict(kind=0, x=x, y=y), frame)
+        click(320, 912, {"cursedWheelTitle": (200, 100), "leap": (400, 900)})
+        click(420, 912, {"Inn": (400, 700), "guild": (200, 500)})
+        click(220, 512, {"guildRequest": (400, 700)})
+        click(420, 712, {"Bounties": (300, 800)})
+        click(320, 812, {"Bounties": (300, 800)})
+        entry = {"EdgeOfTown": (100, 300), "beginningAbyss": (400, 700)}
+        advance(dict(kind=5, key=4), entry)
+        boundaries = [len(commands)]
+        for route in range(2 if hands else 1):
+            click(420, 712, {"B5FWarpedOnesNest" if route else "B2FTemple": (400, 700)})
+            click(420, 712, {"GotoDung": (400, 700)})
+            click(420, 712, {"mapFlag": (100, 100)})
+            points = [(454, 662, (100, 250, 700, 1200)), (135, 714, (100, 250, 700, 1200))] if route else [
+                (505, 760, (100, 1200, 700, 250)), (506, 821, (100, 250, 700, 1200))]
+            for x, y, swipe in points:
+                move = dict(kind=1, x=swipe[0], y=swipe[1], x2=swipe[2], y2=swipe[3], duration=400)
+                advance(move, {"mapFlag": (100, 100)})
+                click(x, y, {"mapFlag": (100, 100)})
+                click(136, 1431, {"dungFlag": (50, 150)})
+                reached = {"mapFlag": (100, 100), "cursor_0": (x - 20, y - 12)}
+                click(777, 150, reached)
+                advance(move, reached)
+            city = {"guild": (200, 500)}
+            if hands and not route: city.update(entry)
+            advance(dict(kind=5, key=4), city)
+            boundaries.append(len(commands))
+        for report in range(2 if hands else 1):
+            click(220, 512, {"guildRequest": (400, 700)})
+            click(420, 712, {"Bounties": (300, 800)})
+            click(320, 812, {"CompletionReported": (500, 900)})
+            click(520, 912, {"Bounties": (300, 800)})
+            advance(dict(kind=5, key=4), {"guildRequest": (400, 700)})
+            city = {"EdgeOfTown": (100, 300), "Inn": (400, 700)}
+            if hands and not report: city["guild"] = (200, 500)
+            advance(dict(kind=5, key=4), city)
+        for name in ("Stay", "Economy", "OK", "Stay"):
+            click(420, 712, {name: (400, 700)})
+        advance(dict(kind=5, key=4), {"Inn": (400, 700)})
+        boundaries.append(len(commands))
+        return frames, commands, boundaries
+
+    def test_scorpion_complete_routes_deliver_each_bounty_and_rest(self):
+        for hands in (False, True):
+            frames, commands, boundaries = self.scorpion_scenario(hands)
+            r = self.execute("scorpion-full-" + str(hands), frames, commands, **self.scorpion_options(hands=hands))
+            self.assertEqual(r["snapshot"]["state"], "Completed", r)
+            self.assertEqual(r["backend_calls"], len(commands))
+            self.assertFalse(r["mismatch"])
+            state = r["snapshot"]["business"]
+            self.assertEqual(state["bounty_cycle"]["completed_cycles"], 1)
+            self.assertEqual(state["bounty_reports"], 2 if hands else 1)
+            self.assertEqual(state["inn_rests"], 1)
+            self.assertEqual(state["dungeons"], 1)
+            self.assertEqual(len(r["snapshot"]["sessions"]), len(boundaries))
+
+    def test_scorpion_leap_preference_and_stop_never_deliver(self):
+        for ore, triumph, target in [(True, True, "BeautifulOre"), (False, True, "Triumph"), (False, False, "GhostsOfYore")]:
+            first = {"cursedWheelTitle": (200, 100), target: (300, 900)}
+            r = self.execute("scorpion-start-" + target, [first, {"cursedWheelTitle": (200, 100), "leap": (400, 900)}],
+                [dict(kind=0, x=320, y=912)], **self.scorpion_options(profile={"ACTIVE_BEAUTIFUL_ORE": ore,
+                    "ACTIVE_TRIUMPH": triumph}, stop_after_first=True))
+            self.assertEqual(r["snapshot"]["state"], "UserStopped", r)
+            self.assertEqual(r["backend_calls"], 1)
+            self.assertTrue(r["snapshot"]["business"]["bounty_cycle"]["transfer_pending"])
+            self.assertEqual(r["snapshot"]["business"]["bounty_reports"], 0)
+
+    def test_scorpion_unknown_entry_never_fakes_a_cycle(self):
+        r = self.execute("scorpion-unknown", [{}], [], **self.scorpion_options())
+        self.assertEqual(r["snapshot"]["state"], "Interrupted", r)
+        self.assertEqual(r["backend_calls"], 0)
+        self.assertEqual(r["snapshot"]["business"]["bounty_cycle"]["completed_cycles"], 0)
 
     @staticmethod
     def bounty_report_scenario():

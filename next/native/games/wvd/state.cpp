@@ -290,6 +290,11 @@ std::string WvdRunState::confirmation_id(const std::string &operation, const std
         id += ":report:" + std::to_string(bounty_reports_ + (event == "bounty_report_prepared" || bounty_report_pending_ ? 1 : 0));
     if (event == "sleep_visit_started" || event == "sleep_visit_completed")
         id += ":sleep:" + std::to_string(sleep_.completed() + (event == "sleep_visit_started" || sleep_.active() ? 1 : 0));
+    if (event.starts_with("bounty_cycle_") || event.starts_with("bounty_leap_") || event.starts_with("bounty_travel_") ||
+        event == "bounty_route_completed" || event == "bounty_return_completed" ||
+        event == "scorpion_started" || event == "scorpion_hands_started")
+        id += ":bounty_cycle:" + std::to_string(bounty_cycle_.sequence() +
+            ((event == "scorpion_started" || event == "scorpion_hands_started") && !bounty_cycle_.active() ? 1 : 0));
     return id;
 }
 bool WvdRunState::confirm_event(const std::string &operation, const std::string &event,
@@ -313,7 +318,38 @@ bool WvdRunState::confirm_event(const std::string &operation, const std::string 
         throw std::runtime_error("BUSINESS_CONFIRMATION_CAPACITY");
     if (expected_step && *expected_step != task_step_)
         throw std::runtime_error("BUSINESS_TASK_STEP_MISMATCH");
-    if (event == "sleep_visit_started") {
+    if (event == "scorpion_started" || event == "scorpion_hands_started") {
+        if (inn_payment_pending_ || bounty_report_pending_) throw std::runtime_error("BOUNTY_SIDE_EFFECT_PENDING");
+        const auto interval = profile_.at("REST_INTERVEL").get<std::int64_t>();
+        if (interval < 0) throw std::runtime_error("BOUNTY_REST_INTERVAL_INVALID");
+        const bool due = dungeons_ % (static_cast<std::uint64_t>(interval) + 1) == 0;
+        const auto now = clock_->now();
+        if (lap_started_ && now < *lap_started_) throw std::runtime_error("WVD_CLOCK_MOVED_BACKWARD");
+        bounty_cycle_.start(unit_index_, event == "scorpion_hands_started", due, bounty_reports_, bounty_reveals_);
+        if (lap_started_) total_seconds_ += std::chrono::duration<double>(now - *lap_started_).count();
+        lap_started_ = now;
+        ++dungeons_;
+        inn_rest_completed_ = false;
+        ++supply_cycle_;
+    } else if (event == "bounty_leap_prepared" || event == "bounty_travel_prepared") {
+        bounty_cycle_.prepare_transfer(unit_index_, event == "bounty_leap_prepared" ? quests::BountyCycle::Phase::Leap : quests::BountyCycle::Phase::Travel);
+    } else if (event == "bounty_leap_completed" || event == "bounty_travel_completed") {
+        bounty_cycle_.transferred(unit_index_, event == "bounty_leap_completed" ? quests::BountyCycle::Phase::Leap : quests::BountyCycle::Phase::Travel);
+    } else if (event == "bounty_cycle_revealed") {
+        bounty_cycle_.revealed(unit_index_, bounty_reveals_);
+    } else if (event == "bounty_travel_skipped") {
+        if (!profile_.at("ACTIVE_BEAUTIFUL_ORE").get<bool>()) throw std::runtime_error("BOUNTY_TRAVEL_REQUIRED");
+        bounty_cycle_.skip_travel(unit_index_);
+    } else if (event == "bounty_route_completed") {
+        bounty_cycle_.route_completed(unit_index_, task_step_);
+    } else if (event == "bounty_return_completed") {
+        bounty_cycle_.returned(unit_index_);
+    } else if (event == "bounty_cycle_reported") {
+        bounty_cycle_.reported(unit_index_, bounty_reports_);
+    } else if (event == "bounty_cycle_completed") {
+        if (inn_payment_pending_ || bounty_report_pending_) throw std::runtime_error("BOUNTY_SIDE_EFFECT_PENDING");
+        bounty_cycle_.complete(unit_index_, inn_rest_completed_);
+    } else if (event == "sleep_visit_started") {
         if (inn_payment_pending_) throw std::runtime_error("INN_PAYMENT_UNCONFIRMED");
         sleep_.start(unit_index_);
         inn_rest_completed_ = false;
@@ -571,6 +607,7 @@ J WvdRunState::summarize() const {
             {"bounty_reports", bounty_reports_},
             {"bounty_reveals", bounty_reveals_},
             {"sleep", sleep_.summary(unit_index_)},
+            {"bounty_cycle", bounty_cycle_.summary(unit_index_, bounty_reports_)},
             {"bounty_report_pending", bounty_report_pending_},
             {"encounter_timed_out", encounter_timed_out()},
             {"combats", combats_},

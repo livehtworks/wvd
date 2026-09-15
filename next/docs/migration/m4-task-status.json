@@ -3334,7 +3334,7 @@
         "M4-TASK-lovesleep"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "TYPED_PLAN_DATA",
+      "implementation_extent": "FINITE_SLEEP_BATCHES_PARTIAL_VALIDATION",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
       "offline_status": "NOT_RUN",
@@ -3344,7 +3344,9 @@
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
-        "native/games/wvd/tasks/task_plan.cpp"
+        "native/games/wvd/tasks/task_plan.cpp",
+        "native/games/wvd/tasks/sleep_visits.cpp",
+        "native/games/wvd/quests/sleep_visits.cpp"
       ],
       "source_fields": [
         "questName",
@@ -3358,12 +3360,21 @@
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
       "blockers": [
-        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "BUSINESS_ACTIONS_NOT_IMPLEMENTED",
-        "SPECIAL_CASE_NOT_IMPLEMENTED"
+        "SLEEP_NATIVE_CONTINUATION_RECOVERY_MATRIX_PENDING",
+        "FULL_STOP_RECOVERY_CONFIG_MATRIX_PENDING"
       ],
       "plan_data_status": "PASS",
-      "plan_evidence": "../m4-plan-validation.md"
+      "plan_evidence": "../m4-plan-validation.md",
+      "iteration_compilation": {
+        "status": "NOT_RUN",
+        "entry": "tasks::sleep_visits",
+        "schedule": "tasks::configure_sleep_units",
+        "required_normal_units": 250,
+        "target_visits": 9999,
+        "executed": false,
+        "scope": "FINITE_SLEEP_BATCH_NOT_FULL_TASK",
+        "evidence_report": "../m4-sleep-validation.md"
+      }
     },
     {
       "task_id": "FFXI-Org",

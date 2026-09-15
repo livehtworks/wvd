@@ -29,7 +29,8 @@ std::optional<runtime::SessionDefinition> decide(const contracts::SessionResult 
         result.reason == "departure.inn_payment_unconfirmed" ||
         result.reason == "karma.choice_outcome_unconfirmed" ||
         result.reason == "dialogue.choice_outcome_unconfirmed" ||
-        result.reason == "quest.manual_transfer_unconfirmed" || result.reason == "quest.bounty_report_unconfirmed")
+        result.reason == "quest.manual_transfer_unconfirmed" || result.reason == "quest.bounty_report_unconfirmed" ||
+        result.reason == "quest.bounty_transfer_unconfirmed")
         return std::nullopt;
     if (!result.business.is_object() || result.business.value("kind", "") != "wvd" ||
         !result.business.at("lifecycle_recovery_active").is_boolean())
@@ -40,6 +41,8 @@ std::optional<runtime::SessionDefinition> decide(const contracts::SessionResult 
     if (result.business.at("manual_separation").at("transfer_pending").get<bool>())
         return std::nullopt;
     if (result.business.at("bounty_report_pending").get<bool>())
+        return std::nullopt;
+    if (result.business.at("bounty_cycle").at("transfer_pending").get<bool>())
         return std::nullopt;
     const bool continuing = previous.lifecycle && result.business.at("lifecycle_recovery_active").get<bool>();
     const unsigned attempt = continuing ? previous.lifecycle->attempt + 1 : 1;

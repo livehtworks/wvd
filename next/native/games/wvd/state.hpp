@@ -8,6 +8,7 @@
 #include "mining/progress.hpp"
 #include "quests/manual_separation.hpp"
 #include "quests/sleep_visits.hpp"
+#include "quests/bounty_cycle.hpp"
 #include <map>
 
 namespace wvd::games {
@@ -69,6 +70,7 @@ class WvdRunState final : public contracts::BusinessRunState {
     mining::Progress mining_;
     quests::ManualSeparation manual_separation_;
     quests::SleepVisits sleep_;
+    quests::BountyCycle bounty_cycle_;
     std::size_t bounty_reports_{};
     std::size_t bounty_reveals_{};
     bool bounty_report_pending_{};

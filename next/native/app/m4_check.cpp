@@ -12,6 +12,7 @@
 #include "games/wvd/tasks/manual_separation.hpp"
 #include "games/wvd/tasks/sleep_visits.hpp"
 #include "games/wvd/quests/sleep_visits.hpp"
+#include "games/wvd/tasks/bounty_cycle.hpp"
 #include "games/wvd/navigation/dungeon_entry.hpp"
 #include "games/wvd/vision/asset_resolver.hpp"
 #include "maafw/buffers.hpp"
@@ -104,17 +105,26 @@ int main(int argc, char **argv) {
                 for (const auto &task : catalog.tasks()) {
                     if (task.type != (specials ? "quest" : "dungeon"))
                         continue;
-                    if (specials && task.id != "fortress-B8F_trap" && task.id != "gaintKiller" && task.id != "darkLight" && task.id != "FFXI-Org" && task.id != "manualSepDemon" && task.id != "lovesleep") {
+                    const bool scorpion = task.id == "Scorpionesses" || task.id == "Scorpionesses_plus_6_hands";
+                    if (specials && !scorpion && task.id != "fortress-B8F_trap" && task.id != "gaintKiller" && task.id != "darkLight" && task.id != "FFXI-Org" && task.id != "manualSepDemon" && task.id != "lovesleep") {
                         result["unimplemented_specials"].push_back(task.id);
                         continue;
                     }
                     const auto plan = games::WvdTaskPlan::parse(task);
-                    const auto graph = specials ? (task.id == "lovesleep" ? games::tasks::sleep_visits(task, profile.values) : task.id == "manualSepDemon" ? games::tasks::manual_separation(task, profile.values, images) : task.id == "FFXI-Org" ? games::tasks::mining_iteration(task, profile.values) : task.id == "darkLight" ? games::tasks::dark_light(task, profile.values, images) : task.id == "gaintKiller"
-                                                ? games::tasks::giant_iteration(task, profile.values, images)
-                                                : games::tasks::fortress_trap_iteration(task, profile.values, images))
-                                              : iterations ? games::tasks::dungeon_iteration(plan, profile.values, images)
-                                              : routes ? games::tasks::traverse_dungeon(plan, profile.values, images)
-                                              : games::navigation::enter_dungeon(plan);
+                    const auto graph = [&] {
+                        if (!specials) {
+                            if (iterations) return games::tasks::dungeon_iteration(plan, profile.values, images);
+                            if (routes) return games::tasks::traverse_dungeon(plan, profile.values, images);
+                            return games::navigation::enter_dungeon(plan);
+                        }
+                        if (scorpion) return games::tasks::scorpion_cycle(task, profile.values, images);
+                        if (task.id == "lovesleep") return games::tasks::sleep_visits(task, profile.values);
+                        if (task.id == "manualSepDemon") return games::tasks::manual_separation(task, profile.values, images);
+                        if (task.id == "FFXI-Org") return games::tasks::mining_iteration(task, profile.values);
+                        if (task.id == "darkLight") return games::tasks::dark_light(task, profile.values, images);
+                        if (task.id == "gaintKiller") return games::tasks::giant_iteration(task, profile.values, images);
+                        return games::tasks::fortress_trap_iteration(task, profile.values, images);
+                    }();
                     J missing = J::array();
                     for (const auto &image : graph.images) {
                         const auto selected = games::vision::resolve_image_source(manifest_bundle, aliases, image);
@@ -124,7 +134,7 @@ int main(int argc, char **argv) {
                     result[key].push_back({{"task_id", task.id}, {"nodes", graph.nodes},
                         {"images", graph.images}, {"required_actions", graph.required_actions},
                         {"missing_images", missing}, {"scope", specials ? "FINITE_SPECIAL_ITERATION_NOT_FULL_TASK" : iterations ? "NORMAL_FARM_ITERATION_NOT_FULL_TASK" : routes ? "DUNGEON_ROUTE_ONLY_NOT_FULL_TASK" : "ENTRY_ONLY_NOT_FULL_TASK"},
-                        {"required_normal_units", task.id == "lovesleep" ? games::quests::SleepVisits::units : task.id == "manualSepDemon" ? 2 : 1}, {"executed", false}});
+                        {"required_normal_units", scorpion ? (task.id == "Scorpionesses" ? 3 : 4) : task.id == "lovesleep" ? games::quests::SleepVisits::units : task.id == "manualSepDemon" ? 2 : 1}, {"executed", false}});
                 }
             }
         }

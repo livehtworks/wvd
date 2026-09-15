@@ -53,6 +53,11 @@
 
 ## 一致性与边界
 
+- `snapshot.business.bounty_cycle`由WvdRunState内BountyCycle持有，区分跳跃、跨城、
+  揭榜、两条路线/返回、交付和住宿阶段。图中的新帧确认推进；每阶段校验所属正常段，
+  交付份数读取同一bounty_reports权威。转场待确认时恢复策略不重发，结果仅供审查，
+  不允许从历史文件自动恢复领取、交付或付款。
+
 - `snapshot.business.sleep`由WvdRunState内的SleepVisits唯一持有，记录固定9999次目标、
   当前住宿意图及完成数；每次退出旅店的新帧确认后递增。`tasks::configure_sleep_units`
   只定义250个有限正常段，不新增调度器。已完成批次的住宿签名在正常换批时释放，

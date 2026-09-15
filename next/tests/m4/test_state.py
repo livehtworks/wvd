@@ -78,6 +78,16 @@ class StateTests(unittest.TestCase):
         self.assertEqual(state["inn_rests"], 9999)
         self.assertEqual(state["dungeons"], 0)
 
+    def test_scorpion_two_cycles_preserve_routes_reports_and_rest_interval(self):
+        results = self.run_case("bounty-cycle-contract", bounty_cycle_contract=True)["bounty_cycle_contract"]
+        for hands, state in zip((False, True), results):
+            self.assertEqual(state["bounty_cycle"]["completed_cycles"], 2)
+            self.assertFalse(state["bounty_cycle"]["active"])
+            self.assertEqual(state["bounty_reports"], 4 if hands else 2)
+            self.assertEqual(state["bounty_reveals"], 2)
+            self.assertEqual(state["dungeons"], 2)
+            self.assertEqual(state["inn_rests"], 1)
+
     def test_karma_rules_and_confirmed_profile_idempotency(self):
         values = ["0", "+0", "-0", "-1", "-2", "-3", "+1", "+2", "3", "+0002", "-0003",
                   "+99999999999999999999999999999", " 2 ", "1_000", "", "bad", "+-2", "1__0", "_1"]

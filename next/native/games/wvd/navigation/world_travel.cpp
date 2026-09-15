@@ -2,6 +2,19 @@
 #include <array>
 
 namespace wvd::games::navigation {
+tasks::CompiledWorkflow travel_city_to_city(const WorldDestination &destination) {
+    using C = tasks::PipelineCompiler;
+    C graph("navigation.city_to_city", std::chrono::seconds{120});
+    const auto world = C::image("worldmapflag");
+    const auto open = C::image("intoWorldMap");
+    graph.route("Entry", {"OnWorld", "Open"});
+    graph.observe("OnWorld", world, {"Travel"});
+    graph.click("Open", C::all({C::image("Inn"), open, C::absent(world)}), open, world, {"Travel"});
+    const auto travel = graph.define_child("World", travel_world(destination, WorldArrival::City));
+    graph.call_child("Travel", travel, {"Arrived"});
+    graph.observe("Arrived", C::all({C::image("Inn"), C::absent(world)}), {"Terminal"});
+    return graph.finish();
+}
 tasks::CompiledWorkflow travel_world(const WorldDestination &destination, WorldArrival arrival) {
     using C = tasks::PipelineCompiler;
     using J = nlohmann::json;
