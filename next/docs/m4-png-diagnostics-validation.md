@@ -2,8 +2,8 @@
 
 ## 当前事实
 
-已落盘，尚未构建、尚未原生执行。不能把源码审查或测试断言存在写成PASS。
-本轮未修改state/boot/handoff/workflow及其已有测试，不写旧config/resources/mod/logs。
+`007a7d6`统一构建通过，8方法全部通过，不能将有限诊断验证扩大为完整任务通过。
+诊断变更不替换state/boot/handoff/workflow业务；不写旧config/resources/mod/logs。
 
 - Context仅提交本次Custom的首/末实际FrameEnvelope，保留身份而不建立图片仓库。
   GatewayHooks经ExecutionSession固定绑定本Run的RunStore；无后台线程、无队列。
@@ -53,13 +53,18 @@ RequireRecovery先保留恢复reason，在recovery标记/关门前单次capture�
 native/maafw/CMakeLists.txt现有M4测试foreach列表已加入diagnostics：
 test_m4_diagnostics链接wvd_business和wvd_vision，沿用UTF8/manifest/m4输出目录。
 专属Python入口为next/tests/m4/test_diagnostics.py，沿用当前验证工具的发现方式。
-当前运行的correction1冻结产物不包含本轮改动，不能用于本项证据。
+早期correction1冻结产物不包含本轮改动，不能用于本项证据。
+
+## 实际结果
+
+`m4-007a7d6-public-state-diagnostics.log`中本组8方法通过，私有根
+`m4-diagnostics-_tbkfbim`。11份执行身份与007a7d6构建的EXE匹配；10份保存结果一致，
+83张已保存PNG的哈希与大小经独立复核。前/后置失败保留实际帧，领取确认只存一次，
+恢复入口截图失败不覆盖业务首因，配额/节流/原子写失败及真实隔离junction负例均符合断言。
+同一产物M2 104方法回归通过；不是生产环境长时稳定或任意原生阻塞取消证明。
 
 ## 未证明边界
 
-已执行Python ast.parse，仅解析新测试文件，语法通过，未import或执行测试。
-已执行本轮既有文件git diff --check，退出0，仅有Git CRLF提示。
-没有执行C++构建、Maa/原生测试或设备操作。
 没有证明磁盘flush、SDK截图或任意原生阻塞可取消。诊断在回调内同步执行，
 遇阻塞时必须继续保持Session/Run/store和租约所有权，不能用外部watchdog当生产取消。
-8方法均待构建/执行；新增写盘会影响M2停止/时间预算，需主代理同构建回归。
+没有执行任何真实设备操作；后续修改存储/停止路径仍须相应回归。

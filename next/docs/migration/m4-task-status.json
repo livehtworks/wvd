@@ -9,6 +9,16 @@
     "quest": 15
   },
   "execution_passed": 0,
+  "acceptance_scope": {
+    "historical_full_task_matrix": "0/58，保留历史完整任务未验口径；execution_passed 不统计编译或有限分项通过。",
+    "full_task_matrix_required_for_current_stage": false,
+    "current_stage": "按用户缩减范围登记当前实现、分项证据、已知失败及待观察项；不要求本轮执行全部43个dungeon或58个任务。",
+    "status_semantics": "implementation_status 保持 PARTIAL；offline_status 保留历史完整任务口径及既有 BLOCKED/PARTIAL，分项实际运行另见 scoped_execution_evidence。blockers 保留已知能力阻断，不作为本轮全矩阵运行清单。",
+    "evidence_boundary": "历史专题证据仅适用于其记录的产物和场景，不自动证明当前构建回归。编译 executed=false 不否认另列的有限场景运行。",
+    "build_checkpoint": "007a7d6",
+    "build_checkpoint_source": "主代理通知该构建通过、源码及16份EXE身份固定；本次仅更新文档，未运行build/native，也不代报主代理串行M2回归结论。",
+    "remaining_scope": "pending_observations 是未证范围/待观察项，不是本轮commit/push前置任务；失败及修正次数边界保留，不安排重跑挑PASS。release_allowed=false不变，不授权设备或生产切换。"
+  },
   "items": [
     {
       "task_id": "Dist",
@@ -26,7 +36,7 @@
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "new_entry": null,
+      "new_entry": "tasks::dungeon_iteration",
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
@@ -44,13 +54,14 @@
         "_EOT"
       ],
       "success_evidence": [],
-      "failure_stop_recovery_evidence": [],
+      "failure_stop_recovery_evidence": [
+        "../../.local/m4-task-matrix-nlxu35jg"
+      ],
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
       "blockers": [
-        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
-        "FULL_TASK_EXECUTION_NOT_VERIFIED"
+        "DIST_SUCCESS_STALE_ACTION_INTENT",
+        "DIST_RECOVERY_SCENE_UNCONFIRMED"
       ],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
@@ -74,6 +85,57 @@
         "executed": false,
         "scope": "NORMAL_FARM_ITERATION_NOT_FULL_TASK",
         "evidence_report": "../m4-iteration-validation.md"
+      },
+      "pending_observations": [
+        "已有入本、路线与正常Farm迭代图；静态编译/计划绑定不代表每个TaskID已执行。",
+        "完整生命周期组合（冷启动、补给/EOT、真实战斗/开箱、正常续段、应用恢复、停止及落盘副作用对账）尚无逐任务完整证据。",
+        "连续周期、中途恢复及配置/mod组合未逐任务验证；本轮不要求全43项运行，既有分项仅按其实际范围登记。"
+      ],
+      "scoped_execution_evidence": {
+        "scope": "FOUR_DIST_SCENARIOS_NOT_FULL_TASK_ACCEPTANCE",
+        "evidence_root": "../../.local/m4-task-matrix-nlxu35jg",
+        "evidence_report": "../m4-dungeon-task-matrix-validation.md",
+        "report_sync": "本次直接核对execution/output/events；专题实测章节由主代理另行更新，报告准备记录不代替本次实际结果。",
+        "exe_sha256": "570172a2123c8011ca34745ab69500210769d61e419305cef701f0b6c11318ec",
+        "process_exit": 0,
+        "quiescent": true,
+        "result_saved": true,
+        "mismatch": false,
+        "storage_error": "",
+        "cases": [
+          {
+            "case": "Dist--success",
+            "status": "FAIL",
+            "run_state": "Failed",
+            "backend_calls": 8,
+            "reason": "CUSTOM_ACTION_FAILED",
+            "first_cause": "STALE_ACTION_INTENT",
+            "first_cause_event_seq": 1026
+          },
+          {
+            "case": "Dist--failure",
+            "status": "PASS",
+            "run_state": "Failed",
+            "backend_calls": 6,
+            "reason": "CUSTOM_ACTION_FAILED",
+            "scope": "EXPECTED_INPUT_REJECTION"
+          },
+          {
+            "case": "Dist--stop",
+            "status": "PASS",
+            "run_state": "UserStopped",
+            "backend_calls": 6,
+            "reason": "USER_STOP"
+          },
+          {
+            "case": "Dist--recovery",
+            "status": "FAIL",
+            "run_state": "Failed",
+            "backend_calls": 1,
+            "reason": "SCENE_UNCONFIRMED"
+          }
+        ],
+        "summary": "四例属于旧冻结EXE的有限场景，不是007a7d6回归；failure的PASS表示预期拒绝成立，不表示任务成功。其余42项未因本组结果获得运行结论。"
       }
     },
     {
@@ -92,7 +154,7 @@
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "new_entry": null,
+      "new_entry": "tasks::dungeon_iteration",
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
@@ -113,11 +175,7 @@
       "failure_stop_recovery_evidence": [],
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
-      "blockers": [
-        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
-        "FULL_TASK_EXECUTION_NOT_VERIFIED"
-      ],
+      "blockers": [],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
       "entry_compilation": {
@@ -140,7 +198,12 @@
         "executed": false,
         "scope": "NORMAL_FARM_ITERATION_NOT_FULL_TASK",
         "evidence_report": "../m4-iteration-validation.md"
-      }
+      },
+      "pending_observations": [
+        "已有入本、路线与正常Farm迭代图；静态编译/计划绑定不代表每个TaskID已执行。",
+        "完整生命周期组合（冷启动、补给/EOT、真实战斗/开箱、正常续段、应用恢复、停止及落盘副作用对账）尚无逐任务完整证据。",
+        "连续周期、中途恢复及配置/mod组合未逐任务验证；本轮不要求全43项运行，既有分项仅按其实际范围登记。"
+      ]
     },
     {
       "task_id": "fortress-B1F",
@@ -158,7 +221,7 @@
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "new_entry": null,
+      "new_entry": "tasks::dungeon_iteration",
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
@@ -179,11 +242,7 @@
       "failure_stop_recovery_evidence": [],
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
-      "blockers": [
-        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
-        "FULL_TASK_EXECUTION_NOT_VERIFIED"
-      ],
+      "blockers": [],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
       "entry_compilation": {
@@ -206,7 +265,12 @@
         "executed": false,
         "scope": "NORMAL_FARM_ITERATION_NOT_FULL_TASK",
         "evidence_report": "../m4-iteration-validation.md"
-      }
+      },
+      "pending_observations": [
+        "已有入本、路线与正常Farm迭代图；静态编译/计划绑定不代表每个TaskID已执行。",
+        "完整生命周期组合（冷启动、补给/EOT、真实战斗/开箱、正常续段、应用恢复、停止及落盘副作用对账）尚无逐任务完整证据。",
+        "连续周期、中途恢复及配置/mod组合未逐任务验证；本轮不要求全43项运行，既有分项仅按其实际范围登记。"
+      ]
     },
     {
       "task_id": "fortress-B8F_entrance",
@@ -224,7 +288,7 @@
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "new_entry": null,
+      "new_entry": "tasks::dungeon_iteration",
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
@@ -245,11 +309,7 @@
       "failure_stop_recovery_evidence": [],
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
-      "blockers": [
-        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
-        "FULL_TASK_EXECUTION_NOT_VERIFIED"
-      ],
+      "blockers": [],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
       "entry_compilation": {
@@ -272,7 +332,12 @@
         "executed": false,
         "scope": "NORMAL_FARM_ITERATION_NOT_FULL_TASK",
         "evidence_report": "../m4-iteration-validation.md"
-      }
+      },
+      "pending_observations": [
+        "已有入本、路线与正常Farm迭代图；静态编译/计划绑定不代表每个TaskID已执行。",
+        "完整生命周期组合（冷启动、补给/EOT、真实战斗/开箱、正常续段、应用恢复、停止及落盘副作用对账）尚无逐任务完整证据。",
+        "连续周期、中途恢复及配置/mod组合未逐任务验证；本轮不要求全43项运行，既有分项仅按其实际范围登记。"
+      ]
     },
     {
       "task_id": "fortress-B8F_trap",
@@ -291,17 +356,18 @@
         "M4-TASK-fortress-B8F_trap"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "TYPED_PLAN_DATA",
+      "implementation_extent": "FINITE_TRAP_ITERATION_PARTIAL_VALIDATION",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "new_entry": null,
+      "new_entry": "tasks::fortress_trap_iteration",
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
-        "native/games/wvd/tasks/task_plan.cpp"
+        "native/games/wvd/tasks/task_plan.cpp",
+        "native/games/wvd/tasks/fortress_trap.cpp"
       ],
       "source_fields": [
         "_TYPE",
@@ -311,17 +377,31 @@
         "questCategory_en_US",
         "_TIPS"
       ],
-      "success_evidence": [],
-      "failure_stop_recovery_evidence": [],
+      "success_evidence": [
+        "../m4-fortress-trap-validation.md"
+      ],
+      "failure_stop_recovery_evidence": [
+        "../m4-fortress-trap-validation.md"
+      ],
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
-      "blockers": [
-        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "BUSINESS_ACTIONS_NOT_IMPLEMENTED",
-        "SPECIAL_CASE_NOT_IMPLEMENTED"
-      ],
+      "blockers": [],
       "plan_data_status": "PASS",
-      "plan_evidence": "../m4-plan-validation.md"
+      "plan_evidence": "../m4-plan-validation.md",
+      "implementation_evidence": "../m4-fortress-trap-validation.md",
+      "scoped_execution_evidence": {
+        "scope": "HISTORICAL_COMPONENT_SCENARIOS_NOT_FULL_TASK_ACCEPTANCE",
+        "status": "PARTIAL",
+        "evidence_report": "../m4-fortress-trap-validation.md",
+        "evidence_roots": [
+          "../../.local/m4-workflow-cpk26zud"
+        ],
+        "summary": "历史5方法/7场景通过：正常33、冷启动33、中途恢复49、两轮66、提前回城3、拒绝1、停止1次输入。正式源码33561a3、夹具32af3b6，不是007a7d6回归；首次失败轮仍由专题保留。"
+      },
+      "pending_observations": [
+        "上述冷启动、恢复和两轮已有有限证据，不再笼统记作未实现/未运行；其它组合及后续共享改动效果待观察。",
+        "配置/mod、未覆盖的生命周期与恢复组合仍未证；保留为后续待观察范围，不要求本轮补齐完整任务矩阵。"
+      ]
     },
     {
       "task_id": "fortress-10F",
@@ -339,7 +419,7 @@
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "new_entry": null,
+      "new_entry": "tasks::dungeon_iteration",
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
@@ -360,11 +440,7 @@
       "failure_stop_recovery_evidence": [],
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
-      "blockers": [
-        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
-        "FULL_TASK_EXECUTION_NOT_VERIFIED"
-      ],
+      "blockers": [],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
       "entry_compilation": {
@@ -387,7 +463,12 @@
         "executed": false,
         "scope": "NORMAL_FARM_ITERATION_NOT_FULL_TASK",
         "evidence_report": "../m4-iteration-validation.md"
-      }
+      },
+      "pending_observations": [
+        "已有入本、路线与正常Farm迭代图；静态编译/计划绑定不代表每个TaskID已执行。",
+        "完整生命周期组合（冷启动、补给/EOT、真实战斗/开箱、正常续段、应用恢复、停止及落盘副作用对账）尚无逐任务完整证据。",
+        "连续周期、中途恢复及配置/mod组合未逐任务验证；本轮不要求全43项运行，既有分项仅按其实际范围登记。"
+      ]
     },
     {
       "task_id": "DH-4f",
@@ -405,7 +486,7 @@
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "new_entry": null,
+      "new_entry": "tasks::dungeon_iteration",
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
@@ -426,11 +507,7 @@
       "failure_stop_recovery_evidence": [],
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
-      "blockers": [
-        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
-        "FULL_TASK_EXECUTION_NOT_VERIFIED"
-      ],
+      "blockers": [],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
       "entry_compilation": {
@@ -453,7 +530,12 @@
         "executed": false,
         "scope": "NORMAL_FARM_ITERATION_NOT_FULL_TASK",
         "evidence_report": "../m4-iteration-validation.md"
-      }
+      },
+      "pending_observations": [
+        "已有入本、路线与正常Farm迭代图；静态编译/计划绑定不代表每个TaskID已执行。",
+        "完整生命周期组合（冷启动、补给/EOT、真实战斗/开箱、正常续段、应用恢复、停止及落盘副作用对账）尚无逐任务完整证据。",
+        "连续周期、中途恢复及配置/mod组合未逐任务验证；本轮不要求全43项运行，既有分项仅按其实际范围登记。"
+      ]
     },
     {
       "task_id": "DH-6f",
@@ -471,7 +553,7 @@
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "new_entry": null,
+      "new_entry": "tasks::dungeon_iteration",
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
@@ -492,11 +574,7 @@
       "failure_stop_recovery_evidence": [],
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
-      "blockers": [
-        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
-        "FULL_TASK_EXECUTION_NOT_VERIFIED"
-      ],
+      "blockers": [],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
       "entry_compilation": {
@@ -519,7 +597,12 @@
         "executed": false,
         "scope": "NORMAL_FARM_ITERATION_NOT_FULL_TASK",
         "evidence_report": "../m4-iteration-validation.md"
-      }
+      },
+      "pending_observations": [
+        "已有入本、路线与正常Farm迭代图；静态编译/计划绑定不代表每个TaskID已执行。",
+        "完整生命周期组合（冷启动、补给/EOT、真实战斗/开箱、正常续段、应用恢复、停止及落盘副作用对账）尚无逐任务完整证据。",
+        "连续周期、中途恢复及配置/mod组合未逐任务验证；本轮不要求全43项运行，既有分项仅按其实际范围登记。"
+      ]
     },
     {
       "task_id": "DH-7f-right",
@@ -537,7 +620,7 @@
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "new_entry": null,
+      "new_entry": "tasks::dungeon_iteration",
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
@@ -558,11 +641,7 @@
       "failure_stop_recovery_evidence": [],
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
-      "blockers": [
-        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
-        "FULL_TASK_EXECUTION_NOT_VERIFIED"
-      ],
+      "blockers": [],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
       "entry_compilation": {
@@ -585,7 +664,12 @@
         "executed": false,
         "scope": "NORMAL_FARM_ITERATION_NOT_FULL_TASK",
         "evidence_report": "../m4-iteration-validation.md"
-      }
+      },
+      "pending_observations": [
+        "已有入本、路线与正常Farm迭代图；静态编译/计划绑定不代表每个TaskID已执行。",
+        "完整生命周期组合（冷启动、补给/EOT、真实战斗/开箱、正常续段、应用恢复、停止及落盘副作用对账）尚无逐任务完整证据。",
+        "连续周期、中途恢复及配置/mod组合未逐任务验证；本轮不要求全43项运行，既有分项仅按其实际范围登记。"
+      ]
     },
     {
       "task_id": "DH-7f-auto",
@@ -603,7 +687,7 @@
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "new_entry": null,
+      "new_entry": "tasks::dungeon_iteration",
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
@@ -624,11 +708,7 @@
       "failure_stop_recovery_evidence": [],
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
-      "blockers": [
-        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
-        "FULL_TASK_EXECUTION_NOT_VERIFIED"
-      ],
+      "blockers": [],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
       "entry_compilation": {
@@ -651,7 +731,12 @@
         "executed": false,
         "scope": "NORMAL_FARM_ITERATION_NOT_FULL_TASK",
         "evidence_report": "../m4-iteration-validation.md"
-      }
+      },
+      "pending_observations": [
+        "已有入本、路线与正常Farm迭代图；静态编译/计划绑定不代表每个TaskID已执行。",
+        "完整生命周期组合（冷启动、补给/EOT、真实战斗/开箱、正常续段、应用恢复、停止及落盘副作用对账）尚无逐任务完整证据。",
+        "连续周期、中途恢复及配置/mod组合未逐任务验证；本轮不要求全43项运行，既有分项仅按其实际范围登记。"
+      ]
     },
     {
       "task_id": "DH-10f-test",
@@ -669,7 +754,7 @@
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "new_entry": null,
+      "new_entry": "tasks::dungeon_iteration",
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
@@ -690,11 +775,7 @@
       "failure_stop_recovery_evidence": [],
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
-      "blockers": [
-        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
-        "FULL_TASK_EXECUTION_NOT_VERIFIED"
-      ],
+      "blockers": [],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
       "entry_compilation": {
@@ -717,7 +798,12 @@
         "executed": false,
         "scope": "NORMAL_FARM_ITERATION_NOT_FULL_TASK",
         "evidence_report": "../m4-iteration-validation.md"
-      }
+      },
+      "pending_observations": [
+        "已有入本、路线与正常Farm迭代图；静态编译/计划绑定不代表每个TaskID已执行。",
+        "完整生命周期组合（冷启动、补给/EOT、真实战斗/开箱、正常续段、应用恢复、停止及落盘副作用对账）尚无逐任务完整证据。",
+        "连续周期、中途恢复及配置/mod组合未逐任务验证；本轮不要求全43项运行，既有分项仅按其实际范围登记。"
+      ]
     },
     {
       "task_id": "DH-10f-JR",
@@ -735,7 +821,7 @@
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "new_entry": null,
+      "new_entry": "tasks::dungeon_iteration",
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
@@ -756,11 +842,7 @@
       "failure_stop_recovery_evidence": [],
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
-      "blockers": [
-        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
-        "FULL_TASK_EXECUTION_NOT_VERIFIED"
-      ],
+      "blockers": [],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
       "entry_compilation": {
@@ -783,7 +865,12 @@
         "executed": false,
         "scope": "NORMAL_FARM_ITERATION_NOT_FULL_TASK",
         "evidence_report": "../m4-iteration-validation.md"
-      }
+      },
+      "pending_observations": [
+        "已有入本、路线与正常Farm迭代图；静态编译/计划绑定不代表每个TaskID已执行。",
+        "完整生命周期组合（冷启动、补给/EOT、真实战斗/开箱、正常续段、应用恢复、停止及落盘副作用对账）尚无逐任务完整证据。",
+        "连续周期、中途恢复及配置/mod组合未逐任务验证；本轮不要求全43项运行，既有分项仅按其实际范围登记。"
+      ]
     },
     {
       "task_id": "DH-Church-upper",
@@ -801,7 +888,7 @@
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "new_entry": null,
+      "new_entry": "tasks::dungeon_iteration",
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
@@ -822,11 +909,7 @@
       "failure_stop_recovery_evidence": [],
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
-      "blockers": [
-        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
-        "FULL_TASK_EXECUTION_NOT_VERIFIED"
-      ],
+      "blockers": [],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
       "entry_compilation": {
@@ -849,7 +932,12 @@
         "executed": false,
         "scope": "NORMAL_FARM_ITERATION_NOT_FULL_TASK",
         "evidence_report": "../m4-iteration-validation.md"
-      }
+      },
+      "pending_observations": [
+        "已有入本、路线与正常Farm迭代图；静态编译/计划绑定不代表每个TaskID已执行。",
+        "完整生命周期组合（冷启动、补给/EOT、真实战斗/开箱、正常续段、应用恢复、停止及落盘副作用对账）尚无逐任务完整证据。",
+        "连续周期、中途恢复及配置/mod组合未逐任务验证；本轮不要求全43项运行，既有分项仅按其实际范围登记。"
+      ]
     },
     {
       "task_id": "DH-Church-auto",
@@ -867,7 +955,7 @@
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "new_entry": null,
+      "new_entry": "tasks::dungeon_iteration",
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
@@ -888,11 +976,7 @@
       "failure_stop_recovery_evidence": [],
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
-      "blockers": [
-        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
-        "FULL_TASK_EXECUTION_NOT_VERIFIED"
-      ],
+      "blockers": [],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
       "entry_compilation": {
@@ -915,7 +999,12 @@
         "executed": false,
         "scope": "NORMAL_FARM_ITERATION_NOT_FULL_TASK",
         "evidence_report": "../m4-iteration-validation.md"
-      }
+      },
+      "pending_observations": [
+        "已有入本、路线与正常Farm迭代图；静态编译/计划绑定不代表每个TaskID已执行。",
+        "完整生命周期组合（冷启动、补给/EOT、真实战斗/开箱、正常续段、应用恢复、停止及落盘副作用对账）尚无逐任务完整证据。",
+        "连续周期、中途恢复及配置/mod组合未逐任务验证；本轮不要求全43项运行，既有分项仅按其实际范围登记。"
+      ]
     },
     {
       "task_id": "White-G-v2",
@@ -933,7 +1022,7 @@
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "new_entry": null,
+      "new_entry": "tasks::dungeon_iteration",
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
@@ -955,11 +1044,7 @@
       "failure_stop_recovery_evidence": [],
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
-      "blockers": [
-        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
-        "FULL_TASK_EXECUTION_NOT_VERIFIED"
-      ],
+      "blockers": [],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
       "entry_compilation": {
@@ -982,7 +1067,12 @@
         "executed": false,
         "scope": "NORMAL_FARM_ITERATION_NOT_FULL_TASK",
         "evidence_report": "../m4-iteration-validation.md"
-      }
+      },
+      "pending_observations": [
+        "已有入本、路线与正常Farm迭代图；静态编译/计划绑定不代表每个TaskID已执行。",
+        "完整生命周期组合（冷启动、补给/EOT、真实战斗/开箱、正常续段、应用恢复、停止及落盘副作用对账）尚无逐任务完整证据。",
+        "连续周期、中途恢复及配置/mod组合未逐任务验证；本轮不要求全43项运行，既有分项仅按其实际范围登记。"
+      ]
     },
     {
       "task_id": "FFXI-2F",
@@ -1000,7 +1090,7 @@
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "new_entry": null,
+      "new_entry": "tasks::dungeon_iteration",
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
@@ -1024,11 +1114,7 @@
       "failure_stop_recovery_evidence": [],
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
-      "blockers": [
-        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
-        "FULL_TASK_EXECUTION_NOT_VERIFIED"
-      ],
+      "blockers": [],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
       "entry_compilation": {
@@ -1051,7 +1137,12 @@
         "executed": false,
         "scope": "NORMAL_FARM_ITERATION_NOT_FULL_TASK",
         "evidence_report": "../m4-iteration-validation.md"
-      }
+      },
+      "pending_observations": [
+        "已有入本、路线与正常Farm迭代图；静态编译/计划绑定不代表每个TaskID已执行。",
+        "完整生命周期组合（冷启动、补给/EOT、真实战斗/开箱、正常续段、应用恢复、停止及落盘副作用对账）尚无逐任务完整证据。",
+        "连续周期、中途恢复及配置/mod组合未逐任务验证；本轮不要求全43项运行，既有分项仅按其实际范围登记。"
+      ]
     },
     {
       "task_id": "FFXI-2F-elite",
@@ -1069,7 +1160,7 @@
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "new_entry": null,
+      "new_entry": "tasks::dungeon_iteration",
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
@@ -1093,11 +1184,7 @@
       "failure_stop_recovery_evidence": [],
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
-      "blockers": [
-        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
-        "FULL_TASK_EXECUTION_NOT_VERIFIED"
-      ],
+      "blockers": [],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
       "entry_compilation": {
@@ -1120,7 +1207,12 @@
         "executed": false,
         "scope": "NORMAL_FARM_ITERATION_NOT_FULL_TASK",
         "evidence_report": "../m4-iteration-validation.md"
-      }
+      },
+      "pending_observations": [
+        "已有入本、路线与正常Farm迭代图；静态编译/计划绑定不代表每个TaskID已执行。",
+        "完整生命周期组合（冷启动、补给/EOT、真实战斗/开箱、正常续段、应用恢复、停止及落盘副作用对账）尚无逐任务完整证据。",
+        "连续周期、中途恢复及配置/mod组合未逐任务验证；本轮不要求全43项运行，既有分项仅按其实际范围登记。"
+      ]
     },
     {
       "task_id": "FFXI-5F-4Elite",
@@ -1138,7 +1230,7 @@
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "new_entry": null,
+      "new_entry": "tasks::dungeon_iteration",
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
@@ -1161,11 +1253,7 @@
       "failure_stop_recovery_evidence": [],
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
-      "blockers": [
-        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
-        "FULL_TASK_EXECUTION_NOT_VERIFIED"
-      ],
+      "blockers": [],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
       "entry_compilation": {
@@ -1188,7 +1276,12 @@
         "executed": false,
         "scope": "NORMAL_FARM_ITERATION_NOT_FULL_TASK",
         "evidence_report": "../m4-iteration-validation.md"
-      }
+      },
+      "pending_observations": [
+        "已有入本、路线与正常Farm迭代图；静态编译/计划绑定不代表每个TaskID已执行。",
+        "完整生命周期组合（冷启动、补给/EOT、真实战斗/开箱、正常续段、应用恢复、停止及落盘副作用对账）尚无逐任务完整证据。",
+        "连续周期、中途恢复及配置/mod组合未逐任务验证；本轮不要求全43项运行，既有分项仅按其实际范围登记。"
+      ]
     },
     {
       "task_id": "FFXI-5F-2Elite-mid",
@@ -1206,7 +1299,7 @@
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "new_entry": null,
+      "new_entry": "tasks::dungeon_iteration",
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
@@ -1229,11 +1322,7 @@
       "failure_stop_recovery_evidence": [],
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
-      "blockers": [
-        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
-        "FULL_TASK_EXECUTION_NOT_VERIFIED"
-      ],
+      "blockers": [],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
       "entry_compilation": {
@@ -1256,7 +1345,12 @@
         "executed": false,
         "scope": "NORMAL_FARM_ITERATION_NOT_FULL_TASK",
         "evidence_report": "../m4-iteration-validation.md"
-      }
+      },
+      "pending_observations": [
+        "已有入本、路线与正常Farm迭代图；静态编译/计划绑定不代表每个TaskID已执行。",
+        "完整生命周期组合（冷启动、补给/EOT、真实战斗/开箱、正常续段、应用恢复、停止及落盘副作用对账）尚无逐任务完整证据。",
+        "连续周期、中途恢复及配置/mod组合未逐任务验证；本轮不要求全43项运行，既有分项仅按其实际范围登记。"
+      ]
     },
     {
       "task_id": "FFXI-5F-2Elite-bottom",
@@ -1274,7 +1368,7 @@
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "new_entry": null,
+      "new_entry": "tasks::dungeon_iteration",
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
@@ -1297,11 +1391,7 @@
       "failure_stop_recovery_evidence": [],
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
-      "blockers": [
-        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
-        "FULL_TASK_EXECUTION_NOT_VERIFIED"
-      ],
+      "blockers": [],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
       "entry_compilation": {
@@ -1324,7 +1414,12 @@
         "executed": false,
         "scope": "NORMAL_FARM_ITERATION_NOT_FULL_TASK",
         "evidence_report": "../m4-iteration-validation.md"
-      }
+      },
+      "pending_observations": [
+        "已有入本、路线与正常Farm迭代图；静态编译/计划绑定不代表每个TaskID已执行。",
+        "完整生命周期组合（冷启动、补给/EOT、真实战斗/开箱、正常续段、应用恢复、停止及落盘副作用对账）尚无逐任务完整证据。",
+        "连续周期、中途恢复及配置/mod组合未逐任务验证；本轮不要求全43项运行，既有分项仅按其实际范围登记。"
+      ]
     },
     {
       "task_id": "FFXI-5F-2Elite-left",
@@ -1342,7 +1437,7 @@
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "new_entry": null,
+      "new_entry": "tasks::dungeon_iteration",
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
@@ -1365,11 +1460,7 @@
       "failure_stop_recovery_evidence": [],
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
-      "blockers": [
-        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
-        "FULL_TASK_EXECUTION_NOT_VERIFIED"
-      ],
+      "blockers": [],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
       "entry_compilation": {
@@ -1392,7 +1483,12 @@
         "executed": false,
         "scope": "NORMAL_FARM_ITERATION_NOT_FULL_TASK",
         "evidence_report": "../m4-iteration-validation.md"
-      }
+      },
+      "pending_observations": [
+        "已有入本、路线与正常Farm迭代图；静态编译/计划绑定不代表每个TaskID已执行。",
+        "完整生命周期组合（冷启动、补给/EOT、真实战斗/开箱、正常续段、应用恢复、停止及落盘副作用对账）尚无逐任务完整证据。",
+        "连续周期、中途恢复及配置/mod组合未逐任务验证；本轮不要求全43项运行，既有分项仅按其实际范围登记。"
+      ]
     },
     {
       "task_id": "FFXI-5F-Elite",
@@ -1410,7 +1506,7 @@
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "new_entry": null,
+      "new_entry": "tasks::dungeon_iteration",
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
@@ -1433,11 +1529,7 @@
       "failure_stop_recovery_evidence": [],
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
-      "blockers": [
-        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
-        "FULL_TASK_EXECUTION_NOT_VERIFIED"
-      ],
+      "blockers": [],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
       "entry_compilation": {
@@ -1460,7 +1552,12 @@
         "executed": false,
         "scope": "NORMAL_FARM_ITERATION_NOT_FULL_TASK",
         "evidence_report": "../m4-iteration-validation.md"
-      }
+      },
+      "pending_observations": [
+        "已有入本、路线与正常Farm迭代图；静态编译/计划绑定不代表每个TaskID已执行。",
+        "完整生命周期组合（冷启动、补给/EOT、真实战斗/开箱、正常续段、应用恢复、停止及落盘副作用对账）尚无逐任务完整证据。",
+        "连续周期、中途恢复及配置/mod组合未逐任务验证；本轮不要求全43项运行，既有分项仅按其实际范围登记。"
+      ]
     },
     {
       "task_id": "HSR-1F",
@@ -1478,7 +1575,7 @@
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "new_entry": null,
+      "new_entry": "tasks::dungeon_iteration",
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
@@ -1501,11 +1598,7 @@
       "failure_stop_recovery_evidence": [],
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
-      "blockers": [
-        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
-        "FULL_TASK_EXECUTION_NOT_VERIFIED"
-      ],
+      "blockers": [],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
       "entry_compilation": {
@@ -1528,7 +1621,12 @@
         "executed": false,
         "scope": "NORMAL_FARM_ITERATION_NOT_FULL_TASK",
         "evidence_report": "../m4-iteration-validation.md"
-      }
+      },
+      "pending_observations": [
+        "已有入本、路线与正常Farm迭代图；静态编译/计划绑定不代表每个TaskID已执行。",
+        "完整生命周期组合（冷启动、补给/EOT、真实战斗/开箱、正常续段、应用恢复、停止及落盘副作用对账）尚无逐任务完整证据。",
+        "连续周期、中途恢复及配置/mod组合未逐任务验证；本轮不要求全43项运行，既有分项仅按其实际范围登记。"
+      ]
     },
     {
       "task_id": "IWO",
@@ -1546,7 +1644,7 @@
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "new_entry": null,
+      "new_entry": "tasks::dungeon_iteration",
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
@@ -1570,11 +1668,7 @@
       "failure_stop_recovery_evidence": [],
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
-      "blockers": [
-        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
-        "FULL_TASK_EXECUTION_NOT_VERIFIED"
-      ],
+      "blockers": [],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
       "entry_compilation": {
@@ -1597,7 +1691,12 @@
         "executed": false,
         "scope": "NORMAL_FARM_ITERATION_NOT_FULL_TASK",
         "evidence_report": "../m4-iteration-validation.md"
-      }
+      },
+      "pending_observations": [
+        "已有入本、路线与正常Farm迭代图；静态编译/计划绑定不代表每个TaskID已执行。",
+        "完整生命周期组合（冷启动、补给/EOT、真实战斗/开箱、正常续段、应用恢复、停止及落盘副作用对账）尚无逐任务完整证据。",
+        "连续周期、中途恢复及配置/mod组合未逐任务验证；本轮不要求全43项运行，既有分项仅按其实际范围登记。"
+      ]
     },
     {
       "task_id": "IWO_2",
@@ -1615,7 +1714,7 @@
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "new_entry": null,
+      "new_entry": "tasks::dungeon_iteration",
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
@@ -1639,11 +1738,7 @@
       "failure_stop_recovery_evidence": [],
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
-      "blockers": [
-        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
-        "FULL_TASK_EXECUTION_NOT_VERIFIED"
-      ],
+      "blockers": [],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
       "entry_compilation": {
@@ -1666,7 +1761,12 @@
         "executed": false,
         "scope": "NORMAL_FARM_ITERATION_NOT_FULL_TASK",
         "evidence_report": "../m4-iteration-validation.md"
-      }
+      },
+      "pending_observations": [
+        "已有入本、路线与正常Farm迭代图；静态编译/计划绑定不代表每个TaskID已执行。",
+        "完整生命周期组合（冷启动、补给/EOT、真实战斗/开箱、正常续段、应用恢复、停止及落盘副作用对账）尚无逐任务完整证据。",
+        "连续周期、中途恢复及配置/mod组合未逐任务验证；本轮不要求全43项运行，既有分项仅按其实际范围登记。"
+      ]
     },
     {
       "task_id": "malice-B3F",
@@ -1684,7 +1784,7 @@
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "new_entry": null,
+      "new_entry": "tasks::dungeon_iteration",
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
@@ -1705,11 +1805,7 @@
       "failure_stop_recovery_evidence": [],
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
-      "blockers": [
-        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
-        "FULL_TASK_EXECUTION_NOT_VERIFIED"
-      ],
+      "blockers": [],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
       "entry_compilation": {
@@ -1732,7 +1828,12 @@
         "executed": false,
         "scope": "NORMAL_FARM_ITERATION_NOT_FULL_TASK",
         "evidence_report": "../m4-iteration-validation.md"
-      }
+      },
+      "pending_observations": [
+        "已有入本、路线与正常Farm迭代图；静态编译/计划绑定不代表每个TaskID已执行。",
+        "完整生命周期组合（冷启动、补给/EOT、真实战斗/开箱、正常续段、应用恢复、停止及落盘副作用对账）尚无逐任务完整证据。",
+        "连续周期、中途恢复及配置/mod组合未逐任务验证；本轮不要求全43项运行，既有分项仅按其实际范围登记。"
+      ]
     },
     {
       "task_id": "fordraig-B3F",
@@ -1750,7 +1851,7 @@
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "new_entry": null,
+      "new_entry": "tasks::dungeon_iteration",
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
@@ -1772,11 +1873,7 @@
       "failure_stop_recovery_evidence": [],
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
-      "blockers": [
-        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
-        "FULL_TASK_EXECUTION_NOT_VERIFIED"
-      ],
+      "blockers": [],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
       "entry_compilation": {
@@ -1799,7 +1896,12 @@
         "executed": false,
         "scope": "NORMAL_FARM_ITERATION_NOT_FULL_TASK",
         "evidence_report": "../m4-iteration-validation.md"
-      }
+      },
+      "pending_observations": [
+        "已有入本、路线与正常Farm迭代图；静态编译/计划绑定不代表每个TaskID已执行。",
+        "完整生命周期组合（冷启动、补给/EOT、真实战斗/开箱、正常续段、应用恢复、停止及落盘副作用对账）尚无逐任务完整证据。",
+        "连续周期、中途恢复及配置/mod组合未逐任务验证；本轮不要求全43项运行，既有分项仅按其实际范围登记。"
+      ]
     },
     {
       "task_id": "SSC_chest",
@@ -1817,7 +1919,7 @@
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "new_entry": null,
+      "new_entry": "tasks::dungeon_iteration",
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
@@ -1839,11 +1941,7 @@
       "failure_stop_recovery_evidence": [],
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
-      "blockers": [
-        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
-        "FULL_TASK_EXECUTION_NOT_VERIFIED"
-      ],
+      "blockers": [],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
       "entry_compilation": {
@@ -1866,7 +1964,12 @@
         "executed": false,
         "scope": "NORMAL_FARM_ITERATION_NOT_FULL_TASK",
         "evidence_report": "../m4-iteration-validation.md"
-      }
+      },
+      "pending_observations": [
+        "已有入本、路线与正常Farm迭代图；静态编译/计划绑定不代表每个TaskID已执行。",
+        "完整生命周期组合（冷启动、补给/EOT、真实战斗/开箱、正常续段、应用恢复、停止及落盘副作用对账）尚无逐任务完整证据。",
+        "连续周期、中途恢复及配置/mod组合未逐任务验证；本轮不要求全43项运行，既有分项仅按其实际范围登记。"
+      ]
     },
     {
       "task_id": "LBC",
@@ -1884,7 +1987,7 @@
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "new_entry": null,
+      "new_entry": "tasks::dungeon_iteration",
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
@@ -1906,11 +2009,7 @@
       "failure_stop_recovery_evidence": [],
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
-      "blockers": [
-        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
-        "FULL_TASK_EXECUTION_NOT_VERIFIED"
-      ],
+      "blockers": [],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
       "entry_compilation": {
@@ -1933,7 +2032,12 @@
         "executed": false,
         "scope": "NORMAL_FARM_ITERATION_NOT_FULL_TASK",
         "evidence_report": "../m4-iteration-validation.md"
-      }
+      },
+      "pending_observations": [
+        "已有入本、路线与正常Farm迭代图；静态编译/计划绑定不代表每个TaskID已执行。",
+        "完整生命周期组合（冷启动、补给/EOT、真实战斗/开箱、正常续段、应用恢复、停止及落盘副作用对账）尚无逐任务完整证据。",
+        "连续周期、中途恢复及配置/mod组合未逐任务验证；本轮不要求全43项运行，既有分项仅按其实际范围登记。"
+      ]
     },
     {
       "task_id": "AWD",
@@ -1951,7 +2055,7 @@
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "new_entry": null,
+      "new_entry": "tasks::dungeon_iteration",
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
@@ -1973,11 +2077,7 @@
       "failure_stop_recovery_evidence": [],
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
-      "blockers": [
-        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
-        "FULL_TASK_EXECUTION_NOT_VERIFIED"
-      ],
+      "blockers": [],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
       "entry_compilation": {
@@ -2000,7 +2100,12 @@
         "executed": false,
         "scope": "NORMAL_FARM_ITERATION_NOT_FULL_TASK",
         "evidence_report": "../m4-iteration-validation.md"
-      }
+      },
+      "pending_observations": [
+        "已有入本、路线与正常Farm迭代图；静态编译/计划绑定不代表每个TaskID已执行。",
+        "完整生命周期组合（冷启动、补给/EOT、真实战斗/开箱、正常续段、应用恢复、停止及落盘副作用对账）尚无逐任务完整证据。",
+        "连续周期、中途恢复及配置/mod组合未逐任务验证；本轮不要求全43项运行，既有分项仅按其实际范围登记。"
+      ]
     },
     {
       "task_id": "AWD-noGorgon",
@@ -2018,7 +2123,7 @@
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "new_entry": null,
+      "new_entry": "tasks::dungeon_iteration",
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
@@ -2040,11 +2145,7 @@
       "failure_stop_recovery_evidence": [],
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
-      "blockers": [
-        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
-        "FULL_TASK_EXECUTION_NOT_VERIFIED"
-      ],
+      "blockers": [],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
       "entry_compilation": {
@@ -2067,7 +2168,12 @@
         "executed": false,
         "scope": "NORMAL_FARM_ITERATION_NOT_FULL_TASK",
         "evidence_report": "../m4-iteration-validation.md"
-      }
+      },
+      "pending_observations": [
+        "已有入本、路线与正常Farm迭代图；静态编译/计划绑定不代表每个TaskID已执行。",
+        "完整生命周期组合（冷启动、补给/EOT、真实战斗/开箱、正常续段、应用恢复、停止及落盘副作用对账）尚无逐任务完整证据。",
+        "连续周期、中途恢复及配置/mod组合未逐任务验证；本轮不要求全43项运行，既有分项仅按其实际范围登记。"
+      ]
     },
     {
       "task_id": "GHB",
@@ -2085,7 +2191,7 @@
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "new_entry": null,
+      "new_entry": "tasks::dungeon_iteration",
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
@@ -2106,11 +2212,7 @@
       "failure_stop_recovery_evidence": [],
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
-      "blockers": [
-        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
-        "FULL_TASK_EXECUTION_NOT_VERIFIED"
-      ],
+      "blockers": [],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
       "entry_compilation": {
@@ -2133,7 +2235,12 @@
         "executed": false,
         "scope": "NORMAL_FARM_ITERATION_NOT_FULL_TASK",
         "evidence_report": "../m4-iteration-validation.md"
-      }
+      },
+      "pending_observations": [
+        "已有入本、路线与正常Farm迭代图；静态编译/计划绑定不代表每个TaskID已执行。",
+        "完整生命周期组合（冷启动、补给/EOT、真实战斗/开箱、正常续段、应用恢复、停止及落盘副作用对账）尚无逐任务完整证据。",
+        "连续周期、中途恢复及配置/mod组合未逐任务验证；本轮不要求全43项运行，既有分项仅按其实际范围登记。"
+      ]
     },
     {
       "task_id": "COS_chest",
@@ -2151,7 +2258,7 @@
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "new_entry": null,
+      "new_entry": "tasks::dungeon_iteration",
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
@@ -2172,11 +2279,7 @@
       "failure_stop_recovery_evidence": [],
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
-      "blockers": [
-        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
-        "FULL_TASK_EXECUTION_NOT_VERIFIED"
-      ],
+      "blockers": [],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
       "entry_compilation": {
@@ -2199,7 +2302,12 @@
         "executed": false,
         "scope": "NORMAL_FARM_ITERATION_NOT_FULL_TASK",
         "evidence_report": "../m4-iteration-validation.md"
-      }
+      },
+      "pending_observations": [
+        "已有入本、路线与正常Farm迭代图；静态编译/计划绑定不代表每个TaskID已执行。",
+        "完整生命周期组合（冷启动、补给/EOT、真实战斗/开箱、正常续段、应用恢复、停止及落盘副作用对账）尚无逐任务完整证据。",
+        "连续周期、中途恢复及配置/mod组合未逐任务验证；本轮不要求全43项运行，既有分项仅按其实际范围登记。"
+      ]
     },
     {
       "task_id": "COS_chest_short",
@@ -2217,7 +2325,7 @@
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "new_entry": null,
+      "new_entry": "tasks::dungeon_iteration",
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
@@ -2238,11 +2346,7 @@
       "failure_stop_recovery_evidence": [],
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
-      "blockers": [
-        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
-        "FULL_TASK_EXECUTION_NOT_VERIFIED"
-      ],
+      "blockers": [],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
       "entry_compilation": {
@@ -2265,7 +2369,12 @@
         "executed": false,
         "scope": "NORMAL_FARM_ITERATION_NOT_FULL_TASK",
         "evidence_report": "../m4-iteration-validation.md"
-      }
+      },
+      "pending_observations": [
+        "已有入本、路线与正常Farm迭代图；静态编译/计划绑定不代表每个TaskID已执行。",
+        "完整生命周期组合（冷启动、补给/EOT、真实战斗/开箱、正常续段、应用恢复、停止及落盘副作用对账）尚无逐任务完整证据。",
+        "连续周期、中途恢复及配置/mod组合未逐任务验证；本轮不要求全43项运行，既有分项仅按其实际范围登记。"
+      ]
     },
     {
       "task_id": "DOE",
@@ -2283,7 +2392,7 @@
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "new_entry": null,
+      "new_entry": "tasks::dungeon_iteration",
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
@@ -2304,11 +2413,7 @@
       "failure_stop_recovery_evidence": [],
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
-      "blockers": [
-        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
-        "FULL_TASK_EXECUTION_NOT_VERIFIED"
-      ],
+      "blockers": [],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
       "entry_compilation": {
@@ -2331,7 +2436,12 @@
         "executed": false,
         "scope": "NORMAL_FARM_ITERATION_NOT_FULL_TASK",
         "evidence_report": "../m4-iteration-validation.md"
-      }
+      },
+      "pending_observations": [
+        "已有入本、路线与正常Farm迭代图；静态编译/计划绑定不代表每个TaskID已执行。",
+        "完整生命周期组合（冷启动、补给/EOT、真实战斗/开箱、正常续段、应用恢复、停止及落盘副作用对账）尚无逐任务完整证据。",
+        "连续周期、中途恢复及配置/mod组合未逐任务验证；本轮不要求全43项运行，既有分项仅按其实际范围登记。"
+      ]
     },
     {
       "task_id": "DOF",
@@ -2349,7 +2459,7 @@
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "new_entry": null,
+      "new_entry": "tasks::dungeon_iteration",
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
@@ -2370,11 +2480,7 @@
       "failure_stop_recovery_evidence": [],
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
-      "blockers": [
-        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
-        "FULL_TASK_EXECUTION_NOT_VERIFIED"
-      ],
+      "blockers": [],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
       "entry_compilation": {
@@ -2397,7 +2503,12 @@
         "executed": false,
         "scope": "NORMAL_FARM_ITERATION_NOT_FULL_TASK",
         "evidence_report": "../m4-iteration-validation.md"
-      }
+      },
+      "pending_observations": [
+        "已有入本、路线与正常Farm迭代图；静态编译/计划绑定不代表每个TaskID已执行。",
+        "完整生命周期组合（冷启动、补给/EOT、真实战斗/开箱、正常续段、应用恢复、停止及落盘副作用对账）尚无逐任务完整证据。",
+        "连续周期、中途恢复及配置/mod组合未逐任务验证；本轮不要求全43项运行，既有分项仅按其实际范围登记。"
+      ]
     },
     {
       "task_id": "DOF_Plus",
@@ -2415,7 +2526,7 @@
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "new_entry": null,
+      "new_entry": "tasks::dungeon_iteration",
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
@@ -2436,11 +2547,7 @@
       "failure_stop_recovery_evidence": [],
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
-      "blockers": [
-        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
-        "FULL_TASK_EXECUTION_NOT_VERIFIED"
-      ],
+      "blockers": [],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
       "entry_compilation": {
@@ -2463,7 +2570,12 @@
         "executed": false,
         "scope": "NORMAL_FARM_ITERATION_NOT_FULL_TASK",
         "evidence_report": "../m4-iteration-validation.md"
-      }
+      },
+      "pending_observations": [
+        "已有入本、路线与正常Farm迭代图；静态编译/计划绑定不代表每个TaskID已执行。",
+        "完整生命周期组合（冷启动、补给/EOT、真实战斗/开箱、正常续段、应用恢复、停止及落盘副作用对账）尚无逐任务完整证据。",
+        "连续周期、中途恢复及配置/mod组合未逐任务验证；本轮不要求全43项运行，既有分项仅按其实际范围登记。"
+      ]
     },
     {
       "task_id": "DOW",
@@ -2481,7 +2593,7 @@
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "new_entry": null,
+      "new_entry": "tasks::dungeon_iteration",
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
@@ -2502,11 +2614,7 @@
       "failure_stop_recovery_evidence": [],
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
-      "blockers": [
-        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
-        "FULL_TASK_EXECUTION_NOT_VERIFIED"
-      ],
+      "blockers": [],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
       "entry_compilation": {
@@ -2529,7 +2637,12 @@
         "executed": false,
         "scope": "NORMAL_FARM_ITERATION_NOT_FULL_TASK",
         "evidence_report": "../m4-iteration-validation.md"
-      }
+      },
+      "pending_observations": [
+        "已有入本、路线与正常Farm迭代图；静态编译/计划绑定不代表每个TaskID已执行。",
+        "完整生命周期组合（冷启动、补给/EOT、真实战斗/开箱、正常续段、应用恢复、停止及落盘副作用对账）尚无逐任务完整证据。",
+        "连续周期、中途恢复及配置/mod组合未逐任务验证；本轮不要求全43项运行，既有分项仅按其实际范围登记。"
+      ]
     },
     {
       "task_id": "DOW_Plus",
@@ -2547,7 +2660,7 @@
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "new_entry": null,
+      "new_entry": "tasks::dungeon_iteration",
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
@@ -2568,11 +2681,7 @@
       "failure_stop_recovery_evidence": [],
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
-      "blockers": [
-        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
-        "FULL_TASK_EXECUTION_NOT_VERIFIED"
-      ],
+      "blockers": [],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
       "entry_compilation": {
@@ -2595,7 +2704,12 @@
         "executed": false,
         "scope": "NORMAL_FARM_ITERATION_NOT_FULL_TASK",
         "evidence_report": "../m4-iteration-validation.md"
-      }
+      },
+      "pending_observations": [
+        "已有入本、路线与正常Farm迭代图；静态编译/计划绑定不代表每个TaskID已执行。",
+        "完整生命周期组合（冷启动、补给/EOT、真实战斗/开箱、正常续段、应用恢复、停止及落盘副作用对账）尚无逐任务完整证据。",
+        "连续周期、中途恢复及配置/mod组合未逐任务验证；本轮不要求全43项运行，既有分项仅按其实际范围登记。"
+      ]
     },
     {
       "task_id": "DOL",
@@ -2613,7 +2727,7 @@
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "new_entry": null,
+      "new_entry": "tasks::dungeon_iteration",
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
@@ -2634,11 +2748,7 @@
       "failure_stop_recovery_evidence": [],
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
-      "blockers": [
-        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
-        "FULL_TASK_EXECUTION_NOT_VERIFIED"
-      ],
+      "blockers": [],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
       "entry_compilation": {
@@ -2661,7 +2771,12 @@
         "executed": false,
         "scope": "NORMAL_FARM_ITERATION_NOT_FULL_TASK",
         "evidence_report": "../m4-iteration-validation.md"
-      }
+      },
+      "pending_observations": [
+        "已有入本、路线与正常Farm迭代图；静态编译/计划绑定不代表每个TaskID已执行。",
+        "完整生命周期组合（冷启动、补给/EOT、真实战斗/开箱、正常续段、应用恢复、停止及落盘副作用对账）尚无逐任务完整证据。",
+        "连续周期、中途恢复及配置/mod组合未逐任务验证；本轮不要求全43项运行，既有分项仅按其实际范围登记。"
+      ]
     },
     {
       "task_id": "DOL_PLUS",
@@ -2679,7 +2794,7 @@
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "new_entry": null,
+      "new_entry": "tasks::dungeon_iteration",
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
@@ -2700,11 +2815,7 @@
       "failure_stop_recovery_evidence": [],
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
-      "blockers": [
-        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
-        "FULL_TASK_EXECUTION_NOT_VERIFIED"
-      ],
+      "blockers": [],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
       "entry_compilation": {
@@ -2727,7 +2838,12 @@
         "executed": false,
         "scope": "NORMAL_FARM_ITERATION_NOT_FULL_TASK",
         "evidence_report": "../m4-iteration-validation.md"
-      }
+      },
+      "pending_observations": [
+        "已有入本、路线与正常Farm迭代图；静态编译/计划绑定不代表每个TaskID已执行。",
+        "完整生命周期组合（冷启动、补给/EOT、真实战斗/开箱、正常续段、应用恢复、停止及落盘副作用对账）尚无逐任务完整证据。",
+        "连续周期、中途恢复及配置/mod组合未逐任务验证；本轮不要求全43项运行，既有分项仅按其实际范围登记。"
+      ]
     },
     {
       "task_id": "DOS",
@@ -2745,7 +2861,7 @@
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "new_entry": null,
+      "new_entry": "tasks::dungeon_iteration",
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
@@ -2766,11 +2882,7 @@
       "failure_stop_recovery_evidence": [],
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
-      "blockers": [
-        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
-        "FULL_TASK_EXECUTION_NOT_VERIFIED"
-      ],
+      "blockers": [],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
       "entry_compilation": {
@@ -2793,7 +2905,12 @@
         "executed": false,
         "scope": "NORMAL_FARM_ITERATION_NOT_FULL_TASK",
         "evidence_report": "../m4-iteration-validation.md"
-      }
+      },
+      "pending_observations": [
+        "已有入本、路线与正常Farm迭代图；静态编译/计划绑定不代表每个TaskID已执行。",
+        "完整生命周期组合（冷启动、补给/EOT、真实战斗/开箱、正常续段、应用恢复、停止及落盘副作用对账）尚无逐任务完整证据。",
+        "连续周期、中途恢复及配置/mod组合未逐任务验证；本轮不要求全43项运行，既有分项仅按其实际范围登记。"
+      ]
     },
     {
       "task_id": "LMG-GT",
@@ -2811,7 +2928,7 @@
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "new_entry": null,
+      "new_entry": "tasks::dungeon_iteration",
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
@@ -2833,11 +2950,7 @@
       "failure_stop_recovery_evidence": [],
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
-      "blockers": [
-        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
-        "FULL_TASK_EXECUTION_NOT_VERIFIED"
-      ],
+      "blockers": [],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
       "entry_compilation": {
@@ -2860,7 +2973,12 @@
         "executed": false,
         "scope": "NORMAL_FARM_ITERATION_NOT_FULL_TASK",
         "evidence_report": "../m4-iteration-validation.md"
-      }
+      },
+      "pending_observations": [
+        "已有入本、路线与正常Farm迭代图；静态编译/计划绑定不代表每个TaskID已执行。",
+        "完整生命周期组合（冷启动、补给/EOT、真实战斗/开箱、正常续段、应用恢复、停止及落盘副作用对账）尚无逐任务完整证据。",
+        "连续周期、中途恢复及配置/mod组合未逐任务验证；本轮不要求全43项运行，既有分项仅按其实际范围登记。"
+      ]
     },
     {
       "task_id": "LMG-FT",
@@ -2878,7 +2996,7 @@
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "new_entry": null,
+      "new_entry": "tasks::dungeon_iteration",
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
@@ -2900,11 +3018,7 @@
       "failure_stop_recovery_evidence": [],
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
-      "blockers": [
-        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "FULL_LIFECYCLE_AND_DIALOGS_INCOMPLETE",
-        "FULL_TASK_EXECUTION_NOT_VERIFIED"
-      ],
+      "blockers": [],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
       "entry_compilation": {
@@ -2927,7 +3041,12 @@
         "executed": false,
         "scope": "NORMAL_FARM_ITERATION_NOT_FULL_TASK",
         "evidence_report": "../m4-iteration-validation.md"
-      }
+      },
+      "pending_observations": [
+        "已有入本、路线与正常Farm迭代图；静态编译/计划绑定不代表每个TaskID已执行。",
+        "完整生命周期组合（冷启动、补给/EOT、真实战斗/开箱、正常续段、应用恢复、停止及落盘副作用对账）尚无逐任务完整证据。",
+        "连续周期、中途恢复及配置/mod组合未逐任务验证；本轮不要求全43项运行，既有分项仅按其实际范围登记。"
+      ]
     },
     {
       "task_id": "7000G",
@@ -2939,7 +3058,7 @@
         "M4-TASK-7000G"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "FINITE_GOLD_INCOME_PENDING_VALIDATION",
+      "implementation_extent": "FINITE_GOLD_INCOME_PARTIAL_VALIDATION",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
       "offline_status": "NOT_RUN",
@@ -2960,16 +3079,31 @@
         "questCategory_en_US",
         "_TYPE"
       ],
-      "success_evidence": [],
-      "failure_stop_recovery_evidence": [],
+      "success_evidence": [
+        "../m4-gold-income-validation.md"
+      ],
+      "failure_stop_recovery_evidence": [
+        "../m4-gold-income-validation.md"
+      ],
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
-      "blockers": [
-        "CURRENT_IMPLEMENTATION_NOT_BUILT_OR_VERIFIED",
-        "FULL_SUCCESS_FAILURE_STOP_RECOVERY_CONFIG_MOD_MATRIX"
-      ],
+      "blockers": [],
       "plan_data_status": "PASS",
-      "plan_evidence": "../m4-plan-validation.md"
+      "plan_evidence": "../m4-plan-validation.md",
+      "implementation_evidence": "../m4-gold-income-validation.md",
+      "scoped_execution_evidence": {
+        "scope": "HISTORICAL_COMPONENT_SCENARIOS_NOT_FULL_TASK_ACCEPTANCE",
+        "status": "PARTIAL",
+        "evidence_report": "../m4-gold-income-validation.md",
+        "evidence_roots": [
+          "../../.local/m4-workflow-7g_0bqno"
+        ],
+        "summary": "两条有限剧情链Completed，分别23/24次输入；拒绝和停止各1次输入分项通过。首次Stage命中上限失败保留；这些是历史产物证据，不证明全部转交/恢复组合。"
+      },
+      "pending_observations": [
+        "未知后置、连续周期、任务转交与恢复的组合行为仍未完整验证；已有handoff独立实现/证据不能替代本TaskID全链验收。",
+        "配置/mod、未覆盖的生命周期与恢复组合仍未证；保留为后续待观察范围，不要求本轮补齐完整任务矩阵。"
+      ]
     },
     {
       "task_id": "manualSepDemon",
@@ -2987,7 +3121,7 @@
       "offline_status": "BLOCKED",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "new_entry": null,
+      "new_entry": "tasks::manual_separation",
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
@@ -3005,12 +3139,13 @@
         "_TYPE"
       ],
       "success_evidence": [],
-      "failure_stop_recovery_evidence": [],
+      "failure_stop_recovery_evidence": [
+        "../m4-manual-separation-validation.md"
+      ],
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
       "blockers": [
-        "MANUAL_SEPARATION_FRAME_AGE_CORRECTION_LIMIT_REACHED",
-        "FULL_CONFIGURATION_AND_RECOVERY_MATRIX_INCOMPLETE"
+        "MANUAL_SEPARATION_FRAME_AGE_CORRECTION_LIMIT_REACHED"
       ],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
@@ -3020,8 +3155,22 @@
         "source": "native/games/wvd/tasks/manual_separation.cpp",
         "scope": "TWO_FINITE_UNITS_NOT_FULL_TASK_ACCEPTANCE",
         "evidence_report": "../m4-manual-separation-validation.md",
-        "remaining": "FRAME_AGE_BLOCKED_AND_FULL_RECOVERY_MATRIX"
-      }
+        "remaining": "FRAME_AGE_BLOCKED_NO_FURTHER_RERUN_IN_THIS_STAGE"
+      },
+      "implementation_evidence": "../m4-manual-separation-validation.md",
+      "scoped_execution_evidence": {
+        "scope": "HISTORICAL_COMPONENT_SCENARIOS_NOT_FULL_TASK_ACCEPTANCE",
+        "status": "BLOCKED",
+        "evidence_report": "../m4-manual-separation-validation.md",
+        "evidence_roots": [
+          "../../.local/m4-workflow-8qtzoenz"
+        ],
+        "summary": "74b99fb最终轮三方法失败：完整链5输入BUSINESS_CONFIRMATION_STALE，提前退出1输入SCENE_UNCONFIRMED，拒绝场景0输入CUSTOM_ACTION_FAILED。源码双段入口已存在；保留BLOCKED，不再复跑。"
+      },
+      "pending_observations": [
+        "两个有限正常段的完整成功与恢复组合未证；不得用早期停止/拒绝分项覆盖最终完整链失败。",
+        "配置/mod、未覆盖的生命周期与恢复组合仍未证；保留为后续待观察范围，不要求本轮补齐完整任务矩阵。"
+      ]
     },
     {
       "task_id": "darkLight",
@@ -3039,11 +3188,12 @@
       "offline_status": "BLOCKED",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "new_entry": null,
+      "new_entry": "tasks::dark_light",
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
-        "native/games/wvd/tasks/task_plan.cpp"
+        "native/games/wvd/tasks/task_plan.cpp",
+        "native/games/wvd/tasks/dark_light.cpp"
       ],
       "source_fields": [
         "questName",
@@ -3052,14 +3202,16 @@
         "questCategory_en_US",
         "_TYPE"
       ],
-      "success_evidence": [],
-      "failure_stop_recovery_evidence": [],
+      "success_evidence": [
+        "../m4-dark-light-validation.md"
+      ],
+      "failure_stop_recovery_evidence": [
+        "../m4-dark-light-validation.md"
+      ],
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
       "blockers": [
-        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "SCENE_CONFIRMATION_CORRECTION_LIMIT_REACHED",
-        "FULL_CONFIGURATION_AND_RECOVERY_MATRIX_INCOMPLETE"
+        "SCENE_CONFIRMATION_CORRECTION_LIMIT_REACHED"
       ],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
@@ -3070,7 +3222,21 @@
         "scope": "FINITE_ITERATION_NOT_FULL_TASK_ACCEPTANCE",
         "evidence_report": "../m4-dark-light-validation.md",
         "remaining": "FULL_SUCCESS_COLD_START_HEALING_AND_CONFIRMATION_NOT_VERIFIED"
-      }
+      },
+      "implementation_evidence": "../m4-dark-light-validation.md",
+      "scoped_execution_evidence": {
+        "scope": "HISTORICAL_COMPONENT_SCENARIOS_NOT_FULL_TASK_ACCEPTANCE",
+        "status": "BLOCKED",
+        "evidence_report": "../m4-dark-light-validation.md",
+        "evidence_roots": [
+          "../../.local/m4-workflow-f37q4l2c"
+        ],
+        "summary": "4972ff6最终轮5方法2通过3失败；完整/后置场景2输入后SCENE_UNCONFIRMED。停止/拒绝及城内分项证据保留，完整链仍BLOCKED。后续unknown_leap接线不等于此链已重新验证。"
+      },
+      "pending_observations": [
+        "完整成功、冷启动、战后恢复及未变化弹窗未证；修正边界保留，不再重跑本组。",
+        "配置/mod、未覆盖的生命周期与恢复组合仍未证；保留为后续待观察范围，不要求本轮补齐完整任务矩阵。"
+      ]
     },
     {
       "task_id": "LBC-oneGorgon",
@@ -3082,7 +3248,7 @@
         "M4-TASK-LBC-oneGorgon"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "FINITE_BULL_CAVE_PENDING_VALIDATION",
+      "implementation_extent": "FINITE_BULL_CAVE_BLOCKED",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
       "offline_status": "NOT_RUN",
@@ -3103,16 +3269,34 @@
         "questCategory_en_US",
         "_TYPE"
       ],
-      "success_evidence": [],
-      "failure_stop_recovery_evidence": [],
+      "success_evidence": [
+        "../m4-bull-cave-validation.md"
+      ],
+      "failure_stop_recovery_evidence": [
+        "../m4-bull-cave-validation.md"
+      ],
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
       "blockers": [
-        "CURRENT_IMPLEMENTATION_NOT_BUILT_OR_VERIFIED",
-        "FULL_SUCCESS_FAILURE_STOP_RECOVERY_CONFIG_MOD_MATRIX"
+        "BULL_CAVE_CONFIRMATION_CORRECTION_LIMIT_REACHED"
       ],
       "plan_data_status": "PASS",
-      "plan_evidence": "../m4-plan-validation.md"
+      "plan_evidence": "../m4-plan-validation.md",
+      "implementation_evidence": "../m4-bull-cave-validation.md",
+      "scoped_execution_evidence": {
+        "scope": "HISTORICAL_COMPONENT_SCENARIOS_NOT_FULL_TASK_ACCEPTANCE",
+        "status": "BLOCKED",
+        "evidence_report": "../m4-bull-cave-validation.md",
+        "evidence_roots": [
+          "../../.local/m4-workflow-a5by2949/bull-cave-full-False",
+          "../../.local/m4-workflow-gqgh3uz1"
+        ],
+        "summary": "最终允许修正后仅False运行：25/37次输入，Failed/BUSINESS_CONFIRMATION_STALE，generation=2，quiescent/result_saved=true，完成1段、cycles=0。True因False断言失败未触达/NOT_RUN。另有设置等6方法分项通过，不覆盖完整链失败。"
+      },
+      "pending_observations": [
+        "保留BLOCKED，不再改代码或复测此链；True分支及完整周期/恢复组合均不能据False失败结果宣称已验。",
+        "配置/mod、未覆盖的生命周期与恢复组合仍未证；保留为后续待观察范围，不要求本轮补齐完整任务矩阵。"
+      ]
     },
     {
       "task_id": "SSC-goldenchest",
@@ -3124,7 +3308,7 @@
         "M4-TASK-SSC-goldenchest"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "FINITE_GOLDEN_CHEST_PENDING_VALIDATION",
+      "implementation_extent": "FINITE_GOLDEN_CHEST_BLOCKED",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
       "offline_status": "NOT_RUN",
@@ -3148,18 +3332,35 @@
         "questCategory_en_US",
         "_TYPE"
       ],
-      "success_evidence": [],
-      "failure_stop_recovery_evidence": [],
+      "success_evidence": [
+        "../m4-golden-chest-validation.md"
+      ],
+      "failure_stop_recovery_evidence": [
+        "../m4-golden-chest-validation.md"
+      ],
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
       "blockers": [
-        "CURRENT_IMPLEMENTATION_NOT_BUILT_OR_VERIFIED",
-        "FULL_TASK_SUCCESS_FAILURE_STOP_RECOVERY_MATRIX_PENDING",
-        "CONFIG_AND_MOD_MATRIX_PENDING"
+        "GOLDEN_CHEST_SCENE_CONFIRMATION_CORRECTION_LIMIT_REACHED"
       ],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
-      "implementation_evidence": "../m4-golden-chest-validation.md"
+      "implementation_evidence": "../m4-golden-chest-validation.md",
+      "scoped_execution_evidence": {
+        "scope": "HISTORICAL_COMPONENT_SCENARIOS_NOT_FULL_TASK_ACCEPTANCE",
+        "status": "BLOCKED",
+        "evidence_report": "../m4-golden-chest-validation.md",
+        "evidence_roots": [
+          "../../.local/m4-workflow-q1g83xy1",
+          "../../.local/m4-workflow-4o72cdln/golden-route-empty-chests",
+          "../../.local/m4-workflow-7g_0bqno/golden-route-empty-chests"
+        ],
+        "summary": "状态/编译与对话分项通过；完整空箱路线先25输入、最终13输入SCENE_UNCONFIRMED，无命令不匹配。已达修正边界，保留BLOCKED；空箱路线不是实际领取四个金箱。"
+      },
+      "pending_observations": [
+        "实际四金箱、连续两轮和完整恢复组合未证；不重跑已到修正边界的失败链。",
+        "配置/mod、未覆盖的生命周期与恢复组合仍未证；保留为后续待观察范围，不要求本轮补齐完整任务矩阵。"
+      ]
     },
     {
       "task_id": "jier",
@@ -3171,7 +3372,7 @@
         "M4-TASK-jier"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "FINITE_BOUNTY_AND_SCOPED_DIALOGUE_PENDING_VALIDATION",
+      "implementation_extent": "FINITE_BOUNTY_AND_SCOPED_DIALOGUE_PARTIAL_VALIDATION",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
       "offline_status": "NOT_RUN",
@@ -3192,17 +3393,32 @@
         "questCategory_en_US",
         "_TYPE"
       ],
-      "success_evidence": [],
-      "failure_stop_recovery_evidence": [],
+      "success_evidence": [
+        "../m4-jier-validation.md"
+      ],
+      "failure_stop_recovery_evidence": [
+        "../m4-jier-validation.md"
+      ],
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
-      "blockers": [
-        "JIER_CAUSAL_WORKFLOW_VALIDATION_PENDING",
-        "SPECIAL_DIALOGUE_INSERTION_RECOVERY_MATRIX_PENDING",
-        "FULL_TASK_ACCEPTANCE_PENDING"
-      ],
+      "blockers": [],
       "plan_data_status": "PASS",
-      "plan_evidence": "../m4-plan-validation.md"
+      "plan_evidence": "../m4-plan-validation.md",
+      "implementation_evidence": "../m4-jier-validation.md",
+      "scoped_execution_evidence": {
+        "scope": "HISTORICAL_COMPONENT_SCENARIOS_NOT_FULL_TASK_ACCEPTANCE",
+        "status": "PARTIAL",
+        "evidence_report": "../m4-jier-validation.md",
+        "evidence_roots": [
+          "../../.local/m4-workflow-o_j70dhs",
+          "../../.local/m4-workflow-w6r933dj"
+        ],
+        "summary": "首轮有限路线Completed/35输入/3段，交付1次、住宿1次；修正一专项对话5方法7场景通过。35输入路线未在修正版重跑，两个产物的证据分别保留。"
+      },
+      "pending_observations": [
+        "路线中插入专项对话、harken中途遭遇、恢复与连续周期仍未形成组合证据。",
+        "配置/mod、未覆盖的生命周期与恢复组合仍未证；保留为后续待观察范围，不要求本轮补齐完整任务矩阵。"
+      ]
     },
     {
       "task_id": "Scorpionesses",
@@ -3220,7 +3436,7 @@
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "new_entry": null,
+      "new_entry": "tasks::bounty_cycle",
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
@@ -3236,14 +3452,15 @@
         "questCategory_en_US",
         "_TYPE"
       ],
-      "success_evidence": [],
-      "failure_stop_recovery_evidence": [],
+      "success_evidence": [
+        "../m4-scorpion-validation.md"
+      ],
+      "failure_stop_recovery_evidence": [
+        "../m4-scorpion-validation.md"
+      ],
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
-      "blockers": [
-        "SCORPION_ALTERNATE_ENTRY_AND_CONTINUATION_PENDING",
-        "FULL_STOP_RECOVERY_CONFIG_MATRIX_PENDING"
-      ],
+      "blockers": [],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
       "iteration_compilation": {
@@ -3254,7 +3471,21 @@
         "executed": true,
         "scope": "ONE_ORE_CYCLE_NOT_FULL_TASK_MATRIX",
         "evidence_report": "../m4-scorpion-validation.md"
-      }
+      },
+      "implementation_evidence": "../m4-scorpion-validation.md",
+      "scoped_execution_evidence": {
+        "scope": "HISTORICAL_COMPONENT_SCENARIOS_NOT_FULL_TASK_ACCEPTANCE",
+        "status": "PARTIAL",
+        "evidence_report": "../m4-scorpion-validation.md",
+        "evidence_roots": [
+          "../../.local/m4-workflow-k2ylxcpn"
+        ],
+        "summary": "713dbbe产物城市/蝎女合组6方法11场景通过；本任务单个BeautifulOre周期31输入、3段、交付1次、住宿1次。三种跳跃入口停止分项不等于其它入口完成。"
+      },
+      "pending_observations": [
+        "非BeautifulOre完整转场、连续周期、冷启动/中途恢复及住宿选项组合仍未证。",
+        "配置/mod、未覆盖的生命周期与恢复组合仍未证；保留为后续待观察范围，不要求本轮补齐完整任务矩阵。"
+      ]
     },
     {
       "task_id": "Scorpionesses_plus_6_hands",
@@ -3272,7 +3503,7 @@
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "new_entry": null,
+      "new_entry": "tasks::bounty_cycle",
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
@@ -3288,14 +3519,15 @@
         "questCategory_en_US",
         "_TYPE"
       ],
-      "success_evidence": [],
-      "failure_stop_recovery_evidence": [],
+      "success_evidence": [
+        "../m4-scorpion-validation.md"
+      ],
+      "failure_stop_recovery_evidence": [
+        "../m4-scorpion-validation.md"
+      ],
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
-      "blockers": [
-        "SCORPION_ALTERNATE_ENTRY_AND_CONTINUATION_PENDING",
-        "FULL_STOP_RECOVERY_CONFIG_MATRIX_PENDING"
-      ],
+      "blockers": [],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
       "iteration_compilation": {
@@ -3306,7 +3538,21 @@
         "executed": true,
         "scope": "ONE_ORE_CYCLE_NOT_FULL_TASK_MATRIX",
         "evidence_report": "../m4-scorpion-validation.md"
-      }
+      },
+      "implementation_evidence": "../m4-scorpion-validation.md",
+      "scoped_execution_evidence": {
+        "scope": "HISTORICAL_COMPONENT_SCENARIOS_NOT_FULL_TASK_ACCEPTANCE",
+        "status": "PARTIAL",
+        "evidence_report": "../m4-scorpion-validation.md",
+        "evidence_roots": [
+          "../../.local/m4-workflow-k2ylxcpn"
+        ],
+        "summary": "713dbbe产物城市/蝎女合组6方法11场景通过；本任务单个BeautifulOre周期51输入、4段、交付2次、住宿1次。两次交付按已确认状态退出后再开始下一份。"
+      },
+      "pending_observations": [
+        "非BeautifulOre完整转场、连续周期、冷启动/中途恢复及住宿选项组合仍未证。",
+        "配置/mod、未覆盖的生命周期与恢复组合仍未证；保留为后续待观察范围，不要求本轮补齐完整任务矩阵。"
+      ]
     },
     {
       "task_id": "gaintKiller",
@@ -3324,7 +3570,7 @@
       "offline_status": "BLOCKED",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "new_entry": null,
+      "new_entry": "tasks::giant_iteration",
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
@@ -3339,13 +3585,13 @@
         "_TYPE"
       ],
       "success_evidence": [],
-      "failure_stop_recovery_evidence": [],
+      "failure_stop_recovery_evidence": [
+        "../m4-giant-validation.md"
+      ],
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
       "blockers": [
-        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "FULL_TASK_EXECUTION_NOT_VERIFIED",
-        "FULL_CONFIGURATION_AND_RECOVERY_MATRIX_INCOMPLETE"
+        "GIANT_SCENE_CONFIRMATION_CORRECTION_LIMIT_REACHED"
       ],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
@@ -3354,7 +3600,21 @@
         "entry": "tasks::giant_iteration",
         "scope": "FINITE_ITERATION_NOT_FULL_TASK_ACCEPTANCE",
         "evidence_report": "../m4-giant-validation.md"
-      }
+      },
+      "implementation_evidence": "../m4-giant-validation.md",
+      "scoped_execution_evidence": {
+        "scope": "HISTORICAL_COMPONENT_SCENARIOS_NOT_FULL_TASK_ACCEPTANCE",
+        "status": "BLOCKED",
+        "evidence_report": "../m4-giant-validation.md",
+        "evidence_roots": [
+          "../../.local/m4-workflow-9o5fuf7y"
+        ],
+        "summary": "修正二3方法仍失败：两例0输入，一例8输入SCENE_UNCONFIRMED；后续冷启动/停止子场景因前项失败未触达。状态/编译分项不能替代完整链，保留BLOCKED。"
+      },
+      "pending_observations": [
+        "源码有限迭代已实现；完整成功与未触达子场景仍未证，已达有限修正边界，不再重跑挑PASS。",
+        "配置/mod、未覆盖的生命周期与恢复组合仍未证；保留为后续待观察范围，不要求本轮补齐完整任务矩阵。"
+      ]
     },
     {
       "task_id": "lovesleep",
@@ -3372,7 +3632,7 @@
       "offline_status": "NOT_RUN",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "new_entry": null,
+      "new_entry": "tasks::sleep_visits",
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
@@ -3387,14 +3647,15 @@
         "questCategory_en_US",
         "_TYPE"
       ],
-      "success_evidence": [],
-      "failure_stop_recovery_evidence": [],
+      "success_evidence": [
+        "../m4-sleep-validation.md"
+      ],
+      "failure_stop_recovery_evidence": [
+        "../m4-sleep-validation.md"
+      ],
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
-      "blockers": [
-        "SLEEP_NATIVE_CONTINUATION_RECOVERY_MATRIX_PENDING",
-        "FULL_STOP_RECOVERY_CONFIG_MATRIX_PENDING"
-      ],
+      "blockers": [],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
       "iteration_compilation": {
@@ -3406,7 +3667,21 @@
         "executed": false,
         "scope": "FINITE_SLEEP_BATCH_NOT_FULL_TASK",
         "evidence_report": "../m4-sleep-validation.md"
-      }
+      },
+      "implementation_evidence": "../m4-sleep-validation.md",
+      "scoped_execution_evidence": {
+        "scope": "HISTORICAL_COMPONENT_SCENARIOS_NOT_FULL_TASK_ACCEPTANCE",
+        "status": "PARTIAL",
+        "evidence_report": "../m4-sleep-validation.md",
+        "evidence_roots": [
+          "../../.local/m4-workflow-h0aml17q"
+        ],
+        "summary": "67d5712状态层9999次确认/250批与计划有分项证据；真实Maa仅一批40次住宿/200输入。流程4方法5场景通过，另含付费后退出拒绝5输入、付款拒绝/停止各4输入、未知页0输入。"
+      },
+      "pending_observations": [
+        "9999次真实Maa住宿、实际跨批续段、冷启动/中途恢复、套房/mod未完整运行；不得把状态事件计作9999次实际住宿。",
+        "配置/mod、未覆盖的生命周期与恢复组合仍未证；保留为后续待观察范围，不要求本轮补齐完整任务矩阵。"
+      ]
     },
     {
       "task_id": "FFXI-Org",
@@ -3424,7 +3699,7 @@
       "offline_status": "PARTIAL",
       "real_status": "UNVERIFIED",
       "release_allowed": false,
-      "new_entry": null,
+      "new_entry": "tasks::mining_iteration",
       "new_files": [
         "native/games/wvd/tasks/quest_catalog.cpp",
         "packs/wvd/parameters/legacy-quests.json",
@@ -3443,14 +3718,16 @@
         "_RTT",
         "_TIPS"
       ],
-      "success_evidence": [],
-      "failure_stop_recovery_evidence": [],
+      "success_evidence": [
+        "../m4-mining-validation.md"
+      ],
+      "failure_stop_recovery_evidence": [
+        "../m4-mining-validation.md"
+      ],
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
       "blockers": [
-        "FULL_TASK_PIPELINE_NOT_IMPLEMENTED",
-        "MINING_MID_RUN_AND_CONTINUOUS_CYCLES_PENDING",
-        "FULL_CONFIGURATION_AND_RECOVERY_MATRIX_INCOMPLETE"
+        "MINING_UNKNOWN_POSTCONDITION_TIMEOUT_UNRESOLVED"
       ],
       "plan_data_status": "PASS",
       "plan_evidence": "../m4-plan-validation.md",
@@ -3460,8 +3737,23 @@
         "source": "native/games/wvd/tasks/mining.cpp",
         "scope": "FINITE_ITERATION_NOT_FULL_TASK_ACCEPTANCE",
         "evidence_report": "../m4-mining-validation.md",
-        "remaining": "MID_RUN_AND_CONTINUOUS_CYCLES_RECOVERY_MATRIX"
-      }
+        "remaining": "UNKNOWN_POSTCONDITION_TIMEOUT_AND_UNCOVERED_RECOVERY_CONFIG_COMBINATIONS"
+      },
+      "implementation_evidence": "../m4-mining-validation.md",
+      "scoped_execution_evidence": {
+        "scope": "HISTORICAL_COMPONENT_SCENARIOS_NOT_FULL_TASK_ACCEPTANCE",
+        "status": "PARTIAL",
+        "evidence_report": "../m4-mining-validation.md",
+        "evidence_roots": [
+          "../../.local/m4-workflow-un8ra41r",
+          "../../.local/m4-workflow-assdnj0d"
+        ],
+        "summary": "c7411bb连续两周期和已知Pause中途恢复2方法通过：两周期16输入；Pause恢复12输入、重启1次。此前未知后置POSTCONDITION_TIMEOUT失败仍保留，不能被已知Pause通过覆盖。"
+      },
+      "pending_observations": [
+        "正常两周期和已知Pause恢复已有有限证据，不再笼统列作未运行；未知后置恢复及未覆盖组合继续待观察。",
+        "配置/mod、未覆盖的生命周期与恢复组合仍未证；保留为后续待观察范围，不要求本轮补齐完整任务矩阵。"
+      ]
     },
     {
       "task_id": "sandman",
@@ -3473,7 +3765,7 @@
         "M4-TASK-sandman"
       ],
       "implementation_status": "PARTIAL",
-      "implementation_extent": "FINITE_SANDMAN_PENDING_VALIDATION",
+      "implementation_extent": "FINITE_SANDMAN_PARTIAL_WITH_FAILURES",
       "data_binding_status": "PASS",
       "plan_status": "PARTIAL",
       "offline_status": "NOT_RUN",
@@ -3495,15 +3787,31 @@
         "_TYPE"
       ],
       "success_evidence": [],
-      "failure_stop_recovery_evidence": [],
+      "failure_stop_recovery_evidence": [
+        "../m4-sandman-validation.md"
+      ],
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
       "blockers": [
-        "CURRENT_IMPLEMENTATION_NOT_BUILT_OR_VERIFIED",
-        "FULL_SUCCESS_FAILURE_STOP_RECOVERY_CONFIG_MOD_MATRIX"
+        "SANDMAN_FULL_ROUTE_SCENE_UNCONFIRMED"
       ],
       "plan_data_status": "PASS",
-      "plan_evidence": "../m4-plan-validation.md"
+      "plan_evidence": "../m4-plan-validation.md",
+      "implementation_evidence": "../m4-sandman-validation.md",
+      "scoped_execution_evidence": {
+        "scope": "HISTORICAL_COMPONENT_SCENARIOS_NOT_FULL_TASK_ACCEPTANCE",
+        "status": "PARTIAL",
+        "evidence_report": "../m4-sandman-validation.md",
+        "evidence_roots": [
+          "../../.local/m4-workflow-7g_0bqno",
+          "../../.local/m4-workflow-vg19i0vi"
+        ],
+        "summary": "最终夹具修正后完整路线仍失败：无缘3输入、有缘0输入，均SCENE_UNCONFIRMED、cycles=0、无命令不匹配。早期拒绝1输入分项通过；停止在0输入SCENE_UNCONFIRMED，不能记为停止PASS。"
+      },
+      "pending_observations": [
+        "完整成功、有效停止、连续周期和恢复组合未证；保留各轮失败，不用后续构建通过替代实际运行。",
+        "配置/mod、未覆盖的生命周期与恢复组合仍未证；保留为后续待观察范围，不要求本轮补齐完整任务矩阵。"
+      ]
     },
     {
       "task_id": "fishing",
@@ -3538,17 +3846,33 @@
         "_TYPE",
         "_TIPS"
       ],
-      "success_evidence": ["../m4-fishing-validation.md"],
-      "failure_stop_recovery_evidence": ["../m4-fishing-validation.md"],
+      "success_evidence": [
+        "../m4-fishing-validation.md"
+      ],
+      "failure_stop_recovery_evidence": [
+        "../m4-fishing-validation.md"
+      ],
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
-      "blockers": [
-        "FISHING_SUPPLY_WORKFLOW_VALIDATION_PENDING",
-        "FISHING_TIMEOUT_CONTINUATION_RECOVERY_MATRIX_PENDING",
-        "FULL_TASK_ACCEPTANCE_PENDING"
-      ],
+      "blockers": [],
       "plan_data_status": "PASS",
-      "plan_evidence": "../m4-plan-validation.md"
+      "plan_evidence": "../m4-plan-validation.md",
+      "implementation_evidence": "../m4-fishing-validation.md",
+      "scoped_execution_evidence": {
+        "scope": "HISTORICAL_COMPONENT_SCENARIOS_NOT_FULL_TASK_ACCEPTANCE",
+        "status": "PARTIAL",
+        "evidence_report": "../m4-fishing-validation.md",
+        "evidence_roots": [
+          "../../.local/m4-workflow-x9yq7v2w",
+          "../../.local/m4-workflow-q1g83xy1/fishing-round-download",
+          "../../.local/m4-workflow-p777ic33"
+        ],
+        "summary": "补饵/返钓/一鱼三段实际Completed/101输入（81/10/10），确认70笔转交、补饵1次并收获1条大三文鱼，全部静止且结果已保存。另有下载回钓鱼11输入和真实300秒等待等分项；70笔转交不是70条鱼。"
+      },
+      "pending_observations": [
+        "共享补给链/有限钓鱼轮次证据不等于两个TaskID各自完整验收；重复抛竿、连续轮次、其它覆盖层及中途恢复配置组合仍待观察。",
+        "配置/mod、未覆盖的生命周期与恢复组合仍未证；保留为后续待观察范围，不要求本轮补齐完整任务矩阵。"
+      ]
     },
     {
       "task_id": "fishing2",
@@ -3583,17 +3907,33 @@
         "_TYPE",
         "_TIPS"
       ],
-      "success_evidence": ["../m4-fishing-validation.md"],
-      "failure_stop_recovery_evidence": ["../m4-fishing-validation.md"],
+      "success_evidence": [
+        "../m4-fishing-validation.md"
+      ],
+      "failure_stop_recovery_evidence": [
+        "../m4-fishing-validation.md"
+      ],
       "data_evidence": "../m4-business-validation.md#配置与目录",
       "semantic_differences": [],
-      "blockers": [
-        "FISHING_SUPPLY_WORKFLOW_VALIDATION_PENDING",
-        "FISHING_TIMEOUT_CONTINUATION_RECOVERY_MATRIX_PENDING",
-        "FULL_TASK_ACCEPTANCE_PENDING"
-      ],
+      "blockers": [],
       "plan_data_status": "PASS",
-      "plan_evidence": "../m4-plan-validation.md"
+      "plan_evidence": "../m4-plan-validation.md",
+      "implementation_evidence": "../m4-fishing-validation.md",
+      "scoped_execution_evidence": {
+        "scope": "HISTORICAL_COMPONENT_SCENARIOS_NOT_FULL_TASK_ACCEPTANCE",
+        "status": "PARTIAL",
+        "evidence_report": "../m4-fishing-validation.md",
+        "evidence_roots": [
+          "../../.local/m4-workflow-x9yq7v2w",
+          "../../.local/m4-workflow-q1g83xy1/fishing-round-download",
+          "../../.local/m4-workflow-p777ic33"
+        ],
+        "summary": "补饵/返钓/一鱼共享链实际Completed/101输入（81/10/10），70笔已确认转交、补饵1次、1条大三文鱼。专题另有近/远钓与下载、等待分项；此共享证据不声明fishing2独立完整任务PASS。"
+      },
+      "pending_observations": [
+        "近/远钓共用实现的分项证据不外推到两种配置全部组合；重复抛竿、连续轮次、其它覆盖层及中途恢复配置组合仍待观察。",
+        "配置/mod、未覆盖的生命周期与恢复组合仍未证；保留为后续待观察范围，不要求本轮补齐完整任务矩阵。"
+      ]
     }
   ]
 }

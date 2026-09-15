@@ -302,10 +302,13 @@ void register_recovery(runtime::BehaviorRegistry &registry) {
     registry.add_recovery({"wvd.recovery", "1"}, decide);
 }
 contracts::BehaviorBinding recovery_binding(const devices::LifecycleTarget &t, const J &profile, bool force) {
+    // 先按unsigned本身检查上界，不能让混合符号JSON比较或后续int64转换把超大值变成负数。
     if (!profile.is_object() || !profile.contains("AUTO_START_CLASH") ||
         !profile.at("AUTO_START_CLASH").is_boolean() || !profile.contains("MAX_CRASH_LIMIT") ||
         !profile.at("MAX_CRASH_LIMIT").is_number_integer() ||
-        profile.at("MAX_CRASH_LIMIT") > (std::numeric_limits<std::int64_t>::max)())
+        (profile.at("MAX_CRASH_LIMIT").is_number_unsigned() &&
+            profile.at("MAX_CRASH_LIMIT").get<std::uint64_t>() >
+                static_cast<std::uint64_t>((std::numeric_limits<std::int64_t>::max)())))
         throw std::runtime_error("WVD_RECOVERY_PROFILE_INVALID");
     const bool vpn = profile.at("AUTO_START_CLASH").get<bool>();
     // 配置只选择已授权能力，不能授予VPN权限或推断应用身份。

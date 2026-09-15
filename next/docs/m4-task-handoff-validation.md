@@ -2,7 +2,7 @@
 
 ## 当前结论
 
-代码状态：**PARTIAL / CORRECTION_PENDING**。
+代码状态：**PARTIAL / FRAME_AGE_BLOCKED**。
 统一构建通过，首轮8方法4通过4失败，设备 **NOT_USED**，`release_allowed=false`。
 主代理构建日志为`m4-extensions-and-stages-build.log`，不包含实机或生产切换。
 未解决任意 SDK/连接/清理阻塞取消、M3 资源和长期稳定性问题。
@@ -27,6 +27,16 @@ state/extensions为状态验证；late-connect证明限定阻塞的持有边界�
 最后一轮定点修正将等价默认模板阈值统一到同帧memo，并同步计算三个独立面板反证；
 保持原候选消费顺序，不合并不同ROI/阈值/预处理，专属有状态条件仍串行。待新产物复验，
 若同一帧过期再次失败则按工作包保留阻断，不继续无限重跑。
+
+最后一轮定点产物`007a7d6`：9方法7通过2失败（私有根`m4-handoff-_dnkioai`，
+批日志`m4-007a7d6-vpn-handoff.log`）。7300秒的受控时钟五段等待首次完整通过，
+最终generation=7、Completed、零普通输入，只有StopApplication/StartApplication两次
+离线生命周期调用，真实静止并保存。money、有效意图后的存储失败、两周期状态、
+原生连接迟到返回所有权，以及交接后按冻结配置重查VPN均通过。
+stop-wait和wait-budget仍在generation=1产生意图前因LEAP_OBSERVATION_STALE失败，
+intent=null、零底层输入、已静止并保存；不是已经进入等待后停止/预算行为被证明失败。
+两个覆盖点仍未验证且达到本包有限修正边界，保留BLOCKED，不重复运行挑PASS。
+用户已取消全游戏任务矩阵作为本轮前置，这不把本项公共帧龄缺口改成PASS。
 
 正式`dungeon_route`未知分支已经使用`PipelineCompiler::unknown_leap`，发布器绑定
 WvdUnknownLeap，并将固定等待节点纳入同一封存revision。专项fixture已改用正式编译器
