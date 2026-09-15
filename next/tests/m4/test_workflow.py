@@ -2160,6 +2160,17 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(r["backend_calls"], 0)
         self.assertEqual(r["snapshot"]["business"]["special_dialogues_completed"], 0)
 
+    def test_jier_dialogue_precedes_karma_without_mutating_karma(self):
+        r = self.execute("jier-dialogue-karma-priority",
+            [{"bounty/cuthimdown": (400, 600), "ambush": (400, 1000)}, {"dungFlag": (50, 150)}],
+            [dict(kind=0, x=420, y=612)], workflow="common", jier_dialogue=True,
+            extra_images=["bounty/cuthimdown", "bondmate_close"])
+        self.assertEqual(r["snapshot"]["state"], "Completed", r)
+        self.assertEqual(r["backend_calls"], 1)
+        self.assertFalse(r["mismatch"])
+        self.assertEqual(r["snapshot"]["business"]["special_dialogues_completed"], 1)
+        self.assertEqual(r["snapshot"]["business"]["karma_sequence"], 0)
+
     def test_jier_dialogue_rejected_or_stopped_choice_keeps_pending(self):
         for stop in (False, True):
             r = self.execute("jier-dialogue-stop-" + str(stop), [{"bounty/cuthimdown": (400, 600)}, {"dungFlag": (50, 150)}],

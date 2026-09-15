@@ -12,7 +12,7 @@ tasks::CompiledWorkflow choose_special_dialogue(DialoguePolicy policy) {
     auto close = C::image("bondmate_close");
     close["roi"] = {277, 751, 330, 600};
     const J choice{{"mode", "special_dialogue"}};
-    const auto after = C::any({close, J{{"mode", "dialogue_post"}}});
+    const J after{{"mode", "special_dialogue_post"}};
     graph.route("Entry", {"Pending", "Prepare"});
     graph.observe("Pending", C::business("/special_dialogue_pending", true), {"AfterChoice"});
     graph.confirm("Prepare", "dialogue.special.prepare", "special_dialogue_prepared", C::all({choice, marker}), {"Choose"});
@@ -20,9 +20,9 @@ tasks::CompiledWorkflow choose_special_dialogue(DialoguePolicy policy) {
     graph.delay_after("Choose", 2000);
     graph.postcondition_budget("Choose", 10000);
     graph.route("AfterChoice", {"CloseBond", "Completed", "Unconfirmed"});
-    graph.click("CloseBond", C::all({close, C::absent(marker)}), close, J{{"mode", "dialogue_post"}}, {"Completed", "Unconfirmed"});
+    graph.click("CloseBond", C::all({close, C::absent(marker)}), close, after, {"Completed", "Unconfirmed"});
     graph.confirm("Completed", "dialogue.special.done", "special_dialogue_completed",
-        C::all({J{{"mode", "dialogue_post"}}, C::absent(close), C::absent(marker)}), {"Terminal"});
+        C::all({after, C::absent(close), C::absent(marker)}), {"Terminal"});
     graph.recovery("Unconfirmed", "dialogue.choice_outcome_unconfirmed");
     return graph.finish();
 }

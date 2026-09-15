@@ -595,6 +595,18 @@ J evaluate_uncached(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels
         }
         return decision(false, {}, {{"stage", "unknown"}});
     }
+    if (mode == "special_dialogue_post") {
+        check(!p.contains("roi") && !p.contains("preprocess") && bound.value("dialogue_task", "") == "jier", "WVD_SPECIAL_DIALOGUE_SCOPE_INVALID");
+        const J probes = J::array({J{{"mode", "template"}, {"image", "bondmate_close"}, {"roi", {277, 751, 330, 600}}},
+            J{{"mode", "boot_ready"}}, J{{"mode", "special_dialogue"}}, J{{"mode", "default_dialogue"}}, J{{"mode", "boot_post"}}});
+        // 先确认关闭按钮/稳定页面，避免已命中仍串行扫描所有对话而让后置帧过期。
+        for (const auto &probe : probes) {
+            const auto result = evaluate_impl(bundle, pixels, probe, bound, scope, cache, depth + 1, memo);
+            check(result.at("outcome") != "Error", "WVD_DIALOGUE_RECOGNITION_ERROR");
+            if (result.at("outcome") == "Hit") return decision(true, allowed_rect, {{"stage", probe.value("image", probe.at("mode").get<std::string>())}});
+        }
+        return decision(false, {}, {{"stage", "unknown"}});
+    }
     if (mode == "special_dialogue") {
         check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");
         const auto task = bound.value("dialogue_task", "");
@@ -603,9 +615,14 @@ J evaluate_uncached(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels
         const auto candidate = evaluate_impl(bundle, pixels, {{"mode", "template"}, {"image", "bounty/cuthimdown"}}, bound, scope, cache, depth + 1, memo);
         check(candidate.at("outcome") != "Error", "WVD_DIALOGUE_RECOGNITION_ERROR");
         if (candidate.at("outcome") != "Hit") return candidate;
-        // 沿用旧正常场景优先边界；剧情选项不覆盖已确认的战斗、地图、旅店或系统覆盖层。
+        // 旧 IdentifyState 的专用选项先于善恶/祝福/沙人兜底，晚于正常场景、启动阻塞和死亡提示。
         auto guards = default_dialogue_normal_probes();
-        for (const auto &probe : blocking_probes(false)) guards.push_back(probe);
+        for (const auto &probe : blocking_probes(false)) {
+            const auto image = probe.value("image", "");
+            if (image != "ambush" && image != "ignore" && image != "blessing" && image != "sandman_recover")
+                guards.push_back(probe);
+        }
+        guards.push_back({{"mode", "party_death"}});
         const auto checked = evaluate_batch(bundle, pixels, guards, bound, scope, cache, depth, memo, 4);
         for (std::size_t i = 0; i < guards.size(); ++i) {
             const auto &result = checked.at(i);

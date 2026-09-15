@@ -65,7 +65,7 @@ void collect_images(const J &value, std::set<std::string> &images, std::set<std:
             collect_images(vision::boot_probes(mode == "boot_post"), images, expanded_modes);
         if (expand && mode == "blocking_screen")
             collect_images(vision::blocking_probes(), images, expanded_modes);
-        if (expand && mode == "dialogue_post") {
+        if (expand && (mode == "dialogue_post" || mode == "special_dialogue_post")) {
             collect_images(J{{"mode", "default_dialogue"}}, images, expanded_modes);
             collect_images(vision::boot_probes(true), images, expanded_modes);
         }

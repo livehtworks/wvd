@@ -3240,8 +3240,8 @@
       "plan_evidence": "../m4-plan-validation.md",
       "iteration_compilation": {
         "status": "PASS",
-        "entry": "tasks::scorpion_cycle",
-        "schedule": "tasks::configure_scorpion_units",
+        "entry": "tasks::bounty_cycle",
+        "schedule": "tasks::configure_bounty_units",
         "required_normal_units": 3,
         "executed": true,
         "scope": "ONE_ORE_CYCLE_NOT_FULL_TASK_MATRIX",
@@ -3292,8 +3292,8 @@
       "plan_evidence": "../m4-plan-validation.md",
       "iteration_compilation": {
         "status": "PASS",
-        "entry": "tasks::scorpion_cycle",
-        "schedule": "tasks::configure_scorpion_units",
+        "entry": "tasks::bounty_cycle",
+        "schedule": "tasks::configure_bounty_units",
         "required_normal_units": 4,
         "executed": true,
         "scope": "ONE_ORE_CYCLE_NOT_FULL_TASK_MATRIX",
