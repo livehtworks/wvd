@@ -6,7 +6,8 @@
 
 namespace fixture {
 // 所有修改均限定在本例新建的副本；不触碰作者资源、活动运行或历史证据。
-inline J integrity_lease_case(const maafw::Bundle &bundle, const std::string &scenario) {
+inline J integrity_lease_case(const maafw::Bundle &bundle, const std::string &scenario,
+                              const std::string &invalid_path = {}) {
     platform::BundleLease::Manifest manifest;
     for (const auto &file : bundle.files)
         manifest.emplace(file.relative_path, file.sha256);
@@ -25,6 +26,8 @@ inline J integrity_lease_case(const maafw::Bundle &bundle, const std::string &sc
         manifest.emplace("image/Target.png", manifest.at("image/target.png"));
     else if (scenario == "missing-member")
         manifest.emplace("image/zz-missing.png", std::string(64, '0'));
+    else if (scenario == "invalid-path")
+        manifest.emplace(invalid_path, std::string(64, '0'));
 
     J result{{"case", scenario}};
     try {
@@ -40,6 +43,9 @@ inline J integrity_lease_case(const maafw::Bundle &bundle, const std::string &sc
         } else if (scenario == "valid") {
             result["files"] = lease.file_count();
             result["hash_bytes"] = lease.hash_bytes();
+            platform::BundleLease reader(bundle.root, bundle.revision, manifest);
+            reader.verify_members();
+            result["readonly_reader_coexists"] = reader.file_count() == lease.file_count();
         }
     } catch (const std::runtime_error &e) {
         result["error"] = e.what();

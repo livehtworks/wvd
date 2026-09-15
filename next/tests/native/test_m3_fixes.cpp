@@ -109,7 +109,7 @@ int main(int argc, char **argv) {
             }
             output["backend_calls"] = device->calls.load();
         } else if (config.at("mode") == "lease-matrix") {
-            output = integrity_lease_case(bundle, config.at("scenario"));
+            output = integrity_lease_case(bundle, config.at("scenario"), config.value("invalid_path", std::string{}));
             output["backend_calls"] = device->calls.load();
         } else if (config.at("mode") == "guarded") {
             runtime::RunCoordinator coordinator(maafw::path_from_utf8(config.at("run_root")),
@@ -154,9 +154,28 @@ int main(int argc, char **argv) {
             auto root = maafw::path_from_utf8(output["active"].at("root"));
             auto file = root / "image/target.png";
             output["protected_files"] = J::object();
+            output["protected_operations"] = J::object();
             for (const auto &relative : config.value("protected_paths", std::vector<std::string>{})) {
-                std::ofstream write(root / maafw::path_from_utf8(relative), std::ios::binary);
+                const auto path = root / maafw::path_from_utf8(relative);
+                const auto hash = platform::file_sha256(path);
+                std::ofstream write(path, std::ios::binary | std::ios::trunc);
                 output["protected_files"][relative] = !write;
+                write.close();
+                std::error_code deletion, rename;
+                std::filesystem::remove(path, deletion);
+                std::filesystem::rename(path, path.parent_path() / "renamed-member", rename);
+                // 替换源放在本例活动快照之外，不用人为新增成员污染后续目录校验。
+                const auto replacement = bundle.root.parent_path() / "replacement-probe";
+                {
+                    std::ofstream source(replacement, std::ios::binary);
+                    source << "replacement bytes";
+                    source.close();
+                    require(bool(source), "TEST_REPLACEMENT_NOT_CREATED");
+                }
+                const bool replaced = MoveFileExW(replacement.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING) != 0;
+                output["protected_operations"][relative] = {{"truncate_blocked", output["protected_files"][relative]},
+                    {"delete_blocked", bool(deletion)}, {"rename_blocked", bool(rename)},
+                    {"replace_blocked", !replaced}, {"unchanged", platform::file_sha256(path) == hash}};
             }
             {
                 std::ofstream write(file, std::ios::binary);

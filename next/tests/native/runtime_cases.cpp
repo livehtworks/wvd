@@ -1,4 +1,5 @@
 #include "runtime_fixture.hpp"
+#include <windows.h>
 
 namespace fixture {
 J runtime_case(const std::string &name, Setup &s) {
@@ -6,6 +7,31 @@ J runtime_case(const std::string &name, Setup &s) {
     runtime::RunCoordinator coordinator(s.output, s.registry, name == "critical-full" ? 8 : 256);
     Unblock safety{s.device};
     auto d = s.definition();
+    std::vector<std::filesystem::path> timeout_resources;
+    J resource_lifetime = J::object();
+    const bool check_resource_lifetime = name == "stop-timeout" || name == "release-timeout";
+    if (check_resource_lifetime)
+        d.initial.bundle.snapshot_parent = s.output / "timeout-resources";
+    auto assert_resources_held = [&] {
+        // 只有本例独立输出目录可枚举。输入已进入原生回调后资源必已物化，
+        // STOP_TIMEOUT 不得提前解锁；不对作者资源执行破坏性探测。
+        const auto parent = d.initial.bundle.snapshot_parent;
+        for (const auto &candidate : std::filesystem::directory_iterator(parent)) {
+            if (!candidate.is_directory() || candidate.path().filename() == "revisions") continue;
+            for (const auto &member : d.initial.bundle.files) {
+                const auto path = candidate.path() / maafw::path_from_utf8(member.relative_path);
+                HANDLE writer = CreateFileW(path.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr,
+                    OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+                const auto error = GetLastError();
+                if (writer != INVALID_HANDLE_VALUE) CloseHandle(writer);
+                require(writer == INVALID_HANDLE_VALUE && error == ERROR_SHARING_VIOLATION,
+                    "STOP_TIMEOUT_RESOURCE_UNLOCKED");
+                timeout_resources.push_back(path);
+            }
+        }
+        require(timeout_resources.size() == d.initial.bundle.files.size(), "TIMEOUT_SNAPSHOT_NOT_UNIQUE");
+        resource_lifetime = {{"held_at_timeout", timeout_resources.size()}};
+    };
     if (name == "registry-sealed") {
         try {
             s.registry->add_action(
@@ -216,6 +242,7 @@ J runtime_case(const std::string &name, Setup &s) {
         } catch (const std::runtime_error &error) {
             require(std::string(error.what()) == "DEVICE_BUSY", error.what());
         }
+        if (check_resource_lifetime) assert_resources_held();
         s.device->unblock = true;
     }
     if (name == "release-timeout") {
@@ -223,12 +250,23 @@ J runtime_case(const std::string &name, Setup &s) {
         coordinator.request_stop();
         until([&] { return coordinator.snapshot().reason == "STOP_TIMEOUT"; });
         require(!coordinator.snapshot().quiescent, "held touch considered quiescent");
+        assert_resources_held();
         s.device->reject_release = false;
     }
     require(coordinator.wait_for(10000ms), "run did not finish");
     auto result = coordinator.snapshot();
     auto events = coordinator.events();
     require(result.quiescent, "not quiescent after completion");
+    if (check_resource_lifetime) {
+        for (const auto &path : timeout_resources) {
+            HANDLE writer = CreateFileW(path.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr,
+                OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+            const bool opened = writer != INVALID_HANDLE_VALUE;
+            if (opened) CloseHandle(writer);
+            require(opened, "QUIESCENT_RESOURCE_STILL_LOCKED");
+        }
+        resource_lifetime["released_after_quiescence"] = timeout_resources.size();
+    }
     const bool stopped = name == "wait-stop" || name == "custom-stop" || name == "nested-stop" ||
                          name == "clone-stop";
     const bool failed =
@@ -355,6 +393,6 @@ J runtime_case(const std::string &name, Setup &s) {
                 {"second", storage::snapshot_json(later)},
                 {"replayed", storage::snapshot_json(replay)}};
     }
-    return {{"snapshot", storage::snapshot_json(result)}, {"events", events}};
+    return {{"snapshot", storage::snapshot_json(result)}, {"events", events}, {"resource_lifetime", resource_lifetime}};
 }
 } // namespace fixture

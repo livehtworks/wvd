@@ -339,7 +339,11 @@ class FixTests(unittest.TestCase):
                             "custom_recognition_param": request["parameters"], "roi": request["roi"],
                             "action": "Custom", "custom_action": "RecordReached"},
         }
-        protected = []
+        parameters = folder / "bundle/parameters"
+        parameters.mkdir()
+        (parameters / "aliases.json").write_text(json.dumps({"target-alias.png": "target.png"}), encoding="utf-8")
+        (parameters / "settings.json").write_text(json.dumps({"threshold": .99}), encoding="utf-8")
+        protected = ["pipeline/main.json", "parameters/aliases.json", "parameters/settings.json"]
         if ocr:
             model_config = json.loads((ROOT / ".local/maafw.json").read_text(encoding="utf-8"))
             model = folder / "bundle/model/ocr"
@@ -359,6 +363,8 @@ class FixTests(unittest.TestCase):
         result = self.execute(folder, {"mode": "integrity", "request": request,
                                       "native_request": native_request, "protected_paths": protected}, nodes)
         self.assertEqual(result["protected_files"], {name: True for name in protected})
+        self.assertEqual(result["protected_operations"], {name: dict(truncate_blocked=True,
+            delete_blocked=True, rename_blocked=True, replace_blocked=True, unchanged=True) for name in protected})
         for key in ("write_blocked", "delete_blocked", "replace_blocked", "one_boundary", "sdk_one_boundary",
                     "offline_one_boundary", "author_change_ignored", "released_write_succeeded"):
             self.assertTrue(result[key], result)
@@ -393,6 +399,22 @@ class FixTests(unittest.TestCase):
                 self.assertEqual(result["backend_calls"], 0)
                 if case == "directory-rename":
                     self.assertTrue(result["rename_blocked"])
+                if case == "valid":
+                    self.assertTrue(result["readonly_reader_coexists"])
+
+    def test_integrity_invalid_paths_reject_without_external_writes(self):
+        paths = ["", "../outside.png", "/absolute.png", "C:/outside.png", "image/target.png:stream",
+                 "image\\target.png", "image/target.png\0other", "image/CON.png", "image/NUL",
+                 "image/COM1.png", "image/trailing.", "image/trailing ", "image/*.png"]
+        for i, path in enumerate(paths):
+            with self.subTest(path=repr(path)):
+                folder = self.images("invalid-path-" + str(i))
+                result = self.execute(folder, {"mode": "lease-matrix", "scenario": "invalid-path",
+                    "invalid_path": path}, {"Entry": {"action": "DoNothing"}})
+                self.assertEqual(result.get("error"), "RESOURCE_PATH_INVALID", result)
+                self.assertTrue(result["all_locks_released"])
+                self.assertTrue(result["target_unchanged"])
+                self.assertEqual(result["backend_calls"], 0)
 
     def test_integrity_same_name_isolated_across_bundles_and_revisions(self):
         for revision in ("fixes-fixture-1", "fixes-fixture-2"):
