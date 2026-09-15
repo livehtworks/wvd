@@ -23,7 +23,7 @@
 
 ## 配置与目录
 
-真实原生数据检查当前 11 方法通过，包括全部 33 字段默认值、逐字段坏类型拒绝、
+最近原生数据全组12方法通过（`4b408ea`产物，`m4-directory-data-regression.log`），包括全部33字段默认值、逐字段坏类型拒绝、
 GENERAL/DEFAULT/任务专用覆盖、中文未知嵌套值、策略顺序、KARMA 字符串、
 兼容导出修改、复制源不变、写入目标已存在失败、CAS 冲突和缺字段草稿拒绝。
 58 个目录项逐项对照固定 Git 原始 JSON；重复 mod 冲突按旧顺序追加名称。
@@ -37,7 +37,7 @@ GENERAL/DEFAULT/任务专用覆盖、中文未知嵌套值、策略顺序、KARM
 数据结果 `outcome=PASS` 只表示本次解析/保存操作成功，同时明确返回
 `execution_available=false` 和 `stage=M4_PARTIAL_IMPLEMENTATION`。
 
-当前数据证据位于 `next/.local/m4-data-lnsubv1q/`；新增存储边界见 `m4-profile-boundaries-validation.md`，图片来源见 `m4-image-import-validation.md`。已知配置复制证据在本工作根的
+最近数据全组证据位于`next/.local/m4-data-0nfes3vr/`，早期数据证据保留于`m4-data-lnsubv1q/`；新增存储边界见 `m4-profile-boundaries-validation.md`，图片来源见 `m4-image-import-validation.md`。已知配置复制证据在本工作根的
 `known-config-import/`，其公开摘要不包含配置内容。
 字段和旧 RuntimeContext 范围见 [数据映射](migration/m4-data-mapping.md)。
 

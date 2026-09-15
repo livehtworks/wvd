@@ -10,13 +10,13 @@ gettext 只读取 msgid，不执行翻译函数。解析器为 `LegacyConfigImpo
 
 | 旧数据 | 当前处理 | 未承接部分 |
 | --- | --- | --- |
-| GENERAL、DEFAULT、任务名称区段 | GENERAL 后合并被选区段；启用任务专用且目标区段存在才选该任务，否则 DEFAULT；只为缺字段应用已核实默认值 | GUI 编辑和运行绑定 |
+| GENERAL、DEFAULT、任务名称区段 | GENERAL 后合并被选区段；启用任务专用且目标区段存在才选该任务，否则 DEFAULT；只为缺字段应用已核实默认值；冻结值供离线图与状态工厂消费 | M5 GUI 编辑和生产运行入口未开放 |
 | EMU_PATH / EMU_INDEX / ADB_ADRESS | 保留拼写和值，包括允许的 null；不改成本机路径 | 真实设备配置应用 |
-| SKIP_COMBAT_RECOVER / SKIP_CHEST_RECOVER | 保存为原“跳过”语义，不反转 | 恢复动作消费 |
-| STRATEGY | 保留全部字段和顺序，状态层已实现策略来源选择及成功消费 | 实际战斗动作 |
-| role_var / skill_var / target_var / freq_var / skill_lvl | 验证已知字段类型，保留字符串和等级，不改名称 | 战斗执行；固定旧源未读取 freq_var 的事实仍待业务迁移明确处理，不凭字段名发明频次 |
-| TASK_POINT_STRATEGY | 保留 overall_strategy、task_point 的字符串步骤键，状态层已实现步骤推进和切换 | 任务出口接入 |
-| LANGUAGE / KARMA_ADJUST | 保留旧语言键和有符号字符串，不取绝对值、不翻译业务键 | 善恶值专项业务写回 |
+| SKIP_COMBAT_RECOVER / SKIP_CHEST_RECOVER | 保存原“跳过”语义；WvdRunState在遭遇结束时形成恢复请求，dungeon_route/dark_light调用实际恢复子图 | 所有任务组合与现场质量未验 |
+| STRATEGY | 保留字段和顺序；策略来源、成功消费、头像/技能/等级/目标与Auto动作已接入离线链 | 全任务策略组合及真实场景质量未验 |
+| role_var / skill_var / target_var / freq_var / skill_lvl | 战斗执行消费角色、技能、目标、等级；固定旧script.py没有freq_var读取，新版同样保留但不发明频次语义 | 当前子流程证据不能代表全部任务/资源组合 |
+| TASK_POINT_STRATEGY | 保留overall_strategy/task_point字符串步骤键；已连接路线确认后的步骤推进及策略切换 | 专项各局部路线/恢复交接仍需逐项验收 |
+| LANGUAGE / KARMA_ADJUST | 保留旧键及有符号字符串；善恶选择确认后通过KarmaCommitPort/ProfileStore只对新版profile执行CAS原子更新，失败不重发副作用 | 所有任务组合未验；旧config永不写回 |
 | 未知值 | 完整 legacy_document 原树保留，legacy_passthrough 按 JSON Pointer 分类 | 不自动成为新版运行参数 |
 
 `import_copy` 的目的目录必须原本不存在，先复制再解析，并比对源 hash；原文件不修改。
@@ -29,11 +29,14 @@ CAS 以内容 revision 和独占 sidecar 锁防止旧稿覆盖，冲突不重载
 `legacy-quests.json` 是固定 Git 的原始字节副本。WvdQuestCatalog 保留所有原字段和数组，
 58 条均与固定 Git 独立对照，包括 43 个 dungeon 和 15 个 quest。
 WvdTaskPlan 进一步解析顺序 fallback、目标提示与回城参数，见 [计划数据验证](../m4-plan-validation.md)。
-仍没有 Pipeline 编译器、Maa 任务入口或 58 项执行成功证据。
+PipelineCompiler/publish_workflow与真实Maa离线入口已实现，43个普通任务的入本/路线/有限
+迭代图可编译；专项逐项推进。仍没有58项完整任务执行成功证据，也未开放生产入口。
 
 任务 mod 按给定文件顺序追加。冲突名称反复增加 `_mod`，中文标题反复增加 `_自定义`，
 中英任务名缺项按旧规则互补，错误条目留下诊断。基线条目不被覆盖。
-图片的基线优先与显式 alias 仍由已有 AssetResolver 负责，本轮未把用户图片 mod 自动扫描接入。
+图片顺序为基线原名、显式alias、mod原名/alias；AssetResolver和publish_workflow通过封存
+副本发布图片mod及来源证据，不在运行中扫描用户目录。新目录模板先由准备阶段生成
+派生revision，再冻结Run；活动资源仍不接受目录引用。
 
 ## 运行状态
 
