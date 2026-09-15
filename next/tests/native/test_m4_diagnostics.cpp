@@ -195,7 +195,8 @@ J runtime_case(const J &config) {
     definition.request_id = "diagnostic-source";
     definition.initial = {bundle, config.value("entry", "Entry"), "Terminal", {}, 90000ms, 200ms};
     if (mode == "reward") {
-        definition.initial = games::tasks::publish_workflow(reward_workflow(), bundle, *registry, root.parent_path() / "compiled");
+        definition.initial = games::tasks::publish_workflow(
+            reward_workflow(), bundle, *registry, root.parent_path() / "compiled", J::object());
         storage::LegacyConfigImporter importer(read(maafw::path_from_utf8(config.at("descriptor"))));
         auto profile = importer.parse({{"GENERAL", {{"FARM_TARGET", "fishing"}}}});
         definition.state_factory = games::wvd_state_binding(profile.values);
