@@ -60,6 +60,27 @@ def prepare_assets():
                 "source_refs": [r["source_ref"] for r in refs],
             }
         )
+    # 新版专属模板不属于固定旧提交，单独从 next/resources 进入清单。
+    # 仍按内容哈希封存并拒绝覆盖同名作者资产，避免绕过资源闭包。
+    extension_root = ROOT / "resources/images"
+    for source_path in sorted(extension_root.rglob("*.png")):
+        image_name = source_path.relative_to(extension_root).as_posix()
+        relative = "image/" + image_name
+        if any(item["path"] == relative for item in files):
+            raise RuntimeError("新版资源与作者资产重名: " + relative)
+        data = source_path.read_bytes()
+        path = pack / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+        files.append(
+            {
+                "path": relative,
+                "source": "next/resources/images/" + image_name,
+                "sha256": sha(data),
+                "bytes": len(data),
+                "source_refs": ["native/games/wvd/recovery/boot.cpp"],
+            }
+        )
     for ref in report["references"]:
         if ref["status"] == "CASE_MISMATCH":
             if len(ref["matches"]) != 1:

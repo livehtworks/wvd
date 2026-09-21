@@ -165,7 +165,9 @@ void CompiledWorkflow::validate() const {
             "COMPILE_SESSION_BUDGET_INVALID");
     require(!kind.empty() && nodes.is_object() && nodes.contains(entry) && nodes.contains(terminal),
             "COMPILE_ENTRY_INVALID");
-    require(nodes.size() <= 4096, "COMPILE_NODE_LIMIT");
+    // 最大的旧任务图约 4,037 个节点；生产恢复必须再封入约百个 Boot 节点。
+    // 保留明确的 4,608 硬上限，不为任意作者输入取消有界校验。
+    require(nodes.size() <= 4608, "COMPILE_NODE_LIMIT");
     std::set<std::string> reached;
     std::function<void(const std::string &)> visit = [&](const std::string &name) {
         require(nodes.contains(name), "COMPILE_NEXT_UNKNOWN");
@@ -183,6 +185,7 @@ void CompiledWorkflow::validate() const {
                                             node.value("custom_action", "") == "WvdCombat" ||
                                             node.value("custom_action", "") == "WvdChest" ||
                                             node.value("custom_action", "") == "WvdUnknownLeap" ||
+                                            node.value("custom_action", "") == "CancelableWait" ||
                                             node.value("custom_action", "") == "BusinessCheckpoint" ||
                                             node.value("custom_action", "") == "RequireRecovery")),
                 "COMPILE_UNGUARDED_ACTION");
@@ -318,6 +321,13 @@ void PipelineCompiler::add(const std::string &name, J node) {
 void PipelineCompiler::route(const std::string &name, J next) {
     add(name, {{"action", "DoNothing"}, {"next", std::move(next)}});
 }
+void PipelineCompiler::wait(const std::string &name, int milliseconds, J next) {
+    require(milliseconds >= 1 && milliseconds <= 10000, "COMPILE_WAIT_INVALID");
+    add(name, {{"action", "Custom"}, {"custom_action", "CancelableWait"},
+               {"custom_action_param", {{"duration_ms", milliseconds}}},
+               {"next", std::move(next)}});
+    workflow_.nodes.at(name)["timeout"] = milliseconds + 3000;
+}
 void PipelineCompiler::observe(const std::string &name, const J &condition, J next) {
     add(name, {{"recognition", "Custom"},
                {"custom_recognition", "WvdVision"},
@@ -325,6 +335,15 @@ void PipelineCompiler::observe(const std::string &name, const J &condition, J ne
                {"roi", {0, 0, 900, 1600}},
                {"action", "DoNothing"},
                {"next", std::move(next)}});
+}
+void PipelineCompiler::observe_ocr(const std::string &name,
+                                   const std::vector<std::string> &expected, J roi, J next) {
+    require(!expected.empty() && expected.size() <= 32 && roi.is_array() && roi.size() == 4,
+            "COMPILE_OCR_INVALID");
+    for (const auto &text : expected)
+        require(!text.empty() && text.size() <= 128, "COMPILE_OCR_INVALID");
+    add(name, {{"recognition", "OCR"}, {"expected", expected}, {"roi", std::move(roi)},
+               {"action", "DoNothing"}, {"next", std::move(next)}});
 }
 void PipelineCompiler::action(const std::string &name, const J &scene, const J &target,
                               const J &post, J command, J next, J offset) {

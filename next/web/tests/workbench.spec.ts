@@ -5,8 +5,9 @@ test("盘点搜索、真实资源预览、响应式布局及异常状态", async
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto("/");
+  await page.getByRole("button", { name: "迁移盘点" }).click();
   await expect(
-    page.getByRole("heading", { name: "完整功能基线" }),
+    page.getByRole("heading", { name: "迁移盘点" }),
   ).toBeVisible();
   await expect(page.getByLabel("基线统计")).toContainText("250");
   await expect(page.getByLabel("基线统计")).toContainText("58");
@@ -124,6 +125,7 @@ test("刷新同步详情、筛选及有效页码", async ({ page }, info) => {
     });
   });
   await page.goto("/");
+  await page.getByRole("button", { name: "迁移盘点" }).click();
   const kind = page.getByLabel("类型", { exact: true });
   const query = page.getByRole("textbox", { name: "搜索基线项" });
   const refresh = page.getByRole("button", { name: "刷新", exact: true });

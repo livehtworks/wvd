@@ -1,6 +1,7 @@
 #include "execution_session.hpp"
 #include "guarded_action.hpp"
 #include "devices/lifecycle_execution.hpp"
+#include <thread>
 
 namespace wvd::runtime {
 using namespace contracts;
@@ -26,7 +27,8 @@ ExecutionSession::ExecutionSession(SessionDefinition definition, devices::Device
         const bool initial_vpn = boundary == contracts::SegmentBoundary::Initial &&
             plan.attempt == 1 && target.vpn_required && plan.operations.size() == 1 &&
             plan.operations.front() == devices::LifecycleOperation::EnsureVpn;
-        if ((!initial_vpn && boundary != contracts::SegmentBoundary::LifecycleRecovery) || !backend.offline() ||
+        if ((!initial_vpn && boundary != contracts::SegmentBoundary::LifecycleRecovery) ||
+            (!backend.offline() && !backend.verified_access()) ||
             policy.observed_read_only_viewport || target.device_id != policy.device_id ||
             target.application_id != policy.application_id || !backend.lifecycle_port())
             throw std::runtime_error("LIFECYCLE_NOT_AUTHORIZED");
@@ -155,6 +157,16 @@ void ExecutionSession::execute() noexcept {
                                       context.node()};
             }
             return true;
+        });
+        add("CancelableWait", [](maafw::Context &context, const auto &parameters) {
+            const auto duration = parameters.at("duration_ms").get<int>();
+            if (duration < 1 || duration > 10000)
+                throw std::runtime_error("WAIT_DURATION_INVALID");
+            const auto deadline = std::chrono::steady_clock::now() +
+                                  std::chrono::milliseconds(duration);
+            while (!context.cancelled() && std::chrono::steady_clock::now() < deadline)
+                std::this_thread::sleep_for(25ms);
+            return !context.cancelled();
         });
         add("RunChild", [](maafw::Context &context, const auto &parameters) {
             auto child = context.run_child(parameters.at("entry"),

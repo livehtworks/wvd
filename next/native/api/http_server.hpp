@@ -2,10 +2,12 @@
 #include <boost/asio.hpp>
 #include <filesystem>
 #include <memory>
+#include "routes.hpp"
 namespace wvd::api {
 class HttpServer {
   public:
-    HttpServer(boost::asio::io_context &, unsigned short port, std::filesystem::path web_root);
+    HttpServer(boost::asio::io_context &, unsigned short port, std::filesystem::path web_root,
+               DynamicHandler handler = {});
     ~HttpServer();
     void start();
     void stop();

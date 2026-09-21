@@ -29,6 +29,7 @@ class RunCoordinator {
     contracts::RunSnapshot snapshot() const;
     bool wait_for(std::chrono::milliseconds duration);
     nlohmann::json events(std::uint64_t after = 0) const;
+    nlohmann::json diagnostics() const;
     std::filesystem::path run_directory() const;
 
   private:

@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "source_commit": "6585f4075f5714ab522aa582993860c09af912c1",
-  "revision": "35e2151250ad2994e43bdfea2d069dae6482623efa523039484a9d6f4ba75a2a",
+  "revision": "e9d87373b3c9f8721cc3cddde69165a20a29c905aeccea9d0c7a3adb40bcb044",
   "files": [
     {
       "path": "image/7000G/icantagreewithU.png",
@@ -3607,6 +3607,15 @@
       "sha256": "b7321c53950a4289ba2bf02c00518338bc69f479d8039acff73d30adb5ac5058",
       "bytes": 25292,
       "source_refs": []
+    },
+    {
+      "path": "image/boot_attention_zh.png",
+      "source": "next/resources/images/boot_attention_zh.png",
+      "sha256": "fe141814bf938a20c4adb1aa660985d7e0dec82ca6dc79cf6242bc704c55699c",
+      "bytes": 12246,
+      "source_refs": [
+        "native/games/wvd/recovery/boot.cpp"
+      ]
     }
   ],
   "aliases": {

@@ -9,6 +9,7 @@ namespace wvd::platform {
 // run 返回清理未完成时仍持有这些对象，禁止发起下一次查询。
 class MetadataQuery {
   public:
+    struct Impl;
     MetadataQuery();
     ~MetadataQuery();
     MetadataQuery(const MetadataQuery &) = delete;
@@ -19,7 +20,6 @@ class MetadataQuery {
     bool finish_cleanup(std::chrono::milliseconds budget = std::chrono::seconds(2));
 
   private:
-    struct Impl;
     std::unique_ptr<Impl> impl_;
 };
 } // namespace wvd::platform

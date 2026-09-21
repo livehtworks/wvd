@@ -11,11 +11,14 @@ using tcp = asio::ip::tcp;
 struct HttpServer::Impl {
     struct Connection;
     tcp::acceptor acceptor;
+    asio::thread_pool workers{4};
     std::filesystem::path root;
+    DynamicHandler handler;
     std::set<std::shared_ptr<Connection>> active;
     bool stopping = false;
-    Impl(asio::io_context &io, unsigned short port, std::filesystem::path web_root)
-        : acceptor(io), root(std::filesystem::canonical(web_root)) {
+    Impl(asio::io_context &io, unsigned short port, std::filesystem::path web_root,
+         DynamicHandler dynamic_handler)
+        : acceptor(io), root(std::filesystem::canonical(web_root)), handler(std::move(dynamic_handler)) {
         tcp::endpoint endpoint{asio::ip::make_address("127.0.0.1"), port};
         acceptor.open(endpoint.protocol());
         acceptor.bind(endpoint);
@@ -28,7 +31,7 @@ struct HttpServer::Impl {
         http::request_parser<http::string_body> parser;
         Response reply;
         Connection(Impl &o, tcp::socket socket) : owner(o), stream(std::move(socket)) {
-            parser.body_limit(4096);
+            parser.body_limit(2 * 1024 * 1024);
             parser.header_limit(8192);
         }
         void read() {
@@ -40,19 +43,24 @@ struct HttpServer::Impl {
                         self->close();
                         return;
                     }
-                    try {
-                        self->reply = route(self->parser.get(), self->owner.root,
-                                            self->owner.acceptor.local_endpoint().port());
-                    } catch (const std::exception &) {
-                        self->reply = Response{http::status::internal_server_error, 11};
-                        self->reply.body() = "{\"error_code\":\"INTERNAL_ERROR\"}";
-                        self->reply.prepare_payload();
-                    }
-                    // HEAD 收口必须位于路由早返回和异常构造之后；长度代表对应 GET 内容。
-                    finalize_response_for_send(self->parser.get(), self->reply);
-                    self->stream.expires_after(std::chrono::seconds(5));
-                    http::async_write(self->stream, self->reply,
-                                      [self](beast::error_code, std::size_t) { self->close(); });
+                    // 文件、配置、截图和原生装配均离开I/O线程；状态/停止请求不会排在长请求后。
+                    asio::post(self->owner.workers, [self] {
+                        try {
+                            self->reply = route(self->parser.get(), self->owner.root,
+                                                self->owner.acceptor.local_endpoint().port(),
+                                                self->owner.handler);
+                        } catch (const std::exception &) {
+                            self->reply = Response{http::status::internal_server_error, 11};
+                            self->reply.body() = "{\"error_code\":\"INTERNAL_ERROR\"}";
+                            self->reply.prepare_payload();
+                        }
+                        finalize_response_for_send(self->parser.get(), self->reply);
+                        asio::post(self->stream.get_executor(), [self] {
+                            self->stream.expires_after(std::chrono::seconds(5));
+                            http::async_write(self->stream, self->reply,
+                                              [self](beast::error_code, std::size_t) { self->close(); });
+                        });
+                    });
                 });
         }
         void close() {
@@ -90,8 +98,9 @@ struct HttpServer::Impl {
         }
     }
 };
-HttpServer::HttpServer(asio::io_context &io, unsigned short port, std::filesystem::path root)
-    : impl_(std::make_unique<Impl>(io, port, std::move(root))) {}
+HttpServer::HttpServer(asio::io_context &io, unsigned short port, std::filesystem::path root,
+                       DynamicHandler handler)
+    : impl_(std::make_unique<Impl>(io, port, std::move(root), std::move(handler))) {}
 HttpServer::~HttpServer() = default;
 void HttpServer::start() {
     impl_->accept();

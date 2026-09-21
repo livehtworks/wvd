@@ -50,15 +50,14 @@ static std::optional<std::string> decode_path(std::string_view input) {
     }
     return value;
 }
-Response route(const Request &request, const fs::path &root, unsigned short port) {
+Response route(const Request &request, const fs::path &root, unsigned short port,
+               const DynamicHandler &handler) {
     const std::string authority = "127.0.0.1:" + std::to_string(port);
     if (request[http::field::host] != authority)
         return error(http::status::forbidden, "INVALID_HOST");
     const auto origin = request[http::field::origin];
     if (!origin.empty() && origin != "http://" + authority)
         return error(http::status::forbidden, "CROSS_ORIGIN_DENIED");
-    if (request.method() != http::verb::get && request.method() != http::verb::head)
-        return error(http::status::method_not_allowed, "READ_ONLY_STAGE");
     auto target = std::string(request.target());
     target = target.substr(0, target.find('?'));
     Response result;
@@ -72,18 +71,26 @@ Response route(const Request &request, const fs::path &root, unsigned short port
         result = response(
             http::status::ok,
             Json{{"platform", "windows-x64"},
-                 {"stage", "M1"},
+                 {"stage", "WINDOWS_FUNCTIONAL"},
                  {"api_version", 1},
-                 {"capabilities", {"version_query", "static_inventory_review"}},
-                 {"maafw", {{"locked_version", contracts::maafw_version}, {"loaded", false}}},
-                 {"device_control", false},
-                 {"task_execution", false},
+                 {"capabilities", {"profile_edit", "device_preview", "workflow_edit", "task_execution", "run_diagnostics"}},
+                 {"maafw", {{"locked_version", contracts::maafw_version}, {"loaded", true}}},
+                 {"device_control", true},
+                 {"task_execution", true},
                  {"websocket", false},
                  {"production_switch", false}}
                 .dump());
-    } else if (target.starts_with("/api/"))
-        return error(http::status::not_found, "UNKNOWN_API");
+    } else if (target.starts_with("/api/")) {
+        if (!handler)
+            return error(http::status::not_found, "UNKNOWN_API");
+        auto dynamic = handler(request);
+        if (!dynamic)
+            return error(http::status::not_found, "UNKNOWN_API");
+        result = response(dynamic->status, std::move(dynamic->body), dynamic->mime);
+    }
     else {
+        if (request.method() != http::verb::get && request.method() != http::verb::head)
+            return error(http::status::method_not_allowed, "STATIC_READ_ONLY");
         auto decoded = decode_path(target);
         if (!decoded || decoded->empty() || (*decoded)[0] != '/')
             return error(http::status::bad_request, "INVALID_PATH");

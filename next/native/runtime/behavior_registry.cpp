@@ -18,7 +18,7 @@ void binding_valid(const contracts::BehaviorBinding &binding) {
         throw std::runtime_error("BEHAVIOR_BINDING_INVALID");
 }
 const std::set<std::string> reserved{"RootTerminal", "RunChild", "RequireRecovery", "GuardedAction",
-                                     "BusinessCheckpoint"};
+                                     "BusinessCheckpoint", "CancelableWait"};
 } // namespace
 BehaviorRegistry::BehaviorRegistry(std::string revision) : revision_(std::move(revision)) {
     if (revision_.empty())

@@ -59,8 +59,10 @@ def run(name, command, cwd=ROOT):
     print("  OK", flush=True)
 
 
-def build(m2_offline=False, m3=False, m4=False):
-    m3 = m3 or m4
+def build(m2_offline=False, m3=False, m4=True):
+    # 常驻应用已经进入可操作阶段，正式本地构建始终链接WVD核心、视觉和设备层。
+    m4 = True
+    m3 = True
     npm = shutil.which("npm.cmd")
     if npm is None:
         raise RuntimeError("需要固定 Node/npm 工具链，见 dependencies.lock.json")
@@ -100,7 +102,8 @@ def build(m2_offline=False, m3=False, m4=False):
         ],
     )
     run("native-build", [cmake, "--build", "--preset", "windows-release"])
-    print("M1 build complete; production wvd.exe/config/mod untouched.")
+    run("functional-package", [sys.executable, str(ROOT / "tools/package_functional.py")])
+    print("Windows functional build complete; production wvd.exe/config/mod untouched.")
 
 
 if __name__ == "__main__":

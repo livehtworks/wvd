@@ -85,7 +85,7 @@ void RunCoordinator::validate(const RunDefinition &d, const devices::DeviceBacke
         if (plan.attempt != 1 || !plan.target.vpn_required || plan.operations.size() != 1 ||
             plan.operations.front() != devices::LifecycleOperation::EnsureVpn)
             throw std::runtime_error("LIFECYCLE_REQUIRES_RECOVERY_BOUNDARY");
-        if (!backend.offline() || p.observed_read_only_viewport ||
+        if ((!backend.offline() && !backend.verified_access()) || p.observed_read_only_viewport ||
             plan.target.device_id != p.device_id || plan.target.application_id != p.application_id)
             throw std::runtime_error("LIFECYCLE_NOT_AUTHORIZED");
     }
@@ -228,6 +228,10 @@ nlohmann::json RunCoordinator::events(std::uint64_t after) const {
         journal = journal_;
     }
     return journal ? journal->read(after) : nlohmann::json::object();
+}
+nlohmann::json RunCoordinator::diagnostics() const {
+    std::lock_guard lock(mutex_);
+    return store_ ? store_->diagnostic_summary() : nlohmann::json{{"entries", nlohmann::json::array()}};
 }
 std::filesystem::path RunCoordinator::run_directory() const {
     std::lock_guard lock(mutex_);

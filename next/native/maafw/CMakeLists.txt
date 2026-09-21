@@ -81,7 +81,8 @@ if(WVD_BUILD_M4)
     ../games/wvd/tasks/fishing.cpp
     ../games/wvd/tasks/fishing_supply.cpp
     ../games/wvd/fishing/progress.cpp
-    ../games/wvd/tasks/pipeline_compiler.cpp ../games/wvd/navigation/world_map.cpp ../games/wvd/supply/inn.cpp
+    ../games/wvd/tasks/pipeline_compiler.cpp ../games/wvd/tasks/author_workflow.cpp
+    ../storage/workflow_repository.cpp ../games/wvd/navigation/world_map.cpp ../games/wvd/supply/inn.cpp
     ../games/wvd/tasks/dungeon_route.cpp
     ../games/wvd/tasks/departure.cpp
     ../games/wvd/tasks/dungeon_iteration.cpp
@@ -122,6 +123,11 @@ if(WVD_BUILD_M4)
   target_compile_options(test_m4_state PRIVATE /utf-8 /W4 /EHsc)
   target_link_options(test_m4_state PRIVATE "/MANIFEST:EMBED" "/MANIFESTINPUT:${PROJECT_SOURCE_DIR}/native/platform/windows/app.manifest")
   set_target_properties(test_m4_state PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/m4")
+  add_executable(test_author_workflow "${PROJECT_SOURCE_DIR}/tests/native/test_author_workflow.cpp")
+  target_link_libraries(test_author_workflow PRIVATE wvd_business)
+  target_compile_options(test_author_workflow PRIVATE /utf-8 /W4 /EHsc)
+  target_link_options(test_author_workflow PRIVATE "/MANIFEST:EMBED" "/MANIFESTINPUT:${PROJECT_SOURCE_DIR}/native/platform/windows/app.manifest")
+  set_target_properties(test_author_workflow PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/w03")
 endif()
 if(WVD_BUILD_M3)
   file(READ "${PROJECT_SOURCE_DIR}/.local/opencv.json" OPENCV_CONFIG)

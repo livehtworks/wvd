@@ -1,0 +1,216 @@
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
+import {
+  captureDevice, connectDevice, disconnectDevice, formatApiError, readCatalog, readCurrentRun,
+  readDevice, readProfile, readTaskProfile, saveProfile, stopRun,
+  startTask, selectEmulator,
+} from "../api/client";
+import type { Catalog, DeviceState, ProfileEnvelope, RunState, StrategyGroup, WvdProfile } from "../api/types";
+
+// 配置全部是 JSON 数据。JSON 往返可安全解开 Vue 的响应式 Proxy；
+// structuredClone 直接接收 Proxy 会在真实浏览器中抛 DataCloneError。
+const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
+const signature = (value: unknown) => JSON.stringify(value);
+
+function normalizeEnvelope(value: ProfileEnvelope | WvdProfile): ProfileEnvelope {
+  if ("profile" in value && typeof value.profile === "object") return value as ProfileEnvelope;
+  return { profile: value as WvdProfile };
+}
+
+export function readStrategies(profile: WvdProfile): StrategyGroup[] {
+  if (Array.isArray(profile.STRATEGY)) return profile.STRATEGY as StrategyGroup[];
+  return Object.entries(profile.STRATEGY ?? {}).map(([group_name, value]) => ({
+    group_name,
+    skill_settings: Array.isArray(value.skill_settings) ? value.skill_settings : [],
+    ...value,
+  }));
+}
+
+export function writeStrategies(profile: WvdProfile, groups: StrategyGroup[]) {
+  profile.STRATEGY = groups;
+}
+
+export function useWorkbench() {
+  const envelope = ref<ProfileEnvelope>();
+  const draft = ref<WvdProfile>();
+  const savedSignature = ref("");
+  const catalog = ref<Catalog>({});
+  const device = ref<DeviceState>();
+  const run = ref<RunState>();
+  const loading = ref(false);
+  const saving = ref(false);
+  const deviceBusy = ref(false);
+  const error = ref("");
+  const notice = ref("");
+  const strategies = ref<StrategyGroup[]>([]);
+  let pollHandle: number | undefined;
+
+  const dirty = computed(() => Boolean(draft.value) && signature(draft.value) !== savedSignature.value);
+  const runActive = computed(() => ["Preparing", "Running", "Recovering", "StopRequested"].includes(run.value?.state ?? ""));
+  const selectedTask = computed(() => catalog.value.tasks?.find((task) => task.id === draft.value?.FARM_TARGET));
+
+  async function load() {
+    loading.value = true;
+    error.value = "";
+    try {
+      const [profileValue, catalogValue, deviceValue, runValue] = await Promise.all([
+        readProfile(), readCatalog(), readDevice(), readCurrentRun(),
+      ]);
+      envelope.value = normalizeEnvelope(profileValue);
+      draft.value = clone(envelope.value.profile);
+      draft.value.TASK_POINT_STRATEGY ??= { overall_strategy: "", task_point: {} };
+      strategies.value = readStrategies(draft.value);
+      savedSignature.value = signature(draft.value);
+      catalog.value = catalogValue;
+      device.value = deviceValue;
+      run.value = runValue;
+    } catch (reason) {
+      error.value = formatApiError(reason);
+    } finally {
+      loading.value = false;
+    }
+  }
+
+  async function save() {
+    if (!draft.value || !envelope.value) return;
+    saving.value = true;
+    error.value = "";
+    notice.value = "";
+    try {
+      writeStrategies(draft.value, clone(strategies.value));
+      const saved = normalizeEnvelope(await saveProfile({
+        ...envelope.value,
+        profile: draft.value,
+      }));
+      envelope.value = saved;
+      draft.value = clone(saved.profile);
+      draft.value.TASK_POINT_STRATEGY ??= { overall_strategy: "", task_point: {} };
+      strategies.value = readStrategies(draft.value);
+      savedSignature.value = signature(draft.value);
+      notice.value = "配置已由服务端保存";
+    } catch (reason) {
+      error.value = formatApiError(reason);
+    } finally {
+      saving.value = false;
+    }
+  }
+
+  async function clearTaskOverride() {
+    if (!draft.value || !envelope.value || !draft.value.FARM_TARGET) return;
+    if (dirty.value) {
+      error.value = "PROFILE_UNSAVED: 请先保存或重载当前更改，再清除任务覆盖";
+      return;
+    }
+    saving.value = true;
+    error.value = "";
+    try {
+      const saved = normalizeEnvelope(await saveProfile({
+        ...envelope.value,
+        profile: draft.value,
+        operation: "clear_task_override",
+        task_id: draft.value.FARM_TARGET,
+      }));
+      envelope.value = saved;
+      draft.value = clone(saved.profile);
+      draft.value.TASK_POINT_STRATEGY ??= { overall_strategy: "", task_point: {} };
+      strategies.value = readStrategies(draft.value);
+      savedSignature.value = signature(draft.value);
+      notice.value = "当前任务覆盖已清除";
+    } catch (reason) { error.value = formatApiError(reason); }
+    finally { saving.value = false; }
+  }
+
+  function revert() {
+    if (!envelope.value) return;
+    draft.value = clone(envelope.value.profile);
+    draft.value.TASK_POINT_STRATEGY ??= { overall_strategy: "", task_point: {} };
+    strategies.value = readStrategies(draft.value);
+    savedSignature.value = signature(draft.value);
+    notice.value = "已恢复为服务端保存版本";
+  }
+
+  async function selectTask(taskId: string) {
+    if (!draft.value) return;
+    error.value = "";
+    try {
+      const selected = normalizeEnvelope(await readTaskProfile(taskId));
+      draft.value = clone(selected.profile);
+      draft.value.TASK_POINT_STRATEGY ??= { overall_strategy: "", task_point: {} };
+      strategies.value = readStrategies(draft.value);
+      envelope.value = selected;
+      savedSignature.value = signature(draft.value);
+      notice.value = selected.task_override_active ? "已载入该任务的专用配置" : "已载入默认配置；保存后切换任务";
+    } catch (reason) { error.value = formatApiError(reason); }
+  }
+
+  async function deviceAction(action: "connect" | "disconnect" | "capture") {
+    if (!draft.value) return;
+    deviceBusy.value = true;
+    error.value = "";
+    try {
+      device.value = action === "connect"
+        ? await connectDevice({
+          emulator_path: draft.value.EMU_PATH,
+          adb_address: draft.value.ADB_ADRESS,
+          emulator_index: draft.value.EMU_INDEX,
+          auto_start_clash: draft.value.AUTO_START_CLASH,
+        })
+        : action === "disconnect" ? await disconnectDevice() : await captureDevice();
+    } catch (reason) {
+      error.value = formatApiError(reason);
+    } finally {
+      deviceBusy.value = false;
+    }
+  }
+
+  async function chooseEmulator() {
+    if (!draft.value) return;
+    error.value = "";
+    try {
+      const selected = await selectEmulator();
+      if (!selected.cancelled && selected.path) draft.value.EMU_PATH = selected.path;
+    } catch (reason) { error.value = formatApiError(reason); }
+  }
+
+  async function startSelectedTask() {
+    if (!draft.value?.FARM_TARGET || dirty.value) {
+      error.value = dirty.value ? "PROFILE_UNSAVED: 请先保存配置" : "TASK_NOT_SELECTED: 请选择任务";
+      return;
+    }
+    error.value = "";
+    try { run.value = await startTask(draft.value.FARM_TARGET); }
+    catch (reason) { error.value = formatApiError(reason); }
+  }
+
+  async function requestStop() {
+    if (!run.value?.run_id) return;
+    error.value = "";
+    try { run.value = await stopRun(run.value.run_id); }
+    catch (reason) { error.value = formatApiError(reason); }
+  }
+
+  async function pollRun() {
+    try {
+      const [runValue, deviceValue] = await Promise.all([readCurrentRun(), readDevice()]);
+      run.value = runValue;
+      device.value = deviceValue;
+      deviceBusy.value = Boolean(deviceValue.busy);
+      if (deviceValue.operation?.state === "failed")
+        error.value = `${String(deviceValue.error_code ?? "DEVICE_OPERATION_FAILED")}: ${String(deviceValue.message ?? deviceValue.operation.error ?? "设备操作失败")}`;
+    } catch { /* 顶层操作会显示错误，轮询保持安静。 */ }
+  }
+
+  watch(strategies, () => {
+    if (draft.value) writeStrategies(draft.value, clone(strategies.value));
+  }, { deep: true });
+  onMounted(() => {
+    void load();
+    pollHandle = window.setInterval(pollRun, 1500);
+  });
+  onBeforeUnmount(() => window.clearInterval(pollHandle));
+
+  return reactive({
+    envelope, draft, catalog, device, run, loading, saving, deviceBusy, error, notice,
+    strategies, dirty, runActive, selectedTask, load, save, clearTaskOverride, revert, selectTask,
+    deviceAction, chooseEmulator, startSelectedTask, requestStop,
+  });
+}

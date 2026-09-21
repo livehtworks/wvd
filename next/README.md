@@ -1,17 +1,17 @@
-# WVD Next · 迁移工作台与独立核心
+# WVD Next · Windows 自动化工作台
 
-独立 C++20 / CMake、Boost.Beast HTTP 服务与 Vue / TypeScript 迁移工作台。
-**只做旁路工程与完整功能基线，不是可挂机的新版本。** 旧 Python 仍是唯一生产入口。
+独立 C++20 / CMake、MaaFramework、Boost.Beast 与 Vue / TypeScript Windows 应用。
+当前交付已接通配置、MuMu、截图、现有任务、运行控制、诊断和可保存执行的流程编辑器；
+旧 Python 版本仍保留，用户自行选择何时使用新版。
 
-已实现：原生服务正常启停、API 版本/能力查询、基线项搜索与详情、资源大小写核对及真实模板预览。
-另有显式 M3 本地只读设备检查和 WVD 专用视觉；这不是工作台的在线执行功能。
-M4 已有离线配置副本导入/CAS 保存和全部任务目录绑定；未实现完整 WVD 任务、运行配置接入、流程编辑和生产替换。
-尚未启用的工作包目录只放职责说明，不提供伪实现，不进入构建。
+直接使用打包产物：
 
-M1 收尾 R01/R02/R03 已完成。M2 核心已实现独立 RunCoordinator、有限 ExecutionSession、
-统一 MaaGateway、模板/OCR 三态、受控动作/输入门禁及原子运行结果存储。
-`wvd_core` 只在显式构建时加载 Maa，不链接进工作台服务；默认离线路线仍在 connect 前拒绝真实后端。
-验收范围与证据见 [M2 核心验证](docs/m2-core-validation.md)，架构说明见下方导航。
+```text
+next/dist/wvd-next/启动WVD新版.bat
+```
+
+新版配置和流程保存在 `%LOCALAPPDATA%\WvdNext`，不会覆盖旧 `config.json`、`mod` 或日志。
+具体操作和有限实操结论见 [Windows 功能交付](docs/windows-functional-delivery.md)。
 
 ## 构建与验证
 
@@ -27,13 +27,11 @@ M1 收尾 R01/R02/R03 已完成。M2 核心已实现独立 RunCoordinator、有�
 `dependencies.lock.json`，Web 的完整依赖树由 `web/package-lock.json` 锁定，安装使用 `npm ci`。
 头文件缓存默认 `%LOCALAPPDATA%/WvdNext/dependencies`，可用 `WVD_NEXT_CACHE` 显式指定。
 
-```powershell
-next/build/Release/automationd.exe --web-root next/web/dist --port 17652
-```
+开发运行需显式传入 Web、数据、资源包和任务目录；普通使用请直接运行打包入口。
 
 控制台看到 READY 后访问 `http://127.0.0.1:17652`；Ctrl+C 正常停止。
 端口占用时启动失败，不接管已有服务；可选择其他端口或 `--port 0`，以 READY 地址为准。
-HTTP 仅绑定 127.0.0.1，严格验证 Host/Origin，只提供 GET/HEAD，不开放 shell/设备/任务 API。
+HTTP 仅绑定 127.0.0.1，严格验证 Host/Origin；设备和任务写操作只由同源工作台调用，不开放 shell。
 
 浏览器验证（先启动上面的服务）：
 

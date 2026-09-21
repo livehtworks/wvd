@@ -77,6 +77,9 @@ void validate_diagnostic_png(const contracts::FrameEnvelope &frame, std::size_t 
 J event_record(const std::string &instance, std::uint64_t run, std::uint64_t generation,
                std::uint64_t seq, std::string type, J payload) {
     auto node = payload.is_object() ? payload.value("node", J(nullptr)) : J(nullptr);
+    if (!node.is_string() && payload.is_object() && payload.contains("name") &&
+        payload.at("name").is_string())
+        node = payload.at("name");
     auto outcome = payload.is_object()
                        ? payload.value("outcome", payload.value("state", J(nullptr)))
                        : J(nullptr);

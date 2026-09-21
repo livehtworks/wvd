@@ -1,0 +1,510 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wvd.local/schemas/author-workflow.schema.json",
+  "title": "WVD author workflow",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "flow", "entry", "nodes", "edges", "layout", "execution"],
+  "properties": {
+    "schema": { "const": 1 },
+    "revision": { "$ref": "#/$defs/revision" },
+    "flow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "description"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "description": { "type": "string", "maxLength": 2048 }
+      }
+    },
+    "entry": { "$ref": "#/$defs/id" },
+    "nodes": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1024,
+      "items": { "$ref": "#/$defs/node" }
+    },
+    "edges": {
+      "type": "array",
+      "maxItems": 4096,
+      "items": { "$ref": "#/$defs/edge" }
+    },
+    "layout": { "$ref": "#/$defs/layout" },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["time_limit_ms"],
+      "properties": {
+        "time_limit_ms": { "type": "integer", "minimum": 1, "maximum": 1800000 }
+      }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$"
+    },
+    "revision": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "roi": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "prefixItems": [
+        { "type": "integer", "minimum": 0, "maximum": 899 },
+        { "type": "integer", "minimum": 0, "maximum": 1599 },
+        { "type": "integer", "minimum": 1, "maximum": 900 },
+        { "type": "integer", "minimum": 1, "maximum": 1600 }
+      ]
+    },
+    "point": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "prefixItems": [
+        { "type": "integer", "minimum": 1, "maximum": 898 },
+        { "type": "integer", "minimum": 1, "maximum": 1598 }
+      ]
+    },
+    "templateCondition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "image"],
+      "properties": {
+        "mode": { "const": "template" },
+        "image": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "pattern": "^(?!/)(?!.*(?:\\.\\.|:|\\\\)).+$"
+        },
+        "threshold": { "type": "number", "minimum": 0, "maximum": 1 },
+        "roi": { "$ref": "#/$defs/roi" }
+      }
+    },
+    "ocrCondition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "expected"],
+      "properties": {
+        "mode": { "const": "ocr" },
+        "expected": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "items": { "type": "string", "minLength": 1, "maxLength": 128 }
+        },
+        "roi": { "$ref": "#/$defs/roi" }
+      }
+    },
+    "compositeCondition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "conditions"],
+      "properties": {
+        "mode": { "enum": ["all", "any"] },
+        "conditions": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "items": { "$ref": "#/$defs/condition" }
+        }
+      }
+    },
+    "notCondition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "conditions"],
+      "properties": {
+        "mode": { "const": "not" },
+        "conditions": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "items": { "$ref": "#/$defs/condition" }
+        }
+      }
+    },
+    "builtinCondition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode"],
+      "properties": {
+        "mode": {
+          "enum": [
+            "auto_route_moving", "auto_route_post", "blocking_screen", "boot_post",
+            "boot_ready", "combat_active", "dark_light_clear", "dark_light_post",
+            "default_dialogue", "dialogue_post", "fast_forward_off", "fishing_bait_empty",
+            "fishing_reward", "fishing_unknown", "map_route_post", "mining_reward",
+            "movement_stopped", "next_low_confidence", "party_death", "party_defeat",
+            "pause", "pause_negative", "special_dialogue", "special_dialogue_post",
+            "target_marker", "task_stop"
+          ]
+        }
+      }
+    },
+    "condition": {
+      "oneOf": [
+        { "$ref": "#/$defs/templateCondition" },
+        { "$ref": "#/$defs/ocrCondition" },
+        { "$ref": "#/$defs/compositeCondition" },
+        { "$ref": "#/$defs/notCondition" },
+        { "$ref": "#/$defs/builtinCondition" }
+      ]
+    },
+    "nodeBase": {
+      "type": "object",
+      "required": ["id", "type", "name", "parameters"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "type": { "enum": ["recognition", "action", "wait", "business", "end"] },
+        "name": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "repeat_limit": { "type": "integer", "minimum": 1, "maximum": 256 }
+      }
+    },
+    "recognitionNode": {
+      "allOf": [
+        { "$ref": "#/$defs/nodeBase" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "type", "name", "parameters"],
+          "properties": {
+            "id": { "$ref": "#/$defs/id" },
+            "type": { "const": "recognition" },
+            "name": { "type": "string", "minLength": 1, "maxLength": 128 },
+            "repeat_limit": { "type": "integer", "minimum": 1, "maximum": 256 },
+            "parameters": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["condition"],
+              "properties": {
+                "condition": { "$ref": "#/$defs/condition" },
+                "delay_after_ms": { "type": "integer", "minimum": 0, "maximum": 10000 }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "clickParameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operation", "scene", "target", "postcondition"],
+      "properties": {
+        "operation": { "const": "click" },
+        "scene": { "$ref": "#/$defs/condition" },
+        "target": { "$ref": "#/$defs/condition" },
+        "postcondition": { "$ref": "#/$defs/condition" },
+        "offset": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "prefixItems": [
+            { "type": "integer", "minimum": -900, "maximum": 900 },
+            { "type": "integer", "minimum": -1600, "maximum": 1600 }
+          ]
+        },
+        "allowed_area": { "$ref": "#/$defs/roi" },
+        "postcondition_timeout_ms": { "type": "integer", "minimum": 1, "maximum": 60000 },
+        "delay_after_ms": { "type": "integer", "minimum": 0, "maximum": 10000 }
+      }
+    },
+    "fixedClickParameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operation", "scene", "postcondition", "position"],
+      "properties": {
+        "operation": { "const": "fixed_click" },
+        "scene": { "$ref": "#/$defs/condition" },
+        "postcondition": { "$ref": "#/$defs/condition" },
+        "position": { "$ref": "#/$defs/point" },
+        "allowed_area": { "$ref": "#/$defs/roi" },
+        "postcondition_timeout_ms": { "type": "integer", "minimum": 1, "maximum": 60000 },
+        "delay_after_ms": { "type": "integer", "minimum": 0, "maximum": 10000 }
+      }
+    },
+    "backParameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operation", "scene", "postcondition"],
+      "properties": {
+        "operation": { "const": "back" },
+        "scene": { "$ref": "#/$defs/condition" },
+        "postcondition": { "$ref": "#/$defs/condition" },
+        "allowed_area": { "$ref": "#/$defs/roi" },
+        "postcondition_timeout_ms": { "type": "integer", "minimum": 1, "maximum": 60000 },
+        "delay_after_ms": { "type": "integer", "minimum": 0, "maximum": 10000 }
+      }
+    },
+    "swipeParameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operation", "scene", "postcondition", "coordinates", "duration_ms"],
+      "properties": {
+        "operation": { "const": "swipe" },
+        "scene": { "$ref": "#/$defs/condition" },
+        "postcondition": { "$ref": "#/$defs/condition" },
+        "coordinates": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "prefixItems": [
+            { "type": "integer", "minimum": 1, "maximum": 898 },
+            { "type": "integer", "minimum": 1, "maximum": 1598 },
+            { "type": "integer", "minimum": 1, "maximum": 898 },
+            { "type": "integer", "minimum": 1, "maximum": 1598 }
+          ]
+        },
+        "duration_ms": { "type": "integer", "minimum": 1, "maximum": 60000 },
+        "allowed_area": { "$ref": "#/$defs/roi" },
+        "postcondition_timeout_ms": { "type": "integer", "minimum": 1, "maximum": 60000 },
+        "delay_after_ms": { "type": "integer", "minimum": 0, "maximum": 10000 }
+      }
+    },
+    "actionNode": {
+      "allOf": [
+        { "$ref": "#/$defs/nodeBase" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "type", "name", "parameters"],
+          "properties": {
+            "id": { "$ref": "#/$defs/id" },
+            "type": { "const": "action" },
+            "name": { "type": "string", "minLength": 1, "maxLength": 128 },
+            "repeat_limit": { "type": "integer", "minimum": 1, "maximum": 256 },
+            "parameters": {
+              "oneOf": [
+                { "$ref": "#/$defs/clickParameters" },
+                { "$ref": "#/$defs/fixedClickParameters" },
+                { "$ref": "#/$defs/backParameters" },
+                { "$ref": "#/$defs/swipeParameters" }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "waitNode": {
+      "allOf": [
+        { "$ref": "#/$defs/nodeBase" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "type", "name", "parameters"],
+          "properties": {
+            "id": { "$ref": "#/$defs/id" },
+            "type": { "const": "wait" },
+            "name": { "type": "string", "minLength": 1, "maxLength": 128 },
+            "repeat_limit": { "type": "integer", "minimum": 1, "maximum": 256 },
+            "parameters": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["duration_ms"],
+              "properties": {
+                "duration_ms": { "type": "integer", "minimum": 1, "maximum": 10000 }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "confirmParameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["binding", "operation_id", "event", "condition"],
+      "properties": {
+        "binding": { "const": "confirm" },
+        "operation_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "event": { "type": "string", "minLength": 1, "maxLength": 96 },
+        "condition": { "$ref": "#/$defs/condition" },
+        "expected_step": { "type": "integer", "minimum": 0, "maximum": 4096 },
+        "delay_after_ms": { "type": "integer", "minimum": 0, "maximum": 10000 }
+      }
+    },
+    "combatParameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["binding", "condition", "arguments"],
+      "properties": {
+        "binding": { "const": "combat" },
+        "condition": { "$ref": "#/$defs/condition" },
+        "arguments": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["operation", "portraits", "catalog"],
+              "properties": {
+                "operation": { "const": "prepare" },
+                "portraits": {
+                  "type": "array",
+                  "maxItems": 128,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["image", "role"],
+                    "properties": {
+                      "image": { "type": "string", "minLength": 1, "maxLength": 160 },
+                      "role": { "type": "string", "minLength": 1, "maxLength": 128 }
+                    }
+                  }
+                },
+                "catalog": { "type": "array", "maxItems": 128 }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["operation", "index"],
+              "properties": {
+                "operation": { "enum": ["success", "auto_confirmed"] },
+                "index": { "type": "integer", "minimum": 0, "maximum": 127 }
+              }
+            }
+          ]
+        },
+        "delay_after_ms": { "type": "integer", "minimum": 0, "maximum": 10000 }
+      }
+    },
+    "chestParameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["binding", "condition", "preferred", "seed"],
+      "properties": {
+        "binding": { "const": "chest" },
+        "condition": { "$ref": "#/$defs/condition" },
+        "preferred": { "type": "integer", "minimum": 0, "maximum": 6 },
+        "seed": { "type": "integer", "minimum": 0, "maximum": 4294967295 },
+        "delay_after_ms": { "type": "integer", "minimum": 0, "maximum": 10000 }
+      }
+    },
+    "taskStageParameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["binding", "task_id", "stage"],
+      "properties": {
+        "binding": { "const": "task_stage" },
+        "task_id": { "$ref": "#/$defs/id" },
+        "stage": { "enum": ["prepare", "enter", "traverse"] }
+      }
+    },
+    "businessNode": {
+      "allOf": [
+        { "$ref": "#/$defs/nodeBase" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "type", "name", "parameters"],
+          "properties": {
+            "id": { "$ref": "#/$defs/id" },
+            "type": { "const": "business" },
+            "name": { "type": "string", "minLength": 1, "maxLength": 128 },
+            "repeat_limit": { "type": "integer", "minimum": 1, "maximum": 256 },
+            "parameters": {
+              "oneOf": [
+                { "$ref": "#/$defs/confirmParameters" },
+                { "$ref": "#/$defs/combatParameters" },
+                { "$ref": "#/$defs/chestParameters" },
+                { "$ref": "#/$defs/taskStageParameters" }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "endNode": {
+      "allOf": [
+        { "$ref": "#/$defs/nodeBase" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "type", "name", "parameters"],
+          "properties": {
+            "id": { "$ref": "#/$defs/id" },
+            "type": { "const": "end" },
+            "name": { "type": "string", "minLength": 1, "maxLength": 128 },
+            "repeat_limit": { "type": "integer", "minimum": 1, "maximum": 256 },
+            "parameters": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["outcome"],
+                  "properties": { "outcome": { "const": "success" } }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["outcome", "reason"],
+                  "properties": {
+                    "outcome": { "const": "failure" },
+                    "reason": { "type": "string", "minLength": 1, "maxLength": 256 }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "node": {
+      "oneOf": [
+        { "$ref": "#/$defs/recognitionNode" },
+        { "$ref": "#/$defs/actionNode" },
+        { "$ref": "#/$defs/waitNode" },
+        { "$ref": "#/$defs/businessNode" },
+        { "$ref": "#/$defs/endNode" }
+      ]
+    },
+    "edge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "from", "to", "outcome", "order"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "from": { "$ref": "#/$defs/id" },
+        "to": { "$ref": "#/$defs/id" },
+        "outcome": { "enum": ["success", "failure"] },
+        "order": { "type": "integer", "minimum": 0, "maximum": 4095 }
+      }
+    },
+    "layout": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["nodes", "viewport"],
+      "properties": {
+        "nodes": {
+          "type": "array",
+          "maxItems": 1024,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["node_id", "x", "y"],
+            "properties": {
+              "node_id": { "$ref": "#/$defs/id" },
+              "x": { "type": "number", "minimum": -1000000, "maximum": 1000000 },
+              "y": { "type": "number", "minimum": -1000000, "maximum": 1000000 }
+            }
+          }
+        },
+        "viewport": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["x", "y", "zoom"],
+          "properties": {
+            "x": { "type": "number", "minimum": -1000000, "maximum": 1000000 },
+            "y": { "type": "number", "minimum": -1000000, "maximum": 1000000 },
+            "zoom": { "type": "number", "minimum": 0.05, "maximum": 8 }
+          }
+        }
+      }
+    }
+  }
+}

@@ -2,7 +2,10 @@
 #include "maafw/buffers.hpp"
 #include <array>
 #include <atomic>
+#include <condition_variable>
+#include <mutex>
 #include <thread>
+#include <vector>
 #include <windows.h>
 
 namespace wvd::platform {
@@ -142,17 +145,8 @@ struct MetadataQuery::Impl {
                accounting.ActiveProcesses == 0;
     }
 };
-MetadataQuery::MetadataQuery() : impl_(std::make_unique<Impl>()) {}
-MetadataQuery::~MetadataQuery() {
-    cancel();
-    // 无法证明内核已完成时保留对象，不 detach、不释放仍在使用的 OVERLAPPED。
-    // 正常入口已经有界回报 CLEANUP_PENDING；此处仅承担最终所有权，不能视为任意原生取消保证。
-    while (!finish_cleanup())
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-}
-void MetadataQuery::cancel() { SetEvent(impl_->cancel_event.value); }
-bool MetadataQuery::finish_cleanup(std::chrono::milliseconds budget) {
-    auto &s = *impl_;
+namespace {
+bool finish_impl(MetadataQuery::Impl &s, std::chrono::milliseconds budget) {
     if (s.quiet)
         return true;
     if (!s.cleaning) {
@@ -187,6 +181,55 @@ bool MetadataQuery::finish_cleanup(std::chrono::milliseconds budget) {
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     } while (Clock::now() < deadline);
     return false;
+}
+
+// 查询超时后的内核对象由进程级清理所有者继续持有。请求线程可以返回，
+// 但 OVERLAPPED、管道和 Job 在真正静止前不会释放；进程退出时该线程也会 join。
+class MetadataCleanupOwner {
+  public:
+    MetadataCleanupOwner() : worker_([this](std::stop_token stop) { run(stop); }) {}
+    ~MetadataCleanupOwner() {
+        worker_.request_stop();
+        cv_.notify_all();
+    }
+    void adopt(std::unique_ptr<MetadataQuery::Impl> value) {
+        std::lock_guard lock(mutex_);
+        pending_.push_back(std::move(value));
+        cv_.notify_one();
+    }
+  private:
+    void run(std::stop_token stop) {
+        for (;;) {
+            std::unique_lock lock(mutex_);
+            cv_.wait_for(lock, std::chrono::milliseconds(100),
+                         [&] { return !pending_.empty() || stop.stop_requested(); });
+            for (auto it = pending_.begin(); it != pending_.end();) {
+                const bool quiet = finish_impl(**it, std::chrono::milliseconds(20));
+                it = quiet ? pending_.erase(it) : std::next(it);
+            }
+            if (stop.stop_requested() && pending_.empty())
+                return;
+        }
+    }
+    std::mutex mutex_;
+    std::condition_variable cv_;
+    std::vector<std::unique_ptr<MetadataQuery::Impl>> pending_;
+    std::jthread worker_;
+};
+MetadataCleanupOwner &cleanup_owner() {
+    static MetadataCleanupOwner owner;
+    return owner;
+}
+} // namespace
+MetadataQuery::MetadataQuery() : impl_(std::make_unique<Impl>()) {}
+MetadataQuery::~MetadataQuery() {
+    cancel();
+    if (impl_ && !finish_cleanup(std::chrono::milliseconds(20)))
+        cleanup_owner().adopt(std::move(impl_));
+}
+void MetadataQuery::cancel() { SetEvent(impl_->cancel_event.value); }
+bool MetadataQuery::finish_cleanup(std::chrono::milliseconds budget) {
+    return !impl_ || finish_impl(*impl_, budget);
 }
 nlohmann::json MetadataQuery::run(const std::filesystem::path &executable, int index,
                                   std::chrono::milliseconds budget) {

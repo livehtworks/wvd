@@ -44,13 +44,24 @@ RawFrame InputGate::capture() {
         permit_.reset();
     }
     auto raw = backend_.capture();
-    if (raw.device_id != policy_.device_id || raw.viewport_id.empty() || raw.size.width <= 0 ||
-        raw.size.height <= 0 || raw.size.width > 16384 || raw.size.height > 16384 ||
-        (!policy_.observed_read_only_viewport &&
-         (raw.viewport_id != policy_.viewport_id ||
-          static_cast<std::int64_t>(raw.size.width) * policy_.recognition_size.height !=
-              static_cast<std::int64_t>(raw.size.height) * policy_.recognition_size.width)))
-        throw std::runtime_error("CAPTURE_IDENTITY_INVALID");
+    const bool invalid_device = raw.device_id != policy_.device_id;
+    const bool invalid_viewport = raw.viewport_id.empty() || raw.size.width <= 0 ||
+                                  raw.size.height <= 0 || raw.size.width > 16384 ||
+                                  raw.size.height > 16384;
+    // 游戏未启动时模拟器桌面通常是横屏。必须允许读取这一帧，状态机才能确认前台应用
+    // 并进入启动游戏的恢复链；只有目标游戏已在前台时才执行严格的纵屏尺寸门禁。
+    const bool invalid_shape = !policy_.observed_read_only_viewport &&
+        raw.foreground_application == policy_.application_id &&
+        (raw.viewport_id != policy_.viewport_id ||
+         static_cast<std::int64_t>(raw.size.width) * policy_.recognition_size.height !=
+             static_cast<std::int64_t>(raw.size.height) * policy_.recognition_size.width);
+    if (invalid_device || invalid_viewport || invalid_shape)
+        throw std::runtime_error(
+            "CAPTURE_IDENTITY_INVALID:actual=" + raw.device_id + "/" + raw.viewport_id + "/" +
+            std::to_string(raw.size.width) + "x" + std::to_string(raw.size.height) +
+            ";expected=" + policy_.device_id + "/" + policy_.viewport_id + "/" +
+            std::to_string(policy_.recognition_size.width) + "x" +
+            std::to_string(policy_.recognition_size.height));
     std::lock_guard lock(mutex_);
     frame_ = {raw.device_id,
               policy_.game_id,
@@ -197,6 +208,14 @@ Command InputGate::mapped(const Command &command) const {
     return result;
 }
 bool InputGate::execute(const Command &command) {
+    if (command.kind == ActionKind::Inactive) {
+        // Maa 的 DoNothing 会调用 inactive 回调。它只是流程路由，不是设备输入，
+        // 不需要动作意图，也不能下发给 ADB 或污染输入统计。
+        if (closed())
+            return false;
+        events_.emit(generation_, "input.inactive", {});
+        return true;
+    }
     {
         std::lock_guard lock(mutex_);
         ++counts_.attempted;

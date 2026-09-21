@@ -31,7 +31,10 @@ class PipelineCompiler {
     static nlohmann::json business(const std::string &field, nlohmann::json value,
                                    const std::string &comparison = "eq");
     void route(const std::string &name, nlohmann::json next);
+    void wait(const std::string &name, int milliseconds, nlohmann::json next);
     void observe(const std::string &name, const nlohmann::json &condition, nlohmann::json next);
+    void observe_ocr(const std::string &name, const std::vector<std::string> &expected,
+                     nlohmann::json roi, nlohmann::json next);
     void click(const std::string &name, const nlohmann::json &scene, const nlohmann::json &target,
                const nlohmann::json &post, nlohmann::json next, nlohmann::json offset = {0, 0});
     void back(const std::string &name, const nlohmann::json &scene, const nlohmann::json &post,

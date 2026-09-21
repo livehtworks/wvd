@@ -145,7 +145,9 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, Dialogue
     const J ready = C::all({common ? C::any({J{{"mode", "boot_ready"}}, panel, C::image("RiseAgain")}) : J{{"mode", "boot_ready"}},
                            C::absent(J{{"mode", "blocking_screen"}})});
     const auto title = scoped("boot_title_logo", {100, 300, 700, 470}, .86);
-    const auto attention = scoped("boot_attention", {250, 430, 420, 220}, .86);
+    // 首次免责声明跟随系统区域设置，游戏主体即使配置为英文也可能显示繁中。
+    const auto attention = C::any({scoped("boot_attention", {250, 430, 420, 220}, .86),
+                                   scoped("boot_attention_zh", {250, 430, 420, 220}, .86)});
     const auto download = scoped("startdownload", {222, 901, 465, 84}, .8);
     const auto retry = C::image("retry");
     auto blank = C::image("retry_blank");

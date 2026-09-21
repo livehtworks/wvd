@@ -6,7 +6,6 @@ import {
   ChevronRight,
   RefreshCw,
   Search,
-  Blocks,
   ListChecks,
   Images,
 } from "@lucide/vue";
@@ -63,34 +62,13 @@ watch([query, kind], () => {
 onMounted(load);
 </script>
 <template>
-  <header class="topbar">
-    <div class="brand">
-      <Blocks :size="23" /><strong>WVD</strong><span>迁移工作台</span>
-    </div>
-    <div class="service">
-      <span :class="['dot', { online: version && !error }]"></span
-      >{{ error ? "服务离线" : version ? "本地服务" : "连接中"
-      }}<span class="mono">{{ version?.version ?? "—" }}</span
-      ><button
-        class="icon-button"
-        aria-label="刷新"
-        title="刷新"
-        :disabled="loading"
-        @click="load"
-      >
-        <RefreshCw :size="17" :class="{ spinning: loading }" />
-      </button>
-    </div>
-  </header>
-  <main>
+  <main class="app-main migration-page">
     <section class="heading">
       <div>
-        <div class="eyebrow">架构迁移 / M1</div>
-        <h1>完整功能基线</h1>
+        <div class="eyebrow">架构迁移 / 功能基线</div>
+        <h1>迁移盘点</h1>
       </div>
-      <a class="download" href="/migration/feature_inventory.json" download
-        ><ArrowDownToLine :size="17" /> JSON</a
-      >
+      <div class="command-row"><span class="mono">{{ version?.version ?? "—" }}</span><button class="icon-button" aria-label="刷新" title="刷新" :disabled="loading" @click="load"><RefreshCw :size="17" :class="{ spinning: loading }" /></button><a class="download" href="/migration/feature_inventory.json" download><ArrowDownToLine :size="17" /> JSON</a></div>
     </section>
     <div v-if="error" class="error" role="alert">连接失败：{{ error }}</div>
     <section class="metrics" aria-label="基线统计">
@@ -207,8 +185,4 @@ onMounted(load);
       </div>
     </section>
   </main>
-  <footer class="page-footer">
-    <span>MaaFramework 5.13.0 · 尚未加载</span
-    ><span>资源稳定性待确认 · 任务执行未接入</span>
-  </footer>
 </template>
