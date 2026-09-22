@@ -1,6 +1,6 @@
 import type {
   ApiErrorBody, AssetReport, Capabilities, Catalog, DeviceState, Inventory, JsonObject,
-  ProfileEnvelope, RecognitionProbeResult, RunState, Version, WorkflowDefinition,
+  ProfileEnvelope, RecognitionProbeResult, RunState, SubmissionReceipt, Version, WorkflowDefinition,
 } from "./types";
 
 export class ApiError extends Error {
@@ -58,10 +58,17 @@ export const importTaskWorkflow = (taskId: string, flowId: string) => send<Workf
 export const readWorkflow = (id: string) => get<WorkflowDefinition>(`/api/v1/workflows/${encodeURIComponent(id)}`);
 export const saveWorkflow = (workflow: WorkflowDefinition) => send<WorkflowDefinition>(`/api/v1/workflows/${encodeURIComponent(workflow.id)}`, "PUT", workflow);
 export const deleteWorkflow = (id: string, revision: string) => send<void>(`/api/v1/workflows/${encodeURIComponent(id)}`, "DELETE", { revision });
-export const runWorkflow = (id: string, body: JsonObject = {}) => send<RunState>(`/api/v1/workflows/${encodeURIComponent(id)}/run`, "POST", body);
-export const stopRun = (id: string) => send<RunState>(`/api/v1/runs/${encodeURIComponent(id)}/stop`, "POST", {});
+export const runWorkflow = (id: string, body: JsonObject = {}) => send<SubmissionReceipt>(`/api/v1/workflows/${encodeURIComponent(id)}/run`, "POST", body);
+export const stopRun = (id?: string | number, requestId?: string) => send<RunState>(
+  requestId || id === undefined ? "/api/v1/runs/current/stop" : `/api/v1/runs/${encodeURIComponent(String(id))}/stop`,
+  "POST", requestId ? { request_id: requestId } : {},
+);
 export const readCurrentRun = () => get<RunState>("/api/v1/runs/current");
-export const startTask = (taskId?: string) => send<RunState>("/api/v1/runs/start", "POST", taskId ? { task_id: taskId } : {});
+export const startTask = (taskId: string, requestId: string, profileRevision?: string) =>
+  send<SubmissionReceipt>("/api/v1/runs/start", "POST", {
+    task_id: taskId, request_id: requestId,
+    ...(profileRevision ? { profile_revision: profileRevision } : {}),
+  });
 export const readDevice = () => get<DeviceState>("/api/v1/device");
 export const selectEmulator = () => send<{ cancelled: boolean; path?: string }>("/api/v1/device/select-emulator", "POST", {});
 export const connectDevice = (body: JsonObject) => send<DeviceState>("/api/v1/device/connect", "POST", body);

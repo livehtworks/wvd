@@ -22,6 +22,7 @@ class Application {
     explicit Application(ApplicationPaths paths);
     ~Application();
     api::DynamicReply handle(const api::Request &request);
+    void request_shutdown();
     void stop();
 
   private:
@@ -29,6 +30,18 @@ class Application {
     J load_json(const std::filesystem::path &path) const;
     J profile() const;
     J effective_profile_values(const std::string &task_id) const;
+    J effective_profile_values(const std::string &task_id, const J &stored) const;
+    J queue_run(const std::string &kind, const J &request, const J &identity,
+                std::function<J()> prepare);
+    runtime::RunDefinition assemble_task(const J &request, const J &stored,
+                                         const devices::LifecycleTarget &target);
+    runtime::RunDefinition assemble_workflow(const J &request, const J &stored, J document,
+                                             const devices::LifecycleTarget &target,
+                                             std::map<std::string, std::string> *pipeline_to_node = nullptr);
+    friend struct ApplicationAssemblyTestAccess;
+    J prepare_task(const J &request, const J &stored, std::shared_ptr<maafw::AdbBackend> backend);
+    J prepare_workflow(const std::string &flow_id, const J &request, const J &stored,
+                       J document, std::shared_ptr<maafw::AdbBackend> backend);
     J profile_for_task(const std::string &task_id) const;
     J catalog() const;
     J device_status() const;
@@ -47,7 +60,8 @@ class Application {
     J save_workflow(const std::string &flow_id, const J &request);
     void delete_workflow(const std::string &flow_id, const J &request);
     J start_workflow(const std::string &flow_id, const J &request);
-    J stop_run(std::optional<std::uint64_t> requested_run_id = std::nullopt);
+    J stop_run(std::optional<std::uint64_t> requested_run_id = std::nullopt,
+               const std::string &requested_submission = {});
     J recognition_probe(const J &request);
     void start_device_job(std::string name, std::function<void()> job);
     bool run_active() const;
@@ -69,7 +83,12 @@ class Application {
     std::string active_workflow_id_, active_workflow_revision_, active_task_name_;
     std::optional<std::chrono::steady_clock::time_point> active_started_;
     std::map<std::string, std::string> active_pipeline_to_node_;
+    // 序列化命令准入和设备所有权交接；重计算不占用它，停止仍可进入。
+    mutable std::recursive_mutex command_mutex_;
     mutable std::mutex mutex_;
+    std::atomic<bool> cancel_operation_{false};
+    J submission_ = nullptr;
+    std::map<std::string, J> submissions_;
     std::jthread device_worker_;
     std::atomic<bool> stopping_{false};
 };

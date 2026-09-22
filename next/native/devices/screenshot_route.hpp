@@ -1,6 +1,7 @@
 #pragma once
 #include <json.hpp>
 #include <stdexcept>
+#include <string_view>
 
 namespace wvd::devices {
 // 单连接内只允许主 -> 后备。打开函数必须先正常销毁旧 Controller，不能并行试探。
@@ -21,11 +22,11 @@ class ScreenshotRoute {
         try {
             if (open(false))
                 return true;
-            failures_.push_back({{"stage", "connect"}, {"reason", "PRIMARY_CONNECT_FAILED"}});
+            record_failure({{"stage", "connect"}, {"reason", "PRIMARY_CONNECT_FAILED"}});
         } catch (const std::exception &error) {
-            if (std::string_view(error.what()) == "STOP_TIMEOUT")
+            if (!fallback_error(error.what()))
                 throw;
-            failures_.push_back({{"stage", "connect"}, {"reason", error.what()}});
+            record_failure({{"stage", "connect"}, {"reason", error.what()}});
         }
         encode_ = true;
         return open(true);
@@ -34,9 +35,9 @@ class ScreenshotRoute {
         try {
             return capture();
         } catch (const std::exception &error) {
-            if (std::string_view(error.what()) == "STOP_TIMEOUT")
+            if (!fallback_error(error.what()))
                 throw;
-            failures_.push_back({{"stage", "capture"},
+            record_failure({{"stage", "capture"},
                                  {"backend", encode_ ? "ADB_ENCODE" : "MUMU_EXTRAS"},
                                  {"reason", error.what()}});
             if (encode_)
@@ -49,6 +50,15 @@ class ScreenshotRoute {
     }
 
   private:
+    static bool fallback_error(std::string_view reason) {
+        return reason == "ADB_CONTROLLER_CREATE_FAILED" || reason == "ADB_CAPTURE_FAILED" ||
+               reason == "ADB_CAPTURE_DECODE_FAILED" || reason == "ADB_CAPTURE_ENCODE_FAILED" ||
+               reason == "ADB_CAPTURE_SIZE_INVALID" || reason.starts_with("MUMU_EXTRAS_");
+    }
+    void record_failure(nlohmann::json failure) {
+        if (failures_.size() >= 128) failures_.erase(failures_.begin());
+        failures_.push_back(std::move(failure));
+    }
     bool encode_only_, encode_;
     nlohmann::json failures_ = nlohmann::json::array();
 };

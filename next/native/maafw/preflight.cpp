@@ -72,7 +72,7 @@ void verify_bundle(const Bundle &bundle) {
     require(count == bundle.files.size(), "BUNDLE_MANIFEST_INCOMPLETE");
 }
 
-Image validate_frame(const contracts::FrameEnvelope &frame, const contracts::FrameIdentity &current,
+void validate_frame_identity(const contracts::FrameEnvelope &frame, const contracts::FrameIdentity &current,
                      const std::string &revision) {
     const auto &id = frame.identity;
     require(!id.device_id.empty() && !id.game_id.empty() && !id.viewport_id.empty() &&
@@ -103,6 +103,11 @@ Image validate_frame(const contracts::FrameEnvelope &frame, const contracts::Fra
             "FRAME_ASPECT_MISMATCH");
     require(!frame.encoded_image.empty() && frame.encoded_image.size() <= 64 * 1024 * 1024,
             "FRAME_BYTES_INVALID");
+ }
+Image validate_frame(const contracts::FrameEnvelope &frame, const contracts::FrameIdentity &current,
+                     const std::string &revision) {
+    validate_frame_identity(frame, current, revision);
+    const auto &id = frame.identity;
     // SDK 的 SetEncoded(true) 不保证解码出像素，必须继续核对尺寸、通道和指针。
     auto image = image_buffer();
     auto owned = frame.encoded_image;

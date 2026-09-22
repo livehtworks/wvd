@@ -82,8 +82,7 @@ void RunCoordinator::validate(const RunDefinition &d, const devices::DeviceBacke
     registry_->validate(d.initial);
     if (d.initial.lifecycle) {
         const auto &plan = *d.initial.lifecycle;
-        if (plan.attempt != 1 || !plan.target.vpn_required || plan.operations.size() != 1 ||
-            plan.operations.front() != devices::LifecycleOperation::EnsureVpn)
+        if (!devices::initial_lifecycle_plan(plan))
             throw std::runtime_error("LIFECYCLE_REQUIRES_RECOVERY_BOUNDARY");
         if ((!backend.offline() && !backend.verified_access()) || p.observed_read_only_viewport ||
             plan.target.device_id != p.device_id || plan.target.application_id != p.application_id)
@@ -173,6 +172,12 @@ RunSnapshot RunCoordinator::start(RunDefinition definition,
         return snapshot();
     }
     return snapshot_;
+}
+std::optional<RunSnapshot> RunCoordinator::request_snapshot(const std::string &request_id) const {
+    std::lock_guard lock(mutex_);
+    const auto it = requests_.find(request_id);
+    if (it == requests_.end()) return std::nullopt;
+    return request_id == last_request_ ? snapshot_ : it->second.result;
 }
 void RunCoordinator::record_failure(const std::string &reason) {
     std::lock_guard lock(mutex_);
@@ -453,7 +458,7 @@ void RunCoordinator::finish() noexcept {
             candidate.state = RunState::Completed;
         else if (last_result_.end == SessionEnd::RecoveryRequired) {
             candidate.state = RunState::Interrupted;
-            candidate.reason = "RECOVERY_REQUIRED";
+            candidate.reason = last_result_.reason.empty() ? "RECOVERY_REQUIRED" : last_result_.reason;
         } else {
             candidate.state = RunState::Failed;
             candidate.reason = last_result_.reason;

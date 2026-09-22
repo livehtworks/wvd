@@ -25,6 +25,7 @@ class RunCoordinator {
     ~RunCoordinator();
     contracts::RunSnapshot start(RunDefinition definition,
                                  std::shared_ptr<devices::DeviceBackend> backend);
+    std::optional<contracts::RunSnapshot> request_snapshot(const std::string &request_id) const;
     void request_stop();
     contracts::RunSnapshot snapshot() const;
     bool wait_for(std::chrono::milliseconds duration);

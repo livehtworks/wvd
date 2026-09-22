@@ -83,6 +83,7 @@ function renameStrategy(group: StrategyGroup, value: string) {
   const old = group.group_name;
   const name = value.trim();
   if (!name || (name !== old && strategyNames.value.includes(name))) return;
+  state.noteRename(old, name);
   group.group_name = name;
   if (!state.draft) return;
   if (state.draft.DEFAULT_OVERALL_STRATEGY === old) state.draft.DEFAULT_OVERALL_STRATEGY = name;
@@ -253,9 +254,10 @@ function updateSkill(skill: SkillSetting, key: keyof SkillSetting, event: Event)
       </details>
 
       <section class="run-section" aria-label="运行结果">
+        <div v-if="state.runError" class="notice error" role="alert">{{ state.runError }}</div>
         <header><div><h2>运行结果</h2><span>{{ state.run?.run_id ?? '当前没有运行' }}</span></div><div class="command-row"><button class="button run" :disabled="state.runActive || state.dirty || !state.device?.connected || !state.draft?.FARM_TARGET" @click="state.startSelectedTask"><Play :size="16" />开始任务</button><button class="button danger" :disabled="!state.runActive" @click="state.requestStop"><CircleStop :size="16" />停止</button></div></header>
         <div v-if="state.error" class="notice error" role="alert">{{ state.error }}</div>
-        <div class="run-grid"><div><span>状态</span><strong>{{ state.run?.state ?? 'Idle' }}</strong></div><div><span>任务 / 步骤</span><strong>{{ state.run?.task_name ?? '—' }} / {{ state.run?.step_name ?? '—' }}</strong></div><div><span>耗时</span><strong>{{ state.run?.elapsed_seconds ?? 0 }} 秒</strong></div><div><span>结果</span><strong>{{ state.run?.result ?? '—' }}</strong></div></div>
+        <div class="run-grid"><div><span>状态</span><strong>{{ state.runLabel }}</strong></div><div><span>任务 / 步骤</span><strong>{{ state.run?.task_name ?? '—' }} / {{ state.run?.step_name ?? '—' }}</strong></div><div><span>耗时</span><strong>{{ state.run?.elapsed_seconds ?? 0 }} 秒</strong></div><div><span>结果</span><strong>{{ state.run?.result ?? '—' }}</strong></div></div>
         <div v-if="state.run?.error_code || state.run?.message" class="notice error">{{ state.run.error_code }}: {{ state.run.message }}</div>
         <div v-if="state.run?.statistics" class="statistics"><span v-for="(value, key) in state.run.statistics" :key="key"><small>{{ key }}</small><strong>{{ value }}</strong></span></div>
         <div v-if="state.run?.diagnostics?.length" class="diagnostics"><figure v-for="item in state.run.diagnostics" :key="item.id ?? item.image_url ?? item.label"><img v-if="item.image_url" :src="item.image_url" :alt="item.label ?? '诊断截图'" /><div v-else class="diagnostic-placeholder">{{ item.status ?? '未保存图片' }}</div><figcaption><strong>{{ item.label ?? item.id }}</strong><span v-if="item.stage || item.node_id">{{ item.stage ?? '阶段未知' }} · {{ item.node_id ?? '节点未知' }}</span><span v-if="item.frame_age_ms !== undefined">帧龄 {{ item.frame_age_ms }} ms</span><span v-if="item.error">{{ item.error }}</span></figcaption></figure></div>

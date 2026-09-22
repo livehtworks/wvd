@@ -277,6 +277,10 @@ J evaluate_uncached(const maafw::Bundle &bundle, maafw::RecognitionPixels pixels
         check((explicit_roi & allowed_rect) == explicit_roi, "WVD_ROI_OUTSIDE_SCOPE");
     }
     auto mode = p.at("mode").get<std::string>();
+    if (mode == "ocr") {
+        check(!p.contains("preprocess"), "WVD_OCR_PREPROCESS_UNSUPPORTED");
+        return scope.recognize_ocr(p);
+    }
     if (mode == "task_stop") {
         check(p.size() == 1, "WVD_TASK_STOP_PARAMETERS_INVALID");
         const auto policy = recovery::dialogue_policy_from_name(bound.value("dialogue_task", ""));

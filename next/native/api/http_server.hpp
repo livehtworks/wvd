@@ -11,10 +11,11 @@ class HttpServer {
     ~HttpServer();
     void start();
     void stop();
+    void join_workers();
     unsigned short port() const;
 
   private:
     struct Impl;
-    std::unique_ptr<Impl> impl_;
+    std::shared_ptr<Impl> impl_;
 };
 } // namespace wvd::api

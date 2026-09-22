@@ -19,6 +19,7 @@ inline nlohmann::json blocking_probes(bool include_party_prompts = true) {
     add("totitle");
     add("resume");
     add("boot_attention", {250, 430, 420, 220}, .86);
+    add("boot_attention_zh", {250, 430, 420, 220}, .86);
     add("boot_title_logo", {100, 300, 700, 470}, .86);
     // Pause 可能保留底层战斗/地图图标，必须先作为覆盖层处理。
     probes.push_back({{"mode", "pause"}});
@@ -39,7 +40,8 @@ inline nlohmann::json boot_probes(bool transient) {
     using J = nlohmann::json;
     J probes = transient ? blocking_probes() : J::array();
     for (auto name : {"Inn", "dungFlag", "worldmapflag", "openworldmap", "returnText", "returntoTown",
-                       "mapFlag", "chestFlag", "whowillopenit", "fishing/cast", "fishing/striking", "fishing/CloseFishInfo"})
+                       "mapFlag", "chestFlag", "whowillopenit", "fishing/cast", "fishing/striking", "fishing/CloseFishInfo",
+                       "cursedWheelTitle", "cursedWheel", "ruins"})
         probes.push_back({{"mode", "template"}, {"image", name}, {"threshold", .8}});
     probes.push_back({{"mode", "combat_active"}});
     return probes;

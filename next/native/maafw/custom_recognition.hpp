@@ -13,6 +13,10 @@ class CustomRecognitionScope {
   public:
     contracts::Box allowed_roi() const { return allowed_roi_; }
     std::uint64_t invocation_id() const { return invocation_id_; }
+    nlohmann::json recognize_ocr(const nlohmann::json &parameters) const {
+        if (!ocr_) throw std::runtime_error("CUSTOM_OCR_CONTEXT_UNAVAILABLE");
+        return ocr_(parameters);
+    }
     // 条件只能读取本次所属 Run 的值副本；不能修改状态或保存运行对象。
     nlohmann::json business_summary() const {
         if (!business_)
@@ -23,11 +27,13 @@ class CustomRecognitionScope {
   private:
     friend class MaaGateway;
     CustomRecognitionScope(contracts::Box roi, std::uint64_t id,
-                           const contracts::BusinessRunState *business = nullptr)
-        : allowed_roi_(roi), invocation_id_(id), business_(business) {}
+                           const contracts::BusinessRunState *business = nullptr,
+                           std::function<nlohmann::json(const nlohmann::json &)> ocr = {})
+        : allowed_roi_(roi), invocation_id_(id), business_(business), ocr_(std::move(ocr)) {}
     const contracts::Box allowed_roi_;
     const std::uint64_t invocation_id_;
     const contracts::BusinessRunState *business_;
+    const std::function<nlohmann::json(const nlohmann::json &)> ocr_;
 };
 // 回调只借用本次像素；缓存只属于此 Gateway，不可存放 image 指针。
 struct RecognitionPixels {

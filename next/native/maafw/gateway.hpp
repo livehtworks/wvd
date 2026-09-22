@@ -99,7 +99,11 @@ class MaaGateway {
     contracts::BusinessRunState *business_;
     RecognitionCache recognition_cache_;
     std::mutex recognition_mutex_;
+    std::mutex native_ocr_mutex_;
     std::mutex direct_recognition_mutex_;
+    Image decoded_frame_{nullptr, MaaImageBufferDestroy};
+    std::string decoded_frame_key_;
+    std::vector<std::uint8_t> decoded_frame_bytes_;
     std::uint64_t recognition_invocation_{};
     struct VerifiedInvocation {
         std::string token, binding;

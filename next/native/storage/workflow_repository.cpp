@@ -1,4 +1,5 @@
 #include "workflow_repository.hpp"
+#include "platform/windows/bundle_lease.hpp"
 
 #include "games/wvd/tasks/author_workflow.hpp"
 #include "platform/windows/file_digest.hpp"
@@ -134,7 +135,7 @@ WorkflowRepository::WorkflowRepository(std::filesystem::path root)
 std::filesystem::path WorkflowRepository::path_for(const std::string &flow_id) const {
     if (!identifier(flow_id))
         fail("WORKFLOW_ID_INVALID", flow_id);
-    const auto result = root_ / std::filesystem::path(flow_id + ".json");
+    const auto result = root_ / platform::BundleLease::checked_relative(flow_id + ".json");
     if (result.parent_path() != root_)
         fail("WORKFLOW_PATH_ESCAPE", flow_id);
     return result;

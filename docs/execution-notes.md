@@ -77,6 +77,8 @@
 - 动态临时 JSON 不得被 AssetResolver 保存为引用；别名表由解析器持有自己的不可变值。不同 Bundle 同名资源必须按 revision 与规范路径隔离。
 - M3 真设备检查遇到未知场景不打开 VPN/游戏、不试点找按钮。系统导航没有前置安全证明时单列 BLOCKED；真实截图不得冒充 NEXT/Pause 质量样本。
 - Android 15 的 `dumpsys window windows` 子段可能只有窗口列表而无 mCurrentFocus，前台观测应使用完整 `dumpsys window` 并验证焦点字段。不能将字段缺失当成默认游戏前台；本轮实际导致安全 Failed，修正后通过。
+- MuMu Android 15 上 `uiautomator dump` 可能直接 `Segmentation fault`。Clash 保底只能在 VPN 未连接、前台包和 `topResumedActivity` 精确为 Clash 主界面、帧尺寸为实测的 `900x1600` 或 `1600x900` 时单击一次状态卡片中心，并立即复核 VPN；系统授权页和其他 Activity 不使用坐标保底。
+- `MUMU_EXTRAS` 的帧方向取决于当前应用，不能从模拟器窗口外观推断。Clash 本轮真实帧为 `900x1600`，游戏诊断帧也为 `900x1600`；输入门禁使用实际捕获尺寸。
 - 模拟器启动后出现过一次未知 Python 控制者阻断，具体进程身份未归因；保留严格拒绝。后续排查应记录被拒 PID/来源，不可直接加宽白名单或杀未知进程。
 
 ## Next M3 修复与 M4 数据验证

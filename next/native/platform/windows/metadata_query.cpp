@@ -12,6 +12,7 @@ namespace wvd::platform {
 namespace {
 using Clock = std::chrono::steady_clock;
 std::atomic<std::uint64_t> pipe_sequence{};
+std::atomic<unsigned> pending_metadata_cleanup{};
 struct Handle {
     HANDLE value{};
     ~Handle() { reset(); }
@@ -195,6 +196,7 @@ class MetadataCleanupOwner {
     void adopt(std::unique_ptr<MetadataQuery::Impl> value) {
         std::lock_guard lock(mutex_);
         pending_.push_back(std::move(value));
+        ++pending_metadata_cleanup;
         cv_.notify_one();
     }
   private:
@@ -205,7 +207,8 @@ class MetadataCleanupOwner {
                          [&] { return !pending_.empty() || stop.stop_requested(); });
             for (auto it = pending_.begin(); it != pending_.end();) {
                 const bool quiet = finish_impl(**it, std::chrono::milliseconds(20));
-                it = quiet ? pending_.erase(it) : std::next(it);
+                if (quiet) { it = pending_.erase(it); --pending_metadata_cleanup; }
+                else ++it;
             }
             if (stop.stop_requested() && pending_.empty())
                 return;
@@ -221,7 +224,9 @@ MetadataCleanupOwner &cleanup_owner() {
     return owner;
 }
 } // namespace
-MetadataQuery::MetadataQuery() : impl_(std::make_unique<Impl>()) {}
+MetadataQuery::MetadataQuery() : impl_(std::make_unique<Impl>()) {
+    check(pending_metadata_cleanup.load() == 0, "METADATA_CLEANUP_PENDING");
+}
 MetadataQuery::~MetadataQuery() {
     cancel();
     if (impl_ && !finish_cleanup(std::chrono::milliseconds(20)))

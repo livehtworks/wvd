@@ -39,5 +39,16 @@ endif()
 if(NOT WVD_BUILD_M4)
   message(FATAL_ERROR "The Windows functional application requires WVD_BUILD_M4=ON")
 endif()
-target_sources(automationd PRIVATE native/app/application.cpp)
-target_link_libraries(automationd PRIVATE wvd_business wvd_vision wvd_device shell32 comdlg32)
+add_library(wvd_application native/app/application.cpp)
+target_link_libraries(wvd_application PUBLIC wvd_http wvd_business wvd_vision wvd_device
+  PRIVATE shell32 comdlg32)
+target_compile_options(wvd_application PRIVATE /utf-8 /W4 /EHsc)
+target_link_libraries(automationd PRIVATE wvd_application)
+
+# 只走正式 Application 装配函数，验证启动计划和代表大图的发布闭包；不连接设备。
+add_executable(test_t0_startup tests/native/test_t0_startup.cpp)
+target_link_libraries(test_t0_startup PRIVATE wvd_application)
+target_compile_options(test_t0_startup PRIVATE /utf-8 /W4 /EHsc)
+target_link_options(test_t0_startup PRIVATE
+  "/MANIFEST:EMBED" "/MANIFESTINPUT:${CMAKE_CURRENT_SOURCE_DIR}/native/platform/windows/app.manifest")
+set_target_properties(test_t0_startup PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/t0")

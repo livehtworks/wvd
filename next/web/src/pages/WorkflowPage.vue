@@ -167,10 +167,10 @@ function changeBusiness(event: Event) {
   state.checkpoint();
   const binding = (event.target as HTMLSelectElement).value;
   state.selectedNode.data.parameters = binding === "chest"
-    ? { binding, condition: { mode: "combat_active" }, preferred: 0, seed: 1 }
+    ? { binding, preferred: 0, quick: false, seed: 1 }
     : binding === "confirm"
       ? { binding, operation_id: "custom-confirm", event: "target_completed", condition: { mode: "target_marker" }, expected_step: 0 }
-      : { binding: "combat", condition: { mode: "combat_active" }, arguments: { operation: "auto_confirmed", index: 0 } };
+      : { binding: "combat" };
 }
 function setRepeat(event: Event) {
   if (!state.selectedNode) return;
@@ -213,6 +213,8 @@ function edgeLabel(edge: WorkflowEdge) { return `${edge.data?.kind ?? "sequence"
 
 <template>
   <main class="workflow-page">
+    <section class="notice" aria-label="流程运行状态" role="status">{{ state.runLabel }}</section>
+    <div v-if="state.runError" class="notice error" role="alert">{{ state.runError }}</div>
     <header class="editor-toolbar">
       <div class="workflow-picker">
         <select aria-label="流程" :value="state.current?.id ?? ''" @change="state.open(($event.target as HTMLSelectElement).value)">
@@ -283,7 +285,7 @@ function edgeLabel(edge: WorkflowEdge) { return `${edge.data?.kind ?? "sequence"
             <label v-if="param('operation') === 'swipe'" class="field"><span>持续时间 (ms)</span><input :value="Number(param('duration_ms') ?? 400)" type="number" min="1" @change="numberParam('duration_ms', $event)" /></label>
           </div>
           <div v-else-if="nodeKind === 'wait'" class="inspector-group"><h3>等待</h3><label class="field"><span>时长 (ms)</span><input :value="Number(param('duration_ms') ?? 500)" type="number" min="1" max="10000" @change="numberParam('duration_ms', $event)" /></label></div>
-          <div v-else-if="nodeKind === 'business'" class="inspector-group"><h3>业务子流程</h3><label class="field"><span>类型</span><select :value="String(param('binding') ?? 'combat')" :disabled="param('binding') === 'task_stage'" @change="changeBusiness"><option value="combat">战斗</option><option value="chest">开箱</option><option value="confirm">业务确认</option><option value="task_stage">现有任务阶段</option></select></label><template v-if="param('binding') === 'task_stage'"><label class="field"><span>任务</span><input :value="String(param('task_id') ?? '')" readonly /></label><label class="field"><span>阶段</span><select :value="String(param('stage') ?? '')" @change="textParam('stage', $event)"><option value="prepare">入本准备与补给</option><option value="enter">进入地下城</option><option value="traverse">路线、战斗与开箱</option></select></label></template><label v-if="param('binding') === 'chest'" class="field"><span>开箱角色</span><input :value="Number(param('preferred') ?? 0)" type="number" min="0" max="6" @change="numberParam('preferred', $event)" /></label><label v-if="param('binding') === 'confirm'" class="field"><span>确认事件</span><input :value="String(param('event') ?? '')" @change="textParam('event', $event)" /></label></div>
+          <div v-else-if="nodeKind === 'business'" class="inspector-group"><h3>业务子流程</h3><label class="field"><span>类型</span><select :value="String(param('binding') ?? 'combat')" :disabled="param('binding') === 'task_stage'" @change="changeBusiness"><option value="combat">完整战斗</option><option value="chest">完整开箱</option><option value="confirm">业务确认</option><option value="task_stage">现有任务阶段</option></select></label><template v-if="param('binding') === 'task_stage'"><label class="field"><span>任务</span><input :value="String(param('task_id') ?? '')" readonly /></label><label class="field"><span>阶段</span><select :value="String(param('stage') ?? '')" @change="textParam('stage', $event)"><option value="prepare">入本准备与补给</option><option value="enter">进入地下城</option><option value="traverse">路线、战斗与开箱</option></select></label></template><template v-if="param('binding') === 'chest'"><label class="field"><span>开箱角色</span><input :value="Number(param('preferred') ?? 0)" type="number" min="0" max="6" @change="numberParam('preferred', $event)" /></label><label class="check-row"><input :checked="Boolean(param('quick'))" type="checkbox" @change="boolParam('quick', $event)" /><span>快速解除陷阱</span></label></template><label v-if="param('binding') === 'confirm'" class="field"><span>确认事件</span><input :value="String(param('event') ?? '')" @change="textParam('event', $event)" /></label></div>
           <div v-else-if="nodeKind === 'end'" class="inspector-group"><h3>结束</h3><label class="field"><span>结果</span><select :value="String(param('outcome') ?? 'success')" @change="textParam('outcome', $event)"><option value="success">成功</option><option value="failure">失败</option></select></label><label v-if="param('outcome') === 'failure'" class="field"><span>原因</span><input :value="String(param('reason') ?? 'workflow_failed')" @change="textParam('reason', $event)" /></label></div>
           <div v-if="nodeKind !== 'end'" class="inspector-group"><h3>控制</h3><label class="field"><span>有限重复次数</span><input :value="state.selectedNode.repeat_limit ?? 1" type="number" min="1" max="256" @change="setRepeat" /></label></div>
           <div v-if="nodeKind === 'recognition'" class="inspector-group"><h3>试识别</h3>

@@ -14,6 +14,8 @@ void register_recovery(runtime::BehaviorRegistry &registry);
 contracts::BehaviorBinding recovery_binding(const devices::LifecycleTarget &target,
                                               const nlohmann::json &frozen_profile,
                                               bool force_restart_instance = false);
+void bind_initial_startup(runtime::RunDefinition &run, const devices::LifecycleTarget &target,
+                          const nlohmann::json &frozen_profile);
 void bind_initial_vpn(runtime::RunDefinition &run, const devices::LifecycleTarget &target,
                       const nlohmann::json &frozen_profile);
 }

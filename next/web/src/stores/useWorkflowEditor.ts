@@ -1,4 +1,5 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue";
+import { runBusy, displayRunState } from "./runStatus";
 import {
   createWorkflow, deleteWorkflow, formatApiError, importTaskWorkflow, listWorkflows, readCatalog, readCurrentRun,
   readWorkflow, runWorkflow, saveWorkflow, stopRun,
@@ -29,6 +30,10 @@ export function useWorkflowEditor() {
   const history = ref<Snapshot[]>([]);
   const future = ref<Snapshot[]>([]);
   const run = ref<RunState>();
+  const starting = ref(false);
+  const linkError = ref("");
+  let pendingRequest: { id: string; fingerprint: string } | undefined;
+  let polling = false;
   const loading = ref(false);
   const saving = ref(false);
   const error = ref("");
@@ -38,7 +43,9 @@ export function useWorkflowEditor() {
   const dirty = computed(() => Boolean(current.value) && signature(cleanWorkflow(current.value!)) !== savedSignature.value);
   const selectedNode = computed(() => current.value?.nodes.find((node) => node.id === selectedNodeId.value));
   const selectedEdge = computed(() => current.value?.edges.find((edge) => edge.id === selectedEdgeId.value));
-  const runActive = computed(() => ["Preparing", "Running", "Recovering", "StopRequested"].includes(run.value?.state ?? ""));
+  const runActive = computed(() => starting.value || runBusy(run.value));
+  const runLabel = computed(() => starting.value ? "提交启动请求" : displayRunState(run.value));
+  const runError = computed(() => run.value?.submission?.error ?? linkError.value);
   const activeNodeId = computed(() => run.value?.current_node_id ?? run.value?.failed_node_id ?? "");
 
   function snapshot(): Snapshot | undefined {
@@ -156,32 +163,52 @@ export function useWorkflowEditor() {
     } catch (reason) { error.value = formatApiError(reason); }
   }
   async function runSaved(selectedOnly = false) {
-    if (!current.value) return;
+    if (!current.value || runActive.value || starting.value) return;
     if (dirty.value || isNew.value) {
       error.value = "WORKFLOW_UNSAVED: 请先保存当前流程，运行只使用服务端保存版本";
       return;
     }
+    const fingerprint = JSON.stringify([current.value.id, current.value.revision,
+      selectedOnly, selectedOnly ? selectedNodeId.value : null]);
+    if (!pendingRequest || pendingRequest.fingerprint !== fingerprint)
+      pendingRequest = { id: crypto.randomUUID(), fingerprint };
+    starting.value = true;
     error.value = "";
     try {
-      run.value = await runWorkflow(current.value.id, selectedOnly
-        ? { mode: "selected_node", node_id: selectedNodeId.value, revision: current.value.revision }
-        : { mode: "workflow", revision: current.value.revision });
+      await runWorkflow(current.value.id, {
+        mode: selectedOnly ? "selected_node" : "workflow",
+        ...(selectedOnly ? { node_id: selectedNodeId.value } : {}),
+        revision: current.value.revision, request_id: pendingRequest.id,
+      });
+      run.value = await readCurrentRun();
+      notice.value = "流程启动已接收，查看真实运行/准备状态";
     } catch (reason) { error.value = formatApiError(reason); }
+    finally { starting.value = false; }
   }
   async function requestStop() {
-    if (!run.value?.run_id) return;
-    try { run.value = await stopRun(run.value.run_id); }
+    if (!run.value?.run_id && !pendingRequest && !run.value?.submission?.request_id) return;
+    try { run.value = await stopRun(run.value?.run_id,
+      run.value?.submission?.state === "preparing" ? run.value.submission.request_id :
+        starting.value ? pendingRequest?.id : undefined); }
     catch (reason) { error.value = formatApiError(reason); }
   }
   async function pollRun() {
-    try { run.value = await readCurrentRun(); } catch { /* 轮询失败不覆盖编辑错误。 */ }
+    if (polling) return;
+    polling = true;
+    try {
+      run.value = await readCurrentRun();
+      linkError.value = "";
+      if (pendingRequest && run.value.submission?.request_id === pendingRequest.id &&
+          ["submitted", "failed", "cancelled"].includes(run.value.submission?.state ?? "") && !runBusy(run.value)) pendingRequest = undefined;
+    } catch (reason) { linkError.value = `状态连接中断，不能确认已停止：${formatApiError(reason)}`; }
+    finally { polling = false; }
   }
   onMounted(() => { void load(); pollHandle = window.setInterval(pollRun, 1000); });
   onBeforeUnmount(() => window.clearInterval(pollHandle));
 
   return reactive({
     catalog, workflows, current, isNew, selectedNodeId, selectedEdgeId, selectedNode, selectedEdge,
-    history, future, run, loading, saving, error, notice, dirty, runActive, activeNodeId,
+    history, future, run, loading, saving, error, notice, dirty, runActive, runLabel, runError, starting, activeNodeId,
     checkpoint, undo, redo, load, open, createBlank, copyCurrent, importTask, save, reload, remove, runSaved, requestStop,
   });
 }

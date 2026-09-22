@@ -1,5 +1,8 @@
 #pragma once
 #include "buffers.hpp"
+#include "devices/android_probe.hpp"
+#include <mutex>
+#include <atomic>
 #include "devices/backend.hpp"
 #include "devices/screenshot_route.hpp"
 #include <json.hpp>
@@ -26,12 +29,16 @@ class AdbBackend final : public devices::DeviceBackend, public devices::Lifecycl
     bool execute_lifecycle(devices::LifecycleOperation operation,
                            const devices::LifecycleTarget &target,
                            const std::function<bool()> &cancelled) override;
-    nlohmann::json diagnostics() const {
-        return {{"connections", diagnostics_}, {"failures", route_.failures()}};
-    }
+    nlohmann::json diagnostics() const;
+    // 仅在 Application 已排除活动 Run/设备作业后，从已保存的冻结配置更新。
+    void set_vpn_required(bool required);
     devices::LifecycleTarget lifecycle_target() const;
 
   private:
+    void record(nlohmann::json value);
+    devices::android::ShellReply probe_reply(const std::string &command, int timeout = 5000);
+    bool vpn_ui_step(const std::string &package, bool &start_clicked,
+                     const std::function<bool()> &cancelled);
     bool open(bool encode);
     bool wait(MaaCtrlId id);
     std::string foreground_probe();
@@ -44,7 +51,9 @@ class AdbBackend final : public devices::DeviceBackend, public devices::Lifecycl
     bool launch_instance(const std::function<bool()> &cancelled);
     bool restart_instance(const std::function<bool()> &cancelled);
     devices::RawFrame capture_current();
+    mutable std::mutex diagnostics_mutex_;
     nlohmann::json binding_, diagnostics_ = nlohmann::json::array();
+    nlohmann::json route_failures_ = nlohmann::json::array();
     bool verified_{}, encode_only_{}, encode_{};
     devices::ScreenshotRoute route_;
     std::uint64_t connection_generation_{};

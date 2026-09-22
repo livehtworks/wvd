@@ -29,13 +29,13 @@ J state_json(const LifecycleObservation &state) {
 }
 bool precondition(O operation, const LifecycleObservation &s) {
     if (operation == O::RestartInstance)
-        return true; // 指定实例可以从已关闭状态恢复；身份仍必须匹配。
+        return false; // 实例重启不属于本次自动恢复；无独立故障证据和人工授权一律拒绝。
     if (operation == O::Reconnect)
         return s.instance_running;
     if (!s.instance_running || !s.connected)
         return false;
     if (operation == O::StartApplication)
-        return !s.application_running && (!s.target.vpn_required || s.vpn_ready);
+        return !s.application_foreground && (!s.target.vpn_required || s.vpn_ready);
     return true;
 }
 bool already_done(O operation, const LifecycleObservation &s) {
@@ -110,7 +110,10 @@ LifecycleEnd execute_lifecycle_plan(const LifecyclePlan &plan, LifecyclePort &po
             return LifecycleEnd::Cancelled;
         event("lifecycle.backend_called", {{"operation", operation_name}});
         const auto deadline = std::chrono::steady_clock::now() + plan.step_timeout;
-        if (!port.execute_lifecycle(operation, plan.target, cancelled)) {
+        const auto stop_or_expired = [&] {
+            return cancelled() || std::chrono::steady_clock::now() >= deadline;
+        };
+        if (!port.execute_lifecycle(operation, plan.target, stop_or_expired)) {
             if (cancelled())
                 return LifecycleEnd::Cancelled;
             event("lifecycle.retry_required", {{"operation", operation_name}, {"reason", "BACKEND_RETURNED_FALSE"}});
@@ -120,6 +123,7 @@ LifecycleEnd execute_lifecycle_plan(const LifecyclePlan &plan, LifecyclePort &po
         do {
             if (cancelled())
                 return LifecycleEnd::Cancelled;
+            if (std::chrono::steady_clock::now() >= deadline) break;
             const auto after = observe();
             if (postcondition(operation, before, after)) {
                 event("lifecycle.confirmed", {{"operation", operation_name}, {"skipped", false}, {"state", state_json(after)}});

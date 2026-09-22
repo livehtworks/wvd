@@ -92,7 +92,13 @@ std::optional<runtime::SessionDefinition> decide(const contracts::SessionResult 
             throw std::runtime_error("LEAP_WAIT_SLICE_BUDGET_EXHAUSTED");
         return leap_wait_session(previous);
     }
-    const bool continuing = previous.lifecycle && result.business.at("lifecycle_recovery_active").get<bool>();
+    // 视觉未知、NoHit、缺节点/素材、启动超时、VPN等待不是设备故障。
+    // 只有专用 Pause 检测完整确认的冻结才允许一次应用级恢复。
+    // 连接故障由用户可见错误和下一次显式启动处理，不用重启猜原因。
+    if (result.reason != "pause.physics_frozen" ||
+        (previous.lifecycle && !devices::initial_lifecycle_plan(*previous.lifecycle)))
+        return std::nullopt;
+    const bool continuing = false;
     const unsigned attempt = continuing ? previous.lifecycle->attempt + 1 : 1;
     if (attempt > 3)
         return std::nullopt;
@@ -100,17 +106,8 @@ std::optional<runtime::SessionDefinition> decide(const contracts::SessionResult 
     plan.target = {p.at("device_id"), p.at("instance_id"), p.at("application_id"),
                     p.at("vpn_application_id"), p.at("vpn_required")};
     plan.attempt = attempt;
-    bool force = p.at("force_restart_instance").get<bool>();
-    if (attempt == 1 && result.business.is_object()) {
-        if (result.business.value("kind", "") != "wvd" || !result.business.at("crashes").is_number_unsigned())
-            throw std::runtime_error("WVD_RECOVERY_STATE_INVALID");
-        const auto limit = p.at("max_crashes").get<std::int64_t>();
-        force = force || limit < 0 || result.business.at("crashes").get<std::size_t>() >= static_cast<std::size_t>(limit);
-    }
-    if (attempt == 3 || (attempt == 1 && force))
-        plan.operations.push_back(O::RestartInstance);
-    else if (attempt == 2)
-        plan.operations.push_back(O::Reconnect);
+    // 保留实例重启实现供以后独立、显式授权的操作使用；本恢复策略不生成它。
+    // MAX_CRASH_LIMIT/force 不是“当前实例故障”的证据，不能授予重启权限。
     // VPN 不是通用点击许可；它由专属端口证明状态。开着则跳过，不重复切换。
     if (plan.target.vpn_required)
         plan.operations.push_back(O::EnsureVpn);
@@ -158,8 +155,13 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, Dialogue
     J recognized = common ? C::any({J{{"mode", "boot_post"}}, panel}) : J{{"mode", "boot_post"}};
     if (!task_stop.is_null())
         recognized = C::any({task_stop, recognized});
-    J entry = common ? J{"Download", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title", "Pause", "Death", "Sandman", "Blessing", "Karma", "Dialogue", "Defeat", "Ready"}
-                     : J{"Ready", "Download", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title", "Pause", "Sandman", "Blessing", "Karma", "Dialogue"};
+    // 启动过程本身包含多个合法中间页。一次点击只需要证明当前提示已经消失，
+    // 或者已直接到达稳定业务页；不能要求“免责声明 -> 标题 -> 加载”在一次输入后跳完。
+    const auto progressed = [&](const J &current) {
+        return C::any({recognized, C::absent(current)});
+    };
+    J entry = common ? J{"Download", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title", "Pause", "Death", "Sandman", "Blessing", "Karma", "Dialogue", "Defeat", "Ready", "Poll"}
+                     : J{"Ready", "Download", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title", "Pause", "Sandman", "Blessing", "Karma", "Dialogue", "Poll"};
     if (policy != DialoguePolicy::Default) {
         entry.insert(entry.begin(), "SpecialDialogue");
         const auto special = graph.define_child("SpecialChoice", choose_special_dialogue(policy));
@@ -174,6 +176,9 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, Dialogue
         graph.observe("TaskStop", task_stop, {"Terminal"});
     }
     graph.route("Entry", entry);
+    // 应用刚切到前台时可能仍是黑帧，免责声明也可能在首轮候选扫描后才出现。
+    // NoHit 只做有界等待后重扫；任何识别 Error 仍通过各节点 on_error 立即退出。
+    graph.wait("Poll", 500, {"Entry"});
     const auto dialogue = graph.define_child("DefaultDialogue", choose_default_dialogue());
     graph.observe("Dialogue", {{"mode", "default_dialogue"}}, {"ChooseDialogue"});
     graph.call_child("ChooseDialogue", dialogue, {"Entry"});
@@ -211,18 +216,18 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, Dialogue
         graph.confirm("ConfirmDeathCleared", "party.death.clear", "party_death_cleared", ready, {"Terminal"});
     }
     if (allow_download)
-        graph.click("Download", download, download, recognized, {"Entry"});
+        graph.click("Download", download, download, progressed(download), {"Entry"});
     else {
         graph.observe("Download", download, {"DownloadBlocked"});
         graph.recovery("DownloadBlocked", "boot.download_permission_missing");
     }
-    graph.click("RetryBlank", blank, blank, recognized, {"Entry"}, {0, 103});
-    graph.click("Retry", retry, retry, recognized, {"Entry"});
-    graph.fixed_click("RetryLow", low_retry, recognized, {450, 900}, {"Entry"});
-    graph.click("ReturnTitle", to_title, to_title, recognized, {"Entry"});
-    graph.click("Resume", resume, resume, recognized, {"Entry"});
-    graph.fixed_click("Attention", attention, recognized, {450, 1450}, {"Entry"});
-    graph.fixed_click("Title", title, recognized, {450, 1450}, {"Entry"});
+    graph.click("RetryBlank", blank, blank, progressed(blank), {"Entry"}, {0, 103});
+    graph.click("Retry", retry, retry, progressed(retry), {"Entry"});
+    graph.fixed_click("RetryLow", low_retry, progressed(low_retry), {450, 900}, {"Entry"});
+    graph.click("ReturnTitle", to_title, to_title, progressed(to_title), {"Entry"});
+    graph.click("Resume", resume, resume, progressed(resume), {"Entry"});
+    graph.fixed_click("Attention", attention, progressed(attention), {450, 1450}, {"Entry"});
+    graph.fixed_click("Title", title, progressed(title), {450, 1450}, {"Entry"});
     const J pause{{"mode", "pause"}};
     graph.observe("Pause", pause, {"ResumePause0"});
     graph.hit_limit("Pause", 6);
@@ -240,7 +245,9 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, Dialogue
     graph.hit_limit("PauseCleared", 6);
     graph.observe("PauseFrozen", pause, {"PauseFrozenExit"});
     graph.recovery("PauseFrozenExit", "pause.physics_frozen");
-    graph.hit_limit("Entry", 30);
+    // 120 秒工作流总预算是最终上限；命中次数只防止 Maa 节点自身过早截断轮询。
+    graph.hit_limit("Entry", 240);
+    graph.hit_limit("Poll", 240);
     for (auto name : {"Download", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title"}) {
         if (!allow_download && std::string(name) == "Download")
             continue;
@@ -289,15 +296,19 @@ tasks::CompiledWorkflow with_boot_recovery(const tasks::CompiledWorkflow &task, 
     const auto stop = task_stop_condition(task.dialogue_policy);
     // Boot停点证明回到该任务的稳定游戏页；仍须回任务入口，由任务自身确认阶段终点。
     // 停点的boot_ready是boolean-only NoHit，不能与图片放进any后当作确认许可。
-    J confirmed{"RestartConfirmed"};
+    J confirmed{"RecoveredBoot", task_entry};
+    graph.observe("RecoveredBoot", C::business("/lifecycle_recovery_active", true),
+                  {"RestartConfirmed"});
     if (!stop.is_null()) {
-        graph.confirm("RestartAtTaskStop", "game.restart", "game_restarted", stop, {task_entry});
+        graph.confirm("RestartAtTaskStop", "game.restart", "game_restarted",
+                      C::all({C::business("/lifecycle_recovery_active", true), stop}), {task_entry});
         confirmed.insert(confirmed.begin(), "RestartAtTaskStop");
     }
     graph.confirm("RestartConfirmed", "game.restart", "game_restarted", {{"mode", "boot_ready"}}, {task_entry});
     const auto boot = graph.append("Boot", boot_workflow(allow_download, false, task.dialogue_policy), confirmed);
-    // Boot 在正常候选链不是默认动作；恢复策略只在新代次选择这个已封存入口。
-    graph.route("Entry", {task_entry, boot});
+    // 正常首段也必须先处理启动页。Task_Entry 常为 DirectHit，放在前面会使 Boot 永远不可达。
+    // 非恢复首段不执行 game_restarted，避免把首次进入误记成崩溃/重置策略。
+    graph.route("Entry", {boot});
     return graph.finish();
 }
 void register_recovery(runtime::BehaviorRegistry &registry) {
@@ -320,6 +331,19 @@ contracts::BehaviorBinding recovery_binding(const devices::LifecycleTarget &t, c
         {"application_id", t.application_id}, {"vpn_application_id", t.vpn_application_id},
         {"vpn_required", vpn}, {"force_restart_instance", force},
         {"max_crashes", profile.at("MAX_CRASH_LIMIT").get<std::int64_t>()}}};
+}
+void bind_initial_startup(runtime::RunDefinition &run, const devices::LifecycleTarget &target,
+                          const J &profile) {
+    bind_initial_vpn(run, target, profile);
+    devices::LifecyclePlan plan;
+    plan.target = target;
+    plan.target.vpn_required = profile.at("AUTO_START_CLASH").get<bool>();
+    plan.attempt = 1;
+    // 这是物理启动/前台确认的单步预算，不是识图 TTL，也不扩大图的重试次数。
+    plan.step_timeout = std::chrono::seconds{10};
+    if (plan.target.vpn_required) plan.operations.push_back(O::EnsureVpn);
+    plan.operations.push_back(O::StartApplication);
+    run.initial.lifecycle = std::move(plan);
 }
 void bind_initial_vpn(runtime::RunDefinition &run, const devices::LifecycleTarget &target, const J &profile) {
     const auto expected = recovery_binding(target, profile);

@@ -25,8 +25,7 @@ ExecutionSession::ExecutionSession(SessionDefinition definition, devices::Device
         const auto &plan = *definition_.lifecycle;
         const auto &target = plan.target;
         const bool initial_vpn = boundary == contracts::SegmentBoundary::Initial &&
-            plan.attempt == 1 && target.vpn_required && plan.operations.size() == 1 &&
-            plan.operations.front() == devices::LifecycleOperation::EnsureVpn;
+            devices::initial_lifecycle_plan(plan);
         if ((!initial_vpn && boundary != contracts::SegmentBoundary::LifecycleRecovery) ||
             (!backend.offline() && !backend.verified_access()) ||
             policy.observed_read_only_viewport || target.device_id != policy.device_id ||
@@ -82,6 +81,11 @@ void ExecutionSession::prepare_lifecycle() {
     auto *port = backend_.lifecycle_port();
     if (!port)
         throw std::runtime_error("LIFECYCLE_PORT_UNAVAILABLE");
+    if (cancelled()) throw LifecycleNotReady{};
+    // 上一有限会话已经释放 Controller；正常的新首段必须先连接，不能把“未连接”
+    // 当成游戏崩溃。connect 不得启动/重启实例，连接失败只结束当前启动。
+    if (devices::initial_lifecycle_plan(*definition_.lifecycle) && !backend_.connect())
+        throw std::runtime_error("INITIAL_DEVICE_CONNECT_FAILED");
     const auto outcome = devices::execute_lifecycle_plan(*definition_.lifecycle, *port,
         [this] { return cancelled(); }, [this](const auto &type, const auto &payload) {
             events_.emit(gate_.generation(), type, payload, true);
@@ -274,7 +278,9 @@ void ExecutionSession::execute() noexcept {
             !business_ || (checkpoint.task_id == result_.root_task_id &&
                            checkpoint.generation == gate_.generation() && checkpoint.depth == 0 &&
                            checkpoint.node == definition_.checkpoint_node);
-        if (user_stop_)
+        if (abort_)
+            result_.end = SessionEnd::Failed;
+        else if (user_stop_)
             result_.end = SessionEnd::UserStopped;
         else if (recovery_)
             result_.end = SessionEnd::RecoveryRequired;

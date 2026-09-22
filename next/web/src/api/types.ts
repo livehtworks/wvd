@@ -57,8 +57,14 @@ export interface WorkflowDefinition extends JsonObject {
   time_limit_ms?: number;
   validation_errors?: Array<{ node_id?: string; error_code: string; message: string }>;
 }
+export interface SubmissionReceipt extends JsonObject {
+  accepted: boolean; request_id: string; submission_state?: string; replayed?: boolean;
+  run_id?: string | number;
+}
 export interface RunState extends JsonObject {
-  run_id?: string; workflow_id?: string; workflow_revision?: string; state?: string; current_node_id?: string;
+  busy?: boolean; quiescent?: boolean;
+  submission?: { request_id: string; kind?: string; state?: string; error?: string | null };
+  run_id?: string | number; workflow_id?: string; workflow_revision?: string; state?: string; current_node_id?: string;
   failed_node_id?: string; task_name?: string; step_name?: string; started_at?: string; elapsed_seconds?: number;
   result?: string; error_code?: string; message?: string; statistics?: Record<string, string | number>;
   diagnostics?: Array<{ id?: string; label?: string; image_url?: string; roi?: number[]; status?: string;

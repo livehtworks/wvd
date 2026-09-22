@@ -52,8 +52,9 @@ bool GuardedAction::execute(maafw::Context &context, devices::InputGate &gate,
         auto scene =
             context.recognize(frame, maafw::parse_recognition_request(p.at("scene_recognition")));
         require_hit(scene, "SCENE_NOT_FOUND");
-        auto target =
-            context.recognize(frame, maafw::parse_recognition_request(p.at("target_recognition")));
+        auto target = p.at("target_recognition") == p.at("scene_recognition")
+            ? scene
+            : context.recognize(frame, maafw::parse_recognition_request(p.at("target_recognition")));
         require_hit(target, "TARGET_NOT_FOUND");
         if (!target.action_eligible)
             throw std::runtime_error("TARGET_REQUIRES_CONFIRMATION");

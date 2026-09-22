@@ -84,8 +84,17 @@ void rejects(Function function, const std::string &expected) {
 void compiler_case() {
     const auto compiled = wvd::games::tasks::compile_author_workflow(workflow());
     check(compiled.workflow.kind == "author.short_flow", "kind");
-    check(compiled.workflow.nodes.at("Entry").at("next") == J::array({"Author_click"}), "success order");
-    check(compiled.workflow.nodes.at("Entry").at("on_error") == J::array({"Author_failed"}), "failure order");
+    check(compiled.workflow.nodes.at("Entry").at("next") == J::array({"Author_recognize"}),
+          "entry dispatches to first recognition");
+    check(compiled.workflow.nodes.at("Author_recognize").at("next") ==
+              J::array({"Author_click"}),
+          "first recognition success order");
+    check(compiled.workflow.nodes.at("Author_recognize").at("on_error") ==
+              J::array({"Author_failed"}),
+          "first recognition failure order");
+    check(compiled.workflow.nodes.at("Author_recognize").at("custom_recognition") ==
+              "WvdVision",
+          "first recognition is not bypassed");
     check(compiled.workflow.nodes.at("Author_click").at("custom_action") == "GuardedAction", "action binding");
     check(compiled.workflow.nodes.at("Author_wait").at("custom_action") == "CancelableWait",
           "wait binding");
@@ -95,6 +104,92 @@ void compiler_case() {
     check(compiled.node_to_pipeline.at("done") == std::vector<std::string>{"Terminal"}, "end mapping");
     check(compiled.pipeline_to_node.at("Author_click") == "click", "reverse mapping");
     compiled.workflow.validate();
+}
+
+void ocr_and_offset_cases() {
+    auto ocr = workflow();
+    const J ocr_condition{{"mode", "ocr"}, {"expected", J::array({"NEXT"})},
+                          {"roi", {100, 100, 500, 700}}};
+    ocr["nodes"][0]["parameters"]["condition"] = ocr_condition;
+    auto compiled = wvd::games::tasks::compile_author_workflow(ocr);
+    const auto &first = compiled.workflow.nodes.at("Author_recognize");
+    check(first.at("recognition") == "OCR", "standalone OCR uses Maa OCR");
+    check(first.at("expected") == J::array({"NEXT"}), "standalone OCR expected text");
+    check(first.at("next") == J::array({"Author_click"}), "OCR success route");
+
+    auto action_ocr = workflow();
+    for (auto &node : action_ocr["nodes"])
+        if (node.at("id") == "click") {
+            node["parameters"]["scene"] = ocr_condition;
+            node["parameters"]["target"] = ocr_condition;
+            node["parameters"]["postcondition"] = ocr_condition;
+        }
+    compiled = wvd::games::tasks::compile_author_workflow(action_ocr);
+    const auto &action = compiled.workflow.nodes.at("Author_click");
+    check(action.at("custom_action") == "GuardedAction", "OCR action remains guarded");
+    check(action.at("custom_recognition") == "WvdVision" &&
+              action.at("custom_recognition_param").at("mode") == "all",
+          "OCR action eligibility remains on the shared recognition gateway");
+    const auto &guard = action.at("custom_action_param");
+    for (const auto *field : {"scene_recognition", "target_recognition", "postcondition"})
+        check(guard.at(field).at("binding") == "WvdVision" &&
+                  guard.at(field).at("parameters").at("mode") == "ocr",
+              "guarded OCR request left the shared recognition gateway");
+
+    for (const auto &offset : {J::array({0, 0}), J::array({25, 40}), J::array({-25, -40})}) {
+        auto document = workflow();
+        for (auto &node : document["nodes"])
+            if (node.at("id") == "click")
+                node["parameters"]["offset"] = offset;
+        wvd::games::tasks::compile_author_workflow(document).workflow.validate();
+    }
+}
+
+void full_business_child_cases() {
+    auto document = workflow();
+    for (auto &node : document["nodes"])
+        if (node.at("id") == "confirm") {
+            node["name"] = "Combat";
+            node["parameters"] = {{"binding", "combat"}};
+        }
+    bool resolved = false;
+    const auto compiled = wvd::games::tasks::compile_author_workflow(
+        document, [&](const J &parameters) {
+            check(parameters.at("binding") == "combat", "combat resolver binding");
+            resolved = true;
+            wvd::games::tasks::PipelineCompiler child("test.full_combat");
+            child.confirm("Entry", "combat.begin", "combat_observed",
+                          {{"mode", "combat_active"}}, {"Terminal"});
+            return child.finish();
+        });
+    check(resolved, "full combat resolver not called");
+    const auto &call = compiled.workflow.nodes.at("Author_confirm");
+    check(call.at("custom_action") == "RunChild", "combat is not a child workflow");
+    check(call.at("custom_action_param").at("entry") ==
+              "Author_confirm_Business_Entry",
+          "combat child entry");
+    check(compiled.pipeline_to_node.at("Author_confirm_Business_Entry") == "confirm",
+          "combat child mapping");
+
+    auto chest = document;
+    for (auto &node : chest["nodes"])
+        if (node.at("id") == "confirm")
+            node["parameters"] = {{"binding", "chest"}, {"preferred", 2},
+                                   {"quick", true}, {"seed", 7}};
+    resolved = false;
+    wvd::games::tasks::compile_author_workflow(chest, [&](const J &parameters) {
+        check(parameters.at("binding") == "chest" && parameters.at("preferred") == 2 &&
+                  parameters.at("quick") == true && parameters.at("seed") == 7,
+              "chest resolver parameters");
+        resolved = true;
+        wvd::games::tasks::PipelineCompiler child("test.full_chest");
+        child.confirm("Entry", "chest.begin", "chest_observed",
+                      {{"mode", "template"}, {"image", "chestFlag"},
+                       {"threshold", .8}, {"roi", {0, 0, 900, 1600}}},
+                      {"Terminal"});
+        return child.finish();
+    });
+    check(resolved, "full chest resolver not called");
 }
 
 void validation_cases() {
@@ -189,6 +284,8 @@ void repository_case() {
 int main() {
     try {
         compiler_case();
+        ocr_and_offset_cases();
+        full_business_child_cases();
         validation_cases();
         repository_case();
         std::cout << "W03_AUTHOR_WORKFLOW_PASS\n";

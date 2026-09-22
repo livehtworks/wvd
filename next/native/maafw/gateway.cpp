@@ -91,7 +91,7 @@ void MaaGateway::initialize() {
     context_sink_ = MaaTaskerAddContextSink(tasker_.get(), context_event_callback, this);
     initialized_ = true;
 }
-MaaBool MaaGateway::recognition_callback(MaaContext *, MaaTaskId, const char *, const char *name,
+MaaBool MaaGateway::recognition_callback(MaaContext *native_context, MaaTaskId, const char *, const char *name,
                                          const char *parameters, const MaaImageBuffer *image,
                                          const MaaRect *roi, void *argument, MaaRect *output,
                                          MaaStringBuffer *detail) noexcept {
@@ -127,8 +127,44 @@ MaaBool MaaGateway::recognition_callback(MaaContext *, MaaTaskId, const char *, 
             verify_bundle(self.bundle_);
             invocation = ++self.recognition_invocation_;
         }
+        // 此回调只暴露固定 OCR 操作，不暴露第二个 Tasker 或任意原生调用。
+        // 不能重入 recognize()：外层已持有 direct/recognition 锁。
+        auto ocr = [&](const nlohmann::json &condition) {
+            using J = nlohmann::json;
+            require(native_context != nullptr && condition.value("mode", "") == "ocr",
+                    "CUSTOM_OCR_CONTEXT_INVALID");
+            require(!self.hooks_.cancelled(), "SESSION_CANCELLED");
+            const auto area = condition.value("roi", J::array({roi->x, roi->y, roi->width, roi->height}));
+            auto request = parse_recognition_request({{"id", "custom.ocr"}, {"revision", self.bundle_.revision},
+                {"type", "ocr"}, {"roi", area}, {"expected", condition.at("expected")}});
+            require(request.roi.x >= roi->x && request.roi.y >= roi->y &&
+                    request.roi.width > 0 && request.roi.height > 0 &&
+                    request.roi.x <= roi->x + roi->width - request.roi.width &&
+                    request.roi.y <= roi->y + roi->height - request.roi.height, "CUSTOM_OCR_OUTSIDE_SCOPE");
+            const auto parameters = validate_parameters(self.bundle_, request, size);
+            std::lock_guard native_ocr(self.native_ocr_mutex_);
+            const auto id = MaaContextRunRecognitionDirect(native_context, "OCR", parameters.dump().c_str(), image);
+            require(id != MaaInvalidId && !self.integrity_failed_, "CUSTOM_OCR_NATIVE_FAILED");
+            auto node = string_buffer(), algorithm = string_buffer(), detail = string_buffer();
+            MaaBool hit{};
+            MaaRect found{};
+            require(MaaTaskerGetRecognitionDetail(self.tasker_.get(), id, node.get(), algorithm.get(),
+                        &hit, &found, detail.get(), nullptr, nullptr) &&
+                    std::string(MaaStringBufferGet(algorithm.get())) == "OCR", "CUSTOM_OCR_DETAIL_UNAVAILABLE");
+            const auto parsed = J::parse(MaaStringBufferGet(detail.get()));
+            require(parsed.is_object() && !parsed.contains("error") && parsed.contains("filtered") &&
+                    parsed.at("filtered").is_array() && bool(hit) == !parsed.at("filtered").empty(),
+                    "CUSTOM_OCR_DETAIL_INVALID");
+            require(!hit || (found.x >= request.roi.x && found.y >= request.roi.y &&
+                    found.width > 0 && found.height > 0 &&
+                    found.x <= request.roi.x + request.roi.width - found.width &&
+                    found.y <= request.roi.y + request.roi.height - found.height), "CUSTOM_OCR_BOX_INVALID");
+            return J{{"schema", 1}, {"outcome", hit ? "Hit" : "NoHit"},
+                     {"box", hit ? J::array({found.x, found.y, found.width, found.height}) : J(nullptr)},
+                     {"target", bool(hit)}, {"evidence", {{"recognition_id", id}, {"ocr", parsed}}}};
+        };
         const CustomRecognitionScope scope({roi->x, roi->y, roi->width, roi->height}, invocation,
-                                            self.business_);
+                                            self.business_, std::move(ocr));
         auto impl = self.recognitions_.find(name);
         require(impl != self.recognitions_.end(), "CUSTOM_RECO_NOT_REGISTERED");
         if (self.gate_) {
@@ -245,6 +281,9 @@ void MaaGateway::close() noexcept {
     }
     controller_callbacks_.reset();
     recognition_cache_ = {};
+    decoded_frame_.reset();
+    decoded_frame_key_.clear();
+    decoded_frame_bytes_.clear();
     bundle_.lease.reset();
     initialized_ = false;
 }

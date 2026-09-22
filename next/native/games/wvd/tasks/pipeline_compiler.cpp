@@ -190,6 +190,8 @@ void CompiledWorkflow::validate() const {
                                             node.value("custom_action", "") == "RequireRecovery")),
                 "COMPILE_UNGUARDED_ACTION");
         require(node.value("recognition", "DirectHit") == "DirectHit" ||
+                    (node.value("recognition", "") == "OCR" && node.contains("expected") &&
+                     node.at("expected").is_array() && !node.at("expected").empty()) ||
                     (node.value("recognition", "") == "Custom" &&
                      node.value("custom_recognition", "") == "WvdVision"),
                 "COMPILE_RECOGNITION_UNKNOWN");

@@ -190,7 +190,21 @@ contracts::Observation MaaGateway::recognize(const contracts::FrameEnvelope &fra
         };
         require(initialized_ && !hooks_.cancelled() && !integrity_failed_, "SESSION_NOT_RUNNING");
         result.error_stage = "frame_preflight";
-        auto image = validate_frame(frame, current, bundle_.revision);
+        validate_frame_identity(frame, current, bundle_.revision);
+        const auto &f = frame.identity;
+        const auto frame_key = nlohmann::json::array({f.device_id, f.game_id, f.pack_revision,
+            f.viewport_id, f.generation, f.frame_id, f.action_epoch, f.connection_generation,
+            f.captured_at.time_since_epoch().count(), f.raw_size.width, f.raw_size.height,
+            f.recognition_size.width, f.recognition_size.height, f.color_format}).dump();
+        const bool reused = decoded_frame_ && decoded_frame_key_ == frame_key &&
+                            decoded_frame_bytes_ == frame.encoded_image;
+        if (!reused) {
+            decoded_frame_ = validate_frame(frame, current, bundle_.revision);
+            decoded_frame_key_ = frame_key;
+            decoded_frame_bytes_ = frame.encoded_image;
+        }
+        auto *image = decoded_frame_.get();
+        result.timing_ms["frame_decode_reused"] = reused ? 1.0 : 0.0;
         stage("frame_decode_preflight");
         result.error_stage = "resource_preflight";
         // Custom 通过一次性凭据复用这次检查。SDK 内置识别没有 Custom 回调，
@@ -214,19 +228,49 @@ contracts::Observation MaaGateway::recognize(const contracts::FrameEnvelope &fra
         }
         stage("parameter_preflight");
         result.error_stage = "native_recognition";
+        bool inline_custom = false;
         const char *type = std::holds_alternative<TemplateParameters>(request.parameters)
                                ? "TemplateMatch"
                            : std::holds_alternative<OcrParameters>(request.parameters) ? "OCR"
                                                                                        : "Custom";
-        if (context) {
+        if (context && std::holds_alternative<RecognitionRequest::CustomParameters>(request.parameters)) {
+            const auto &custom = std::get<RecognitionRequest::CustomParameters>(request.parameters);
+            result.engine_task_id = MaaContextGetTaskId(context);
+            result.engine_status = MaaTaskerStatus(tasker_.get(), result.engine_task_id);
+            // 未向 SDK 注册一个临时识别任务，所以不伪造 recognition_id。
+            result.engine_reco_id = 0;
+            auto detail = string_buffer();
+            MaaRect box{}, roi{request.roi.x, request.roi.y, request.roi.width, request.roi.height};
+            const auto custom_parameters = parameters.at("custom_recognition_param").dump();
+            const auto hit = recognition_callback(context, result.engine_task_id, request.recognizer_id.c_str(),
+                custom.binding.c_str(), custom_parameters.c_str(), image, &roi, this, &box, detail.get());
+            auto data = nlohmann::json::parse(MaaStringBufferGet(detail.get()));
+            require(data.is_object() && data.value("schema", 0) == 1, "CUSTOM_DETAIL_INVALID");
+            const auto outcome = data.at("outcome").get<std::string>();
+            if (outcome == "Error") throw std::runtime_error(data.value("error", std::string("CUSTOM_RECO_ERROR")));
+            require((outcome == "Hit" || outcome == "NoHit") && bool(hit) == (outcome == "Hit"),
+                    "CUSTOM_DETAIL_INCONSISTENT");
+            result.outcome = hit ? RecognitionOutcome::Hit : RecognitionOutcome::NoHit;
+            result.action_eligible = data.value("action_eligible", true);
+            if (hit) {
+                contracts::Box found{box.x, box.y, box.width, box.height};
+                require(valid_box(found, frame.identity.recognition_size), "CUSTOM_BOX_INVALID");
+                result.box = found;
+                if (data.value("target", false)) result.center = contracts::Point{
+                    found.x + found.width / 2, found.y + found.height / 2};
+            }
+            data["invocation_source"] = "registered_custom_inline";
+            result.evidence = std::move(data);
+            inline_custom = true;
+        } else if (context) {
             result.engine_task_id = MaaContextGetTaskId(context);
             result.engine_reco_id = MaaContextRunRecognitionDirect(
-                context, type, parameters.dump().c_str(), image.get());
+                context, type, parameters.dump().c_str(), image);
             require(result.engine_reco_id != MaaInvalidId, "RECO_NATIVE_FAILED");
             result.engine_status = MaaTaskerStatus(tasker_.get(), result.engine_task_id);
         } else {
             result.engine_task_id = MaaTaskerPostRecognition(
-                tasker_.get(), type, parameters.dump().c_str(), image.get());
+                tasker_.get(), type, parameters.dump().c_str(), image);
             require(result.engine_task_id != MaaInvalidId, "RECO_POST_FAILED");
             result.engine_status = MaaTaskerWait(tasker_.get(), result.engine_task_id);
             require(result.engine_status == MaaStatus_Succeeded, "RECO_NATIVE_FAILED");
@@ -235,7 +279,7 @@ contracts::Observation MaaGateway::recognize(const contracts::FrameEnvelope &fra
             throw std::runtime_error(integrity_error());
         result.error_stage = "recognition_detail";
         stage("native_recognition_including_custom_preflight");
-        read_detail(tasker_.get(), result);
+        if (!inline_custom) read_detail(tasker_.get(), result);
         stage("detail_conversion");
         result.error_stage.clear();
     } catch (const std::filesystem::filesystem_error &) {
@@ -248,6 +292,9 @@ contracts::Observation MaaGateway::recognize(const contracts::FrameEnvelope &fra
         result.error_code = "RECO_UNKNOWN_EXCEPTION";
     }
     if (!result.error_code.empty()) {
+        decoded_frame_.reset();
+        decoded_frame_key_.clear();
+        decoded_frame_bytes_.clear();
         result.outcome = RecognitionOutcome::Error;
         result.box.reset();
         result.center.reset();

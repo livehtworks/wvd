@@ -78,6 +78,8 @@ Response route(const Request &request, const fs::path &root, unsigned short port
                  {"device_control", true},
                  {"task_execution", true},
                  {"websocket", false},
+                 {"real_startup_verified", false},
+                 {"delivery_state", "INCIDENT_FIX_REQUIRES_LOCAL_ACCEPTANCE"},
                  {"production_switch", false}}
                 .dump());
     } else if (target.starts_with("/api/")) {

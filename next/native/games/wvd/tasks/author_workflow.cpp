@@ -48,7 +48,8 @@ std::int64_t integer(const J &value, std::int64_t low, std::int64_t high,
         fail(code, identity);
     if (value.is_number_unsigned()) {
         const auto number = value.get<std::uint64_t>();
-        if (low < 0 || number > static_cast<std::uint64_t>(high))
+        if (high < 0 || number > static_cast<std::uint64_t>(high) ||
+            (low > 0 && number < static_cast<std::uint64_t>(low)))
             fail(code, identity);
         return static_cast<std::int64_t>(number);
     }
@@ -259,47 +260,20 @@ void validate_business_parameters(const J &parameters, const std::string &node_i
             integer(parameters.at("expected_step"), 0, 4096,
                     "AUTHOR_BUSINESS_STEP_INVALID", node_id);
     } else if (binding == "combat") {
-        exact_object(parameters, {"binding", "condition", "arguments"},
-                     {"delay_after_ms"}, "AUTHOR_BUSINESS_PARAMETERS_INVALID", node_id);
-        validate_condition(parameters.at("condition"), node_id);
-        if (!parameters.at("arguments").is_object())
-            fail("AUTHOR_BUSINESS_ARGUMENTS_INVALID", node_id);
-        const auto &arguments = parameters.at("arguments");
-        validate_bounded_json(arguments, node_id);
-        if (arguments.dump().size() > 65536)
-            fail("AUTHOR_BUSINESS_ARGUMENTS_INVALID", node_id);
-        if (!arguments.contains("operation") || !arguments.at("operation").is_string())
-            fail("AUTHOR_BUSINESS_ARGUMENTS_INVALID", node_id);
-        const auto operation = arguments.at("operation").get<std::string>();
-        if (operation == "prepare") {
-            exact_object(arguments, {"operation", "portraits", "catalog"}, {},
-                         "AUTHOR_BUSINESS_ARGUMENTS_INVALID", node_id);
-            if (!arguments.at("portraits").is_array() || arguments.at("portraits").size() > 128 ||
-                !arguments.at("catalog").is_array() || arguments.at("catalog").size() > 128)
-                fail("AUTHOR_BUSINESS_ARGUMENTS_INVALID", node_id);
-            for (const auto &portrait : arguments.at("portraits")) {
-                exact_object(portrait, {"image", "role"}, {},
-                             "AUTHOR_BUSINESS_ARGUMENTS_INVALID", node_id);
-                validate_image(portrait.at("image"), node_id);
-                bounded_text(portrait.at("role"), 1, 128,
-                             "AUTHOR_BUSINESS_ARGUMENTS_INVALID", node_id);
-            }
-        } else if (operation == "success" || operation == "auto_confirmed") {
-            exact_object(arguments, {"operation", "index"}, {},
-                         "AUTHOR_BUSINESS_ARGUMENTS_INVALID", node_id);
-            integer(arguments.at("index"), 0, 127,
-                    "AUTHOR_BUSINESS_ARGUMENTS_INVALID", node_id);
-        } else {
-            fail("AUTHOR_BUSINESS_ARGUMENTS_INVALID", node_id + ":" + operation);
-        }
+        // 作者节点表示完整遭遇战；角色轮次和策略参数只从本次冻结配置读取。
+        exact_object(parameters, {"binding"}, {"delay_after_ms"},
+                     "AUTHOR_BUSINESS_PARAMETERS_INVALID", node_id);
     } else if (binding == "chest") {
-        exact_object(parameters, {"binding", "condition", "preferred", "seed"},
-                     {"delay_after_ms"}, "AUTHOR_BUSINESS_PARAMETERS_INVALID", node_id);
-        validate_condition(parameters.at("condition"), node_id);
+        exact_object(parameters, {"binding", "preferred"},
+                     {"quick", "seed", "delay_after_ms"},
+                     "AUTHOR_BUSINESS_PARAMETERS_INVALID", node_id);
         integer(parameters.at("preferred"), 0, 6,
                 "AUTHOR_BUSINESS_ARGUMENTS_INVALID", node_id);
-        integer(parameters.at("seed"), 0, std::numeric_limits<unsigned>::max(),
-                "AUTHOR_BUSINESS_ARGUMENTS_INVALID", node_id);
+        if (parameters.contains("quick") && !parameters.at("quick").is_boolean())
+            fail("AUTHOR_BUSINESS_ARGUMENTS_INVALID", node_id);
+        if (parameters.contains("seed"))
+            integer(parameters.at("seed"), 0, std::numeric_limits<unsigned>::max(),
+                    "AUTHOR_BUSINESS_ARGUMENTS_INVALID", node_id);
     } else if (binding == "task_stage") {
         exact_object(parameters, {"binding", "task_id", "stage"}, {},
                      "AUTHOR_BUSINESS_PARAMETERS_INVALID", node_id);
@@ -558,8 +532,7 @@ ValidatedGraph validate_graph(const J &document) {
 
 std::string pipeline_name(const std::string &node_id, const std::string &entry,
                           const std::string &success_end) {
-    if (node_id == entry)
-        return "Entry";
+    (void)entry; // Entry 留给无副作用的根分发，作者首节点必须参与真实识别。
     if (node_id == success_end)
         return "Terminal";
     return "Author_" + node_id;
@@ -590,6 +563,9 @@ AuthorWorkflowCompilation compile_author_workflow(const J &document,
         document.at("execution").at("time_limit_ms").get<std::int64_t>()};
     PipelineCompiler compiler("author." + flow_id, budget);
     AuthorWorkflowCompilation result;
+    compiler.route("Entry", {pipeline_name(entry, entry, graph.success_end)});
+    if (!graph.failure.at(entry).empty())
+        compiler.failure_route("Entry", successors(graph.failure.at(entry), entry, graph.success_end));
 
     for (const auto &[id, node] : graph.nodes) {
         const auto runtime_name = pipeline_name(id, entry, graph.success_end);
@@ -648,18 +624,10 @@ AuthorWorkflowCompilation compile_author_workflow(const J &document,
                         runtime_name, parameters.at("operation_id").get<std::string>(),
                         parameters.at("event").get<std::string>(), parameters.at("condition"), next,
                         parameters.contains("expected_step") ? parameters.at("expected_step") : J(nullptr));
-                else if (binding == "combat")
-                    compiler.combat_step(runtime_name, parameters.at("condition"),
-                                         parameters.at("arguments"), next);
-                else if (binding == "chest")
-                    compiler.chest_selection(
-                        runtime_name, parameters.at("condition"),
-                        static_cast<int>(parameters.at("preferred").get<std::int64_t>()),
-                        static_cast<unsigned>(parameters.at("seed").get<std::uint64_t>()), next);
-                else if (binding == "task_stage") {
+                else if (binding == "combat" || binding == "chest" || binding == "task_stage") {
                     if (!resolver)
                         fail("AUTHOR_BUSINESS_CONTEXT_REQUIRED", id);
-                    const auto prefix = runtime_name + "_Stage";
+                    const auto prefix = runtime_name + "_Business";
                     const auto child = resolver(parameters);
                     const auto child_entry = compiler.define_child(prefix, child);
                     compiler.call_child(runtime_name, child_entry, next);
@@ -697,7 +665,7 @@ AuthorWorkflowCompilation compile_author_workflow(const J &document,
     // 编译器可能增加业务检查点和统一恢复节点；二者属于既有运行模型而非作者节点。
     for (const auto &[id, source] : graph.nodes) {
         (void)source;
-        const auto prefix = pipeline_name(id, entry, graph.success_end) + "_Stage_";
+        const auto prefix = pipeline_name(id, entry, graph.success_end) + "_Business_";
         for (const auto &[name, node] : result.workflow.nodes.items()) {
             (void)node;
             if (name.starts_with(prefix)) {

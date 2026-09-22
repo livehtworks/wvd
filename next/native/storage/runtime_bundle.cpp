@@ -4,6 +4,7 @@
 #include "platform/windows/file_digest.hpp"
 #include "maafw/buffers.hpp"
 #include <fstream>
+#include <iostream>
 
 namespace wvd::storage {
 namespace {
@@ -74,6 +75,17 @@ maafw::Bundle materialize_bundle(const maafw::Bundle &source) {
     }
     auto root = std::filesystem::absolute(parent) / platform::unique_id();
     require(std::filesystem::create_directories(root), "RUNTIME_BUNDLE_DIRECTORY_EXISTS");
+    // root 是此调用创建的随机快照目录，不是源目录。失败或最后一个lease结束时才回收。
+    // shared owner必须先于lease声明，异常展开会先关原生/文件句柄再释放目录。
+    const auto directory = std::shared_ptr<const std::filesystem::path>(
+        new std::filesystem::path(root), [](const std::filesystem::path *created) noexcept {
+            try {
+                std::error_code error;
+                std::filesystem::remove_all(*created, error);
+                if (error) std::clog << "RUNTIME_SNAPSHOT_CLEANUP_FAILED: " << error.message() << '\n';
+            } catch (...) { /* 析构不得抛异常或伪报业务完成。 */ }
+            delete created;
+        });
     for (const auto &[relative, hash] : manifest) {
         auto path = root / platform::BundleLease::checked_relative(relative);
         std::filesystem::create_directories(path.parent_path());
@@ -83,7 +95,9 @@ maafw::Bundle materialize_bundle(const maafw::Bundle &source) {
         output.close();
         require(bool(output), "RUNTIME_BUNDLE_COPY_FAILED");
     }
-    auto lease = std::make_shared<platform::BundleLease>(root, source.revision, manifest);
+    auto lease = std::shared_ptr<platform::BundleLease>(
+        new platform::BundleLease(root, source.revision, manifest),
+        [directory](platform::BundleLease *active) { delete active; });
     maafw::Bundle result{root, source.revision, source.files, parent, std::move(lease)};
     for (const auto &[relative, hash] : manifest) {
         if (relative.starts_with("pipeline/") && relative.ends_with(".json")) {
