@@ -1,4 +1,5 @@
 #include "workflow_session.hpp"
+#include "transition_lowering.hpp"
 #include "games/wvd/vision/recognizers.hpp"
 #include "games/wvd/vision/asset_resolver.hpp"
 #include "games/wvd/diagnostics.hpp"
@@ -52,6 +53,11 @@ std::vector<runtime::SessionDefinition> publish(const std::vector<CompiledWorkfl
                                             const J &aliases, const maafw::Bundle *mod) {
     const auto &workflow = workflows.front();
     for (const auto &stage : workflows) stage.validate();
+    // 必须在全部组合/命名空间处理之后拆分，运行发布物与哈希采用同一份实际节点。
+    std::vector<J> executable_nodes;
+    executable_nodes.reserve(workflows.size());
+    for (const auto &stage : workflows)
+        executable_nodes.push_back(lower_input_transitions(stage.nodes, stage.time_limit));
     if (!destination.is_absolute() || std::filesystem::exists(destination))
         throw std::runtime_error("COMPILE_DESTINATION_EXISTS_OR_INVALID");
     if (!aliases.is_object())
@@ -138,19 +144,20 @@ std::vector<runtime::SessionDefinition> publish(const std::vector<CompiledWorkfl
                {"kind", workflow.kind},
                {"time_limit_ms", workflow.time_limit.count()},
                {"required_actions", workflow.required_actions},
-               {"pipeline", workflow.nodes},
+               {"pipeline", executable_nodes.front()},
+               {"input_contract", 2},
                {"aliases", aliases},
                {"dialogue_task", dialogue},
                {"registry", registry.manifest()}};
     std::map<std::string, std::string> pipelines;
-    if (workflows.size() == 1) pipelines["pipeline/workflow.json"] = workflow.nodes.dump(2);
+    if (workflows.size() == 1) pipelines["pipeline/workflow.json"] = executable_nodes.front().dump(2);
     else {
         identity["stages"] = J::array();
         for (std::size_t i = 0; i < workflows.size(); ++i) {
             const auto &stage = workflows[i];
-            pipelines["pipeline/stage" + std::to_string(i) + ".json"] = stage.nodes.dump(2);
+            pipelines["pipeline/stage" + std::to_string(i) + ".json"] = executable_nodes.at(i).dump(2);
             identity["stages"].push_back({{"kind", stage.kind}, {"entry", stage.entry},
-                {"terminal", stage.terminal}, {"checkpoint", stage.checkpoint}, {"pipeline", stage.nodes},
+                {"terminal", stage.terminal}, {"checkpoint", stage.checkpoint}, {"pipeline", executable_nodes.at(i)},
                 {"time_limit_ms", stage.time_limit.count()}, {"required_actions", stage.required_actions},
                 {"dialogue_task", recovery::dialogue_policy_name(stage.dialogue_policy)}});
         }

@@ -769,12 +769,12 @@ Application::J Application::start_task(const J &request) {
     const auto stored = profile_store_->load();
     if (request.contains("profile_revision"))
         require(request.at("profile_revision") == stored.at("revision"), "PROFILE_REVISION_MISMATCH");
-    std::shared_ptr<maafw::AdbBackend> backend;
-    { std::lock_guard lock(mutex_); backend = backend_; }
-    require(bool(backend), "DEVICE_NOT_CONNECTED");
     return queue_run("start_task", frozen,
         {{"kind", "task"}, {"request", frozen}, {"profile_revision", stored.at("revision")}},
-        [this, frozen, stored, backend] { return prepare_task(frozen, stored, backend); });
+        [this, frozen, stored] {
+            const auto backend = ensure_connected_for_run(stored);
+            return prepare_task(frozen, stored, backend);
+        });
 }
 Application::J Application::start_workflow(const std::string &flow_id, const J &request) {
     std::lock_guard command(command_mutex_);
@@ -786,12 +786,10 @@ Application::J Application::start_workflow(const std::string &flow_id, const J &
     const auto document = workflow_store_->read(flow_id);
     require(frozen.value("revision", std::string{}) == document.at("revision").get<std::string>(),
             "WORKFLOW_REVISION_MISMATCH");
-    std::shared_ptr<maafw::AdbBackend> backend;
-    { std::lock_guard lock(mutex_); backend = backend_; }
-    require(bool(backend), "DEVICE_NOT_CONNECTED");
     return queue_run("start_workflow", frozen,
         {{"kind", "workflow"}, {"flow_id", flow_id}, {"request", frozen}, {"profile_revision", stored.at("revision")}},
-        [this, flow_id, frozen, stored, document, backend] {
+        [this, flow_id, frozen, stored, document] {
+            const auto backend = ensure_connected_for_run(stored);
             return prepare_workflow(flow_id, frozen, stored, document, backend);
         });
 }
@@ -803,6 +801,13 @@ Application::J Application::connect_device(const J &request) {
         std::lock_guard lock(mutex_);
         require(!backend_, "DEVICE_ALREADY_CONNECTED");
     }
+    start_device_job("connect", [this, request] { connect_selected_device(request); });
+    return device_status();
+}
+
+void Application::connect_selected_device(const J &request) {
+    require(request.is_object(), "DEVICE_REQUEST_INVALID");
+    require(!stopping_ && !cancel_operation_, "PREPARATION_CANCELLED");
     const auto path = maafw::path_from_utf8(request.contains("emulator_path")
                                                 ? request.at("emulator_path") : request.at("path"));
     const auto manager = manager_from_path(path);
@@ -810,41 +815,65 @@ Application::J Application::connect_device(const J &request) {
     const auto serial = request.value("adb_address", request.value("serial", std::string{}));
     require(!serial.empty(), "ADB_ADDRESS_REQUIRED");
     const bool vpn = request.value("vpn_required", request.value("auto_start_clash", false));
-    start_device_job("connect", [this, manager, path, index, serial, vpn] {
-        auto binding = platform::create_mumu_binding(manager, index, serial);
-        if (!binding.at("initial_manager").value("is_android_started", false)) {
-            launch_selected_instance(path, index);
-            const auto deadline = std::chrono::steady_clock::now() + 120s;
-            do {
-                std::this_thread::sleep_for(1s);
-                binding = platform::create_mumu_binding(manager, index, serial);
-                if (binding.at("initial_manager").value("is_android_started", false))
-                    break;
-            } while (!stopping_ && !cancel_operation_ && std::chrono::steady_clock::now() < deadline);
-            require(binding.at("initial_manager").value("is_android_started", false),
-                    "MUMU_START_TIMEOUT");
-        }
-        binding["launcher"] = maafw::utf8(path);
-        binding["application_id"] = "jp.co.drecom.wizardry.daphne";
-        binding["vpn_required"] = vpn;
-        auto lease = std::make_unique<platform::DeviceLease>(serial);
-        auto next = std::make_shared<maafw::AdbBackend>(std::move(binding));
+    // 在可能启动选定实例之前取得唯一控制权；不启动其他实例、不执行 restart。
+    auto lease = std::make_unique<platform::DeviceLease>(serial);
+    auto binding = platform::create_mumu_binding(manager, index, serial);
+    if (!binding.at("initial_manager").value("is_android_started", false)) {
         require(!stopping_ && !cancel_operation_, "PREPARATION_CANCELLED");
-        require(next->connect(), "DEVICE_CONNECT_FAILED");
-        require(!stopping_ && !cancel_operation_, "PREPARATION_CANCELLED");
-        auto frame = next->capture();
-        std::lock_guard connected(mutex_);
-        backend_ = std::move(next);
-        preview_lease_ = std::move(lease);
-        frame_png_ = std::move(frame.encoded);
-        frame_captured_at_ = frame.captured_at;
-        frame_info_ = {{"width", frame.size.width}, {"height", frame.size.height},
-                       {"device_id", frame.device_id}, {"viewport", frame.viewport_id},
-                       {"foreground_application", frame.foreground_application},
-                       {"backend", frame.backend},
-                       {"connection_generation", frame.connection_generation}};
-    });
-    return device_status();
+        launch_selected_instance(path, index);
+        const auto deadline = std::chrono::steady_clock::now() + 120s;
+        do {
+            // 准备期停止不必等一整秒才被本层察觉；不伪称可以撤回已启动的进程。
+            for (int i = 0; i < 20 && !stopping_ && !cancel_operation_; ++i)
+                std::this_thread::sleep_for(50ms);
+            require(!stopping_ && !cancel_operation_, "PREPARATION_CANCELLED");
+            binding = platform::create_mumu_binding(manager, index, serial);
+            if (binding.at("initial_manager").value("is_android_started", false)) break;
+        } while (std::chrono::steady_clock::now() < deadline);
+        require(binding.at("initial_manager").value("is_android_started", false), "MUMU_START_TIMEOUT");
+    }
+    binding["launcher"] = maafw::utf8(path);
+    binding["application_id"] = "jp.co.drecom.wizardry.daphne";
+    binding["vpn_required"] = vpn;
+    auto next = std::make_shared<maafw::AdbBackend>(std::move(binding));
+    require(!stopping_ && !cancel_operation_, "PREPARATION_CANCELLED");
+    require(next->connect(), "DEVICE_CONNECT_FAILED");
+    require(!stopping_ && !cancel_operation_, "PREPARATION_CANCELLED");
+    auto frame = next->capture();
+    std::lock_guard connected(mutex_);
+    require(!stopping_ && !cancel_operation_, "PREPARATION_CANCELLED");
+    require(!backend_, "DEVICE_ALREADY_CONNECTED");
+    backend_ = std::move(next);
+    preview_lease_ = std::move(lease);
+    frame_png_ = std::move(frame.encoded);
+    frame_captured_at_ = frame.captured_at;
+    frame_info_ = {{"width", frame.size.width}, {"height", frame.size.height},
+                   {"device_id", frame.device_id}, {"viewport", frame.viewport_id},
+                   {"foreground_application", frame.foreground_application},
+                   {"backend", frame.backend}, {"connection_generation", frame.connection_generation},
+                   {"display_rotation", frame.display_rotation}};
+}
+
+std::shared_ptr<maafw::AdbBackend> Application::ensure_connected_for_run(const J &stored) {
+    require(!stopping_ && !cancel_operation_, "PREPARATION_CANCELLED");
+    const auto &values = stored.at("values"); // 与提交身份相同的冻结版本，不在准备中重读编辑中的配置。
+    const auto path = maafw::path_from_utf8(values.at("EMU_PATH"));
+    const auto manager = manager_from_path(path);
+    const auto index = values.at("EMU_INDEX").get<int>();
+    const auto serial = values.at("ADB_ADRESS").get<std::string>();
+    std::shared_ptr<maafw::AdbBackend> backend;
+    { std::lock_guard lock(mutex_); backend = backend_; }
+    if (backend) {
+        require(backend->matches_selection(manager, index, serial), "DEVICE_BINDING_CHANGED_RECONNECT_REQUIRED");
+        return backend;
+    }
+    // 在现有准备作业中同步调用同一连接实现，不再嵌套第二个作业或第二个控制器。
+    connect_selected_device({{"emulator_path", maafw::utf8(path)}, {"emulator_index", index},
+                             {"adb_address", serial}, {"auto_start_clash", values.at("AUTO_START_CLASH")}});
+    require(!stopping_ && !cancel_operation_, "PREPARATION_CANCELLED");
+    std::lock_guard lock(mutex_);
+    require(bool(backend_), "DEVICE_CONNECT_FAILED");
+    return backend_;
 }
 
 Application::J Application::select_emulator_path() const {
@@ -988,13 +1017,19 @@ Application::J Application::run_status() const {
             if (!it->contains("node_id") || !it->at("node_id").is_string())
                 continue;
             const auto pipeline = it->at("node_id").get<std::string>();
-            if (const auto found = mapping.find(pipeline); found != mapping.end()) {
-                value["step_name"] = pipeline;
+            constexpr std::string_view observer_prefix = "__wvd_observe__";
+            const bool observing = pipeline.starts_with(observer_prefix);
+            const auto visible = observing ? pipeline.substr(observer_prefix.size()) : pipeline;
+            // 派生观察节点映射回作者的输入节点；仍显示真实阶段，不能让等待看起来没执行。
+            value["step_name"] = visible + (observing ? "（等待页面结果）" : "");
+            value["execution_stage"] = observing ? "transition_observation" : "pipeline";
+            if (const auto found = mapping.find(visible); found != mapping.end()) {
                 value["current_node_id"] = found->second;
                 if (snapshot.state == contracts::RunState::Failed)
                     value["failed_node_id"] = found->second;
                 break;
             }
+            if (mapping.empty()) break; // 旧任务没有作者节点映射，也必须显示真实执行步骤。
         }
     }
     return value;
@@ -1041,7 +1076,7 @@ runtime::RunDefinition Application::assemble_task(const J &request, const J &sto
     definition.policy = {lifecycle.device_id, "wvd", "jp.co.drecom.wizardry.daphne",
         definition.initial.bundle.revision, "900x1600", {900, 1600},
         {contracts::ActionKind::Click, contracts::ActionKind::ClickKey, contracts::ActionKind::Swipe},
-        {}, {"wvd"}, 2000ms};
+        {}, {"wvd"}, 0ms};
     for (const auto &action : workflow.required_actions) definition.policy.permissions.insert(action_kind(action));
     definition.recover = games::recovery::recovery_binding(lifecycle, values);
     definition.recovery_limit = 3;
@@ -1245,7 +1280,7 @@ runtime::RunDefinition Application::assemble_workflow(
                          "jp.co.drecom.wizardry.daphne", definition.initial.bundle.revision,
                          "900x1600", {900, 1600},
                          {contracts::ActionKind::Click, contracts::ActionKind::ClickKey,
-                          contracts::ActionKind::Swipe}, {}, {"wvd"}, 2000ms};
+                          contracts::ActionKind::Swipe}, {}, {"wvd"}, 0ms};
     for (const auto &action : executable.required_actions)
         definition.policy.permissions.insert(action_kind(action));
     definition.recover = games::recovery::recovery_binding(lifecycle, values);

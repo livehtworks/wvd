@@ -46,8 +46,10 @@ void require_hit(const Observation &observation, const char *no_hit) {
 bool GuardedAction::execute(maafw::Context &context, devices::InputGate &gate,
                             storage::EventJournal &events, const nlohmann::json &p) {
     FrameEnvelope frame;
-    std::optional<FrameEnvelope> last_post;
+    bool submission_armed = false;
     try {
+        if (p.value("input_contract", 0) != 2)
+            throw std::runtime_error("INPUT_PIPELINE_REPUBLISH_REQUIRED");
         frame = context.capture();
         auto scene =
             context.recognize(frame, maafw::parse_recognition_request(p.at("scene_recognition")));
@@ -58,6 +60,8 @@ bool GuardedAction::execute(maafw::Context &context, devices::InputGate &gate,
         require_hit(target, "TARGET_NOT_FOUND");
         if (!target.action_eligible)
             throw std::runtime_error("TARGET_REQUIRES_CONFIRMATION");
+        if (!gate.input_observation_current(scene) || !gate.input_observation_current(target))
+            throw std::runtime_error("INPUT_EVIDENCE_EXPIRED");
         const auto scene_name = p.at("scene").get<std::string>();
         gate.confirm_scene(scene, scene_name);
         auto input = command(p.at("command"));
@@ -107,14 +111,13 @@ bool GuardedAction::execute(maafw::Context &context, devices::InputGate &gate,
         if (area.size() != 4)
             throw std::runtime_error("ACTION_AREA_INVALID");
         auto post = maafw::parse_recognition_request(p.at("postcondition"));
-        auto budget = p.value("postcondition_timeout_ms", 1000);
-        if (budget < 1 || budget > 60000)
-            throw std::runtime_error("POSTCONDITION_BUDGET_INVALID");
         const auto id = events.emit(gate.generation(), "intent.requested",
                                     {{"frame_id", frame.identity.frame_id}, {"kind", int(input.kind)}});
         ActionIntent intent{
             id,    gate.run_id(), gate.generation(),  target,
             input, scene_name,    post.recognizer_id, {area[0], area[1], area[2], area[3]}};
+        gate.begin_submission(context.node(), context.task_id(), intent, p.at("postcondition").dump());
+        submission_armed = true;
         gate.authorize(intent);
         struct Permit {
             devices::InputGate &gate;
@@ -130,44 +133,95 @@ bool GuardedAction::execute(maafw::Context &context, devices::InputGate &gate,
                                                    {"duration", input.duration}});
         else
             sent = context.controller_action(input);
+        gate.revoke();
+        gate.finish_submission(sent);
+        submission_armed = false;
         if (!sent) {
-            // 子任务普通 false 可以被 SDK 的 on_error 消费；真实输入失败不能因此变成可重试恢复。
             if (!context.cancelled())
-                throw std::runtime_error("CUSTOM_ACTION_FAILED");
+                throw std::runtime_error("INPUT_SUBMISSION_UNCONFIRMED");
             return false;
         }
-        gate.revoke();
-        const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(budget);
-        do {
-            if (context.cancelled())
-                return false;
-            last_post = context.capture();
-            const auto &fresh = *last_post;
-            auto observed = context.recognize(fresh, post);
-            if (observed.outcome == RecognitionOutcome::Error)
-                throw std::runtime_error(observed.error_code);
-            if (observed.outcome == RecognitionOutcome::Hit) {
-                if (observed.basis.frame_id <= frame.identity.frame_id ||
-                    observed.basis.generation != frame.identity.generation)
-                    throw std::runtime_error("POSTCONDITION_FRAME_INVALID");
-                gate.confirm_scene(observed, scene_name);
-                events.emit(gate.generation(), "postcondition.confirmed",
-                            {{"intent", id}, {"frame_id", fresh.identity.frame_id}});
-                return true;
-            }
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        } while (std::chrono::steady_clock::now() < deadline);
-        throw std::runtime_error("POSTCONDITION_TIMEOUT");
+        const auto receipt = gate.pending_submission(context.node(), context.task_id(), p.at("postcondition").dump());
+        events.emit(gate.generation(), "input.submitted",
+            {{"intent", id}, {"source_node", context.node()}, {"business_confirmed", false},
+             {"frame_id", receipt.before.frame_id}, {"action_epoch", receipt.action_epoch},
+             {"submitted_at_ns", std::chrono::duration_cast<std::chrono::nanoseconds>(receipt.submitted_at.time_since_epoch()).count()}});
+        // 这里只提交一次输入。转场由后继 AwaitTransition 持有，绝不在此等待网络/页面。
+        return !context.cancelled();
     } catch (const std::exception &error) {
         // Permit先随异常展开撤销；关门后才同步写盘，绝不延长输入许可的寿命。
         gate.close();
-        const auto *evidence = last_post ? &*last_post : (frame.encoded_image.empty() ? nullptr : &frame);
-        context.save_diagnostic(evidence, error.what(), last_post ? "postcondition" : "pre_action");
+        if (submission_armed) { try { gate.finish_submission(false); } catch (...) {} }
+        const auto *evidence = frame.encoded_image.empty() ? nullptr : &frame;
+        context.save_diagnostic(evidence, error.what(), "input_submission");
         throw;
     } catch (...) {
         gate.close();
-        const auto *evidence = last_post ? &*last_post : (frame.encoded_image.empty() ? nullptr : &frame);
-        context.save_diagnostic(evidence, "CUSTOM_ACTION_EXCEPTION", last_post ? "postcondition" : "pre_action");
+        if (submission_armed) { try { gate.finish_submission(false); } catch (...) {} }
+        const auto *evidence = frame.encoded_image.empty() ? nullptr : &frame;
+        context.save_diagnostic(evidence, "CUSTOM_ACTION_EXCEPTION", "input_submission");
+        throw;
+    }
+}
+} // namespace wvd::runtime
+
+namespace wvd::runtime {
+bool GuardedAction::await_transition(maafw::Context &context, devices::InputGate &gate,
+    storage::EventJournal &events, const nlohmann::json &p) {
+    using Clock = std::chrono::steady_clock;
+    using namespace std::chrono_literals;
+    std::optional<contracts::FrameEnvelope> last;
+    try {
+        if (p.value("input_contract", 0) != 2)
+            throw std::runtime_error("TRANSITION_CONTRACT_INVALID");
+        const auto source = p.at("source_node").get<std::string>();
+        const auto request = maafw::parse_recognition_request(p.at("postcondition"));
+        const auto receipt = gate.pending_submission(source, context.task_id(), p.at("postcondition").dump());
+        const auto budget = p.at("observation_budget_ms").get<std::int64_t>();
+        const auto delay = p.value("initial_delay_ms", std::int64_t{0});
+        const auto interval = p.value("poll_interval_ms", std::int64_t{50});
+        if (budget < 1 || budget > 24LL * 60 * 60 * 1000 || delay < 0 || delay > 10000 ||
+            interval < 10 || interval > 10000 || delay >= budget)
+            throw std::runtime_error("TRANSITION_BUDGET_INVALID");
+        // 转场总预算从输入完成开始。识别已取得的有效结果不再套输入寿命。
+        const auto deadline = std::min(receipt.submitted_at + std::chrono::milliseconds(budget),
+                                       gate.observation_deadline());
+        auto cancellable_wait = [&](Clock::time_point until) {
+            while (!context.cancelled() && Clock::now() < until)
+                std::this_thread::sleep_for(std::min(25ms,
+                    std::max(1ms, std::chrono::duration_cast<std::chrono::milliseconds>(until - Clock::now()))));
+            return !context.cancelled();
+        };
+        if (!cancellable_wait(std::min(deadline, receipt.submitted_at + std::chrono::milliseconds(delay)))) return false;
+        events.emit(gate.generation(), "transition.waiting",
+            {{"intent", receipt.intent_id}, {"source_node", source}, {"budget_ms", budget}});
+        while (!context.cancelled() && Clock::now() < deadline) {
+            last = context.capture();
+            const auto observed = context.recognize(*last, request);
+            if (context.cancelled()) return false;
+            if (observed.outcome == contracts::RecognitionOutcome::Error)
+                throw std::runtime_error(observed.error_code);
+            if (observed.outcome == contracts::RecognitionOutcome::Hit) {
+                if (!gate.confirm_transition(receipt, observed))
+                    throw std::runtime_error("TRANSITION_EVIDENCE_MISMATCH");
+                events.emit(gate.generation(), "transition.observed",
+                    {{"intent", receipt.intent_id}, {"source_node", source},
+                     {"frame_id", observed.basis.frame_id}, {"business_confirmed", false}});
+                return true;
+            }
+            if (!cancellable_wait(std::min(deadline, Clock::now() + std::chrono::milliseconds(interval))))
+                return false;
+        }
+        if (context.cancelled()) return false;
+        // 输入已经提交，结果仍不确定。禁止在这里重发输入或请求重启；保留原操作证据。
+        throw std::runtime_error("TRANSITION_RESULT_UNCONFIRMED");
+    } catch (const std::exception &error) {
+        gate.close();
+        context.save_diagnostic(last ? &*last : nullptr, error.what(), "transition_observation");
+        throw;
+    } catch (...) {
+        gate.close();
+        context.save_diagnostic(last ? &*last : nullptr, "TRANSITION_OBSERVATION_EXCEPTION", "transition_observation");
         throw;
     }
 }

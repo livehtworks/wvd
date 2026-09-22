@@ -18,7 +18,8 @@ void binding_valid(const contracts::BehaviorBinding &binding) {
         throw std::runtime_error("BEHAVIOR_BINDING_INVALID");
 }
 const std::set<std::string> reserved{"RootTerminal", "RunChild", "RequireRecovery", "GuardedAction",
-                                     "BusinessCheckpoint", "CancelableWait"};
+                                     "BusinessCheckpoint", "CancelableWait", "AwaitTransition",
+                                     "BeginObservationPhase", "EndObservationPhase"};
 } // namespace
 BehaviorRegistry::BehaviorRegistry(std::string revision) : revision_(std::move(revision)) {
     if (revision_.empty())
@@ -109,7 +110,7 @@ J BehaviorRegistry::manifest() const {
             {{"kind", "recovery"}, {"id", identity.id}, {"revision", identity.revision}});
     return {{"build_id", WVD_CORE_BUILD_ID},
             {"registry_revision", revision_},
-            {"builtin_revision", "runtime-3"},
+            {"builtin_revision", "runtime-4-observation-split"},
             {"entries", entries}};
 }
 void BehaviorRegistry::validate(const SessionDefinition &definition) const {

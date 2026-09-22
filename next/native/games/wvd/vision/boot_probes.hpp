@@ -1,4 +1,5 @@
 #pragma once
+#include "location_probes.hpp"
 #include <json.hpp>
 
 namespace wvd::games::vision {
@@ -13,6 +14,7 @@ inline nlohmann::json blocking_probes(bool include_party_prompts = true) {
         probes.push_back(std::move(p));
     };
     add("startdownload", {222, 901, 465, 84});
+    add("startdownload_zh_hant", {222, 901, 465, 84}, .86);
     add("retry_blank", nullptr, .65);
     add("retry");
     add("retry", nullptr, .60);
@@ -39,6 +41,9 @@ inline nlohmann::json blocking_probes(bool include_party_prompts = true) {
 inline nlohmann::json boot_probes(bool transient) {
     using J = nlohmann::json;
     J probes = transient ? blocking_probes() : J::array();
+    // 各城市的建筑按钮图标相同，不能用来区分地点。王城身份只由其固定塔楼
+    // 背景确认；该锚点只读，不用于点击或推断其他城市业务状态。
+    probes.push_back(royal_city());
     for (auto name : {"Inn", "dungFlag", "worldmapflag", "openworldmap", "returnText", "returntoTown",
                        "mapFlag", "chestFlag", "whowillopenit", "fishing/cast", "fishing/striking", "fishing/CloseFishInfo",
                        "cursedWheelTitle", "cursedWheel", "ruins"})

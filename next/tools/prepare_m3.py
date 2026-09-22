@@ -46,10 +46,12 @@ def prepare_assets():
         )
         relative = "image/" + source.removeprefix("resources/images/")
         path = pack / relative
-        if path.exists() and path.read_bytes() != data:
-            raise RuntimeError("拒绝覆盖不同的作者资产: " + relative)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(data)
+        if path.exists():
+            if path.read_bytes() != data:
+                raise RuntimeError("拒绝覆盖不同的作者资产: " + relative)
+        else:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
         refs = [r for r in report["references"] if source in r["matches"]]
         files.append(
             {
@@ -70,8 +72,12 @@ def prepare_assets():
             raise RuntimeError("新版资源与作者资产重名: " + relative)
         data = source_path.read_bytes()
         path = pack / relative
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(data)
+        if path.exists():
+            if path.read_bytes() != data:
+                raise RuntimeError("拒绝覆盖不同的新版资产: " + relative)
+        else:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
         files.append(
             {
                 "path": relative,

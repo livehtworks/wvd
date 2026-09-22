@@ -1,4 +1,5 @@
 #include "adb_backend.hpp"
+#include "devices/android_viewport.hpp"
 #include "platform/windows/runtime_files.hpp"
 #include "platform/windows/mumu_binding.hpp"
 #include "platform/windows/metadata_query.hpp"
@@ -38,6 +39,16 @@ nlohmann::json AdbBackend::diagnostics() const {
 void AdbBackend::set_vpn_required(bool required) {
     std::lock_guard lock(diagnostics_mutex_);
     binding_["vpn_required"] = required;
+}
+bool AdbBackend::matches_selection(const std::filesystem::path &manager, int index,
+                                   const std::string &serial) const {
+    std::lock_guard lock(diagnostics_mutex_);
+    if (binding_.at("serial") != serial || binding_.at("index") != index) return false;
+    std::error_code error;
+    const auto actual = std::filesystem::canonical(path_from_utf8(binding_.at("manager")), error);
+    if (error) return false;
+    const auto selected = std::filesystem::canonical(manager, error);
+    return !error && selected == actual;
 }
 bool AdbBackend::wait(MaaCtrlId id) {
     if (id == MaaInvalidId)
@@ -433,7 +444,20 @@ devices::RawFrame AdbBackend::capture_current() {
     auto length = MaaImageBufferGetEncodedSize(image.get());
     check(data && length, "ADB_CAPTURE_ENCODE_FAILED");
     std::vector<std::uint8_t> bytes(data, data + length);
+    // 保留采集起点，另记像素就绪时间；查询/识别结束不能伪装成刚拍到的画面。
+    const auto capture_finished = std::chrono::steady_clock::now();
     auto app = foreground_probe(); // 暂态仍可预览；InputGate 不给未知前台输入许可。
+    int rotation = -1;
+    try {
+        const auto input = probe_reply("dumpsys input", 5000);
+        const auto viewport_state = input.exit_code == 0
+            ? devices::android::input_viewport(input.output) : std::nullopt;
+        if (viewport_state && viewport_state->size == size) rotation = viewport_state->rotation;
+        else record({{"event", "viewport_unconfirmed"}, {"input_allowed", false}});
+    } catch (const std::exception &error) {
+        // 元数据缺失不转到另一条截图后端；保留预览，但不猜测旋转来批准输入。
+        record({{"event", "viewport_unconfirmed"}, {"reason", error.what()}, {"input_allowed", false}});
+    }
     std::string viewport = std::to_string(size.width) + "x" + std::to_string(size.height);
     return {std::move(bytes),
             size,
@@ -442,7 +466,7 @@ devices::RawFrame AdbBackend::capture_current() {
             app,
             captured,
             encode_ ? "ADB_ENCODE" : "MUMU_EXTRAS",
-            connection_generation_};
+            connection_generation_, capture_finished, rotation};
 }
 devices::RawFrame AdbBackend::capture() {
     try {
@@ -456,12 +480,25 @@ devices::RawFrame AdbBackend::capture() {
     }
 }
 bool AdbBackend::context_matches(const contracts::FrameIdentity &identity, const std::string &app) {
-    if (!identity.frame_id)
+    if (!identity.frame_id || identity.display_rotation < 0 || !controller_ ||
+        !MaaControllerConnected(controller_.get()) ||
+        identity.connection_generation != connection_generation_ ||
+        identity.device_id != binding_.at("serial").get<std::string>() || app.empty() ||
+        identity.foreground_application != app)
         return false;
-    auto actual = capture();
-    return actual.connection_generation == identity.connection_generation &&
-           actual.size == identity.raw_size && actual.device_id == identity.device_id &&
-           actual.viewport_id == identity.viewport_id && actual.foreground_application == app;
+    // 只复核设备/显示器/前台，不再第二次取整张图，不触发后备连接或改变 frame_id。
+    // 两次前台查询不能提供内核级原子点击保证，但会拒绝检测到的切换和歧义。
+    if (foreground_probe() != app) return false;
+    const auto input = probe_reply("dumpsys input", 5000);
+    const auto viewport = input.exit_code == 0
+        ? devices::android::input_viewport(input.output) : std::nullopt;
+    if (!viewport || viewport->size != identity.raw_size ||
+        viewport->rotation != identity.display_rotation ||
+        identity.viewport_id != std::to_string(viewport->size.width) + "x" +
+                                std::to_string(viewport->size.height))
+        return false;
+    return foreground_probe() == app && MaaControllerConnected(controller_.get()) &&
+           connection_generation_ == identity.connection_generation;
 }
 bool AdbBackend::execute(const contracts::Command &command) {
     using contracts::ActionKind;

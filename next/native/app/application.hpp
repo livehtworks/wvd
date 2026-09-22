@@ -50,6 +50,9 @@ class Application {
     J save_profile(const J &request);
     J select_emulator_path() const;
     J connect_device(const J &request);
+    // 仅在既有设备作业线程调用，同一实现服务于手动连接和开始任务的自动准备。
+    void connect_selected_device(const J &request);
+    std::shared_ptr<maafw::AdbBackend> ensure_connected_for_run(const J &stored);
     J disconnect_device();
     J capture_device();
     J start_task(const J &request);

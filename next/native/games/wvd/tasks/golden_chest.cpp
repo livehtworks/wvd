@@ -3,6 +3,7 @@
 #include "games/wvd/quests/golden_chest.hpp"
 #include "games/wvd/navigation/world_travel.hpp"
 #include "games/wvd/navigation/map_route.hpp"
+#include "games/wvd/vision/location_probes.hpp"
 #include <algorithm>
 
 namespace wvd::games::tasks {
@@ -67,6 +68,7 @@ CompiledWorkflow golden_chest_cycle(const WvdQuestDefinition &definition, const 
     // 领取与路线分属两个Session。按较大的单段预算计算，不能把两段相加超过30分钟上限。
     C graph("tasks.SSC-goldenchest", std::max(route.time_limit + std::chrono::seconds{300}, std::chrono::milliseconds{600000}));
     const auto inn = C::image("Inn"), dung = C::image("dungFlag"), map = C::image("mapFlag");
+    const auto royal_city = vision::royal_city();
     const auto leap_page = C::any({C::image("ruins"), C::image("cursedWheel")});
     graph.route("Entry", {"PendingLeap", "Active", "Start"});
     graph.observe("PendingLeap", C::business("/golden_chest/leap_pending", true), {"Uncertain"});
@@ -82,7 +84,7 @@ CompiledWorkflow golden_chest_cycle(const WvdQuestDefinition &definition, const 
     graph.observe("TravelPhase", phase(Phase::Travel), {"Travel"});
     const auto travel = graph.define_child("RoyalCity", navigation::travel_city_to_city({"City_RoyalCityLuknalia", TaskSwipe{{450, 150}, {500, 150}}, {550, 1}}));
     graph.call_child("Travel", travel, {"Travelled"});
-    graph.confirm("Travelled", "golden.travel", "golden_travelled", inn, {"RequestPhase"});
+    graph.confirm("Travelled", "golden.travel", "golden_travelled", royal_city, {"RequestPhase"});
     graph.observe("RequestPhase", phase(Phase::Request), {"Request"});
     const auto request = graph.define_child("Featured", accept_featured_request(FeaturedRequest::GoldenChest, profile.at("ACTIVE_ROYALSUITE_REST").get<bool>()));
     graph.call_child("Request", request, {"Requested"});

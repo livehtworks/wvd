@@ -491,7 +491,9 @@ void Context::save_diagnostic(const contracts::FrameEnvelope *frame, const std::
                 id.connection_generation == owned->connection_generation &&
                 id.raw_size == owned->raw_size && id.recognition_size == owned->recognition_size &&
                 id.color_format == owned->color_format && id.backend == owned->backend &&
-                id.foreground_application == owned->foreground_application;
+                id.foreground_application == owned->foreground_application &&
+                id.capture_finished_at == owned->capture_finished_at &&
+                id.display_rotation == owned->display_rotation;
         };
         if (frame && !belongs(first_frame_) && !belongs(last_frame_)) {
             request.error = "DIAGNOSTIC_CONTEXT_FRAME_MISMATCH";
@@ -521,7 +523,8 @@ ChildResult Context::run_child(const std::string &entry, const nlohmann::json &o
     } depth(gateway_.depth_);
     auto native = clone ? MaaContextClone(context_) : context_;
     require(native != nullptr, "CONTEXT_CLONE_FAILED");
-    require(reset_hit_counts.size() <= 4096, "CHILD_RESET_LIMIT");
+    // 原编译图最多 4608 节点，每个输入最多派生一个观察节点；不是解除原图上限。
+    require(reset_hit_counts.size() <= 4608 * 2, "CHILD_RESET_LIMIT");
     // SDK 的上下文共享命中计数。只清理编译器封存的被调用作用域，
     // 不清外层次数、业务状态、观察缓存或输入许可；下一次动作仍需新帧。
     for (const auto &name : reset_hit_counts) {

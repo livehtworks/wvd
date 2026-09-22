@@ -29,6 +29,10 @@ struct FrameIdentity {
     std::string color_format{"BGR8"};
     std::uint64_t connection_generation{};
     std::string backend, foreground_application;
+    // captured_at 是采集开始时间；完成时间独立保存，不用重置旧时间掩盖耗时。
+    std::chrono::steady_clock::time_point capture_finished_at{};
+    int display_rotation{-1};
+    bool operator==(const FrameIdentity &) const = default;
 };
 struct FrameEnvelope {
     FrameIdentity identity;

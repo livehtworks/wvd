@@ -10,6 +10,8 @@ struct RawFrame {
     std::chrono::steady_clock::time_point captured_at{};
     std::string backend;
     std::uint64_t connection_generation{};
+    std::chrono::steady_clock::time_point capture_finished_at{};
+    int display_rotation{-1};
 };
 // 内层始终使用原始设备坐标。M2 的具体设备只存在于 tests，真实适配在 M3。
 class DeviceBackend {

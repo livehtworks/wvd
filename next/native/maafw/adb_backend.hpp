@@ -32,6 +32,8 @@ class AdbBackend final : public devices::DeviceBackend, public devices::Lifecycl
     nlohmann::json diagnostics() const;
     // 仅在 Application 已排除活动 Run/设备作业后，从已保存的冻结配置更新。
     void set_vpn_required(bool required);
+    bool matches_selection(const std::filesystem::path &manager, int index,
+                           const std::string &serial) const;
     devices::LifecycleTarget lifecycle_target() const;
 
   private:

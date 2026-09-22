@@ -6,6 +6,7 @@
 #include "games/wvd/navigation/world_travel.hpp"
 #include "games/wvd/quests/bounty_cycle.hpp"
 #include "games/wvd/supply/inn.hpp"
+#include "games/wvd/vision/location_probes.hpp"
 
 namespace wvd::games::tasks {
 namespace {
@@ -16,10 +17,10 @@ const J jier_positions{{"position", "左下", {452, 545}}, {"position", "左下"
 J phase(Phase value) { return C::all({C::business("/bounty_cycle/phase", static_cast<int>(value)), C::business("/bounty_cycle/unit_matches", true)}); }
 CompiledWorkflow return_to_bounty_city(bool guild) {
     C graph(guild ? "quest.bounty.return_guild" : "quest.bounty.return_fortress");
-    const auto target = C::image(guild ? "guild" : "Inn");
+    const auto target = guild ? vision::guild_button() : vision::inn_button();
     const auto map = C::image("mapFlag");
     const auto encounter = C::any({J{{"mode", "combat_active"}}, C::image("chestFlag"), C::image("RiseAgain")});
-    J known{target, map, C::image("dungFlag"), C::image("Inn"), C::image("EdgeOfTown")};
+    J known{target, map, C::image("dungFlag"), vision::city_screen()};
     const std::vector<std::string> exits{"returntotown", "returnText", "leaveDung", "blessing"};
     for (const auto &name : exits) known.push_back(C::image(name));
     const auto done = C::all({target, C::absent(map), C::absent(encounter)});
@@ -73,9 +74,18 @@ CompiledWorkflow bounty_cycle(const WvdQuestDefinition &definition, const J &pro
     // harken是退出动作，不是假装仍在地图上确认的第三个坐标点。两点完成后独立执行它。
     const auto first_route = traverse_dungeon(jier ? first_plan.with_route(jier_positions) : first_plan, profile, images, allow_download, dialogue);
     C graph("tasks." + definition.id, first_route.time_limit + std::chrono::seconds{360});
-    const auto inn = C::image("Inn"), guild = C::image("guild"), edge = C::image("EdgeOfTown"), map = C::image("mapFlag");
-    const auto leap_page = C::any({C::image("cursedWheelTitle"), C::image("cursedWheel"), C::image("ruins")});
-    const auto outside = C::any({inn, edge, C::image("dungFlag"), C::image("returnText"), C::image("returntotown"), C::image("openworldmap")});
+    const auto inn = vision::inn_button(), guild = vision::guild_button(),
+               edge = vision::edge_of_town_button(), map = C::image("mapFlag");
+    const auto royal_city = vision::royal_city();
+    const auto leap_page = C::any({C::image("cursedWheelTitle"), C::image("cursedWheelTitle_zh_hant"),
+        C::image("cursedWheel"), C::image("cursedWheel_zh_hant"), C::image("ruins"), C::image("ruins_icon")});
+    // 与旧 CursedWheelTimeLeap 的调用入口一致：先从已确认城市进入因果轮。
+    // 这里仅标记准备阶段，绝不把城市画面当作“已跳跃”。
+    const auto start_page = C::all({C::any({leap_page, royal_city, inn, guild, edge, C::image("openworldmap")}),
+        C::absent(J{{"mode", "blocking_screen"}}), C::absent(J{{"mode", "combat_active"}}),
+        C::absent(C::image("chestFlag"))});
+    const auto outside = C::any({royal_city, inn, edge, C::image("dungFlag"), C::image("returnText"),
+        C::image("returntotown"), C::image("openworldmap")});
     graph.route("Entry", {"PendingTransfer", "PendingPayment", "PendingReport", "Resume", "Start"});
     graph.observe("PendingTransfer", C::business("/bounty_cycle/transfer_pending", true), {"TransferUncertain"});
     graph.recovery("TransferUncertain", "quest.bounty_transfer_unconfirmed");
@@ -84,12 +94,12 @@ CompiledWorkflow bounty_cycle(const WvdQuestDefinition &definition, const J &pro
     graph.observe("PendingReport", C::business("/bounty_report_pending", true), {"ReportUncertain"});
     graph.recovery("ReportUncertain", "quest.bounty_report_unconfirmed");
     graph.observe("Resume", C::business("/bounty_cycle/active", true), {"Stage"});
-    graph.confirm("Start", "bounty.cycle.start", jier ? "jier_started" : hands ? "scorpion_hands_started" : "scorpion_started", leap_page, {"Stage"});
+    graph.confirm("Start", "bounty.cycle.start", jier ? "jier_started" : hands ? "scorpion_hands_started" : "scorpion_started", start_page, {"Stage"});
     graph.route("Stage", hands ? J{"LeapPhase", "TravelPhase", "RevealPhase", "FirstRoutePhase", "FirstReturnPhase",
         "SecondRoutePhase", "SecondReturnPhase", "ReportsPhase", "RestPhase"} :
         J{"LeapPhase", "TravelPhase", "RevealPhase", "FirstRoutePhase", "FirstReturnPhase", "ReportsPhase", "RestPhase"});
     graph.observe("LeapPhase", phase(Phase::Leap), {"PrepareLeap"});
-    graph.confirm("PrepareLeap", "bounty.leap.prepare", "bounty_leap_prepared", leap_page, {"Leap"});
+    graph.confirm("PrepareLeap", "bounty.leap.prepare", "bounty_leap_prepared", start_page, {"Leap"});
     // 这两个原case没有传CSC_symbol，即便ACTIVE_CSC开启也不修改因果；并非忽略配置。
     const auto leap = graph.define_child("TimeLeap", navigation::time_leap_without_causality(
         jier ? "requestToRescueTheDuke" : ore ? "BeautifulOre" : triumph ? "Triumph" : "GhostsOfYore", ore ? "cursedwheel_dhi" : "cursedwheel_impregnableFortress", allow_download));
@@ -105,7 +115,8 @@ CompiledWorkflow bounty_cycle(const WvdQuestDefinition &definition, const J &pro
             {"City_RoyalCityLuknalia", TaskSwipe{{450, 150}, {500, 150}}, {550, 1}}));
         graph.call_child("GoRoyalCity", travel, {"Travelled"});
     }
-    graph.confirm("Travelled", "bounty.travel.done", ore ? "bounty_travel_skipped" : "bounty_travel_completed", C::any({inn, guild, edge}), {"RevealPhase"});
+    graph.confirm("Travelled", "bounty.travel.done", ore ? "bounty_travel_skipped" : "bounty_travel_completed",
+                  ore ? C::any({royal_city, inn, guild, edge}) : royal_city, {"RevealPhase"});
     graph.observe("RevealPhase", phase(Phase::Reveal), {"Reveal"});
     const auto board = graph.define_child("BountyBoard", visit_bounty_board(BountyVisit::Reveal));
     graph.call_child("Reveal", board, {"Revealed"});

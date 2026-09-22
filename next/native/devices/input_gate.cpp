@@ -75,6 +75,12 @@ RawFrame InputGate::capture() {
               raw.captured_at.time_since_epoch().count() > 0 ? raw.captured_at
                                                              : std::chrono::steady_clock::now(),
               "BGR8"};
+    frame_.capture_finished_at = raw.capture_finished_at.time_since_epoch().count() > 0
+        ? raw.capture_finished_at : frame_.captured_at;
+    if (frame_.captured_at > frame_.capture_finished_at ||
+        frame_.capture_finished_at > std::chrono::steady_clock::now())
+        throw std::runtime_error("CAPTURE_TIME_INVALID");
+    frame_.display_rotation = raw.display_rotation;
     application_ = raw.foreground_application;
     frame_.connection_generation = raw.connection_generation;
     frame_.backend = raw.backend;
@@ -87,7 +93,12 @@ RawFrame InputGate::capture() {
                   {"backend", raw.backend},
                   {"width", raw.size.width},
                   {"height", raw.size.height},
-                  {"application", application_}});
+                  {"application", application_},
+                  {"capture_started_ns", std::chrono::duration_cast<std::chrono::nanoseconds>(frame_.captured_at.time_since_epoch()).count()},
+                  {"capture_finished_ns", std::chrono::duration_cast<std::chrono::nanoseconds>(frame_.capture_finished_at.time_since_epoch()).count()},
+                  {"capture_finish_reported", raw.capture_finished_at.time_since_epoch().count() > 0},
+                  {"capture_duration_ms", std::chrono::duration_cast<std::chrono::milliseconds>(
+                      frame_.capture_finished_at - frame_.captured_at).count()}});
     return raw;
 }
 void InputGate::invalidate_frame() {
@@ -107,17 +118,22 @@ bool InputGate::same_frame(const FrameIdentity &f) const {
            f.action_epoch == epoch_ && f.raw_size == frame_.raw_size &&
            f.recognition_size == frame_.recognition_size && f.captured_at == frame_.captured_at &&
            f.color_format == "BGR8" && f.connection_generation == frame_.connection_generation &&
-           std::chrono::steady_clock::now() - f.captured_at <= policy_.max_frame_age;
+           f.backend == frame_.backend && f.foreground_application == frame_.foreground_application &&
+           f.capture_finished_at == frame_.capture_finished_at &&
+           f.display_rotation == frame_.display_rotation &&
+           f.captured_at.time_since_epoch().count() > 0 &&
+           f.captured_at <= std::chrono::steady_clock::now();
 }
 bool InputGate::current_observation(const Observation &observation) const {
     std::lock_guard lock(mutex_);
-    // 只校验已观测证据，不建立场景许可。业务确认不能绕过相同的代次/epoch/帧龄边界。
+    // 业务证据不是待发点击许可。识别耗时不撤销已经观察到的事实；仍拒绝旧代次/旧epoch。
     return !closed() && observation.outcome != RecognitionOutcome::Error &&
            same_frame(observation.basis) && application_ == policy_.application_id;
 }
 void InputGate::confirm_scene(const Observation &observation, const std::string &scene) {
     std::lock_guard lock(mutex_);
-    if (observation.outcome != RecognitionOutcome::Hit || !same_frame(observation.basis) ||
+    if (closed() || observation.outcome != RecognitionOutcome::Hit ||
+        !same_frame(observation.basis) || application_ != policy_.application_id ||
         !policy_.allowed_scenes.contains(scene))
         throw std::runtime_error("SCENE_UNCONFIRMED");
     scene_ = scene;
@@ -144,6 +160,8 @@ std::string InputGate::reject_reason(const Command &c) const {
     const auto &p = *permit_;
     if (p.run_id != run_ || p.generation != generation_ || !same_frame(p.observation.basis))
         return "STALE_ACTION_INTENT";
+    if (!fresh_for_input(p.observation.basis))
+        return "INPUT_EVIDENCE_EXPIRED";
     if (p.observation.outcome != RecognitionOutcome::Hit)
         return "OBSERVATION_NOT_HIT";
     if (!p.observation.action_eligible)
@@ -359,5 +377,114 @@ bool InputGate::quiescent() const {
 InputCounts InputGate::counts() const {
     std::lock_guard lock(mutex_);
     return counts_;
+}
+} // namespace wvd::devices
+
+namespace wvd::devices {
+bool InputGate::fresh_for_input(const contracts::FrameIdentity &frame) const {
+    if (policy_.max_frame_age.count() < 0) return false;
+    const auto captured = frame.capture_finished_at.time_since_epoch().count() > 0
+        ? frame.capture_finished_at : frame.captured_at;
+    const auto now = std::chrono::steady_clock::now();
+    return captured <= now && (policy_.max_frame_age.count() == 0 ||
+                               now - captured <= policy_.max_frame_age);
+}
+bool InputGate::input_observation_current(const contracts::Observation &observation) const {
+    std::lock_guard lock(mutex_);
+    return !closed() && observation.outcome == contracts::RecognitionOutcome::Hit &&
+        same_frame(observation.basis) && application_ == policy_.application_id &&
+        fresh_for_input(observation.basis);
+}
+void InputGate::begin_submission(const std::string &node, std::int64_t task,
+                                 const contracts::ActionIntent &intent,
+                                 const std::string &condition) {
+    std::lock_guard lock(mutex_);
+    if (submission_) throw std::runtime_error("PREVIOUS_INPUT_NOT_OBSERVED");
+    if (closed() || node.empty() || task <= 0 || !intent.id || condition.empty() ||
+        intent.run_id != run_ || intent.generation != generation_ ||
+        !same_frame(intent.observation.basis))
+        throw std::runtime_error("SUBMISSION_IDENTITY_INVALID");
+    submission_ = contracts::SubmittedInput{node, condition, task, intent.id, epoch_,
+        intent.observation.basis};
+}
+void InputGate::finish_submission(bool accepted) {
+    std::lock_guard lock(mutex_);
+    if (!submission_ || submission_->state != contracts::SubmittedInput::State::Prepared)
+        throw std::runtime_error("SUBMISSION_NOT_PREPARED");
+    // 原许可只允许一次输入。成功返回但没有实际输入不能伪造 Submitted。
+    const bool exactly_one = epoch_ == submission_->before.action_epoch + 1 && !in_flight_;
+    submission_->state = accepted && exactly_one
+        ? contracts::SubmittedInput::State::Submitted : contracts::SubmittedInput::State::Ambiguous;
+    submission_->action_epoch = epoch_;
+    submission_->submitted_at = std::chrono::steady_clock::now();
+    if (accepted && !exactly_one)
+        throw std::runtime_error("SUBMISSION_INPUT_COUNT_MISMATCH");
+}
+contracts::SubmittedInput InputGate::pending_submission(const std::string &node,
+    std::int64_t task, const std::string &condition) const {
+    std::lock_guard lock(mutex_);
+    if (!submission_ || submission_->source_node != node || submission_->task_id != task ||
+        submission_->expected_condition != condition ||
+        submission_->state != contracts::SubmittedInput::State::Submitted ||
+        submission_->action_epoch != epoch_)
+        throw std::runtime_error("TRANSITION_RECEIPT_MISMATCH");
+    return *submission_;
+}
+bool InputGate::confirm_transition(const contracts::SubmittedInput &receipt,
+                                   const contracts::Observation &observed) {
+    std::lock_guard lock(mutex_);
+    if (closed() || !submission_ || submission_->intent_id != receipt.intent_id ||
+        submission_->source_node != receipt.source_node || submission_->task_id != receipt.task_id ||
+        submission_->expected_condition != receipt.expected_condition ||
+        submission_->before != receipt.before || submission_->action_epoch != receipt.action_epoch ||
+        submission_->submitted_at != receipt.submitted_at || receipt.state != contracts::SubmittedInput::State::Submitted ||
+        submission_->state != contracts::SubmittedInput::State::Submitted ||
+        observed.outcome != contracts::RecognitionOutcome::Hit || !same_frame(observed.basis) ||
+        application_ != policy_.application_id ||
+        observed.basis.connection_generation != receipt.before.connection_generation ||
+        observed.basis.frame_id <= receipt.before.frame_id ||
+        observed.basis.action_epoch != receipt.action_epoch ||
+        observed.basis.captured_at < receipt.submitted_at)
+        return false;
+    // 只消费观察回执，绝不重建 scene_ / permit_，更不自动提交业务完成。
+    submission_.reset();
+    return true;
+}
+bool InputGate::has_pending_submission() const {
+    std::lock_guard lock(mutex_);
+    return submission_.has_value();
+}
+} // namespace wvd::devices
+
+namespace wvd::devices {
+void InputGate::begin_observation_phase(std::int64_t task, const std::string &phase,
+                                        std::chrono::milliseconds budget) {
+    std::lock_guard lock(mutex_);
+    if (closed() || task <= 0 || phase.empty() || phase.size() > 128 ||
+        budget.count() <= 0 || budget > std::chrono::hours(24))
+        throw std::runtime_error("OBSERVATION_PHASE_INVALID");
+    const auto key = std::make_pair(task, phase);
+    auto found = observation_phases_.find(key);
+    if (found == observation_phases_.end()) {
+        if (observation_phases_.size() >= 32)
+            throw std::runtime_error("OBSERVATION_PHASE_DEPTH_EXCEEDED");
+        found = observation_phases_.emplace(key, std::chrono::steady_clock::now() + budget).first;
+    }
+    if (std::chrono::steady_clock::now() >= found->second)
+        throw std::runtime_error("OBSERVATION_PHASE_TIMEOUT:" + phase);
+}
+void InputGate::end_observation_phase(std::int64_t task, const std::string &phase) {
+    std::lock_guard lock(mutex_);
+    if (observation_phases_.erase({task, phase}) != 1)
+        throw std::runtime_error("OBSERVATION_PHASE_NOT_ACTIVE");
+}
+std::chrono::steady_clock::time_point InputGate::observation_deadline() const {
+    std::lock_guard lock(mutex_);
+    auto deadline = std::chrono::steady_clock::time_point::max();
+    for (const auto &[key, value] : observation_phases_) {
+        (void)key;
+        deadline = std::min(deadline, value);
+    }
+    return deadline;
 }
 } // namespace wvd::devices

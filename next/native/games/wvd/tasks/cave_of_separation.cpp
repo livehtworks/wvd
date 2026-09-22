@@ -5,6 +5,7 @@
 #include "games/wvd/navigation/world_travel.hpp"
 #include "games/wvd/recovery/boot.hpp"
 #include "games/wvd/supply/inn.hpp"
+#include "games/wvd/vision/location_probes.hpp"
 #include <utility>
 
 namespace wvd::games::tasks {
@@ -79,6 +80,7 @@ void entry_guards(C &graph, J next) {
 CompiledWorkflow preparation(const WvdQuestDefinition &definition, const J &profile, bool download) {
     C graph("tasks.CaveOfSeperation.preparation", std::chrono::seconds{1500});
     const auto inn = city(), guild = C::image("guild");
+    const auto royal_city = vision::royal_city();
     const auto leap_page = C::any({C::image("cursedWheelTitle"), C::image("cursedWheel"), C::image("ruins")});
     const auto outside = C::all({C::any({inn, C::image("dungFlag"), C::image("mapFlag"), C::image("EdgeOfTown"),
         C::image("returnText"), C::image("returntotown"), C::image("openworldmap")}),
@@ -106,7 +108,7 @@ CompiledWorkflow preparation(const WvdQuestDefinition &definition, const J &prof
     graph.call_child("Royal", royal, {"FindGuild"});
     const auto find = graph.define_child("RoyalGuild", find_city_menu(true, true));
     graph.call_child("FindGuild", find, {"AtRoyal"});
-    graph.confirm("AtRoyal", "cos.royal", "cos_royal", guild, {"Stage"});
+    graph.confirm("AtRoyal", "cos.royal", "cos_royal", royal_city, {"Stage"});
     graph.observe("RequestPhase", phase(Phase::Request), {"Request"});
     const auto request = graph.define_child("RequestSword", request_sword());
     graph.call_child("Request", request, {"Requested"});

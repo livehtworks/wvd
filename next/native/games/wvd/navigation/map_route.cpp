@@ -1,4 +1,5 @@
 #include "map_route.hpp"
+#include "games/wvd/vision/location_probes.hpp"
 
 namespace wvd::games::navigation {
 using J = nlohmann::json;
@@ -29,7 +30,7 @@ tasks::CompiledWorkflow reach_map_target(const MapTarget &target,
     bool positional = target.target == "position" || target.target.starts_with("stair");
     const bool exit_target = target.target == "harken" || target.target == "Bharken" ||
                              target.target == "leaveDung" || target.target.ends_with("_quit");
-    const auto outside = C::all({C::any({C::image("Inn"), C::image("EdgeOfTown"), C::image("returnText"),
+    const auto outside = C::all({C::any({vision::city_screen(), C::image("returnText"),
                                         C::image("returntoTown"), C::image("openworldmap"), C::image("worldmapflag")}),
                                  C::absent(map), C::absent(encounter)});
     J done;

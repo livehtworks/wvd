@@ -14,6 +14,20 @@ class InputGate {
     RawFrame capture();
     void invalidate_frame();
     contracts::FrameIdentity frame_identity() const;
+    // 结果确认只核对证据归属；可选输入寿命单独检查。
+    bool input_observation_current(const contracts::Observation &observation) const;
+    void begin_submission(const std::string &source_node, std::int64_t task_id,
+                          const contracts::ActionIntent &intent, const std::string &condition);
+    void finish_submission(bool accepted);
+    contracts::SubmittedInput pending_submission(const std::string &source_node,
+                          std::int64_t task_id, const std::string &condition) const;
+    bool confirm_transition(const contracts::SubmittedInput &receipt,
+                            const contracts::Observation &observation);
+    bool has_pending_submission() const;
+    void begin_observation_phase(std::int64_t task_id, const std::string &phase,
+                                 std::chrono::milliseconds budget);
+    void end_observation_phase(std::int64_t task_id, const std::string &phase);
+    std::chrono::steady_clock::time_point observation_deadline() const;
     bool current_observation(const contracts::Observation &observation) const;
     void confirm_scene(const contracts::Observation &observation, const std::string &scene);
     bool authorize(const contracts::ActionIntent &intent);
@@ -40,6 +54,7 @@ class InputGate {
     }
 
   private:
+    bool fresh_for_input(const contracts::FrameIdentity &frame) const;
     bool same_frame(const contracts::FrameIdentity &frame) const;
     std::string reject_reason(const contracts::Command &command) const;
     contracts::Command mapped(const contracts::Command &command) const;
@@ -54,6 +69,9 @@ class InputGate {
     contracts::FrameIdentity frame_;
     std::string application_, scene_;
     std::optional<contracts::ActionIntent> permit_;
+    std::optional<contracts::SubmittedInput> submission_;
+    // 嵌套子流程继承当前活动阶段最早截止时间；循环入口不重新开始计时。
+    std::map<std::pair<std::int64_t, std::string>, std::chrono::steady_clock::time_point> observation_phases_;
     contracts::InputCounts counts_;
     std::set<int> touches_, keys_;
     std::size_t in_flight_{};

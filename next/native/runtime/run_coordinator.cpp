@@ -75,7 +75,7 @@ void RunCoordinator::validate(const RunDefinition &d, const devices::DeviceBacke
     if (d.request_id.empty() || d.request_id.size() > 128 || p.device_id.empty() ||
         p.game_id.empty() || p.application_id.empty() || p.viewport_id.empty() ||
         p.pack_revision != d.initial.bundle.revision || p.recognition_size.width <= 0 ||
-        p.recognition_size.height <= 0 || p.max_frame_age <= 0ms || d.initial.entry.empty() ||
+        p.recognition_size.height <= 0 || p.max_frame_age < 0ms || d.initial.entry.empty() ||
         d.initial.terminal_node.empty() || d.initial.time_limit <= 0ms ||
         d.initial.stop_timeout <= 0ms || d.recovery_limit > 16)
         throw std::runtime_error("RUN_DEFINITION_INVALID");

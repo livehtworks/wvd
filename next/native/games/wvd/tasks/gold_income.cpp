@@ -3,6 +3,7 @@
 #include "games/wvd/navigation/time_leap.hpp"
 #include "games/wvd/navigation/world_travel.hpp"
 #include "games/wvd/navigation/return_city.hpp"
+#include "games/wvd/vision/location_probes.hpp"
 
 namespace wvd::games::tasks {
 namespace {
@@ -93,9 +94,10 @@ CompiledWorkflow gold_income_cycle(const WvdQuestDefinition &definition, bool al
     C graph("tasks.7000G", std::chrono::seconds{1500});
     const auto leap_page = C::any({C::image("cursedWheelTitle"), C::image("cursedWheel"), C::image("ruins")});
     const auto inn = C::image("Inn"), world = C::image("intoWorldMap");
+    const auto royal_city = vision::royal_city();
     const auto outside = C::any({inn, C::image("EdgeOfTown"), C::image("returntotown"), C::image("returnText"), C::image("leaveDung"), C::image("blessing")});
     const auto story = C::any({C::image("fastforward"), option("royalcapital")});
-    const std::array<J, 11> scenes{leap_page, outside, inn, C::image("guild"), story, world, world, world,
+    const std::array<J, 11> scenes{leap_page, outside, inn, royal_city, story, world, world, world,
         option("icantagreewithU"), option("illgo"), C::image("ruins")};
     std::vector<CompiledWorkflow> steps;
     steps.push_back(navigation::time_leap_without_causality("FortressArrival", "cursedwheel_impregnableFortress", allow_download));

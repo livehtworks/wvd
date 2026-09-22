@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "source_commit": "6585f4075f5714ab522aa582993860c09af912c1",
-  "revision": "e9d87373b3c9f8721cc3cddde69165a20a29c905aeccea9d0c7a3adb40bcb044",
+  "revision": "59d1d4bc46f8be0f241f7e6db2575df44843234fc85ea941b391045c0285996b",
   "files": [
     {
       "path": "image/7000G/icantagreewithU.png",
@@ -3609,10 +3609,181 @@
       "source_refs": []
     },
     {
+      "path": "image/BeautifulOre_zh_hant.png",
+      "source": "next/resources/images/BeautifulOre_zh_hant.png",
+      "sha256": "0b50a66d2b07dd132b58eb25786e790b658a17893bb755c17cac99bc7f51ce50",
+      "bytes": 47300,
+      "source_refs": [
+        "native/games/wvd/recovery/boot.cpp"
+      ]
+    },
+    {
+      "path": "image/beginningAbyss_zh_hant.png",
+      "source": "next/resources/images/beginningAbyss_zh_hant.png",
+      "sha256": "9d7f408de577b59bb018f6430554f782be6f62998550134312a9f1fc5c10fa0f",
+      "bytes": 33146,
+      "source_refs": [
+        "native/games/wvd/recovery/boot.cpp"
+      ]
+    },
+    {
       "path": "image/boot_attention_zh.png",
       "source": "next/resources/images/boot_attention_zh.png",
       "sha256": "fe141814bf938a20c4adb1aa660985d7e0dec82ca6dc79cf6242bc704c55699c",
       "bytes": 12246,
+      "source_refs": [
+        "native/games/wvd/recovery/boot.cpp"
+      ]
+    },
+    {
+      "path": "image/cursedwheel_dhi_zh_hant.png",
+      "source": "next/resources/images/cursedwheel_dhi_zh_hant.png",
+      "sha256": "bfc9be21ae72a83eef4335ea13f0ef4e69f67a1e166914a27cbc7fd6c8b5b126",
+      "bytes": 24006,
+      "source_refs": [
+        "native/games/wvd/recovery/boot.cpp"
+      ]
+    },
+    {
+      "path": "image/cursedwheel_impregnableFortress_zh_hant.png",
+      "source": "next/resources/images/cursedwheel_impregnableFortress_zh_hant.png",
+      "sha256": "da02d0dd19ac3448210b58ec79e0d1914d6a3d79de69072b0b15e28104b21a3a",
+      "bytes": 27456,
+      "source_refs": [
+        "native/games/wvd/recovery/boot.cpp"
+      ]
+    },
+    {
+      "path": "image/cursedWheel_zh_hant.png",
+      "source": "next/resources/images/cursedWheel_zh_hant.png",
+      "sha256": "04ffd1d30a063e67650e96b0d743854965ccd41cd02681f4a83ffe6ca7bba9a7",
+      "bytes": 33261,
+      "source_refs": [
+        "native/games/wvd/recovery/boot.cpp"
+      ]
+    },
+    {
+      "path": "image/cursedWheelTitle_zh_hant.png",
+      "source": "next/resources/images/cursedWheelTitle_zh_hant.png",
+      "sha256": "493ec3883f78d6a1b3b9a8f0719bc705832f2634cd3622921782cf015e900171",
+      "bytes": 34376,
+      "source_refs": [
+        "native/games/wvd/recovery/boot.cpp"
+      ]
+    },
+    {
+      "path": "image/edge_of_town_icon.png",
+      "source": "next/resources/images/edge_of_town_icon.png",
+      "sha256": "4a519855f1153f379b29d9f7f3fea847fd4f0a9c0e286e260056830813f3ff35",
+      "bytes": 39083,
+      "source_refs": [
+        "native/games/wvd/recovery/boot.cpp"
+      ]
+    },
+    {
+      "path": "image/FortressArrival_zh_hant.png",
+      "source": "next/resources/images/FortressArrival_zh_hant.png",
+      "sha256": "197bd96260ed326bf71ade54554b71346deab5ff2a77a76ca31314eb3f6689a7",
+      "bytes": 48960,
+      "source_refs": [
+        "native/games/wvd/recovery/boot.cpp"
+      ]
+    },
+    {
+      "path": "image/GhostsOfYore_zh_hant.png",
+      "source": "next/resources/images/GhostsOfYore_zh_hant.png",
+      "sha256": "c3034ffeeb2c288e34fb4807ff90f770226afffd23feb2221cff893f3ad1434a",
+      "bytes": 71744,
+      "source_refs": [
+        "native/games/wvd/recovery/boot.cpp"
+      ]
+    },
+    {
+      "path": "image/guild_icon.png",
+      "source": "next/resources/images/guild_icon.png",
+      "sha256": "9d821f86943c3054a6cc6e929be456f23c94bf918b29be70034934982811e8cd",
+      "bytes": 39431,
+      "source_refs": [
+        "native/games/wvd/recovery/boot.cpp"
+      ]
+    },
+    {
+      "path": "image/inn_icon.png",
+      "source": "next/resources/images/inn_icon.png",
+      "sha256": "fa2054b29397d7066b49e20043e54172ed0e5ac2e3eb13f0d84686ed935f17d7",
+      "bytes": 43566,
+      "source_refs": [
+        "native/games/wvd/recovery/boot.cpp"
+      ]
+    },
+    {
+      "path": "image/leap_zh_hant.png",
+      "source": "next/resources/images/leap_zh_hant.png",
+      "sha256": "f2debe77129f89e9933f7fea9978c5274de24e9def0d3f8fea9927cbdd4c8b81",
+      "bytes": 12910,
+      "source_refs": [
+        "native/games/wvd/recovery/boot.cpp"
+      ]
+    },
+    {
+      "path": "image/RescueKing_zh_hant.png",
+      "source": "next/resources/images/RescueKing_zh_hant.png",
+      "sha256": "302bd6970ae84b8a30d1a3d80a87f068f09d8b39a837bd6bc4567ba145142dc8",
+      "bytes": 30472,
+      "source_refs": [
+        "native/games/wvd/recovery/boot.cpp"
+      ]
+    },
+    {
+      "path": "image/ReturnRoyalCity_zh_hant.png",
+      "source": "next/resources/images/ReturnRoyalCity_zh_hant.png",
+      "sha256": "74fef5e961438df235fac3421e73771c5d1611c3510a32f5b42293a3fe6059d8",
+      "bytes": 40088,
+      "source_refs": [
+        "native/games/wvd/recovery/boot.cpp"
+      ]
+    },
+    {
+      "path": "image/royal_city_background.png",
+      "source": "next/resources/images/royal_city_background.png",
+      "sha256": "3f5d97ff9d84fe08591e5623a83abcedb5305efa37b063fd193c8d9345415e0e",
+      "bytes": 100211,
+      "source_refs": [
+        "native/games/wvd/recovery/boot.cpp"
+      ]
+    },
+    {
+      "path": "image/ruins_icon.png",
+      "source": "next/resources/images/ruins_icon.png",
+      "sha256": "f9f6ca5e5bf50f4f83d25851f84cdf01a8ac7e0b90e3586ae65a61514757fa96",
+      "bytes": 25420,
+      "source_refs": [
+        "native/games/wvd/recovery/boot.cpp"
+      ]
+    },
+    {
+      "path": "image/startdownload_zh_hant.png",
+      "source": "next/resources/images/startdownload_zh_hant.png",
+      "sha256": "5a979721fe526ff70f0955a0f8769e5d15c36cf9dff28462740b6f4fa4cfc7db",
+      "bytes": 9740,
+      "source_refs": [
+        "native/games/wvd/recovery/boot.cpp"
+      ]
+    },
+    {
+      "path": "image/TradeWaterway_zh_hant.png",
+      "source": "next/resources/images/TradeWaterway_zh_hant.png",
+      "sha256": "2ecd62c5b9dda58e5c7f6a524aad25f3539d99b84c144dcc4e025d7f26d37402",
+      "bytes": 24853,
+      "source_refs": [
+        "native/games/wvd/recovery/boot.cpp"
+      ]
+    },
+    {
+      "path": "image/Triumph_zh_hant.png",
+      "source": "next/resources/images/Triumph_zh_hant.png",
+      "sha256": "3fe6186c5c8ac993b4495496de308eaf4b8390feedeefe4caa5260dd8db171ee",
+      "bytes": 19220,
       "source_refs": [
         "native/games/wvd/recovery/boot.cpp"
       ]

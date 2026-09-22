@@ -186,6 +186,8 @@ void CompiledWorkflow::validate() const {
                                             node.value("custom_action", "") == "WvdChest" ||
                                             node.value("custom_action", "") == "WvdUnknownLeap" ||
                                             node.value("custom_action", "") == "CancelableWait" ||
+                                            node.value("custom_action", "") == "BeginObservationPhase" ||
+                                            node.value("custom_action", "") == "EndObservationPhase" ||
                                             node.value("custom_action", "") == "BusinessCheckpoint" ||
                                             node.value("custom_action", "") == "RequireRecovery")),
                 "COMPILE_UNGUARDED_ACTION");
@@ -313,7 +315,8 @@ void PipelineCompiler::add(const std::string &name, J node) {
     node.update({{"pre_delay", 0},
                  {"post_delay", 0},
                  {"rate_limit", 50},
-                 {"timeout", 3000},
+                 // 下一页面的等待属于该业务图预算，不是统一三秒页面跳转事务。
+                 {"timeout", workflow_.time_limit.count()},
                  {"max_hit", 5}});
     if (name != "Terminal" && name != "RecoveryRequired")
         node["on_error"] = {"RecoveryRequired"};
@@ -328,7 +331,8 @@ void PipelineCompiler::wait(const std::string &name, int milliseconds, J next) {
     add(name, {{"action", "Custom"}, {"custom_action", "CancelableWait"},
                {"custom_action_param", {{"duration_ms", milliseconds}}},
                {"next", std::move(next)}});
-    workflow_.nodes.at(name)["timeout"] = milliseconds + 3000;
+    // CancelableWait 的 duration 只控制延迟；后继识别等待继续使用业务图预算。
+    workflow_.nodes.at(name)["timeout"] = workflow_.time_limit.count();
 }
 void PipelineCompiler::observe(const std::string &name, const J &condition, J next) {
     add(name, {{"recognition", "Custom"},
@@ -355,7 +359,8 @@ void PipelineCompiler::action(const std::string &name, const J &scene, const J &
              {"postcondition", request(post)},
              {"command", std::move(command)},
              {"allowed_area", {1, 1, 898, 1598}},
-             {"postcondition_timeout_ms", 3000},
+             // 显式声明该条件供独立观察节点消费，不再隐含三秒网络期限。
+             {"postcondition_timeout_ms", workflow_.time_limit.count()},
              {"use_target_center", !offset.is_null()}};
     if (!offset.is_null())
         params.update({{"target_offset", offset}, {"clip_target_to_area", true}});
@@ -396,10 +401,13 @@ void PipelineCompiler::delay_after(const std::string &name, int milliseconds) {
     workflow_.nodes[name]["post_delay"] = milliseconds;
 }
 void PipelineCompiler::postcondition_budget(const std::string &name, int milliseconds) {
-    require(workflow_.nodes.contains(name) && milliseconds >= 1 && milliseconds <= 60000 &&
+    require(workflow_.nodes.contains(name) && milliseconds >= 1 &&
+                milliseconds <= workflow_.time_limit.count() &&
                 workflow_.nodes.at(name).value("custom_action", "") == "GuardedAction",
             "COMPILE_POSTCONDITION_BUDGET_INVALID");
+    // 保留旧字段用于数据回显；只有这一显式调用签发独立转场预算。
     workflow_.nodes[name]["custom_action_param"]["postcondition_timeout_ms"] = milliseconds;
+    workflow_.nodes[name]["custom_action_param"]["transition_timeout_ms"] = milliseconds;
 }
 void PipelineCompiler::allowed_area(const std::string &name, J area) {
     require(workflow_.nodes.contains(name) && workflow_.nodes.at(name).value("custom_action", "") == "GuardedAction",

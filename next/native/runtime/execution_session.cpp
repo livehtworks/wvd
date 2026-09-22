@@ -82,10 +82,11 @@ void ExecutionSession::prepare_lifecycle() {
     if (!port)
         throw std::runtime_error("LIFECYCLE_PORT_UNAVAILABLE");
     if (cancelled()) throw LifecycleNotReady{};
-    // 上一有限会话已经释放 Controller；正常的新首段必须先连接，不能把“未连接”
-    // 当成游戏崩溃。connect 不得启动/重启实例，连接失败只结束当前启动。
-    if (devices::initial_lifecycle_plan(*definition_.lifecycle) && !backend_.connect())
-        throw std::runtime_error("INITIAL_DEVICE_CONNECT_FAILED");
+    // 所有已授权生命周期会话均先恢复本进程的连接对象，普通首段与恢复段相同。
+    // connect 只连接，不以缺少 Controller 推断游戏崩溃，也不重启实例。
+    if (!backend_.connect())
+        throw std::runtime_error("LIFECYCLE_DEVICE_CONNECT_FAILED");
+    if (cancelled()) throw LifecycleNotReady{};
     const auto outcome = devices::execute_lifecycle_plan(*definition_.lifecycle, *port,
         [this] { return cancelled(); }, [this](const auto &type, const auto &payload) {
             events_.emit(gate_.generation(), type, payload, true);
@@ -213,6 +214,22 @@ void ExecutionSession::execute() noexcept {
         add("GuardedAction", [this](maafw::Context &context, const auto &parameters) {
             return GuardedAction::execute(context, gate_, events_, parameters);
         });
+        add("AwaitTransition", [this](maafw::Context &context, const auto &parameters) {
+            return GuardedAction::await_transition(context, gate_, events_, parameters);
+        });
+        add("BeginObservationPhase", [this](maafw::Context &context, const auto &parameters) {
+            if (context.cancelled()) return false;
+            gate_.begin_observation_phase(context.task_id(),
+                parameters.at("phase").template get<std::string>(),
+                std::chrono::milliseconds(parameters.at("budget_ms").template get<std::int64_t>()));
+            return true;
+        });
+        add("EndObservationPhase", [this](maafw::Context &context, const auto &parameters) {
+            if (context.cancelled()) return false;
+            gate_.end_observation_phase(context.task_id(),
+                parameters.at("phase").template get<std::string>());
+            return true;
+        });
         maafw::MaaGateway gateway(definition_.bundle, &gate_, std::move(hooks), std::move(actions),
                                   registry_->bind_recognitions(definition_.recognitions),
                                   business_);
@@ -226,6 +243,9 @@ void ExecutionSession::execute() noexcept {
         events_.emit(gate_.generation(), "session.root_started", {{"task_id", id}}, true);
         while (gateway.running() || gateway.status(id) == MaaStatus_Pending ||
                gateway.status(id) == MaaStatus_Running) {
+            // Boot 被内联进长任务后仍保留自身总预算；不能因每次回入口重置。
+            if (!cancelled() && std::chrono::steady_clock::now() > gate_.observation_deadline())
+                fail("OBSERVATION_PHASE_TIMEOUT");
             if (cancelled())
                 gateway.request_stop();
             std::this_thread::sleep_for(5ms);
@@ -286,12 +306,13 @@ void ExecutionSession::execute() noexcept {
             result_.end = SessionEnd::RecoveryRequired;
         else if (!abort_ && result_.engine_status == MaaStatus_Succeeded &&
                  root.task_id == result_.root_task_id && root.generation == gate_.generation() &&
-                 root.depth == 0 && root.node == definition_.terminal_node && checkpoint_valid)
+                 root.depth == 0 && root.node == definition_.terminal_node && checkpoint_valid &&
+                 !gate_.has_pending_submission())
             result_.end = SessionEnd::Completed;
         else {
             result_.end = SessionEnd::Failed;
             if (result_.reason.empty())
-                result_.reason =
+                result_.reason = gate_.has_pending_submission() ? "PENDING_INPUT_RESULT_UNCONFIRMED" :
                     checkpoint_valid ? "ROOT_TERMINAL_MISSING" : "BUSINESS_CHECKPOINT_MISSING";
         }
         done_ = true;

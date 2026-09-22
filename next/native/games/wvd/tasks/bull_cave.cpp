@@ -6,6 +6,7 @@
 #include "games/wvd/navigation/return_city.hpp"
 #include "games/wvd/navigation/world_travel.hpp"
 #include "games/wvd/supply/inn.hpp"
+#include "games/wvd/vision/location_probes.hpp"
 #include <algorithm>
 
 namespace wvd::games::tasks {
@@ -38,6 +39,7 @@ CompiledWorkflow bull_cave_cycle(const WvdQuestDefinition &definition, const J &
     const auto route = traverse_dungeon(plan.with_route(first_points), profile, images, allow_download);
     C graph("tasks.LBC-oneGorgon", std::max(route.time_limit + std::chrono::seconds{300}, std::chrono::milliseconds{900000}));
     const auto inn = C::image("Inn"), dung = C::image("dungFlag"), map = C::image("mapFlag");
+    const auto royal_city = vision::royal_city();
     const auto leap_page = C::any({C::image("cursedWheelTitle"), C::image("cursedWheel"), C::image("ruins")});
     const auto outside = C::all({C::any({inn, C::image("EdgeOfTown"), C::image("returnText"), C::image("returntotown"), C::image("openworldmap")}), C::absent(map)});
     graph.route("Entry", {"Pending", "Active", "Start"});
@@ -62,7 +64,7 @@ CompiledWorkflow bull_cave_cycle(const WvdQuestDefinition &definition, const J &
     graph.observe("RoyalPhase", phase(Phase::RoyalCity), {"Royal"});
     const auto royal = graph.define_child("RoyalCity", navigation::travel_city_to_city({"City_RoyalCityLuknalia", TaskSwipe{{450, 150}, {500, 150}}, {550, 1}}));
     graph.call_child("Royal", royal, {"AtRoyal"});
-    graph.confirm("AtRoyal", "bull.royal", "bull_cave_royal", inn, {"RequestPhase"});
+    graph.confirm("AtRoyal", "bull.royal", "bull_cave_royal", royal_city, {"RequestPhase"});
     graph.observe("RequestPhase", phase(Phase::Request), {"Request"});
     const auto request = graph.define_child("Featured", accept_featured_request(FeaturedRequest::BullCave, profile.at("ACTIVE_ROYALSUITE_REST").get<bool>()));
     graph.call_child("Request", request, {"Requested"});

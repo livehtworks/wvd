@@ -1,5 +1,6 @@
 #include "app/application.hpp"
 #include "devices/android_probe.hpp"
+#include "devices/android_viewport.hpp"
 #include "devices/lifecycle.hpp"
 #include <fstream>
 #include <functional>
@@ -186,6 +187,28 @@ void verify_android_probe() {
         "activity query error preserved");
 }
 
+void verify_android_viewport() {
+    using wvd::devices::android::input_viewport;
+    const std::string portrait =
+        "  Viewport INTERNAL: displayId=0, orientation=0, logicalFrame=[0, 0, 900, 1600]\n";
+    const auto parsed = input_viewport(portrait + portrait);
+    expect(parsed && parsed->size == wvd::contracts::Size{900, 1600} &&
+               parsed->rotation == 0,
+           "identical default viewports are not accepted");
+    expect(!input_viewport(
+               portrait +
+               "  Viewport INTERNAL: displayId=0, orientation=1, logicalFrame=[0, 0, 1600, 900]\n"),
+           "conflicting default viewports are accepted");
+    expect(!input_viewport(
+               "Viewport INTERNAL: displayId=1, orientation=0, logicalFrame=[0, 0, 900, 1600]\n"),
+           "non-default display is accepted");
+    expect(!input_viewport(
+               "Viewport INTERNAL: displayId=0, orientation=0, logicalFrame=[1, 0, 901, 1600]\n"),
+           "non-zero viewport origin is accepted");
+    expect(!input_viewport("Input Reader State: no viewport records\n"),
+           "unknown viewport format is accepted");
+}
+
 void verify_initial_plan_contract() {
     auto check = [](bool vpn, unsigned attempt, std::vector<O> operations, bool expected) {
         wvd::devices::LifecyclePlan plan;
@@ -207,7 +230,8 @@ void verify_initial_plan_contract() {
 }
 
 std::size_t verify_definition(const wvd::runtime::RunDefinition &definition,
-                              const std::vector<O> &expected_operations) {
+                              const std::vector<O> &expected_operations,
+                              bool verify_bounty_entry = false) {
     expect(definition.initial.lifecycle.has_value(), "initial lifecycle missing");
     expect(definition.initial.lifecycle->operations == expected_operations,
            "initial lifecycle operations mismatch");
@@ -222,6 +246,41 @@ std::size_t verify_definition(const wvd::runtime::RunDefinition &definition,
 
     const auto pipeline = read_json(definition.initial.bundle.root / "pipeline/workflow.json");
     expect(pipeline.is_object(), "published pipeline invalid");
+    expect(definition.policy.max_frame_age.count() == 0,
+           "business observations still inherit a global input TTL");
+
+    std::size_t guarded = 0, observers = 0;
+    for (const auto &[name, node] : pipeline.items()) {
+        const auto action = node.value("custom_action", "");
+        if (action == "GuardedAction") {
+            ++guarded;
+            const auto &parameters = node.at("custom_action_param");
+            expect(parameters.at("input_contract") == 2,
+                   "input node retained the monolithic contract");
+            expect(node.at("post_delay") == 0,
+                   "input node still sleeps after transition confirmation");
+            expect(node.at("next").is_array() && node.at("next").size() == 1,
+                   "input node does not have one observation successor");
+            const auto observer = node.at("next").front().get<std::string>();
+            expect(observer == "__wvd_observe__" + name && pipeline.contains(observer),
+                   "input observation node name or edge is invalid");
+            const auto &wait = pipeline.at(observer);
+            const auto &wait_parameters = wait.at("custom_action_param");
+            expect(wait.at("custom_action") == "AwaitTransition" &&
+                       wait_parameters.at("input_contract") == 2 &&
+                       wait_parameters.at("source_node") == name,
+                   "observation node is not bound to its source input");
+            expect(wait_parameters.at("postcondition") == parameters.at("postcondition"),
+                   "observation condition differs from submitted intent");
+            expect(wait_parameters.at("observation_budget_ms").get<std::int64_t>() >
+                       wait_parameters.at("initial_delay_ms").get<std::int64_t>(),
+                   "observation budget does not include its initial delay");
+        } else if (action == "AwaitTransition") {
+            ++observers;
+        }
+    }
+    expect(guarded > 0 && guarded == observers,
+           "published input and observation node counts differ");
     expect(pipeline.contains("Boot_Entry"), "Boot entry missing from published graph");
     expect(pipeline.contains("Boot_Poll"), "Boot unknown-frame poll missing");
     expect(pipeline.at("Boot_Poll").at("next") == J::array({"Boot_Entry"}),
@@ -229,6 +288,45 @@ std::size_t verify_definition(const wvd::runtime::RunDefinition &definition,
     expect(pipeline.at("Boot_Poll").at("custom_action") == "CancelableWait" &&
                pipeline.at("Boot_Poll").at("custom_action_param").at("duration_ms") == 500,
            "Boot poll is not a bounded cancellable wait");
+    expect(pipeline.at("Boot_Entry").at("custom_action") == "BeginObservationPhase" &&
+               pipeline.at("Boot_Entry").at("custom_action_param").at("budget_ms") == 120000,
+           "Boot phase does not retain one 120 second deadline");
+    expect(pipeline.at("Boot_ObservationPhaseEnd").at("custom_action") ==
+               "EndObservationPhase",
+           "Boot phase does not close before returning to the task");
+    const auto &attention =
+        pipeline.at("Boot_Attention").at("custom_action_param").at("postcondition");
+    expect(attention.dump().find("boot_attention") != std::string::npos &&
+               attention.dump().find("boot_post") == std::string::npos,
+           "Boot attention still accepts the unchanged prompt as progress");
+    const auto download = pipeline.at("Boot_DownloadEn").dump() +
+                          pipeline.at("Boot_DownloadZhHant").dump();
+    expect(download.find("startdownload") != std::string::npos &&
+               download.find("startdownload_zh_hant") != std::string::npos,
+           "Boot download does not accept both English and Traditional Chinese prompts");
+
+    if (verify_bounty_entry) {
+        expect(pipeline.contains("Task_Start"), "bounty start node missing");
+        const auto start_condition =
+            pipeline.at("Task_Start").at("custom_recognition_param").dump();
+        expect(start_condition.find("Inn") != std::string::npos &&
+                   start_condition.find("cursedWheelTitle") != std::string::npos &&
+                   start_condition.find("blocking_screen") != std::string::npos &&
+                   start_condition.find("combat_active") != std::string::npos,
+               "bounty start cannot safely begin from a confirmed city");
+        expect(pipeline.contains("Task_TimeLeap_OpenFromCity"),
+               "time leap has no bounded city entry branch");
+        const auto time_leap_download = pipeline.at("Task_TimeLeap_DownloadEn").dump() +
+                                        pipeline.at("Task_TimeLeap_DownloadZhHant").dump();
+        expect(time_leap_download.find("startdownload") != std::string::npos &&
+                   time_leap_download.find("startdownload_zh_hant") != std::string::npos,
+               "time leap download does not accept both language variants");
+        const auto &open_from_city = pipeline.at("Task_TimeLeap_OpenFromCity");
+        expect(open_from_city.at("max_hit") == 25 &&
+                   open_from_city.at("next") ==
+                       J::array({"__wvd_observe__Task_TimeLeap_OpenFromCity"}),
+               "city entry branch is not bounded or transition-lowered");
+    }
     auto verify_unit = [&](const wvd::runtime::SessionDefinition &unit) {
         expect(pipeline.contains(unit.entry), "session entry missing from published graph");
         expect(pipeline.contains(unit.terminal_node), "session terminal missing from published graph");
@@ -245,6 +343,11 @@ std::size_t verify_definition(const wvd::runtime::RunDefinition &definition,
                            return file.relative_path == "image/boot_attention_zh.png";
                        }),
            "Traditional Chinese attention resource missing");
+    expect(std::any_of(definition.initial.bundle.files.begin(), definition.initial.bundle.files.end(),
+                       [](const auto &file) {
+                           return file.relative_path == "image/startdownload_zh_hant.png";
+                       }),
+           "Traditional Chinese download resource missing");
     return pipeline.size();
 }
 
@@ -271,16 +374,19 @@ int main(int argc, char **argv) {
         if (argc != 4)
             throw std::runtime_error("usage: test_t0_startup DATA_ROOT PACK_ROOT QUEST_CATALOG");
         verify_android_probe();
+        verify_android_viewport();
         verify_initial_plan_contract();
         wvd::app::Application application({std::filesystem::absolute(argv[1]),
                                            std::filesystem::absolute(argv[2]), {},
                                            std::filesystem::absolute(argv[3])});
         const auto without_vpn = wvd::app::ApplicationAssemblyTestAccess::task(
             application, false, "t0-scorpion-vpn-off");
-        const auto nodes_without_vpn = verify_definition(without_vpn, {O::StartApplication});
+        const auto nodes_without_vpn =
+            verify_definition(without_vpn, {O::StartApplication}, true);
         const auto with_vpn = wvd::app::ApplicationAssemblyTestAccess::task(
             application, true, "t0-scorpion-vpn-on");
-        const auto nodes_with_vpn = verify_definition(with_vpn, {O::EnsureVpn, O::StartApplication});
+        const auto nodes_with_vpn = verify_definition(
+            with_vpn, {O::EnsureVpn, O::StartApplication}, true);
         expect(nodes_without_vpn == nodes_with_vpn, "VPN setting changed published graph");
         verify_author_definition(wvd::app::ApplicationAssemblyTestAccess::workflow(
                                      application, true, false, "t0-author-full"),

@@ -1,4 +1,5 @@
 #include "time_leap.hpp"
+#include "games/wvd/vision/location_probes.hpp"
 #include "causality.hpp"
 
 namespace wvd::games::navigation {
@@ -11,67 +12,179 @@ tasks::CompiledWorkflow compile_time_leap(const std::string &target_name,
         throw std::runtime_error("TIME_LEAP_TARGET_INVALID");
     C graph(causality ? "navigation.time_leap_with_causality" : "navigation.time_leap_without_causality",
         causality ? std::chrono::seconds{480} : std::chrono::seconds{180});
-    const auto title = C::image("cursedWheelTitle"), wheel = C::image("cursedWheel");
-    const auto target = C::image(target_name), chapter = C::image(chapter_name), leap = C::image("leap");
-    const auto right = C::image("cursedWheelTapRight"), ruins = C::image("ruins");
-    auto download = C::image("startdownload");
-    download["roi"] = {222, 901, 465, 84};
+    const auto title_en = C::image("cursedWheelTitle");
+    auto title_zh_hant = C::image("cursedWheelTitle_zh_hant");
+    title_zh_hant["roi"] = {250, 0, 400, 180};
+    const auto wheel_en = C::image("cursedWheel");
+    auto wheel_zh_hant = C::image("cursedWheel_zh_hant");
+    wheel_zh_hant["roi"] = {450, 500, 450, 400};
+    const auto ruins_en = C::image("ruins");
+    auto ruins_icon = C::image("ruins_icon");
+    ruins_icon["roi"] = {700, 430, 200, 300};
+    const auto title = C::any({title_en, title_zh_hant});
+    const auto wheel = C::any({wheel_en, wheel_zh_hant});
+    const auto ruins = C::any({ruins_en, ruins_icon});
+
+    std::string translated_target_name;
+    if (target_name == "BeautifulOre") translated_target_name = "BeautifulOre_zh_hant";
+    else if (target_name == "GhostsOfYore") translated_target_name = "GhostsOfYore_zh_hant";
+    else if (target_name == "Triumph") translated_target_name = "Triumph_zh_hant";
+    else if (target_name == "FortressArrival") translated_target_name = "FortressArrival_zh_hant";
+    const auto target_en = C::image(target_name);
+    J target_zh_hant;
+    if (!translated_target_name.empty()) {
+        target_zh_hant = C::image(translated_target_name);
+        target_zh_hant["roi"] = {150, 250, 650, 900};
+    }
+    const auto target = translated_target_name.empty() ? target_en : C::any({target_en, target_zh_hant});
+
+    std::string translated_chapter_name;
+    if (chapter_name == "cursedwheel_dhi") translated_chapter_name = "cursedwheel_dhi_zh_hant";
+        else if (chapter_name == "cursedwheel_impregnableFortress")
+            translated_chapter_name = "cursedwheel_impregnableFortress_zh_hant";
+        else if (chapter_name == "TradeWaterway") translated_chapter_name = "TradeWaterway_zh_hant";
+        else if (chapter_name == "beginningAbyss") translated_chapter_name = "beginningAbyss_zh_hant";
+    const auto chapter_en = C::image(chapter_name);
+    J chapter_zh_hant;
+    if (!translated_chapter_name.empty()) {
+        chapter_zh_hant = C::image(translated_chapter_name);
+        chapter_zh_hant["roi"] = {250, 120, 400, 220};
+    }
+    const auto chapter = translated_chapter_name.empty() ? chapter_en : C::any({chapter_en, chapter_zh_hant});
+    const auto leap_en = C::image("leap");
+    auto leap_zh_hant = C::image("leap_zh_hant");
+    leap_zh_hant["roi"] = {250, 1250, 400, 250};
+    const auto leap = C::any({leap_en, leap_zh_hant});
+    const auto right = C::image("cursedWheelTapRight");
+    auto download_en = C::image("startdownload");
+    download_en["roi"] = {222, 901, 465, 84};
+    auto download_zh_hant = C::image("startdownload_zh_hant");
+    download_zh_hant["roi"] = {222, 901, 465, 84};
+    download_zh_hant["threshold"] = .86;
+    const auto download = C::any({download_en, download_zh_hant});
     const auto chooser = C::any({title, chapter, leap});
-    const auto outside = C::all({C::any({C::image("Inn"), C::image("dungFlag"), C::image("mapFlag"),
-        C::image("EdgeOfTown"), C::image("returnText"), C::image("returntotown"), C::image("openworldmap")}),
+    const auto outside = C::all({C::any({vision::royal_city(), vision::city_screen(), C::image("dungFlag"),
+        C::image("mapFlag"), C::image("returnText"), C::image("returntotown"), C::image("openworldmap")}),
         C::absent(C::any({title, leap}))});
-    const auto opening = C::any({chooser, wheel, ruins, download});
+    const auto opening = C::any({chooser, wheel, download});
+    const auto opened_wheel = C::any({chooser, download});
     const auto after_leap = C::any({chooser, outside});
-    graph.route("Entry", {"AtTitle", "OpenWheel", "Ruins", "Download"});
-    graph.observe("AtTitle", title, {"QuickSelect", "Reset0"});
-    graph.click("OpenWheel", C::all({wheel, C::absent(title)}), wheel, opening, {"Entry"});
-    graph.click("Ruins", C::all({ruins, C::absent(title)}), ruins, opening, {"Entry"});
-    if (allow_download)
-        graph.click("Download", download, download, opening, {"Entry"});
-    else {
-        graph.observe("Download", download, {"DownloadDenied"});
+    // 当前就在王城时优先使用稳定塔楼背景完成输入前复核；公共建筑图标只说明
+    // “某个城市界面”，不能把它们当成王城身份。
+    const auto city = C::all({C::any({vision::royal_city(), vision::city_screen(), C::image("openworldmap")}),
+        C::absent(C::any({title, wheel, download, C::image("dungFlag"), C::image("mapFlag"),
+                         C::image("chestFlag"), J{{"mode", "combat_active"}}, J{{"mode", "blocking_screen"}}}))});
+    graph.route("Entry", {"AtTitle", "OpenWheelEn", "OpenWheelZhHant", "RuinsEn",
+                            "RuinsZhHant", "DownloadEn", "DownloadZhHant", "OpenFromRoyalCity"});
+    // 旧源码中的 [1,1] 只是前面图片候选全部失败后的兜底点击，不能迁成主动作。
+    // 王城背景已确认时，点击荒屋的稳定建筑区域；动作后必须真正出现荒屋菜单。
+    graph.fixed_click("OpenFromRoyalCity", C::all({vision::royal_city(), city}), wheel,
+                      {820, 590}, {"Entry"});
+    graph.delay_after("OpenFromRoyalCity", 1000);
+    graph.postcondition_budget("OpenFromRoyalCity", 30000);
+    graph.hit_limit("OpenFromRoyalCity", 3);
+    J quick_select = J::array({"QuickSelectEn"});
+    if (!translated_target_name.empty()) quick_select.push_back("QuickSelectZhHant");
+    quick_select.push_back("Reset0");
+    graph.observe("AtTitle", title, quick_select);
+    graph.click("OpenWheelEn", C::all({wheel_en, C::absent(title)}), wheel_en, opened_wheel, {"Entry"});
+    graph.click("OpenWheelZhHant", C::all({wheel_zh_hant, C::absent(title)}), wheel_zh_hant,
+                opened_wheel, {"Entry"});
+    graph.click("RuinsEn", C::all({ruins_en, C::absent(title)}), ruins_en, wheel, {"Entry"});
+    graph.click("RuinsZhHant", C::all({ruins_icon, C::absent(title)}), ruins_icon, wheel, {"Entry"});
+    if (allow_download) {
+        graph.click("DownloadEn", download_en, download_en, opening, {"Entry"});
+        graph.click("DownloadZhHant", download_zh_hant, download_zh_hant,
+                    opening, {"Entry"});
+    } else {
+        graph.observe("DownloadEn", download_en, {"DownloadDenied"});
+        graph.observe("DownloadZhHant", download_zh_hant, {"DownloadDenied"});
         graph.recovery("DownloadDenied", "boot.download_permission_missing");
     }
     // 原函数的可见目标快路径会直接跳跃，不重置页签也不调整因果。
-    graph.click("QuickSelect", C::all({title, target}), target, leap, {"QuickLeap"});
-    graph.delay_after("QuickSelect", 2000);
-    graph.click("QuickLeap", leap, leap, after_leap, {"Done", "Reset0"});
-    graph.delay_after("QuickLeap", 2000);
+    graph.click("QuickSelectEn", C::all({title, target_en}), target_en, leap, {"QuickLeapRoute"});
+    graph.delay_after("QuickSelectEn", 2000);
+    if (!translated_target_name.empty()) {
+        graph.click("QuickSelectZhHant", C::all({title, target_zh_hant}), target_zh_hant,
+                    leap, {"QuickLeapRoute"});
+        graph.delay_after("QuickSelectZhHant", 2000);
+    }
+    graph.route("QuickLeapRoute", {"QuickLeapEn", "QuickLeapZhHant"});
+    graph.click("QuickLeapEn", leap_en, leap_en, after_leap, {"Done", "Reset0"});
+    graph.click("QuickLeapZhHant", leap_zh_hant, leap_zh_hant, after_leap, {"Done", "Reset0"});
+    graph.delay_after("QuickLeapEn", 2000);
+    graph.delay_after("QuickLeapZhHant", 2000);
     for (int i = 0; i < 10; ++i) {
         const auto name = "Reset" + std::to_string(i);
         graph.fixed_click(name, chooser, chooser, {105, 230},
             i == 9 ? J{"FindChapter"} : J{"Reset" + std::to_string(i + 1)});
         graph.delay_after(name, 500);
     }
-    graph.route("FindChapter", {"Chapter", "NextTab", "ReopenWheel"});
-    graph.click("Chapter", C::all({chooser, chapter}), chapter, chooser, {"SelectTarget", "Scroll0"});
+    J find_chapter = J::array({"ChapterEn"});
+    if (!translated_chapter_name.empty()) find_chapter.push_back("ChapterZhHant");
+    find_chapter.push_back("NextTab");
+    find_chapter.push_back("ReopenWheelEn");
+    find_chapter.push_back("ReopenWheelZhHant");
+    graph.route("FindChapter", find_chapter);
+    J after_chapter = J::array({"SelectTargetEn"});
+    if (!translated_target_name.empty()) after_chapter.push_back("SelectTargetZhHant");
+    after_chapter.push_back("Scroll0");
+    graph.click("ChapterEn", C::all({chooser, chapter_en}), chapter_en, chooser, after_chapter);
+    if (!translated_chapter_name.empty())
+        graph.click("ChapterZhHant", C::all({chooser, chapter_zh_hant}), chapter_zh_hant,
+                    chooser, after_chapter);
     graph.click("NextTab", C::all({chooser, right, C::absent(chapter)}), right, chooser, {"FindChapter"});
-    graph.click("ReopenWheel", C::all({wheel, C::absent(chapter)}), wheel, opening, {"FindChapter"});
+    graph.click("ReopenWheelEn", C::all({wheel_en, C::absent(chapter)}), wheel_en,
+                opened_wheel, {"FindChapter"});
+    graph.click("ReopenWheelZhHant", C::all({wheel_zh_hant, C::absent(chapter)}), wheel_zh_hant,
+                opened_wheel, {"FindChapter"});
     for (int i = 0; i < 3; ++i) {
         const auto name = "Scroll" + std::to_string(i);
-        graph.swipe(name, C::all({title, C::absent(leap)}), title, {450, 1200, 450, 200},
+        graph.swipe(name, C::all({title, C::absent(target)}), title, {450, 1200, 450, 200},
             i == 2 ? J{"FindTarget"} : J{"Scroll" + std::to_string(i + 1)});
         graph.delay_after(name, 2000);
     }
-    graph.route("FindTarget", {"SelectTarget", "FineScroll"});
-    graph.click("SelectTarget", C::all({title, target}), target, leap, causality ? J{"Causality"} : J{"Leap"});
-    graph.delay_after("SelectTarget", 1000);
-    graph.swipe("FineScroll", C::all({title, C::absent(target), C::absent(leap)}), title,
+    J find_target = J::array({"SelectTargetEn"});
+    if (!translated_target_name.empty()) find_target.push_back("SelectTargetZhHant");
+    find_target.push_back("FineScroll");
+    graph.route("FindTarget", find_target);
+    graph.click("SelectTargetEn", C::all({title, target_en}), target_en, leap,
+                causality ? J{"Causality"} : J{"LeapRoute"});
+    graph.delay_after("SelectTargetEn", 1000);
+    if (!translated_target_name.empty()) {
+        graph.click("SelectTargetZhHant", C::all({title, target_zh_hant}), target_zh_hant,
+                    leap, causality ? J{"Causality"} : J{"LeapRoute"});
+        graph.delay_after("SelectTargetZhHant", 1000);
+    }
+    graph.swipe("FineScroll", C::all({title, C::absent(target)}), title,
         {50, 1200, 50, 1300}, {"FindTarget"});
     graph.delay_after("FineScroll", 1000);
     if (causality) {
         const auto child = graph.define_child("CausalitySettings", adjust_causality(*causality));
-        graph.call_child("Causality", child, {"Leap"});
+        graph.call_child("Causality", child, {"LeapRoute"});
     }
-    graph.click("Leap", leap, leap, after_leap, causality ? J{"Done", "Reselect", "Causality"} : J{"Done", "Reselect", "Leap"});
-    graph.delay_after("Leap", 2000);
-    graph.click("Reselect", C::all({title, target}), target, leap, causality ? J{"Causality"} : J{"Leap"});
+    graph.route("LeapRoute", {"LeapEn", "LeapZhHant"});
+    J leap_next = J::array({"Done", "ReselectEn"});
+    if (!translated_target_name.empty()) leap_next.push_back("ReselectZhHant");
+    leap_next.push_back(causality ? "Causality" : "LeapRoute");
+    graph.click("LeapEn", leap_en, leap_en, after_leap, leap_next);
+    graph.click("LeapZhHant", leap_zh_hant, leap_zh_hant, after_leap, leap_next);
+    graph.delay_after("LeapEn", 2000);
+    graph.delay_after("LeapZhHant", 2000);
+    graph.click("ReselectEn", C::all({title, target_en}), target_en, leap,
+                causality ? J{"Causality"} : J{"LeapRoute"});
+    if (!translated_target_name.empty())
+        graph.click("ReselectZhHant", C::all({title, target_zh_hant}), target_zh_hant,
+                    leap, causality ? J{"Causality"} : J{"LeapRoute"});
     // 离开按钮不是充分条件。只有已执行跳跃路径之后的新帧正常游戏锚点才是终点。
     // 启动时的城市画面不能直达这里，未知加载帧也不能算业务完成。
     graph.observe("Done", outside, {"Terminal"});
-    for (const auto *name : {"Entry", "AtTitle", "OpenWheel", "Ruins", "Download", "FindChapter",
-        "NextTab", "ReopenWheel", "FindTarget", "FineScroll", "Leap", "Reselect"})
+    for (const auto *name : {"Entry", "AtTitle", "OpenWheelEn", "OpenWheelZhHant",
+        "RuinsEn", "RuinsZhHant", "DownloadEn", "DownloadZhHant", "FindChapter",
+        "NextTab", "ReopenWheelEn", "ReopenWheelZhHant", "FindTarget", "FineScroll",
+        "LeapRoute", "LeapEn", "LeapZhHant", "ReselectEn"})
         graph.hit_limit(name, 32);
+    if (!translated_target_name.empty()) graph.hit_limit("ReselectZhHant", 32);
     return graph.finish();
 }
 }

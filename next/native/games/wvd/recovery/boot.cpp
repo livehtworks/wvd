@@ -145,7 +145,12 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, Dialogue
     // 首次免责声明跟随系统区域设置，游戏主体即使配置为英文也可能显示繁中。
     const auto attention = C::any({scoped("boot_attention", {250, 430, 420, 220}, .86),
                                    scoped("boot_attention_zh", {250, 430, 420, 220}, .86)});
-    const auto download = scoped("startdownload", {222, 901, 465, 84}, .8);
+    // 资源下载弹窗同样跟随系统区域设置。繁中模板来自 900x1600 真实页面，
+    // 只匹配“開始下載”按钮文字；保留英文模板，不通过降低阈值混淆语言版本。
+    const auto download_en = scoped("startdownload", {222, 901, 465, 84}, .8);
+    const auto download_zh_hant =
+        scoped("startdownload_zh_hant", {222, 901, 465, 84}, .86);
+    const auto download = C::any({download_en, download_zh_hant});
     const auto retry = C::image("retry");
     auto blank = C::image("retry_blank");
     blank["threshold"] = .65;
@@ -155,13 +160,11 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, Dialogue
     J recognized = common ? C::any({J{{"mode", "boot_post"}}, panel}) : J{{"mode", "boot_post"}};
     if (!task_stop.is_null())
         recognized = C::any({task_stop, recognized});
-    // 启动过程本身包含多个合法中间页。一次点击只需要证明当前提示已经消失，
-    // 或者已直接到达稳定业务页；不能要求“免责声明 -> 标题 -> 加载”在一次输入后跳完。
-    const auto progressed = [&](const J &current) {
-        return C::any({recognized, C::absent(current)});
-    };
-    J entry = common ? J{"Download", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title", "Pause", "Death", "Sandman", "Blessing", "Karma", "Dialogue", "Defeat", "Ready", "Poll"}
-                     : J{"Ready", "Download", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title", "Pause", "Sandman", "Blessing", "Karma", "Dialogue", "Poll"};
+    // 这里只等待离开刚处理的提示；它不是“游戏就绪”的证据。
+    // recognized 包含当前提示，不能放进 any 后把页面未变化认作进展。
+    const auto progressed = [](const J &current) { return C::absent(current); };
+    J entry = common ? J{"DownloadEn", "DownloadZhHant", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title", "Pause", "Death", "Sandman", "Blessing", "Karma", "Dialogue", "Defeat", "Ready", "Poll"}
+                     : J{"Ready", "DownloadEn", "DownloadZhHant", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title", "Pause", "Sandman", "Blessing", "Karma", "Dialogue", "Poll"};
     if (policy != DialoguePolicy::Default) {
         entry.insert(entry.begin(), "SpecialDialogue");
         const auto special = graph.define_child("SpecialChoice", choose_special_dialogue(policy));
@@ -215,10 +218,13 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, Dialogue
         graph.observe("PendingDeathCleared", C::business("/death_prompt_pending", true), {"ConfirmDeathCleared"});
         graph.confirm("ConfirmDeathCleared", "party.death.clear", "party_death_cleared", ready, {"Terminal"});
     }
-    if (allow_download)
-        graph.click("Download", download, download, progressed(download), {"Entry"});
-    else {
-        graph.observe("Download", download, {"DownloadBlocked"});
+    if (allow_download) {
+        graph.click("DownloadEn", download_en, download_en, progressed(download), {"Entry"});
+        graph.click("DownloadZhHant", download_zh_hant, download_zh_hant,
+                    progressed(download), {"Entry"});
+    } else {
+        graph.observe("DownloadEn", download_en, {"DownloadBlocked"});
+        graph.observe("DownloadZhHant", download_zh_hant, {"DownloadBlocked"});
         graph.recovery("DownloadBlocked", "boot.download_permission_missing");
     }
     graph.click("RetryBlank", blank, blank, progressed(blank), {"Entry"}, {0, 103});
@@ -248,12 +254,13 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, Dialogue
     // 120 秒工作流总预算是最终上限；命中次数只防止 Maa 节点自身过早截断轮询。
     graph.hit_limit("Entry", 240);
     graph.hit_limit("Poll", 240);
-    for (auto name : {"Download", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title"}) {
-        if (!allow_download && std::string(name) == "Download")
+    for (auto name : {"DownloadEn", "DownloadZhHant", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title"}) {
+        if (!allow_download && (std::string(name) == "DownloadEn" ||
+                               std::string(name) == "DownloadZhHant"))
             continue;
         graph.hit_limit(name, 6);
         graph.delay_after(name, 1500);
-        graph.postcondition_budget(name, 10000);
+        graph.postcondition_budget(name, 120000);
     }
     auto result = graph.finish();
     if (!task_stop.is_null()) {
@@ -266,7 +273,8 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, Dialogue
         }
         // 动作可能直接到达停点；例如Pause动作的后继不能继续点击或先选对话。
         std::vector<std::string> actions{"ChooseSpecial", "ChooseDialogue", "ChooseKarma",
-            "SandmanHandle", "BlessingHandle", "DismissDeath", "AcknowledgeDefeat", "Download",
+            "SandmanHandle", "BlessingHandle", "DismissDeath", "AcknowledgeDefeat",
+            "DownloadEn", "DownloadZhHant",
             "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title"};
         for (unsigned i = 0; i < 6; ++i) actions.push_back("ResumePause" + std::to_string(i));
         for (const auto &name : actions) {
@@ -279,6 +287,25 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, Dialogue
         }
         result.validate();
     }
+    // 该图可能被内联进 30 分钟任务。入口轮询不能每轮重置原版 120 秒启动总预算。
+    // 阶段只绑定当前原生 task 与会话，绝不持有游戏存档或假装回滚服务端状态。
+    const auto phase = common ? "wvd.common-screen" : "wvd.boot";
+    auto &phase_entry = result.nodes.at(result.entry);
+    phase_entry["action"] = "Custom";
+    phase_entry["custom_action"] = "BeginObservationPhase";
+    phase_entry["custom_action_param"] = {{"phase", phase}, {"budget_ms", 120000}};
+    const std::string phase_end = "ObservationPhaseEnd";
+    if (result.nodes.contains(phase_end)) throw std::runtime_error("BOOT_PHASE_NODE_COLLISION");
+    for (auto &node : result.nodes)
+        for (const auto *key : {"next", "on_error"})
+            if (node.contains(key))
+                for (auto &edge : node[key])
+                    if (edge == result.terminal) edge = phase_end;
+    result.nodes[phase_end] = {{"action", "Custom"}, {"custom_action", "EndObservationPhase"},
+        {"custom_action_param", {{"phase", phase}}}, {"next", {result.terminal}},
+        {"on_error", {"RecoveryRequired"}}, {"pre_delay", 0}, {"post_delay", 0},
+        {"rate_limit", 50}, {"timeout", 120000}, {"max_hit", 1}};
+    result.validate();
     return result;
 }
 }

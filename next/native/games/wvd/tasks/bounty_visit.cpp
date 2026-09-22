@@ -1,4 +1,5 @@
 #include "bounty_visit.hpp"
+#include "games/wvd/vision/location_probes.hpp"
 
 namespace wvd::games::tasks {
 CompiledWorkflow visit_bounty_board(BountyVisit operation) {
@@ -8,8 +9,8 @@ CompiledWorkflow visit_bounty_board(BountyVisit operation) {
         throw std::runtime_error("BOUNTY_VISIT_INVALID");
     const bool report = operation == BountyVisit::Report;
     C graph(report ? "quest.bounty.report" : "quest.bounty.reveal", std::chrono::seconds{180});
-    const auto guild = C::image("guild"), request = C::image("guildRequest"), bounty = C::image("Bounties");
-    const auto completed = C::image("CompletionReported"), edge = C::image("EdgeOfTown");
+    const auto guild = vision::guild_button(), request = C::image("guildRequest"), bounty = C::image("Bounties");
+    const auto completed = C::image("CompletionReported"), edge = vision::edge_of_town_button();
     const auto menu = C::any({guild, request, bounty, C::image("guildFeatured"), completed});
     const auto post = C::any({menu, edge});
     const J find = report ? J{"PrepareReport", "Bounties", "Request", "Guild", "Swipe"} : J{"Request", "Bounties", "Guild", "Swipe"};

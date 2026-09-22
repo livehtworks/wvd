@@ -90,8 +90,13 @@ void validate_frame_identity(const contracts::FrameEnvelope &frame, const contra
             "FRAME_VIEWPORT_MISMATCH");
     require(id.color_format == "BGR8" && current.color_format == "BGR8", "FRAME_COLOR_INVALID");
     require(id.captured_at == current.captured_at &&
+                id.capture_finished_at == current.capture_finished_at &&
+                id.display_rotation == current.display_rotation &&
                 id.captured_at.time_since_epoch().count() > 0 &&
-                id.captured_at <= std::chrono::steady_clock::now(),
+                id.captured_at <= std::chrono::steady_clock::now() &&
+                (id.capture_finished_at.time_since_epoch().count() == 0 ||
+                 (id.capture_finished_at >= id.captured_at &&
+                  id.capture_finished_at <= std::chrono::steady_clock::now())),
             "FRAME_TIME_INVALID");
     require(id.raw_size.width > 0 && id.raw_size.height > 0 && id.recognition_size.width > 0 &&
                 id.recognition_size.height > 0 && id.raw_size.width <= 16384 &&

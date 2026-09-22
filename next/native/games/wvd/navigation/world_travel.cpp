@@ -1,18 +1,27 @@
 #include "world_travel.hpp"
+#include "games/wvd/vision/location_probes.hpp"
 #include <array>
 
 namespace wvd::games::navigation {
+namespace {
+nlohmann::json city_arrival(const WorldDestination &destination) {
+    if (destination.target == "City_RoyalCityLuknalia")
+        return vision::royal_city();
+    return vision::inn_button();
+}
+}
 tasks::CompiledWorkflow travel_city_to_city(const WorldDestination &destination) {
     using C = tasks::PipelineCompiler;
     C graph("navigation.city_to_city", std::chrono::seconds{120});
     const auto world = C::image("worldmapflag");
     const auto open = C::image("intoWorldMap");
+    const auto arrived = C::all({city_arrival(destination), C::absent(world)});
     graph.route("Entry", {"OnWorld", "Open"});
     graph.observe("OnWorld", world, {"Travel"});
-    graph.click("Open", C::all({C::image("Inn"), open, C::absent(world)}), open, world, {"Travel"});
+    graph.click("Open", C::all({vision::inn_button(), open, C::absent(world)}), open, world, {"Travel"});
     const auto travel = graph.define_child("World", travel_world(destination, WorldArrival::City));
     graph.call_child("Travel", travel, {"Arrived"});
-    graph.observe("Arrived", C::all({C::image("Inn"), C::absent(world)}), {"Terminal"});
+    graph.observe("Arrived", arrived, {"Terminal"});
     return graph.finish();
 }
 tasks::CompiledWorkflow travel_world(const WorldDestination &destination, WorldArrival arrival) {
@@ -20,8 +29,8 @@ tasks::CompiledWorkflow travel_world(const WorldDestination &destination, WorldA
     using J = nlohmann::json;
     C graph("navigation.world_travel");
     const auto world = C::image("worldmapflag"), target = C::image(destination.target);
-    const auto inn = C::image("Inn"), open = C::image("openworldmap"), into = C::image("intoWorldMap");
-    const auto expected = arrival == WorldArrival::City ? inn : C::any({open, C::image("dungFlag")});
+    const auto inn = vision::inn_button(), open = C::image("openworldmap"), into = C::image("intoWorldMap");
+    const auto expected = arrival == WorldArrival::City ? city_arrival(destination) : C::any({open, C::image("dungFlag")});
     const auto arrived = C::all({expected, C::absent(world)});
     const auto searching = C::all({world, C::absent(expected)});
     const auto located = C::all({searching, target});

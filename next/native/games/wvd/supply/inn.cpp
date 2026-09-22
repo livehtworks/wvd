@@ -1,10 +1,11 @@
 #include "inn.hpp"
+#include "games/wvd/vision/location_probes.hpp"
 
 namespace wvd::games::supply {
 tasks::CompiledWorkflow rest_at_inn(bool royal_suite, bool record_completion) {
     using C = tasks::PipelineCompiler;
     C graph("supply.inn");
-    const auto inn = C::image("Inn"), stay = C::image("Stay"), economy = C::image("Economy"),
+    const auto inn = vision::inn_button(), stay = C::image("Stay"), economy = C::image("Economy"),
                royal = C::image("royalsuite"), ok = C::image("OK");
     graph.route("Entry", record_completion ? nlohmann::json{"Pending", "Receipt", "Unpaid"} : nlohmann::json{"Open"});
     const auto payment = record_completion ? "PreparePayment" : "Confirm";

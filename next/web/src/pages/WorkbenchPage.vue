@@ -255,7 +255,7 @@ function updateSkill(skill: SkillSetting, key: keyof SkillSetting, event: Event)
 
       <section class="run-section" aria-label="运行结果">
         <div v-if="state.runError" class="notice error" role="alert">{{ state.runError }}</div>
-        <header><div><h2>运行结果</h2><span>{{ state.run?.run_id ?? '当前没有运行' }}</span></div><div class="command-row"><button class="button run" :disabled="state.runActive || state.dirty || !state.device?.connected || !state.draft?.FARM_TARGET" @click="state.startSelectedTask"><Play :size="16" />开始任务</button><button class="button danger" :disabled="!state.runActive" @click="state.requestStop"><CircleStop :size="16" />停止</button></div></header>
+        <header><div><h2>运行结果</h2><span>{{ state.run?.run_id ?? '当前没有运行' }}</span></div><div class="command-row"><button class="button run" :disabled="state.runActive || state.deviceBusy || state.dirty || !state.draft?.FARM_TARGET" @click="state.startSelectedTask"><Play :size="16" />开始任务</button><button class="button danger" :disabled="!state.runActive" @click="state.requestStop"><CircleStop :size="16" />停止</button></div></header>
         <div v-if="state.error" class="notice error" role="alert">{{ state.error }}</div>
         <div class="run-grid"><div><span>状态</span><strong>{{ state.runLabel }}</strong></div><div><span>任务 / 步骤</span><strong>{{ state.run?.task_name ?? '—' }} / {{ state.run?.step_name ?? '—' }}</strong></div><div><span>耗时</span><strong>{{ state.run?.elapsed_seconds ?? 0 }} 秒</strong></div><div><span>结果</span><strong>{{ state.run?.result ?? '—' }}</strong></div></div>
         <div v-if="state.run?.error_code || state.run?.message" class="notice error">{{ state.run.error_code }}: {{ state.run.message }}</div>

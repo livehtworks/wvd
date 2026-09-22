@@ -31,7 +31,9 @@ struct InputPolicy {
     Size recognition_size{900, 1600};
     std::set<ActionKind> capabilities, permissions;
     std::set<std::string> allowed_scenes;
-    std::chrono::milliseconds max_frame_age{2000};
+    // 仅限输入前的可选证据寿命。0 表示未设置全局墙钟限制；绝不用于结果/业务确认。
+    // 设备、连接代次、epoch、最新帧和前台检查仍始终执行。
+    std::chrono::milliseconds max_frame_age{0};
     // 仅用于 M3 无输入的系统观察；采用实测尺寸，不把横屏强制变成 WVD 竖屏。
     bool observed_read_only_viewport{false};
 };
@@ -41,6 +43,17 @@ struct ActionIntent {
     Command command;
     std::string required_scene, expected_postcondition;
     Box allowed_area;
+};
+// 一次输入的有限回执。Submitted 只证明底层接受，不证明页面改变或业务完成。
+// 回执在当前会话内持有；不跨设备/连接/动作 epoch 复用，也不用于自动重放。
+struct SubmittedInput {
+    enum class State { Prepared, Submitted, Ambiguous };
+    std::string source_node, expected_condition;
+    std::int64_t task_id{};
+    std::uint64_t intent_id{}, action_epoch{};
+    FrameIdentity before;
+    State state{State::Prepared};
+    std::chrono::steady_clock::time_point submitted_at{};
 };
 struct InputCounts {
     std::uint64_t attempted{}, accepted{}, rejected{}, backend_called{}, cleanup_called{};

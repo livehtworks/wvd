@@ -34,7 +34,9 @@ HTTP 连接最多 64 个，每次读/写上限 5 秒，头/体上限 8/4 KiB，�
               -> 新截图 -> 场景/目标识别 -> ActionIntent
               -> Maa 内置动作或 Controller 队列
               -> GuardedController -> InputGate -> DeviceBackend
-              -> 新截图 -> 后置确认
+          -> AwaitTransition（发布期为每个输入派生）
+              -> 可取消初始等待 -> 新截图/识别轮询 -> 消费输入回执
+          -> WvdConfirm / 根检查点（独立业务确认）
   -> EventJournal / RunStore（有界事件、原子终态与证据）
 
 OfflineRecognizer -> 同一 MaaGateway / preflight / RecognitionDetail 三态转换
@@ -137,7 +139,11 @@ RunCoordinator 的监督线程不调用 SDK 阻塞等待；会话工作线程持
 
 ### 输入与终态
 
-门禁检查实际帧的设备、游戏、包版本、代次、viewport、动作 epoch、时效、场景、应用、权限与坐标。
+门禁检查实际帧的设备、游戏、包版本、代次、viewport、动作 epoch、输入前时效、场景、应用、权限与坐标。
+`max_frame_age=0` 表示不启用统一输入寿命；非零值也只约束尚未发送的输入证据。
+输入成功后保留唯一回执，独立 `AwaitTransition` 只确认同设备、连接、代次、epoch 且晚于输入的
+页面证据，不再套用输入前墙钟寿命，也不授予下一次输入。回执未消费时即使 Maa 根节点成功，
+会话也不能报告 Completed；业务完成仍由 WVD 确认事件和根检查点决定。
 所有回调先记 attempted，再记 accepted/rejected/backend_called；停止后只允许已按住输入的释放。
 外层截图统一为识别尺寸，SDK 在这一层比例为 1；InputGate 到底层原始尺寸只映射一次。
 不同宽高比拒绝，不自动旋转或裁切。SDK Scroll 的附带 TouchMove 也被观察和拒绝，
