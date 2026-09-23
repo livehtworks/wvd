@@ -4,11 +4,16 @@ import { Handle, Position, VueFlow, type Connection, type EdgeMouseEvent, type N
 import "@vue-flow/core/dist/style.css";
 import "@vue-flow/core/dist/theme-default.css";
 import {
-  Beaker, CircleStop, Copy, GitBranch, Play, Plus, Redo2, RefreshCw, Save, Trash2, Undo2,
+  ArrowLeft, Beaker, CircleStop, Copy, GitBranch, Play, Plus, Redo2, RefreshCw, Save, Trash2, Undo2,
 } from "@lucide/vue";
 import { formatApiError, probeRecognition } from "../api/client";
 import type { JsonObject, RecognitionProbeResult, WorkflowEdge, WorkflowNode } from "../api/types";
 import { useWorkflowEditor } from "../stores/useWorkflowEditor";
+import FlowCallInspector from "../features/authoring/FlowCallInspector.vue";
+import DefinitionInterfaceEditor from "../features/authoring/DefinitionInterfaceEditor.vue";
+import SlotInspector from "../features/authoring/SlotInspector.vue";
+import ConditionEditor from "../features/authoring/ConditionEditor.vue";
+import type { FlowCall, PublicInterface } from "../features/authoring/flowModel";
 
 const state = useWorkflowEditor();
 const emit = defineEmits<{ dirty: [value: boolean] }>();
@@ -24,7 +29,10 @@ const importTaskId = ref("");
 const cloneJson = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
 const selectedParameters = computed(() => state.selectedNode?.data.parameters ?? {});
-const nodeTypes = computed(() => state.catalog.node_types ?? []);
+const nodeTypes = computed(() => [...(state.catalog.node_types ?? []),
+ {type:"call",label:"调用公共步骤 / 块",category:"公共复用",defaults:{flow_id:"",arguments:{},extensions:{}}},
+ {type:"slot",label:"附加步骤插槽",category:"公共复用",defaults:{name:"extra",calls:[]}},
+ {type:"route",label:"候选分派",category:"流程控制",defaults:{}}]);
 const recognitionAssets = computed(() => [
   ...(state.catalog.templates ?? []),
   ...(state.catalog.recognizers ?? []),
@@ -202,12 +210,25 @@ async function runProbe() {
   try {
     const payload: JsonObject = {
       workflow_id: state.current?.id, node_id: state.selectedNode.id,
-      source: probeSource.value, recognition: cloneJson(state.selectedNode.data.parameters),
+      source: probeSource.value, recognition: cloneJson(state.selectedNode.data.parameters), resource_locale:state.current?.resource_locale??"",
     };
     probeResult.value = await probeRecognition(payload, probeSource.value === "local" ? probeImage.value : undefined);
   } catch (reason) { editorError.value = formatApiError(reason); }
   finally { probeBusy.value = false; }
 }
+const selectedPublicNodes=ref<string[]>([]);
+watch(()=>state.current?.id,()=>{selectedPublicNodes.value=[];});
+const publicResources=computed(()=>(state.catalog.semantic_resources??[]) as Array<{value:string;label:string;role:string;category:string}>);
+function replaceParameters(value:Record<string,unknown>|FlowCall) {if(state.selectedNode){state.checkpoint();state.selectedNode.data.parameters=cloneJson(value) as JsonObject;}}
+function interfaceChanged(value:PublicInterface) {if(state.current){state.checkpoint();state.current.interface=value;}}
+function setWholeCondition(key:string,value:JsonObject) {setParam(key,value);}
+function selectMany(event:{nodes:Array<{id:string}>}) {selectedPublicNodes.value=event.nodes.map(n=>n.id);}
+function extractSelected(){void state.extractSelection(selectedPublicNodes.value.length?selectedPublicNodes.value:state.selectedNodeId?[state.selectedNodeId]:[]);}
+function optionalBudget(name:string,event:Event){
+ if(!state.selectedNode)return;state.checkpoint();const raw=(event.target as HTMLInputElement).value;
+ if(raw==='')delete state.selectedNode.data.parameters[name];else state.selectedNode.data.parameters[name]=Number(raw);
+}
+function rootBudget(event:Event){if(state.current){state.checkpoint();state.current.time_limit_ms=Number((event.target as HTMLInputElement).value);}}
 function edgeLabel(edge: WorkflowEdge) { return `${edge.data?.kind ?? "sequence"} · ${edge.data?.order ?? 0}`; }
 </script>
 
@@ -215,8 +236,10 @@ function edgeLabel(edge: WorkflowEdge) { return `${edge.data?.kind ?? "sequence"
   <main class="workflow-page">
     <section class="notice" aria-label="流程运行状态" role="status">{{ state.runLabel }}</section>
     <div v-if="state.runError" class="notice error" role="alert">{{ state.runError }}</div>
+    <nav v-if="state.run?.node_path?.length" aria-label="运行调用路径"><button v-for="(part,i) in state.run.node_path" :key="i" type="button" @click="state.openDefinition(part.flow_id,part.node_id)">{{part.flow_id}} / {{part.node_id}}</button></nav>
     <header class="editor-toolbar">
       <div class="workflow-picker">
+        <button v-if="state.definitionCaller" class="button secondary" :title="`返回 ${state.definitionCaller.name}`" @click="state.returnToCaller"><ArrowLeft :size="16" />返回调用者</button>
         <select aria-label="流程" :value="state.current?.id ?? ''" @change="state.open(($event.target as HTMLSelectElement).value)">
           <option value="" disabled>选择流程</option><option v-for="item in state.workflows" :key="item.id" :value="item.id">{{ item.name }}</option>
         </select>
@@ -225,6 +248,7 @@ function edgeLabel(edge: WorkflowEdge) { return `${edge.data?.kind ?? "sequence"
         <button class="icon-button danger" title="删除流程" aria-label="删除流程" :disabled="!state.current || state.isNew" @click="state.remove"><Trash2 :size="16" /></button>
         <select v-model="importTaskId" aria-label="复制现有任务"><option value="">复制现有任务…</option><option v-for="task in state.catalog.tasks?.filter((item) => item.type === 'dungeon') ?? []" :key="task.id" :value="task.id">{{ task.name }}</option></select>
         <button class="button secondary" :disabled="!importTaskId" @click="state.importTask(importTaskId)"><Copy :size="16" />生成编辑副本</button>
+        <button class="button secondary" :disabled="!state.current" @click="extractSelected">提取选中步骤为公共块</button>
       </div>
       <div class="command-row">
         <span v-if="state.dirty" class="status-chip warning">未保存</span>
@@ -244,6 +268,9 @@ function edgeLabel(edge: WorkflowEdge) { return `${edge.data?.kind ?? "sequence"
         <header><h2>节点</h2><span>{{ nodeTypes.length }}</span></header>
         <div v-if="nodeTypes.length" class="node-type-list"><button v-for="item in nodeTypes" :key="item.type" @click="addNode(item.type)"><Plus :size="14" /><span><strong>{{ item.label }}</strong><small>{{ item.category ?? item.type }}</small></span></button></div>
         <p v-else class="empty-state">目录未返回可编排节点</p>
+        <label v-if="state.current" class="field"><span>本次根运行总预算（ms）</span><input type="number" min="1" max="1800000" :value="state.current.time_limit_ms??60000" @change="rootBudget" /></label>
+        <DefinitionInterfaceEditor v-if="state.current" :model-value="state.current.interface" :nodes="state.current.nodes" @update:model-value="interfaceChanged" />
+        <label v-if="state.current" class="field"><span>游戏素材语言（不是工作台语言）</span><select v-model="state.current.resource_locale" @focus="state.checkpoint"><option value="">未选择</option><option value="zh-Hant">繁中</option><option value="en">英文</option><option value="zh-Hans">简中</option><option value="ja">日文</option></select></label>
       </aside>
 
       <section class="flow-region" aria-label="流程画布">
@@ -251,7 +278,7 @@ function edgeLabel(edge: WorkflowEdge) { return `${edge.data?.kind ?? "sequence"
           <input v-model="state.current.name" aria-label="流程名称" @focus="state.checkpoint" /><input v-model="state.current.description" aria-label="流程说明" placeholder="流程说明" @focus="state.checkpoint" />
           <span class="mono">{{ state.current.revision ?? '尚未保存' }}</span>
         </div>
-        <VueFlow v-if="state.current" :nodes="flowNodes" :edges="flowEdges" :delete-key-code="null" fit-view-on-init class="flow-canvas" @connect="connect" @node-click="selectNode" @edge-click="selectEdge" @node-drag-start="dragStart" @node-drag-stop="dragStop">
+        <VueFlow v-if="state.current" :nodes="flowNodes" :edges="flowEdges" :delete-key-code="null" fit-view-on-init class="flow-canvas" @connect="connect" @node-click="selectNode" @edge-click="selectEdge" @node-drag-start="dragStart" @node-drag-stop="dragStop" @selection-change="selectMany">
           <template #node-editor="slotProps">
             <div :class="['editor-node', { entry: state.current?.entry_node_id === slotProps.id, active: state.activeNodeId === slotProps.id, failed: state.run?.failed_node_id === slotProps.id }]">
               <Handle type="target" :position="Position.Left" /><span class="node-kind">{{ slotProps.data.node_type }}</span><strong>{{ slotProps.data.label }}</strong><span v-if="state.current?.entry_node_id === slotProps.id" class="node-mark">入口</span><Handle id="success" type="source" :position="Position.Right" /><Handle id="failure" type="source" :position="Position.Bottom" />
@@ -268,18 +295,29 @@ function edgeLabel(edge: WorkflowEdge) { return `${edge.data?.kind ?? "sequence"
           <label class="field"><span>名称</span><input v-model="state.selectedNode.data.label" @focus="state.checkpoint" /></label>
           <label class="field"><span>节点类型</span><input :value="state.selectedNode.data.node_type" readonly /></label>
           <button class="button secondary full" :disabled="state.current?.entry_node_id === state.selectedNodeId" @click="setEntry">设为入口</button>
-          <div v-if="nodeKind === 'recognition'" class="inspector-group"><h3>识别</h3>
+          <FlowCallInspector v-if="nodeKind==='call'" :model-value="selectedParameters as unknown as FlowCall" :flows="state.workflows" :current-flow-id="state.current!.id" @update:model-value="replaceParameters" @open-definition="state.openDefinition" />
+          <SlotInspector v-else-if="nodeKind==='slot'" :model-value="selectedParameters as unknown as {name:string;calls?:FlowCall[]}" :flows="state.workflows" :current-flow-id="state.current!.id" @update:model-value="replaceParameters" @open-definition="state.openDefinition" />
+          <div v-else-if="nodeKind==='route'" class="inspector-group"><p>按后继候选顺序识别，不是同时执行全部分支。调用块为直接命中节点，分支条件请显式放在调用前。</p></div>
+          <div v-else-if="nodeKind === 'recognition'" class="inspector-group"><h3>识别</h3>
+            <ConditionEditor :model-value="selectedCondition" :templates="state.catalog.templates" :resources="publicResources" :recognizers="state.catalog.recognizers" @update:model-value="setWholeCondition('condition',$event)" />
+            <details v-if="['template','ocr'].includes(String(selectedCondition.mode))"><summary>旧模板快捷字段</summary>
             <label class="field"><span>识别方式</span><select :value="String(selectedCondition.mode ?? '')" @change="setRecognitionMode"><option value="template">模板</option><option value="ocr">OCR</option><option v-for="item in state.catalog.recognizers ?? []" :key="String(item.value)" :value="String(item.value)">WVD · {{ item.label }}</option></select></label>
             <label v-if="selectedCondition.mode === 'template'" class="field"><span>模板</span><input list="recognition-assets" :value="String(selectedCondition.image ?? '')" @input="setConditionText('image', $event)" /><datalist id="recognition-assets"><option v-for="item in state.catalog.templates ?? []" :key="String(item.value)" :value="String(item.value)">{{ item.label }}</option></datalist></label>
             <label v-if="selectedCondition.mode === 'template'" class="field"><span>阈值</span><input :value="Number(selectedCondition.threshold ?? 0.8)" type="number" min="0" max="1" step="0.01" @input="setConditionNumber('threshold', $event)" /></label>
             <label v-if="selectedCondition.mode === 'ocr'" class="field"><span>OCR 文本（多个用 | 分隔）</span><input :value="Array.isArray(selectedCondition.expected) ? selectedCondition.expected.join('|') : ''" @change="setOcrText" /></label>
             <div v-if="['template','ocr'].includes(String(selectedCondition.mode))" class="roi-grid"><label v-for="(label, index) in ['X','Y','宽','高']" :key="label" class="field"><span>{{ label }}</span><input :value="Number((selectedCondition.roi as number[] | undefined)?.[index] ?? [0,0,900,1600][index])" type="number" min="0" @change="setRoi(index, $event)" /></label></div>
+            </details>
           </div>
           <div v-else-if="nodeKind === 'action'" class="inspector-group"><h3>受控动作</h3>
+            <ConditionEditor :model-value="(param('scene')??{}) as JsonObject" :templates="state.catalog.templates" :resources="publicResources" :recognizers="state.catalog.recognizers" @update:model-value="setWholeCondition('scene',$event)" />
+            <ConditionEditor v-if="param('operation')==='click'" :model-value="(param('target')??{}) as JsonObject" :templates="state.catalog.templates" :resources="publicResources" :positional="true" @update:model-value="setWholeCondition('target',$event)" />
+            <ConditionEditor :model-value="(param('postcondition')??{}) as JsonObject" :templates="state.catalog.templates" :resources="publicResources" :recognizers="state.catalog.recognizers" @update:model-value="setWholeCondition('postcondition',$event)" />
             <label class="field"><span>动作</span><select :value="String(param('operation') ?? 'fixed_click')" @change="changeAction"><option value="fixed_click">固定坐标点击</option><option value="click">识别目标点击</option><option value="swipe">滑动</option><option value="back">返回键</option></select></label>
+            <details v-if="['scene','target','postcondition'].every(k=>Object.keys((param(k)??{}) as JsonObject).length===1)"><summary>旧单模式快捷字段</summary>
             <label class="field"><span>允许场景</span><input :value="String((param('scene') as JsonObject | undefined)?.mode ?? '')" @change="setActionCondition('scene', $event)" /></label>
             <label v-if="param('operation') === 'click'" class="field"><span>目标识别</span><input :value="String((param('target') as JsonObject | undefined)?.mode ?? '')" @change="setActionCondition('target', $event)" /></label>
             <label class="field"><span>后置条件</span><input :value="String((param('postcondition') as JsonObject | undefined)?.mode ?? '')" @change="setActionCondition('postcondition', $event)" /></label>
+            </details>
             <div v-if="param('operation') === 'fixed_click'" class="coordinate-grid"><label v-for="(label,index) in ['X','Y']" :key="label" class="field"><span>{{ label }}</span><input :value="Number((param('position') as number[])?.[index] ?? 0)" type="number" @change="setArrayValue('position', index, $event)" /></label></div>
             <div v-if="param('operation') === 'swipe'" class="coordinate-grid"><label v-for="(label,index) in ['X1','Y1','X2','Y2']" :key="label" class="field"><span>{{ label }}</span><input :value="Number((param('coordinates') as number[])?.[index] ?? 0)" type="number" @change="setArrayValue('coordinates', index, $event)" /></label></div>
             <label v-if="param('operation') === 'swipe'" class="field"><span>持续时间 (ms)</span><input :value="Number(param('duration_ms') ?? 400)" type="number" min="1" @change="numberParam('duration_ms', $event)" /></label>
@@ -287,6 +325,7 @@ function edgeLabel(edge: WorkflowEdge) { return `${edge.data?.kind ?? "sequence"
           <div v-else-if="nodeKind === 'wait'" class="inspector-group"><h3>等待</h3><label class="field"><span>时长 (ms)</span><input :value="Number(param('duration_ms') ?? 500)" type="number" min="1" max="10000" @change="numberParam('duration_ms', $event)" /></label></div>
           <div v-else-if="nodeKind === 'business'" class="inspector-group"><h3>业务子流程</h3><label class="field"><span>类型</span><select :value="String(param('binding') ?? 'combat')" :disabled="param('binding') === 'task_stage'" @change="changeBusiness"><option value="combat">完整战斗</option><option value="chest">完整开箱</option><option value="confirm">业务确认</option><option value="task_stage">现有任务阶段</option></select></label><template v-if="param('binding') === 'task_stage'"><label class="field"><span>任务</span><input :value="String(param('task_id') ?? '')" readonly /></label><label class="field"><span>阶段</span><select :value="String(param('stage') ?? '')" @change="textParam('stage', $event)"><option value="prepare">入本准备与补给</option><option value="enter">进入地下城</option><option value="traverse">路线、战斗与开箱</option></select></label></template><template v-if="param('binding') === 'chest'"><label class="field"><span>开箱角色</span><input :value="Number(param('preferred') ?? 0)" type="number" min="0" max="6" @change="numberParam('preferred', $event)" /></label><label class="check-row"><input :checked="Boolean(param('quick'))" type="checkbox" @change="boolParam('quick', $event)" /><span>快速解除陷阱</span></label></template><label v-if="param('binding') === 'confirm'" class="field"><span>确认事件</span><input :value="String(param('event') ?? '')" @change="textParam('event', $event)" /></label></div>
           <div v-else-if="nodeKind === 'end'" class="inspector-group"><h3>结束</h3><label class="field"><span>结果</span><select :value="String(param('outcome') ?? 'success')" @change="textParam('outcome', $event)"><option value="success">成功</option><option value="failure">失败</option></select></label><label v-if="param('outcome') === 'failure'" class="field"><span>原因</span><input :value="String(param('reason') ?? 'workflow_failed')" @change="textParam('reason', $event)" /></label></div>
+          <div v-if="nodeKind==='action'" class="inspector-group"><label class="field"><span>输入后等待（ms，可留空）</span><input type="number" min="0" max="10000" :value="param('delay_after_ms')??''" @change="optionalBudget('delay_after_ms',$event)" /></label><label class="field"><span>独立转场观察预算（ms，可留空沿用）</span><input type="number" min="1" max="60000" :value="param('postcondition_timeout_ms')??''" @change="optionalBudget('postcondition_timeout_ms',$event)" /></label></div>
           <div v-if="nodeKind !== 'end'" class="inspector-group"><h3>控制</h3><label class="field"><span>有限重复次数</span><input :value="state.selectedNode.repeat_limit ?? 1" type="number" min="1" max="256" @change="setRepeat" /></label></div>
           <div v-if="nodeKind === 'recognition'" class="inspector-group"><h3>试识别</h3>
             <span class="source-line">使用设备面板最近一次截图，不触发任何点击</span>

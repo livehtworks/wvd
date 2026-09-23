@@ -41,6 +41,11 @@
 
 ## Next 独立 M1 工程
 
+- 可组合流程改动的最小验收入口是显式构建并运行 `test_public_flow`、执行 Vue 正式 build，再用独立 `--data-root` 跑一次 HTTP 编辑链；不运行 M4 全任务矩阵，也不连接设备。服务结束后必须按验收端口和命令行精确确认并关闭专属 `automationd.exe`。
+- `prepare_m3.py` 会重新生成包清单并复制 `public-flows.json`、`semantic-assets.json`；运行可能超过默认十秒，必须等待进程真实结束并读取 JSON 摘要，不能因短暂无输出重复启动。
+- 公共流程契约错误使用 `authoring::ContractError` 原样传播；节点内部的非契约异常才包装为 `AUTHOR_NODE_COMPILE_FAILED`。不要重新改成字符串前缀猜测，否则循环引用和语义缺项会丢失准确错误码。
+- 从调用节点打开公共定义使用编辑器调用栈；普通流程下拉切换会清空调用栈。两种导航不能共用残留返回状态。
+
 - 构建/验收入口为 `next/tools/build.py`、`next/tools/validate.py`，只写 next 构建/测试目录及专用依赖缓存，不打包旧 wvd。工具链版本见 `next/dependencies.lock.json`。
 - CMake 未加入 PATH 时通过 VS Installer 的 vswhere 发现 VS 2022 内置 CMake，不硬编码个人安装路径；Web 使用锁文件 `npm ci`，不安装浮动版本。
 - automationd 运行期间重新链接会出现 LNK1104。先 Ctrl+C 正常停本目录服务再构建，不全局结束同名进程。验收工具使用独立隐藏控制台发送 Ctrl+C；强杀只用于失败测试的专属进程清理，不能计作停止通过。

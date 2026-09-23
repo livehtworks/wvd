@@ -55,6 +55,8 @@ export interface WorkflowDefinition extends JsonObject {
   id: string; name: string; revision?: string; description?: string; entry_node_id?: string;
   nodes: WorkflowNode[]; edges: WorkflowEdge[]; created_from?: string; runnable?: boolean;
   time_limit_ms?: number;
+  interface?: import("../features/authoring/flowModel").PublicInterface;
+  slots?: string[]; resource_locale?: string;
   validation_errors?: Array<{ node_id?: string; error_code: string; message: string }>;
 }
 export interface SubmissionReceipt extends JsonObject {
@@ -63,6 +65,7 @@ export interface SubmissionReceipt extends JsonObject {
 }
 export interface RunState extends JsonObject {
   busy?: boolean; quiescent?: boolean;
+  node_path?: Array<{flow_id:string;node_id:string}>;
   submission?: { request_id: string; kind?: string; state?: string; error?: string | null };
   run_id?: string | number; workflow_id?: string; workflow_revision?: string; state?: string; current_node_id?: string;
   failed_node_id?: string; task_name?: string; step_name?: string; started_at?: string; elapsed_seconds?: number;

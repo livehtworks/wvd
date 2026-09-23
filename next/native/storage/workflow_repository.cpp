@@ -1,4 +1,5 @@
 #include "workflow_repository.hpp"
+#include "authoring/document_parameters.hpp"
 #include "platform/windows/bundle_lease.hpp"
 
 #include "games/wvd/tasks/author_workflow.hpp"
@@ -199,7 +200,10 @@ J WorkflowRepository::list() const {
                           {"description", document.at("flow").at("description")},
                           {"revision", document.at("revision")},
                           {"node_count", document.at("nodes").size()},
-                          {"edge_count", document.at("edges").size()}});
+                          {"edge_count", document.at("edges").size()},
+                          {"interface", document.value("interface", J::object())},
+                          {"slots", authoring::slot_names(document)},
+                          {"resource_locale", document.at("execution").value("resource_locale", std::string{})}});
     }
     if (error)
         fail("WORKFLOW_LIST_FAILED");
@@ -213,6 +217,32 @@ J WorkflowRepository::read(const std::string &flow_id) const {
     verify_plain_directory(root_);
     RepositoryLock lock(root_);
     return read_unlocked(flow_id);
+}
+
+J WorkflowRepository::snapshot_closure(const J &root) const {
+    verify_plain_directory(root_);
+    RepositoryLock lock(root_);
+    const auto root_id = root.at("flow").at("id").get<std::string>();
+    const auto persisted_root = read_unlocked(root_id);
+    if (root != persisted_root) fail("WORKFLOW_CONFLICT", root_id);
+    J documents = J::object();
+    std::size_t bytes{};
+    std::map<std::string, std::vector<std::string>> graph;
+    const auto load = [&](auto &&self, const std::string &id, unsigned depth) -> void {
+        if (documents.contains(id)) return;
+        if (depth >= 8) fail("FLOW_REFERENCE_DEPTH", id);
+        if (documents.size() >= 1024) fail("FLOW_SNAPSHOT_LIMIT");
+        auto document = id == root_id ? root : read_unlocked(id);
+        bytes += document.dump().size();
+        if (bytes > 16 * 1024 * 1024) fail("FLOW_SNAPSHOT_BYTES_LIMIT");
+        documents[id] = document;
+        const auto references = authoring::referenced_flows(document);
+        graph[id] = std::vector<std::string>(references.begin(), references.end());
+        for (const auto &next : references) self(self, next, depth + 1);
+    };
+    load(load, root_id, 0);
+    authoring::validate_call_graph(graph, root_id);
+    return documents;
 }
 
 J WorkflowRepository::copy(const std::string &source_id, const std::string &new_id,
@@ -260,6 +290,13 @@ void WorkflowRepository::erase(const std::string &flow_id,
     const auto current = read_unlocked(flow_id);
     if (current.at("revision") != expected_revision)
         fail("WORKFLOW_CONFLICT", flow_id);
+    for (const auto &entry : std::filesystem::directory_iterator(root_)) {
+        if (entry.path().extension() != L".json") continue;
+        const auto id = entry.path().stem().string();
+        if (id == flow_id) continue;
+        const auto references = authoring::referenced_flows(read_unlocked(id));
+        if (references.contains(flow_id)) fail("WORKFLOW_STILL_REFERENCED", id);
+    }
     if (!DeleteFileW(path_for(flow_id).c_str()))
         fail("WORKFLOW_DELETE_FAILED", flow_id);
 }

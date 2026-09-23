@@ -84,7 +84,7 @@ def prepare_assets():
                 "source": "next/resources/images/" + image_name,
                 "sha256": sha(data),
                 "bytes": len(data),
-                "source_refs": ["native/games/wvd/recovery/boot.cpp"],
+                "source_refs": ["semantic-catalogue:unclassified"],
             }
         )
     for ref in report["references"]:
@@ -163,6 +163,38 @@ def prepare_assets():
                 "blocks": "M4 调用参数绑定" if category != "RESOLVED" else None,
             }
         )
+    # 作者定义与语义资源是运行包依赖；不在游戏脚本中拼语言文件名。
+    authoring_root = ROOT / "resources/authoring"
+    catalogue = json.loads((authoring_root / "semantic-assets.json").read_text(encoding="utf-8"))
+    def image_names(value):
+        if isinstance(value, dict):
+            if isinstance(value.get("image"), str):
+                name = value["image"]
+                yield name if name.endswith(".png") else name + ".png"
+            for child in value.values():
+                yield from image_names(child)
+        elif isinstance(value, list):
+            for child in value:
+                yield from image_names(child)
+    semantic_refs = {}
+    for resource_id, entry in catalogue["resources"].items():
+        for image in image_names(entry):
+            semantic_refs.setdefault("image/" + image, set()).add("semantic:" + resource_id)
+    for item in files:
+        if item["path"] in semantic_refs:
+            old = [v for v in item["source_refs"] if v != "semantic-catalogue:unclassified"]
+            item["source_refs"] = sorted(set(old) | semantic_refs[item["path"]])
+    for name in ("semantic-assets.json", "public-flows.json"):
+        source_path = authoring_root / name
+        data = source_path.read_bytes()
+        json.loads(data)
+        relative = "parameters/" + name
+        target = pack / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(data)
+        files.append({"path": relative, "source": "next/resources/authoring/" + name,
+                      "sha256": sha(data), "bytes": len(data), "source_refs": ["authoring:public-flow-1"]})
+    files.sort(key=lambda item: item["path"])
     revision = sha(json.dumps(files, sort_keys=True, ensure_ascii=False).encode())
     manifest = {
         "schema_version": 1,
@@ -238,7 +270,8 @@ if __name__ == "__main__":
     print(
         json.dumps(
             {
-                "images": len(manifest["files"]),
+                "images": sum(f["path"].startswith("image/") for f in manifest["files"]),
+                "metadata_files": sum(not f["path"].startswith("image/") for f in manifest["files"]),
                 "bytes": sum(f["bytes"] for f in manifest["files"]),
                 "revision": manifest["revision"],
                 "dynamic": len(manifest["dynamic_references"]),

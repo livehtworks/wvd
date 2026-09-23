@@ -1,4 +1,5 @@
 #include "author_workflow.hpp"
+#include "authoring/document_parameters.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -130,6 +131,31 @@ void validate_condition(const J &condition, const std::string &node_id,
     const auto mode = condition.at("mode").is_string()
                           ? condition.at("mode").get<std::string>()
                           : std::string{};
+    if (mode == "semantic") {
+        exact_object(condition, {"mode", "id"}, {}, "AUTHOR_SEMANTIC_INVALID", node_id);
+        if (!authoring::public_id(condition.at("id").get<std::string>()))
+            fail("AUTHOR_SEMANTIC_INVALID", node_id);
+        return;
+    }
+    if (mode == "location") {
+        exact_object(condition, {"mode", "id"}, {}, "AUTHOR_LOCATION_INVALID", node_id);
+        integer(condition.at("id"), 0, 65535, "AUTHOR_LOCATION_INVALID", node_id);
+        return;
+    }
+    if (mode == "bright_mask") {
+        exact_object(condition, {"mode", "image"}, {"threshold", "roi", "min_brightness"},
+                     "AUTHOR_CONDITION_INVALID", node_id);
+        validate_image(condition.at("image"), node_id);
+        if (condition.contains("roi")) validate_roi(condition.at("roi"), node_id);
+        if (condition.contains("min_brightness"))
+            integer(condition.at("min_brightness"), 0, 255, "AUTHOR_MASK_INVALID", node_id);
+        if (condition.contains("threshold")) {
+            if (!condition.at("threshold").is_number()) fail("AUTHOR_THRESHOLD_INVALID", node_id);
+            const auto n = condition.at("threshold").get<double>();
+            if (!std::isfinite(n) || n < 0 || n > 1) fail("AUTHOR_THRESHOLD_INVALID", node_id);
+        }
+        return;
+    }
     if (mode == "template") {
         exact_object(condition, {"mode", "image"}, {"threshold", "roi"},
                      "AUTHOR_CONDITION_INVALID", node_id);
@@ -345,7 +371,9 @@ ValidatedGraph validate_graph(const J &document) {
         if (node.contains("repeat_limit"))
             integer(node.at("repeat_limit"), 1, 256, "AUTHOR_NODE_REPEAT_INVALID", id);
         const auto type = node.at("type").get<std::string>();
-        if (type == "recognition") {
+        if (type == "route") {
+            exact_object(node.at("parameters"), {}, {}, "AUTHOR_ROUTE_PARAMETERS_INVALID", id);
+        } else if (type == "recognition") {
             exact_object(node.at("parameters"), {"condition"}, {"delay_after_ms"},
                          "AUTHOR_RECOGNITION_PARAMETERS_INVALID", id);
             validate_condition(node.at("parameters").at("condition"), id);
@@ -359,6 +387,15 @@ ValidatedGraph validate_graph(const J &document) {
                          "AUTHOR_WAIT_PARAMETERS_INVALID", id);
             integer(node.at("parameters").at("duration_ms"), 1, 10000,
                     "AUTHOR_WAIT_DURATION_INVALID", id);
+        } else if (type == "call") {
+            authoring::validate_call(node.at("parameters"));
+        } else if (type == "slot") {
+            const auto &p = node.at("parameters");
+            exact_object(p, {"name"}, {"calls"}, "AUTHOR_SLOT_INVALID", id);
+            if (!authoring::public_id(p.at("name").get<std::string>())) fail("AUTHOR_SLOT_INVALID", id);
+            const auto calls = p.value("calls", J::array());
+            if (!calls.is_array() || calls.size() > 32) fail("AUTHOR_SLOT_INVALID", id);
+            for (const auto &call : calls) authoring::validate_call(call);
         } else if (type == "business") {
             validate_business_parameters(node.at("parameters"), id);
             if (node.at("parameters").at("binding") == "confirm") {
@@ -523,8 +560,13 @@ ValidatedGraph validate_graph(const J &document) {
         viewport.at("zoom").get<double>() < .05 || viewport.at("zoom").get<double>() > 8)
         fail("AUTHOR_VIEWPORT_INVALID");
 
-    exact_object(document.at("execution"), {"time_limit_ms"}, {},
+    exact_object(document.at("execution"), {"time_limit_ms"}, {"resource_locale"},
                  "AUTHOR_EXECUTION_FIELDS_INVALID");
+    if (document.at("execution").contains("resource_locale")) {
+        const auto locale = document.at("execution").at("resource_locale").get<std::string>();
+        if (locale != "" && locale != "en" && locale != "zh-Hant" && locale != "zh-Hans" && locale != "ja")
+            fail("AUTHOR_RESOURCE_LOCALE_INVALID");
+    }
     integer(document.at("execution").at("time_limit_ms"), 1, 1800000,
             "AUTHOR_EXECUTION_BUDGET_INVALID", "execution");
     return graph;
@@ -548,14 +590,26 @@ J successors(const std::vector<const J *> &edges, const std::string &entry,
 } // namespace
 
 void validate_author_workflow(const J &document) {
-    (void)validate_graph(document);
+    (void)validate_graph(authoring::instantiate_document(document));
     if (document.dump().size() > 1048576)
         fail("AUTHOR_DOCUMENT_TOO_LARGE");
 }
 
-AuthorWorkflowCompilation compile_author_workflow(const J &document,
-                                                  AuthorBusinessResolver resolver) {
+AuthorWorkflowCompilation compile_author_workflow(const J &source,
+                                                  AuthorBusinessResolver resolver,
+                                                  AuthorFlowResolver public_flow) {
+    const auto document = authoring::instantiate_document(source);
     validate_author_workflow(document);
+    // symbolic 只允许存在于草稿；必须经 PublicFlowLibrary 绑定语言和使用语义再编译。
+    const auto unresolved = [&](auto &&self, const J &v) -> bool {
+        if (v.is_object()) {
+            if (v.contains("mode") && v.at("mode").is_string() &&
+                (v.at("mode") == "semantic" || v.at("mode") == "location")) return true;
+            for (const auto &child : v) if (self(self, child)) return true;
+        } else if (v.is_array()) for (const auto &child : v) if (self(self, child)) return true;
+        return false;
+    };
+    if (unresolved(unresolved, document.at("nodes"))) fail("AUTHOR_SEMANTIC_UNRESOLVED");
     const auto graph = validate_graph(document);
     const auto entry = document.at("entry").get<std::string>();
     const auto flow_id = document.at("flow").at("id").get<std::string>();
@@ -567,9 +621,11 @@ AuthorWorkflowCompilation compile_author_workflow(const J &document,
     if (!graph.failure.at(entry).empty())
         compiler.failure_route("Entry", successors(graph.failure.at(entry), entry, graph.success_end));
 
+    std::size_t public_ordinal{};
     for (const auto &[id, node] : graph.nodes) {
         const auto runtime_name = pipeline_name(id, entry, graph.success_end);
         result.node_to_pipeline[id] = {runtime_name};
+        result.source_paths[runtime_name] = J::array({J{{"flow_id", flow_id}, {"node_id", id}}});
         if (!result.pipeline_to_node.emplace(runtime_name, id).second)
             fail("AUTHOR_PIPELINE_MAPPING_DUPLICATE", id + ":" + runtime_name);
         if (id == graph.success_end)
@@ -578,7 +634,9 @@ AuthorWorkflowCompilation compile_author_workflow(const J &document,
         const auto &parameters = node->at("parameters");
         const auto type = node->at("type").get<std::string>();
         try {
-            if (type == "recognition") {
+            if (type == "route") {
+                compiler.route(runtime_name, next);
+            } else if (type == "recognition") {
                 const auto &condition = parameters.at("condition");
                 if (condition.value("mode", "") == "ocr")
                     compiler.observe_ocr(runtime_name,
@@ -617,6 +675,38 @@ AuthorWorkflowCompilation compile_author_workflow(const J &document,
                 compiler.wait(runtime_name,
                               static_cast<int>(parameters.at("duration_ms").get<std::int64_t>()),
                               next);
+            } else if (type == "call" || type == "slot") {
+                const J calls = type == "call" ? J::array({parameters})
+                                               : parameters.value("calls", J::array());
+                const auto add_call = [&](const J &call, const std::string &name, J successors) {
+                    if (!public_flow) fail("AUTHOR_FLOW_CONTEXT_REQUIRED", id);
+                    const auto child = public_flow(call);
+                    const auto prefix = "Public" + std::to_string(public_ordinal++);
+                    const auto child_entry = compiler.define_child(prefix, child.workflow);
+                    compiler.call_child(name, child_entry, std::move(successors));
+                    for (const auto &[child_name, unused] : child.workflow.nodes.items()) {
+                        (void)unused;
+                        const auto compiled_name = prefix + "_" + child_name;
+                        result.node_to_pipeline[id].push_back(compiled_name);
+                        result.pipeline_to_node[compiled_name] = id;
+                        J path = J::array({J{{"flow_id", flow_id}, {"node_id", id}}});
+                        if (child.source_paths.contains(child_name))
+                            for (const auto &part : child.source_paths.at(child_name)) path.push_back(part);
+                        result.source_paths[compiled_name] = std::move(path);
+                    }
+                };
+                if (type == "call") add_call(parameters, runtime_name, next);
+                else {
+                    compiler.route(runtime_name, calls.empty() ? next : J::array({runtime_name + "_Call0"}));
+                    for (std::size_t i = 0; i < calls.size(); ++i) {
+                        const auto name = runtime_name + "_Call" + std::to_string(i);
+                        add_call(calls.at(i), name, i + 1 == calls.size() ? next
+                            : J::array({runtime_name + "_Call" + std::to_string(i + 1)}));
+                        result.node_to_pipeline[id].push_back(name);
+                        result.pipeline_to_node[name] = id;
+                        result.source_paths[name] = J::array({J{{"flow_id", flow_id}, {"node_id", id}}});
+                    }
+                }
             } else if (type == "business") {
                 const auto binding = parameters.at("binding").get<std::string>();
                 if (binding == "confirm")
@@ -650,6 +740,8 @@ AuthorWorkflowCompilation compile_author_workflow(const J &document,
             if (!graph.failure.at(id).empty())
                 compiler.failure_route(runtime_name,
                                        successors(graph.failure.at(id), entry, graph.success_end));
+        } catch (const authoring::ContractError &) {
+            throw;
         } catch (const std::runtime_error &error) {
             const std::string message = error.what();
             if (message.starts_with("AUTHOR_"))
@@ -663,8 +755,8 @@ AuthorWorkflowCompilation compile_author_workflow(const J &document,
         fail("AUTHOR_COMPILE_FAILED", error.what());
     }
     // 编译器可能增加业务检查点和统一恢复节点；二者属于既有运行模型而非作者节点。
-    for (const auto &[id, source] : graph.nodes) {
-        (void)source;
+    for (const auto &[id, source_node] : graph.nodes) {
+        (void)source_node;
         const auto prefix = pipeline_name(id, entry, graph.success_end) + "_Business_";
         for (const auto &[name, node] : result.workflow.nodes.items()) {
             (void)node;

@@ -27,6 +27,7 @@
 #include "games/wvd/tasks/steel_trial.hpp"
 #include "games/wvd/tasks/workflow_session.hpp"
 #include "games/wvd/tasks/author_workflow.hpp"
+#include "games/wvd/tasks/public_flow_library.hpp"
 #include "games/wvd/vision/recognizers.hpp"
 #include "maafw/buffers.hpp"
 #include "maafw/gateway.hpp"
@@ -240,6 +241,8 @@ J author_document_from_ui(const J &ui) {
                {"execution", {{"time_limit_ms", ui.value("time_limit_ms", 60000)}}}};
     if (ui.contains("revision"))
         document["revision"] = ui.at("revision");
+    if (ui.contains("interface")) document["interface"] = ui.at("interface");
+    if (ui.contains("resource_locale")) document["execution"]["resource_locale"] = ui.at("resource_locale");
     for (const auto &source : ui.at("nodes")) {
         const auto &data = source.at("data");
         J parameters = data.value("parameters", J::object());
@@ -274,6 +277,8 @@ J ui_document_from_author(const J &document) {
          {"time_limit_ms", document.at("execution").at("time_limit_ms")}, {"runnable", true}};
     if (document.contains("revision"))
         ui["revision"] = document.at("revision");
+    ui["interface"] = document.value("interface", J::object());
+    ui["resource_locale"] = document.at("execution").value("resource_locale", std::string{});
     std::map<std::string, J> positions;
     for (const auto &position : document.at("layout").at("nodes"))
         positions[position.at("node_id").get<std::string>()] =
@@ -407,6 +412,21 @@ Application::Application(ApplicationPaths paths) : paths_(std::move(paths)) {
     const auto profile_path = paths_.data_root / "profile.json";
     profile_store_ = std::make_unique<storage::ProfileStore>(profile_path, descriptor_);
     workflow_store_ = std::make_unique<storage::WorkflowRepository>(paths_.data_root / "workflows");
+    // 首次引入公共定义；已有同 ID 的用户编辑版本绝不覆盖。公共定义仍存于同一 WorkflowRepository。
+    const auto semantic_path = author_bundle_.root / "parameters/semantic-assets.json";
+    if (std::filesystem::is_regular_file(semantic_path)) semantic_catalogue_ = load_json(semantic_path);
+    const auto library_path = author_bundle_.root / "parameters/public-flows.json";
+    if (std::filesystem::is_regular_file(library_path)) {
+        std::set<std::string> existing;
+        for (const auto &entry : workflow_store_->list()) existing.insert(entry.at("id").get<std::string>());
+        const auto library = load_json(library_path);
+        require(library.is_array(), "FLOW_SEED_INVALID");
+        for (const auto &document : library) {
+            const auto id = document.at("flow").at("id").get<std::string>();
+            if (!existing.contains(id)) { workflow_store_->create(document); existing.insert(id); }
+        }
+    }
+
     if (!std::filesystem::exists(profile_path)) {
         storage::LegacyConfigImporter importer(descriptor_);
         games::WvdProfile initial;
@@ -553,6 +573,19 @@ Application::J Application::catalog() const {
                 J{{"value", "chest"}, {"label", "开箱"}},
                 J{{"value", "confirm"}, {"label", "业务确认"}}
             })},
+            {"semantic_resources", [&] {
+                J result = J::array();
+                const auto resources = semantic_catalogue_.value("resources", J::object());
+                for (const auto &[id, entry] : resources.items()) {
+                    J locales = J::array();
+                    const auto variants = entry.value("variants", J::object());
+                    for (const auto &[locale, variant] : variants.items()) { (void)variant; locales.push_back(locale); }
+                    result.push_back({{"value", id}, {"label", entry.value("label", id)},
+                        {"category", entry.value("category", "未分类")}, {"role", entry.value("role", "observation")},
+                        {"locales", locales}});
+                }
+                return result;
+            }()},
             {"roles", roles},
             {"skills", options({J{{"value", "左上技能"}, {"label", "左上技能"}},
                                   J{{"value", "右上技能"}, {"label", "右上技能"}},
@@ -786,11 +819,18 @@ Application::J Application::start_workflow(const std::string &flow_id, const J &
     const auto document = workflow_store_->read(flow_id);
     require(frozen.value("revision", std::string{}) == document.at("revision").get<std::string>(),
             "WORKFLOW_REVISION_MISMATCH");
+    const auto library = workflow_store_->snapshot_closure(document);
     return queue_run("start_workflow", frozen,
-        {{"kind", "workflow"}, {"flow_id", flow_id}, {"request", frozen}, {"profile_revision", stored.at("revision")}},
-        [this, flow_id, frozen, stored, document] {
+        {{"kind", "workflow"}, {"flow_id", flow_id}, {"request", frozen},
+         {"profile_revision", stored.at("revision")}, {"library", library}},
+        [this, flow_id, frozen, stored, document, library] {
+            // 不齐全的语言素材/循环引用在连接和启动模拟器之前暴露。
+            const auto locale = frozen.value("resource_locale", document.at("execution").value("resource_locale", std::string{}));
+            (void)games::tasks::PublicFlowLibrary(library, semantic_catalogue_).task_profiles(
+                document, frozen.value("arguments", J::object()), locale);
+            require(!stopping_ && !cancel_operation_, "PREPARATION_CANCELLED");
             const auto backend = ensure_connected_for_run(stored);
-            return prepare_workflow(flow_id, frozen, stored, document, backend);
+            return prepare_workflow(flow_id, frozen, stored, document, backend, library);
         });
 }
 
@@ -992,12 +1032,14 @@ Application::J Application::run_status() const {
     }
     value["diagnostics"] = std::move(diagnostics);
     std::map<std::string, std::string> mapping;
+    J source_paths = J::object();
     {
         std::lock_guard lock(mutex_);
         value["workflow_id"] = active_workflow_id_.empty() ? J(nullptr) : J(active_workflow_id_);
         value["workflow_revision"] = active_workflow_revision_.empty()
                                          ? J(nullptr) : J(active_workflow_revision_);
         mapping = active_pipeline_to_node_;
+        source_paths = active_source_paths_;
         value["submission"] = submission_;
         value["busy"] = run_active() || operation_.value("state", "idle") == "running";
         value["task_name"] = active_task_name_.empty() ? J(nullptr) : J(active_task_name_);
@@ -1023,6 +1065,7 @@ Application::J Application::run_status() const {
             // 派生观察节点映射回作者的输入节点；仍显示真实阶段，不能让等待看起来没执行。
             value["step_name"] = visible + (observing ? "（等待页面结果）" : "");
             value["execution_stage"] = observing ? "transition_observation" : "pipeline";
+            if (source_paths.contains(visible)) value["node_path"] = source_paths.at(visible);
             if (const auto found = mapping.find(visible); found != mapping.end()) {
                 value["current_node_id"] = found->second;
                 if (snapshot.state == contracts::RunState::Failed)
@@ -1121,6 +1164,7 @@ Application::J Application::prepare_task(const J &request, const J &stored,
         active_task_name_ = task.source.value("questName", task_id);
         active_started_ = std::chrono::steady_clock::now();
         active_pipeline_to_node_.clear();
+        active_source_paths_ = J::object();
     }
     auto result = storage::snapshot_json(snapshot);
     result.update({{"accepted", true}, {"task_id", task_id},
@@ -1192,15 +1236,17 @@ void Application::delete_workflow(const std::string &flow_id, const J &request) 
 }
 
 Application::J Application::prepare_workflow(const std::string &flow_id, const J &request,
-    const J &stored, J document, std::shared_ptr<maafw::AdbBackend> backend) {
+    const J &stored, J document, std::shared_ptr<maafw::AdbBackend> backend,
+    const J &library_snapshot) {
     require(bool(backend), "DEVICE_NOT_CONNECTED");
     if (stopping_ || cancel_operation_) throw std::runtime_error("PREPARATION_CANCELLED");
     const auto workflow_revision = document.at("revision").get<std::string>();
     const auto workflow_name = document.at("flow").at("name").get<std::string>();
     backend->set_vpn_required(stored.at("values").at("AUTO_START_CLASH").get<bool>());
     std::map<std::string, std::string> pipeline_to_node;
+    J source_paths = J::object();
     auto definition = assemble_workflow(request, stored, std::move(document),
-                                        backend->lifecycle_target(), &pipeline_to_node);
+                                        backend->lifecycle_target(), &pipeline_to_node, library_snapshot, &source_paths);
     const auto request_id = definition.request_id;
     std::lock_guard handoff(command_mutex_);
     require(!stopping_ && !cancel_operation_, "PREPARATION_CANCELLED");
@@ -1216,6 +1262,7 @@ Application::J Application::prepare_workflow(const std::string &flow_id, const J
         active_task_name_ = workflow_name;
         active_started_ = std::chrono::steady_clock::now();
         active_pipeline_to_node_ = std::move(pipeline_to_node);
+        active_source_paths_ = std::move(source_paths);
     }
     auto result = storage::snapshot_json(snapshot);
     result["accepted"] = true;
@@ -1227,24 +1274,25 @@ Application::J Application::prepare_workflow(const std::string &flow_id, const J
 
 runtime::RunDefinition Application::assemble_workflow(
     const J &request, const J &stored, J document, const devices::LifecycleTarget &lifecycle,
-    std::map<std::string, std::string> *pipeline_to_node) {
+    std::map<std::string, std::string> *pipeline_to_node, const J &library_snapshot, J *source_paths) {
     if (stopping_ || cancel_operation_) throw std::runtime_error("PREPARATION_CANCELLED");
     require(request.value("revision", std::string{}) ==
                 document.at("revision").get<std::string>(),
             "WORKFLOW_REVISION_MISMATCH");
     // 调试图会移除持久化 revision；请求已先与已保存版本完成CAS身份核对。
-    if (request.value("mode", "workflow") == "selected_node")
+    if (request.value("mode", "workflow") == "selected_node") {
+        document = authoring::instantiate_document(document, request.value("arguments", J::object()));
         document = selected_node_document(std::move(document), request.at("node_id"));
-    std::set<std::string> task_ids;
-    for (const auto &node : document.at("nodes")) {
-        const auto &parameters = node.at("parameters");
-        if (node.at("type") == "business" && parameters.value("binding", "") == "task_stage")
-            task_ids.insert(parameters.at("task_id").get<std::string>());
     }
+    const games::tasks::PublicFlowLibrary library(library_snapshot, semantic_catalogue_);
+    const auto locale = request.value("resource_locale", document.at("execution").value("resource_locale", std::string{}));
+    auto supplied = request.value("arguments", J::object());
+    if (request.value("mode", "workflow") == "selected_node") supplied = J::object();
+    const auto task_ids = library.task_profiles(document, supplied, locale);
     require(task_ids.size() <= 1, "AUTHOR_MULTIPLE_TASK_PROFILES_UNSUPPORTED");
     auto values = task_ids.empty() ? stored.at("values")
                                    : effective_profile_values(*task_ids.begin(), stored);
-    auto compiled = games::tasks::compile_author_workflow(
+    auto compiled = library.compile(
         document, [this, &values](const J &parameters) {
             const auto binding = parameters.at("binding").get<std::string>();
             if (binding == "combat")
@@ -1264,7 +1312,7 @@ runtime::RunDefinition Application::assemble_workflow(
             if (stage == "traverse")
                 return games::tasks::traverse_dungeon(plan, values, available_images_);
             throw std::runtime_error("AUTHOR_TASK_STAGE_UNSUPPORTED");
-        });
+        }, supplied, locale);
     auto executable = games::recovery::with_boot_recovery(compiled.workflow, true);
     require(executable.nodes.contains("Boot_Entry"), "PRODUCTION_BOOT_ENTRY_MISSING");
     const auto request_id = checked_request_id(request);
@@ -1291,6 +1339,7 @@ runtime::RunDefinition Application::assemble_workflow(
                 !definition.initial.checkpoint_node.empty() &&
                 executable.nodes.contains(definition.initial.checkpoint_node),
             "PRODUCTION_SESSION_ENTRY_MISSING");
+    if (source_paths) *source_paths = executable.authoring.value("source_paths", J::object());
     if (pipeline_to_node) {
         pipeline_to_node->clear();
         for (const auto &[pipeline, node] : compiled.pipeline_to_node)
@@ -1373,9 +1422,14 @@ Application::J Application::recognition_probe(const J &request) {
     J recognition;
     if (request.contains("request")) {
         recognition = request.at("request");
+        if (recognition.value("type", "") == "custom" && recognition.value("binding", "") == "WvdVision")
+            recognition["parameters"] = authoring::SemanticAssets(semantic_catalogue_).resolve(
+                recognition.at("parameters"), request.value("resource_locale", std::string{}));
     } else {
         const auto &parameters = request.at("recognition");
-        const auto &condition = parameters.contains("condition") ? parameters.at("condition") : parameters;
+        const auto condition = authoring::SemanticAssets(semantic_catalogue_).resolve(
+            parameters.contains("condition") ? parameters.at("condition") : parameters,
+            request.value("resource_locale", std::string{}));
         const auto mode = condition.value("mode", std::string{});
         const auto roi = condition.value("roi", J::array({0, 0, 900, 1600}));
         recognition = {{"id", request.value("node_id", "probe")},

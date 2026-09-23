@@ -37,11 +37,14 @@ class Application {
                                          const devices::LifecycleTarget &target);
     runtime::RunDefinition assemble_workflow(const J &request, const J &stored, J document,
                                              const devices::LifecycleTarget &target,
-                                             std::map<std::string, std::string> *pipeline_to_node = nullptr);
+                                             std::map<std::string, std::string> *pipeline_to_node = nullptr,
+                                             const J &library_snapshot = J::object(),
+                                             J *source_paths = nullptr);
     friend struct ApplicationAssemblyTestAccess;
     J prepare_task(const J &request, const J &stored, std::shared_ptr<maafw::AdbBackend> backend);
     J prepare_workflow(const std::string &flow_id, const J &request, const J &stored,
-                       J document, std::shared_ptr<maafw::AdbBackend> backend);
+                       J document, std::shared_ptr<maafw::AdbBackend> backend,
+                       const J &library_snapshot);
     J profile_for_task(const std::string &task_id) const;
     J catalog() const;
     J device_status() const;
@@ -71,6 +74,7 @@ class Application {
 
     ApplicationPaths paths_;
     J descriptor_, manifest_, aliases_, operation_;
+    J semantic_catalogue_ = J::object();
     maafw::Bundle author_bundle_;
     std::set<std::string> available_images_;
     std::unique_ptr<storage::ProfileStore> profile_store_;
@@ -86,6 +90,7 @@ class Application {
     std::string active_workflow_id_, active_workflow_revision_, active_task_name_;
     std::optional<std::chrono::steady_clock::time_point> active_started_;
     std::map<std::string, std::string> active_pipeline_to_node_;
+    J active_source_paths_ = J::object();
     // 序列化命令准入和设备所有权交接；重计算不占用它，停止仍可进入。
     mutable std::recursive_mutex command_mutex_;
     mutable std::mutex mutex_;

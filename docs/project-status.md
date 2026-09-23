@@ -21,13 +21,22 @@
 
 ## 本轮实操事实
 
+### 可组合流程整改（2026-09-23）
+
+- 作者模型已增加 `call`、`slot`、`route`，公共步骤、流程块和任务共用现有 WorkflowRepository、作者编译器、Maa Pipeline 与 RunCoordinator；没有新增第二套执行器。
+- 公开参数使用声明式标量契约和节点字段绑定；语义素材通过 `semantic-assets.json` 按用途和游戏语言解析。作者定义、语义目录及图片哈希已进入运行包 revision。
+- 12 份公共定义已导入编辑器并达到 `STRUCTURE_VERIFIED`。所有既有游戏任务仍为 `LEGACY_NATIVE`，本轮没有切换真实任务入口，也没有连接 MuMu、ADB 或操作游戏。
+- 隔离 HTTP 编辑链已验证：创建公共步骤、以不同参数调用两次、插槽扩展、保存重开、展开定义、返回原调用节点以及拒绝删除被引用定义。产品页面控制台无错误。
+- 当前仍缺可靠繁中 `guild.commissions.page`、`guild.bounties.page`、`guild.bounty.first_item`、`guild.bounty.receipt`；公会领取及依赖这些资源的组合保持阻断。
+- 当前交付 `automationd.exe` SHA256 为 `67C622B521416B1ED311431A0C0584F661AF25C13A1A567674A67C67F20EEEBE`，交付目录为 `next/dist/wvd-next`。隔离服务检查后端口已释放，`automationd.exe` 进程数为 0。
+
 - 繁中蝎女实机链已真实完成“王城 -> 荒屋 -> 诅咒之轮 -> 美魔矿石的真相 -> 跳跃 -> 返回王城”；最后一层曾因只接受英文城市锚点而把成功跳跃误报为 `SCENE_NOT_FOUND`。因果轮列表现按“目标尚未出现”向下滑，不再以始终可见的跳跃按钮作为是否滚动的条件。
 - 城市公共动作已统一到不含文字的旅店、公会、郊外图标探针，并接入蝎女涉及的因果轮、世界旅行、悬赏、公会返回、入本、地图退出和住宿流程。三张探针在当前繁中王城真实帧均为 `Hit`，位置分别为 `(30,500,150,120)`、`(65,720,190,90)`、`(700,760,185,105)`；它们只定位动作和城市主界面，具体王城身份仍只由塔楼背景确认。
 - 本轮未继续执行公会领取及后续任务。静态盘点确认 `guildRequest / Bounties / CompletionReported / GotoDung / beginningAbyss / B2FTemple` 等仍是英文文字模板，完整繁中蝎女链仍未交付；后续必须按同一语义资源契约补齐，不能继续在业务函数中逐节点追加语言特例。
 
 - 当前任务配置为 `[悬赏]蝎女`、`法术+地裂`、`ACTIVE_BEAUTIFUL_ORE=true`。运行链把一次受控输入和后续页面观察分成两个节点，任务启动先按冻结配置连接设备；繁中下载按钮与王城塔楼背景均已在实机命中。
 - 因果轮实机运行在完成跳跃后曾误报 `SCENE_NOT_FOUND`：子流程只识别英文城市场景。现已把已验证的王城背景接入跳跃后的子流程与蝎女外层终点；这项修正尚未重新运行完整任务。
-- 当前 `automationd.exe` SHA256 为 `FBB49FF8D7F7EE4848689B7BD230F63D64A8DB1DC56365A273017068E6683F68`。本轮服务已正常输出 `STOPPED`，端口释放；没有继续公会领取及后续任务。历史启动链证据保存在本机 `%LOCALAPPDATA%\WvdNext\runs\16464253-853D-4E92-907F-5165118A326E\1`。
+- 前次真实启动链证据保存在本机 `%LOCALAPPDATA%\WvdNext\runs\16464253-853D-4E92-907F-5165118A326E\1`；本轮没有继续公会领取及后续任务。
 
 ## 保留边界
 
@@ -42,5 +51,6 @@
 - 使用与构建：[next/README.md](../next/README.md)
 - 本轮交付：[windows-functional-delivery.md](../next/docs/windows-functional-delivery.md)
 - 架构：[architecture.md](../next/docs/architecture.md)
+- 可组合流程状态：[composable-workflow-status.md](../next/docs/composable-workflow-status.md)
 - 数据权威：[data-authority.md](../next/docs/data-authority.md)
 - 执行注意项：[execution-notes.md](execution-notes.md)

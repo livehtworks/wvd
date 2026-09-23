@@ -52,3 +52,9 @@ target_compile_options(test_t0_startup PRIVATE /utf-8 /W4 /EHsc)
 target_link_options(test_t0_startup PRIVATE
   "/MANIFEST:EMBED" "/MANIFESTINPUT:${CMAKE_CURRENT_SOURCE_DIR}/native/platform/windows/app.manifest")
 set_target_properties(test_t0_startup PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/t0")
+
+# 公共流程编译模型检查：显式构建/执行，不加入默认全任务矩阵。
+add_executable(test_public_flow EXCLUDE_FROM_ALL tests/native/test_public_flow.cpp)
+target_link_libraries(test_public_flow PRIVATE wvd_business)
+target_compile_options(test_public_flow PRIVATE /utf-8 /W4 /EHsc)
+set_target_properties(test_public_flow PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/authoring")

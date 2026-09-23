@@ -14,6 +14,8 @@ class WorkflowRepository {
     nlohmann::json create(const nlohmann::json &document);
     nlohmann::json list() const;
     nlohmann::json read(const std::string &flow_id) const;
+    // 一次锁定整个实际引用闭包；返回纯值快照，不在运行中回读库文件。
+    nlohmann::json snapshot_closure(const nlohmann::json &root) const;
     nlohmann::json copy(const std::string &source_id, const std::string &new_id,
                         const std::string &new_name);
     nlohmann::json compare_exchange(const std::string &flow_id,

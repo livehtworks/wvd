@@ -1,0 +1,2833 @@
+[
+  {
+    "schema": 1,
+    "flow": {
+      "id": "city-enter-guild",
+      "name": "进入公会",
+      "description": "公共定义候选；来自 dcc11c18 源码及用户业务说明。编译验证不代表真实游戏验证。"
+    },
+    "entry": "Enter",
+    "nodes": [
+      {
+        "id": "Enter",
+        "type": "action",
+        "name": "识别入口并进入公会",
+        "parameters": {
+          "operation": "click",
+          "scene": {
+            "mode": "location",
+            "id": 0
+          },
+          "target": {
+            "mode": "semantic",
+            "id": "city.guild.entry"
+          },
+          "postcondition": {
+            "mode": "semantic",
+            "id": "guild.menu"
+          }
+        },
+        "repeat_limit": 1
+      },
+      {
+        "id": "Done",
+        "type": "end",
+        "name": "完成",
+        "parameters": {
+          "outcome": "success"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e0",
+        "from": "Enter",
+        "to": "Done",
+        "outcome": "success",
+        "order": 0
+      }
+    ],
+    "layout": {
+      "nodes": [
+        {
+          "node_id": "Enter",
+          "x": 40,
+          "y": 100
+        },
+        {
+          "node_id": "Done",
+          "x": 260,
+          "y": 100
+        }
+      ],
+      "viewport": {
+        "x": 0,
+        "y": 0,
+        "zoom": 1
+      }
+    },
+    "execution": {
+      "time_limit_ms": 180000,
+      "resource_locale": "zh-Hant"
+    },
+    "interface": {
+      "kind": "step",
+      "category": "城市导航",
+      "parameters": [
+        {
+          "name": "location",
+          "label": "所需当前城市：0任意、1王城",
+          "type": "integer",
+          "default": 0,
+          "bindings": [
+            {
+              "node": "Enter",
+              "path": "/scene/id"
+            }
+          ],
+          "choices": [
+            0,
+            1
+          ]
+        },
+        {
+          "name": "entry_asset",
+          "label": "入口素材",
+          "type": "resource",
+          "default": "city.guild.entry",
+          "bindings": [
+            {
+              "node": "Enter",
+              "path": "/target/id"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "schema": 1,
+    "flow": {
+      "id": "guild-enter-commissions",
+      "name": "进入委托",
+      "description": "公共定义候选；来自 dcc11c18 源码及用户业务说明。编译验证不代表真实游戏验证。"
+    },
+    "entry": "Enter",
+    "nodes": [
+      {
+        "id": "Enter",
+        "type": "action",
+        "name": "进入委托",
+        "parameters": {
+          "operation": "click",
+          "scene": {
+            "mode": "semantic",
+            "id": "guild.menu"
+          },
+          "target": {
+            "mode": "semantic",
+            "id": "guild.commissions.entry"
+          },
+          "postcondition": {
+            "mode": "semantic",
+            "id": "guild.commissions.page"
+          }
+        },
+        "repeat_limit": 1
+      },
+      {
+        "id": "Done",
+        "type": "end",
+        "name": "完成",
+        "parameters": {
+          "outcome": "success"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e0",
+        "from": "Enter",
+        "to": "Done",
+        "outcome": "success",
+        "order": 0
+      }
+    ],
+    "layout": {
+      "nodes": [
+        {
+          "node_id": "Enter",
+          "x": 40,
+          "y": 100
+        },
+        {
+          "node_id": "Done",
+          "x": 260,
+          "y": 100
+        }
+      ],
+      "viewport": {
+        "x": 0,
+        "y": 0,
+        "zoom": 1
+      }
+    },
+    "execution": {
+      "time_limit_ms": 180000,
+      "resource_locale": "zh-Hant"
+    },
+    "interface": {
+      "kind": "step",
+      "category": "公会",
+      "parameters": []
+    }
+  },
+  {
+    "schema": 1,
+    "flow": {
+      "id": "guild-open-bounties",
+      "name": "切到赏金页面",
+      "description": "公共定义候选；来自 dcc11c18 源码及用户业务说明。编译验证不代表真实游戏验证。"
+    },
+    "entry": "Open",
+    "nodes": [
+      {
+        "id": "Open",
+        "type": "action",
+        "name": "打开赏金页面",
+        "parameters": {
+          "operation": "click",
+          "scene": {
+            "mode": "semantic",
+            "id": "guild.commissions.page"
+          },
+          "target": {
+            "mode": "semantic",
+            "id": "guild.bounties.entry"
+          },
+          "postcondition": {
+            "mode": "semantic",
+            "id": "guild.bounties.page"
+          }
+        },
+        "repeat_limit": 1
+      },
+      {
+        "id": "Done",
+        "type": "end",
+        "name": "完成",
+        "parameters": {
+          "outcome": "success"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e0",
+        "from": "Open",
+        "to": "Done",
+        "outcome": "success",
+        "order": 0
+      }
+    ],
+    "layout": {
+      "nodes": [
+        {
+          "node_id": "Open",
+          "x": 40,
+          "y": 100
+        },
+        {
+          "node_id": "Done",
+          "x": 260,
+          "y": 100
+        }
+      ],
+      "viewport": {
+        "x": 0,
+        "y": 0,
+        "zoom": 1
+      }
+    },
+    "execution": {
+      "time_limit_ms": 180000,
+      "resource_locale": "zh-Hant"
+    },
+    "interface": {
+      "kind": "step",
+      "category": "公会",
+      "parameters": []
+    }
+  },
+  {
+    "schema": 1,
+    "flow": {
+      "id": "guild-open-bounty-page",
+      "name": "打开公会赏金页面",
+      "description": "公共定义候选；来自 dcc11c18 源码及用户业务说明。编译验证不代表真实游戏验证。"
+    },
+    "entry": "Guild",
+    "nodes": [
+      {
+        "id": "Guild",
+        "type": "call",
+        "name": "进入公会",
+        "parameters": {
+          "flow_id": "city-enter-guild",
+          "arguments": {
+            "location": 0
+          },
+          "extensions": {}
+        },
+        "repeat_limit": 1
+      },
+      {
+        "id": "Commissions",
+        "type": "call",
+        "name": "进入委托",
+        "parameters": {
+          "flow_id": "guild-enter-commissions",
+          "arguments": {},
+          "extensions": {}
+        },
+        "repeat_limit": 1
+      },
+      {
+        "id": "Bounties",
+        "type": "call",
+        "name": "切到赏金页面",
+        "parameters": {
+          "flow_id": "guild-open-bounties",
+          "arguments": {},
+          "extensions": {}
+        },
+        "repeat_limit": 1
+      },
+      {
+        "id": "Done",
+        "type": "end",
+        "name": "完成",
+        "parameters": {
+          "outcome": "success"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e0",
+        "from": "Guild",
+        "to": "Commissions",
+        "outcome": "success",
+        "order": 0
+      },
+      {
+        "id": "e1",
+        "from": "Commissions",
+        "to": "Bounties",
+        "outcome": "success",
+        "order": 0
+      },
+      {
+        "id": "e2",
+        "from": "Bounties",
+        "to": "Done",
+        "outcome": "success",
+        "order": 0
+      }
+    ],
+    "layout": {
+      "nodes": [
+        {
+          "node_id": "Guild",
+          "x": 40,
+          "y": 100
+        },
+        {
+          "node_id": "Commissions",
+          "x": 260,
+          "y": 100
+        },
+        {
+          "node_id": "Bounties",
+          "x": 480,
+          "y": 100
+        },
+        {
+          "node_id": "Done",
+          "x": 700,
+          "y": 100
+        }
+      ],
+      "viewport": {
+        "x": 0,
+        "y": 0,
+        "zoom": 1
+      }
+    },
+    "execution": {
+      "time_limit_ms": 180000,
+      "resource_locale": "zh-Hant"
+    },
+    "interface": {
+      "kind": "block",
+      "category": "公会",
+      "parameters": [
+        {
+          "name": "location",
+          "label": "所需当前城市：0任意、1王城",
+          "type": "integer",
+          "default": 0,
+          "bindings": [
+            {
+              "node": "Guild",
+              "path": "/arguments/location"
+            }
+          ],
+          "choices": [
+            0,
+            1
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "schema": 1,
+    "flow": {
+      "id": "guild-claim-first-bounty",
+      "name": "领取列表第一项赏金",
+      "description": "公共定义候选；来自 dcc11c18 源码及用户业务说明。编译验证不代表真实游戏验证。"
+    },
+    "entry": "Page",
+    "nodes": [
+      {
+        "id": "Page",
+        "type": "call",
+        "name": "打开赏金页面",
+        "parameters": {
+          "flow_id": "guild-open-bounty-page",
+          "arguments": {
+            "location": 0
+          },
+          "extensions": {}
+        },
+        "repeat_limit": 1
+      },
+      {
+        "id": "Extra",
+        "type": "slot",
+        "name": "任务专用附加操作",
+        "parameters": {
+          "name": "before_claim",
+          "calls": []
+        },
+        "repeat_limit": 1
+      },
+      {
+        "id": "Claim",
+        "type": "action",
+        "name": "点击第一项并观察领取结果",
+        "parameters": {
+          "operation": "click",
+          "scene": {
+            "mode": "semantic",
+            "id": "guild.bounties.page"
+          },
+          "target": {
+            "mode": "semantic",
+            "id": "guild.bounty.first_item"
+          },
+          "postcondition": {
+            "mode": "semantic",
+            "id": "guild.bounty.receipt"
+          }
+        },
+        "repeat_limit": 1
+      },
+      {
+        "id": "Done",
+        "type": "end",
+        "name": "完成",
+        "parameters": {
+          "outcome": "success"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e0",
+        "from": "Page",
+        "to": "Extra",
+        "outcome": "success",
+        "order": 0
+      },
+      {
+        "id": "e1",
+        "from": "Extra",
+        "to": "Claim",
+        "outcome": "success",
+        "order": 0
+      },
+      {
+        "id": "e2",
+        "from": "Claim",
+        "to": "Done",
+        "outcome": "success",
+        "order": 0
+      }
+    ],
+    "layout": {
+      "nodes": [
+        {
+          "node_id": "Page",
+          "x": 40,
+          "y": 100
+        },
+        {
+          "node_id": "Extra",
+          "x": 260,
+          "y": 100
+        },
+        {
+          "node_id": "Claim",
+          "x": 480,
+          "y": 100
+        },
+        {
+          "node_id": "Done",
+          "x": 700,
+          "y": 100
+        }
+      ],
+      "viewport": {
+        "x": 0,
+        "y": 0,
+        "zoom": 1
+      }
+    },
+    "execution": {
+      "time_limit_ms": 180000,
+      "resource_locale": "zh-Hant"
+    },
+    "interface": {
+      "kind": "block",
+      "category": "公会",
+      "parameters": [
+        {
+          "name": "location",
+          "label": "所需当前城市：0任意、1王城",
+          "type": "integer",
+          "default": 0,
+          "bindings": [
+            {
+              "node": "Page",
+              "path": "/arguments/location"
+            }
+          ],
+          "choices": [
+            0,
+            1
+          ]
+        },
+        {
+          "name": "item_asset",
+          "label": "列表项判定素材（默认第一项）",
+          "type": "resource",
+          "default": "guild.bounty.first_item",
+          "bindings": [
+            {
+              "node": "Claim",
+              "path": "/target/id"
+            }
+          ]
+        },
+        {
+          "name": "receipt_asset",
+          "label": "领取结果判定素材",
+          "type": "resource",
+          "default": "guild.bounty.receipt",
+          "bindings": [
+            {
+              "node": "Claim",
+              "path": "/postcondition/id"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "schema": 1,
+    "flow": {
+      "id": "city-open-ruins",
+      "name": "从当前城市打开荒屋",
+      "description": "公共定义候选；来自 dcc11c18 源码及用户业务说明。编译验证不代表真实游戏验证。"
+    },
+    "entry": "Open",
+    "nodes": [
+      {
+        "id": "Open",
+        "type": "action",
+        "name": "打开荒屋",
+        "parameters": {
+          "operation": "click",
+          "scene": {
+            "mode": "location",
+            "id": 0
+          },
+          "target": {
+            "mode": "semantic",
+            "id": "city.ruins.entry"
+          },
+          "postcondition": {
+            "mode": "semantic",
+            "id": "wheel.entry"
+          },
+          "delay_after_ms": 1000
+        },
+        "repeat_limit": 3
+      },
+      {
+        "id": "Done",
+        "type": "end",
+        "name": "完成",
+        "parameters": {
+          "outcome": "success"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e0",
+        "from": "Open",
+        "to": "Done",
+        "outcome": "success",
+        "order": 0
+      }
+    ],
+    "layout": {
+      "nodes": [
+        {
+          "node_id": "Open",
+          "x": 40,
+          "y": 100
+        },
+        {
+          "node_id": "Done",
+          "x": 260,
+          "y": 100
+        }
+      ],
+      "viewport": {
+        "x": 0,
+        "y": 0,
+        "zoom": 1
+      }
+    },
+    "execution": {
+      "time_limit_ms": 180000,
+      "resource_locale": "zh-Hant"
+    },
+    "interface": {
+      "kind": "step",
+      "category": "诅咒之轮",
+      "parameters": [
+        {
+          "name": "location",
+          "label": "所需当前城市：0不限定",
+          "type": "integer",
+          "default": 0,
+          "bindings": [
+            {
+              "node": "Open",
+              "path": "/scene/id"
+            }
+          ],
+          "choices": [
+            0,
+            1
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "schema": 1,
+    "flow": {
+      "id": "wheel-jump",
+      "name": "执行跳跃并观察返回游戏",
+      "description": "公共定义候选；来自 dcc11c18 源码及用户业务说明。编译验证不代表真实游戏验证。"
+    },
+    "entry": "Jump",
+    "nodes": [
+      {
+        "id": "Jump",
+        "type": "action",
+        "name": "提交一次跳跃",
+        "parameters": {
+          "operation": "click",
+          "scene": {
+            "mode": "semantic",
+            "id": "wheel.title"
+          },
+          "target": {
+            "mode": "semantic",
+            "id": "wheel.leap"
+          },
+          "postcondition": {
+            "mode": "all",
+            "conditions": [
+              {
+                "mode": "semantic",
+                "id": "game.stable"
+              },
+              {
+                "mode": "not",
+                "conditions": [
+                  {
+                    "mode": "semantic",
+                    "id": "wheel.title"
+                  }
+                ]
+              }
+            ]
+          },
+          "delay_after_ms": 2000
+        },
+        "repeat_limit": 1
+      },
+      {
+        "id": "Done",
+        "type": "end",
+        "name": "完成",
+        "parameters": {
+          "outcome": "success"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e0",
+        "from": "Jump",
+        "to": "Done",
+        "outcome": "success",
+        "order": 0
+      }
+    ],
+    "layout": {
+      "nodes": [
+        {
+          "node_id": "Jump",
+          "x": 40,
+          "y": 100
+        },
+        {
+          "node_id": "Done",
+          "x": 260,
+          "y": 100
+        }
+      ],
+      "viewport": {
+        "x": 0,
+        "y": 0,
+        "zoom": 1
+      }
+    },
+    "execution": {
+      "time_limit_ms": 180000,
+      "resource_locale": "zh-Hant"
+    },
+    "interface": {
+      "kind": "step",
+      "category": "诅咒之轮",
+      "parameters": []
+    }
+  },
+  {
+    "schema": 1,
+    "flow": {
+      "id": "wheel-open",
+      "name": "从已知页面进入诅咒之轮",
+      "description": "公共定义候选；来自 dcc11c18 源码及用户业务说明。编译验证不代表真实游戏验证。"
+    },
+    "entry": "Entry",
+    "nodes": [
+      {
+        "id": "Entry",
+        "type": "route",
+        "name": "按当前页面分派",
+        "parameters": {},
+        "repeat_limit": 32
+      },
+      {
+        "id": "Ready",
+        "type": "recognition",
+        "name": "已经在诅咒之轮",
+        "parameters": {
+          "condition": {
+            "mode": "semantic",
+            "id": "wheel.title"
+          }
+        },
+        "repeat_limit": 1
+      },
+      {
+        "id": "Wheel",
+        "type": "action",
+        "name": "点击诅咒之轮入口",
+        "parameters": {
+          "operation": "click",
+          "scene": {
+            "mode": "all",
+            "conditions": [
+              {
+                "mode": "semantic",
+                "id": "wheel.entry"
+              },
+              {
+                "mode": "not",
+                "conditions": [
+                  {
+                    "mode": "semantic",
+                    "id": "wheel.title"
+                  }
+                ]
+              }
+            ]
+          },
+          "target": {
+            "mode": "semantic",
+            "id": "wheel.entry"
+          },
+          "postcondition": {
+            "mode": "any",
+            "conditions": [
+              {
+                "mode": "semantic",
+                "id": "wheel.title"
+              },
+              {
+                "mode": "semantic",
+                "id": "boot.download.action"
+              }
+            ]
+          }
+        },
+        "repeat_limit": 32
+      },
+      {
+        "id": "Ruins",
+        "type": "action",
+        "name": "点击荒屋图标",
+        "parameters": {
+          "operation": "click",
+          "scene": {
+            "mode": "all",
+            "conditions": [
+              {
+                "mode": "semantic",
+                "id": "city.ruins.entry"
+              },
+              {
+                "mode": "not",
+                "conditions": [
+                  {
+                    "mode": "semantic",
+                    "id": "wheel.title"
+                  }
+                ]
+              }
+            ]
+          },
+          "target": {
+            "mode": "semantic",
+            "id": "city.ruins.entry"
+          },
+          "postcondition": {
+            "mode": "semantic",
+            "id": "wheel.entry"
+          }
+        },
+        "repeat_limit": 32
+      },
+      {
+        "id": "Download",
+        "type": "action",
+        "name": "处理已确认下载提示",
+        "parameters": {
+          "operation": "click",
+          "scene": {
+            "mode": "semantic",
+            "id": "boot.download.action"
+          },
+          "target": {
+            "mode": "semantic",
+            "id": "boot.download.action"
+          },
+          "postcondition": {
+            "mode": "any",
+            "conditions": [
+              {
+                "mode": "semantic",
+                "id": "wheel.title"
+              },
+              {
+                "mode": "semantic",
+                "id": "wheel.entry"
+              },
+              {
+                "mode": "semantic",
+                "id": "boot.download.action"
+              }
+            ]
+          }
+        },
+        "repeat_limit": 32
+      },
+      {
+        "id": "Royal",
+        "type": "action",
+        "name": "仅王城固定荒屋区域",
+        "parameters": {
+          "operation": "fixed_click",
+          "scene": {
+            "mode": "all",
+            "conditions": [
+              {
+                "mode": "semantic",
+                "id": "city.royal.identity"
+              },
+              {
+                "mode": "not",
+                "conditions": [
+                  {
+                    "mode": "any",
+                    "conditions": [
+                      {
+                        "mode": "semantic",
+                        "id": "wheel.title"
+                      },
+                      {
+                        "mode": "semantic",
+                        "id": "wheel.entry"
+                      },
+                      {
+                        "mode": "semantic",
+                        "id": "boot.download.action"
+                      },
+                      {
+                        "mode": "combat_active"
+                      },
+                      {
+                        "mode": "blocking_screen"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          "postcondition": {
+            "mode": "semantic",
+            "id": "wheel.entry"
+          },
+          "position": [
+            820,
+            590
+          ],
+          "delay_after_ms": 1000
+        },
+        "repeat_limit": 3
+      },
+      {
+        "id": "Done",
+        "type": "end",
+        "name": "完成",
+        "parameters": {
+          "outcome": "success"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e0",
+        "from": "Entry",
+        "to": "Ready",
+        "outcome": "success",
+        "order": 0
+      },
+      {
+        "id": "e1",
+        "from": "Entry",
+        "to": "Wheel",
+        "outcome": "success",
+        "order": 1
+      },
+      {
+        "id": "e2",
+        "from": "Entry",
+        "to": "Ruins",
+        "outcome": "success",
+        "order": 2
+      },
+      {
+        "id": "e3",
+        "from": "Entry",
+        "to": "Download",
+        "outcome": "success",
+        "order": 3
+      },
+      {
+        "id": "e4",
+        "from": "Entry",
+        "to": "Royal",
+        "outcome": "success",
+        "order": 4
+      },
+      {
+        "id": "e5",
+        "from": "Ready",
+        "to": "Done",
+        "outcome": "success",
+        "order": 0
+      },
+      {
+        "id": "e6",
+        "from": "Wheel",
+        "to": "Entry",
+        "outcome": "success",
+        "order": 0
+      },
+      {
+        "id": "e7",
+        "from": "Ruins",
+        "to": "Entry",
+        "outcome": "success",
+        "order": 0
+      },
+      {
+        "id": "e8",
+        "from": "Download",
+        "to": "Entry",
+        "outcome": "success",
+        "order": 0
+      },
+      {
+        "id": "e9",
+        "from": "Royal",
+        "to": "Entry",
+        "outcome": "success",
+        "order": 0
+      }
+    ],
+    "layout": {
+      "nodes": [
+        {
+          "node_id": "Entry",
+          "x": 40,
+          "y": 100
+        },
+        {
+          "node_id": "Ready",
+          "x": 260,
+          "y": 100
+        },
+        {
+          "node_id": "Wheel",
+          "x": 480,
+          "y": 100
+        },
+        {
+          "node_id": "Ruins",
+          "x": 700,
+          "y": 100
+        },
+        {
+          "node_id": "Download",
+          "x": 40,
+          "y": 260
+        },
+        {
+          "node_id": "Royal",
+          "x": 260,
+          "y": 260
+        },
+        {
+          "node_id": "Done",
+          "x": 480,
+          "y": 260
+        }
+      ],
+      "viewport": {
+        "x": 0,
+        "y": 0,
+        "zoom": 1
+      }
+    },
+    "execution": {
+      "time_limit_ms": 180000,
+      "resource_locale": "zh-Hant"
+    },
+    "interface": {
+      "kind": "step",
+      "category": "诅咒之轮",
+      "parameters": []
+    }
+  },
+  {
+    "schema": 1,
+    "flow": {
+      "id": "wheel-select-target",
+      "name": "选择章节并查找跳跃目标",
+      "description": "公共定义候选；来自 dcc11c18 源码及用户业务说明。编译验证不代表真实游戏验证。"
+    },
+    "entry": "Entry",
+    "nodes": [
+      {
+        "id": "Entry",
+        "type": "route",
+        "name": "先用当前可见目标",
+        "parameters": {},
+        "repeat_limit": 32
+      },
+      {
+        "id": "QuickSelect",
+        "type": "action",
+        "name": "当前目标可见则直接选择",
+        "parameters": {
+          "operation": "click",
+          "scene": {
+            "mode": "all",
+            "conditions": [
+              {
+                "mode": "semantic",
+                "id": "wheel.title"
+              },
+              {
+                "mode": "semantic",
+                "id": "wheel.target.ore"
+              }
+            ]
+          },
+          "target": {
+            "mode": "semantic",
+            "id": "wheel.target.ore"
+          },
+          "postcondition": {
+            "mode": "semantic",
+            "id": "wheel.leap"
+          },
+          "delay_after_ms": 2000
+        },
+        "repeat_limit": 1
+      },
+      {
+        "id": "Reset0",
+        "type": "action",
+        "name": "回到起始章节页签",
+        "parameters": {
+          "operation": "fixed_click",
+          "scene": {
+            "mode": "any",
+            "conditions": [
+              {
+                "mode": "semantic",
+                "id": "wheel.title"
+              },
+              {
+                "mode": "semantic",
+                "id": "wheel.chapter.dhi"
+              },
+              {
+                "mode": "semantic",
+                "id": "wheel.leap"
+              }
+            ]
+          },
+          "postcondition": {
+            "mode": "any",
+            "conditions": [
+              {
+                "mode": "semantic",
+                "id": "wheel.title"
+              },
+              {
+                "mode": "semantic",
+                "id": "wheel.chapter.dhi"
+              },
+              {
+                "mode": "semantic",
+                "id": "wheel.leap"
+              }
+            ]
+          },
+          "position": [
+            105,
+            230
+          ],
+          "delay_after_ms": 500
+        },
+        "repeat_limit": 1
+      },
+      {
+        "id": "Reset1",
+        "type": "action",
+        "name": "回到起始章节页签",
+        "parameters": {
+          "operation": "fixed_click",
+          "scene": {
+            "mode": "any",
+            "conditions": [
+              {
+                "mode": "semantic",
+                "id": "wheel.title"
+              },
+              {
+                "mode": "semantic",
+                "id": "wheel.chapter.dhi"
+              },
+              {
+                "mode": "semantic",
+                "id": "wheel.leap"
+              }
+            ]
+          },
+          "postcondition": {
+            "mode": "any",
+            "conditions": [
+              {
+                "mode": "semantic",
+                "id": "wheel.title"
+              },
+              {
+                "mode": "semantic",
+                "id": "wheel.chapter.dhi"
+              },
+              {
+                "mode": "semantic",
+                "id": "wheel.leap"
+              }
+            ]
+          },
+          "position": [
+            105,
+            230
+          ],
+          "delay_after_ms": 500
+        },
+        "repeat_limit": 1
+      },
+      {
+        "id": "Reset2",
+        "type": "action",
+        "name": "回到起始章节页签",
+        "parameters": {
+          "operation": "fixed_click",
+          "scene": {
+            "mode": "any",
+            "conditions": [
+              {
+                "mode": "semantic",
+                "id": "wheel.title"
+              },
+              {
+                "mode": "semantic",
+                "id": "wheel.chapter.dhi"
+              },
+              {
+                "mode": "semantic",
+                "id": "wheel.leap"
+              }
+            ]
+          },
+          "postcondition": {
+            "mode": "any",
+            "conditions": [
+              {
+                "mode": "semantic",
+                "id": "wheel.title"
+              },
+              {
+                "mode": "semantic",
+                "id": "wheel.chapter.dhi"
+              },
+              {
+                "mode": "semantic",
+                "id": "wheel.leap"
+              }
+            ]
+          },
+          "position": [
+            105,
+            230
+          ],
+          "delay_after_ms": 500
+        },
+        "repeat_limit": 1
+      },
+      {
+        "id": "Reset3",
+        "type": "action",
+        "name": "回到起始章节页签",
+        "parameters": {
+          "operation": "fixed_click",
+          "scene": {
+            "mode": "any",
+            "conditions": [
+              {
+                "mode": "semantic",
+                "id": "wheel.title"
+              },
+              {
+                "mode": "semantic",
+                "id": "wheel.chapter.dhi"
+              },
+              {
+                "mode": "semantic",
+                "id": "wheel.leap"
+              }
+            ]
+          },
+          "postcondition": {
+            "mode": "any",
+            "conditions": [
+              {
+                "mode": "semantic",
+                "id": "wheel.title"
+              },
+              {
+                "mode": "semantic",
+                "id": "wheel.chapter.dhi"
+              },
+              {
+                "mode": "semantic",
+                "id": "wheel.leap"
+              }
+            ]
+          },
+          "position": [
+            105,
+            230
+          ],
+          "delay_after_ms": 500
+        },
+        "repeat_limit": 1
+      },
+      {
+        "id": "Reset4",
+        "type": "action",
+        "name": "回到起始章节页签",
+        "parameters": {
+          "operation": "fixed_click",
+          "scene": {
+            "mode": "any",
+            "conditions": [
+              {
+                "mode": "semantic",
+                "id": "wheel.title"
+              },
+              {
+                "mode": "semantic",
+                "id": "wheel.chapter.dhi"
+              },
+              {
+                "mode": "semantic",
+                "id": "wheel.leap"
+              }
+            ]
+          },
+          "postcondition": {
+            "mode": "any",
+            "conditions": [
+              {
+                "mode": "semantic",
+                "id": "wheel.title"
+              },
+              {
+                "mode": "semantic",
+                "id": "wheel.chapter.dhi"
+              },
+              {
+                "mode": "semantic",
+                "id": "wheel.leap"
+              }
+            ]
+          },
+          "position": [
+            105,
+            230
+          ],
+          "delay_after_ms": 500
+        },
+        "repeat_limit": 1
+      },
+      {
+        "id": "Reset5",
+        "type": "action",
+        "name": "回到起始章节页签",
+        "parameters": {
+          "operation": "fixed_click",
+          "scene": {
+            "mode": "any",
+            "conditions": [
+              {
+                "mode": "semantic",
+                "id": "wheel.title"
+              },
+              {
+                "mode": "semantic",
+                "id": "wheel.chapter.dhi"
+              },
+              {
+                "mode": "semantic",
+                "id": "wheel.leap"
+              }
+            ]
+          },
+          "postcondition": {
+            "mode": "any",
+            "conditions": [
+              {
+                "mode": "semantic",
+                "id": "wheel.title"
+              },
+              {
+                "mode": "semantic",
+                "id": "wheel.chapter.dhi"
+              },
+              {
+                "mode": "semantic",
+                "id": "wheel.leap"
+              }
+            ]
+          },
+          "position": [
+            105,
+            230
+          ],
+          "delay_after_ms": 500
+        },
+        "repeat_limit": 1
+      },
+      {
+        "id": "Reset6",
+        "type": "action",
+        "name": "回到起始章节页签",
+        "parameters": {
+          "operation": "fixed_click",
+          "scene": {
+            "mode": "any",
+            "conditions": [
+              {
+                "mode": "semantic",
+                "id": "wheel.title"
+              },
+              {
+                "mode": "semantic",
+                "id": "wheel.chapter.dhi"
+              },
+              {
+                "mode": "semantic",
+                "id": "wheel.leap"
+              }
+            ]
+          },
+          "postcondition": {
+            "mode": "any",
+            "conditions": [
+              {
+                "mode": "semantic",
+                "id": "wheel.title"
+              },
+              {
+                "mode": "semantic",
+                "id": "wheel.chapter.dhi"
+              },
+              {
+                "mode": "semantic",
+                "id": "wheel.leap"
+              }
+            ]
+          },
+          "position": [
+            105,
+            230
+          ],
+          "delay_after_ms": 500
+        },
+        "repeat_limit": 1
+      },
+      {
+        "id": "Reset7",
+        "type": "action",
+        "name": "回到起始章节页签",
+        "parameters": {
+          "operation": "fixed_click",
+          "scene": {
+            "mode": "any",
+            "conditions": [
+              {
+                "mode": "semantic",
+                "id": "wheel.title"
+              },
+              {
+                "mode": "semantic",
+                "id": "wheel.chapter.dhi"
+              },
+              {
+                "mode": "semantic",
+                "id": "wheel.leap"
+              }
+            ]
+          },
+          "postcondition": {
+            "mode": "any",
+            "conditions": [
+              {
+                "mode": "semantic",
+                "id": "wheel.title"
+              },
+              {
+                "mode": "semantic",
+                "id": "wheel.chapter.dhi"
+              },
+              {
+                "mode": "semantic",
+                "id": "wheel.leap"
+              }
+            ]
+          },
+          "position": [
+            105,
+            230
+          ],
+          "delay_after_ms": 500
+        },
+        "repeat_limit": 1
+      },
+      {
+        "id": "Reset8",
+        "type": "action",
+        "name": "回到起始章节页签",
+        "parameters": {
+          "operation": "fixed_click",
+          "scene": {
+            "mode": "any",
+            "conditions": [
+              {
+                "mode": "semantic",
+                "id": "wheel.title"
+              },
+              {
+                "mode": "semantic",
+                "id": "wheel.chapter.dhi"
+              },
+              {
+                "mode": "semantic",
+                "id": "wheel.leap"
+              }
+            ]
+          },
+          "postcondition": {
+            "mode": "any",
+            "conditions": [
+              {
+                "mode": "semantic",
+                "id": "wheel.title"
+              },
+              {
+                "mode": "semantic",
+                "id": "wheel.chapter.dhi"
+              },
+              {
+                "mode": "semantic",
+                "id": "wheel.leap"
+              }
+            ]
+          },
+          "position": [
+            105,
+            230
+          ],
+          "delay_after_ms": 500
+        },
+        "repeat_limit": 1
+      },
+      {
+        "id": "Reset9",
+        "type": "action",
+        "name": "回到起始章节页签",
+        "parameters": {
+          "operation": "fixed_click",
+          "scene": {
+            "mode": "any",
+            "conditions": [
+              {
+                "mode": "semantic",
+                "id": "wheel.title"
+              },
+              {
+                "mode": "semantic",
+                "id": "wheel.chapter.dhi"
+              },
+              {
+                "mode": "semantic",
+                "id": "wheel.leap"
+              }
+            ]
+          },
+          "postcondition": {
+            "mode": "any",
+            "conditions": [
+              {
+                "mode": "semantic",
+                "id": "wheel.title"
+              },
+              {
+                "mode": "semantic",
+                "id": "wheel.chapter.dhi"
+              },
+              {
+                "mode": "semantic",
+                "id": "wheel.leap"
+              }
+            ]
+          },
+          "position": [
+            105,
+            230
+          ],
+          "delay_after_ms": 500
+        },
+        "repeat_limit": 1
+      },
+      {
+        "id": "FindChapter",
+        "type": "route",
+        "name": "查找指定章节",
+        "parameters": {},
+        "repeat_limit": 32
+      },
+      {
+        "id": "Chapter",
+        "type": "action",
+        "name": "选择章节",
+        "parameters": {
+          "operation": "click",
+          "scene": {
+            "mode": "all",
+            "conditions": [
+              {
+                "mode": "any",
+                "conditions": [
+                  {
+                    "mode": "semantic",
+                    "id": "wheel.title"
+                  },
+                  {
+                    "mode": "semantic",
+                    "id": "wheel.chapter.dhi"
+                  },
+                  {
+                    "mode": "semantic",
+                    "id": "wheel.leap"
+                  }
+                ]
+              },
+              {
+                "mode": "semantic",
+                "id": "wheel.chapter.dhi"
+              }
+            ]
+          },
+          "target": {
+            "mode": "semantic",
+            "id": "wheel.chapter.dhi"
+          },
+          "postcondition": {
+            "mode": "any",
+            "conditions": [
+              {
+                "mode": "semantic",
+                "id": "wheel.title"
+              },
+              {
+                "mode": "semantic",
+                "id": "wheel.chapter.dhi"
+              },
+              {
+                "mode": "semantic",
+                "id": "wheel.leap"
+              }
+            ]
+          }
+        },
+        "repeat_limit": 32
+      },
+      {
+        "id": "NextTab",
+        "type": "action",
+        "name": "翻到下一章节页签",
+        "parameters": {
+          "operation": "click",
+          "scene": {
+            "mode": "all",
+            "conditions": [
+              {
+                "mode": "any",
+                "conditions": [
+                  {
+                    "mode": "semantic",
+                    "id": "wheel.title"
+                  },
+                  {
+                    "mode": "semantic",
+                    "id": "wheel.chapter.dhi"
+                  },
+                  {
+                    "mode": "semantic",
+                    "id": "wheel.leap"
+                  }
+                ]
+              },
+              {
+                "mode": "semantic",
+                "id": "wheel.next_tab"
+              },
+              {
+                "mode": "not",
+                "conditions": [
+                  {
+                    "mode": "semantic",
+                    "id": "wheel.chapter.dhi"
+                  }
+                ]
+              }
+            ]
+          },
+          "target": {
+            "mode": "semantic",
+            "id": "wheel.next_tab"
+          },
+          "postcondition": {
+            "mode": "any",
+            "conditions": [
+              {
+                "mode": "semantic",
+                "id": "wheel.title"
+              },
+              {
+                "mode": "semantic",
+                "id": "wheel.chapter.dhi"
+              },
+              {
+                "mode": "semantic",
+                "id": "wheel.leap"
+              }
+            ]
+          }
+        },
+        "repeat_limit": 32
+      },
+      {
+        "id": "Reopen",
+        "type": "action",
+        "name": "返回诅咒之轮",
+        "parameters": {
+          "operation": "click",
+          "scene": {
+            "mode": "all",
+            "conditions": [
+              {
+                "mode": "semantic",
+                "id": "wheel.entry"
+              },
+              {
+                "mode": "not",
+                "conditions": [
+                  {
+                    "mode": "semantic",
+                    "id": "wheel.chapter.dhi"
+                  }
+                ]
+              }
+            ]
+          },
+          "target": {
+            "mode": "semantic",
+            "id": "wheel.entry"
+          },
+          "postcondition": {
+            "mode": "any",
+            "conditions": [
+              {
+                "mode": "semantic",
+                "id": "wheel.title"
+              },
+              {
+                "mode": "semantic",
+                "id": "boot.download.action"
+              }
+            ]
+          }
+        },
+        "repeat_limit": 32
+      },
+      {
+        "id": "AfterChapter",
+        "type": "route",
+        "name": "章节内查找目标",
+        "parameters": {},
+        "repeat_limit": 32
+      },
+      {
+        "id": "SelectTarget",
+        "type": "action",
+        "name": "选择出现的目标",
+        "parameters": {
+          "operation": "click",
+          "scene": {
+            "mode": "all",
+            "conditions": [
+              {
+                "mode": "semantic",
+                "id": "wheel.title"
+              },
+              {
+                "mode": "semantic",
+                "id": "wheel.target.ore"
+              }
+            ]
+          },
+          "target": {
+            "mode": "semantic",
+            "id": "wheel.target.ore"
+          },
+          "postcondition": {
+            "mode": "semantic",
+            "id": "wheel.leap"
+          },
+          "delay_after_ms": 1000
+        },
+        "repeat_limit": 1
+      },
+      {
+        "id": "FindTarget",
+        "type": "route",
+        "name": "目标未出现继续向下查找",
+        "parameters": {},
+        "repeat_limit": 32
+      },
+      {
+        "id": "FineScroll",
+        "type": "action",
+        "name": "向下查找",
+        "parameters": {
+          "operation": "swipe",
+          "scene": {
+            "mode": "all",
+            "conditions": [
+              {
+                "mode": "semantic",
+                "id": "wheel.title"
+              },
+              {
+                "mode": "not",
+                "conditions": [
+                  {
+                    "mode": "semantic",
+                    "id": "wheel.target.ore"
+                  }
+                ]
+              }
+            ]
+          },
+          "postcondition": {
+            "mode": "semantic",
+            "id": "wheel.title"
+          },
+          "coordinates": [
+            50,
+            1200,
+            50,
+            1300
+          ],
+          "duration_ms": 400,
+          "delay_after_ms": 1000
+        },
+        "repeat_limit": 32
+      },
+      {
+        "id": "Scroll0",
+        "type": "action",
+        "name": "目标未出现时大幅向下查找",
+        "parameters": {
+          "operation": "swipe",
+          "scene": {
+            "mode": "all",
+            "conditions": [
+              {
+                "mode": "semantic",
+                "id": "wheel.title"
+              },
+              {
+                "mode": "not",
+                "conditions": [
+                  {
+                    "mode": "semantic",
+                    "id": "wheel.target.ore"
+                  }
+                ]
+              }
+            ]
+          },
+          "postcondition": {
+            "mode": "semantic",
+            "id": "wheel.title"
+          },
+          "coordinates": [
+            450,
+            1200,
+            450,
+            200
+          ],
+          "duration_ms": 400,
+          "delay_after_ms": 2000
+        },
+        "repeat_limit": 1
+      },
+      {
+        "id": "Scroll1",
+        "type": "action",
+        "name": "目标未出现时大幅向下查找",
+        "parameters": {
+          "operation": "swipe",
+          "scene": {
+            "mode": "all",
+            "conditions": [
+              {
+                "mode": "semantic",
+                "id": "wheel.title"
+              },
+              {
+                "mode": "not",
+                "conditions": [
+                  {
+                    "mode": "semantic",
+                    "id": "wheel.target.ore"
+                  }
+                ]
+              }
+            ]
+          },
+          "postcondition": {
+            "mode": "semantic",
+            "id": "wheel.title"
+          },
+          "coordinates": [
+            450,
+            1200,
+            450,
+            200
+          ],
+          "duration_ms": 400,
+          "delay_after_ms": 2000
+        },
+        "repeat_limit": 1
+      },
+      {
+        "id": "Scroll2",
+        "type": "action",
+        "name": "目标未出现时大幅向下查找",
+        "parameters": {
+          "operation": "swipe",
+          "scene": {
+            "mode": "all",
+            "conditions": [
+              {
+                "mode": "semantic",
+                "id": "wheel.title"
+              },
+              {
+                "mode": "not",
+                "conditions": [
+                  {
+                    "mode": "semantic",
+                    "id": "wheel.target.ore"
+                  }
+                ]
+              }
+            ]
+          },
+          "postcondition": {
+            "mode": "semantic",
+            "id": "wheel.title"
+          },
+          "coordinates": [
+            450,
+            1200,
+            450,
+            200
+          ],
+          "duration_ms": 400,
+          "delay_after_ms": 2000
+        },
+        "repeat_limit": 1
+      },
+      {
+        "id": "Done",
+        "type": "end",
+        "name": "完成",
+        "parameters": {
+          "outcome": "success"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e0",
+        "from": "Entry",
+        "to": "QuickSelect",
+        "outcome": "success",
+        "order": 0
+      },
+      {
+        "id": "e1",
+        "from": "Entry",
+        "to": "Reset0",
+        "outcome": "success",
+        "order": 1
+      },
+      {
+        "id": "e2",
+        "from": "QuickSelect",
+        "to": "Done",
+        "outcome": "success",
+        "order": 0
+      },
+      {
+        "id": "e3",
+        "from": "Reset0",
+        "to": "Reset1",
+        "outcome": "success",
+        "order": 0
+      },
+      {
+        "id": "e4",
+        "from": "Reset1",
+        "to": "Reset2",
+        "outcome": "success",
+        "order": 0
+      },
+      {
+        "id": "e5",
+        "from": "Reset2",
+        "to": "Reset3",
+        "outcome": "success",
+        "order": 0
+      },
+      {
+        "id": "e6",
+        "from": "Reset3",
+        "to": "Reset4",
+        "outcome": "success",
+        "order": 0
+      },
+      {
+        "id": "e7",
+        "from": "Reset4",
+        "to": "Reset5",
+        "outcome": "success",
+        "order": 0
+      },
+      {
+        "id": "e8",
+        "from": "Reset5",
+        "to": "Reset6",
+        "outcome": "success",
+        "order": 0
+      },
+      {
+        "id": "e9",
+        "from": "Reset6",
+        "to": "Reset7",
+        "outcome": "success",
+        "order": 0
+      },
+      {
+        "id": "e10",
+        "from": "Reset7",
+        "to": "Reset8",
+        "outcome": "success",
+        "order": 0
+      },
+      {
+        "id": "e11",
+        "from": "Reset8",
+        "to": "Reset9",
+        "outcome": "success",
+        "order": 0
+      },
+      {
+        "id": "e12",
+        "from": "Reset9",
+        "to": "FindChapter",
+        "outcome": "success",
+        "order": 0
+      },
+      {
+        "id": "e13",
+        "from": "FindChapter",
+        "to": "Chapter",
+        "outcome": "success",
+        "order": 0
+      },
+      {
+        "id": "e14",
+        "from": "FindChapter",
+        "to": "NextTab",
+        "outcome": "success",
+        "order": 1
+      },
+      {
+        "id": "e15",
+        "from": "FindChapter",
+        "to": "Reopen",
+        "outcome": "success",
+        "order": 2
+      },
+      {
+        "id": "e16",
+        "from": "NextTab",
+        "to": "FindChapter",
+        "outcome": "success",
+        "order": 0
+      },
+      {
+        "id": "e17",
+        "from": "Reopen",
+        "to": "FindChapter",
+        "outcome": "success",
+        "order": 0
+      },
+      {
+        "id": "e18",
+        "from": "Chapter",
+        "to": "AfterChapter",
+        "outcome": "success",
+        "order": 0
+      },
+      {
+        "id": "e19",
+        "from": "AfterChapter",
+        "to": "SelectTarget",
+        "outcome": "success",
+        "order": 0
+      },
+      {
+        "id": "e20",
+        "from": "AfterChapter",
+        "to": "Scroll0",
+        "outcome": "success",
+        "order": 1
+      },
+      {
+        "id": "e21",
+        "from": "FindTarget",
+        "to": "SelectTarget",
+        "outcome": "success",
+        "order": 0
+      },
+      {
+        "id": "e22",
+        "from": "FindTarget",
+        "to": "FineScroll",
+        "outcome": "success",
+        "order": 1
+      },
+      {
+        "id": "e23",
+        "from": "FineScroll",
+        "to": "FindTarget",
+        "outcome": "success",
+        "order": 0
+      },
+      {
+        "id": "e24",
+        "from": "SelectTarget",
+        "to": "Done",
+        "outcome": "success",
+        "order": 0
+      },
+      {
+        "id": "e25",
+        "from": "Scroll0",
+        "to": "Scroll1",
+        "outcome": "success",
+        "order": 0
+      },
+      {
+        "id": "e26",
+        "from": "Scroll1",
+        "to": "Scroll2",
+        "outcome": "success",
+        "order": 0
+      },
+      {
+        "id": "e27",
+        "from": "Scroll2",
+        "to": "FindTarget",
+        "outcome": "success",
+        "order": 0
+      }
+    ],
+    "layout": {
+      "nodes": [
+        {
+          "node_id": "Entry",
+          "x": 40,
+          "y": 100
+        },
+        {
+          "node_id": "QuickSelect",
+          "x": 260,
+          "y": 100
+        },
+        {
+          "node_id": "Reset0",
+          "x": 480,
+          "y": 100
+        },
+        {
+          "node_id": "Reset1",
+          "x": 700,
+          "y": 100
+        },
+        {
+          "node_id": "Reset2",
+          "x": 40,
+          "y": 260
+        },
+        {
+          "node_id": "Reset3",
+          "x": 260,
+          "y": 260
+        },
+        {
+          "node_id": "Reset4",
+          "x": 480,
+          "y": 260
+        },
+        {
+          "node_id": "Reset5",
+          "x": 700,
+          "y": 260
+        },
+        {
+          "node_id": "Reset6",
+          "x": 40,
+          "y": 420
+        },
+        {
+          "node_id": "Reset7",
+          "x": 260,
+          "y": 420
+        },
+        {
+          "node_id": "Reset8",
+          "x": 480,
+          "y": 420
+        },
+        {
+          "node_id": "Reset9",
+          "x": 700,
+          "y": 420
+        },
+        {
+          "node_id": "FindChapter",
+          "x": 40,
+          "y": 580
+        },
+        {
+          "node_id": "Chapter",
+          "x": 260,
+          "y": 580
+        },
+        {
+          "node_id": "NextTab",
+          "x": 480,
+          "y": 580
+        },
+        {
+          "node_id": "Reopen",
+          "x": 700,
+          "y": 580
+        },
+        {
+          "node_id": "AfterChapter",
+          "x": 40,
+          "y": 740
+        },
+        {
+          "node_id": "SelectTarget",
+          "x": 260,
+          "y": 740
+        },
+        {
+          "node_id": "FindTarget",
+          "x": 480,
+          "y": 740
+        },
+        {
+          "node_id": "FineScroll",
+          "x": 700,
+          "y": 740
+        },
+        {
+          "node_id": "Scroll0",
+          "x": 40,
+          "y": 900
+        },
+        {
+          "node_id": "Scroll1",
+          "x": 260,
+          "y": 900
+        },
+        {
+          "node_id": "Scroll2",
+          "x": 480,
+          "y": 900
+        },
+        {
+          "node_id": "Done",
+          "x": 700,
+          "y": 900
+        }
+      ],
+      "viewport": {
+        "x": 0,
+        "y": 0,
+        "zoom": 1
+      }
+    },
+    "execution": {
+      "time_limit_ms": 180000,
+      "resource_locale": "zh-Hant"
+    },
+    "interface": {
+      "kind": "block",
+      "category": "诅咒之轮",
+      "parameters": [
+        {
+          "name": "chapter_asset",
+          "label": "章节目标",
+          "type": "resource",
+          "default": "wheel.chapter.dhi",
+          "bindings": [
+            {
+              "node": "Reset0",
+              "path": "/scene/conditions/1/id"
+            },
+            {
+              "node": "Reset0",
+              "path": "/postcondition/conditions/1/id"
+            },
+            {
+              "node": "Reset1",
+              "path": "/scene/conditions/1/id"
+            },
+            {
+              "node": "Reset1",
+              "path": "/postcondition/conditions/1/id"
+            },
+            {
+              "node": "Reset2",
+              "path": "/scene/conditions/1/id"
+            },
+            {
+              "node": "Reset2",
+              "path": "/postcondition/conditions/1/id"
+            },
+            {
+              "node": "Reset3",
+              "path": "/scene/conditions/1/id"
+            },
+            {
+              "node": "Reset3",
+              "path": "/postcondition/conditions/1/id"
+            },
+            {
+              "node": "Reset4",
+              "path": "/scene/conditions/1/id"
+            },
+            {
+              "node": "Reset4",
+              "path": "/postcondition/conditions/1/id"
+            },
+            {
+              "node": "Reset5",
+              "path": "/scene/conditions/1/id"
+            },
+            {
+              "node": "Reset5",
+              "path": "/postcondition/conditions/1/id"
+            },
+            {
+              "node": "Reset6",
+              "path": "/scene/conditions/1/id"
+            },
+            {
+              "node": "Reset6",
+              "path": "/postcondition/conditions/1/id"
+            },
+            {
+              "node": "Reset7",
+              "path": "/scene/conditions/1/id"
+            },
+            {
+              "node": "Reset7",
+              "path": "/postcondition/conditions/1/id"
+            },
+            {
+              "node": "Reset8",
+              "path": "/scene/conditions/1/id"
+            },
+            {
+              "node": "Reset8",
+              "path": "/postcondition/conditions/1/id"
+            },
+            {
+              "node": "Reset9",
+              "path": "/scene/conditions/1/id"
+            },
+            {
+              "node": "Reset9",
+              "path": "/postcondition/conditions/1/id"
+            },
+            {
+              "node": "Chapter",
+              "path": "/scene/conditions/0/conditions/1/id"
+            },
+            {
+              "node": "Chapter",
+              "path": "/scene/conditions/1/id"
+            },
+            {
+              "node": "Chapter",
+              "path": "/target/id"
+            },
+            {
+              "node": "Chapter",
+              "path": "/postcondition/conditions/1/id"
+            },
+            {
+              "node": "NextTab",
+              "path": "/scene/conditions/0/conditions/1/id"
+            },
+            {
+              "node": "NextTab",
+              "path": "/scene/conditions/2/conditions/0/id"
+            },
+            {
+              "node": "NextTab",
+              "path": "/postcondition/conditions/1/id"
+            },
+            {
+              "node": "Reopen",
+              "path": "/scene/conditions/1/conditions/0/id"
+            }
+          ]
+        },
+        {
+          "name": "target_asset",
+          "label": "跳跃目标",
+          "type": "resource",
+          "default": "wheel.target.ore",
+          "bindings": [
+            {
+              "node": "QuickSelect",
+              "path": "/scene/conditions/1/id"
+            },
+            {
+              "node": "QuickSelect",
+              "path": "/target/id"
+            },
+            {
+              "node": "SelectTarget",
+              "path": "/scene/conditions/1/id"
+            },
+            {
+              "node": "SelectTarget",
+              "path": "/target/id"
+            },
+            {
+              "node": "FineScroll",
+              "path": "/scene/conditions/1/conditions/0/id"
+            },
+            {
+              "node": "Scroll0",
+              "path": "/scene/conditions/1/conditions/0/id"
+            },
+            {
+              "node": "Scroll1",
+              "path": "/scene/conditions/1/conditions/0/id"
+            },
+            {
+              "node": "Scroll2",
+              "path": "/scene/conditions/1/conditions/0/id"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "schema": 1,
+    "flow": {
+      "id": "wheel-reset",
+      "name": "指定章节和目标跳轮",
+      "description": "公共定义候选；来自 dcc11c18 源码及用户业务说明。编译验证不代表真实游戏验证。"
+    },
+    "entry": "Open",
+    "nodes": [
+      {
+        "id": "Open",
+        "type": "call",
+        "name": "进入诅咒之轮",
+        "parameters": {
+          "flow_id": "wheel-open",
+          "arguments": {},
+          "extensions": {}
+        },
+        "repeat_limit": 1
+      },
+      {
+        "id": "Target",
+        "type": "call",
+        "name": "章节与目标选择",
+        "parameters": {
+          "flow_id": "wheel-select-target",
+          "arguments": {
+            "chapter_asset": "wheel.chapter.dhi",
+            "target_asset": "wheel.target.ore"
+          },
+          "extensions": {}
+        },
+        "repeat_limit": 1
+      },
+      {
+        "id": "Extra",
+        "type": "slot",
+        "name": "跳跃前专用处理",
+        "parameters": {
+          "name": "before_jump",
+          "calls": []
+        },
+        "repeat_limit": 1
+      },
+      {
+        "id": "Jump",
+        "type": "call",
+        "name": "提交一次跳跃",
+        "parameters": {
+          "flow_id": "wheel-jump",
+          "arguments": {},
+          "extensions": {}
+        },
+        "repeat_limit": 1
+      },
+      {
+        "id": "Done",
+        "type": "end",
+        "name": "完成",
+        "parameters": {
+          "outcome": "success"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e0",
+        "from": "Open",
+        "to": "Target",
+        "outcome": "success",
+        "order": 0
+      },
+      {
+        "id": "e1",
+        "from": "Target",
+        "to": "Extra",
+        "outcome": "success",
+        "order": 0
+      },
+      {
+        "id": "e2",
+        "from": "Extra",
+        "to": "Jump",
+        "outcome": "success",
+        "order": 0
+      },
+      {
+        "id": "e3",
+        "from": "Jump",
+        "to": "Done",
+        "outcome": "success",
+        "order": 0
+      }
+    ],
+    "layout": {
+      "nodes": [
+        {
+          "node_id": "Open",
+          "x": 40,
+          "y": 100
+        },
+        {
+          "node_id": "Target",
+          "x": 260,
+          "y": 100
+        },
+        {
+          "node_id": "Extra",
+          "x": 480,
+          "y": 100
+        },
+        {
+          "node_id": "Jump",
+          "x": 700,
+          "y": 100
+        },
+        {
+          "node_id": "Done",
+          "x": 40,
+          "y": 260
+        }
+      ],
+      "viewport": {
+        "x": 0,
+        "y": 0,
+        "zoom": 1
+      }
+    },
+    "execution": {
+      "time_limit_ms": 180000,
+      "resource_locale": "zh-Hant"
+    },
+    "interface": {
+      "kind": "block",
+      "category": "诅咒之轮",
+      "parameters": [
+        {
+          "name": "chapter_asset",
+          "label": "章节",
+          "type": "resource",
+          "default": "wheel.chapter.dhi",
+          "bindings": [
+            {
+              "node": "Target",
+              "path": "/arguments/chapter_asset"
+            }
+          ]
+        },
+        {
+          "name": "target_asset",
+          "label": "目标",
+          "type": "resource",
+          "default": "wheel.target.ore",
+          "bindings": [
+            {
+              "node": "Target",
+              "path": "/arguments/target_asset"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "schema": 1,
+    "flow": {
+      "id": "ore-reset-to-royal",
+      "name": "美魔矿石跳轮后确认王城",
+      "description": "公共定义候选；来自 dcc11c18 源码及用户业务说明。编译验证不代表真实游戏验证。"
+    },
+    "entry": "Reset",
+    "nodes": [
+      {
+        "id": "Reset",
+        "type": "call",
+        "name": "美魔矿石跳轮",
+        "parameters": {
+          "flow_id": "wheel-reset",
+          "arguments": {
+            "chapter_asset": "wheel.chapter.dhi",
+            "target_asset": "wheel.target.ore"
+          },
+          "extensions": {}
+        },
+        "repeat_limit": 1
+      },
+      {
+        "id": "Royal",
+        "type": "recognition",
+        "name": "确认实际返回王城",
+        "parameters": {
+          "condition": {
+            "mode": "semantic",
+            "id": "city.royal.identity"
+          }
+        },
+        "repeat_limit": 1
+      },
+      {
+        "id": "Done",
+        "type": "end",
+        "name": "完成",
+        "parameters": {
+          "outcome": "success"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e0",
+        "from": "Reset",
+        "to": "Royal",
+        "outcome": "success",
+        "order": 0
+      },
+      {
+        "id": "e1",
+        "from": "Royal",
+        "to": "Done",
+        "outcome": "success",
+        "order": 0
+      }
+    ],
+    "layout": {
+      "nodes": [
+        {
+          "node_id": "Reset",
+          "x": 40,
+          "y": 100
+        },
+        {
+          "node_id": "Royal",
+          "x": 260,
+          "y": 100
+        },
+        {
+          "node_id": "Done",
+          "x": 480,
+          "y": 100
+        }
+      ],
+      "viewport": {
+        "x": 0,
+        "y": 0,
+        "zoom": 1
+      }
+    },
+    "execution": {
+      "time_limit_ms": 180000,
+      "resource_locale": "zh-Hant"
+    },
+    "interface": {
+      "kind": "block",
+      "category": "诅咒之轮",
+      "parameters": []
+    }
+  },
+  {
+    "schema": 1,
+    "flow": {
+      "id": "bounty-refresh",
+      "name": "跳轮后打开赏金页面（刷新）",
+      "description": "公共定义候选；来自 dcc11c18 源码及用户业务说明。编译验证不代表真实游戏验证。"
+    },
+    "entry": "Reset",
+    "nodes": [
+      {
+        "id": "Reset",
+        "type": "call",
+        "name": "跳轮",
+        "parameters": {
+          "flow_id": "wheel-reset",
+          "arguments": {},
+          "extensions": {}
+        },
+        "repeat_limit": 1
+      },
+      {
+        "id": "Bounties",
+        "type": "call",
+        "name": "打开赏金页面",
+        "parameters": {
+          "flow_id": "guild-open-bounty-page",
+          "arguments": {
+            "location": 0
+          },
+          "extensions": {}
+        },
+        "repeat_limit": 1
+      },
+      {
+        "id": "Done",
+        "type": "end",
+        "name": "完成",
+        "parameters": {
+          "outcome": "success"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e0",
+        "from": "Reset",
+        "to": "Bounties",
+        "outcome": "success",
+        "order": 0
+      },
+      {
+        "id": "e1",
+        "from": "Bounties",
+        "to": "Done",
+        "outcome": "success",
+        "order": 0
+      }
+    ],
+    "layout": {
+      "nodes": [
+        {
+          "node_id": "Reset",
+          "x": 40,
+          "y": 100
+        },
+        {
+          "node_id": "Bounties",
+          "x": 260,
+          "y": 100
+        },
+        {
+          "node_id": "Done",
+          "x": 480,
+          "y": 100
+        }
+      ],
+      "viewport": {
+        "x": 0,
+        "y": 0,
+        "zoom": 1
+      }
+    },
+    "execution": {
+      "time_limit_ms": 180000,
+      "resource_locale": "zh-Hant"
+    },
+    "interface": {
+      "kind": "block",
+      "category": "公会",
+      "parameters": []
+    }
+  }
+]

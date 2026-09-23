@@ -145,6 +145,7 @@ std::vector<runtime::SessionDefinition> publish(const std::vector<CompiledWorkfl
                {"time_limit_ms", workflow.time_limit.count()},
                {"required_actions", workflow.required_actions},
                {"pipeline", executable_nodes.front()},
+               {"authoring", workflow.authoring},
                {"input_contract", 2},
                {"aliases", aliases},
                {"dialogue_task", dialogue},
@@ -159,13 +160,22 @@ std::vector<runtime::SessionDefinition> publish(const std::vector<CompiledWorkfl
             identity["stages"].push_back({{"kind", stage.kind}, {"entry", stage.entry},
                 {"terminal", stage.terminal}, {"checkpoint", stage.checkpoint}, {"pipeline", executable_nodes.at(i)},
                 {"time_limit_ms", stage.time_limit.count()}, {"required_actions", stage.required_actions},
-                {"dialogue_task", recovery::dialogue_policy_name(stage.dialogue_policy)}});
+                {"dialogue_task", recovery::dialogue_policy_name(stage.dialogue_policy)},
+                {"authoring", stage.authoring}});
         }
     }
     if (needs_leap_wait) {
         const auto wait_nodes = recovery::leap_wait_nodes();
         identity["leap_wait"] = wait_nodes;
         pipelines["pipeline/leap-wait.json"] = wait_nodes.dump(2);
+    }
+    J authored = J::array();
+    for (const auto &stage : workflows)
+        if (!stage.authoring.empty()) authored.push_back(stage.authoring);
+    if (!authored.empty()) {
+        if (manifest.contains("parameters/authoring.json"))
+            throw std::runtime_error("COMPILE_RESERVED_PATH_CONFLICT");
+        pipelines["parameters/authoring.json"] = authored.dump(2);
     }
     const auto serialized = identity.dump();
     const auto revision = platform::bytes_sha256(

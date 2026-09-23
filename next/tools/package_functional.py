@@ -124,9 +124,10 @@ def package() -> Path:
         _package_into(staging)
         # 这是待实机验收的候选，不把打包成功写成真实能力已验证。
         (staging / "DELIVERY_STATUS.json").write_text(json.dumps({
-            "state": "INCIDENT_FIX_REQUIRES_LOCAL_ACCEPTANCE",
+            "state": "LOCAL_ACCEPTANCE_REQUIRED",
             "real_startup_verified": False,
-            "source_baseline": "ab085389caf85d8c2ca4d253d565d641d4d71c63",
+            "source_baseline": "dcc11c18aff724ad9557bbbab13b064ad5734c24",
+            "work_package": "WVD_Composable_Workflows_dcc11c18_20260923",
         }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         if OUTPUT.exists():
             if OUTPUT.is_symlink() or (hasattr(OUTPUT, "is_junction") and OUTPUT.is_junction()):

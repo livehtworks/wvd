@@ -28,6 +28,9 @@ completed_cycles只在六点及退出已确认后增加，不把任务点数或�
 | next/.local/m2-runs/各独立测试目录 | 本轮可丢弃测试数据，绝非用户配置或业务记录 | 每次 unittest 创建新目录及合成资源 | 测试驱动、真实 Maa SDK、审核；每个用例的 run-data 是专用隔离写入根 |
 | docs/migration/feature_inventory.json | 固定 Git 基线的静态盘点，不是运行调度源 | inventory 工具 | 只读工作台；基线状态不随实现改写，当前实现看 M3/M4 叠加台账 |
 | packs/wvd/image 与 manifest.json | 新版作者资源副本；固定 Git 源字节和 manifest hash 是来源权威 | prepare_m3.py | 独立 Bundle 装配；显式别名、动态引用去向；不写旧 resources |
+| resources/authoring/public-flows.json、semantic-assets.json | 随版本发布的公共定义种子与语义资源目录；不是用户编辑结果或真实设备通过记录 | 受版本控制的作者资源，prepare_m3.py 校验并复制 | 首次只补缺失流程 ID；PublicFlowLibrary 按冻结目录解析语言和用途，缺项显式拒绝 |
+| 调用者 data_root/workflows/*.json 及 .repository.lock | 用户保存的作者流程唯一权威；每份含内容 revision，公共步骤/块/任务使用同一格式 | WorkflowRepository 通过 create/CAS/erase 原子写入 | 编辑器、snapshot_closure 和运行准备；引用闭包在同一仓库锁内冻结，被引用定义拒绝删除 |
+| packs/wvd/parameters/public-flows.json、semantic-assets.json | 运行包中的已哈希种子/目录，不是第二份可编辑权威 | prepare_m3.py 从受控源逐字节复制并写 manifest | Application 启动导入缺失定义、构造语义目录；用户已有同 ID 流程不覆盖 |
 | opencv.lock.json 与 .local/opencv.json | 前者是固定公开依赖锁，后者是私有安装路径 | prepare_m3.py，来自固定 MaaDeps 归档 | CMake 校验所有列出的头/库及与 Maa 相同的运行时 DLL |
 | docs/migration/m3-implementation-map.json | 实现去向叠加，不改静态功能基线或宣布任务迁移完成 | m3_implementation_map.py | 审核报告；实现状态与质量状态分离 |
 | .local 中显式指定的新 binding JSON | 私有设备线索和初始发现证据，不是场景许可 | validate_m3_device.py --discover | 本地 C++ 入口再次查管理器和控制者；不公开地址、路径、进程命令行 |

@@ -5,24 +5,52 @@
 ```text
 automationd main
   -> HttpServer (单 Asio I/O 上下文，管理活动连接)
-      -> route (请求校验、只读 API、静态资源)
-          -> contracts/version (接口事实)
+      -> Application::handle (API 路由、请求校验与应用装配)
+          -> ProfileStore / WorkflowRepository / RunCoordinator
+          -> WVD 任务目录、公共流程编译器与设备生命周期
+      -> 静态资源 (Vue 生产构建)
 
-Vue MigrationPage
-  -> useInventory (只读响应镜像、筛选与分页)
-      -> api/client (同源 GET，有限超时)
-  -> InventoryTable / ItemDetail (无请求、无任务副作用)
+Vue App
+  -> WorkbenchPage（配置、设备与既有任务入口）
+  -> WorkflowPage / useWorkflowEditor（作者流程编辑与运行入口）
+  -> MigrationPage / useInventory（只读迁移盘点）
+      -> api/client（同源、有限超时）
 
 tools/inventory/generate
   -> ast_scan (提取) / mapping (职责映射) / assets (资源引用核对)
   -> 固定 Git 基线 -> JSON 报告 -> Web 构建时只读镜像
 ```
 
-原生 `app` 不放路由或业务，`api` 不认识 WVD 策略，组件不发设备动作。
+`Application` 是唯一应用装配和 HTTP 路由所有者，但不实现识别算法或游戏步骤；`api` 不认识
+WVD 策略，Vue 只提交结构化命令，不直接发设备动作。
 盘点工具与服务没有运行时依赖关系；服务不访问 Git，也不 import Python。
 HTTP 连接最多 64 个，每次读/写上限 5 秒，头/体上限 8/4 KiB，静态资源上限 32 MiB。
 断开连接即移出活动集合，不保留无界历史。关闭先取消 accept/连接，再处理完取消回调并退出。
 这里验证的是 **HTTP 服务正常停止**，不能推导 Maa 原生等待可中断。
+
+## 可组合作者流程
+
+```text
+WorkflowPage
+  -> WorkflowRepository（同一文档、同一 CAS 保存、同一引用删除保护）
+      -> snapshot_closure（同一仓库锁内冻结根定义及依赖闭包）
+          -> PublicFlowLibrary（参数绑定、slot 展开、循环/深度检查、语义资源解析）
+              -> compile_author_workflow
+                  -> PipelineCompiler -> 既有 Maa Pipeline / RunCoordinator
+```
+
+公共步骤、流程块和任务共用 `author-workflow` 文档，不存在第二套执行器。`call` 表达参数化调用，
+`slot` 表达调用者可见的有序附加步骤，`route` 只表达既有候选分派。参数只能绑定到已声明节点的
+标量字段，不能修改引用 ID、边或结构字段；运行只读取启动时冻结的定义闭包。
+
+`semantic-assets.json` 是语义 ID 到语言变体和既有识别能力的唯一映射。观察证据与可点击位置分别
+标记；缺语言、缺位置或歧义资源在连接设备前拒绝。作者定义、语义目录和实际图片哈希一同进入包
+revision。公共定义首次只补缺失 ID，不覆盖用户已经保存的同名定义。
+
+运行节点同时保留外层调用路径和内层源节点路径。编辑器可展开公共定义并按调用栈返回原调用者；
+运行高亮从 `node_path` 选择当前打开定义对应的节点。现有原生任务入口在逐项完成迁移前仍保持
+`LEGACY_NATIVE`，不能因公共候选定义可编译就改称已迁移。当前状态见
+[可组合流程迁移状态](composable-workflow-status.md)。
 
 ## M2 运行核心
 

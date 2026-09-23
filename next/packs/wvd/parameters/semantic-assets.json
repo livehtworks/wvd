@@ -1,0 +1,574 @@
+{
+  "schema": 1,
+  "description": "语义索引：源码候选，不把素材存在或本文标签当作实机通过；像素文件保持原位置。",
+  "locations": {
+    "0": {
+      "label": "不限定城市",
+      "resource": "city.any"
+    },
+    "1": {
+      "label": "王城",
+      "resource": "city.royal.identity"
+    }
+  },
+  "resources": {
+    "city.royal.identity": {
+      "label": "王城塔楼背景",
+      "category": "地点/王城",
+      "role": "observation",
+      "variants": {
+        "shared": {
+          "condition": {
+            "mode": "template",
+            "image": "royal_city_background",
+            "threshold": 0.9,
+            "roi": [
+              480,
+              400,
+              320,
+              350
+            ]
+          },
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "dcc11c18: native/games/wvd/vision/location_probes.hpp"
+        }
+      }
+    },
+    "city.inn.entry": {
+      "label": "旅店入口",
+      "category": "城市/公共入口",
+      "role": "position",
+      "variants": {
+        "shared": {
+          "condition": {
+            "mode": "bright_mask",
+            "image": "inn_icon",
+            "threshold": 0.82,
+            "min_brightness": 145,
+            "roi": [
+              0,
+              450,
+              220,
+              250
+            ]
+          },
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "dcc11c18: native/games/wvd/vision/location_probes.hpp"
+        }
+      }
+    },
+    "city.guild.entry": {
+      "label": "公会入口",
+      "category": "城市/公共入口",
+      "role": "position",
+      "variants": {
+        "shared": {
+          "condition": {
+            "mode": "bright_mask",
+            "image": "guild_icon",
+            "threshold": 0.82,
+            "min_brightness": 145,
+            "roi": [
+              0,
+              650,
+              300,
+              250
+            ]
+          },
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "dcc11c18: native/games/wvd/vision/location_probes.hpp"
+        }
+      }
+    },
+    "city.edge.entry": {
+      "label": "郊外入口",
+      "category": "城市/公共入口",
+      "role": "position",
+      "variants": {
+        "shared": {
+          "condition": {
+            "mode": "bright_mask",
+            "image": "edge_of_town_icon",
+            "threshold": 0.82,
+            "min_brightness": 145,
+            "roi": [
+              650,
+              700,
+              250,
+              250
+            ]
+          },
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "dcc11c18: native/games/wvd/vision/location_probes.hpp"
+        }
+      }
+    },
+    "city.any": {
+      "label": "任意城市主界面（不代表王城）",
+      "category": "地点/公共",
+      "role": "observation",
+      "condition": {
+        "mode": "any",
+        "conditions": [
+          {
+            "mode": "semantic",
+            "id": "city.inn.entry"
+          },
+          {
+            "mode": "semantic",
+            "id": "city.guild.entry"
+          },
+          {
+            "mode": "semantic",
+            "id": "city.edge.entry"
+          }
+        ]
+      }
+    },
+    "guild.commissions.entry": {
+      "label": "委托入口",
+      "category": "公会/委托",
+      "role": "position",
+      "variants": {
+        "en": {
+          "condition": {
+            "mode": "template",
+            "image": "guildRequest",
+            "threshold": 0.8
+          },
+          "validation": "SOURCE_ONLY_NOT_REAL_VERIFIED",
+          "source": "dcc11c18: native/games/wvd/tasks/bounty_visit.cpp"
+        }
+      }
+    },
+    "guild.bounties.entry": {
+      "label": "赏金页签",
+      "category": "公会/委托",
+      "role": "position",
+      "variants": {
+        "en": {
+          "condition": {
+            "mode": "template",
+            "image": "Bounties",
+            "threshold": 0.8
+          },
+          "validation": "SOURCE_ONLY_NOT_REAL_VERIFIED",
+          "source": "dcc11c18: native/games/wvd/tasks/bounty_visit.cpp"
+        }
+      }
+    },
+    "guild.report.action": {
+      "label": "完成报告按钮",
+      "category": "公会/委托",
+      "role": "position",
+      "variants": {
+        "en": {
+          "condition": {
+            "mode": "template",
+            "image": "CompletionReported",
+            "threshold": 0.8
+          },
+          "validation": "SOURCE_ONLY_NOT_REAL_VERIFIED",
+          "source": "dcc11c18: native/games/wvd/tasks/bounty_visit.cpp"
+        }
+      }
+    },
+    "guild.featured.entry": {
+      "label": "特别委托入口",
+      "category": "公会/委托",
+      "role": "position",
+      "variants": {
+        "en": {
+          "condition": {
+            "mode": "template",
+            "image": "guildFeatured",
+            "threshold": 0.8
+          },
+          "validation": "SOURCE_ONLY_NOT_REAL_VERIFIED",
+          "source": "dcc11c18: native/games/wvd/tasks/bounty_visit.cpp"
+        }
+      }
+    },
+    "guild.menu": {
+      "label": "公会菜单已出现",
+      "category": "公会/页面",
+      "role": "observation",
+      "condition": {
+        "mode": "any",
+        "conditions": [
+          {
+            "mode": "semantic",
+            "id": "guild.commissions.entry"
+          },
+          {
+            "mode": "semantic",
+            "id": "guild.bounties.entry"
+          },
+          {
+            "mode": "semantic",
+            "id": "guild.featured.entry"
+          },
+          {
+            "mode": "semantic",
+            "id": "guild.report.action"
+          }
+        ]
+      }
+    },
+    "guild.commissions.page": {
+      "label": "委托页（待按实际页面核定）",
+      "category": "公会/页面",
+      "role": "observation",
+      "variants": {}
+    },
+    "guild.bounties.page": {
+      "label": "赏金内容区/选中页签证据",
+      "category": "公会/页面",
+      "role": "observation",
+      "variants": {}
+    },
+    "guild.bounty.first_item": {
+      "label": "赏金列表第一项（待采集）",
+      "category": "公会/列表",
+      "role": "position",
+      "variants": {}
+    },
+    "guild.bounty.receipt": {
+      "label": "领取结果证据（不得用按钮仍可见替代）",
+      "category": "公会/结果",
+      "role": "observation",
+      "variants": {}
+    },
+    "wheel.entry": {
+      "label": "诅咒之轮入口",
+      "category": "诅咒之轮/页面与操作",
+      "role": "position",
+      "variants": {
+        "en": {
+          "condition": {
+            "mode": "template",
+            "image": "cursedWheel",
+            "threshold": 0.8
+          },
+          "validation": "SOURCE_ONLY_NOT_REAL_VERIFIED",
+          "source": "dcc11c18: native/games/wvd/navigation/time_leap.cpp"
+        },
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "cursedWheel_zh_hant",
+            "threshold": 0.8,
+            "roi": [
+              450,
+              500,
+              450,
+              400
+            ]
+          },
+          "validation": "SOURCE_VARIANT_PRESENT",
+          "source": "dcc11c18: native/games/wvd/navigation/time_leap.cpp"
+        }
+      }
+    },
+    "wheel.title": {
+      "label": "诅咒之轮标题",
+      "category": "诅咒之轮/页面与操作",
+      "role": "observation",
+      "variants": {
+        "en": {
+          "condition": {
+            "mode": "template",
+            "image": "cursedWheelTitle",
+            "threshold": 0.8
+          },
+          "validation": "SOURCE_ONLY_NOT_REAL_VERIFIED",
+          "source": "dcc11c18: native/games/wvd/navigation/time_leap.cpp"
+        },
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "cursedWheelTitle_zh_hant",
+            "threshold": 0.8,
+            "roi": [
+              250,
+              0,
+              400,
+              180
+            ]
+          },
+          "validation": "SOURCE_VARIANT_PRESENT",
+          "source": "dcc11c18: native/games/wvd/navigation/time_leap.cpp"
+        }
+      }
+    },
+    "wheel.leap": {
+      "label": "跳跃按钮",
+      "category": "诅咒之轮/页面与操作",
+      "role": "position",
+      "variants": {
+        "en": {
+          "condition": {
+            "mode": "template",
+            "image": "leap",
+            "threshold": 0.8
+          },
+          "validation": "SOURCE_ONLY_NOT_REAL_VERIFIED",
+          "source": "dcc11c18: native/games/wvd/navigation/time_leap.cpp"
+        },
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "leap_zh_hant",
+            "threshold": 0.8,
+            "roi": [
+              250,
+              1250,
+              400,
+              250
+            ]
+          },
+          "validation": "SOURCE_VARIANT_PRESENT",
+          "source": "dcc11c18: native/games/wvd/navigation/time_leap.cpp"
+        }
+      }
+    },
+    "wheel.target.ore": {
+      "label": "美魔矿石的真相",
+      "category": "诅咒之轮/目标",
+      "role": "position",
+      "variants": {
+        "en": {
+          "condition": {
+            "mode": "template",
+            "image": "BeautifulOre",
+            "threshold": 0.8
+          },
+          "validation": "SOURCE_ONLY_NOT_REAL_VERIFIED",
+          "source": "dcc11c18: native/games/wvd/navigation/time_leap.cpp"
+        },
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "BeautifulOre_zh_hant",
+            "threshold": 0.8,
+            "roi": [
+              150,
+              250,
+              650,
+              900
+            ]
+          },
+          "validation": "SOURCE_VARIANT_PRESENT",
+          "source": "dcc11c18: native/games/wvd/navigation/time_leap.cpp"
+        }
+      }
+    },
+    "wheel.target.ghosts": {
+      "label": "GhostsOfYore",
+      "category": "诅咒之轮/目标",
+      "role": "position",
+      "variants": {
+        "en": {
+          "condition": {
+            "mode": "template",
+            "image": "GhostsOfYore",
+            "threshold": 0.8
+          },
+          "validation": "SOURCE_ONLY_NOT_REAL_VERIFIED",
+          "source": "dcc11c18: native/games/wvd/navigation/time_leap.cpp"
+        },
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "GhostsOfYore_zh_hant",
+            "threshold": 0.8,
+            "roi": [
+              150,
+              250,
+              650,
+              900
+            ]
+          },
+          "validation": "SOURCE_VARIANT_PRESENT",
+          "source": "dcc11c18: native/games/wvd/navigation/time_leap.cpp"
+        }
+      }
+    },
+    "wheel.target.triumph": {
+      "label": "Triumph",
+      "category": "诅咒之轮/目标",
+      "role": "position",
+      "variants": {
+        "en": {
+          "condition": {
+            "mode": "template",
+            "image": "Triumph",
+            "threshold": 0.8
+          },
+          "validation": "SOURCE_ONLY_NOT_REAL_VERIFIED",
+          "source": "dcc11c18: native/games/wvd/navigation/time_leap.cpp"
+        },
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "Triumph_zh_hant",
+            "threshold": 0.8,
+            "roi": [
+              150,
+              250,
+              650,
+              900
+            ]
+          },
+          "validation": "SOURCE_VARIANT_PRESENT",
+          "source": "dcc11c18: native/games/wvd/navigation/time_leap.cpp"
+        }
+      }
+    },
+    "wheel.chapter.dhi": {
+      "label": "美魔矿石所在章节",
+      "category": "诅咒之轮/页面与操作",
+      "role": "position",
+      "variants": {
+        "en": {
+          "condition": {
+            "mode": "template",
+            "image": "cursedwheel_dhi",
+            "threshold": 0.8
+          },
+          "validation": "SOURCE_ONLY_NOT_REAL_VERIFIED",
+          "source": "dcc11c18: native/games/wvd/navigation/time_leap.cpp"
+        },
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "cursedwheel_dhi_zh_hant",
+            "threshold": 0.8,
+            "roi": [
+              250,
+              120,
+              400,
+              220
+            ]
+          },
+          "validation": "SOURCE_VARIANT_PRESENT",
+          "source": "dcc11c18: native/games/wvd/navigation/time_leap.cpp"
+        }
+      }
+    },
+    "wheel.chapter.fortress": {
+      "label": "城塞章节",
+      "category": "诅咒之轮/页面与操作",
+      "role": "position",
+      "variants": {
+        "en": {
+          "condition": {
+            "mode": "template",
+            "image": "cursedwheel_impregnableFortress",
+            "threshold": 0.8
+          },
+          "validation": "SOURCE_ONLY_NOT_REAL_VERIFIED",
+          "source": "dcc11c18: native/games/wvd/navigation/time_leap.cpp"
+        },
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "cursedwheel_impregnableFortress_zh_hant",
+            "threshold": 0.8,
+            "roi": [
+              250,
+              120,
+              400,
+              220
+            ]
+          },
+          "validation": "SOURCE_VARIANT_PRESENT",
+          "source": "dcc11c18: native/games/wvd/navigation/time_leap.cpp"
+        }
+      }
+    },
+    "city.ruins.entry": {
+      "label": "荒屋入口图标",
+      "category": "城市/公共入口",
+      "role": "position",
+      "variants": {
+        "shared": {
+          "condition": {
+            "mode": "template",
+            "image": "ruins_icon",
+            "threshold": 0.8,
+            "roi": [
+              700,
+              430,
+              200,
+              300
+            ]
+          },
+          "validation": "SOURCE_VARIANT_PRESENT",
+          "source": "dcc11c18: native/games/wvd/navigation/time_leap.cpp"
+        }
+      }
+    },
+    "wheel.next_tab": {
+      "label": "章节右侧翻页",
+      "category": "诅咒之轮/操作",
+      "role": "position",
+      "variants": {
+        "shared": {
+          "condition": {
+            "mode": "template",
+            "image": "cursedWheelTapRight",
+            "threshold": 0.8
+          },
+          "validation": "SOURCE_VARIANT_PRESENT",
+          "source": "dcc11c18: native/games/wvd/navigation/time_leap.cpp"
+        }
+      }
+    },
+    "game.stable": {
+      "label": "现有 boot_ready 分类（不是具体地点）",
+      "category": "公共/页面分类",
+      "role": "observation",
+      "condition": {
+        "mode": "boot_ready"
+      }
+    },
+    "boot.download.action": {
+      "label": "开始下载按钮",
+      "category": "启动/下载",
+      "role": "position",
+      "variants": {
+        "en": {
+          "condition": {
+            "mode": "template",
+            "image": "startdownload",
+            "threshold": 0.8,
+            "roi": [
+              222,
+              901,
+              465,
+              84
+            ]
+          },
+          "validation": "SOURCE_VARIANT_PRESENT",
+          "source": "dcc11c18: native/games/wvd/navigation/time_leap.cpp"
+        },
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "startdownload_zh_hant",
+            "threshold": 0.86,
+            "roi": [
+              222,
+              901,
+              465,
+              84
+            ]
+          },
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "dcc11c18: native/games/wvd/navigation/time_leap.cpp"
+        }
+      }
+    }
+  }
+}

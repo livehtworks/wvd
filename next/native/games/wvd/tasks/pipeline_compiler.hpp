@@ -18,6 +18,8 @@ struct CompiledWorkflow {
     std::vector<std::string> required_actions;
     std::chrono::milliseconds time_limit{60000};
     recovery::DialoguePolicy dialogue_policy{recovery::DialoguePolicy::Default};
+    // 作者定义和资源选择在编译后封存；不新增执行器。
+    nlohmann::json authoring = nlohmann::json::object();
     void validate() const;
 };
 

@@ -336,7 +336,14 @@ tasks::CompiledWorkflow with_boot_recovery(const tasks::CompiledWorkflow &task, 
     // 正常首段也必须先处理启动页。Task_Entry 常为 DirectHit，放在前面会使 Boot 永远不可达。
     // 非恢复首段不执行 game_restarted，避免把首次进入误记成崩溃/重置策略。
     graph.route("Entry", {boot});
-    return graph.finish();
+    auto result = graph.finish();
+    result.authoring = task.authoring;
+    if (result.authoring.contains("source_paths")) {
+        J renamed = J::object();
+        for (const auto &[name, path] : result.authoring.at("source_paths").items()) renamed["Task_" + name] = path;
+        result.authoring["source_paths"] = std::move(renamed);
+    }
+    return result;
 }
 void register_recovery(runtime::BehaviorRegistry &registry) {
     registry.add_recovery({"wvd.recovery", "1"}, decide);

@@ -13,6 +13,12 @@ next/dist/wvd-next/启动WVD新版.bat
 新版配置和流程保存在 `%LOCALAPPDATA%\WvdNext`，不会覆盖旧 `config.json`、`mod` 或日志。
 具体操作和有限实操结论见 [Windows 功能交付](docs/windows-functional-delivery.md)。
 
+流程编辑器内可把公共步骤/流程块作为调用节点复用：调用参数只影响当前实例，命名插槽用于按顺序
+增加任务专用步骤；“展开 / 编辑公共定义”进入定义后可用“返回调用者”恢复原节点。保存和运行
+使用同一作者图，运行开始时冻结完整引用闭包。当前 12 份公共定义只达到结构验证，既有任务仍走
+原生入口，缺繁中公会资源的流程不会自动回退到英文。详见
+[可组合流程状态](docs/composable-workflow-status.md)。
+
 ## 构建与验证
 
 在仓库根目录执行，Python 3.11+ 仅用于构建/只读盘点，不会 import 旧程序：
@@ -58,6 +64,8 @@ UI 开发可在 `next/web` 执行 `npm run dev`；同源完整验收以原生服
 ## 导航
 
 - [架构与依赖方向](docs/architecture.md)
+- [可组合流程状态](docs/composable-workflow-status.md)
+- [本地工作包收口](docs/composable-workflow-local-closure-20260923.md)
 - [完整迁移基线与差异](docs/migration/README.md)
 - [M1 验收报告](docs/m1-validation.md)
 - [依赖与来源](docs/dependencies.md)
