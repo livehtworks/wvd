@@ -1,6 +1,7 @@
 #include "turn.hpp"
 #include "auto_combat.hpp"
 #include "games/wvd/state.hpp"
+#include "games/wvd/recovery/event_bindings.hpp"
 #include <algorithm>
 #include <map>
 
@@ -15,12 +16,11 @@ J request(J parameters) {
 bool combat_action(maafw::Context &context, const J &p, const J &) {
     if (context.cancelled())
         return false;
-    const auto frame = context.capture();
-    auto confirmation = context.recognize(frame, maafw::parse_recognition_request(p.at("confirmation")));
-    if (confirmation.outcome == contracts::RecognitionOutcome::Error)
-        throw std::runtime_error(confirmation.error_code);
-    if (confirmation.outcome != contracts::RecognitionOutcome::Hit || !confirmation.action_eligible)
-        throw std::runtime_error("COMBAT_CONFIRMATION_MISSING");
+    const auto confirmed = recovery::confirm_with_events(
+        context, p.at("confirmation"), "COMBAT_CONFIRMATION_MISSING");
+    if (!confirmed) return context.event_replan_pending(context.node());
+    const auto &frame = confirmed->frame;
+    const auto &confirmation = confirmed->observation;
     const auto operation = p.at("operation").get<std::string>();
     std::vector<PortraitScore> scores;
     if (operation == "prepare") {

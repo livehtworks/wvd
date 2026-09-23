@@ -6,6 +6,7 @@
 #include <thread>
 
 namespace wvd::runtime {
+class FlowEvents;
 class ExecutionSession {
   public:
     ExecutionSession(SessionDefinition definition, devices::DeviceBackend &backend,
@@ -22,6 +23,7 @@ class ExecutionSession {
     bool running() const { return running_.load(); }
     contracts::SessionResult join();
     contracts::InputCounts counts() const { return gate_.counts(); }
+    nlohmann::json event_status() const;
 
   private:
     void execute() noexcept;
@@ -36,12 +38,13 @@ class ExecutionSession {
     std::size_t unit_index_{};
     devices::InputGate gate_;
     devices::DeviceBackend &backend_;
-    std::atomic<bool> started_{false}, user_stop_{false}, abort_{false}, recovery_{false},
+    std::atomic<bool> started_{false}, user_stop_{false}, abort_{false}, recovery_{false}, external_blocked_{false},
         running_{false};
-    std::mutex mutex_;
+    mutable std::mutex mutex_;
     std::condition_variable cv_;
     bool done_{};
     contracts::SessionResult result_;
+    std::shared_ptr<FlowEvents> flow_events_;
     std::thread worker_;
 };
 } // namespace wvd::runtime

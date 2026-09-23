@@ -1,5 +1,6 @@
 #include "workflow_session.hpp"
 #include "transition_lowering.hpp"
+#include "event_lowering.hpp"
 #include "games/wvd/vision/recognizers.hpp"
 #include "games/wvd/vision/asset_resolver.hpp"
 #include "games/wvd/diagnostics.hpp"
@@ -24,6 +25,7 @@ CompiledWorkflow scoped_stage(const CompiledWorkflow &source, std::size_t index)
     result.terminal = prefix + source.terminal;
     if (!source.checkpoint.empty()) result.checkpoint = prefix + source.checkpoint;
     result.nodes = J::object();
+    result.event_scopes = J::object();
     // 只改编译契约声明的节点引用；不能全局替换字符串，图片和条件参数不是节点名。
     for (const auto &[name, original] : source.nodes.items()) {
         auto node = original;
@@ -43,6 +45,19 @@ CompiledWorkflow scoped_stage(const CompiledWorkflow &source, std::size_t index)
         }
         result.nodes[prefix + name] = std::move(node);
     }
+    for (const auto &[name, original_rules] : source.event_scopes.items()) {
+        auto rules = original_rules;
+        for (auto &rule : rules) {
+            rule["source_node"] = prefix + rule.at("source_node").get<std::string>();
+            if (rule.contains("entry")) rule["entry"] = prefix + rule.at("entry").get<std::string>();
+            if (rule.contains("reset_hit_counts"))
+                for (auto &reset : rule["reset_hit_counts"])
+                    reset = prefix + reset.get<std::string>();
+            if (rule.contains("resume") && rule.at("resume").value("mode", "") == "replan")
+                rule["resume"]["node_id"] = prefix + rule.at("resume").at("node_id").get<std::string>();
+        }
+        result.event_scopes[prefix + name] = std::move(rules);
+    }
     result.validate();
     return result;
 }
@@ -56,20 +71,27 @@ std::vector<runtime::SessionDefinition> publish(const std::vector<CompiledWorkfl
     // 必须在全部组合/命名空间处理之后拆分，运行发布物与哈希采用同一份实际节点。
     std::vector<J> executable_nodes;
     executable_nodes.reserve(workflows.size());
-    for (const auto &stage : workflows)
-        executable_nodes.push_back(lower_input_transitions(stage.nodes, stage.time_limit));
+    std::vector<J> event_scopes;
+    for (const auto &stage : workflows) {
+        auto scopes = stage.event_scopes;
+        executable_nodes.push_back(lower_event_candidates(
+            lower_input_transitions(stage.nodes, stage.time_limit), scopes));
+        event_scopes.push_back(std::move(scopes));
+    }
     if (!destination.is_absolute() || std::filesystem::exists(destination))
         throw std::runtime_error("COMPILE_DESTINATION_EXISTS_OR_INVALID");
     if (!aliases.is_object())
         throw std::runtime_error("COMPILE_ALIASES_INVALID");
     std::vector<runtime::SessionDefinition> sessions;
     bool needs_leap_wait = false;
-    for (const auto &stage : workflows) {
+    for (std::size_t stage_index = 0; stage_index < workflows.size(); ++stage_index) {
+        const auto &stage = workflows.at(stage_index);
         runtime::SessionDefinition session;
         session.entry = stage.entry;
         session.terminal_node = stage.terminal;
         session.checkpoint_node = stage.checkpoint;
         session.time_limit = stage.time_limit;
+        session.event_scopes = event_scopes.at(stage_index);
         session.recognitions = {vision::binding(aliases)};
         const auto dialogue = recovery::dialogue_policy_name(stage.dialogue_policy);
         if (!dialogue.empty()) session.recognitions.front().parameters["dialogue_task"] = dialogue;
@@ -147,6 +169,8 @@ std::vector<runtime::SessionDefinition> publish(const std::vector<CompiledWorkfl
                {"pipeline", executable_nodes.front()},
                {"authoring", workflow.authoring},
                {"input_contract", 2},
+               {"event_contract", workflow.event_scopes.empty() ? 0 : 1},
+               {"event_scopes", event_scopes.front()},
                {"aliases", aliases},
                {"dialogue_task", dialogue},
                {"registry", registry.manifest()}};
@@ -160,6 +184,7 @@ std::vector<runtime::SessionDefinition> publish(const std::vector<CompiledWorkfl
             identity["stages"].push_back({{"kind", stage.kind}, {"entry", stage.entry},
                 {"terminal", stage.terminal}, {"checkpoint", stage.checkpoint}, {"pipeline", executable_nodes.at(i)},
                 {"time_limit_ms", stage.time_limit.count()}, {"required_actions", stage.required_actions},
+                {"event_scopes", event_scopes.at(i)},
                 {"dialogue_task", recovery::dialogue_policy_name(stage.dialogue_policy)},
                 {"authoring", stage.authoring}});
         }

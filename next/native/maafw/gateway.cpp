@@ -4,6 +4,7 @@
 #include "platform/windows/bundle_lease.hpp"
 #include "platform/windows/runtime_files.hpp"
 #include <algorithm>
+#include <string_view>
 #include <thread>
 
 namespace wvd::maafw {
@@ -211,7 +212,10 @@ MaaBool MaaGateway::recognition_callback(MaaContext *native_context, MaaTaskId, 
             *output = {box[0], box[1], box[2], box[3]};
         }
     } catch (const std::exception &error) {
-        result = {{"schema", 1}, {"outcome", "Error"}, {"error", error.what()}};
+        if (std::string_view(error.what()) == "SESSION_CANCELLED" && self.hooks_.cancelled())
+            result = {{"schema", 1}, {"outcome", "NoHit"}, {"target", false}};
+        else
+            result = {{"schema", 1}, {"outcome", "Error"}, {"error", error.what()}};
     } catch (...) {
         result = {{"schema", 1}, {"outcome", "Error"}, {"error", "CUSTOM_RECO_EXCEPTION"}};
     }
@@ -510,6 +514,19 @@ contracts::Observation Context::recognize(const contracts::FrameEnvelope &frame,
 }
 bool Context::current_observation(const contracts::Observation &observation) const {
     return gateway_.gate_ && gateway_.gate_->current_observation(observation);
+}
+contracts::FlowEventResult Context::check_events(const contracts::FrameEnvelope &frame,
+    contracts::FlowEventPhase phase, const std::string &source_node) {
+    if (!gateway_.hooks_.event_check) return {};
+    return gateway_.hooks_.event_check(*this, frame, phase,
+        source_node.empty() ? node_ : source_node);
+}
+bool Context::event_replan_pending(const std::string &source_node) const {
+    return gateway_.hooks_.event_replan_pending &&
+        gateway_.hooks_.event_replan_pending(source_node);
+}
+bool Context::has_event_scope() const {
+    return gateway_.hooks_.event_scope_enabled && gateway_.hooks_.event_scope_enabled(node_);
 }
 ChildResult Context::run_child(const std::string &entry, const nlohmann::json &overrides,
                                bool clone, const std::vector<std::string> &reset_hit_counts) {

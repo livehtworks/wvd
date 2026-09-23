@@ -15,6 +15,8 @@ export interface GraphNode {
   id: string; type?: string; position: { x: number; y: number };
   data: { label: string; node_type: string; parameters: Record<string, unknown> };
   repeat_limit?: number;
+  event_overrides?: Record<string, { enabled?: boolean; arguments?: Record<string, Scalar> }>;
+  resume?: Record<string, import("../../api/types").EventResume>;
 }
 export interface GraphEdge {
   id: string; source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null;
@@ -24,6 +26,7 @@ export interface FlowGraph {
   id: string; name: string; description?: string; revision?: string; entry_node_id?: string;
   nodes: GraphNode[]; edges: GraphEdge[]; interface?: PublicInterface;
   time_limit_ms?: number; resource_locale?: string; [key: string]: unknown;
+  events?: Record<string, import("../../api/types").EventRule>;
 }
 const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
 export function effectiveArguments(fields: PublicParameter[], supplied: Record<string, Scalar> = {}) {

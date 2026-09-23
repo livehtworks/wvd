@@ -1,6 +1,7 @@
 #pragma once
 #include "author_workflow.hpp"
 #include "authoring/document_parameters.hpp"
+#include "authoring/event_policy.hpp"
 #include "authoring/semantic_assets.hpp"
 
 namespace wvd::games::tasks {
@@ -23,23 +24,48 @@ class PublicFlowLibrary {
         authoring::SemanticAssets assets(semantic_catalogue_);
         std::vector<std::string> active;
         std::size_t count{};
-        const auto walk = [&](auto &&self, const J &source, const J &provided, const J &extensions) -> void {
+        const auto walk = [&](auto &&self, const J &source, const J &provided, const J &extensions,
+                              const J &inherited, const std::optional<std::set<std::string>> &allowed) -> void {
             Enter enter(active, source.at("flow").at("id").get<std::string>(), count);
             const auto doc = assets.lower(authoring::instantiate_document(source, provided, extensions), locale);
             validate_author_workflow(doc);
-            const auto child = [&](const J &call) {
+            const auto child = [&](const J &call, const J &scope,
+                                   const std::optional<std::set<std::string>> &nested) {
                 authoring::validate_call(call);
-                self(self, lookup(call), call.value("arguments", J::object()), call.value("extensions", J::object()));
+                self(self, lookup(call), call.value("arguments", J::object()),
+                     call.value("extensions", J::object()), scope, nested);
             };
+            std::set<std::string> observed_handlers;
             for (const auto &node : doc.at("nodes")) {
+                if (node.at("type") == "end") continue;
                 const auto &p = node.at("parameters");
+                const auto scope = authoring::effective_event_policy(inherited, doc, node);
                 if (node.at("type") == "business" && p.value("binding", "") == "task_stage")
                     ids.insert(p.at("task_id").get<std::string>());
-                if (node.at("type") == "call") child(p);
-                if (node.at("type") == "slot") for (const auto &call : p.at("calls")) child(call);
+                if (node.at("type") == "call") child(p, scope, allowed);
+                if (node.at("type") == "slot")
+                    for (const auto &call : p.at("calls")) child(call, scope, allowed);
+                for (const auto &[event_id, rule] : scope.items()) {
+                    if (!rule.value("enabled", false)) continue;
+                    if (allowed && !allowed->contains(event_id)) {
+                        const auto declared = doc.at("execution").value("events", J::object());
+                        const auto overrides = node.value("event_overrides", J::object());
+                        if ((declared.contains(event_id) && declared.at(event_id).value("enabled", false)) ||
+                            (overrides.contains(event_id) && overrides.at(event_id).value("enabled", false)))
+                            authoring::contract_error("EVENT_NESTED_NOT_ALLOWED", event_id);
+                        continue;
+                    }
+                    if (!rule.contains("handler")) continue;
+                    const auto nested_policy = authoring::nested_event_policy(scope, event_id);
+                    const auto &nested = nested_policy.rules;
+                    const auto &permitted = nested_policy.direct;
+                    const auto identity = event_id + rule.at("handler").dump() + nested.dump();
+                    if (observed_handlers.insert(identity).second)
+                        child(rule.at("handler"), nested, permitted);
+                }
             }
         };
-        walk(walk, root, args, J::object());
+        walk(walk, root, args, J::object(), J::object(), std::nullopt);
         return ids;
     }
     AuthorWorkflowCompilation compile(const J &root, AuthorBusinessResolver native,
@@ -49,19 +75,29 @@ class PublicFlowLibrary {
         J used = J::object();
         authoring::SemanticAssets assets(semantic_catalogue_);
         const auto compile_one = [&](auto &&self, const J &source, const J &provided,
-                                      const J &extensions) -> AuthorWorkflowCompilation {
+                                      const J &extensions, const J &inherited,
+                                      const std::optional<std::set<std::string>> &allowed) -> AuthorWorkflowCompilation {
             const auto id = source.at("flow").at("id").get<std::string>();
             Enter enter(active, id, count);
             if (used.contains(id) && used.at(id) != source) authoring::contract_error("FLOW_SNAPSHOT_CONFLICT", id);
             used[id] = source;
+            std::string stage = "instantiate";
+            try {
             auto concrete = authoring::instantiate_document(source, provided, extensions);
+            stage = "semantic_lowering";
             concrete = assets.lower(std::move(concrete), locale);
-            return compile_author_workflow(concrete, native, [&](const J &call) {
+            stage = "node_compile";
+            return compile_author_workflow(concrete, native, {}, [&](const J &call, const J &scope,
+                                                                      const std::optional<std::set<std::string>> &nested) {
                 authoring::validate_call(call);
-                return self(self, lookup(call), call.value("arguments", J::object()), call.value("extensions", J::object()));
-            });
+                return self(self, lookup(call), call.value("arguments", J::object()),
+                            call.value("extensions", J::object()), scope, nested);
+            }, inherited, allowed);
+            } catch (const nlohmann::json::exception &error) {
+                authoring::contract_error("FLOW_JSON_INVALID", id + ":" + stage + ":" + error.what());
+            }
         };
-        auto result = compile_one(compile_one, root, args, J::object());
+        auto result = compile_one(compile_one, root, args, J::object(), J::object(), std::nullopt);
         result.workflow.authoring = {{"schema", 1}, {"format", "public-flow-1"},
             {"root", root.at("flow").at("id")}, {"arguments", args}, {"resource_locale", locale},
             {"documents", used}, {"resources", assets.selections()}, {"source_paths", result.source_paths}};

@@ -41,42 +41,42 @@
       "variants": {
         "shared": {
           "condition": {
-            "mode": "bright_mask",
-            "image": "inn_icon",
-            "threshold": 0.82,
-            "min_brightness": 145,
+            "mode": "template",
+            "image": "inn_icon_shape",
+            "threshold": 0.8,
             "roi": [
-              0,
-              450,
-              220,
-              250
-            ]
+              20,
+              520,
+              200,
+              180
+            ],
+            "grayscale": true
           },
           "validation": "REAL_FRAME_REPORTED",
-          "source": "dcc11c18: native/games/wvd/vision/location_probes.hpp"
+          "source": "native/games/wvd/vision/location_probes.hpp"
         }
       }
     },
     "city.guild.entry": {
-      "label": "公会入口",
+      "label": "冒险者公会入口",
       "category": "城市/公共入口",
       "role": "position",
       "variants": {
         "shared": {
           "condition": {
-            "mode": "bright_mask",
-            "image": "guild_icon",
-            "threshold": 0.82,
-            "min_brightness": 145,
+            "mode": "template",
+            "image": "guild_icon_shape",
+            "threshold": 0.8,
             "roi": [
-              0,
-              650,
-              300,
-              250
-            ]
+              60,
+              700,
+              200,
+              180
+            ],
+            "grayscale": true
           },
           "validation": "REAL_FRAME_REPORTED",
-          "source": "dcc11c18: native/games/wvd/vision/location_probes.hpp"
+          "source": "native/games/wvd/vision/location_probes.hpp"
         }
       }
     },
@@ -87,19 +87,19 @@
       "variants": {
         "shared": {
           "condition": {
-            "mode": "bright_mask",
-            "image": "edge_of_town_icon",
-            "threshold": 0.82,
-            "min_brightness": 145,
+            "mode": "template",
+            "image": "edge_of_town_icon_shape",
+            "threshold": 0.8,
             "roi": [
-              650,
               700,
-              250,
-              250
-            ]
+              750,
+              190,
+              170
+            ],
+            "grayscale": true
           },
           "validation": "REAL_FRAME_REPORTED",
-          "source": "dcc11c18: native/games/wvd/vision/location_probes.hpp"
+          "source": "native/games/wvd/vision/location_probes.hpp"
         }
       }
     },
@@ -116,7 +116,27 @@
           },
           {
             "mode": "semantic",
+            "id": "city.temple.entry"
+          },
+          {
+            "mode": "semantic",
+            "id": "city.blacksmith.entry"
+          },
+          {
+            "mode": "semantic",
+            "id": "city.ruins.entry"
+          },
+          {
+            "mode": "semantic",
             "id": "city.guild.entry"
+          },
+          {
+            "mode": "semantic",
+            "id": "city.ore_merchant.entry"
+          },
+          {
+            "mode": "semantic",
+            "id": "city.item_shop.entry"
           },
           {
             "mode": "semantic",
@@ -488,24 +508,25 @@
       }
     },
     "city.ruins.entry": {
-      "label": "荒屋入口图标",
+      "label": "荒屋入口",
       "category": "城市/公共入口",
       "role": "position",
       "variants": {
         "shared": {
           "condition": {
             "mode": "template",
-            "image": "ruins_icon",
-            "threshold": 0.8,
+            "image": "ruins_icon_shape",
+            "threshold": 0.7,
             "roi": [
-              700,
-              430,
-              200,
-              300
-            ]
+              730,
+              525,
+              170,
+              180
+            ],
+            "grayscale": true
           },
-          "validation": "SOURCE_VARIANT_PRESENT",
-          "source": "dcc11c18: native/games/wvd/navigation/time_leap.cpp"
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "native/games/wvd/vision/location_probes.hpp"
         }
       }
     },
@@ -567,6 +588,965 @@
           },
           "validation": "REAL_FRAME_REPORTED",
           "source": "dcc11c18: native/games/wvd/navigation/time_leap.cpp"
+        }
+      }
+    },
+    "city.temple.entry": {
+      "label": "寺院入口",
+      "category": "城市/公共入口",
+      "role": "position",
+      "variants": {
+        "shared": {
+          "condition": {
+            "mode": "template",
+            "image": "temple_icon_shape",
+            "threshold": 0.75,
+            "roi": [
+              270,
+              390,
+              160,
+              175
+            ],
+            "grayscale": true
+          },
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "native/games/wvd/vision/location_probes.hpp"
+        }
+      }
+    },
+    "city.blacksmith.entry": {
+      "label": "打铁铺入口",
+      "category": "城市/公共入口",
+      "role": "position",
+      "variants": {
+        "shared": {
+          "condition": {
+            "mode": "template",
+            "image": "blacksmith_icon_shape",
+            "threshold": 0.72,
+            "roi": [
+              365,
+              555,
+              180,
+              180
+            ],
+            "grayscale": true
+          },
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "native/games/wvd/vision/location_probes.hpp"
+        }
+      }
+    },
+    "city.ore_merchant.entry": {
+      "label": "矿石商入口",
+      "category": "城市/公共入口",
+      "role": "position",
+      "variants": {
+        "shared": {
+          "condition": {
+            "mode": "template",
+            "image": "ore_merchant_icon_shape",
+            "threshold": 0.78,
+            "roi": [
+              240,
+              745,
+              180,
+              170
+            ],
+            "grayscale": true
+          },
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "native/games/wvd/vision/location_probes.hpp"
+        }
+      }
+    },
+    "city.item_shop.entry": {
+      "label": "道具店入口",
+      "category": "城市/公共入口",
+      "role": "position",
+      "variants": {
+        "shared": {
+          "condition": {
+            "mode": "template",
+            "image": "item_shop_icon_shape",
+            "threshold": 0.72,
+            "roi": [
+              515,
+              710,
+              170,
+              175
+            ],
+            "grayscale": true
+          },
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "native/games/wvd/vision/location_probes.hpp"
+        }
+      }
+    },
+    "inn.stay.option": {
+      "label": "住宿",
+      "category": "旅店/住宿",
+      "role": "position",
+      "variants": {
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "inn_stay_zh_hant",
+            "threshold": 0.8,
+            "roi": [
+              600,
+              665,
+              300,
+              125
+            ]
+          },
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "2026-09-23 MuMu 900x1600 inn screenshot"
+        },
+        "en": {
+          "condition": {
+            "mode": "template",
+            "image": "Stay",
+            "threshold": 0.8
+          },
+          "validation": "SOURCE_VARIANT_PRESENT",
+          "source": "resources/images/Stay.png"
+        }
+      }
+    },
+    "inn.room.stable": {
+      "label": "馬房",
+      "category": "旅店/住宿",
+      "role": "position",
+      "variants": {
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "inn_stable_zh_hant",
+            "threshold": 0.8,
+            "roi": [
+              465,
+              605,
+              235,
+              90
+            ]
+          },
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "2026-09-23 MuMu 900x1600 inn screenshot"
+        }
+      }
+    },
+    "inn.room.standard": {
+      "label": "標準房",
+      "category": "旅店/住宿",
+      "role": "position",
+      "variants": {
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "inn_standard_zh_hant",
+            "threshold": 0.8,
+            "roi": [
+              465,
+              685,
+              235,
+              95
+            ]
+          },
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "2026-09-23 MuMu 900x1600 inn screenshot"
+        }
+      }
+    },
+    "inn.room.deluxe": {
+      "label": "高級房",
+      "category": "旅店/住宿",
+      "role": "position",
+      "variants": {
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "inn_deluxe_zh_hant",
+            "threshold": 0.8,
+            "roi": [
+              465,
+              770,
+              235,
+              95
+            ]
+          },
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "2026-09-23 MuMu 900x1600 inn screenshot"
+        }
+      }
+    },
+    "inn.room.royal": {
+      "label": "豪華房",
+      "category": "旅店/住宿",
+      "role": "position",
+      "variants": {
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "inn_royal_zh_hant",
+            "threshold": 0.8,
+            "roi": [
+              465,
+              855,
+              235,
+              95
+            ]
+          },
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "2026-09-23 MuMu 900x1600 inn screenshot"
+        }
+      }
+    },
+    "inn.room.back": {
+      "label": "返回",
+      "category": "旅店/住宿",
+      "role": "position",
+      "variants": {
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "inn_back_zh_hant",
+            "threshold": 0.8,
+            "roi": [
+              600,
+              930,
+              190,
+              100
+            ]
+          },
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "2026-09-23 MuMu 900x1600 inn screenshot"
+        }
+      }
+    },
+    "outskirts.fire": {
+      "label": "火之魔窟",
+      "category": "郊外/副本选择",
+      "role": "position",
+      "variants": {
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "outskirts_fire_zh_hant",
+            "threshold": 0.8,
+            "roi": [
+              555,
+              210,
+              204,
+              83
+            ]
+          },
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "2026-09-23 MuMu 900x1600 outskirts screenshot: outskirts-list-final.png"
+        }
+      }
+    },
+    "outskirts.wind": {
+      "label": "風之魔窟",
+      "category": "郊外/副本选择",
+      "role": "position",
+      "variants": {
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "outskirts_wind_zh_hant",
+            "threshold": 0.8,
+            "roi": [
+              555,
+              300,
+              204,
+              83
+            ]
+          },
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "2026-09-23 MuMu 900x1600 outskirts screenshot: outskirts-list-final.png"
+        }
+      }
+    },
+    "outskirts.light": {
+      "label": "光之魔窟",
+      "category": "郊外/副本选择",
+      "role": "position",
+      "variants": {
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "outskirts_light_zh_hant",
+            "threshold": 0.8,
+            "roi": [
+              555,
+              390,
+              204,
+              83
+            ]
+          },
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "2026-09-23 MuMu 900x1600 outskirts screenshot: outskirts-list-final.png"
+        }
+      }
+    },
+    "outskirts.earth": {
+      "label": "土之魔窟",
+      "category": "郊外/副本选择",
+      "role": "position",
+      "variants": {
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "outskirts_earth_zh_hant",
+            "threshold": 0.8,
+            "roi": [
+              555,
+              480,
+              204,
+              83
+            ]
+          },
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "2026-09-23 MuMu 900x1600 outskirts screenshot: outskirts-list-final.png"
+        }
+      }
+    },
+    "outskirts.water": {
+      "label": "水之魔窟",
+      "category": "郊外/副本选择",
+      "role": "position",
+      "variants": {
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "outskirts_water_zh_hant",
+            "threshold": 0.8,
+            "roi": [
+              555,
+              570,
+              204,
+              83
+            ]
+          },
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "2026-09-23 MuMu 900x1600 outskirts screenshot: outskirts-list-final.png"
+        }
+      }
+    },
+    "outskirts.resentment": {
+      "label": "怨嗟洞窟",
+      "category": "郊外/副本选择",
+      "role": "position",
+      "variants": {
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "outskirts_resentment_zh_hant",
+            "threshold": 0.8,
+            "roi": [
+              555,
+              660,
+              204,
+              83
+            ]
+          },
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "2026-09-23 MuMu 900x1600 outskirts screenshot: outskirts-list-final.png"
+        }
+      }
+    },
+    "outskirts.abyss": {
+      "label": "初始的奈落",
+      "category": "郊外/副本选择",
+      "role": "position",
+      "variants": {
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "outskirts_abyss_zh_hant",
+            "threshold": 0.8,
+            "roi": [
+              537,
+              750,
+              238,
+              83
+            ]
+          },
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "2026-09-23 MuMu 900x1600 outskirts screenshot: outskirts-list-final.png"
+        }
+      }
+    },
+    "outskirts.separation": {
+      "label": "別離洞窟",
+      "category": "郊外/副本选择",
+      "role": "position",
+      "variants": {
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "outskirts_separation_zh_hant",
+            "threshold": 0.8,
+            "roi": [
+              555,
+              840,
+              204,
+              83
+            ]
+          },
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "2026-09-23 MuMu 900x1600 outskirts screenshot: outskirts-list-final.png"
+        }
+      }
+    },
+    "outskirts.return.to.town": {
+      "label": "回到城鎮",
+      "category": "郊外/副本选择",
+      "role": "position",
+      "variants": {
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "outskirts_return_to_town_zh_hant",
+            "threshold": 0.8,
+            "roi": [
+              555,
+              935,
+              211,
+              89
+            ]
+          },
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "2026-09-23 MuMu 900x1600 outskirts screenshot: outskirts-list-final.png"
+        }
+      }
+    },
+    "outskirts.fire.b1f": {
+      "label": "火之魔窟B1F",
+      "category": "郊外/副本选择",
+      "role": "position",
+      "variants": {
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "outskirts_fire_b1f_zh_hant",
+            "threshold": 0.8,
+            "roi": [
+              528,
+              847,
+              267,
+              73
+            ]
+          },
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "2026-09-23 MuMu 900x1600 outskirts screenshot: outskirts-fire.png"
+        }
+      }
+    },
+    "outskirts.wind.b1f": {
+      "label": "風之魔窟B1F",
+      "category": "郊外/副本选择",
+      "role": "position",
+      "variants": {
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "outskirts_wind_b1f_zh_hant",
+            "threshold": 0.8,
+            "roi": [
+              528,
+              847,
+              267,
+              73
+            ]
+          },
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "2026-09-23 MuMu 900x1600 outskirts screenshot: outskirts-wind.png"
+        }
+      }
+    },
+    "outskirts.light.b1f": {
+      "label": "光之魔窟B1F",
+      "category": "郊外/副本选择",
+      "role": "position",
+      "variants": {
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "outskirts_light_b1f_zh_hant",
+            "threshold": 0.8,
+            "roi": [
+              528,
+              847,
+              267,
+              73
+            ]
+          },
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "2026-09-23 MuMu 900x1600 outskirts screenshot: outskirts-light.png"
+        }
+      }
+    },
+    "outskirts.earth.b1f": {
+      "label": "土之魔窟B1F",
+      "category": "郊外/副本选择",
+      "role": "position",
+      "variants": {
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "outskirts_earth_b1f_zh_hant",
+            "threshold": 0.8,
+            "roi": [
+              528,
+              847,
+              267,
+              73
+            ]
+          },
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "2026-09-23 MuMu 900x1600 outskirts screenshot: outskirts-earth.png"
+        }
+      }
+    },
+    "outskirts.water.b1f": {
+      "label": "水之魔窟B1F",
+      "category": "郊外/副本选择",
+      "role": "position",
+      "variants": {
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "outskirts_water_b1f_zh_hant",
+            "threshold": 0.8,
+            "roi": [
+              528,
+              847,
+              267,
+              73
+            ]
+          },
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "2026-09-23 MuMu 900x1600 outskirts screenshot: outskirts-water.png"
+        }
+      }
+    },
+    "outskirts.resentment.b1f": {
+      "label": "怨嗟洞窟B1F",
+      "category": "郊外/副本选择",
+      "role": "position",
+      "variants": {
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "outskirts_resentment_b1f_zh_hant",
+            "threshold": 0.8,
+            "roi": [
+              528,
+              576,
+              267,
+              73
+            ]
+          },
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "2026-09-23 MuMu 900x1600 outskirts screenshot: outskirts-resentment.png"
+        }
+      }
+    },
+    "outskirts.resentment.b2f": {
+      "label": "怨嗟洞窟B2F",
+      "category": "郊外/副本选择",
+      "role": "position",
+      "variants": {
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "outskirts_resentment_b2f_zh_hant",
+            "threshold": 0.8,
+            "roi": [
+              528,
+              666,
+              267,
+              73
+            ]
+          },
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "2026-09-23 MuMu 900x1600 outskirts screenshot: outskirts-resentment.png"
+        }
+      }
+    },
+    "outskirts.resentment.b3f": {
+      "label": "怨嗟洞窟B3F",
+      "category": "郊外/副本选择",
+      "role": "position",
+      "variants": {
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "outskirts_resentment_b3f_zh_hant",
+            "threshold": 0.8,
+            "roi": [
+              528,
+              756,
+              267,
+              73
+            ]
+          },
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "2026-09-23 MuMu 900x1600 outskirts screenshot: outskirts-resentment.png"
+        }
+      }
+    },
+    "outskirts.resentment.b4f": {
+      "label": "怨嗟洞窟B4F",
+      "category": "郊外/副本选择",
+      "role": "position",
+      "variants": {
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "outskirts_resentment_b4f_zh_hant",
+            "threshold": 0.8,
+            "roi": [
+              528,
+              846,
+              267,
+              73
+            ]
+          },
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "2026-09-23 MuMu 900x1600 outskirts screenshot: outskirts-resentment.png"
+        }
+      }
+    },
+    "outskirts.abyss.entrance": {
+      "label": "初始的奈落-入口-",
+      "category": "郊外/副本选择",
+      "role": "position",
+      "variants": {
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "outskirts_abyss_entrance_zh_hant",
+            "threshold": 0.8,
+            "roi": [
+              498,
+              217,
+              297,
+              72
+            ]
+          },
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "2026-09-23 MuMu 900x1600 outskirts screenshot: outskirts-abyss.png"
+        }
+      }
+    },
+    "outskirts.abyss.b1f": {
+      "label": "B1F-巨坑-",
+      "category": "郊外/副本选择",
+      "role": "position",
+      "variants": {
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "outskirts_abyss_b1f_zh_hant",
+            "threshold": 0.8,
+            "roi": [
+              535,
+              307,
+              260,
+              72
+            ]
+          },
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "2026-09-23 MuMu 900x1600 outskirts screenshot: outskirts-abyss.png"
+        }
+      }
+    },
+    "outskirts.abyss.b2f": {
+      "label": "B2F-聖堂-",
+      "category": "郊外/副本选择",
+      "role": "position",
+      "variants": {
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "outskirts_abyss_b2f_zh_hant",
+            "threshold": 0.8,
+            "roi": [
+              535,
+              398,
+              260,
+              72
+            ]
+          },
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "2026-09-23 MuMu 900x1600 outskirts screenshot: outskirts-abyss.png"
+        }
+      }
+    },
+    "outskirts.abyss.b3f": {
+      "label": "B3F-崩落地帶-",
+      "category": "郊外/副本选择",
+      "role": "position",
+      "variants": {
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "outskirts_abyss_b3f_zh_hant",
+            "threshold": 0.8,
+            "roi": [
+              510,
+              489,
+              285,
+              72
+            ]
+          },
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "2026-09-23 MuMu 900x1600 outskirts screenshot: outskirts-abyss.png"
+        }
+      }
+    },
+    "outskirts.abyss.b4f": {
+      "label": "B4F-迷宮-",
+      "category": "郊外/副本选择",
+      "role": "position",
+      "variants": {
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "outskirts_abyss_b4f_zh_hant",
+            "threshold": 0.8,
+            "roi": [
+              535,
+              579,
+              260,
+              72
+            ]
+          },
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "2026-09-23 MuMu 900x1600 outskirts screenshot: outskirts-abyss.png"
+        }
+      }
+    },
+    "outskirts.abyss.b5f": {
+      "label": "B5F-異形巢穴-",
+      "category": "郊外/副本选择",
+      "role": "position",
+      "variants": {
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "outskirts_abyss_b5f_zh_hant",
+            "threshold": 0.8,
+            "roi": [
+              510,
+              669,
+              285,
+              72
+            ]
+          },
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "2026-09-23 MuMu 900x1600 outskirts screenshot: outskirts-abyss.png"
+        }
+      }
+    },
+    "outskirts.abyss.b7f": {
+      "label": "B7F-逝者之間-",
+      "category": "郊外/副本选择",
+      "role": "position",
+      "variants": {
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "outskirts_abyss_b7f_zh_hant",
+            "threshold": 0.8,
+            "roi": [
+              510,
+              759,
+              285,
+              72
+            ]
+          },
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "2026-09-23 MuMu 900x1600 outskirts screenshot: outskirts-abyss.png"
+        }
+      }
+    },
+    "outskirts.abyss.b8f": {
+      "label": "B8F-最深處-",
+      "category": "郊外/副本选择",
+      "role": "position",
+      "variants": {
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "outskirts_abyss_b8f_zh_hant",
+            "threshold": 0.8,
+            "roi": [
+              525,
+              848,
+              270,
+              73
+            ]
+          },
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "2026-09-23 MuMu 900x1600 outskirts screenshot: outskirts-abyss.png"
+        }
+      }
+    },
+    "outskirts.separation.entrance": {
+      "label": "別離洞窟-入口-",
+      "category": "郊外/副本选择",
+      "role": "position",
+      "variants": {
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "outskirts_separation_entrance_zh_hant",
+            "threshold": 0.8,
+            "roi": [
+              513,
+              759,
+              282,
+              71
+            ]
+          },
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "2026-09-23 MuMu 900x1600 outskirts screenshot: outskirts-separation.png"
+        }
+      }
+    },
+    "outskirts.separation.b2f": {
+      "label": "別離洞窟B2F",
+      "category": "郊外/副本选择",
+      "role": "position",
+      "variants": {
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "outskirts_separation_b2f_zh_hant",
+            "threshold": 0.8,
+            "roi": [
+              530,
+              847,
+              265,
+              73
+            ]
+          },
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "2026-09-23 MuMu 900x1600 outskirts screenshot: outskirts-separation.png"
+        }
+      }
+    },
+    "outskirts.submenu.back": {
+      "label": "返回",
+      "category": "郊外/副本选择",
+      "role": "position",
+      "variants": {
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "outskirts_submenu_back_zh_hant",
+            "threshold": 0.8,
+            "roi": [
+              588,
+              937,
+              142,
+              93
+            ]
+          },
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "2026-09-23 MuMu 900x1600 outskirts screenshot: outskirts-separation.png"
+        }
+      }
+    },
+    "harken.buff.none": {
+      "label": "什麼都不做",
+      "category": "哈肯/页面与操作",
+      "role": "observation",
+      "variants": {
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "harken_buff_none_zh_hant",
+            "threshold": 0.8,
+            "roi": [
+              330,
+              1300,
+              250,
+              140
+            ]
+          },
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "2026-09-24 MuMu 900x1600: temple-harken-check-20260924.png"
+        }
+      }
+    },
+    "harken.buff.info": {
+      "label": "加护选项信息图标",
+      "category": "哈肯/页面与操作",
+      "role": "observation",
+      "variants": {
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "harken_buff_info_zh_hant",
+            "threshold": 0.78,
+            "roi": [
+              615,
+              950,
+              82,
+              82
+            ]
+          },
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "2026-09-24 MuMu 900x1600: temple-harken-check-20260924.png"
+        }
+      }
+    },
+    "harken.floor.return": {
+      "label": "歸還",
+      "category": "哈肯/页面与操作",
+      "role": "position",
+      "variants": {
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "harken_floor_return_zh_hant",
+            "threshold": 0.8,
+            "roi": [
+              340,
+              980,
+              220,
+              110
+            ]
+          },
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "2026-09-24 MuMu 900x1600: temple-harken-buff-first-after-20260924.png"
+        }
+      }
+    },
+    "harken.floor.move": {
+      "label": "移動",
+      "category": "哈肯/页面与操作",
+      "role": "observation",
+      "variants": {
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "harken_floor_move_zh_hant",
+            "threshold": 0.8,
+            "roi": [
+              20,
+              280,
+              130,
+              80
+            ]
+          },
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "2026-09-24 MuMu 900x1600: temple-harken-buff-first-after-20260924.png"
         }
       }
     }

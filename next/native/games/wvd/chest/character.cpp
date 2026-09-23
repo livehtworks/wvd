@@ -1,5 +1,6 @@
 #include "chest.hpp"
 #include "games/wvd/state.hpp"
+#include "games/wvd/recovery/event_bindings.hpp"
 
 namespace wvd::games::chest {
 namespace {
@@ -7,12 +8,11 @@ using J = nlohmann::json;
 bool prepare_character(maafw::Context &context, const J &parameters, const J &) {
     if (context.cancelled())
         return false;
-    const auto frame = context.capture();
-    const auto scene = context.recognize(frame, maafw::parse_recognition_request(parameters.at("confirmation")));
-    if (scene.outcome == contracts::RecognitionOutcome::Error)
-        throw std::runtime_error(scene.error_code);
-    if (scene.outcome != contracts::RecognitionOutcome::Hit || !scene.action_eligible)
-        throw std::runtime_error("CHEST_SELECTION_SCENE_MISSING");
+    const auto confirmed = recovery::confirm_with_events(
+        context, parameters.at("confirmation"), "CHEST_SELECTION_SCENE_MISSING");
+    if (!confirmed) return context.event_replan_pending(context.node());
+    const auto &frame = confirmed->frame;
+    const auto &scene = confirmed->observation;
     std::array<bool, 6> fear{};
     for (unsigned i = 0; i < fear.size(); ++i) {
         if (context.cancelled())

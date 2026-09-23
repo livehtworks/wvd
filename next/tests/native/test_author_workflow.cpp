@@ -1,4 +1,7 @@
 #include "games/wvd/tasks/author_workflow.hpp"
+#include "games/wvd/tasks/event_lowering.hpp"
+#include "games/wvd/tasks/public_flow_library.hpp"
+#include "games/wvd/tasks/transition_lowering.hpp"
 #include "platform/windows/runtime_files.hpp"
 #include "storage/workflow_repository.hpp"
 
@@ -192,6 +195,25 @@ void full_business_child_cases() {
     check(resolved, "full chest resolver not called");
 }
 
+void slot_call_limit_case() {
+    auto document = workflow();
+    for (auto &node : document["nodes"])
+        if (node.at("id") == "wait") {
+            node["type"] = "slot";
+            node["parameters"] = {{"name", "extra"}, {"calls", J::array({J{{"flow_id", "shared"}}})}};
+            node["repeat_limit"] = 6;
+        }
+    const auto compiled = wvd::games::tasks::compile_author_workflow(document, {}, [](const J &) {
+        wvd::games::tasks::PipelineCompiler child("test.shared");
+        child.route("Entry", {"Terminal"});
+        return wvd::games::tasks::AuthorWorkflowCompilation{child.finish()};
+    });
+    check(compiled.workflow.nodes.at("Author_wait_Call0").at("max_hit") == 6,
+          "slot call inherits six-hit limit");
+    check(compiled.workflow.nodes.at("Author_wait").at("max_hit") == 6,
+          "slot route preserves its six-hit limit");
+}
+
 void validation_cases() {
     auto success_only = workflow();
     success_only["edges"].erase(
@@ -279,6 +301,110 @@ void repository_case() {
     std::filesystem::remove_all(root, error);
     check(!error, "cleanup");
 }
+
+void event_compilation_case() {
+    std::string stage = "prepare";
+    try {
+    auto root = workflow();
+    auto handler = workflow();
+    handler["flow"]["id"] = "handle_intrusion";
+    root["execution"]["events"] = {
+        {"intrusion", {{"enabled", true}, {"class", "overlay"}, {"priority", 10},
+                       {"detect", condition("dungFlag")},
+                       {"handler", {{"flow_id", "handle_intrusion"}, {"arguments", J::object()},
+                                    {"extensions", J::object()}}},
+                       {"resume", {{"mode", "reobserve"}}}, {"allow_nested", J::array()}}}
+    };
+    check(root.at("execution").at("events").is_object(), "event rules object");
+    check(root.at("execution").at("events").at("intrusion").at("resume").is_object(), "event resume object");
+    check(root.at("execution").at("events").at("intrusion").at("detect").is_object(), "event detect source");
+    wvd::authoring::SemanticAssets event_assets;
+    auto lowered_root = event_assets.lower(root, "en");
+    check(lowered_root.at("execution").at("events").at("intrusion").at("detect").is_object(),
+          "event detect lowered");
+    const wvd::games::tasks::PublicFlowLibrary library({{"handle_intrusion", handler}});
+    stage = "compile";
+    const auto compiled = library.compile(root, {}, J::object(), "en");
+    check(compiled.workflow.event_scopes.contains("Author_click"), "action event scope");
+    check(compiled.workflow.event_scopes.contains("Entry"), "entry event scope");
+    check(compiled.workflow.authoring.at("documents").contains("handle_intrusion"),
+          "event handler frozen in revision");
+    stage = "lower_input";
+    auto lowered = wvd::games::tasks::lower_input_transitions(compiled.workflow.nodes,
+        compiled.workflow.time_limit);
+    auto scopes = compiled.workflow.event_scopes;
+    stage = "lower_events";
+    lowered = wvd::games::tasks::lower_event_candidates(lowered, scopes);
+    check(lowered.at("Entry").at("next").size() > 1, "entry event candidate");
+    check(lowered.contains("__wvd_observe__Author_click"), "transition observer retained");
+    bool found_handler = false;
+    for (const auto &[name, node] : lowered.items())
+        if (name.starts_with("__wvd_event_") && node.value("custom_action", "") == "DispatchEvent")
+            found_handler = true;
+    check(found_handler, "Maa event candidate wired");
+    root["execution"]["events"]["intrusion"]["resume"] =
+        {{"mode", "replan"}, {"node_id", "wait"}, {"guard", condition("dungFlag")}};
+    const auto replanned = library.compile(root, {}, J::object(), "en");
+    auto replan_scopes = replanned.workflow.event_scopes;
+    auto replan_nodes = wvd::games::tasks::lower_input_transitions(
+        replanned.workflow.nodes, replanned.workflow.time_limit);
+    replan_nodes = wvd::games::tasks::lower_event_candidates(replan_nodes, replan_scopes);
+    const auto &observer_next = replan_nodes.at("__wvd_observe__Author_click").at("next");
+    check(!observer_next.empty() &&
+          replan_nodes.at(observer_next.at(0).get<std::string>()).value("custom_action", "") ==
+              "ConsumeEventRoute", "input observer routes before normal successor");
+    check(replan_nodes.at(observer_next.at(0).get<std::string>()).at("next") ==
+          J::array({"Author_wait"}), "replan target is explicit");
+    } catch (const std::exception &error) {
+        throw std::runtime_error("event_compilation:" + stage + ":" + error.what());
+    }
+}
+
+void event_preflight_case() {
+    auto root = workflow();
+    auto handler = workflow();
+    handler["flow"]["id"] = "event_handler";
+    root["execution"]["events"] = {{"maintenance", {
+        {"enabled", false}, {"class", "overlay"}, {"priority", 100},
+        {"detect", {{"mode", "semantic"}, {"id", "event.maintenance.prompt"}}},
+        {"handler", {{"flow_id", "event_handler"}}},
+        {"resume", {{"mode", "reobserve"}}}
+    }}};
+    J resources{{"schema", 1}, {"resources", {{"event.maintenance.prompt", {
+        {"role", "observation"}, {"variants", J::object()},
+        {"validation", "MISSING_REAL_RECIPE"}
+    }}}}};
+    const wvd::games::tasks::PublicFlowLibrary library({{"event_handler", handler}}, resources);
+    check(library.task_profiles(root, J::object(), "zh-Hant").empty(),
+          "disabled missing event does not block preflight");
+    auto overridden = root;
+    overridden["nodes"][0]["event_overrides"] = {{"maintenance", {{"enabled", false}}}};
+    const auto effective = wvd::authoring::effective_event_policy(J::object(), overridden,
+        overridden.at("nodes").at(0));
+    check(effective.at("maintenance").at("enabled") == false, "explicit false override retained");
+    root["execution"]["events"]["maintenance"]["enabled"] = true;
+    rejects([&] { (void)library.task_profiles(root, J::object(), "zh-Hant"); },
+            "EVENT_DETECT_UNAVAILABLE:maintenance:zh-Hant:detect:SEMANTIC_RECIPE_MISSING");
+
+    const auto directory = std::filesystem::temp_directory_path() /
+        ("wvd-event-references-" + wvd::platform::unique_id());
+    try {
+        wvd::storage::WorkflowRepository repository(directory);
+        const auto saved_handler = repository.create(handler);
+        root["execution"]["events"]["maintenance"]["enabled"] = false;
+        const auto saved_root = repository.create(root);
+        check(repository.snapshot_closure(saved_root).contains("event_handler"),
+              "disabled event handler frozen as dependency");
+        rejects([&] { repository.erase("event_handler", saved_handler.at("revision")); },
+                "WORKFLOW_STILL_REFERENCED:short_flow");
+    } catch (...) {
+        std::error_code ignored;
+        std::filesystem::remove_all(directory, ignored);
+        throw;
+    }
+    std::error_code ignored;
+    std::filesystem::remove_all(directory, ignored);
+}
 } // namespace
 
 int main() {
@@ -286,8 +412,11 @@ int main() {
         compiler_case();
         ocr_and_offset_cases();
         full_business_child_cases();
+        slot_call_limit_case();
         validation_cases();
         repository_case();
+        event_compilation_case();
+        event_preflight_case();
         std::cout << "W03_AUTHOR_WORKFLOW_PASS\n";
         return 0;
     } catch (const std::exception &error) {

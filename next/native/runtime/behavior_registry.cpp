@@ -19,7 +19,8 @@ void binding_valid(const contracts::BehaviorBinding &binding) {
 }
 const std::set<std::string> reserved{"RootTerminal", "RunChild", "RequireRecovery", "GuardedAction",
                                      "BusinessCheckpoint", "CancelableWait", "AwaitTransition",
-                                     "BeginObservationPhase", "EndObservationPhase"};
+                                     "BeginObservationPhase", "EndObservationPhase", "DispatchEvent",
+                                     "ConsumeEventRoute"};
 } // namespace
 BehaviorRegistry::BehaviorRegistry(std::string revision) : revision_(std::move(revision)) {
     if (revision_.empty())
@@ -184,6 +185,7 @@ J session_definition_json(const SessionDefinition &definition, bool include_file
              {"checkpoint", definition.checkpoint_node},
              {"time_limit_ms", definition.time_limit.count()},
              {"stop_timeout_ms", definition.stop_timeout.count()},
+             {"event_contract", definition.event_scopes.empty() ? 0 : 1},
              {"custom_actions", actions}};
     result["custom_recognitions"] = J::array();
     if (definition.lifecycle)

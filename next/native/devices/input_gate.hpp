@@ -3,6 +3,8 @@
 #include "storage/run_store.hpp"
 #include <atomic>
 #include <optional>
+#include <thread>
+#include <vector>
 
 namespace wvd::devices {
 class InputGate {
@@ -24,6 +26,12 @@ class InputGate {
     bool confirm_transition(const contracts::SubmittedInput &receipt,
                             const contracts::Observation &observation);
     bool has_pending_submission() const;
+    std::uint64_t begin_event_scope(std::int64_t parent_task, const std::string &event_id,
+                                    const std::set<std::string> &handler_nodes);
+    void end_event_scope(std::uint64_t token);
+    std::optional<contracts::SubmittedInput> settle_event_replan(
+        std::int64_t parent_task, const contracts::Observation &guard);
+    std::size_t event_depth() const;
     void begin_observation_phase(std::int64_t task_id, const std::string &phase,
                                  std::chrono::milliseconds budget);
     void end_observation_phase(std::int64_t task_id, const std::string &phase);
@@ -70,6 +78,21 @@ class InputGate {
     std::string application_, scene_;
     std::optional<contracts::ActionIntent> permit_;
     std::optional<contracts::SubmittedInput> submission_;
+    struct EventScope {
+        std::uint64_t token{};
+        std::int64_t parent_task{};
+        std::string event_id;
+        std::set<std::string> handler_nodes;
+        std::optional<contracts::SubmittedInput> receipt;
+        bool receipt_interrupted{};
+        std::chrono::steady_clock::time_point entered_at;
+        std::set<std::pair<std::int64_t, std::string>> paused_phases;
+        std::thread::id owner;
+    };
+    std::vector<EventScope> event_scopes_;
+    std::uint64_t next_event_token_{};
+    bool submission_interrupted_{};
+    std::chrono::steady_clock::time_point resume_after_{};
     // 嵌套子流程继承当前活动阶段最早截止时间；循环入口不重新开始计时。
     std::map<std::pair<std::int64_t, std::string>, std::chrono::steady_clock::time_point> observation_phases_;
     contracts::InputCounts counts_;

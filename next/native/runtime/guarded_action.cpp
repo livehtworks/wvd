@@ -50,13 +50,43 @@ bool GuardedAction::execute(maafw::Context &context, devices::InputGate &gate,
     try {
         if (p.value("input_contract", 0) != 2)
             throw std::runtime_error("INPUT_PIPELINE_REPUBLISH_REQUIRED");
+        for (;;) {
+        if (context.cancelled()) return false;
         frame = context.capture();
+        const auto overlay = context.check_events(frame, FlowEventPhase::Overlay);
+        if (overlay.outcome == FlowEventOutcome::ExternalBlocked ||
+            overlay.outcome == FlowEventOutcome::Cancelled) return false;
+        if (overlay.outcome == FlowEventOutcome::Replan) return true;
+        if (overlay.outcome == FlowEventOutcome::Handled || overlay.outcome == FlowEventOutcome::Reobserve) {
+            if (overlay.outcome == FlowEventOutcome::Reobserve) std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            continue;
+        }
         auto scene =
             context.recognize(frame, maafw::parse_recognition_request(p.at("scene_recognition")));
+        if (scene.outcome == RecognitionOutcome::NoHit) {
+            const auto extra = context.check_events(frame, FlowEventPhase::Encounter);
+            if (extra.outcome == FlowEventOutcome::ExternalBlocked ||
+                extra.outcome == FlowEventOutcome::Cancelled) return false;
+            if (extra.outcome == FlowEventOutcome::Replan) return true;
+            if (extra.outcome == FlowEventOutcome::Handled || extra.outcome == FlowEventOutcome::Reobserve) {
+                if (extra.outcome == FlowEventOutcome::Reobserve) std::this_thread::sleep_for(std::chrono::milliseconds(50));
+                continue;
+            }
+        }
         require_hit(scene, "SCENE_NOT_FOUND");
         auto target = p.at("target_recognition") == p.at("scene_recognition")
             ? scene
             : context.recognize(frame, maafw::parse_recognition_request(p.at("target_recognition")));
+        if (target.outcome == RecognitionOutcome::NoHit) {
+            const auto extra = context.check_events(frame, FlowEventPhase::Encounter);
+            if (extra.outcome == FlowEventOutcome::ExternalBlocked ||
+                extra.outcome == FlowEventOutcome::Cancelled) return false;
+            if (extra.outcome == FlowEventOutcome::Replan) return true;
+            if (extra.outcome == FlowEventOutcome::Handled || extra.outcome == FlowEventOutcome::Reobserve) {
+                if (extra.outcome == FlowEventOutcome::Reobserve) std::this_thread::sleep_for(std::chrono::milliseconds(50));
+                continue;
+            }
+        }
         require_hit(target, "TARGET_NOT_FOUND");
         if (!target.action_eligible)
             throw std::runtime_error("TARGET_REQUIRES_CONFIRMATION");
@@ -148,6 +178,7 @@ bool GuardedAction::execute(maafw::Context &context, devices::InputGate &gate,
              {"submitted_at_ns", std::chrono::duration_cast<std::chrono::nanoseconds>(receipt.submitted_at.time_since_epoch()).count()}});
         // 这里只提交一次输入。转场由后继 AwaitTransition 持有，绝不在此等待网络/页面。
         return !context.cancelled();
+        }
     } catch (const std::exception &error) {
         // Permit先随异常展开撤销；关门后才同步写盘，绝不延长输入许可的寿命。
         gate.close();
@@ -175,6 +206,7 @@ bool GuardedAction::await_transition(maafw::Context &context, devices::InputGate
         if (p.value("input_contract", 0) != 2)
             throw std::runtime_error("TRANSITION_CONTRACT_INVALID");
         const auto source = p.at("source_node").get<std::string>();
+        if (context.event_replan_pending(source)) return true;
         const auto request = maafw::parse_recognition_request(p.at("postcondition"));
         const auto receipt = gate.pending_submission(source, context.task_id(), p.at("postcondition").dump());
         const auto budget = p.at("observation_budget_ms").get<std::int64_t>();
@@ -184,8 +216,8 @@ bool GuardedAction::await_transition(maafw::Context &context, devices::InputGate
             interval < 10 || interval > 10000 || delay >= budget)
             throw std::runtime_error("TRANSITION_BUDGET_INVALID");
         // 转场总预算从输入完成开始。识别已取得的有效结果不再套输入寿命。
-        const auto deadline = std::min(receipt.submitted_at + std::chrono::milliseconds(budget),
-                                       gate.observation_deadline());
+        auto deadline = std::min(receipt.submitted_at + std::chrono::milliseconds(budget),
+                                 gate.observation_deadline());
         auto cancellable_wait = [&](Clock::time_point until) {
             while (!context.cancelled() && Clock::now() < until)
                 std::this_thread::sleep_for(std::min(25ms,
@@ -197,6 +229,16 @@ bool GuardedAction::await_transition(maafw::Context &context, devices::InputGate
             {{"intent", receipt.intent_id}, {"source_node", source}, {"budget_ms", budget}});
         while (!context.cancelled() && Clock::now() < deadline) {
             last = context.capture();
+            const auto overlay = context.check_events(*last, FlowEventPhase::Overlay, source);
+            if (overlay.outcome == FlowEventOutcome::ExternalBlocked ||
+                overlay.outcome == FlowEventOutcome::Cancelled) return false;
+            if (overlay.outcome == FlowEventOutcome::Replan) return true;
+            if (overlay.outcome == FlowEventOutcome::Handled || overlay.outcome == FlowEventOutcome::Reobserve) {
+                if (overlay.outcome == FlowEventOutcome::Handled)
+                    deadline = std::min(deadline + overlay.elapsed, gate.observation_deadline());
+                else std::this_thread::sleep_for(50ms);
+                continue;
+            }
             const auto observed = context.recognize(*last, request);
             if (context.cancelled()) return false;
             if (observed.outcome == contracts::RecognitionOutcome::Error)
@@ -208,6 +250,16 @@ bool GuardedAction::await_transition(maafw::Context &context, devices::InputGate
                     {{"intent", receipt.intent_id}, {"source_node", source},
                      {"frame_id", observed.basis.frame_id}, {"business_confirmed", false}});
                 return true;
+            }
+            const auto extra = context.check_events(*last, FlowEventPhase::Encounter, source);
+            if (extra.outcome == FlowEventOutcome::ExternalBlocked ||
+                extra.outcome == FlowEventOutcome::Cancelled) return false;
+            if (extra.outcome == FlowEventOutcome::Replan) return true;
+            if (extra.outcome == FlowEventOutcome::Handled || extra.outcome == FlowEventOutcome::Reobserve) {
+                if (extra.outcome == FlowEventOutcome::Handled)
+                    deadline = std::min(deadline + extra.elapsed, gate.observation_deadline());
+                else std::this_thread::sleep_for(50ms);
+                continue;
             }
             if (!cancellable_wait(std::min(deadline, Clock::now() + std::chrono::milliseconds(interval))))
                 return false;

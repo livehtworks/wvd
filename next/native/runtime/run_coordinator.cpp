@@ -33,6 +33,7 @@ nlohmann::json frozen(const RunDefinition &d, const BehaviorRegistry &registry,
          {"event_capacity", capacity}});
     result["state_factory"] = d.state_factory ? binding_json(*d.state_factory) : J(nullptr);
     result["max_business_units"] = d.max_business_units;
+    result["total_time_limit_ms"] = d.total_time_limit ? J(d.total_time_limit->count()) : J(nullptr);
     result["continuation_units"] = J::array();
     for (const auto &unit : d.continuation_units)
         result["continuation_units"].push_back(session_definition_json(unit));
@@ -77,7 +78,8 @@ void RunCoordinator::validate(const RunDefinition &d, const devices::DeviceBacke
         p.pack_revision != d.initial.bundle.revision || p.recognition_size.width <= 0 ||
         p.recognition_size.height <= 0 || p.max_frame_age < 0ms || d.initial.entry.empty() ||
         d.initial.terminal_node.empty() || d.initial.time_limit <= 0ms ||
-        d.initial.stop_timeout <= 0ms || d.recovery_limit > 16)
+        d.initial.stop_timeout <= 0ms || d.recovery_limit > 16 ||
+        (d.total_time_limit && *d.total_time_limit <= 0ms))
         throw std::runtime_error("RUN_DEFINITION_INVALID");
     registry_->validate(d.initial);
     if (d.initial.lifecycle) {
@@ -145,7 +147,7 @@ RunSnapshot RunCoordinator::start(RunDefinition definition,
     store_ = std::move(store);
     journal_ = std::move(journal);
     last_request_ = definition.request_id;
-    snapshot_ = {id, 1, RunState::Preparing, "", false, false, 0, {}};
+    snapshot_ = {id, 1, RunState::Preparing, "", "", false, false, 0, {}};
     requests_.emplace(last_request_, RequestRecord{std::move(immutable), snapshot_});
     stop_ = false;
     active_ = true;
@@ -219,6 +221,7 @@ RunSnapshot RunCoordinator::snapshot() const {
         result.inputs.rejected += current.rejected;
         result.inputs.backend_called += current.backend_called;
         result.inputs.cleanup_called += current.cleanup_called;
+        result.active_event = session_->event_status();
     }
     return result;
 }
@@ -243,7 +246,8 @@ std::filesystem::path RunCoordinator::run_directory() const {
     return store_ ? store_->directory() : std::filesystem::path{};
 }
 void RunCoordinator::wait_session(const std::shared_ptr<ExecutionSession> &session,
-                                  const SessionDefinition &definition, bool report_events) {
+                                  const SessionDefinition &definition, bool report_events,
+                                  std::optional<std::chrono::steady_clock::time_point> total_deadline) {
     const auto started = std::chrono::steady_clock::now();
     bool timeout_reported = false;
     while (!session->wait_for(5ms)) {
@@ -253,12 +257,13 @@ void RunCoordinator::wait_session(const std::shared_ptr<ExecutionSession> &sessi
             std::lock_guard lock(mutex_);
             generation = snapshot_.generation;
             const auto now = std::chrono::steady_clock::now();
-            if (!stop_ && now - started > definition.time_limit) {
+            const bool total_expired = total_deadline && now >= *total_deadline;
+            if (!stop_ && (total_expired || now - started > definition.time_limit)) {
                 stop_ = true;
                 stopped_at_ = now;
                 session->request_stop();
                 if (snapshot_.reason.empty())
-                    snapshot_.reason = "SESSION_TIME_LIMIT";
+                    snapshot_.reason = total_expired ? "RUN_TIME_LIMIT" : "SESSION_TIME_LIMIT";
                 snapshot_.state = RunState::StopRequested;
                 deadline = true;
             }
@@ -300,9 +305,11 @@ void RunCoordinator::collect_session(const std::shared_ptr<ExecutionSession> &se
             snapshot_.inputs.cleanup_called += result.inputs.cleanup_called;
             collected_generation_ = snapshot_.generation;
             last_result_ = result;
+            if (!result.outcome_category.empty()) snapshot_.outcome_category = result.outcome_category;
             snapshot_.engine_status = result.engine_status;
             snapshot_.sessions.push_back(
                 {{"generation", snapshot_.generation},
+                 {"end", static_cast<int>(result.end)},
                  {"definition", session_definition_json(current_definition_, false)},
                  {"engine_status", result.engine_status},
                  {"reason", result.reason},
@@ -330,6 +337,9 @@ void RunCoordinator::collect_session(const std::shared_ptr<ExecutionSession> &se
 void RunCoordinator::drive(RunDefinition definition,
                            std::shared_ptr<devices::DeviceBackend> backend) noexcept {
     try {
+        const auto total_deadline = definition.total_time_limit
+            ? std::optional(std::chrono::steady_clock::now() + *definition.total_time_limit)
+            : std::nullopt;
         auto next = definition.initial;
         std::size_t recovered = 0;
         std::size_t unit_index = 0;
@@ -340,6 +350,14 @@ void RunCoordinator::drive(RunDefinition definition,
         while (true) {
             if (stop_)
                 break;
+            if (total_deadline && std::chrono::steady_clock::now() >= *total_deadline) {
+                std::lock_guard lock(mutex_);
+                stop_ = true;
+                stopped_at_ = std::chrono::steady_clock::now();
+                if (snapshot_.reason.empty()) snapshot_.reason = "RUN_TIME_LIMIT";
+                snapshot_.state = RunState::StopRequested;
+                break;
+            }
             if (business_)
                 business_->enter_segment(boundary, snapshot().generation, unit_index);
             auto policy = definition.policy;
@@ -357,7 +375,7 @@ void RunCoordinator::drive(RunDefinition definition,
                 // start 只创建工作线程，不等待 SDK。与 request_stop 同锁建立唯一先后顺序。
                 session->start();
             }
-            wait_session(session, next, true);
+            wait_session(session, next, true, total_deadline);
             collect_session(session, definition.recover.has_value());
             journal_->emit(snapshot().generation, "session.quiescent", {{"quiescent", true}}, true);
             store_->save_events(*journal_);
@@ -456,9 +474,12 @@ void RunCoordinator::finish() noexcept {
             candidate.reason = "USER_STOP";
         } else if (last_result_.end == SessionEnd::Completed)
             candidate.state = RunState::Completed;
-        else if (last_result_.end == SessionEnd::RecoveryRequired) {
+        else if (last_result_.end == SessionEnd::RecoveryRequired ||
+                 last_result_.end == SessionEnd::ExternalBlocked) {
             candidate.state = RunState::Interrupted;
             candidate.reason = last_result_.reason.empty() ? "RECOVERY_REQUIRED" : last_result_.reason;
+            if (last_result_.end == SessionEnd::ExternalBlocked)
+                candidate.outcome_category = "external_blocked";
         } else {
             candidate.state = RunState::Failed;
             candidate.reason = last_result_.reason;

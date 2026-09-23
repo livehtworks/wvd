@@ -7,12 +7,14 @@ import {
   ArrowLeft, Beaker, CircleStop, Copy, GitBranch, Play, Plus, Redo2, RefreshCw, Save, Trash2, Undo2,
 } from "@lucide/vue";
 import { formatApiError, probeRecognition } from "../api/client";
-import type { JsonObject, RecognitionProbeResult, WorkflowEdge, WorkflowNode } from "../api/types";
+import type { EventResume, EventRule, JsonObject, RecognitionProbeResult, WorkflowEdge, WorkflowNode } from "../api/types";
 import { useWorkflowEditor } from "../stores/useWorkflowEditor";
 import FlowCallInspector from "../features/authoring/FlowCallInspector.vue";
 import DefinitionInterfaceEditor from "../features/authoring/DefinitionInterfaceEditor.vue";
 import SlotInspector from "../features/authoring/SlotInspector.vue";
 import ConditionEditor from "../features/authoring/ConditionEditor.vue";
+import EventPolicyPanel from "../features/authoring/EventPolicyPanel.vue";
+import ArgumentFields from "../features/authoring/ArgumentFields.vue";
 import type { FlowCall, PublicInterface } from "../features/authoring/flowModel";
 
 const state = useWorkflowEditor();
@@ -229,12 +231,45 @@ function optionalBudget(name:string,event:Event){
  if(raw==='')delete state.selectedNode.data.parameters[name];else state.selectedNode.data.parameters[name]=Number(raw);
 }
 function rootBudget(event:Event){if(state.current){state.checkpoint();state.current.time_limit_ms=Number((event.target as HTMLInputElement).value);}}
+function eventsChanged(value:Record<string,EventRule>){
+ if(!state.current)return;
+ state.checkpoint();state.current.events=value;
+ for(const node of state.current.nodes){
+  for(const key of Object.keys(node.event_overrides??{}))if(!(key in value))delete node.event_overrides?.[key];
+  for(const key of Object.keys(node.resume??{}))if(!(key in value))delete node.resume?.[key];
+  if(node.event_overrides && !Object.keys(node.event_overrides).length)delete node.event_overrides;
+  if(node.resume && !Object.keys(node.resume).length)delete node.resume;
+ }
+}
+function setNodeEvent(id:string,value:"inherit"|"enabled"|"disabled"){
+ if(!state.selectedNode)return;state.checkpoint();
+ if(value==="inherit")delete state.selectedNode.event_overrides?.[id];
+ else{state.selectedNode.event_overrides??={};state.selectedNode.event_overrides[id]={...state.selectedNode.event_overrides[id],enabled:value==="enabled"};}
+ if(state.selectedNode.event_overrides && !Object.keys(state.selectedNode.event_overrides).length)delete state.selectedNode.event_overrides;
+}
+function setNodeEventArguments(id:string,args:Record<string,string|number|boolean>){
+ if(!state.selectedNode)return;state.checkpoint();state.selectedNode.event_overrides??={};
+ state.selectedNode.event_overrides[id]={...state.selectedNode.event_overrides[id],arguments:args};
+}
+function setNodeEventResume(id:string,mode:"inherit"|EventResume["mode"]){
+ if(!state.selectedNode)return;state.checkpoint();
+ if(mode==="inherit")delete state.selectedNode.resume?.[id];
+ else{state.selectedNode.resume??={};state.selectedNode.resume[id]=mode==="replan"
+  ? {mode,node_id:state.current?.nodes.find(node=>node.data.node_type!=="end")?.id??"",guard:{mode:"semantic",id:""}}
+  : {mode:"reobserve"};}
+ if(state.selectedNode.resume && !Object.keys(state.selectedNode.resume).length)delete state.selectedNode.resume;
+}
+function patchNodeEventResume(id:string,patch:Partial<EventResume>){
+ if(!state.selectedNode?.resume?.[id])return;state.checkpoint();
+ state.selectedNode.resume[id]={...state.selectedNode.resume[id],...patch};
+}
 function edgeLabel(edge: WorkflowEdge) { return `${edge.data?.kind ?? "sequence"} · ${edge.data?.order ?? 0}`; }
 </script>
 
 <template>
   <main class="workflow-page">
     <section class="notice" aria-label="流程运行状态" role="status">{{ state.runLabel }}</section>
+    <section v-if="state.run?.active_event" class="notice" role="status">{{ state.run.active_event.path?.map(item => item.event_id).join(' → ') ?? state.run.active_event.event_id }} · 原步骤 {{ state.run.suspended_step?.node_id ?? state.run.active_event.source_node }} · {{ state.run.active_event.resume.mode }}</section>
     <div v-if="state.runError" class="notice error" role="alert">{{ state.runError }}</div>
     <nav v-if="state.run?.node_path?.length" aria-label="运行调用路径"><button v-for="(part,i) in state.run.node_path" :key="i" type="button" @click="state.openDefinition(part.flow_id,part.node_id)">{{part.flow_id}} / {{part.node_id}}</button></nav>
     <header class="editor-toolbar">
@@ -270,6 +305,10 @@ function edgeLabel(edge: WorkflowEdge) { return `${edge.data?.kind ?? "sequence"
         <p v-else class="empty-state">目录未返回可编排节点</p>
         <label v-if="state.current" class="field"><span>本次根运行总预算（ms）</span><input type="number" min="1" max="1800000" :value="state.current.time_limit_ms??60000" @change="rootBudget" /></label>
         <DefinitionInterfaceEditor v-if="state.current" :model-value="state.current.interface" :nodes="state.current.nodes" @update:model-value="interfaceChanged" />
+        <EventPolicyPanel v-if="state.current" :model-value="state.current.events"
+          :flows="state.workflows" :current-flow-id="state.current.id" :nodes="state.current.nodes"
+          :templates="state.catalog.templates" :resources="publicResources" :recognizers="state.catalog.recognizers"
+          @update:model-value="eventsChanged" @open-definition="state.openDefinition" />
         <label v-if="state.current" class="field"><span>游戏素材语言（不是工作台语言）</span><select v-model="state.current.resource_locale" @focus="state.checkpoint"><option value="">未选择</option><option value="zh-Hant">繁中</option><option value="en">英文</option><option value="zh-Hans">简中</option><option value="ja">日文</option></select></label>
       </aside>
 
@@ -327,6 +366,35 @@ function edgeLabel(edge: WorkflowEdge) { return `${edge.data?.kind ?? "sequence"
           <div v-else-if="nodeKind === 'end'" class="inspector-group"><h3>结束</h3><label class="field"><span>结果</span><select :value="String(param('outcome') ?? 'success')" @change="textParam('outcome', $event)"><option value="success">成功</option><option value="failure">失败</option></select></label><label v-if="param('outcome') === 'failure'" class="field"><span>原因</span><input :value="String(param('reason') ?? 'workflow_failed')" @change="textParam('reason', $event)" /></label></div>
           <div v-if="nodeKind==='action'" class="inspector-group"><label class="field"><span>输入后等待（ms，可留空）</span><input type="number" min="0" max="10000" :value="param('delay_after_ms')??''" @change="optionalBudget('delay_after_ms',$event)" /></label><label class="field"><span>独立转场观察预算（ms，可留空沿用）</span><input type="number" min="1" max="60000" :value="param('postcondition_timeout_ms')??''" @change="optionalBudget('postcondition_timeout_ms',$event)" /></label></div>
           <div v-if="nodeKind !== 'end'" class="inspector-group"><h3>控制</h3><label class="field"><span>有限重复次数</span><input :value="state.selectedNode.repeat_limit ?? 1" type="number" min="1" max="256" @change="setRepeat" /></label></div>
+          <div v-if="nodeKind !== 'end' && Object.keys(state.current?.events ?? {}).length" class="inspector-group"><h3>当前节点事件</h3>
+            <div v-for="(rule,id) in state.current?.events ?? {}" :key="id" class="inspector-group">
+              <strong>{{ id }}</strong><small> · 根规则{{ rule.enabled ? '启用' : '关闭' }}</small>
+              <label class="field"><span>当前节点</span><select :value="state.selectedNode.event_overrides?.[id]?.enabled === undefined ? 'inherit' : state.selectedNode.event_overrides[id].enabled ? 'enabled' : 'disabled'"
+                @change="setNodeEvent(id,($event.target as HTMLSelectElement).value as 'inherit'|'enabled'|'disabled')">
+                <option value="inherit">继承</option><option value="enabled">启用</option><option value="disabled">关闭</option>
+              </select></label>
+              <ArgumentFields v-if="rule.handler && state.selectedNode.event_overrides?.[id]?.arguments"
+                :fields="state.workflows.find(flow=>flow.id===rule.handler?.flow_id)?.interface?.parameters ?? []"
+                :model-value="state.selectedNode.event_overrides[id].arguments ?? {}"
+                @update:model-value="setNodeEventArguments(id,$event)" />
+              <button v-if="rule.handler && !state.selectedNode.event_overrides?.[id]?.arguments" type="button" class="button secondary full"
+                @click="setNodeEventArguments(id,{})">覆盖处理参数</button>
+              <label v-if="rule.disposition !== 'external_blocked'" class="field"><span>返回位置</span>
+                <select :value="state.selectedNode.resume?.[id]?.mode ?? 'inherit'"
+                  @change="setNodeEventResume(id,($event.target as HTMLSelectElement).value as 'inherit'|EventResume['mode'])">
+                  <option value="inherit">继承</option><option value="reobserve">重新观察</option><option value="replan">指定步骤</option>
+                </select></label>
+              <template v-if="state.selectedNode.resume?.[id]?.mode === 'replan'">
+                <label class="field"><span>恢复步骤</span><select :value="state.selectedNode.resume[id].node_id ?? ''"
+                  @change="patchNodeEventResume(id,{node_id:($event.target as HTMLSelectElement).value})">
+                  <option v-for="node in state.current?.nodes.filter(item=>item.data.node_type!=='end') ?? []" :key="node.id" :value="node.id">{{ node.data.label }}</option>
+                </select></label>
+                <ConditionEditor :model-value="(state.selectedNode.resume[id].guard ?? {}) as JsonObject"
+                  :templates="state.catalog.templates" :resources="publicResources" :recognizers="state.catalog.recognizers"
+                  @update:model-value="patchNodeEventResume(id,{guard:$event})" />
+              </template>
+            </div>
+          </div>
           <div v-if="nodeKind === 'recognition'" class="inspector-group"><h3>试识别</h3>
             <span class="source-line">使用设备面板最近一次截图，不触发任何点击</span>
             <button class="button secondary full" :disabled="probeBusy" @click="runProbe"><Beaker :size="16" />试识别</button>

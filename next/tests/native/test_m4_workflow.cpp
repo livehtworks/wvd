@@ -21,6 +21,7 @@
 #include "games/wvd/recovery/boot.hpp"
 #include "games/wvd/recovery/revival.hpp"
 #include "games/wvd/tasks/workflow_session.hpp"
+#include "games/wvd/tasks/public_flow_library.hpp"
 #include "games/wvd/tasks/dungeon_route.hpp"
 #include "games/wvd/tasks/departure.hpp"
 #include "games/wvd/tasks/dungeon_iteration.hpp"
@@ -62,6 +63,8 @@ class WorkflowDevice final : public OfflineDevice, public devices::LifecyclePort
     bool mismatch{};
     J mismatch_detail;
     J time_events = J::array();
+    J capture_events = J::array();
+    std::size_t capture_event_count{};
     std::optional<std::chrono::steady_clock::time_point> time_event_due;
     unsigned time_event_count{};
     bool allow_lifecycle{}, stale_lifecycle{}, wrong_instance{}, hold_lifecycle{}, ignore_lifecycle_cancel{};
@@ -69,6 +72,9 @@ class WorkflowDevice final : public OfflineDevice, public devices::LifecyclePort
     int failed_starts{}, start_attempts{}, failed_vpns{};
     std::size_t restart_frame{1}, restart_action{};
     std::chrono::milliseconds returned_frame_age{};
+    std::chrono::milliseconds capture_delay{};
+    bool change_connection_after_first_input{};
+    std::uint64_t synthetic_connection_generation{};
     std::atomic<unsigned> lifecycle_count{};
     J lifecycle_calls = J::array();
     bool enforce_connection_state{}, connection_throws{};
@@ -146,6 +152,7 @@ class WorkflowDevice final : public OfflineDevice, public devices::LifecyclePort
         return true;
     }
     devices::RawFrame capture() override {
+        if (capture_delay.count()) std::this_thread::sleep_for(capture_delay);
         std::lock_guard lock(mutex);
         // 只按显式时钟事件推进动画；重复截图本身不能产生业务进展。
         if (time_event_due && std::chrono::steady_clock::now() >= *time_event_due) {
@@ -153,10 +160,15 @@ class WorkflowDevice final : public OfflineDevice, public devices::LifecyclePort
             time_event_due.reset();
             ++time_event_count;
         }
-        ++captures;
+        const auto capture_number = ++captures;
+        if (capture_event_count < capture_events.size() &&
+            capture_number == capture_events.at(capture_event_count).at("after_capture").get<std::size_t>()) {
+            cursor = capture_events.at(capture_event_count).at("frame").get<std::size_t>();
+            ++capture_event_count;
+        }
         return {frames.at(cursor), size, identity, viewport, application,
                 std::chrono::steady_clock::now() - returned_frame_age, "fixture",
-                allow_lifecycle ? lifecycle_state.connection_generation : 0};
+                allow_lifecycle ? lifecycle_state.connection_generation : synthetic_connection_generation};
     }
     bool execute(const contracts::Command &c) override {
         std::lock_guard lock(mutex);
@@ -181,6 +193,8 @@ class WorkflowDevice final : public OfflineDevice, public devices::LifecyclePort
             return false;
         if (after_input)
             after_input();
+        if (change_connection_after_first_input && action_cursor == 0)
+            ++synthetic_connection_generation;
         if (!expected.value("stay", false)) {
             ++cursor;
             ++action_cursor;
@@ -288,6 +302,12 @@ int main(int argc, char **argv) {
         std::vector<games::tasks::CompiledWorkflow> stage_workflows;
         auto workflow = [&] {
             const auto kind = config.at("workflow").get<std::string>();
+            if (kind == "author-event") {
+                games::tasks::PublicFlowLibrary library(config.at("author_library"));
+                require(library.task_profiles(config.at("author_document"), J::object(), "en").empty(),
+                        "FIXTURE_AUTHOR_PROFILE_UNEXPECTED");
+                return library.compile(config.at("author_document"), {}, J::object(), "en").workflow;
+            }
             if (kind == "staged-publication") {
                 using C = games::tasks::PipelineCompiler;
                 const std::array<std::string, 3> images{"Inn", "Stay", "Economy"};
@@ -679,6 +699,15 @@ int main(int argc, char **argv) {
         for (const auto &frame : config.at("frames"))
             device->frames.push_back(bytes(maafw::path_from_utf8(frame)));
         device->transitions = config.at("transitions");
+        device->capture_events = config.value("capture_events", J::array());
+        require(device->capture_events.is_array(), "FIXTURE_CAPTURE_EVENTS_INVALID");
+        std::size_t previous_capture = 0;
+        for (const auto &event : device->capture_events) {
+            const auto after = event.at("after_capture").get<std::size_t>();
+            require(after > previous_capture && event.at("frame").get<std::size_t>() < device->frames.size(),
+                    "FIXTURE_CAPTURE_EVENT_INVALID");
+            previous_capture = after;
+        }
         require(!(config.contains("time_event") && config.contains("time_events")), "FIXTURE_TIME_EVENT_AMBIGUOUS");
         if (config.contains("time_event")) device->time_events.push_back(config.at("time_event"));
         if (config.contains("time_events")) device->time_events = config.at("time_events");
@@ -702,6 +731,10 @@ int main(int argc, char **argv) {
         const auto frame_age = config.value("returned_frame_age_ms", 0);
         require(frame_age >= 0 && frame_age <= 60000, "FIXTURE_FRAME_AGE_INVALID");
         device->returned_frame_age = std::chrono::milliseconds{frame_age};
+        const auto capture_delay = config.value("capture_delay_ms", 0);
+        require(capture_delay >= 0 && capture_delay <= 3000, "FIXTURE_CAPTURE_DELAY_INVALID");
+        device->capture_delay = std::chrono::milliseconds{capture_delay};
+        device->change_connection_after_first_input = config.value("change_connection_after_first_input", false);
         device->restart_action = config.value("restart_action", std::size_t{0});
         device->hold_lifecycle = config.value("stop_during_lifecycle", false) || config.value("late_lifecycle_release", false);
         device->ignore_lifecycle_cancel = config.value("late_lifecycle_release", false);
@@ -760,7 +793,7 @@ int main(int argc, char **argv) {
             {contracts::ActionKind::Click, contracts::ActionKind::ClickKey, contracts::ActionKind::Swipe},
             {contracts::ActionKind::Click, contracts::ActionKind::ClickKey, contracts::ActionKind::Swipe},
             {"wvd"},
-            2000ms};
+            config.at("workflow") == "author-event" ? 0ms : 2000ms};
         policy.permissions.clear();
         auto actions = workflow.required_actions;
         for (const auto &stage : stage_workflows)
@@ -774,6 +807,9 @@ int main(int argc, char **argv) {
         definition.request_id = "m4-causal";
         definition.policy = policy;
         definition.initial = std::move(session);
+        if (config.at("workflow") == "author-event")
+            definition.total_time_limit = std::chrono::milliseconds{
+                config.value("total_time_limit_ms", workflow.time_limit.count())};
         const auto units = !stage_sessions.empty() ? stage_sessions.size() : config.at("workflow") == "repel-forces" ? games::quests::RepelForces::rounds(profile) + 2 : config.at("workflow") == "bull-cave" ? (profile.at("ACTIVE_REST").get<bool>() ? 3u : 2u) : config.at("workflow") == "jier" ? 3u : config.at("workflow") == "scorpion" ? (config.value("hands", false) ? 4u : 3u) :
             config.at("workflow") == "manual-separation" || config.at("workflow") == "golden-chest" || config.at("workflow") == "sandman" ? 2u : config.value("normal_units", 1u);
         require(units > 0 && units <= (!stage_sessions.empty() || config.at("workflow") == "repel-forces" ? 256 : 4), "FIXTURE_NORMAL_UNITS_INVALID");

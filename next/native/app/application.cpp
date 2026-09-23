@@ -243,6 +243,7 @@ J author_document_from_ui(const J &ui) {
         document["revision"] = ui.at("revision");
     if (ui.contains("interface")) document["interface"] = ui.at("interface");
     if (ui.contains("resource_locale")) document["execution"]["resource_locale"] = ui.at("resource_locale");
+    if (ui.contains("events")) document["execution"]["events"] = ui.at("events");
     for (const auto &source : ui.at("nodes")) {
         const auto &data = source.at("data");
         J parameters = data.value("parameters", J::object());
@@ -252,6 +253,8 @@ J author_document_from_ui(const J &ui) {
                {"parameters", std::move(parameters)}};
         if (source.contains("repeat_limit"))
             node["repeat_limit"] = source.at("repeat_limit");
+        if (source.contains("event_overrides")) node["event_overrides"] = source.at("event_overrides");
+        if (source.contains("resume")) node["resume"] = source.at("resume");
         document["nodes"].push_back(std::move(node));
         const auto position = source.value("position", J{{"x", 0}, {"y", 0}});
         document["layout"]["nodes"].push_back(
@@ -279,6 +282,7 @@ J ui_document_from_author(const J &document) {
         ui["revision"] = document.at("revision");
     ui["interface"] = document.value("interface", J::object());
     ui["resource_locale"] = document.at("execution").value("resource_locale", std::string{});
+    if (document.at("execution").contains("events")) ui["events"] = document.at("execution").at("events");
     std::map<std::string, J> positions;
     for (const auto &position : document.at("layout").at("nodes"))
         positions[position.at("node_id").get<std::string>()] =
@@ -290,6 +294,8 @@ J ui_document_from_author(const J &document) {
                           {"parameters", source.at("parameters")}}}};
         if (source.contains("repeat_limit"))
             node["repeat_limit"] = source.at("repeat_limit");
+        if (source.contains("event_overrides")) node["event_overrides"] = source.at("event_overrides");
+        if (source.contains("resume")) node["resume"] = source.at("resume");
         ui["nodes"].push_back(std::move(node));
     }
     std::map<std::pair<std::string, std::string>, int> outcome_counts;
@@ -1075,6 +1081,14 @@ Application::J Application::run_status() const {
             if (mapping.empty()) break; // 旧任务没有作者节点映射，也必须显示真实执行步骤。
         }
     }
+    if (value.contains("active_event") && value.at("active_event").is_object()) {
+        const auto source = value.at("active_event").value("source_node", std::string{});
+        value["suspended_step"] = {
+            {"pipeline_node", source},
+            {"node_id", mapping.contains(source) ? J(mapping.at(source)) : J(nullptr)},
+            {"node_path", source_paths.value(source, J::array())}
+        };
+    }
     return value;
 }
 
@@ -1323,6 +1337,8 @@ runtime::RunDefinition Application::assemble_workflow(
     definition.request_id = request_id;
     definition.initial = std::move(session);
     definition.max_business_units = 1;
+    definition.total_time_limit = std::chrono::milliseconds(
+        document.at("execution").at("time_limit_ms").get<std::int64_t>());
     definition.state_factory = games::wvd_state_binding(values);
     definition.policy = {lifecycle.device_id, "wvd",
                          "jp.co.drecom.wizardry.daphne", definition.initial.bundle.revision,

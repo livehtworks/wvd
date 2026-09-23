@@ -12,6 +12,7 @@ struct SessionDefinition {
     std::chrono::milliseconds time_limit{60000}, stop_timeout{3000};
     contracts::BehaviorBindings recognitions;
     std::string checkpoint_node;
+    nlohmann::json event_scopes = nlohmann::json::object();
     std::optional<devices::LifecyclePlan> lifecycle;
 };
 } // namespace wvd::runtime

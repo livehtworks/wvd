@@ -19,8 +19,7 @@ tasks::CompiledWorkflow compile_time_leap(const std::string &target_name,
     auto wheel_zh_hant = C::image("cursedWheel_zh_hant");
     wheel_zh_hant["roi"] = {450, 500, 450, 400};
     const auto ruins_en = C::image("ruins");
-    auto ruins_icon = C::image("ruins_icon");
-    ruins_icon["roi"] = {700, 430, 200, 300};
+    const auto ruins_icon = vision::ruins_button();
     const auto title = C::any({title_en, title_zh_hant});
     const auto wheel = C::any({wheel_en, wheel_zh_hant});
     const auto ruins = C::any({ruins_en, ruins_icon});
@@ -77,9 +76,9 @@ tasks::CompiledWorkflow compile_time_leap(const std::string &target_name,
     graph.route("Entry", {"AtTitle", "OpenWheelEn", "OpenWheelZhHant", "RuinsEn",
                             "RuinsZhHant", "DownloadEn", "DownloadZhHant", "OpenFromRoyalCity"});
     // 旧源码中的 [1,1] 只是前面图片候选全部失败后的兜底点击，不能迁成主动作。
-    // 王城背景已确认时，点击荒屋的稳定建筑区域；动作后必须真正出现荒屋菜单。
-    graph.fixed_click("OpenFromRoyalCity", C::all({vision::royal_city(), city}), wheel,
-                      {820, 590}, {"Entry"});
+    // 王城背景只确认城市身份；荒屋图标本身给出点击位置，动作后再确认荒屋菜单。
+    graph.click("OpenFromRoyalCity", C::all({vision::royal_city(), city, ruins_icon}),
+                ruins_icon, wheel, {"Entry"});
     graph.delay_after("OpenFromRoyalCity", 1000);
     graph.postcondition_budget("OpenFromRoyalCity", 30000);
     graph.hit_limit("OpenFromRoyalCity", 3);

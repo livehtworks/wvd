@@ -172,7 +172,7 @@ void EventJournal::commit_terminal(std::uint64_t generation, J payload,
     committing_ = false;
 }
 J snapshot_json(const contracts::RunSnapshot &s) {
-    return {{"run_id", s.run_id},
+    J result{{"run_id", s.run_id},
             {"generation", s.generation},
             {"state", contracts::name(s.state)},
             {"reason", s.reason},
@@ -190,6 +190,9 @@ J snapshot_json(const contracts::RunSnapshot &s) {
               {"rejected", s.inputs.rejected},
               {"backend_called", s.inputs.backend_called},
               {"cleanup_called", s.inputs.cleanup_called}}}};
+    if (!s.outcome_category.empty()) result["outcome_category"] = s.outcome_category;
+    if (!s.active_event.is_null()) result["active_event"] = s.active_event;
+    return result;
 }
 RunStore::RunStore(const std::filesystem::path &root, const std::string &instance,
                    std::uint64_t run, const J &definition,

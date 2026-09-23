@@ -251,6 +251,241 @@ class WorkflowTests(unittest.TestCase):
         inputs = [dict(kind=0, x=420, y=712)] * 4 + [dict(kind=5, key=4)]
         return frames, inputs
 
+    @staticmethod
+    def author_event_flow(flow_id, scene, target, result, events=None):
+        def image(name):
+            return dict(mode="template", image=name, threshold=.8, roi=[0, 0, 900, 1600])
+        return dict(schema=1, flow=dict(id=flow_id, name=flow_id, description="offline event fixture"),
+            entry="act", nodes=[
+                dict(id="act", type="action", name="Act", parameters=dict(operation="click",
+                    scene=image(scene), target=image(target), postcondition=image(result),
+                    postcondition_timeout_ms=4000)),
+                dict(id="done", type="end", name="Done", parameters=dict(outcome="success")),
+                dict(id="failed", type="end", name="Failed", parameters=dict(outcome="failure", reason="fixture.failed"))],
+            edges=[dict(id="ok", **{"from": "act"}, to="done", outcome="success", order=0),
+                   dict(id="bad", **{"from": "act"}, to="failed", outcome="failure", order=0)],
+            layout=dict(nodes=[dict(node_id=node, x=100*i, y=0)
+                for i, node in enumerate(("act", "done", "failed"))],
+                viewport=dict(x=0, y=0, zoom=1.0)),
+            execution=dict(time_limit_ms=30000, **({"events": events} if events else {})))
+
+    def test_author_event_overlay_uses_published_maa_handler(self):
+        detect = dict(mode="template", image="retry", threshold=.8, roi=[0, 0, 900, 1600])
+        handler = self.author_event_flow("clear_overlay", "retry", "retry", "Inn")
+        root = self.author_event_flow("resume_target", "Inn", "Inn", "Stay", {
+            "network": dict(enabled=True, **{"class": "overlay"}, priority=10,
+                detect=detect, handler=dict(flow_id="clear_overlay", arguments={}, extensions={}),
+                resume=dict(mode="reobserve"), allow_nested=[])
+        })
+        screens = [{"Inn": (100, 100), "retry": (300, 300)}, {"Inn": (100, 100)},
+                   {"Stay": (100, 100)}]
+        commands = [dict(kind=0, x=320, y=312), dict(kind=0, x=120, y=112)]
+        result = self.execute("author-event-overlay", screens, commands, workflow="author-event",
+            author_document=root, author_library={"clear_overlay": handler}, extra_images=["retry"])
+        self.assertEqual(result["snapshot"]["state"], "Completed", result)
+        self.assertEqual(result["backend_calls"], 2, result)
+        self.assertFalse(result["mismatch"], result)
+
+    def test_author_event_appears_between_candidate_and_input(self):
+        detect = dict(mode="template", image="retry", threshold=.8, roi=[0, 0, 900, 1600])
+        handler = self.author_event_flow("clear_overlay", "retry", "retry", "Inn")
+        root = self.author_event_flow("resume_target", "Inn", "Inn", "Stay", {
+            "network": dict(enabled=True, **{"class": "overlay"}, priority=10,
+                detect=detect, handler=dict(flow_id="clear_overlay", arguments={}, extensions={}),
+                resume=dict(mode="reobserve"), allow_nested=[])
+        })
+        screens = [{"Inn": (100, 100)}, {"Inn": (100, 100), "retry": (300, 300)},
+                   {"Inn": (100, 100)}, {"Stay": (100, 100)}]
+        commands = [dict(kind=0, x=320, y=312), dict(kind=0, x=120, y=112)]
+        result = self.execute("author-event-preinput", screens, commands, workflow="author-event",
+            author_document=root, author_library={"clear_overlay": handler}, extra_images=["retry"],
+            capture_events=[dict(after_capture=3, frame=1)])
+        self.assertEqual(result["snapshot"]["state"], "Completed", result)
+        self.assertEqual(result["backend_calls"], 2, result)
+        self.assertFalse(result["mismatch"], result)
+
+    def test_author_event_after_parent_receipt_does_not_replay_click(self):
+        detect = dict(mode="template", image="retry", threshold=.8, roi=[0, 0, 900, 1600])
+        handler = self.author_event_flow("clear_overlay", "retry", "retry", "Stay")
+        root = self.author_event_flow("resume_target", "Inn", "Inn", "Stay", {
+            "network": dict(enabled=True, **{"class": "overlay"}, priority=10,
+                detect=detect, handler=dict(flow_id="clear_overlay", arguments={}, extensions={}),
+                resume=dict(mode="reobserve"), allow_nested=[])
+        })
+        screens = [{"Inn": (100, 100)}, {"Stay": (100, 100), "retry": (300, 300)},
+                   {"Stay": (100, 100)}]
+        commands = [dict(kind=0, x=120, y=112), dict(kind=0, x=320, y=312)]
+        result = self.execute("author-event-receipt", screens, commands, workflow="author-event",
+            author_document=root, author_library={"clear_overlay": handler}, extra_images=["retry"])
+        self.assertEqual(result["snapshot"]["state"], "Completed", result)
+        self.assertEqual(result["backend_calls"], 2, result)
+        self.assertFalse(result["mismatch"], result)
+
+    def test_author_event_replan_routes_through_guarded_target(self):
+        def image(name):
+            return dict(mode="template", image=name, threshold=.8, roi=[0, 0, 900, 1600])
+        handler = self.author_event_flow("clear_overlay", "retry", "retry", "Stay")
+        root = self.author_event_flow("resume_target", "Inn", "Inn", "Stay", {
+            "network": dict(enabled=True, **{"class": "overlay"}, priority=10,
+                detect=image("retry"), handler=dict(flow_id="clear_overlay", arguments={}, extensions={}),
+                resume=dict(mode="replan", node_id="verify", guard=image("Stay")), allow_nested=[])
+        })
+        root["nodes"].append(dict(id="verify", type="recognition", name="Verify",
+                                  parameters=dict(condition=image("Stay"))))
+        root["edges"][0]["to"] = "verify"
+        root["edges"].extend([dict(id="verify-ok", **{"from": "verify"}, to="done", outcome="success", order=0),
+                              dict(id="verify-bad", **{"from": "verify"}, to="failed", outcome="failure", order=0)])
+        root["layout"]["nodes"].append(dict(node_id="verify", x=400, y=0))
+        screens = [{"Inn": (100, 100)}, {"Stay": (100, 100), "retry": (300, 300)},
+                   {"Stay": (100, 100)}]
+        commands = [dict(kind=0, x=120, y=112), dict(kind=0, x=320, y=312)]
+        result = self.execute("author-event-replan", screens, commands, workflow="author-event",
+            author_document=root, author_library={"clear_overlay": handler}, extra_images=["retry"])
+        self.assertEqual(result["snapshot"]["state"], "Completed", result)
+        self.assertEqual(result["backend_calls"], 2, result)
+        self.assertFalse(result["mismatch"], result)
+        journal = next((self.root / "author-event-replan" / "run").rglob("events.json"))
+        types = [entry["type"] for entry in json.loads(journal.read_text(encoding="utf-8"))["events"]]
+        self.assertIn("flow_event.replan_receipt", types)
+        self.assertIn("flow_event.replanned", types)
+
+    def test_author_event_synthetic_maintenance_blocks_without_input(self):
+        detect = dict(mode="template", image="retry", threshold=.8, roi=[0, 0, 900, 1600])
+        root = self.author_event_flow("resume_target", "Inn", "Inn", "Stay", {
+            "maintenance": dict(enabled=True, **{"class": "overlay"}, priority=100,
+                detect=detect, disposition="external_blocked", reason="EXTERNAL_BLOCKED_MAINTENANCE",
+                allow_nested=[])
+        })
+        result = self.execute("author-event-maintenance", [{"Inn": (100, 100), "retry": (300, 300)}], [],
+            workflow="author-event", author_document=root, author_library={}, extra_images=["retry"])
+        self.assertEqual(result["snapshot"]["state"], "Interrupted", result)
+        self.assertEqual(result["snapshot"]["outcome_category"], "external_blocked", result)
+        self.assertEqual(result["snapshot"]["reason"], "EXTERNAL_BLOCKED_MAINTENANCE", result)
+        self.assertEqual(result["backend_calls"], 0, result)
+        self.assertEqual(result["lifecycle_calls"], [], result)
+
+    def test_author_event_handler_failure_never_runs_parent_input(self):
+        detect = dict(mode="template", image="retry", threshold=.8, roi=[0, 0, 900, 1600])
+        handler = self.author_event_flow("bad_handler", "retry", "Stay", "Inn")
+        root = self.author_event_flow("resume_target", "Inn", "Inn", "Stay", {
+            "network": dict(enabled=True, **{"class": "overlay"}, priority=10,
+                detect=detect, handler=dict(flow_id="bad_handler", arguments={}, extensions={}),
+                resume=dict(mode="reobserve"), allow_nested=[])
+        })
+        result = self.execute("author-event-handler-failed", [{"Inn": (100, 100), "retry": (300, 300)}], [],
+            workflow="author-event", author_document=root,
+            author_library={"bad_handler": handler}, extra_images=["retry"])
+        self.assertEqual(result["snapshot"]["state"], "Failed", result)
+        self.assertEqual(result["backend_calls"], 0, result)
+        self.assertTrue(result["snapshot"]["reason"], result)
+
+    def test_author_stop_during_event_handler_prevents_parent_input(self):
+        detect = dict(mode="template", image="retry", threshold=.8, roi=[0, 0, 900, 1600])
+        handler = self.author_event_flow("clear_overlay", "retry", "retry", "Inn")
+        root = self.author_event_flow("resume_target", "Inn", "Inn", "Stay", {
+            "network": dict(enabled=True, **{"class": "overlay"}, priority=10,
+                detect=detect, handler=dict(flow_id="clear_overlay", arguments={}, extensions={}),
+                resume=dict(mode="reobserve"), allow_nested=[])
+        })
+        screens = [{"Inn": (100, 100), "retry": (300, 300)}, {"Inn": (100, 100)},
+                   {"Stay": (100, 100)}]
+        commands = [dict(kind=0, x=320, y=312), dict(kind=0, x=120, y=112)]
+        result = self.execute("author-event-stop", screens, commands, workflow="author-event",
+            author_document=root, author_library={"clear_overlay": handler}, extra_images=["retry"],
+            stop_after_calls=1)
+        self.assertEqual(result["snapshot"]["state"], "UserStopped", result)
+        self.assertEqual(result["backend_calls"], 1, result)
+
+    def test_author_nested_chest_combat_network_returns_to_target(self):
+        def image(name):
+            return dict(mode="template", image=name, threshold=.8, roi=[0, 0, 900, 1600])
+        def call(flow_id):
+            return dict(flow_id=flow_id, arguments={}, extensions={})
+        rules = {
+            "chest": dict(enabled=True, **{"class": "encounter"}, priority=10,
+                detect=image("chestFlag"), handler=call("handle_chest"),
+                resume=dict(mode="reobserve"), allow_nested=["combat"]),
+            "combat": dict(enabled=True, **{"class": "encounter"}, priority=20,
+                detect=image("combatActive"), handler=call("handle_combat"),
+                resume=dict(mode="reobserve"), allow_nested=["network"]),
+            "network": dict(enabled=True, **{"class": "overlay"}, priority=100,
+                detect=image("retry"), handler=call("handle_network"),
+                resume=dict(mode="reobserve"), allow_nested=[]),
+        }
+        root = self.author_event_flow("resume_target", "Inn", "Inn", "Stay", rules)
+        library = {
+            "handle_chest": self.author_event_flow("handle_chest", "chestFlag", "chestFlag", "Inn"),
+            "handle_combat": self.author_event_flow("handle_combat", "combatActive", "combatActive", "Inn"),
+            "handle_network": self.author_event_flow("handle_network", "retry", "retry", "Inn"),
+        }
+        screens = [{"chestFlag": (100, 100)}, {"combatActive": (100, 100)},
+                   {"retry": (300, 300)}, {"Inn": (100, 100)}, {"Stay": (100, 100)}]
+        commands = [dict(kind=0, x=120, y=112), dict(kind=0, x=120, y=112),
+                    dict(kind=0, x=320, y=312), dict(kind=0, x=120, y=112)]
+        result = self.execute("author-event-nested", screens, commands, workflow="author-event",
+            author_document=root, author_library=library,
+            extra_images=["chestFlag", "combatActive", "retry"])
+        self.assertEqual(result["snapshot"]["state"], "Completed", result)
+        self.assertEqual(result["backend_calls"], 4, result)
+        self.assertFalse(result["mismatch"], result)
+        journal = next((self.root / "author-event-nested" / "run").rglob("events.json"))
+        entries = json.loads(journal.read_text(encoding="utf-8"))["events"]
+        entered = [entry["payload"]["event_id"] for entry in entries if entry["type"] == "flow_event.enter"]
+        self.assertEqual(entered, ["chest", "combat", "network"])
+
+    def test_author_slot_six_maa_rounds_are_not_hidden_by_hit_limit(self):
+        child = self.author_event_flow("shared", "Inn", "Inn", "Inn")
+        root = self.author_event_flow("six_slot", "Inn", "Inn", "Inn")
+        root["nodes"][0].update(type="slot", name="Repeat", repeat_limit=6,
+            parameters=dict(name="extra", calls=[dict(flow_id="shared")]))
+        root["edges"][0]["to"] = "act"
+        root["edges"].append(dict(id="slot-done", **{"from": "act"}, to="done",
+                                  outcome="success", order=1))
+        result = self.execute("author-slot-six", [{"Inn": (100, 100)}],
+            [dict(kind=0, x=120, y=112, stay=True)], workflow="author-event",
+            author_document=root, author_library={"shared": child})
+        self.assertEqual(result["snapshot"]["state"], "Completed", result)
+        self.assertEqual(result["backend_calls"], 6, result)
+        self.assertFalse(result["mismatch"], result)
+
+    def test_author_no_event_preserves_direct_success_path(self):
+        root = self.author_event_flow("plain_target", "Inn", "Inn", "Stay")
+        result = self.execute("author-no-event", [{"Inn": (100, 100)}, {"Stay": (100, 100)}],
+            [dict(kind=0, x=120, y=112)], workflow="author-event",
+            author_document=root, author_library={})
+        self.assertEqual(result["snapshot"]["state"], "Completed", result)
+        self.assertEqual(result["backend_calls"], 1, result)
+        self.assertFalse(result["mismatch"], result)
+
+    def test_author_slow_capture_does_not_impose_two_second_click_deadline(self):
+        root = self.author_event_flow("slow_target", "Inn", "Inn", "Stay")
+        result = self.execute("author-slow-capture", [{"Inn": (100, 100)}, {"Stay": (100, 100)}],
+            [dict(kind=0, x=120, y=112)], workflow="author-event",
+            author_document=root, author_library={}, capture_delay_ms=2100)
+        self.assertEqual(result["snapshot"]["state"], "Completed", result)
+        self.assertEqual(result["backend_calls"], 1, result)
+
+    def test_author_connection_change_rejects_old_receipt_without_replay(self):
+        root = self.author_event_flow("changed_device", "Inn", "Inn", "Stay")
+        result = self.execute("author-connection-change", [{"Inn": (100, 100)}, {"Stay": (100, 100)}],
+            [dict(kind=0, x=120, y=112)], workflow="author-event", author_document=root,
+            author_library={}, change_connection_after_first_input=True)
+        self.assertEqual(result["snapshot"]["state"], "Failed", result)
+        self.assertEqual(result["snapshot"]["reason"], "TRANSITION_EVIDENCE_MISMATCH", result)
+        self.assertEqual(result["backend_calls"], 1, result)
+
+    def test_author_total_wall_clock_stops_long_wait(self):
+        root = self.author_event_flow("long_wait", "Inn", "Inn", "Stay")
+        root["nodes"][0].update(type="wait", name="Wait", parameters=dict(duration_ms=2500))
+        root["edges"] = [edge for edge in root["edges"] if edge["outcome"] == "success"]
+        root["nodes"] = [node for node in root["nodes"] if node["id"] != "failed"]
+        root["layout"]["nodes"] = [node for node in root["layout"]["nodes"] if node["node_id"] != "failed"]
+        result = self.execute("author-total-budget", [{}], [], workflow="author-event",
+            author_document=root, author_library={}, total_time_limit_ms=400)
+        self.assertEqual(result["snapshot"]["state"], "Failed", result)
+        self.assertEqual(result["snapshot"]["reason"], "RUN_TIME_LIMIT", result)
+        self.assertEqual(result["backend_calls"], 0, result)
+
     def test_departure_tracked_inn_does_not_pay_twice(self):
         frames, commands = self.inn_sequence()
         r = self.execute("inn-receipt", frames, commands, workflow="inn-tracked")

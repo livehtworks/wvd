@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "source_commit": "6585f4075f5714ab522aa582993860c09af912c1",
-  "revision": "d1a1777516c8f880cb9e0018f694fb2a0c57a34a309bd973be6fcd31a5ed3ca0",
+  "revision": "bcc1891a3fe67b2403783c96109e8f58085087059fb8e81baaf5874701529dde",
   "files": [
     {
       "path": "image/7000G/icantagreewithU.png",
@@ -1279,7 +1279,9 @@
       "source": "resources/images/Stay.png",
       "sha256": "da8467abe4eaed804359e78f64f6db2d320e7f6adc37ff7ccc7c8b13a0fc0c3f",
       "bytes": 7696,
-      "source_refs": []
+      "source_refs": [
+        "semantic:inn.stay.option"
+      ]
     },
     {
       "path": "image/TWC/TWC.png",
@@ -1381,6 +1383,15 @@
       "sha256": "53c158b4c74e22bc7b48160929f53ea2df608fbfce468c50cc7eed1fab2f9f12",
       "bytes": 4308,
       "source_refs": []
+    },
+    {
+      "path": "image/blacksmith_icon_shape.png",
+      "source": "next/resources/images/blacksmith_icon_shape.png",
+      "sha256": "4474e1046b6d04fe406347897a25014b4b3be7b4906bf9765387004d1f2b867b",
+      "bytes": 1583,
+      "source_refs": [
+        "semantic:city.blacksmith.entry"
+      ]
     },
     {
       "path": "image/blessing.png",
@@ -1960,6 +1971,15 @@
       "sha256": "4a519855f1153f379b29d9f7f3fea847fd4f0a9c0e286e260056830813f3ff35",
       "bytes": 39083,
       "source_refs": [
+        "semantic-catalogue:unclassified"
+      ]
+    },
+    {
+      "path": "image/edge_of_town_icon_shape.png",
+      "source": "next/resources/images/edge_of_town_icon_shape.png",
+      "sha256": "6e141feea75e010a603aaaed09418437c3c6c0fedd3573c2e774be0ca065cb06",
+      "bytes": 1065,
+      "source_refs": [
         "semantic:city.edge.entry"
       ]
     },
@@ -2431,6 +2451,15 @@
       "sha256": "9d821f86943c3054a6cc6e929be456f23c94bf918b29be70034934982811e8cd",
       "bytes": 39431,
       "source_refs": [
+        "semantic-catalogue:unclassified"
+      ]
+    },
+    {
+      "path": "image/guild_icon_shape.png",
+      "source": "next/resources/images/guild_icon_shape.png",
+      "sha256": "9417da3678afe048b52f6dd56055ed1063f66a853d4d8a8ab394aedc8809619b",
+      "bytes": 1250,
+      "source_refs": [
         "semantic:city.guild.entry"
       ]
     },
@@ -2465,6 +2494,42 @@
       ]
     },
     {
+      "path": "image/harken_buff_info_zh_hant.png",
+      "source": "next/resources/images/harken_buff_info_zh_hant.png",
+      "sha256": "0fffb287343f9114adf95205bd974761ebeb8ac609d58577f9fb749d4db00d8c",
+      "bytes": 2991,
+      "source_refs": [
+        "semantic:harken.buff.info"
+      ]
+    },
+    {
+      "path": "image/harken_buff_none_zh_hant.png",
+      "source": "next/resources/images/harken_buff_none_zh_hant.png",
+      "sha256": "13b38246d4f4e6dd2001204fefec763abf2b1eadbe9bd9d164542f63dbd77f0e",
+      "bytes": 20953,
+      "source_refs": [
+        "semantic:harken.buff.none"
+      ]
+    },
+    {
+      "path": "image/harken_floor_move_zh_hant.png",
+      "source": "next/resources/images/harken_floor_move_zh_hant.png",
+      "sha256": "994e5b896f6a9d6c98f7c473648ba01a812a1bd7d8fdaf68beb70a17d7d7900b",
+      "bytes": 4417,
+      "source_refs": [
+        "semantic:harken.floor.move"
+      ]
+    },
+    {
+      "path": "image/harken_floor_return_zh_hant.png",
+      "source": "next/resources/images/harken_floor_return_zh_hant.png",
+      "sha256": "8f1d56e968289696740de2d95b5a96e232b253d58d83aebaab06ea8f7a638c9d",
+      "bytes": 6053,
+      "source_refs": [
+        "semantic:harken.floor.return"
+      ]
+    },
+    {
       "path": "image/icanstillgo.png",
       "source": "resources/images/icanstillgo.png",
       "sha256": "c0061f4615651953af4c46d9b45e768ced20fdaa6c03258d963f77a9f7846a32",
@@ -2496,12 +2561,75 @@
       ]
     },
     {
+      "path": "image/inn_back_zh_hant.png",
+      "source": "next/resources/images/inn_back_zh_hant.png",
+      "sha256": "7d54b08287a7840f5e1c292d2c2543deef2205466af50b60ce1c1429d3147de8",
+      "bytes": 10580,
+      "source_refs": [
+        "semantic:inn.room.back"
+      ]
+    },
+    {
+      "path": "image/inn_deluxe_zh_hant.png",
+      "source": "next/resources/images/inn_deluxe_zh_hant.png",
+      "sha256": "74ada4962ce287610b708de8f4bc6dc8522ca85f18e2d45524efcd883f7fe8aa",
+      "bytes": 14331,
+      "source_refs": [
+        "semantic:inn.room.deluxe"
+      ]
+    },
+    {
       "path": "image/inn_icon.png",
       "source": "next/resources/images/inn_icon.png",
       "sha256": "fa2054b29397d7066b49e20043e54172ed0e5ac2e3eb13f0d84686ed935f17d7",
       "bytes": 43566,
       "source_refs": [
+        "semantic-catalogue:unclassified"
+      ]
+    },
+    {
+      "path": "image/inn_icon_shape.png",
+      "source": "next/resources/images/inn_icon_shape.png",
+      "sha256": "1c5095a48cc911f5fafe2a88797017d64b9d886e6283b0b23a94a5c2503b1bd6",
+      "bytes": 848,
+      "source_refs": [
         "semantic:city.inn.entry"
+      ]
+    },
+    {
+      "path": "image/inn_royal_zh_hant.png",
+      "source": "next/resources/images/inn_royal_zh_hant.png",
+      "sha256": "9f4f86c8827882ff5b403a2ffb204d3ad9f31d2fe27985771ef1134e7e5df64d",
+      "bytes": 13779,
+      "source_refs": [
+        "semantic:inn.room.royal"
+      ]
+    },
+    {
+      "path": "image/inn_stable_zh_hant.png",
+      "source": "next/resources/images/inn_stable_zh_hant.png",
+      "sha256": "cbedb7b171f2bc8cbe543d46caed2f036bd481611d4ade69ae1e0ada01c6667a",
+      "bytes": 12346,
+      "source_refs": [
+        "semantic:inn.room.stable"
+      ]
+    },
+    {
+      "path": "image/inn_standard_zh_hant.png",
+      "source": "next/resources/images/inn_standard_zh_hant.png",
+      "sha256": "9a70a6ff30b11d9385a082de0aaf36e71059ed4d9ed1283889b1b946f552dd18",
+      "bytes": 14477,
+      "source_refs": [
+        "semantic:inn.room.standard"
+      ]
+    },
+    {
+      "path": "image/inn_stay_zh_hant.png",
+      "source": "next/resources/images/inn_stay_zh_hant.png",
+      "sha256": "cc123c5cf71aae8907c24759cb7d4f3ab497a7f5372e7d5455a133a072412006",
+      "bytes": 10509,
+      "source_refs": [
+        "semantic:inn.stay.option"
       ]
     },
     {
@@ -2541,6 +2669,15 @@
       "bytes": 10009,
       "source_refs": [
         "src/script.py:1803"
+      ]
+    },
+    {
+      "path": "image/item_shop_icon_shape.png",
+      "source": "next/resources/images/item_shop_icon_shape.png",
+      "sha256": "bb9fb5729508ff2bfcd165e2f9bf9896366464825aa52608ac379c9d6714fb4a",
+      "bytes": 993,
+      "source_refs": [
+        "semantic:city.item_shop.entry"
       ]
     },
     {
@@ -2702,11 +2839,281 @@
       ]
     },
     {
+      "path": "image/ore_merchant_icon_shape.png",
+      "source": "next/resources/images/ore_merchant_icon_shape.png",
+      "sha256": "74f33e4367daa6ce3a1d48a67912abd01d0ab0630f7307ffede992cf91c595d5",
+      "bytes": 1242,
+      "source_refs": [
+        "semantic:city.ore_merchant.entry"
+      ]
+    },
+    {
       "path": "image/output.png",
       "source": "resources/images/output.png",
       "sha256": "305a3713eeb27e29d7efce4c4ea2544c9e64e1e40fcd2d683155843cd5aac604",
       "bytes": 20829,
       "source_refs": []
+    },
+    {
+      "path": "image/outskirts_abyss_b1f_zh_hant.png",
+      "source": "next/resources/images/outskirts_abyss_b1f_zh_hant.png",
+      "sha256": "0ff6a542c5aed2fe6d802e3984bae5dd52b6e038af84ac3a14bb9dea8f913f05",
+      "bytes": 17002,
+      "source_refs": [
+        "semantic:outskirts.abyss.b1f"
+      ]
+    },
+    {
+      "path": "image/outskirts_abyss_b2f_zh_hant.png",
+      "source": "next/resources/images/outskirts_abyss_b2f_zh_hant.png",
+      "sha256": "3af37f593ad5d0e298e1f7d730934d97e90363220d541fc776d9a8b72245962c",
+      "bytes": 15994,
+      "source_refs": [
+        "semantic:outskirts.abyss.b2f"
+      ]
+    },
+    {
+      "path": "image/outskirts_abyss_b3f_zh_hant.png",
+      "source": "next/resources/images/outskirts_abyss_b3f_zh_hant.png",
+      "sha256": "29a515dbceaa4dffe9f42d1a8cbafb1346fd71294bad0dd5464e9281796b7464",
+      "bytes": 24196,
+      "source_refs": [
+        "semantic:outskirts.abyss.b3f"
+      ]
+    },
+    {
+      "path": "image/outskirts_abyss_b4f_zh_hant.png",
+      "source": "next/resources/images/outskirts_abyss_b4f_zh_hant.png",
+      "sha256": "9611ecad3d3ce786ac8e43bea3ef553dd32cc9748a0e03ab3e16b103480190ee",
+      "bytes": 18867,
+      "source_refs": [
+        "semantic:outskirts.abyss.b4f"
+      ]
+    },
+    {
+      "path": "image/outskirts_abyss_b5f_zh_hant.png",
+      "source": "next/resources/images/outskirts_abyss_b5f_zh_hant.png",
+      "sha256": "00a49849e7387a2fcf5353ea57649de176b1e7055ae4c65af0689b962790d389",
+      "bytes": 24214,
+      "source_refs": [
+        "semantic:outskirts.abyss.b5f"
+      ]
+    },
+    {
+      "path": "image/outskirts_abyss_b7f_zh_hant.png",
+      "source": "next/resources/images/outskirts_abyss_b7f_zh_hant.png",
+      "sha256": "6e455ce7f7f5ceacad0a7fb7827043dd6085dd2085f85bc546c92a947aa91a8f",
+      "bytes": 23345,
+      "source_refs": [
+        "semantic:outskirts.abyss.b7f"
+      ]
+    },
+    {
+      "path": "image/outskirts_abyss_b8f_zh_hant.png",
+      "source": "next/resources/images/outskirts_abyss_b8f_zh_hant.png",
+      "sha256": "c0e2b64fbf640fda1d8b8d025cf6bbc1f9e564d72f8646af69a270e2a98f2703",
+      "bytes": 23519,
+      "source_refs": [
+        "semantic:outskirts.abyss.b8f"
+      ]
+    },
+    {
+      "path": "image/outskirts_abyss_entrance_zh_hant.png",
+      "source": "next/resources/images/outskirts_abyss_entrance_zh_hant.png",
+      "sha256": "fe4b95d7c3f62b886f72264fae368b30e333096e94d0a9e005697ebdb208871f",
+      "bytes": 25432,
+      "source_refs": [
+        "semantic:outskirts.abyss.entrance"
+      ]
+    },
+    {
+      "path": "image/outskirts_abyss_zh_hant.png",
+      "source": "next/resources/images/outskirts_abyss_zh_hant.png",
+      "sha256": "e33c7956b0c76b902a3e87b8f41f7c75711d50021db1137cf28e702d99551d4b",
+      "bytes": 24198,
+      "source_refs": [
+        "semantic:outskirts.abyss"
+      ]
+    },
+    {
+      "path": "image/outskirts_earth_b1f_zh_hant.png",
+      "source": "next/resources/images/outskirts_earth_b1f_zh_hant.png",
+      "sha256": "111e8b38c3e2471f40df587fafc10356c3f53a3ab08f61cef16c6c603188a403",
+      "bytes": 23446,
+      "source_refs": [
+        "semantic:outskirts.earth.b1f"
+      ]
+    },
+    {
+      "path": "image/outskirts_earth_zh_hant.png",
+      "source": "next/resources/images/outskirts_earth_zh_hant.png",
+      "sha256": "9aeba5419df94bbe69dc0358ba825feaed54c39fc01fbc9e80f0e30a45835daa",
+      "bytes": 17381,
+      "source_refs": [
+        "semantic:outskirts.earth"
+      ]
+    },
+    {
+      "path": "image/outskirts_fire_b1f_zh_hant.png",
+      "source": "next/resources/images/outskirts_fire_b1f_zh_hant.png",
+      "sha256": "f7b0992e071e6b102280144379f1db767138e1f1e916d8e8662cb6c44e4ab6a1",
+      "bytes": 23789,
+      "source_refs": [
+        "semantic:outskirts.fire.b1f"
+      ]
+    },
+    {
+      "path": "image/outskirts_fire_zh_hant.png",
+      "source": "next/resources/images/outskirts_fire_zh_hant.png",
+      "sha256": "f73a7aba203ffb0a331eafde0462d62a349b30f746181cbdb5d2bcb5495e561d",
+      "bytes": 16344,
+      "source_refs": [
+        "semantic:outskirts.fire"
+      ]
+    },
+    {
+      "path": "image/outskirts_light_b1f_zh_hant.png",
+      "source": "next/resources/images/outskirts_light_b1f_zh_hant.png",
+      "sha256": "b216ba389836224f2c18b068eb0c10a58fba8e02b816b5b1ad1f5bee6ded2d88",
+      "bytes": 24110,
+      "source_refs": [
+        "semantic:outskirts.light.b1f"
+      ]
+    },
+    {
+      "path": "image/outskirts_light_zh_hant.png",
+      "source": "next/resources/images/outskirts_light_zh_hant.png",
+      "sha256": "686364f22f89f82e697925a5ac28aee14684bc6ebed1faae07ba539a55e76370",
+      "bytes": 17546,
+      "source_refs": [
+        "semantic:outskirts.light"
+      ]
+    },
+    {
+      "path": "image/outskirts_resentment_b1f_zh_hant.png",
+      "source": "next/resources/images/outskirts_resentment_b1f_zh_hant.png",
+      "sha256": "3afc793e0892199709cbb595de035bf701f5b61596fd7b8ccb1264e4ea449342",
+      "bytes": 24186,
+      "source_refs": [
+        "semantic:outskirts.resentment.b1f"
+      ]
+    },
+    {
+      "path": "image/outskirts_resentment_b2f_zh_hant.png",
+      "source": "next/resources/images/outskirts_resentment_b2f_zh_hant.png",
+      "sha256": "a119cacc37cec706851746cc3cf6dd18d2d4fc9c60f755c5a70a18e4012e4cc3",
+      "bytes": 24242,
+      "source_refs": [
+        "semantic:outskirts.resentment.b2f"
+      ]
+    },
+    {
+      "path": "image/outskirts_resentment_b3f_zh_hant.png",
+      "source": "next/resources/images/outskirts_resentment_b3f_zh_hant.png",
+      "sha256": "4722f25311269bf6fdf18a3954bc263678f22558d311fad58cc48bd7ea4f471f",
+      "bytes": 24133,
+      "source_refs": [
+        "semantic:outskirts.resentment.b3f"
+      ]
+    },
+    {
+      "path": "image/outskirts_resentment_b4f_zh_hant.png",
+      "source": "next/resources/images/outskirts_resentment_b4f_zh_hant.png",
+      "sha256": "793f86d2e0b99858a2174ec04f286ec515f36674b193655d6aa1a30da2a8628c",
+      "bytes": 24637,
+      "source_refs": [
+        "semantic:outskirts.resentment.b4f"
+      ]
+    },
+    {
+      "path": "image/outskirts_resentment_zh_hant.png",
+      "source": "next/resources/images/outskirts_resentment_zh_hant.png",
+      "sha256": "10d5682dea6423409002c1af33d9b7604580c0eac0a6ac75c66e301ef025b33f",
+      "bytes": 20370,
+      "source_refs": [
+        "semantic:outskirts.resentment"
+      ]
+    },
+    {
+      "path": "image/outskirts_return_to_town_zh_hant.png",
+      "source": "next/resources/images/outskirts_return_to_town_zh_hant.png",
+      "sha256": "d45861683932903abccc83a87cc4f1c43e690b7689201b918249df9ad9d94f11",
+      "bytes": 21421,
+      "source_refs": [
+        "semantic:outskirts.return.to.town"
+      ]
+    },
+    {
+      "path": "image/outskirts_separation_b2f_zh_hant.png",
+      "source": "next/resources/images/outskirts_separation_b2f_zh_hant.png",
+      "sha256": "8d995443daff3e6279fbd5a562c187cb1b166f4445253f2de0c729767e9a438d",
+      "bytes": 25202,
+      "source_refs": [
+        "semantic:outskirts.separation.b2f"
+      ]
+    },
+    {
+      "path": "image/outskirts_separation_entrance_zh_hant.png",
+      "source": "next/resources/images/outskirts_separation_entrance_zh_hant.png",
+      "sha256": "ac1c462f3119e255aaa3089227bdf360b9e59573c6bb1b521686bfc697044a27",
+      "bytes": 24208,
+      "source_refs": [
+        "semantic:outskirts.separation.entrance"
+      ]
+    },
+    {
+      "path": "image/outskirts_separation_zh_hant.png",
+      "source": "next/resources/images/outskirts_separation_zh_hant.png",
+      "sha256": "db650b570966bb8d5b9146d4897c477b74ff220627e5cdb031a9ba241d4e9c5e",
+      "bytes": 20413,
+      "source_refs": [
+        "semantic:outskirts.separation"
+      ]
+    },
+    {
+      "path": "image/outskirts_submenu_back_zh_hant.png",
+      "source": "next/resources/images/outskirts_submenu_back_zh_hant.png",
+      "sha256": "b67ac5d26104f3ac229caccd964e39365a5add6732c36c72d57f34cc12b3d3d2",
+      "bytes": 12014,
+      "source_refs": [
+        "semantic:outskirts.submenu.back"
+      ]
+    },
+    {
+      "path": "image/outskirts_water_b1f_zh_hant.png",
+      "source": "next/resources/images/outskirts_water_b1f_zh_hant.png",
+      "sha256": "dd34ac527cbbf2dab9a87bce89622f4bb2a8949e9afb1a55113e08378b670ba9",
+      "bytes": 23828,
+      "source_refs": [
+        "semantic:outskirts.water.b1f"
+      ]
+    },
+    {
+      "path": "image/outskirts_water_zh_hant.png",
+      "source": "next/resources/images/outskirts_water_zh_hant.png",
+      "sha256": "5e6102090ceaf65bcac217d8336494e47c1408a7d55f85b316353484272c0375",
+      "bytes": 19245,
+      "source_refs": [
+        "semantic:outskirts.water"
+      ]
+    },
+    {
+      "path": "image/outskirts_wind_b1f_zh_hant.png",
+      "source": "next/resources/images/outskirts_wind_b1f_zh_hant.png",
+      "sha256": "030e3722da67c020d92879391053bf3698fdaa89fa1fba32266e1c1fdbf1d4f0",
+      "bytes": 24150,
+      "source_refs": [
+        "semantic:outskirts.wind.b1f"
+      ]
+    },
+    {
+      "path": "image/outskirts_wind_zh_hant.png",
+      "source": "next/resources/images/outskirts_wind_zh_hant.png",
+      "sha256": "58a5464481e3e90b7afedd4894269e9da636b38e79954cfd40e1fb771f1d2709",
+      "bytes": 17716,
+      "source_refs": [
+        "semantic:outskirts.wind"
+      ]
     },
     {
       "path": "image/press!!!.png",
@@ -2840,6 +3247,15 @@
       "source": "next/resources/images/ruins_icon.png",
       "sha256": "f9f6ca5e5bf50f4f83d25851f84cdf01a8ac7e0b90e3586ae65a61514757fa96",
       "bytes": 25420,
+      "source_refs": [
+        "semantic-catalogue:unclassified"
+      ]
+    },
+    {
+      "path": "image/ruins_icon_shape.png",
+      "source": "next/resources/images/ruins_icon_shape.png",
+      "sha256": "b839bf3b25556fe25238a25623208c44c89b68dba0fbc1c6da2f6fb122ea7440",
+      "bytes": 1262,
       "source_refs": [
         "semantic:city.ruins.entry"
       ]
@@ -3732,6 +4148,15 @@
       ]
     },
     {
+      "path": "image/temple_icon_shape.png",
+      "source": "next/resources/images/temple_icon_shape.png",
+      "sha256": "9c663beee17bff296394bf3ced6137fda82735bb26695d3d9fa216ce15f10e03",
+      "bytes": 1531,
+      "source_refs": [
+        "semantic:city.temple.entry"
+      ]
+    },
+    {
       "path": "image/theRouteToTheDestinationCannotBeFound.png",
       "source": "resources/images/theRouteToTheDestinationCannotBeFound.png",
       "sha256": "bd436b94266838cdf0e4af33b1cce63390b865a69cd626b63f4186f0972f6b2a",
@@ -3826,8 +4251,8 @@
     {
       "path": "parameters/semantic-assets.json",
       "source": "next/resources/authoring/semantic-assets.json",
-      "sha256": "c7f11812b9fdac5dd74a54e08f17fdf90995602dd51c9fe9efc8d12453f80ae6",
-      "bytes": 15597,
+      "sha256": "779085dc5a764138338a6d8b3137ee83bb67fb392e36f9fd8b2eda2752c739a5",
+      "bytes": 43156,
       "source_refs": [
         "authoring:public-flow-1"
       ]

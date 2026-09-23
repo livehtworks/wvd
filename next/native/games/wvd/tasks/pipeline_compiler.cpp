@@ -165,6 +165,9 @@ void CompiledWorkflow::validate() const {
             "COMPILE_SESSION_BUDGET_INVALID");
     require(!kind.empty() && nodes.is_object() && nodes.contains(entry) && nodes.contains(terminal),
             "COMPILE_ENTRY_INVALID");
+    require(event_scopes.is_object(), "COMPILE_EVENT_SCOPE_INVALID");
+    for (const auto &[name, rules] : event_scopes.items())
+        require(nodes.contains(name) && rules.is_array(), "COMPILE_EVENT_SCOPE_INVALID");
     // 最大的旧任务图约 4,037 个节点；生产恢复必须再封入约百个 Boot 节点。
     // 保留明确的 4,608 硬上限，不为任意作者输入取消有界校验。
     require(nodes.size() <= 4608, "COMPILE_NODE_LIMIT");
@@ -207,6 +210,14 @@ void CompiledWorkflow::validate() const {
                         p.at("reset_hit_counts").is_array(), "COMPILE_CHILD_PARAMETERS_INVALID");
             visit(p.at("entry").get<std::string>());
         }
+        if (event_scopes.contains(name))
+            for (const auto &rule : event_scopes.at(name)) {
+                require(rule.at("source_node") == name, "COMPILE_EVENT_SOURCE_INVALID");
+                if (rule.contains("entry")) visit(rule.at("entry").get<std::string>());
+                if (rule.contains("resume") && rule.at("resume").value("mode", "") == "replan")
+                    require(nodes.contains(rule.at("resume").at("node_id").get<std::string>()),
+                            "COMPILE_EVENT_REPLAN_INVALID");
+            }
         for (const auto &next : node.value("next", J::array()))
             visit(next.get<std::string>());
         for (const auto &next : node.value("on_error", J::array()))
@@ -248,6 +259,13 @@ void CompiledWorkflow::validate() const {
                 check_scope(target);
                 height = std::max(height, 1 + scope_heights.at(target));
             }
+            if (event_scopes.contains(name))
+                for (const auto &rule : event_scopes.at(name))
+                    if (rule.contains("entry")) {
+                        const auto target = rule.at("entry").get<std::string>();
+                        check_scope(target);
+                        height = std::max(height, 1 + scope_heights.at(target));
+                    }
             const auto next = node.value("next", J::array());
             if (next.empty() && (action == "RootTerminal" || node.value("action", "DoNothing") == "DoNothing"))
                 has_terminal = true;
@@ -279,6 +297,7 @@ void CompiledWorkflow::validate() const {
                 "COMPILE_CHECKPOINT_INVALID");
     std::set<std::string> actual_images;
     collect_images(nodes, actual_images);
+    collect_images(event_scopes, actual_images);
     if (dialogue_policy != recovery::DialoguePolicy::Default) {
         for (const auto name : recovery::special_dialogue_options(dialogue_policy)) actual_images.insert(std::string(name) + ".png");
         for (const auto name : recovery::dialogue_task_stops(dialogue_policy)) actual_images.insert(std::string(name) + ".png");
@@ -394,6 +413,10 @@ void PipelineCompiler::hit_limit(const std::string &name, int limit) {
     require(workflow_.nodes.contains(name) && limit >= 1 && limit <= 256,
             "COMPILE_HIT_LIMIT_INVALID");
     workflow_.nodes[name]["max_hit"] = limit;
+}
+void PipelineCompiler::event_scope(const std::string &name, J rules) {
+    require(workflow_.nodes.contains(name) && rules.is_array(), "COMPILE_EVENT_SCOPE_INVALID");
+    workflow_.event_scopes[name] = std::move(rules);
 }
 void PipelineCompiler::delay_after(const std::string &name, int milliseconds) {
     require(workflow_.nodes.contains(name) && milliseconds >= 0 && milliseconds <= 10000,
@@ -558,6 +581,19 @@ std::string PipelineCompiler::append(const std::string &prefix, const CompiledWo
         }
         workflow_.nodes[prefix + "_" + name] = std::move(node);
     }
+    for (const auto &[name, original_rules] : child.event_scopes.items()) {
+        auto rules = original_rules;
+        for (auto &rule : rules) {
+            rule["source_node"] = prefix + "_" + rule.at("source_node").get<std::string>();
+            if (rule.contains("entry")) rule["entry"] = prefix + "_" + rule.at("entry").get<std::string>();
+            if (rule.contains("reset_hit_counts"))
+                for (auto &reset : rule["reset_hit_counts"])
+                    reset = prefix + "_" + reset.get<std::string>();
+            if (rule.contains("resume") && rule.at("resume").value("mode", "") == "replan")
+                rule["resume"]["node_id"] = prefix + "_" + rule.at("resume").at("node_id").get<std::string>();
+        }
+        workflow_.event_scopes[prefix + "_" + name] = std::move(rules);
+    }
     return prefix + "_" + child.entry;
 }
 std::string PipelineCompiler::define_child(const std::string &prefix, const CompiledWorkflow &child,
@@ -708,6 +744,7 @@ CompiledWorkflow PipelineCompiler::finish() {
          {"custom_action_param", {{"reason", workflow_.kind + ".budget_exhausted"}}}});
     std::set<std::string> images;
     collect_images(workflow_.nodes, images);
+    collect_images(workflow_.event_scopes, images);
     if (workflow_.dialogue_policy != recovery::DialoguePolicy::Default) {
         for (const auto name : recovery::special_dialogue_options(workflow_.dialogue_policy)) images.insert(std::string(name) + ".png");
         for (const auto name : recovery::dialogue_task_stops(workflow_.dialogue_policy)) images.insert(std::string(name) + ".png");

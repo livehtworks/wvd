@@ -14,6 +14,8 @@ struct CompiledWorkflow {
     std::string terminal{"Terminal"};
     std::string checkpoint;
     nlohmann::json nodes = nlohmann::json::object();
+    // 编译期已解析的节点作用域规则，不交给 Maa 作为可变业务参数。
+    nlohmann::json event_scopes = nlohmann::json::object();
     std::vector<std::string> images;
     std::vector<std::string> required_actions;
     std::chrono::milliseconds time_limit{60000};
@@ -60,6 +62,7 @@ class PipelineCompiler {
                  const nlohmann::json &condition, nlohmann::json next,
                  nlohmann::json expected_step = nullptr);
     void hit_limit(const std::string &name, int limit);
+    void event_scope(const std::string &name, nlohmann::json rules);
     void failure_route(const std::string &name, nlohmann::json next);
     void delay_after(const std::string &name, int milliseconds);
     void postcondition_budget(const std::string &name, int milliseconds);

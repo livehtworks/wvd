@@ -4,6 +4,7 @@
 #include "guarded_controller.hpp"
 #include "recognition.hpp"
 #include "contracts/business_state.hpp"
+#include "contracts/flow_event.hpp"
 #include <map>
 #include <vector>
 
@@ -23,6 +24,10 @@ class Context {
     contracts::FrameEnvelope capture();
     contracts::Observation recognize(const contracts::FrameEnvelope &frame,
                                      const RecognitionRequest &request);
+    contracts::FlowEventResult check_events(const contracts::FrameEnvelope &frame,
+        contracts::FlowEventPhase phase, const std::string &source_node = {});
+    bool event_replan_pending(const std::string &source_node) const;
+    bool has_event_scope() const;
     bool current_observation(const contracts::Observation &observation) const;
     ChildResult run_child(const std::string &entry,
                           const nlohmann::json &overrides = nlohmann::json::object(),
@@ -55,6 +60,10 @@ struct GatewayHooks {
     std::function<void(const std::string &, const nlohmann::json &)> event = [](const auto &,
                                                                                 const auto &) {};
     std::function<void(const ChildResult &)> child = [](const auto &) {};
+    std::function<contracts::FlowEventResult(Context &, const contracts::FrameEnvelope &,
+        contracts::FlowEventPhase, const std::string &)> event_check;
+    std::function<bool(const std::string &)> event_replan_pending;
+    std::function<bool(const std::string &)> event_scope_enabled;
     std::function<void(const contracts::FrameEnvelope *, const storage::DiagnosticRequest &)> diagnostic;
 };
 class MaaGateway {

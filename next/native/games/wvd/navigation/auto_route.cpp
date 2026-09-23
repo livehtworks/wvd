@@ -1,4 +1,5 @@
 #include "auto_route.hpp"
+#include "games/wvd/vision/harken_probes.hpp"
 
 namespace wvd::games::navigation {
 using J = nlohmann::json;
@@ -14,9 +15,12 @@ tasks::CompiledWorkflow auto_route(const std::string &target) {
     const auto outside = C::all({C::any({C::image("Inn"), C::image("EdgeOfTown"), C::image("returnText"),
                                         C::image("returntoTown"), C::image("openworldmap"), C::image("worldmapflag")}),
                                  C::absent(map), C::absent(encounter)});
+    const auto harken = C::any({vision::harken_buff_menu(), vision::harken_floor_menu(),
+                                vision::outskirts_return_button()});
     const J moving{{"mode", "auto_route_moving"}};
     const auto no_target = C::any({C::image("NoChestCanBeFound"), C::image("theRouteToTheDestinationCannotBeFound")});
-    const J post{{"mode", "auto_route_post"}};
+    const J post = target == "dungFlag" ? C::any({J{{"mode", "auto_route_post"}}, harken})
+                                          : J{{"mode", "auto_route_post"}};
     graph.observe("Encounter", encounter, {"EncounterExit"});
     graph.recovery("EncounterExit", "navigation.auto_encounter_requires_dispatch");
     graph.recovery("StoppedExit", "navigation.auto_stopped_requires_dispatch");
@@ -37,7 +41,7 @@ tasks::CompiledWorkflow auto_route(const std::string &target) {
             available = C::all({button, minus});
         }
         graph.route("Entry", {"Encounter", "Retreated", "Done", "CloseMap", "Ready", "Expand"});
-        graph.observe("Retreated", outside, {"Terminal"});
+        graph.observe("Retreated", target == "dungFlag" ? C::any({outside, harken}) : outside, {"Terminal"});
         graph.observe("Done", C::all({no_target, C::absent(encounter)}), {"Terminal"});
         graph.back("CloseMap", C::all({map, C::absent(encounter)}), post, {"Entry"});
         graph.observe("Ready", C::all({moving, button}), {"Choose", "Unavailable"});

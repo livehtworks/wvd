@@ -1,5 +1,6 @@
 #include "execution_session.hpp"
 #include "guarded_action.hpp"
+#include "flow_events.hpp"
 #include "devices/lifecycle_execution.hpp"
 #include <thread>
 
@@ -38,6 +39,14 @@ ExecutionSession::~ExecutionSession() {
     if (worker_.joinable())
         worker_.join();
 }
+nlohmann::json ExecutionSession::event_status() const {
+    std::shared_ptr<FlowEvents> events;
+    {
+        std::lock_guard lock(mutex_);
+        events = flow_events_;
+    }
+    return events ? events->status() : nlohmann::json(nullptr);
+}
 void ExecutionSession::start() {
     // join 后线程不再 joinable，但会话的历史/门禁不能因此重新用于另一轮执行。
     if (started_.exchange(true))
@@ -57,10 +66,17 @@ void ExecutionSession::request_stop() {
     user_stop_ = true;
     gate_.close();
 }
-bool ExecutionSession::cancelled() const { return user_stop_ || abort_ || recovery_; }
+bool ExecutionSession::cancelled() const { return user_stop_ || abort_ || recovery_ || external_blocked_; }
 void ExecutionSession::fail(const std::string &reason) {
+    if ((external_blocked_ || user_stop_) &&
+        (reason == "INPUT_CLOSED" || reason == "SESSION_CANCELLED"))
+        return;
     gate_.close();
     abort_ = true;
+    try {
+        events_.emit(gate_.generation(), "session.failure", {{"reason", reason}});
+    } catch (...) {
+    }
     std::lock_guard lock(mutex_);
     if (result_.reason.empty())
         result_.reason = reason;
@@ -105,11 +121,33 @@ void ExecutionSession::execute() noexcept {
         // 上一代次由协调器 join 后才创建本段；此处尚未创建 SDK Controller。
         // 生命周期成功只允许进入启动识别图，不能直接形成根终态。
         prepare_lifecycle();
+        auto flow_events = std::make_shared<FlowEvents>(definition_.event_scopes, gate_, events_, [this](const std::string &reason) {
+            gate_.close();
+            external_blocked_ = true;
+            std::lock_guard lock(mutex_);
+            if (result_.reason.empty()) result_.reason = reason;
+            result_.outcome_category = "external_blocked";
+        });
+        {
+            std::lock_guard lock(mutex_);
+            flow_events_ = flow_events;
+        }
         maafw::GatewayHooks hooks;
         hooks.cancelled = [this] { return cancelled(); };
         hooks.failure = [this](const auto &reason) { fail(reason); };
         hooks.event = [this](const auto &type, const auto &data) {
             events_.emit(gate_.generation(), type, data);
+        };
+        hooks.event_check = [flow_events](maafw::Context &context,
+            const contracts::FrameEnvelope &frame, contracts::FlowEventPhase phase,
+            const std::string &source_node) {
+            return flow_events->check(context, frame, phase, source_node);
+        };
+        hooks.event_replan_pending = [flow_events](const std::string &source_node) {
+            return flow_events->route_pending_for_source(source_node);
+        };
+        hooks.event_scope_enabled = [flow_events](const std::string &source_node) {
+            return flow_events->scope_enabled(source_node);
         };
         if (diagnostic_store_) {
             // store固定属于本Run，由协调器持有到全部回调结束、Session join及终态保存后。
@@ -129,7 +167,7 @@ void ExecutionSession::execute() noexcept {
         hooks.child = [this](const maafw::ChildResult &child) {
             events_.emit(gate_.generation(), "child.result",
                          {{"id", child.id}, {"valid", child.valid}, {"status", child.status}});
-            if (!child.valid || child.status != MaaStatus_Succeeded)
+            if (!external_blocked_ && !user_stop_ && (!child.valid || child.status != MaaStatus_Succeeded))
                 fail("CHILD_FAILED");
         };
         auto actions = registry_->bind(definition_.actions);
@@ -167,10 +205,32 @@ void ExecutionSession::execute() noexcept {
             const auto duration = parameters.at("duration_ms").get<int>();
             if (duration < 1 || duration > 10000)
                 throw std::runtime_error("WAIT_DURATION_INVALID");
-            const auto deadline = std::chrono::steady_clock::now() +
-                                  std::chrono::milliseconds(duration);
-            while (!context.cancelled() && std::chrono::steady_clock::now() < deadline)
+            auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(duration);
+            if (!context.has_event_scope()) {
+                while (!context.cancelled() && std::chrono::steady_clock::now() < deadline)
+                    std::this_thread::sleep_for(25ms);
+                return !context.cancelled();
+            }
+            auto next_check = std::chrono::steady_clock::now();
+            while (!context.cancelled() && std::chrono::steady_clock::now() < deadline) {
+                if (std::chrono::steady_clock::now() >= next_check) {
+                    const auto frame = context.capture();
+                    for (const auto phase : {contracts::FlowEventPhase::Overlay,
+                                             contracts::FlowEventPhase::Encounter}) {
+                        const auto event = context.check_events(frame, phase);
+                        if (event.outcome == contracts::FlowEventOutcome::ExternalBlocked ||
+                            event.outcome == contracts::FlowEventOutcome::Cancelled) return false;
+                        if (event.outcome == contracts::FlowEventOutcome::Replan) return true;
+                        if (event.outcome == contracts::FlowEventOutcome::Handled) {
+                            deadline += event.elapsed;
+                            break;
+                        }
+                        if (event.outcome == contracts::FlowEventOutcome::Reobserve) break;
+                    }
+                    next_check = std::chrono::steady_clock::now() + 100ms;
+                }
                 std::this_thread::sleep_for(25ms);
+            }
             return !context.cancelled();
         });
         add("RunChild", [](maafw::Context &context, const auto &parameters) {
@@ -214,6 +274,27 @@ void ExecutionSession::execute() noexcept {
         add("GuardedAction", [this](maafw::Context &context, const auto &parameters) {
             return GuardedAction::execute(context, gate_, events_, parameters);
         });
+        add("DispatchEvent", [flow_events](maafw::Context &context, const auto &parameters) {
+            const auto frame = context.capture();
+            const auto kind = parameters.at("class").get<std::string>();
+            const auto result = flow_events->check(context, frame,
+                kind == "overlay" ? contracts::FlowEventPhase::Overlay : contracts::FlowEventPhase::Encounter,
+                parameters.at("source_node").get<std::string>(),
+                parameters.at("event_id").get<std::string>());
+            return result.outcome != contracts::FlowEventOutcome::ExternalBlocked &&
+                   result.outcome != contracts::FlowEventOutcome::Cancelled &&
+                   result.outcome != contracts::FlowEventOutcome::Error;
+        });
+        add("ConsumeEventRoute", [this, flow_events](maafw::Context &context, const auto &parameters) {
+            if (context.cancelled()) return false;
+            const auto source = parameters.at("source_node").template get<std::string>();
+            const auto event = parameters.at("event_id").template get<std::string>();
+            const auto target = parameters.at("target").template get<std::string>();
+            flow_events->consume_route(source, event, target);
+            events_.emit(gate_.generation(), "flow_event.replanned",
+                         {{"source_node", source}, {"event_id", event}, {"target", target}}, true);
+            return true;
+        });
         add("AwaitTransition", [this](maafw::Context &context, const auto &parameters) {
             return GuardedAction::await_transition(context, gate_, events_, parameters);
         });
@@ -230,8 +311,20 @@ void ExecutionSession::execute() noexcept {
                 parameters.at("phase").template get<std::string>());
             return true;
         });
+        auto recognitions = registry_->bind_recognitions(definition_.recognitions);
+        if (!recognitions.emplace("EventRoute", [flow_events](const maafw::Bundle &,
+            maafw::RecognitionPixels, const nlohmann::json &parameters,
+            const maafw::CustomRecognitionScope &, maafw::RecognitionCache &) {
+            const auto hit = flow_events->route_pending(
+                parameters.at("source_node").get<std::string>(),
+                parameters.at("event_id").get<std::string>(),
+                parameters.at("target").get<std::string>());
+            return nlohmann::json{{"schema", 1}, {"outcome", hit ? "Hit" : "NoHit"},
+                {"box", hit ? nlohmann::json::array({0, 0, 1, 1}) : nlohmann::json(nullptr)},
+                {"target", false}, {"evidence", nlohmann::json::object()}};
+        }).second) throw std::runtime_error("RESERVED_RECOGNITION_OVERRIDE");
         maafw::MaaGateway gateway(definition_.bundle, &gate_, std::move(hooks), std::move(actions),
-                                  registry_->bind_recognitions(definition_.recognitions),
+                                  std::move(recognitions),
                                   business_);
         gateway.initialize();
         running_ = true;
@@ -302,17 +395,21 @@ void ExecutionSession::execute() noexcept {
             result_.end = SessionEnd::Failed;
         else if (user_stop_)
             result_.end = SessionEnd::UserStopped;
+        else if (external_blocked_)
+            result_.end = SessionEnd::ExternalBlocked;
         else if (recovery_)
             result_.end = SessionEnd::RecoveryRequired;
         else if (!abort_ && result_.engine_status == MaaStatus_Succeeded &&
                  root.task_id == result_.root_task_id && root.generation == gate_.generation() &&
                  root.depth == 0 && root.node == definition_.terminal_node && checkpoint_valid &&
-                 !gate_.has_pending_submission())
+                 !gate_.has_pending_submission() && gate_.event_depth() == 0 &&
+                 !(flow_events_ && flow_events_->has_pending_route()))
             result_.end = SessionEnd::Completed;
         else {
             result_.end = SessionEnd::Failed;
             if (result_.reason.empty())
                 result_.reason = gate_.has_pending_submission() ? "PENDING_INPUT_RESULT_UNCONFIRMED" :
+                    flow_events_ && flow_events_->has_pending_route() ? "EVENT_REPLAN_ROUTE_UNCONSUMED" :
                     checkpoint_valid ? "ROOT_TERMINAL_MISSING" : "BUSINESS_CHECKPOINT_MISSING";
         }
         done_ = true;

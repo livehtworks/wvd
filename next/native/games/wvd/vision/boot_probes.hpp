@@ -1,5 +1,6 @@
 #pragma once
 #include "location_probes.hpp"
+#include "harken_probes.hpp"
 #include <json.hpp>
 
 namespace wvd::games::vision {
@@ -27,6 +28,7 @@ inline nlohmann::json blocking_probes(bool include_party_prompts = true) {
     probes.push_back({{"mode", "pause"}});
     add("sandman_recover");
     add("blessing");
+    probes.push_back(harken_buff_menu());
     add("ambush");
     add("ignore");
     // 死亡提示只有在正常场景全部不成立时才生效，不能让王城/地图骷髅抢占导航。

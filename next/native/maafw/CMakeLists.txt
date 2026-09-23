@@ -36,7 +36,7 @@ add_library(wvd_core recognition.cpp preflight.cpp gateway.cpp guarded_controlle
   ../platform/windows/file_digest.cpp ../platform/windows/runtime_files.cpp
   ../storage/run_store.cpp ../storage/runtime_bundle.cpp ../storage/pipeline_bundle.cpp ../platform/windows/bundle_lease.cpp
   ../devices/input_gate.cpp ../devices/lifecycle_execution.cpp ../runtime/guarded_action.cpp
-  ../runtime/execution_session.cpp ../runtime/run_coordinator.cpp ../runtime/behavior_registry.cpp)
+  ../runtime/execution_session.cpp ../runtime/flow_events.cpp ../runtime/run_coordinator.cpp ../runtime/behavior_registry.cpp)
 target_include_directories(wvd_core PUBLIC "${PROJECT_SOURCE_DIR}/native" "${PROJECT_BINARY_DIR}/generated")
 target_include_directories(wvd_core PUBLIC "${WVD_MAA_SDK}/include")
 target_compile_definitions(wvd_core PUBLIC NOMINMAX WIN32_LEAN_AND_MEAN)
@@ -76,6 +76,7 @@ if(WVD_BUILD_M4)
     ../games/wvd/recovery/leap_wait.cpp
     ../games/wvd/navigation/causality.cpp
     ../games/wvd/navigation/return_city.cpp
+    ../games/wvd/navigation/harken_exit.cpp
     ../games/wvd/quests/bounty_cycle.cpp
     ../games/wvd/tasks/bounty_cycle.cpp
     ../games/wvd/tasks/fishing.cpp

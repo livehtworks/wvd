@@ -4,6 +4,7 @@
 #include "karma_prompt.hpp"
 #include "dialogue.hpp"
 #include "leap_wait.hpp"
+#include "games/wvd/vision/harken_probes.hpp"
 #include <limits>
 
 namespace wvd::games::recovery {
@@ -196,7 +197,9 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, Dialogue
                                          std::pair{"Blessing", GlobalPrompt::Blessing}}) {
         const std::string name = prefix;
         const auto child = graph.define_child(name + "Prompt", dismiss_global_prompt(prompt));
-        graph.observe(name, C::image(prompt == GlobalPrompt::Blessing ? "blessing" : "sandman_recover"), {name + "Handle"});
+        const auto marker = prompt == GlobalPrompt::Blessing
+            ? C::any({vision::harken_buff_menu(), C::image("blessing")}) : C::image("sandman_recover");
+        graph.observe(name, marker, {name + "Handle"});
         graph.call_child(name + "Handle", child, {"Entry"});
         graph.hit_limit(name, 6);
         graph.hit_limit(name + "Handle", 6);

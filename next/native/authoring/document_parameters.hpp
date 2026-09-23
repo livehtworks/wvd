@@ -182,6 +182,11 @@ inline std::set<std::string> referenced_flows(const Json &document) {
         if (node.at("type") == "slot")
             for (const auto &call : node.at("parameters").value("calls", Json::array())) collect(collect, call);
     }
+    const auto event_rules = document.at("execution").value("events", Json::object());
+    for (const auto &[id, rule] : event_rules.items()) {
+        (void)id;
+        if (rule.contains("handler")) collect(collect, rule.at("handler"));
+    }
     return result;
 }
 inline Json slot_names(const Json &document) {

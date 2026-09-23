@@ -12,6 +12,7 @@ struct RunDefinition {
     std::optional<contracts::BehaviorBinding> state_factory;
     std::vector<SessionDefinition> continuation_units;
     std::size_t max_business_units{1};
+    std::optional<std::chrono::milliseconds> total_time_limit;
 };
 // 一个用户运行的唯一所有者。监督线程不做原生阻塞调用；Session 工作线程独占 SDK 对象。
 // STOP_TIMEOUT 只改变可观察故障状态，不能提前 join、释放设备租约或接受另一运行。
@@ -38,7 +39,8 @@ class RunCoordinator {
     void validate(const RunDefinition &definition, const devices::DeviceBackend &backend) const;
     void record_failure(const std::string &reason);
     void wait_session(const std::shared_ptr<ExecutionSession> &session,
-                      const SessionDefinition &definition, bool events);
+                      const SessionDefinition &definition, bool events,
+                      std::optional<std::chrono::steady_clock::time_point> total_deadline = std::nullopt);
     void collect_session(const std::shared_ptr<ExecutionSession> &session, bool allow_connection_recovery = false);
     void finish() noexcept;
     const std::filesystem::path data_root_;

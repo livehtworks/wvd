@@ -91,6 +91,11 @@ J match(const cv::Mat &source, cv::Mat templ, J p, maafw::RecognitionCache &cach
             cache.assets.emplace(mask_key, mask);
         }
         cv::matchTemplate(search, templ, scores, cv::TM_CCORR_NORMED, mask);
+    } else if (p.value("grayscale", false)) {
+        cv::Mat gray_search, gray_template;
+        cv::cvtColor(search, gray_search, cv::COLOR_BGR2GRAY);
+        cv::cvtColor(templ, gray_template, cv::COLOR_BGR2GRAY);
+        cv::matchTemplate(gray_search, gray_template, scores, cv::TM_CCOEFF_NORMED);
     } else
         cv::matchTemplate(search, templ, scores, cv::TM_CCOEFF_NORMED);
     const auto match_finished = std::chrono::steady_clock::now();
@@ -111,7 +116,8 @@ J match(const cv::Mat &source, cv::Mat templ, J p, maafw::RecognitionCache &cach
                {"best_box", box(found)},
                {"threshold", threshold},
                {"scale", scale},
-               {"method", bright ? "CCORR_NORMED_BRIGHT_MASK" : "CCOEFF_NORMED"},
+               {"method", bright ? "CCORR_NORMED_BRIGHT_MASK" :
+                   p.value("grayscale", false) ? "CCOEFF_NORMED_GRAY" : "CCOEFF_NORMED"},
                // 只保存有界标量诊断，不保存像素，也不把耗时参与识别结果或缓存身份。
                {"timing_ms", {{"match", milliseconds(match_started, match_finished)},
                               {"sanitize", milliseconds(match_finished, sanitize_finished)},

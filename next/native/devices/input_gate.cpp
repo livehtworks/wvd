@@ -400,12 +400,17 @@ void InputGate::begin_submission(const std::string &node, std::int64_t task,
                                  const std::string &condition) {
     std::lock_guard lock(mutex_);
     if (submission_) throw std::runtime_error("PREVIOUS_INPUT_NOT_OBSERVED");
+    if (!event_scopes_.empty() &&
+        (!event_scopes_.back().handler_nodes.contains(node) ||
+         event_scopes_.back().owner != std::this_thread::get_id()))
+        throw std::runtime_error("EVENT_INPUT_OWNER_INVALID");
     if (closed() || node.empty() || task <= 0 || !intent.id || condition.empty() ||
         intent.run_id != run_ || intent.generation != generation_ ||
         !same_frame(intent.observation.basis))
         throw std::runtime_error("SUBMISSION_IDENTITY_INVALID");
     submission_ = contracts::SubmittedInput{node, condition, task, intent.id, epoch_,
         intent.observation.basis};
+    submission_interrupted_ = false;
 }
 void InputGate::finish_submission(bool accepted) {
     std::lock_guard lock(mutex_);
@@ -426,7 +431,7 @@ contracts::SubmittedInput InputGate::pending_submission(const std::string &node,
     if (!submission_ || submission_->source_node != node || submission_->task_id != task ||
         submission_->expected_condition != condition ||
         submission_->state != contracts::SubmittedInput::State::Submitted ||
-        submission_->action_epoch != epoch_)
+        (!submission_interrupted_ && submission_->action_epoch != epoch_))
         throw std::runtime_error("TRANSITION_RECEIPT_MISMATCH");
     return *submission_;
 }
@@ -443,16 +448,95 @@ bool InputGate::confirm_transition(const contracts::SubmittedInput &receipt,
         application_ != policy_.application_id ||
         observed.basis.connection_generation != receipt.before.connection_generation ||
         observed.basis.frame_id <= receipt.before.frame_id ||
-        observed.basis.action_epoch != receipt.action_epoch ||
-        observed.basis.captured_at < receipt.submitted_at)
+        observed.basis.action_epoch != (submission_interrupted_ ? epoch_ : receipt.action_epoch) ||
+        observed.basis.captured_at < (submission_interrupted_ ? resume_after_ : receipt.submitted_at))
         return false;
     // 只消费观察回执，绝不重建 scene_ / permit_，更不自动提交业务完成。
     submission_.reset();
+    submission_interrupted_ = false;
     return true;
 }
 bool InputGate::has_pending_submission() const {
     std::lock_guard lock(mutex_);
-    return submission_.has_value();
+    if (submission_) return true;
+    for (const auto &scope : event_scopes_) if (scope.receipt) return true;
+    return false;
+}
+std::uint64_t InputGate::begin_event_scope(std::int64_t parent_task, const std::string &event_id,
+                                          const std::set<std::string> &handler_nodes) {
+    std::lock_guard lock(mutex_);
+    if (closed() || parent_task <= 0 || event_id.empty() || handler_nodes.empty() ||
+        event_scopes_.size() >= 8 ||
+        in_flight_ || !touches_.empty() || !keys_.empty())
+        throw std::runtime_error("EVENT_SCOPE_NOT_QUIESCENT");
+    if (submission_ && (submission_->task_id != parent_task ||
+                        submission_->state != contracts::SubmittedInput::State::Submitted))
+        throw std::runtime_error("EVENT_PARENT_RECEIPT_UNCERTAIN");
+    for (const auto &scope : event_scopes_)
+        if (scope.event_id == event_id) throw std::runtime_error("EVENT_RECURSION_INVALID");
+    EventScope scope;
+    scope.token = ++next_event_token_;
+    scope.parent_task = parent_task;
+    scope.event_id = event_id;
+    scope.handler_nodes = handler_nodes;
+    scope.entered_at = std::chrono::steady_clock::now();
+    scope.owner = std::this_thread::get_id();
+    scope.receipt = submission_;
+    scope.receipt_interrupted = submission_interrupted_;
+    for (const auto &[key, deadline] : observation_phases_) {
+        (void)deadline;
+        if (key.first != parent_task) continue;
+        bool already_paused = false;
+        for (const auto &active : event_scopes_) {
+            if (active.paused_phases.contains(key)) { already_paused = true; break; }
+        }
+        if (!already_paused) scope.paused_phases.insert(key);
+    }
+    permit_.reset();
+    submission_.reset();
+    submission_interrupted_ = false;
+    event_scopes_.push_back(std::move(scope));
+    return next_event_token_;
+}
+void InputGate::end_event_scope(std::uint64_t token) {
+    std::lock_guard lock(mutex_);
+    if (closed() || event_scopes_.empty() || event_scopes_.back().token != token || submission_ ||
+        in_flight_ || !touches_.empty() || !keys_.empty() || permit_ ||
+        event_scopes_.back().owner != std::this_thread::get_id())
+        throw std::runtime_error("EVENT_RETURN_UNSAFE");
+    auto scope = std::move(event_scopes_.back());
+    event_scopes_.pop_back();
+    const auto now = std::chrono::steady_clock::now();
+    for (const auto &key : scope.paused_phases)
+        if (auto found = observation_phases_.find(key); found != observation_phases_.end())
+            found->second += now - scope.entered_at;
+    submission_ = std::move(scope.receipt);
+    submission_interrupted_ = submission_.has_value();
+    if (submission_interrupted_) resume_after_ = now;
+}
+std::optional<contracts::SubmittedInput> InputGate::settle_event_replan(
+    std::int64_t parent_task, const contracts::Observation &guard) {
+    std::lock_guard lock(mutex_);
+    if (closed() || parent_task <= 0 || !event_scopes_.empty() || in_flight_ || permit_ ||
+        !touches_.empty() || !keys_.empty() ||
+        guard.outcome != contracts::RecognitionOutcome::Hit || !same_frame(guard.basis) ||
+        application_ != policy_.application_id || guard.basis.generation != generation_ ||
+        guard.basis.connection_generation != frame_.connection_generation)
+        throw std::runtime_error("EVENT_REPLAN_EVIDENCE_INVALID");
+    if (!submission_) return std::nullopt;
+    if (submission_->task_id != parent_task ||
+        submission_->state != contracts::SubmittedInput::State::Submitted ||
+        !submission_interrupted_ || guard.basis.frame_id <= submission_->before.frame_id ||
+        guard.basis.action_epoch != epoch_ || guard.basis.captured_at < resume_after_)
+        throw std::runtime_error("EVENT_REPLAN_RECEIPT_UNCERTAIN");
+    auto receipt = *submission_;
+    submission_.reset();
+    submission_interrupted_ = false;
+    return receipt;
+}
+std::size_t InputGate::event_depth() const {
+    std::lock_guard lock(mutex_);
+    return event_scopes_.size();
 }
 } // namespace wvd::devices
 
@@ -482,7 +566,10 @@ std::chrono::steady_clock::time_point InputGate::observation_deadline() const {
     std::lock_guard lock(mutex_);
     auto deadline = std::chrono::steady_clock::time_point::max();
     for (const auto &[key, value] : observation_phases_) {
-        (void)key;
+        bool paused = false;
+        for (const auto &scope : event_scopes_)
+            if (scope.paused_phases.contains(key)) { paused = true; break; }
+        if (paused) continue;
         deadline = std::min(deadline, value);
     }
     return deadline;

@@ -1,4 +1,5 @@
 #include "global_prompt.hpp"
+#include "games/wvd/vision/harken_probes.hpp"
 
 namespace wvd::games::recovery {
 tasks::CompiledWorkflow dismiss_global_prompt(GlobalPrompt prompt) {
@@ -10,7 +11,14 @@ tasks::CompiledWorkflow dismiss_global_prompt(GlobalPrompt prompt) {
     const auto marker = C::image(name);
     const J known{{"mode", "boot_post"}};
     const auto changed = C::all({known, C::absent(marker)});
-    graph.route("Entry", {"Choose0"});
+    graph.route("Entry", blessing ? J{"HarkenChoice", "Choose0"} : J{"Choose0"});
+    if (blessing) {
+        // 祝福名称随机，三处信息图标与底部放弃项共同证明当前是四选一页面。
+        graph.fixed_click("HarkenChoice", vision::harken_buff_menu(), vision::harken_floor_menu(),
+                          {450, 987}, {"HarkenReturned"});
+        graph.postcondition_budget("HarkenChoice", 15000);
+        graph.observe("HarkenReturned", vision::harken_floor_menu(), {"Terminal"});
+    }
     // 旧祝福二次确认优先关闭，不能继续点背景中的祝福按钮。
     // 每次输入都重新定位；六次无效后退出，不把下一页当成连点目标。
     for (unsigned i = 0; i < 6; ++i) {

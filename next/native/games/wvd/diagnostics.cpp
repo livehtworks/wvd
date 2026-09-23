@@ -1,6 +1,7 @@
 #include "diagnostics.hpp"
 #include "state.hpp"
 #include "mining/progress.hpp"
+#include "recovery/event_bindings.hpp"
 
 namespace wvd::games {
 namespace {
@@ -10,13 +11,11 @@ bool confirm(maafw::Context &context, const J &parameters, const J &) {
         return false;
     const auto event = parameters.at("event").get<std::string>();
     const auto operation = parameters.at("operation").get<std::string>();
-    const auto frame = context.capture();
-    auto request = maafw::parse_recognition_request(parameters.at("confirmation"));
-    auto observed = context.recognize(frame, request);
-    if (observed.outcome == contracts::RecognitionOutcome::Error)
-        throw std::runtime_error(observed.error_code);
-    if (observed.outcome != contracts::RecognitionOutcome::Hit || !observed.action_eligible)
-        throw std::runtime_error("BUSINESS_CONFIRMATION_MISSING");
+    const auto confirmed = recovery::confirm_with_events(
+        context, parameters.at("confirmation"), "BUSINESS_CONFIRMATION_MISSING");
+    if (!confirmed) return context.event_replan_pending(context.node());
+    const auto &frame = confirmed->frame;
+    const auto &observed = confirmed->observation;
     if (observed.basis.frame_id != frame.identity.frame_id ||
         observed.basis.generation != frame.identity.generation)
         throw std::runtime_error("BUSINESS_CONFIRMATION_FRAME_INVALID");

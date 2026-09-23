@@ -46,7 +46,17 @@ export interface DeviceState extends JsonObject {
   operation?: { state?: string; name?: string; error?: string | null };
 }
 export interface WorkflowNodeData extends JsonObject { label: string; node_type: string; parameters: JsonObject }
-export interface WorkflowNode { id: string; type?: string; position: { x: number; y: number }; data: WorkflowNodeData; repeat_limit?: number }
+export interface EventResume { mode: "reobserve" | "replan"; node_id?: string; guard?: JsonObject }
+export interface EventRule {
+  enabled: boolean; class: "overlay" | "encounter"; priority: number; detect: JsonObject;
+  handler?: import("../features/authoring/flowModel").FlowCall; resume?: EventResume;
+  allow_nested?: string[]; disposition?: "handled" | "external_blocked"; reason?: string;
+}
+export interface WorkflowNode {
+  id: string; type?: string; position: { x: number; y: number }; data: WorkflowNodeData;
+  repeat_limit?: number; event_overrides?: Record<string, { enabled?: boolean; arguments?: Record<string, string | number | boolean> }>;
+  resume?: Record<string, EventResume>;
+}
 export interface WorkflowEdge {
   id: string; source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null; label?: string;
   data?: { order?: number; kind?: "sequence" | "candidate" | "failure"; [key: string]: unknown };
@@ -57,6 +67,7 @@ export interface WorkflowDefinition extends JsonObject {
   time_limit_ms?: number;
   interface?: import("../features/authoring/flowModel").PublicInterface;
   slots?: string[]; resource_locale?: string;
+  events?: Record<string, EventRule>;
   validation_errors?: Array<{ node_id?: string; error_code: string; message: string }>;
 }
 export interface SubmissionReceipt extends JsonObject {
@@ -66,6 +77,10 @@ export interface SubmissionReceipt extends JsonObject {
 export interface RunState extends JsonObject {
   busy?: boolean; quiescent?: boolean;
   node_path?: Array<{flow_id:string;node_id:string}>;
+  active_event?: {event_id:string;class?:string;source_node:string;handler_entry?:string;phase?:string;
+    depth:number;resume:{mode:string;node_id?:string};path?:Array<{event_id:string;source_node:string}>};
+  suspended_step?: {pipeline_node:string;node_id?:string|null;node_path?:Array<{flow_id:string;node_id:string}>};
+  outcome_category?: string;
   submission?: { request_id: string; kind?: string; state?: string; error?: string | null };
   run_id?: string | number; workflow_id?: string; workflow_revision?: string; state?: string; current_node_id?: string;
   failed_node_id?: string; task_name?: string; step_name?: string; started_at?: string; elapsed_seconds?: number;

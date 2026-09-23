@@ -22,6 +22,27 @@ class SemanticAssets {
     }
     Json lower(Json document, const std::string &locale) {
         check_locale(locale);
+        if (document.at("execution").contains("events")) {
+            for (auto &[id, rule] : document["execution"]["events"].items()) {
+                (void)id;
+                if (rule.value("enabled", false)) {
+                    try {
+                        auto detect = lower_condition(rule.at("detect"), locale);
+                        rule["detect"] = std::move(detect);
+                    } catch (const ContractError &error) {
+                        contract_error("EVENT_DETECT_UNAVAILABLE", id + ":" + locale + ":detect:" + error.what());
+                    }
+                    if (rule.contains("resume") && rule.at("resume").value("mode", "") == "replan") {
+                        try {
+                            auto guard = lower_condition(rule.at("resume").at("guard"), locale);
+                            rule["resume"]["guard"] = std::move(guard);
+                        } catch (const ContractError &error) {
+                            contract_error("EVENT_GUARD_UNAVAILABLE", id + ":" + locale + ":guard:" + error.what());
+                        }
+                    }
+                }
+            }
+        }
         for (auto &node : document.at("nodes")) {
             auto &p = node.at("parameters");
             const auto type = node.at("type").get<std::string>();
@@ -33,6 +54,19 @@ class SemanticAssets {
                     p["target"] = lower_condition(p.at("target"), locale, ResourceUse::Position);
             } else if (type == "business" && p.value("binding", "") == "confirm")
                 p["condition"] = lower_condition(p.at("condition"), locale);
+            if (node.contains("resume")) {
+                for (auto &[id, resume] : node["resume"].items()) {
+                    (void)id;
+                    if (resume.value("mode", "") == "replan") {
+                        try {
+                            auto guard = lower_condition(resume.at("guard"), locale);
+                            resume["guard"] = std::move(guard);
+                        } catch (const ContractError &error) {
+                            contract_error("EVENT_GUARD_UNAVAILABLE", id + ":" + locale + ":guard:" + error.what());
+                        }
+                    }
+                }
+            }
         }
         return document;
     }
@@ -90,6 +124,8 @@ class SemanticAssets {
         if (catalogue_.empty() || !catalogue_.at("resources").contains(id))
             contract_error("SEMANTIC_RESOURCE_MISSING", id);
         const auto &entry = catalogue_.at("resources").at(id);
+        if (entry.value("validation", std::string{}) == "MISSING_REAL_RECIPE")
+            contract_error("SEMANTIC_RECIPE_MISSING", id + ":" + locale);
         const auto role = entry.at("role").get<std::string>();
         if (role != "observation" && role != "position") contract_error("SEMANTIC_ROLE_INVALID", id);
         if (use == ResourceUse::Position && role != "position")

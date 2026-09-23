@@ -5,6 +5,8 @@
 #include <functional>
 #include <string>
 #include <vector>
+#include <optional>
+#include <set>
 
 namespace wvd::games::tasks {
 
@@ -21,8 +23,13 @@ struct AuthorWorkflowCompilation {
 void validate_author_workflow(const nlohmann::json &document);
 using AuthorBusinessResolver = std::function<CompiledWorkflow(const nlohmann::json &parameters)>;
 using AuthorFlowResolver = std::function<AuthorWorkflowCompilation(const nlohmann::json &call)>;
+using AuthorScopedFlowResolver = std::function<AuthorWorkflowCompilation(
+    const nlohmann::json &call, const nlohmann::json &inherited_events,
+    const std::optional<std::set<std::string>> &allowed_events)>;
 AuthorWorkflowCompilation compile_author_workflow(
     const nlohmann::json &document, AuthorBusinessResolver resolver = {},
-    AuthorFlowResolver public_flow = {});
+    AuthorFlowResolver public_flow = {}, AuthorScopedFlowResolver scoped_flow = {},
+    nlohmann::json inherited_events = nlohmann::json::object(),
+    std::optional<std::set<std::string>> allowed_events = std::nullopt);
 
 } // namespace wvd::games::tasks

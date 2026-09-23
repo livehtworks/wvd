@@ -1,12 +1,15 @@
 #include "bounty_cycle.hpp"
 #include "bounty_visit.hpp"
 #include "games/wvd/navigation/dungeon_entry.hpp"
+#include "games/wvd/navigation/auto_route.hpp"
+#include "games/wvd/navigation/harken_exit.hpp"
 #include "games/wvd/navigation/map_route.hpp"
 #include "games/wvd/navigation/time_leap.hpp"
 #include "games/wvd/navigation/world_travel.hpp"
 #include "games/wvd/quests/bounty_cycle.hpp"
 #include "games/wvd/supply/inn.hpp"
 #include "games/wvd/vision/location_probes.hpp"
+#include "games/wvd/vision/harken_probes.hpp"
 
 namespace wvd::games::tasks {
 namespace {
@@ -16,16 +19,30 @@ using Phase = quests::BountyCycle::Phase;
 const J jier_positions{{"position", "左下", {452, 545}}, {"position", "左下", {452, 1026}}};
 J phase(Phase value) { return C::all({C::business("/bounty_cycle/phase", static_cast<int>(value)), C::business("/bounty_cycle/unit_matches", true)}); }
 CompiledWorkflow return_to_bounty_city(bool guild) {
-    C graph(guild ? "quest.bounty.return_guild" : "quest.bounty.return_fortress");
+    C graph(guild ? "quest.bounty.return_guild" : "quest.bounty.return_fortress", std::chrono::seconds{240});
     const auto target = guild ? vision::guild_button() : vision::inn_button();
     const auto map = C::image("mapFlag");
     const auto encounter = C::any({J{{"mode", "combat_active"}}, C::image("chestFlag"), C::image("RiseAgain")});
-    J known{target, map, C::image("dungFlag"), vision::city_screen()};
+    const auto harken = C::any({vision::harken_buff_menu(), vision::harken_floor_menu(),
+                                vision::outskirts_return_button()});
+    J known{target, map, C::image("dungFlag"), vision::city_screen(), harken};
     const std::vector<std::string> exits{"returntotown", "returnText", "leaveDung", "blessing"};
     for (const auto &name : exits) known.push_back(C::image(name));
-    const auto done = C::all({target, C::absent(map), C::absent(encounter)});
-    graph.route("Entry", guild ? J{"Done", "Back"} : J{"Done", "Exit0", "Exit1", "Exit2", "Exit3", "Back"});
+    const auto destination = guild ? C::all({target, vision::royal_city()}) : target;
+    const auto done = C::all({destination, C::absent(map), C::absent(encounter)});
+    graph.route("Entry", guild ? J{"Done", "WrongCity", "Harken", "Dungeon", "Back"}
+                               : J{"Done", "Harken", "Dungeon", "Exit0", "Exit1", "Exit2", "Exit3", "Back"});
     graph.observe("Done", done, {"Terminal"});
+    if (guild) {
+        graph.observe("WrongCity", C::all({vision::city_screen(), C::absent(vision::royal_city())}), {"WrongCityExit"});
+        graph.recovery("WrongCityExit", "quest.bounty_return_wrong_city");
+    }
+    const auto harken_exit = graph.define_child("HarkenExit", navigation::leave_harken());
+    graph.observe("Harken", harken, {"LeaveHarken"});
+    graph.call_child("LeaveHarken", harken_exit, {"Entry"});
+    const auto return_harken = graph.define_child("ReturnHarken", navigation::auto_route("dungFlag"), {"BlockedExit"});
+    graph.observe("Dungeon", C::all({C::image("dungFlag"), C::absent(map), C::absent(encounter)}), {"GoHarken"});
+    graph.call_child("GoHarken", return_harken, {"Entry"});
     if (!guild)
         for (std::size_t i = 0; i < exits.size(); ++i) {
             const auto image = C::image(exits[i]);
@@ -37,6 +54,8 @@ CompiledWorkflow return_to_bounty_city(bool guild) {
     graph.back("Back", C::all({guild ? C::any(known) : map, C::absent(target), C::absent(encounter)}), C::any(known), {"Entry"});
     graph.hit_limit("Entry", 32);
     graph.hit_limit("Back", 16);
+    graph.hit_limit("Harken", 16);
+    graph.hit_limit("Dungeon", 16);
     return graph.finish();
 }
 }
@@ -78,7 +97,7 @@ CompiledWorkflow bounty_cycle(const WvdQuestDefinition &definition, const J &pro
                edge = vision::edge_of_town_button(), map = C::image("mapFlag");
     const auto royal_city = vision::royal_city();
     const auto leap_page = C::any({C::image("cursedWheelTitle"), C::image("cursedWheelTitle_zh_hant"),
-        C::image("cursedWheel"), C::image("cursedWheel_zh_hant"), C::image("ruins"), C::image("ruins_icon")});
+        C::image("cursedWheel"), C::image("cursedWheel_zh_hant"), C::image("ruins"), vision::ruins_button()});
     // 与旧 CursedWheelTimeLeap 的调用入口一致：先从已确认城市进入因果轮。
     // 这里仅标记准备阶段，绝不把城市画面当作“已跳跃”。
     const auto start_page = C::all({C::any({leap_page, royal_city, inn, guild, edge, C::image("openworldmap")}),

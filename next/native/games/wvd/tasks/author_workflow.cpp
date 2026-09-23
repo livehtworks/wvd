@@ -1,5 +1,6 @@
 #include "author_workflow.hpp"
 #include "authoring/document_parameters.hpp"
+#include "authoring/event_policy.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -157,9 +158,11 @@ void validate_condition(const J &condition, const std::string &node_id,
         return;
     }
     if (mode == "template") {
-        exact_object(condition, {"mode", "image"}, {"threshold", "roi"},
+        exact_object(condition, {"mode", "image"}, {"threshold", "roi", "grayscale"},
                      "AUTHOR_CONDITION_INVALID", node_id);
         validate_image(condition.at("image"), node_id);
+        if (condition.contains("grayscale") && !condition.at("grayscale").is_boolean())
+            fail("AUTHOR_CONDITION_INVALID", node_id);
         if (condition.contains("threshold")) {
             if (!condition.at("threshold").is_number())
                 fail("AUTHOR_THRESHOLD_INVALID", node_id);
@@ -357,7 +360,7 @@ ValidatedGraph validate_graph(const J &document) {
     ValidatedGraph graph;
     std::set<std::string> confirmation_operations;
     for (const auto &node : nodes) {
-        exact_object(node, {"id", "type", "name", "parameters"}, {"repeat_limit"},
+        exact_object(node, {"id", "type", "name", "parameters"}, {"repeat_limit", "event_overrides", "resume"},
                      "AUTHOR_NODE_FIELDS_INVALID");
         bounded_text(node.at("id"), 1, 64, "AUTHOR_NODE_ID_INVALID", "node");
         const auto id = node.at("id").get<std::string>();
@@ -560,8 +563,41 @@ ValidatedGraph validate_graph(const J &document) {
         viewport.at("zoom").get<double>() < .05 || viewport.at("zoom").get<double>() > 8)
         fail("AUTHOR_VIEWPORT_INVALID");
 
-    exact_object(document.at("execution"), {"time_limit_ms"}, {"resource_locale"},
+    exact_object(document.at("execution"), {"time_limit_ms"}, {"resource_locale", "events"},
                  "AUTHOR_EXECUTION_FIELDS_INVALID");
+    try {
+    authoring::validate_event_policy(document);
+    } catch (const nlohmann::json::exception &error) {
+        fail("AUTHOR_EVENT_POLICY_JSON_INVALID", error.what());
+    }
+    const auto event_rules = document.at("execution").value("events", J::object());
+    for (const auto &[event_id, rule] : event_rules.items()) {
+        try {
+        validate_condition(rule.at("detect"), "event:" + event_id);
+        if (rule.contains("resume") && rule.at("resume").value("mode", "") == "replan") {
+            const auto target = rule.at("resume").at("node_id").get<std::string>();
+            if (!graph.nodes.contains(target) || graph.nodes.at(target)->at("type") == "end")
+                fail("EVENT_REPLAN_NODE_INVALID", event_id + ":" + target);
+            validate_condition(rule.at("resume").at("guard"), "event:" + event_id);
+        }
+        } catch (const nlohmann::json::exception &error) {
+            fail("AUTHOR_EVENT_CONDITION_JSON_INVALID", event_id + ":" + error.what());
+        }
+    }
+    for (const auto &node : document.at("nodes")) {
+        const auto resumes = node.value("resume", J::object());
+        for (const auto &[event_id, resume] : resumes.items()) {
+            try {
+            if (resume.value("mode", "") != "replan") continue;
+            const auto target = resume.at("node_id").get<std::string>();
+            if (!graph.nodes.contains(target) || graph.nodes.at(target)->at("type") == "end")
+                fail("EVENT_REPLAN_NODE_INVALID", event_id + ":" + target);
+            validate_condition(resume.at("guard"), node.at("id").get<std::string>());
+            } catch (const nlohmann::json::exception &error) {
+                fail("AUTHOR_EVENT_NODE_RESUME_JSON_INVALID", node.at("id").get<std::string>() + ":" + event_id + ":" + error.what());
+            }
+        }
+    }
     if (document.at("execution").contains("resource_locale")) {
         const auto locale = document.at("execution").at("resource_locale").get<std::string>();
         if (locale != "" && locale != "en" && locale != "zh-Hant" && locale != "zh-Hans" && locale != "ja")
@@ -597,9 +633,16 @@ void validate_author_workflow(const J &document) {
 
 AuthorWorkflowCompilation compile_author_workflow(const J &source,
                                                   AuthorBusinessResolver resolver,
-                                                  AuthorFlowResolver public_flow) {
+                                                  AuthorFlowResolver public_flow,
+                                                  AuthorScopedFlowResolver scoped_flow,
+                                                  J inherited_events,
+                                                  std::optional<std::set<std::string>> allowed_events) {
     const auto document = authoring::instantiate_document(source);
-    validate_author_workflow(document);
+    try {
+        validate_author_workflow(document);
+    } catch (const nlohmann::json::exception &error) {
+        fail("AUTHOR_EVENT_DOCUMENT_JSON_INVALID", error.what());
+    }
     // symbolic 只允许存在于草稿；必须经 PublicFlowLibrary 绑定语言和使用语义再编译。
     const auto unresolved = [&](auto &&self, const J &v) -> bool {
         if (v.is_object()) {
@@ -610,7 +653,12 @@ AuthorWorkflowCompilation compile_author_workflow(const J &source,
         return false;
     };
     if (unresolved(unresolved, document.at("nodes"))) fail("AUTHOR_SEMANTIC_UNRESOLVED");
-    const auto graph = validate_graph(document);
+    ValidatedGraph graph;
+    try {
+        graph = validate_graph(document);
+    } catch (const nlohmann::json::exception &error) {
+        fail("AUTHOR_EVENT_GRAPH_JSON_INVALID", error.what());
+    }
     const auto entry = document.at("entry").get<std::string>();
     const auto flow_id = document.at("flow").at("id").get<std::string>();
     const auto budget = std::chrono::milliseconds{
@@ -622,6 +670,8 @@ AuthorWorkflowCompilation compile_author_workflow(const J &source,
         compiler.failure_route("Entry", successors(graph.failure.at(entry), entry, graph.success_end));
 
     std::size_t public_ordinal{};
+    std::map<std::string, J> event_handlers;
+    J entry_events = J::array();
     for (const auto &[id, node] : graph.nodes) {
         const auto runtime_name = pipeline_name(id, entry, graph.success_end);
         result.node_to_pipeline[id] = {runtime_name};
@@ -679,8 +729,9 @@ AuthorWorkflowCompilation compile_author_workflow(const J &source,
                 const J calls = type == "call" ? J::array({parameters})
                                                : parameters.value("calls", J::array());
                 const auto add_call = [&](const J &call, const std::string &name, J successors) {
-                    if (!public_flow) fail("AUTHOR_FLOW_CONTEXT_REQUIRED", id);
-                    const auto child = public_flow(call);
+                    if (!public_flow && !scoped_flow) fail("AUTHOR_FLOW_CONTEXT_REQUIRED", id);
+                    const auto scope = authoring::effective_event_policy(inherited_events, document, *node);
+                    const auto child = scoped_flow ? scoped_flow(call, scope, allowed_events) : public_flow(call);
                     const auto prefix = "Public" + std::to_string(public_ordinal++);
                     const auto child_entry = compiler.define_child(prefix, child.workflow);
                     compiler.call_child(name, child_entry, std::move(successors));
@@ -702,6 +753,8 @@ AuthorWorkflowCompilation compile_author_workflow(const J &source,
                         const auto name = runtime_name + "_Call" + std::to_string(i);
                         add_call(calls.at(i), name, i + 1 == calls.size() ? next
                             : J::array({runtime_name + "_Call" + std::to_string(i + 1)}));
+                        compiler.hit_limit(name, node->contains("repeat_limit")
+                            ? static_cast<int>(node->at("repeat_limit").get<std::int64_t>()) : 1);
                         result.node_to_pipeline[id].push_back(name);
                         result.pipeline_to_node[name] = id;
                         result.source_paths[name] = J::array({J{{"flow_id", flow_id}, {"node_id", id}}});
@@ -729,6 +782,69 @@ AuthorWorkflowCompilation compile_author_workflow(const J &source,
             } else {
                 fail("AUTHOR_NODE_TYPE_INVALID", id + ":" + type);
             }
+            if (type != "end") {
+                const auto effective = authoring::effective_event_policy(inherited_events, document, *node);
+                J active = J::array();
+                for (const auto &[event_id, rule] : effective.items()) {
+                    if (!rule.value("enabled", false)) continue;
+                    if (allowed_events && !allowed_events->contains(event_id)) {
+                        const auto declared = document.at("execution").value("events", J::object());
+                        const auto overrides = node->value("event_overrides", J::object());
+                        if ((declared.contains(event_id) && declared.at(event_id).value("enabled", false)) ||
+                            (overrides.contains(event_id) && overrides.at(event_id).value("enabled", false)))
+                            fail("EVENT_NESTED_NOT_ALLOWED", id + ":" + event_id);
+                        continue;
+                    }
+                    if (unresolved(unresolved, rule.at("detect")))
+                        fail("EVENT_SEMANTIC_UNRESOLVED", event_id);
+                    const auto resume = rule.value("resume", J{{"mode", "reobserve"}});
+                    if (resume.value("mode", "") == "replan") {
+                        const auto target = resume.at("node_id").get<std::string>();
+                        if (!graph.nodes.contains(target) || graph.nodes.at(target)->at("type") == "end" ||
+                            unresolved(unresolved, resume.at("guard")))
+                            fail("EVENT_REPLAN_INVALID", event_id + ":" + target);
+                    }
+                    J descriptor{{"id", event_id}, {"class", rule.at("class")},
+                                 {"priority", rule.at("priority")}, {"detect", rule.at("detect")},
+                                 {"disposition", rule.value("disposition", "handled")},
+                                 {"source_node", runtime_name}};
+                    if (descriptor.at("disposition") == "external_blocked") {
+                        descriptor["reason"] = rule.at("reason");
+                    } else {
+                        if (!scoped_flow) fail("EVENT_HANDLER_CONTEXT_REQUIRED", event_id);
+                        const auto nested_policy = authoring::nested_event_policy(effective, event_id);
+                        const auto &nested = nested_policy.rules;
+                        const auto &permitted = nested_policy.direct;
+                        const auto key = event_id + rule.at("handler").dump() + nested.dump();
+                        if (!event_handlers.contains(key)) {
+                            const auto child = scoped_flow(rule.at("handler"), nested, permitted);
+                            const auto prefix = "Event" + std::to_string(public_ordinal++);
+                            const auto child_entry = compiler.define_child(prefix, child.workflow);
+                            J reset = J::array();
+                            for (const auto &[child_name, unused] : child.workflow.nodes.items()) {
+                                (void)unused;
+                                const auto compiled_name = prefix + "_" + child_name;
+                                reset.push_back(compiled_name);
+                                J path = J::array({J{{"event_id", event_id}}});
+                                if (child.source_paths.contains(child_name))
+                                    for (const auto &part : child.source_paths.at(child_name)) path.push_back(part);
+                                result.source_paths[compiled_name] = std::move(path);
+                            }
+                            event_handlers[key] = {{"entry", child_entry}, {"reset_hit_counts", reset}};
+                        }
+                        descriptor.update(event_handlers.at(key));
+                        descriptor["resume"] = resume;
+                        if (resume.value("mode", "") == "replan")
+                            descriptor["resume"]["node_id"] = pipeline_name(
+                                resume.at("node_id").get<std::string>(), entry, graph.success_end);
+                    }
+                    active.push_back(std::move(descriptor));
+                }
+                if (!active.empty()) {
+                    if (id == entry) entry_events = active;
+                    compiler.event_scope(runtime_name, std::move(active));
+                }
+            }
             if (node->contains("repeat_limit"))
                 compiler.hit_limit(runtime_name,
                                    static_cast<int>(node->at("repeat_limit").get<std::int64_t>()));
@@ -740,6 +856,8 @@ AuthorWorkflowCompilation compile_author_workflow(const J &source,
             if (!graph.failure.at(id).empty())
                 compiler.failure_route(runtime_name,
                                        successors(graph.failure.at(id), entry, graph.success_end));
+        } catch (const nlohmann::json::exception &error) {
+            fail("AUTHOR_NODE_JSON_INVALID", id + ":" + error.what());
         } catch (const authoring::ContractError &) {
             throw;
         } catch (const std::runtime_error &error) {
@@ -750,7 +868,13 @@ AuthorWorkflowCompilation compile_author_workflow(const J &source,
         }
     }
     try {
-        result.workflow = compiler.finish();
+    if (!entry_events.empty()) {
+        for (auto &rule : entry_events) rule["source_node"] = "Entry";
+        compiler.event_scope("Entry", std::move(entry_events));
+    }
+    result.workflow = compiler.finish();
+    } catch (const nlohmann::json::exception &error) {
+        fail("AUTHOR_FINISH_JSON_INVALID", error.what());
     } catch (const std::runtime_error &error) {
         fail("AUTHOR_COMPILE_FAILED", error.what());
     }
