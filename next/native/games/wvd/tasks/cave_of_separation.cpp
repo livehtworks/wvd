@@ -215,32 +215,4 @@ CompiledWorkflow cave_of_separation_segment(const WvdQuestDefinition &definition
     graph.recovery("Incomplete", "quest.cos_route_endpoint_unconfirmed");
     return graph.finish();
 }
-void configure_cave_of_separation_units(runtime::RunDefinition &definition,
-    const std::array<runtime::SessionDefinition, quests::CaveOfSeparation::segments_per_cycle> &segments,
-    std::size_t cycles) {
-    constexpr auto count = quests::CaveOfSeparation::segments_per_cycle;
-    if (!cycles || cycles > 256 / count || definition.max_business_units != 1 || !definition.continuation_units.empty())
-        throw std::runtime_error("COS_UNIT_BUDGET_INVALID");
-    for (std::size_t index = 0; index < count; ++index) {
-        const auto &segment = segments[index];
-        if (segment.entry.empty() || segment.terminal_node.empty() || segment.checkpoint_node.empty() ||
-            segment.time_limit <= std::chrono::milliseconds{0} || segment.time_limit > std::chrono::seconds{1800} || segment.lifecycle)
-            throw std::runtime_error("COS_SESSION_DEFINITION_INVALID");
-        if (segment.bundle.revision.empty() || segment.bundle.revision != segments.front().bundle.revision)
-            throw std::runtime_error("COS_SESSION_REVISION_MISMATCH");
-        const auto policy = recovery::dialogue_policy_name(cave_of_separation_dialogue(static_cast<Segment>(index)));
-        std::size_t vision_bindings = 0;
-        for (const auto &binding : segment.recognitions) {
-            if (binding.name != "WvdVision") continue;
-            ++vision_bindings;
-            if (!binding.parameters.is_object() || binding.parameters.value("dialogue_task", "") != policy)
-                throw std::runtime_error("COS_SESSION_DIALOGUE_MISMATCH");
-        }
-        if (vision_bindings != 1) throw std::runtime_error("COS_SESSION_DIALOGUE_MISSING");
-    }
-    definition.initial = segments.front();
-    definition.max_business_units = cycles * count;
-    for (std::size_t unit = 1; unit < definition.max_business_units; ++unit)
-        definition.continuation_units.push_back(segments[unit % count]);
-}
 }

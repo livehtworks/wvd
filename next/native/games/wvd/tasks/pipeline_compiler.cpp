@@ -15,6 +15,16 @@ void require(bool value, const char *code) {
     if (!value)
         throw std::runtime_error(code);
 }
+const J &scope_rules(const J &scope) {
+    if (scope.is_array()) return scope;
+    require(scope.is_object() && scope.contains("rules") && scope.at("rules").is_array() &&
+        scope.contains("disabled") && scope.at("disabled").is_array(),
+        "COMPILE_EVENT_SCOPE_INVALID");
+    for (const auto &id : scope.at("disabled"))
+        require(id.is_string() && !id.get<std::string>().empty(),
+            "COMPILE_EVENT_SCOPE_INVALID");
+    return scope.at("rules");
+}
 void collect_images(const J &value, std::set<std::string> &images, std::set<std::string> &expanded_modes) {
     if (value.is_object()) {
         // 专用识别器内部加载的资源也必须进入发布清单，不能等运行才发现缺图。
@@ -143,9 +153,9 @@ void collect_images(const J &value, std::set<std::string> &images) {
 std::set<std::string> collect_actions(const J &nodes) {
     std::set<std::string> actions;
     for (const auto &node : nodes) {
-        if (node.value("custom_action", "") != "GuardedAction")
+        if (node.value("binding", "") != "Input")
             continue;
-        const auto &parameters = node.at("custom_action_param");
+        const auto &parameters = node.at("operation_args");
         const auto command = parameters.at("command").at("kind").get<std::string>();
         require(command == "Click" || command == "ClickKey" || command == "Swipe",
                 "COMPILE_ACTION_PERMISSION_INVALID");
@@ -166,8 +176,10 @@ void CompiledWorkflow::validate() const {
     require(!kind.empty() && nodes.is_object() && nodes.contains(entry) && nodes.contains(terminal),
             "COMPILE_ENTRY_INVALID");
     require(event_scopes.is_object(), "COMPILE_EVENT_SCOPE_INVALID");
-    for (const auto &[name, rules] : event_scopes.items())
-        require(nodes.contains(name) && rules.is_array(), "COMPILE_EVENT_SCOPE_INVALID");
+    for (const auto &[name, scope] : event_scopes.items()) {
+        require(nodes.contains(name), "COMPILE_EVENT_SCOPE_INVALID");
+        (void)scope_rules(scope);
+    }
     // 最大的旧任务图约 4,037 个节点；生产恢复必须再封入约百个 Boot 节点。
     // 保留明确的 4,608 硬上限，不为任意作者输入取消有界校验。
     require(nodes.size() <= 4608, "COMPILE_NODE_LIMIT");
@@ -179,39 +191,39 @@ void CompiledWorkflow::validate() const {
         const auto &node = nodes.at(name);
         require(node.value("max_hit", 0) >= 1 && node.value("max_hit", 0) <= 256,
                 "COMPILE_UNBOUNDED_NODE");
-        const auto action = node.value("action", "DoNothing");
-        require(action == "DoNothing" ||
-                    (action == "Custom" && (node.value("custom_action", "") == "GuardedAction" ||
-                                            node.value("custom_action", "") == "RootTerminal" ||
-                                            node.value("custom_action", "") == "RunChild" ||
-                                            node.value("custom_action", "") == "WvdConfirm" ||
-                                            node.value("custom_action", "") == "WvdCombat" ||
-                                            node.value("custom_action", "") == "WvdChest" ||
-                                            node.value("custom_action", "") == "WvdUnknownLeap" ||
-                                            node.value("custom_action", "") == "CancelableWait" ||
-                                            node.value("custom_action", "") == "BeginObservationPhase" ||
-                                            node.value("custom_action", "") == "EndObservationPhase" ||
-                                            node.value("custom_action", "") == "BusinessCheckpoint" ||
-                                            node.value("custom_action", "") == "RequireRecovery")),
+        const auto action = node.value("operation", "Route");
+        require(action == "Route" ||
+                    (action == "Registered" && (node.value("binding", "") == "Input" ||
+                                            node.value("binding", "") == "Finish" ||
+                                            node.value("binding", "") == "Call" ||
+                                            node.value("binding", "") == "WvdConfirm" ||
+                                            node.value("binding", "") == "WvdCombat" ||
+                                            node.value("binding", "") == "WvdChest" ||
+                                            node.value("binding", "") == "WvdUnknownLeap" ||
+                                            node.value("binding", "") == "CancelableWait" ||
+                                            node.value("binding", "") == "BeginObservationPhase" ||
+                                            node.value("binding", "") == "EndObservationPhase" ||
+                                            node.value("binding", "") == "BusinessCheckpoint" ||
+                                            node.value("binding", "") == "RequireRecovery")),
                 "COMPILE_UNGUARDED_ACTION");
-        require(node.value("recognition", "DirectHit") == "DirectHit" ||
-                    (node.value("recognition", "") == "OCR" && node.contains("expected") &&
+        require(node.value("observation", "Always") == "Always" ||
+                    (node.value("observation", "") == "OCR" && node.contains("expected") &&
                      node.at("expected").is_array() && !node.at("expected").empty()) ||
-                    (node.value("recognition", "") == "Custom" &&
-                     node.value("custom_recognition", "") == "WvdVision"),
+                    (node.value("observation", "") == "Registered" &&
+                     node.value("recognizer", "") == "WvdVision"),
                 "COMPILE_RECOGNITION_UNKNOWN");
-        if (node.value("custom_action", "") == "RootTerminal")
+        if (node.value("binding", "") == "Finish")
             require(name == terminal && node.value("next", J::array()).empty(),
                     "COMPILE_TERMINAL_INVALID");
-        if (node.value("custom_action", "") == "RunChild") {
-            const auto &p = node.at("custom_action_param");
+        if (node.value("binding", "") == "Call") {
+            const auto &p = node.at("operation_args");
             require(p.is_object() && p.size() == 3 && p.contains("entry") && p.at("entry").is_string() &&
-                        p.contains("clone") && p.at("clone") == false && p.contains("reset_hit_counts") &&
-                        p.at("reset_hit_counts").is_array(), "COMPILE_CHILD_PARAMETERS_INVALID");
+                        p.contains("clone") && p.at("clone") == false && p.contains("local_counters") &&
+                        p.at("local_counters").is_array(), "COMPILE_CHILD_PARAMETERS_INVALID");
             visit(p.at("entry").get<std::string>());
         }
         if (event_scopes.contains(name))
-            for (const auto &rule : event_scopes.at(name)) {
+            for (const auto &rule : scope_rules(event_scopes.at(name))) {
                 require(rule.at("source_node") == name, "COMPILE_EVENT_SOURCE_INVALID");
                 if (rule.contains("entry")) visit(rule.at("entry").get<std::string>());
                 if (rule.contains("resume") && rule.at("resume").value("mode", "") == "replan")
@@ -226,7 +238,7 @@ void CompiledWorkflow::validate() const {
     visit(entry);
     require(reached.contains(terminal), "COMPILE_TERMINAL_UNREACHABLE");
     require(reached.size() == nodes.size(), "COMPILE_ORPHAN_NODE");
-    require(nodes.at(terminal).value("custom_action", "") == "RootTerminal",
+    require(nodes.at(terminal).value("binding", "") == "Finish",
             "COMPILE_TERMINAL_INVALID");
     // next/on_error 不能越过子任务边界；只有 RunChild 可进入子任务，只有根图可到根终点。
     // 每个作用域独立检查，普通图循环由 max_hit/Session 预算约束；调用递归则直接拒绝。
@@ -246,28 +258,28 @@ void CompiledWorkflow::validate() const {
             if (!local.insert(name).second)
                 return;
             const auto &node = nodes.at(name);
-            const auto action = node.value("custom_action", "");
+            const auto action = node.value("binding", "");
             // RequireRecovery 只关闭整个 Session，没有正常返回边，可以共享失败出口。
             if (action == "RequireRecovery")
                 return;
             const auto [owner, inserted] = owners.emplace(name, scope);
             require(inserted || owner->second == scope, "COMPILE_CHILD_BOUNDARY_CROSSED");
-            if (action == "RootTerminal")
+            if (action == "Finish")
                 require(scope == entry, "COMPILE_CHILD_ROOT_TERMINAL");
-            if (action == "RunChild") {
-                const auto target = node.at("custom_action_param").at("entry").get<std::string>();
+            if (action == "Call") {
+                const auto target = node.at("operation_args").at("entry").get<std::string>();
                 check_scope(target);
                 height = std::max(height, 1 + scope_heights.at(target));
             }
             if (event_scopes.contains(name))
-                for (const auto &rule : event_scopes.at(name))
+                for (const auto &rule : scope_rules(event_scopes.at(name)))
                     if (rule.contains("entry")) {
                         const auto target = rule.at("entry").get<std::string>();
                         check_scope(target);
                         height = std::max(height, 1 + scope_heights.at(target));
                     }
             const auto next = node.value("next", J::array());
-            if (next.empty() && (action == "RootTerminal" || node.value("action", "DoNothing") == "DoNothing"))
+            if (next.empty() && (action == "Finish" || node.value("operation", "Route") == "Route"))
                 has_terminal = true;
             for (const auto *key : {"next", "on_error"})
                 for (const auto &edge : node.value(key, J::array()))
@@ -283,17 +295,17 @@ void CompiledWorkflow::validate() const {
     };
     check_scope(entry);
     for (const auto &node : nodes) {
-        if (node.value("custom_action", "") != "RunChild")
+        if (node.value("binding", "") != "Call")
             continue;
-        const auto &p = node.at("custom_action_param");
+        const auto &p = node.at("operation_args");
         std::vector<std::string> expected;
         for (const auto &[name, scope] : owners)
             if (scope == p.at("entry").get<std::string>())
                 expected.push_back(name);
-        require(p.at("reset_hit_counts") == expected, "COMPILE_CHILD_RESET_SCOPE_INVALID");
+        require(p.at("local_counters") == expected, "COMPILE_CHILD_RESET_SCOPE_INVALID");
     }
     if (!checkpoint.empty())
-        require(nodes.contains(checkpoint) && nodes.at(checkpoint).value("custom_action", "") == "BusinessCheckpoint",
+        require(nodes.contains(checkpoint) && nodes.at(checkpoint).value("binding", "") == "BusinessCheckpoint",
                 "COMPILE_CHECKPOINT_INVALID");
     std::set<std::string> actual_images;
     collect_images(nodes, actual_images);
@@ -343,22 +355,22 @@ void PipelineCompiler::add(const std::string &name, J node) {
     local_nodes_.push_back(name);
 }
 void PipelineCompiler::route(const std::string &name, J next) {
-    add(name, {{"action", "DoNothing"}, {"next", std::move(next)}});
+    add(name, {{"operation", "Route"}, {"next", std::move(next)}});
 }
 void PipelineCompiler::wait(const std::string &name, int milliseconds, J next) {
     require(milliseconds >= 1 && milliseconds <= 10000, "COMPILE_WAIT_INVALID");
-    add(name, {{"action", "Custom"}, {"custom_action", "CancelableWait"},
-               {"custom_action_param", {{"duration_ms", milliseconds}}},
+    add(name, {{"operation", "Registered"}, {"binding", "CancelableWait"},
+               {"operation_args", {{"duration_ms", milliseconds}}},
                {"next", std::move(next)}});
     // CancelableWait 的 duration 只控制延迟；后继识别等待继续使用业务图预算。
     workflow_.nodes.at(name)["timeout"] = workflow_.time_limit.count();
 }
 void PipelineCompiler::observe(const std::string &name, const J &condition, J next) {
-    add(name, {{"recognition", "Custom"},
-               {"custom_recognition", "WvdVision"},
-               {"custom_recognition_param", condition},
+    add(name, {{"observation", "Registered"},
+               {"recognizer", "WvdVision"},
+               {"observation_args", condition},
                {"roi", {0, 0, 900, 1600}},
-               {"action", "DoNothing"},
+               {"operation", "Route"},
                {"next", std::move(next)}});
 }
 void PipelineCompiler::observe_ocr(const std::string &name,
@@ -367,8 +379,8 @@ void PipelineCompiler::observe_ocr(const std::string &name,
             "COMPILE_OCR_INVALID");
     for (const auto &text : expected)
         require(!text.empty() && text.size() <= 128, "COMPILE_OCR_INVALID");
-    add(name, {{"recognition", "OCR"}, {"expected", expected}, {"roi", std::move(roi)},
-               {"action", "DoNothing"}, {"next", std::move(next)}});
+    add(name, {{"observation", "OCR"}, {"expected", expected}, {"roi", std::move(roi)},
+               {"operation", "Route"}, {"next", std::move(next)}});
 }
 void PipelineCompiler::action(const std::string &name, const J &scene, const J &target,
                               const J &post, J command, J next, J offset) {
@@ -383,13 +395,13 @@ void PipelineCompiler::action(const std::string &name, const J &scene, const J &
              {"use_target_center", !offset.is_null()}};
     if (!offset.is_null())
         params.update({{"target_offset", offset}, {"clip_target_to_area", true}});
-    add(name, {{"recognition", "Custom"},
-               {"custom_recognition", "WvdVision"},
-               {"custom_recognition_param", all({scene, target})},
+    add(name, {{"observation", "Registered"},
+               {"recognizer", "WvdVision"},
+               {"observation_args", all({scene, target})},
                {"roi", {0, 0, 900, 1600}},
-               {"action", "Custom"},
-               {"custom_action", "GuardedAction"},
-               {"custom_action_param", std::move(params)},
+               {"operation", "Registered"},
+               {"binding", "Input"},
+               {"operation_args", std::move(params)},
                {"next", std::move(next)}});
 }
 void PipelineCompiler::click(const std::string &name, const J &scene, const J &target,
@@ -415,7 +427,8 @@ void PipelineCompiler::hit_limit(const std::string &name, int limit) {
     workflow_.nodes[name]["max_hit"] = limit;
 }
 void PipelineCompiler::event_scope(const std::string &name, J rules) {
-    require(workflow_.nodes.contains(name) && rules.is_array(), "COMPILE_EVENT_SCOPE_INVALID");
+    require(workflow_.nodes.contains(name), "COMPILE_EVENT_SCOPE_INVALID");
+    (void)scope_rules(rules);
     workflow_.event_scopes[name] = std::move(rules);
 }
 void PipelineCompiler::delay_after(const std::string &name, int milliseconds) {
@@ -426,14 +439,14 @@ void PipelineCompiler::delay_after(const std::string &name, int milliseconds) {
 void PipelineCompiler::postcondition_budget(const std::string &name, int milliseconds) {
     require(workflow_.nodes.contains(name) && milliseconds >= 1 &&
                 milliseconds <= workflow_.time_limit.count() &&
-                workflow_.nodes.at(name).value("custom_action", "") == "GuardedAction",
+                workflow_.nodes.at(name).value("binding", "") == "Input",
             "COMPILE_POSTCONDITION_BUDGET_INVALID");
     // 保留旧字段用于数据回显；只有这一显式调用签发独立转场预算。
-    workflow_.nodes[name]["custom_action_param"]["postcondition_timeout_ms"] = milliseconds;
-    workflow_.nodes[name]["custom_action_param"]["transition_timeout_ms"] = milliseconds;
+    workflow_.nodes[name]["operation_args"]["postcondition_timeout_ms"] = milliseconds;
+    workflow_.nodes[name]["operation_args"]["transition_timeout_ms"] = milliseconds;
 }
 void PipelineCompiler::allowed_area(const std::string &name, J area) {
-    require(workflow_.nodes.contains(name) && workflow_.nodes.at(name).value("custom_action", "") == "GuardedAction",
+    require(workflow_.nodes.contains(name) && workflow_.nodes.at(name).value("binding", "") == "Input",
             "COMPILE_ACTION_AREA_INVALID");
     require(area.is_array() && area.size() == 4, "COMPILE_ACTION_AREA_INVALID");
     for (const auto &part : area)
@@ -441,7 +454,7 @@ void PipelineCompiler::allowed_area(const std::string &name, J area) {
     require(area[0] >= 0 && area[1] >= 0 && area[2] > 0 && area[3] > 0 &&
                 area[0].get<int>() <= 900 - area[2].get<int>() &&
                 area[1].get<int>() <= 1600 - area[3].get<int>(), "COMPILE_ACTION_AREA_INVALID");
-    workflow_.nodes[name]["custom_action_param"]["allowed_area"] = std::move(area);
+    workflow_.nodes[name]["operation_args"]["allowed_area"] = std::move(area);
 }
 void PipelineCompiler::interrupt_on(J condition, std::string reason) {
     require(interruption_.is_null() && condition.is_object() && !reason.empty(), "COMPILE_INTERRUPTION_INVALID");
@@ -451,7 +464,7 @@ void PipelineCompiler::interrupt_on(J condition, std::string reason) {
 void PipelineCompiler::stop_if_interrupted_after(const std::string &name, std::string reason) {
     require(workflow_.nodes.contains(name) &&
                 std::find(local_nodes_.begin(), local_nodes_.end(), name) != local_nodes_.end() &&
-                workflow_.nodes.at(name).value("custom_action", "") == "GuardedAction" && !reason.empty(),
+                workflow_.nodes.at(name).value("binding", "") == "Input" && !reason.empty(),
             "COMPILE_UNCERTAIN_ACTION_INVALID");
     require(uncertain_actions_.emplace(name, std::move(reason)).second, "COMPILE_UNCERTAIN_ACTION_DUPLICATE");
 }
@@ -467,13 +480,13 @@ void PipelineCompiler::compile_interruption() {
     // 不能跨进去重写，更不能把 Common 处理器也拦在自己要关闭的弹窗之前。
     for (const auto &name : local_nodes_) {
         auto &node = workflow_.nodes[name];
-        const auto action = node.value("custom_action", "");
+        const auto action = node.value("binding", "");
         if (action == "RequireRecovery")
             continue;
-        if (node.value("recognition", "") == "Custom")
-            node["custom_recognition_param"] = all({clear, node.at("custom_recognition_param")});
-        if (action == "GuardedAction") {
-            auto &p = node["custom_action_param"];
+        if (node.value("observation", "") == "Registered")
+            node["observation_args"] = all({clear, node.at("observation_args")});
+        if (action == "Input") {
+            auto &p = node["operation_args"];
             p["scene_recognition"]["parameters"] = all({clear, p.at("scene_recognition").at("parameters")});
             // 固定点位/返回键原本就以同一条件证明场景和目标，包装后仍须保持一致。
             // 否则同一帧会先查完整 guarded scene，再把未包装的原场景重查一遍。
@@ -483,10 +496,12 @@ void PipelineCompiler::compile_interruption() {
             // WvdConfirm/WvdCombat 的新帧确认也排除弹窗，不能因此消费技能或任务点。
             p["postcondition"]["parameters"] = any({interruption_, p.at("postcondition").at("parameters")});
         } else if (action == "WvdConfirm" || action == "WvdCombat" || action == "WvdChest") {
-            auto &confirmation = node["custom_action_param"]["confirmation"]["parameters"];
+            auto &confirmation = node["operation_args"]["confirmation"]["parameters"];
             confirmation = all({clear, confirmation});
         }
         if (node.contains("next") && !node.at("next").empty()) {
+            if (!node.at("next").is_array())
+                throw std::runtime_error("COMPILE_INTERRUPTION_NEXT_NOT_ARRAY:" + name);
             // 已点出技能/恢复等动作时，不把覆盖层当成可重新入场的普通中断。
             // 专属出口保留动作事件和未消费状态；调用者不会将它绑定为正常子返回。
             node["next"].insert(node["next"].begin(),
@@ -506,18 +521,18 @@ void PipelineCompiler::compile_interruption() {
 void PipelineCompiler::combat_step(const std::string &name, const J &condition, J parameters, J next) {
     require(parameters.is_object(), "COMPILE_COMBAT_PARAMETERS_INVALID");
     parameters["confirmation"] = request(condition);
-    add(name, {{"recognition", "Custom"}, {"custom_recognition", "WvdVision"},
-               {"custom_recognition_param", condition}, {"roi", {0, 0, 900, 1600}},
-               {"action", "Custom"}, {"custom_action", "WvdCombat"},
-               {"custom_action_param", std::move(parameters)}, {"next", std::move(next)}});
+    add(name, {{"observation", "Registered"}, {"recognizer", "WvdVision"},
+               {"observation_args", condition}, {"roi", {0, 0, 900, 1600}},
+               {"operation", "Registered"}, {"binding", "WvdCombat"},
+               {"operation_args", std::move(parameters)}, {"next", std::move(next)}});
 }
 void PipelineCompiler::chest_selection(const std::string &name, const J &condition,
                                       int preferred, unsigned seed, J next) {
     require(preferred >= 0 && preferred <= 6, "CHEST_CHARACTER_INVALID");
-    add(name, {{"recognition", "Custom"}, {"custom_recognition", "WvdVision"},
-        {"custom_recognition_param", condition}, {"roi", {0, 0, 900, 1600}},
-        {"action", "Custom"}, {"custom_action", "WvdChest"},
-        {"custom_action_param", {{"confirmation", request(condition)}, {"preferred", preferred},
+    add(name, {{"observation", "Registered"}, {"recognizer", "WvdVision"},
+        {"observation_args", condition}, {"roi", {0, 0, 900, 1600}},
+        {"operation", "Registered"}, {"binding", "WvdChest"},
+        {"operation_args", {{"confirmation", request(condition)}, {"preferred", preferred},
                                  {"seed", seed}, {"image", "chestfear"}}}, {"next", std::move(next)}});
 }
 void PipelineCompiler::swipe(const std::string &name, const J &scene, const J &post,
@@ -541,7 +556,7 @@ std::string PipelineCompiler::append(const std::string &prefix, const CompiledWo
     use_dialogue(child.dialogue_policy);
     require(normal_exits.is_object(), "COMPILE_EXIT_BINDINGS_INVALID");
     for (const auto &[name, successors] : normal_exits.items())
-        require(child.nodes.contains(name) && child.nodes.at(name).value("custom_action", "") == "RequireRecovery" &&
+        require(child.nodes.contains(name) && child.nodes.at(name).value("binding", "") == "RequireRecovery" &&
                     successors.is_array() && !successors.empty(), "COMPILE_EXIT_BINDING_INVALID");
     for (const auto &[name, node] : child.nodes.items()) {
         (void)node;
@@ -549,15 +564,15 @@ std::string PipelineCompiler::append(const std::string &prefix, const CompiledWo
     }
     for (const auto &[name, original] : child.nodes.items()) {
         auto node = original;
-        if (node.value("custom_action", "") == "WvdConfirm") {
-            auto &operation = node["custom_action_param"]["operation"];
+        if (node.value("binding", "") == "WvdConfirm") {
+            auto &operation = node["operation_args"]["operation"];
             operation = prefix + ":" + operation.get<std::string>();
             require(operation.get<std::string>().size() <= 128, "COMPILE_BUSINESS_EVENT_INVALID");
         }
-        if (node.value("custom_action", "") == "RunChild") {
-            auto &entry = node["custom_action_param"]["entry"];
+        if (node.value("binding", "") == "Call") {
+            auto &entry = node["operation_args"]["entry"];
             entry = prefix + "_" + entry.get<std::string>();
-            for (auto &reset_name : node["custom_action_param"]["reset_hit_counts"])
+            for (auto &reset_name : node["operation_args"]["local_counters"])
                 reset_name = prefix + "_" + reset_name.get<std::string>();
         }
         for (const auto *key : {"next", "on_error"})
@@ -565,17 +580,17 @@ std::string PipelineCompiler::append(const std::string &prefix, const CompiledWo
                 for (auto &edge : node[key])
                     edge = prefix + "_" + edge.get<std::string>();
         if (name == child.terminal) {
-            node.erase("custom_action");
-            node.erase("custom_action_param");
-            node["action"] = "DoNothing";
+            node.erase("binding");
+            node.erase("operation_args");
+            node["operation"] = "Route";
             node["next"] = next;
             node["on_error"] = {"RecoveryRequired"};
         }
         if (normal_exits.contains(name)) {
             // 只有调用者显式绑定的普通插入出口改为外层后继；真正恢复出口仍保持 RequireRecovery。
-            node.erase("custom_action");
-            node.erase("custom_action_param");
-            node["action"] = "DoNothing";
+            node.erase("binding");
+            node.erase("operation_args");
+            node["operation"] = "Route";
             node["next"] = normal_exits.at(name);
             node["on_error"] = {"RecoveryRequired"};
         }
@@ -583,11 +598,12 @@ std::string PipelineCompiler::append(const std::string &prefix, const CompiledWo
     }
     for (const auto &[name, original_rules] : child.event_scopes.items()) {
         auto rules = original_rules;
-        for (auto &rule : rules) {
+        auto &entries = rules.is_array() ? rules : rules.at("rules");
+        for (auto &rule : entries) {
             rule["source_node"] = prefix + "_" + rule.at("source_node").get<std::string>();
             if (rule.contains("entry")) rule["entry"] = prefix + "_" + rule.at("entry").get<std::string>();
-            if (rule.contains("reset_hit_counts"))
-                for (auto &reset : rule["reset_hit_counts"])
+            if (rule.contains("local_counters"))
+                for (auto &reset : rule["local_counters"])
                     reset = prefix + "_" + reset.get<std::string>();
             if (rule.contains("resume") && rule.at("resume").value("mode", "") == "replan")
                 rule["resume"]["node_id"] = prefix + "_" + rule.at("resume").at("node_id").get<std::string>();
@@ -614,21 +630,21 @@ void PipelineCompiler::call_child(const std::string &name, const std::string &en
             return;
         require(workflow_.nodes.contains(n), "COMPILE_CHILD_ENTRY_INVALID");
         const auto &node = workflow_.nodes.at(n);
-        if (node.value("custom_action", "") == "RequireRecovery" || !local.insert(n).second)
+        if (node.value("binding", "") == "RequireRecovery" || !local.insert(n).second)
             return;
         for (const auto *key : {"next", "on_error"})
             for (const auto &edge : node.value(key, J::array()))
                 collect(edge.get<std::string>());
     };
     collect(entry);
-    add(name, {{"action", "Custom"}, {"custom_action", "RunChild"},
-               {"custom_action_param", {{"entry", entry}, {"clone", false}, {"reset_hit_counts", local}}},
+    add(name, {{"operation", "Registered"}, {"binding", "Call"},
+               {"operation_args", {{"entry", entry}, {"clone", false}, {"local_counters", local}}},
                {"next", std::move(next)}});
 }
 void PipelineCompiler::recovery(const std::string &name, const std::string &reason) {
     require(!reason.empty(), "COMPILE_RECOVERY_REASON_EMPTY");
-    add(name, {{"action", "Custom"}, {"custom_action", "RequireRecovery"},
-               {"custom_action_param", {{"reason", reason}}}});
+    add(name, {{"operation", "Registered"}, {"binding", "RequireRecovery"},
+               {"operation_args", {{"reason", reason}}}});
 }
 void PipelineCompiler::unknown_leap(const std::string &name, J next, J extra_known) {
     require(extra_known.is_array(), "COMPILE_UNKNOWN_KNOWN_INVALID");
@@ -639,10 +655,10 @@ void PipelineCompiler::unknown_leap(const std::string &name, J next, J extra_kno
         parameters["extra_known"] = std::move(extra_known);
     }
     const auto condition = all({unknown, image("cursedWheel_timeLeap")});
-    add(name, {{"recognition", "Custom"}, {"custom_recognition", "WvdVision"},
-        {"custom_recognition_param", condition}, {"roi", {0, 0, 900, 1600}},
-        {"action", "Custom"}, {"custom_action", "WvdUnknownLeap"},
-        {"custom_action_param", std::move(parameters)}, {"next", std::move(next)}});
+    add(name, {{"observation", "Registered"}, {"recognizer", "WvdVision"},
+        {"observation_args", condition}, {"roi", {0, 0, 900, 1600}},
+        {"operation", "Registered"}, {"binding", "WvdUnknownLeap"},
+        {"operation_args", std::move(parameters)}, {"next", std::move(next)}});
 }
 void PipelineCompiler::failure_route(const std::string &name, J next) {
     require(workflow_.nodes.contains(name) && next.is_array() && !next.empty(), "COMPILE_ERROR_ROUTE_INVALID");
@@ -709,10 +725,10 @@ void PipelineCompiler::confirm(const std::string &name, const std::string &opera
     J parameters{{"event", event}, {"operation", operation}, {"confirmation", request(condition)}};
     if (!step.is_null())
         parameters["expected_step"] = step;
-    add(name, {{"recognition", "Custom"}, {"custom_recognition", "WvdVision"},
-               {"custom_recognition_param", condition}, {"roi", {0, 0, 900, 1600}},
-               {"action", "Custom"}, {"custom_action", "WvdConfirm"},
-               {"custom_action_param", parameters}, {"next", std::move(next)}});
+    add(name, {{"observation", "Registered"}, {"recognizer", "WvdVision"},
+               {"observation_args", condition}, {"roi", {0, 0, 900, 1600}},
+               {"operation", "Registered"}, {"binding", "WvdConfirm"},
+               {"operation_args", parameters}, {"next", std::move(next)}});
 }
 void PipelineCompiler::use_dialogue(recovery::DialoguePolicy policy) {
     (void)recovery::dialogue_policy_name(policy);
@@ -724,8 +740,8 @@ CompiledWorkflow PipelineCompiler::finish() {
     compile_interruption();
     bool business = false;
     for (const auto &node : workflow_.nodes)
-        business = business || node.value("custom_action", "") == "WvdConfirm" || node.value("custom_action", "") == "WvdCombat" ||
-                   node.value("custom_action", "") == "WvdChest";
+        business = business || node.value("binding", "") == "WvdConfirm" || node.value("binding", "") == "WvdCombat" ||
+                   node.value("binding", "") == "WvdChest";
     if (business) {
         workflow_.checkpoint = "Checkpoint";
         for (auto &node : workflow_.nodes)
@@ -734,16 +750,22 @@ CompiledWorkflow PipelineCompiler::finish() {
                     for (auto &edge : node[key])
                         if (edge == "Terminal")
                             edge = workflow_.checkpoint;
-        add(workflow_.checkpoint, {{"action", "Custom"}, {"custom_action", "BusinessCheckpoint"},
+        add(workflow_.checkpoint, {{"operation", "Registered"}, {"binding", "BusinessCheckpoint"},
                                    {"next", {"Terminal"}}});
     }
-    add("Terminal", {{"action", "Custom"}, {"custom_action", "RootTerminal"}});
+    add("Terminal", {{"operation", "Registered"}, {"binding", "Finish"}});
     add("RecoveryRequired",
-        {{"action", "Custom"},
-         {"custom_action", "RequireRecovery"},
-         {"custom_action_param", {{"reason", workflow_.kind + ".budget_exhausted"}}}});
+        {{"operation", "Registered"},
+         {"binding", "RequireRecovery"},
+         {"operation_args", {{"reason", workflow_.kind + ".budget_exhausted"}}}});
     std::set<std::string> images;
-    collect_images(workflow_.nodes, images);
+    std::set<std::string> expanded;
+    for (const auto &[name, node] : workflow_.nodes.items()) {
+        try { collect_images(node, images, expanded); }
+        catch (const std::exception &error) {
+            throw std::runtime_error("COMPILE_IMAGE_SCAN:" + name + ":" + error.what());
+        }
+    }
     collect_images(workflow_.event_scopes, images);
     if (workflow_.dialogue_policy != recovery::DialoguePolicy::Default) {
         for (const auto name : recovery::special_dialogue_options(workflow_.dialogue_policy)) images.insert(std::string(name) + ".png");

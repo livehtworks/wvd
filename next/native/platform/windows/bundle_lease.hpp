@@ -8,7 +8,7 @@
 #include <cstdint>
 
 namespace wvd::platform {
-// Win32 文件共享锁保护整个快照，不依赖文件时间戳。对象由 Gateway 持有到 SDK 真正释放之后。
+// Win32 文件共享锁保护整个快照，不依赖文件时间戳。由运行会话持有至资源释放。
 class BundleLease final {
   public:
     using Manifest = std::map<std::string, std::string>;

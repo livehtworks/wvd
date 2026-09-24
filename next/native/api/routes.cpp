@@ -74,12 +74,13 @@ Response route(const Request &request, const fs::path &root, unsigned short port
                  {"stage", "WINDOWS_FUNCTIONAL"},
                  {"api_version", 1},
                  {"capabilities", {"profile_edit", "device_preview", "workflow_edit", "task_execution", "run_diagnostics"}},
-                 {"maafw", {{"locked_version", contracts::maafw_version}, {"loaded", true}}},
+                 {"engine", "wvd_native"},
+                 {"recognition", {"opencv", "onnxruntime"}},
                  {"device_control", true},
                  {"task_execution", true},
                  {"websocket", false},
                  {"real_startup_verified", false},
-                 {"delivery_state", "INCIDENT_FIX_REQUIRES_LOCAL_ACCEPTANCE"},
+                 {"delivery_state", "NATIVE_OFFLINE_ACCEPTANCE_REQUIRED"},
                  {"production_switch", false}}
                 .dump());
     } else if (target.starts_with("/api/")) {

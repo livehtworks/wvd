@@ -1,5 +1,5 @@
 #include "metadata_query.hpp"
-#include "maafw/buffers.hpp"
+#include "path_utf8.hpp"
 #include <array>
 #include <atomic>
 #include <condition_variable>
@@ -300,7 +300,7 @@ nlohmann::json MetadataQuery::run(const std::filesystem::path &executable, int i
               "METADATA_PROCESS_IDENTITY");
         s.record.update(
             {{"pid", child.dwProcessId},
-             {"image", maafw::utf8(path)},
+             {"image", utf8(path)},
              {"created", (std::uint64_t(created.dwHighDateTime) << 32) | created.dwLowDateTime}});
         check(AssignProcessToJobObject(s.job.value, s.child.value), "METADATA_JOB_ASSIGN");
         s.assigned = true;

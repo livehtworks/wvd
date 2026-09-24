@@ -23,7 +23,8 @@ struct LifecyclePlan {
     LifecycleTarget target;
     std::vector<LifecycleOperation> operations;
     unsigned attempt{};
-    std::chrono::milliseconds step_timeout{5000};
+    std::chrono::milliseconds step_timeout{120000};
+    std::chrono::milliseconds defer_for{0};
 };
 // 初始启动只允许“可选 VPN -> 确保游戏运行/前台”，不允许停游戏或重启实例。
 inline bool initial_lifecycle_plan(const LifecyclePlan &plan) {

@@ -20,12 +20,6 @@ WvdTaskPlan manual_separation_plan(const WvdQuestDefinition &definition, bool se
         {"press", "COS/COSB2F", {1, 1}, 1}})
         .with_route({{"stair_3", "左上", {720, 822}}, {"position", "左上", {79, 447}}});
 }
-void configure_manual_separation_units(runtime::RunDefinition &definition) {
-    if (definition.max_business_units != 1 || !definition.continuation_units.empty())
-        throw std::runtime_error("MANUAL_SEPARATION_UNITS_ALREADY_CONFIGURED");
-    definition.max_business_units = 2;
-    definition.continuation_units.push_back(definition.initial);
-}
 CompiledWorkflow manual_separation(const WvdQuestDefinition &definition, const nlohmann::json &profile,
     const std::set<std::string> &images, bool allow_download) {
     using C = PipelineCompiler;

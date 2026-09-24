@@ -2,7 +2,6 @@
 #include "combat/strategy.hpp"
 #include "chest/selection.hpp"
 #include "contracts/business_state.hpp"
-#include "runtime/behavior_registry.hpp"
 #include "supply/policy.hpp"
 #include "karma.hpp"
 #include "mining/progress.hpp"
@@ -135,6 +134,4 @@ class WvdRunState final : public contracts::BusinessRunState {
     std::size_t karma_sequence_{};
     nlohmann::json karma_effect_;
 };
-void register_wvd_state(runtime::BehaviorRegistry &registry);
-contracts::BehaviorBinding wvd_state_binding(const nlohmann::json &profile);
 } // namespace wvd::games

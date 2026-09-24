@@ -133,22 +133,6 @@ WvdTaskPlan fordraig_plan(const WvdQuestDefinition &definition) {
             {"press", "fordraig/Entrance", {"fordraig/labyrinthOfFordraig", {1, 1}}, 1}})
         .with_route(points);
 }
-void configure_fordraig_units(runtime::RunDefinition &definition,
-    const std::vector<runtime::SessionDefinition> &stages, std::size_t cycles) {
-    constexpr auto units = quests::FordraigCycle::units_per_cycle;
-    if (!cycles || cycles > 256 / units || stages.size() != units ||
-        definition.max_business_units != 1 || !definition.continuation_units.empty())
-        throw std::runtime_error("FORDRAIG_UNIT_BUDGET_INVALID");
-    for (const auto &stage : stages)
-        if (stage.entry.empty() || stage.checkpoint_node.empty() || stage.time_limit <= std::chrono::milliseconds::zero() ||
-            stage.time_limit > std::chrono::seconds{1800})
-            throw std::runtime_error("FORDRAIG_SEGMENT_DEFINITION_INVALID");
-    definition.initial = stages.front();
-    definition.max_business_units = cycles * units;
-    definition.continuation_units.reserve(definition.max_business_units - 1);
-    for (std::size_t unit = 1; unit < definition.max_business_units; ++unit)
-        definition.continuation_units.push_back(stages[unit % units]);
-}
 std::vector<CompiledWorkflow> fordraig_cycle(const WvdQuestDefinition &definition, const J &profile,
     const std::set<std::string> &images, bool allow_download) {
     const auto plan = fordraig_plan(definition);

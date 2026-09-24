@@ -1,5 +1,12 @@
 export interface Version { service: string; version: string; api_version: number; stage: string }
-export interface Capabilities { platform: string; device_control: boolean; task_execution: boolean; maafw: { locked_version: string; loaded: boolean } }
+export interface Capabilities {
+  platform: string;
+  device_control: boolean;
+  task_execution: boolean;
+  engine: "wvd_native";
+  recognition: string[];
+  production_switch: boolean;
+}
 export interface ApiErrorBody { error_code: string; message: string; details?: unknown }
 export type JsonObject = Record<string, unknown>;
 

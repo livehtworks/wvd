@@ -3,6 +3,7 @@
 #include <chrono>
 #include <cstdint>
 #include <json.hpp>
+#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
@@ -20,7 +21,7 @@ struct Point {
     int x{}, y{};
 };
 
-// 值对象不携带 Maa 指针。异步消费者只能持有自己的帧字节，不能借用截图缓存。
+// 异步消费者只能持有自己的帧字节，不能借用截图缓存。
 struct FrameIdentity {
     std::string device_id, game_id, pack_revision, viewport_id;
     std::uint64_t generation{}, frame_id{}, action_epoch{};
@@ -37,6 +38,8 @@ struct FrameIdentity {
 struct FrameEnvelope {
     FrameIdentity identity;
     std::vector<std::uint8_t> encoded_image;
+    // 截图后端可直接交付 BGR 像素；持有者不可修改发布后的帧。
+    std::shared_ptr<const std::vector<std::uint8_t>> raw_bgr;
 };
 struct RecognitionMatch {
     Box box;
@@ -51,8 +54,6 @@ struct Observation {
     std::optional<Point> center;
     bool action_eligible{true};
     std::vector<RecognitionMatch> matches;
-    std::int64_t engine_task_id{}, engine_reco_id{};
-    int engine_status{};
     std::string error_code, error_stage;
     nlohmann::json evidence = nlohmann::json::object();
     nlohmann::json timing_ms = nlohmann::json::object();

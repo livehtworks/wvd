@@ -1,7 +1,7 @@
 #include "bundle_lease.hpp"
 #include "file_digest.hpp"
 #include "runtime_files.hpp"
-#include "maafw/buffers.hpp"
+#include "path_utf8.hpp"
 #include <algorithm>
 #include <cwctype>
 #include <set>
@@ -91,7 +91,7 @@ struct BundleLease::Impl {
             require(attributes != INVALID_FILE_ATTRIBUTES &&
                         !(attributes & FILE_ATTRIBUTE_REPARSE_POINT),
                     "BUNDLE_LINK_REJECTED");
-            auto name = maafw::utf8(entry.path().lexically_relative(root));
+            auto name = utf8(entry.path().lexically_relative(root));
             std::replace(name.begin(), name.end(), '\\', '/');
             if (entry.is_directory())
                 require(directories.contains(entry.path()), "BUNDLE_DIRECTORY_CHANGED");
@@ -107,7 +107,7 @@ std::filesystem::path BundleLease::checked_relative(const std::string &value) {
     require(!value.empty() && value.find_first_of(":\\\0") == std::string::npos &&
                 value.find('\0') == std::string::npos,
             "RESOURCE_PATH_INVALID");
-    auto path = maafw::path_from_utf8(value);
+    auto path = path_from_utf8(value);
     // Windows 的 /foo 没有盘符，不满足 is_absolute，却会覆盖拼接路径的根目录。
     // manifest 成员必须完全相对，同时拒绝 root_name 与 root_directory。
     require(!path.has_root_path(), "RESOURCE_PATH_INVALID");

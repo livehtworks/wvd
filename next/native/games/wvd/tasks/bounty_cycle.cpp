@@ -74,13 +74,6 @@ WvdTaskPlan jier_plan(const WvdQuestDefinition &definition) {
     return WvdTaskPlan::parse(definition).with_entry({{"press", "beginningAbyss", {"EdgeOfTown", {1, 1}}, 1},
         {"press", "B4FLabyrinth", {{1, 1}}, 1}}).with_route(points);
 }
-void configure_bounty_units(runtime::RunDefinition &definition, bool hands, std::size_t cycles) {
-    const auto units = hands ? 4u : 3u;
-    if (!cycles || cycles > 256 / units || definition.max_business_units != 1 || !definition.continuation_units.empty())
-        throw std::runtime_error("BOUNTY_UNIT_BUDGET_INVALID");
-    definition.max_business_units = cycles * units;
-    definition.continuation_units.assign(definition.max_business_units - 1, definition.initial);
-}
 CompiledWorkflow bounty_cycle(const WvdQuestDefinition &definition, const J &profile,
     const std::set<std::string> &images, bool allow_download) {
     const bool jier = definition.id == "jier";

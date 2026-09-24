@@ -131,6 +131,10 @@ inline NestedEventPolicy nested_event_policy(const Json &effective, const std::s
         result.direct.insert(key);
         include(include, key);
     }
+    for (const auto &[key, rule] : effective.items()) {
+        (void)rule;
+        if (!result.rules.contains(key)) result.rules[key] = {{"enabled", false}};
+    }
     return result;
 }
 } // namespace wvd::authoring

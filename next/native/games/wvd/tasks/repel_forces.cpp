@@ -66,11 +66,6 @@ WvdTaskPlan repel_forces_plan(const WvdQuestDefinition &definition) {
         .with_entry({{"press", "TradeWaterway", "EdgeOfTown", 1}, {"press", "7thDist", {1, 1}, 1}})
         .with_route({{"position", "左下", {559, 599}}, {"position", "左下", {186, 813}}});
 }
-void configure_repel_forces_units(runtime::RunDefinition &definition, const J &profile) {
-    if (definition.max_business_units != 1 || !definition.continuation_units.empty()) throw std::runtime_error("REPEL_UNITS_ALREADY_CONFIGURED");
-    definition.max_business_units = quests::RepelForces::rounds(profile) + 2;
-    definition.continuation_units.assign(definition.max_business_units - 1, definition.initial);
-}
 CompiledWorkflow repel_forces_cycle(const WvdQuestDefinition &definition, const J &profile,
     const std::set<std::string> &images, bool allow_download) {
     quests::RepelForces::rounds(profile);

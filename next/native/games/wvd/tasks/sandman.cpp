@@ -21,12 +21,6 @@ WvdTaskPlan sandman_plan(const WvdQuestDefinition &definition) {
         .with_entry({{"press", "impregnableFortress", {"EdgeOfTown", {1, 1}}, 1},
                      {"press", "fortressb3f", "input swipe 650 250 650 900", 1}}).with_route(points);
 }
-void configure_sandman_units(runtime::RunDefinition &definition, std::size_t visits) {
-    if (!visits || visits > 128 || definition.max_business_units != 1 || !definition.continuation_units.empty())
-        throw std::runtime_error("SANDMAN_UNIT_BUDGET_INVALID");
-    definition.max_business_units = visits * 2;
-    definition.continuation_units.assign(visits * 2 - 1, definition.initial);
-}
 CompiledWorkflow sandman_cycle(const WvdQuestDefinition &definition, const J &profile,
     const std::set<std::string> &images, bool allow_download) {
     const auto plan = sandman_plan(definition);

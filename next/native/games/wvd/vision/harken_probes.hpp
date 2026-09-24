@@ -6,7 +6,7 @@ inline nlohmann::json harken_buff_menu() {
     using C = tasks::PipelineCompiler;
     auto none = C::image("harken_buff_none_zh_hant");
     none["roi"] = {330, 1300, 250, 140};
-    nlohmann::json choices{none};
+    nlohmann::json choices = nlohmann::json::array({none});
     for (const int y : {950, 1060, 1170}) {
         auto info = C::image("harken_buff_info_zh_hant");
         info["roi"] = {615, y, 82, 82};

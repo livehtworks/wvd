@@ -10,7 +10,7 @@
 
 namespace wvd::games::tasks {
 
-// 作者模型只描述可编辑图；运行时仍使用 PipelineCompiler 产出的 Maa Pipeline。
+// 作者模型描述可编辑图；与原生任务共用同一 FlowProgram 和执行器。
 struct AuthorWorkflowCompilation {
     CompiledWorkflow workflow;
     std::map<std::string, std::vector<std::string>> node_to_pipeline;

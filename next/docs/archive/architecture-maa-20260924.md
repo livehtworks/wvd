@@ -1,0 +1,223 @@
+# 当前架构与业务分层
+
+## 当前有效调用链
+
+```text
+automationd main
+  -> HttpServer (单 Asio I/O 上下文，管理活动连接)
+      -> Application::handle (API 路由、请求校验与应用装配)
+          -> ProfileStore / WorkflowRepository / RunCoordinator
+          -> WVD 任务目录、公共流程编译器与设备生命周期
+      -> 静态资源 (Vue 生产构建)
+
+Vue App
+  -> WorkbenchPage（配置、设备与既有任务入口）
+  -> WorkflowPage / useWorkflowEditor（作者流程编辑与运行入口）
+  -> MigrationPage / useInventory（只读迁移盘点）
+      -> api/client（同源、有限超时）
+
+tools/inventory/generate
+  -> ast_scan (提取) / mapping (职责映射) / assets (资源引用核对)
+  -> 固定 Git 基线 -> JSON 报告 -> Web 构建时只读镜像
+```
+
+`Application` 是唯一应用装配和 HTTP 路由所有者，但不实现识别算法或游戏步骤；`api` 不认识
+WVD 策略，Vue 只提交结构化命令，不直接发设备动作。
+盘点工具与服务没有运行时依赖关系；服务不访问 Git，也不 import Python。
+HTTP 连接最多 64 个，每次读/写上限 5 秒，头/体上限 8/4 KiB，静态资源上限 32 MiB。
+断开连接即移出活动集合，不保留无界历史。关闭先取消 accept/连接，再处理完取消回调并退出。
+这里验证的是 **HTTP 服务正常停止**，不能推导 Maa 原生等待可中断。
+
+## 可组合作者流程
+
+```text
+WorkflowPage
+  -> WorkflowRepository（同一文档、同一 CAS 保存、同一引用删除保护）
+      -> snapshot_closure（同一仓库锁内冻结根定义及依赖闭包）
+          -> PublicFlowLibrary（参数绑定、slot 展开、循环/深度检查、语义资源解析）
+              -> compile_author_workflow
+                  -> PipelineCompiler -> 既有 Maa Pipeline / RunCoordinator
+```
+
+公共步骤、流程块和任务共用 `author-workflow` 文档，不存在第二套执行器。`call` 表达参数化调用，
+`slot` 表达调用者可见的有序附加步骤，`route` 只表达既有候选分派。参数只能绑定到已声明节点的
+标量字段，不能修改引用 ID、边或结构字段；运行只读取启动时冻结的定义闭包。
+
+`semantic-assets.json` 是语义 ID 到语言变体和既有识别能力的唯一映射。观察证据与可点击位置分别
+标记；缺语言、缺位置或歧义资源在连接设备前拒绝。作者定义、语义目录和实际图片哈希一同进入包
+revision。公共定义首次只补缺失 ID，不覆盖用户已经保存的同名定义。
+
+运行节点同时保留外层调用路径和内层源节点路径。编辑器可展开公共定义并按调用栈返回原调用者；
+运行高亮从 `node_path` 选择当前打开定义对应的节点。现有原生任务入口在逐项完成迁移前仍保持
+`LEGACY_NATIVE`，不能因公共候选定义可编译就改称已迁移。当前状态见
+[可组合流程迁移状态](composable-workflow-status.md)。
+
+## M2 运行核心
+
+```text
+独立调用者 -> RunCoordinator（请求去重、运行快照、设备租约、监督与恢复决策）
+  -> ExecutionSession（有限会话工作线程，每代独立状态）
+      -> MaaGateway（真实 Pipeline、子任务详情、根任务证据、SDK 对象释放）
+          -> GuardedAction
+              -> 新截图 -> 场景/目标识别 -> ActionIntent
+              -> Maa 内置动作或 Controller 队列
+              -> GuardedController -> InputGate -> DeviceBackend
+          -> AwaitTransition（发布期为每个输入派生）
+              -> 可取消初始等待 -> 新截图/识别轮询 -> 消费输入回执
+          -> WvdConfirm / 根检查点（独立业务确认）
+  -> EventJournal / RunStore（有界事件、原子终态与证据）
+
+OfflineRecognizer -> 同一 MaaGateway / preflight / RecognitionDetail 三态转换
+```
+
+`wvd_core` 是单独的原生库，构建选项默认关闭；M1 `automationd` 不链接该库。
+默认离线请求仍在连接前拒绝真实后端；仅显式 M3 本地入口可组装经重新核实的 MuMu 后端。
+测试提供隔离设备，Maa Pipeline/识别/回调本身不是 Mock。M1 服务不连接设备。
+只启用固定 CPU OCR 模型；WVD 专用视觉见下节。M4 已有原生业务图与状态消费者，
+仍只有 Maa 推进节点，没有第二套节点调度器；这不代表完整任务验收通过。
+
+## M3 设备与视觉
+
+`wvd_m3_check` 是有限本地诊断入口，不是新的常驻服务。它通过封存 BehaviorRegistry
+绑定只读 CaptureBatch，仍由 RunCoordinator → ExecutionSession → MaaGateway 管理。
+HTTP 没有启动任务、任意 shell 或输入 API。捕获检查的 permissions/capabilities 均为空。
+
+内层 `maafw/AdbBackend` 只持有 Maa 原始 Controller，不创建 Tasker/Resource；外层
+GuardedController、唯一 InputGate 和 Session 生命周期不变。会话释放外层对象、按住输入及
+内层 Controller 后才报告 quiescent。停止超时不会换控制者或释放租约。
+MuMu EmulatorExtras 与 ADB Encode 分别创建，降级前销毁旧 Controller，记录原因和连接代次；
+同一连接不每帧重试 IPC。固定 SDK 的 KillServer 命令配置被替换为指定设备的只读 get-state，
+不允许内部恢复杀全局 ADB；SDK 内部重试等待仍存在，不声称任意阻塞可中断。
+
+Windows 绑定层交叉核对只读旧配置线索、管理器的实例创建标识、安装根、ADB 路径/端口与进程。
+无法排除旧控制者时拒绝，不杀进程。租约仍仅保证同一 Windows 登录会话内遵守协议的参与者。
+每帧记录实测原始尺寸、前台应用、采集时刻、后端和连接代次。输入前重新检查上下文；
+检查与底层输入之间仍非设备端原子操作，不宣称消除了所有竞争窗口。
+系统捕获显式使用 observed_read_only_viewport，保留原始方向/尺寸，不执行游戏 ROI。
+该模式若携带权限、能力或场景许可，连接前即拒绝；所有输入始终拒绝。
+普通 WVD 策略不启用此模式，仍检查固定 viewport、9:16 和唯一坐标映射。
+
+`games/wvd/vision` 不含 Maa C ABI、设备点击、策略消费、游戏恢复。版本化纯算法由同一
+Gateway 注册为 CustomRecognition，直接识别与 Pipeline 共享实现和三态转换。
+Custom 详情 schema=1 保存真实证据和候选分数；NoHit 无可执行中心，boolean-only 也不编造中心。
+Session 缓存绑定包 revision、活动 lease、参数及帧身份。文件 hash 移至快照封存期，
+每次识别仍验证闭合成员与身份；direct/Custom 通过一次性内部凭证共享一次检查。
+SDK 提供的调用 ROI 由独立 CustomRecognitionScope 传入，不再覆盖业务 ROI。
+OpenCV 头文件/导入库来自固定 MaaDeps，运行时复用与 SDK 同 hash 的 DLL，不装第二套 ABI。
+
+基线图片由固定 Git 对象生成到 `packs/wvd/image`，作者 manifest 不加入运行 Bundle 内容树。
+M4 已有配置、状态、导航/补给、战斗/宝箱、恢复及专项有限业务图；完整迁移仍未完成，
+完整任务验收保持 0/58。固定 M1 静态索引保持原状。
+当前实现与缺口见 `docs/migration/m3-implementation-map.json`、`m4-implementation-map.json`，
+最新验收以 `m3-fix-validation.md` 和 `m4-business-validation.md` 为准。
+
+本轮 MetadataQuery 拥有查询子进程、Job、重叠管道与取消事件，只允许固定 info 参数。
+首次进程句柄增量仍未归因；绑定入口的局部 Query 遇到 CLEANUP_PENDING 时，析构等待可能继续阻塞。
+因此该发现链仍阻断，不能把 helper 的正常超时回收当成任意底层取消保证。
+
+### 离线 M4 数据与业务
+
+`wvd_m4_check` 组装导入器、ProfileStore、WvdQuestCatalog 和任务编译器，支持计划检查、
+入本/路线/正常迭代/专项图编译、资源闭包检查及准备阶段目录模板展开；不创建 Run，
+仍拒绝 device、binding、execute。它不是业务执行入口，也不只是早期的目录读取器。
+`games/wvd/profile` 与 `tasks/quest_catalog` 保存游戏字段和目录；`storage` 负责严格解析、来源、
+复制导入、原子保存及 revision/CAS。仅显式 `--m4` 编译此数据模块，默认服务仍只读。
+`BusinessRunState` 是无游戏知识的运行契约。非捕获状态工厂注册在封存 BehaviorRegistry，
+工厂 revision 和参数随 RunDefinition 冻结；RunCoordinator 创建并独占状态，Session/Gateway
+仅借用，Context 在受锁保护的回调范围内访问。观察者取得段结束时的 JSON 值副本，不拿可变指针。
+`WvdRunState` 负责策略消费、任务步和旧统计口径，`CombatStrategy` 不直接截图或输入。
+`state_factory` 单独承担状态与持久化端口装配。善恶选择的纯规则在 `games/wvd/karma`，
+提示图在 `recovery/karma_prompt`，业务经 `KarmaCommitPort` 提交已确认效果，
+`storage/karma_writer` 才读取显式新版 profile 绑定并执行 CAS。未绑定时禁止善恶输入，
+确认后保存失败保留事实并结束，不用恢复或重发动作补偿文件失败。
+正常续段必须同时满足 Completed、真正静止和本根任务检查点；新段更新 generation、保留业务事实，
+不复用帧、识别缓存或目标。正常续段不借用 RecoveryRequired；停止与创建工作线程有唯一先后顺序。
+M4 状态测试使用真实 Maa 离线 Controller。WvdTaskPlan 已解析旧任务的顺序动作、目标提示和地图参数，
+保留源树。PipelineCompiler 与 publish_workflow 已把参数、资源、权限和注册表接到有限图。
+43 个普通 dungeon 有入本/路线/正常迭代图，15 个基础 quest 均有专项源码。最新源码已冻结、
+构建中；扩展、unknownLeap、publisher多图和boot映射已有新版调用接线，无新增运行通过证据。
+真实 Maa 离线执行由 `tests/native/test_m4_workflow.cpp` 装配注册表、发布图、冻结状态/恢复绑定
+并调用 RunCoordinator；它是隔离验证消费者，不是已开放的 M5 API 或生产入口。
+不把图存在、可编译、状态/数据或子流程证据当作完整任务通过。
+`navigation/world_map`、`supply/inn`、`combat/auto_combat` 输出静态 Maa 图；所有输入使用
+GuardedAction，目标偏移只能基于新识别且在合法区域裁剪。组合条件没有位置中心，
+不短路掩盖 Error，也不提升低置信子识别的授权级别。
+发布器仅向不存在的新目录复制封存资产；源、图、权限、别名和注册表参与 revision。
+节点重试预算耗尽通过 RequireRecovery 记录原因；只有 RunCoordinator 可以决定后续新代次。
+资源快照的完整所有权说明见 [快照契约](integrity-snapshot-contract.md)。
+
+### 所有权与停止
+
+RunCoordinator 的监督线程不调用 SDK 阻塞等待；会话工作线程持有全部原生对象。
+用户停止先关 InputGate，记录 StopRequested。正常静止后才提交 UserStopped。
+原生调用未返回或按住的触点/按键未释放时，超时进入 Failed/STOP_TIMEOUT，quiescent=false，
+继续保留会话和 Windows 设备租约，拒绝新运行。没有 detach、强杀或后台替代控制者。
+正常回收必须等回调离开，再依次销毁 Tasker、Controller、Resource、userdata。
+因此外部测试 watchdog 未触发不等于底层等待可任意取消，资源增长也不因此归因完成。
+
+恢复只能在前一 Session 真正结束后由协调器决定，使用新 generation 和新 SDK 对象；
+恢复决策回调是纯决策，不执行设备操作。有限次数与会话时间预算由冻结运行定义给定。
+重复 request_id 返回已有运行；不同配置重用同 ID 拒绝。每实例最多记住 256 个请求，
+达到上限显式拒绝新请求，不淘汰旧记录后误执行迟到重试。
+
+类型化生命周期恢复由 `devices/lifecycle` 表达设备/实例/应用目标及有限操作，WVD 只生成冻结计划。
+只有明确的 LifecycleRecovery 会话、已授权的离线端口和新近匹配观测才能执行；在原会话工作线程内、
+创建 Maa Controller 前完成，不从纯策略回调操作设备。停止超时仍由同一会话保留所有权。
+当前只有受控离线端口；真实后端默认无此能力。启动就绪是游戏检查点，不是根业务完成。
+
+### 输入与终态
+
+门禁检查实际帧的设备、游戏、包版本、代次、viewport、动作 epoch、输入前时效、场景、应用、权限与坐标。
+`max_frame_age=0` 表示不启用统一输入寿命；非零值也只约束尚未发送的输入证据。
+输入成功后保留唯一回执，独立 `AwaitTransition` 只确认同设备、连接、代次、epoch 且晚于输入的
+页面证据，不再套用输入前墙钟寿命，也不授予下一次输入。回执未消费时即使 Maa 根节点成功，
+会话也不能报告 Completed；业务完成仍由 WVD 确认事件和根检查点决定。
+所有回调先记 attempted，再记 accepted/rejected/backend_called；停止后只允许已按住输入的释放。
+外层截图统一为识别尺寸，SDK 在这一层比例为 1；InputGate 到底层原始尺寸只映射一次。
+不同宽高比拒绝，不自动旋转或裁切。SDK Scroll 的附带 TouchMove 也被观察和拒绝，
+其后真正的 Scroll 仍须通过同一个单次许可，不放行额外点击或移动。
+
+子任务检查真实 TaskDetail 状态，不以 ID 有效代替成功。根终点还核对 task_id、generation、
+嵌套层级及指定终点节点。引擎 Succeeded 但业务终点未到达仍失败。
+业务终态和终态事件同存 result.json，原子提交成功后才对外发布 Completed。
+存储失败不发布终态成功，不覆盖旧文件；数据职责见 [数据权威](data-authority.md)。
+
+## 后续层边界
+
+| 层 | 唯一职责 | 后续阶段 |
+| --- | --- | --- |
+| native/runtime | 已实现运行、有限 Session、业务终态；不含游戏知识 | M2 |
+| native/maafw | 已实现统一 Gateway、三态识别、回调和停止映射 | M2 |
+| native/devices | 门禁、帧身份、单次原始坐标转换；真实 Controller 适配在 maafw | M2/M3 |
+| native/platform | Windows / Linux 平台机制 | 分平台验收 |
+| native/storage | 运行快照、原子结果、有界事件、资源快照和离线配置副本；善恶确认后经 KarmaCommitPort/ProfileStore 对新版副本 CAS，非任意旧配置写回 | M2/M4 |
+| native/games/wvd | 视觉、战斗、路线、补给、恢复和任务业务 | M3/M4 |
+| packs/wvd | 可验证的游戏包内容 | M3/M4 |
+| web/src/features | 流程/视觉编辑草稿及调试呈现 | M5 |
+| schemas | 应用配置与包契约 | 对应实现阶段 |
+
+其余未实现目录只记录边界，未创建虚假的执行类或未接通的 API。
+游戏层详细划分见 `native/games/wvd/README.md`。未来依赖方向为：
+应用组装运行协调器；运行协调器通过约定能力调用 Session；Session 经 Maa/设备门禁执行；
+WVD 业务提供决策与领域结果，不让通用 runtime 判断技能、地图或宝箱。
+
+## 数据权威与隔离
+
+- 原 `config.json`、mod、任务入口和更新/打包链仍归 Python 生产程序，本轮完全未切换。
+- M1 没有数据库或用户配置写入。基线权威是报告里的固定 Git commit，不是前端状态。
+- `feature_inventory.json` 是生成的迁移索引，条目状态全为 MAPPED_NOT_IMPLEMENTED。
+- 当前 250 函数/33 字段的消费者与差异以 `migration/m4-implementation-map.json` 的
+  `semantic_audit` 为准；方法与确定缺口见 [静态语义审计](migration/m4-semantic-audit.md)。
+  字段描述、导入成功和同名关键词均不能代替业务取值/调用证据。
+- `migration/m4-task-status.json` 仍是逐任务验收权威，本次文档审计不修改它；完整任务
+  0/58、release_allowed=false，M3 Metadata/CLEANUP、RESOURCE_UNRESOLVED、
+  PERFORMANCE_UNRESOLVED 均保留，不因已有离线图解除。
+- 预览 PNG 来自原 Git 资源，不是实机识别证据；不将用户截图或本机目录加入清单。
+- 前端不拥有 C++ 指针、不发任意 shell、不决定游戏循环，不重试任何启动任务命令。
+
+## 维护约束
+
+新增业务前先补完整链路的输入、终点、副作用、恢复与验收映射，再按领域实施。
+不得将旧 Factory 翻成巨型类、把整个 Farm 作为 Custom，或重新实现第二套 Pipeline 调度。
+注释解释所有权、并发、失败边界和旧语义保留理由，不用逐行叙述掩盖过长函数。
+代码格式由 `.clang-format`、Prettier 和 Python Black 统一；格式化仅限 `next/`。

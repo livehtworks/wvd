@@ -34,8 +34,8 @@ inline std::string probe_command(const std::string &fixed_command, const std::st
     if (fixed_command.empty() || fixed_command.size() > 8192 || marker.empty() ||
         marker.find_first_not_of("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_") != std::string::npos)
         throw std::runtime_error("ADB_PROBE_COMMAND_INVALID");
-    // 最后的 printf 允许 SDK 正常收集业务负结果，原 rc 没有被丢弃。
-    // 通道断开/超时仍由 Maa shell 调用结果报告，缺尾标也绝不视为命令成功。
+    // 最后的 printf 保留远端命令退出码，负结果不能被传输成功掩盖。
+    // 通道断开或超时必须明确报告，缺尾标绝不视为命令成功。
     return "(" + fixed_command + ") 2>&1; __wvd_rc=$?; printf '\\n" + marker + "%d\\n' \"$__wvd_rc\"";
 }
 inline ShellReply parse_shell_reply(const std::string &raw, const std::string &marker) {

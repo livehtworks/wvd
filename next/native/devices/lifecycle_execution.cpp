@@ -58,7 +58,9 @@ void validate_lifecycle_plan(const LifecyclePlan &plan) {
         t.device_id.size() > 256 || t.instance_id.size() > 128 || t.application_id.size() > 256 ||
         t.vpn_application_id.size() > 256 || (t.vpn_required && t.vpn_application_id.empty()) ||
         plan.attempt < 1 || plan.attempt > 3 || plan.operations.empty() || plan.operations.size() > 5 ||
-        plan.step_timeout.count() < 1 || plan.step_timeout.count() > 10000)
+        plan.step_timeout.count() < 1 || plan.step_timeout > std::chrono::minutes{3} ||
+        plan.defer_for < std::chrono::milliseconds::zero() ||
+        plan.defer_for > std::chrono::hours{24})
         throw std::runtime_error("LIFECYCLE_PLAN_INVALID");
     std::set<O> seen;
     for (auto operation : plan.operations) {
@@ -75,12 +77,15 @@ J lifecycle_plan_json(const LifecyclePlan &plan) {
     return {{"schema", 1}, {"device_id", plan.target.device_id}, {"instance_id", plan.target.instance_id},
              {"application_id", plan.target.application_id}, {"vpn_application_id", plan.target.vpn_application_id},
              {"vpn_required", plan.target.vpn_required}, {"attempt", plan.attempt},
-             {"step_timeout_ms", plan.step_timeout.count()}, {"operations", operations}};
+             {"step_timeout_ms", plan.step_timeout.count()},
+             {"defer_for_ms", plan.defer_for.count()}, {"operations", operations}};
 }
 LifecycleEnd execute_lifecycle_plan(const LifecyclePlan &plan, LifecyclePort &port,
     const std::function<bool()> &cancelled,
     const std::function<void(const std::string &, const J &)> &event) {
     validate_lifecycle_plan(plan);
+    if (plan.defer_for != std::chrono::milliseconds::zero())
+        throw std::runtime_error("LIFECYCLE_DEFER_NOT_CONSUMED");
     auto observe = [&] {
         auto value = port.observe_lifecycle();
         const auto now = std::chrono::steady_clock::now();

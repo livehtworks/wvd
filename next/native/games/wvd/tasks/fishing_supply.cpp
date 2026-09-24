@@ -47,12 +47,6 @@ CompiledWorkflow transfer_bait() {
     return graph.finish();
 }
 }
-void configure_fishing_units(runtime::RunDefinition &definition, std::size_t units) {
-    if (!units || units > 256 || definition.max_business_units != 1 || !definition.continuation_units.empty())
-        throw std::runtime_error("FISHING_UNIT_BUDGET_INVALID");
-    definition.max_business_units = units;
-    definition.continuation_units.assign(units - 1, definition.initial);
-}
 CompiledWorkflow fishing_cycle(const WvdQuestDefinition &definition, const J &profile,
     const std::set<std::string> &images, bool allow_download) {
     if (definition.type != "quest" || (definition.id != "fishing" && definition.id != "fishing2")) throw std::runtime_error("FISHING_TASK_INVALID");

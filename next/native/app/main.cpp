@@ -1,6 +1,7 @@
 #include "api/http_server.hpp"
 #include "app/application.hpp"
 #include "contracts/version.hpp"
+#include "platform/windows/path_utf8.hpp"
 #include <charconv>
 #include <atomic>
 #include <csignal>
@@ -27,7 +28,7 @@ int wmain(int argc, wchar_t **argv) {
         std::filesystem::path root, data_root, pack_root, legacy_config, quests;
         bool open_browser = true;
         for (int i = 1; i < argc; ++i) {
-            std::string arg = wvd::maafw::utf8(std::filesystem::path(argv[i]));
+            std::string arg = wvd::platform::utf8(std::filesystem::path(argv[i]));
             if (arg == "--version") {
                 std::cout << "automationd " << wvd::contracts::service_version
                           << " api=1 stage=WINDOWS_FUNCTIONAL\n";
@@ -40,7 +41,7 @@ int wmain(int argc, wchar_t **argv) {
             if ((arg == "--port" || arg == "--web-root" || arg == "--data-root" ||
                  arg == "--pack-root" || arg == "--legacy-config" || arg == "--quests") &&
                 i + 1 < argc) {
-                std::string value = wvd::maafw::utf8(std::filesystem::path(argv[++i]));
+                std::string value = wvd::platform::utf8(std::filesystem::path(argv[++i]));
                 if (arg == "--web-root")
                     root = std::filesystem::path(std::u8string(value.begin(), value.end()));
                 else if (arg == "--data-root")
@@ -90,7 +91,7 @@ int wmain(int argc, wchar_t **argv) {
         auto begin_shutdown = [&] {
             if (shutdown_started) return;
             shutdown_started = true;
-            // I/O线程只关闭准入和发取消；回调/SDK释放在 io.run 返回后有序等待。
+            // I/O线程只关闭准入并发出取消；设备与工作线程在 io.run 返回后回收。
             application.request_shutdown();
             server.stop();
             signals.cancel();

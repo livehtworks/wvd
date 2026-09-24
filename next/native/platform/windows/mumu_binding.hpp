@@ -9,7 +9,7 @@ namespace wvd::platform {
 nlohmann::json create_mumu_binding(const std::filesystem::path &manager, int index,
                                    std::string serial,
                                    std::stop_token cancellation = {});
-// 只接受已定位的单实例；在创建任何 Maa Controller 前再读取管理器和进程现场。
+// 只接受已定位的单实例；建立设备会话前核对管理器和进程现场。
 nlohmann::json verify_mumu_binding(const std::filesystem::path &file,
                                    std::stop_token cancellation = {});
 nlohmann::json verify_mumu_binding(const nlohmann::json &binding,

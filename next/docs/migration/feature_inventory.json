@@ -78578,7 +78578,7 @@
       "callee_expression": "SaveImage",
       "arguments": [
         "scn",
-        "f'debug_{reason}_{datetime.now().strftime('%H%M%S.%f')[:-3]}'"
+        "f\"debug_{reason}_{datetime.now().strftime('%H%M%S.%f')[:-3]}\""
       ],
       "resolution": "EXTERNAL_OR_DYNAMIC",
       "targets": []
@@ -119044,7 +119044,7 @@
       "callee_expression": "cv2.putText",
       "arguments": [
         "marked",
-        "f'DF:{det['score']:.2f}'",
+        "f\"DF:{det['score']:.2f}\"",
         "(x1, y1 - 5)",
         "cv2.FONT_HERSHEY_SIMPLEX",
         "0.5",
@@ -119061,7 +119061,7 @@
       "callee_expression": "cv2.putText",
       "arguments": [
         "marked",
-        "f'MA:{det['match_score']:.2f}'",
+        "f\"MA:{det['match_score']:.2f}\"",
         "(x1, y1 - 20)",
         "cv2.FONT_HERSHEY_SIMPLEX",
         "0.5",
@@ -119491,7 +119491,7 @@
       "line": 109,
       "callee_expression": "print",
       "arguments": [
-        "f'发现新版本: {data['version']}'"
+        "f\"发现新版本: {data['version']}\""
       ],
       "resolution": "EXTERNAL_OR_DYNAMIC",
       "targets": []

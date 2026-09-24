@@ -1,6 +1,6 @@
 #include "karma_writer.hpp"
 #include "profile_store.hpp"
-#include "maafw/preflight.hpp"
+#include "platform/windows/path_utf8.hpp"
 
 namespace wvd::storage {
 namespace {
@@ -8,7 +8,7 @@ using J = nlohmann::json;
 class Writer final : public games::KarmaCommitPort {
   public:
     Writer(const J &binding, const J &values)
-        : store_(maafw::path_from_utf8(binding.at("path")), binding.at("descriptor")), document_(store_.load()) {
+        : store_(platform::path_from_utf8(binding.at("path")), binding.at("descriptor")), document_(store_.load()) {
         if (document_.at("revision") != binding.at("revision") || document_.at("values") != values)
             throw std::runtime_error("PROFILE_BINDING_MISMATCH");
     }

@@ -1,0 +1,64 @@
+{
+  "schema": 1,
+  "project": "livehtworks/wvd",
+  "base_commit": "376ca780fa7432afb48031b048d340531ae8d5c7",
+  "target": "Windows x64 / C++20 / Vue; no Maa runtime or MaaDeps",
+  "checked_at": "2026-09-24",
+  "binaries": [
+    {
+      "id": "opencv",
+      "version": "4.12.0",
+      "filename": "opencv-4.12.0-windows.exe",
+      "url": "https://github.com/opencv/opencv/releases/download/4.12.0/opencv-4.12.0-windows.exe",
+      "size": 186838616,
+      "sha256": "b753b14d880b9bc8d89d6acd3b665c040baec0211078435432fcae117db707af",
+      "release_api": "https://api.github.com/repos/opencv/opencv/releases/tags/4.12.0",
+      "purpose": "Official standalone OpenCV Windows headers/import libraries/runtime; replace MaaDeps build, not the WVD recognition algorithms.",
+      "installation": "Extract only into project-owned dependency directory; never run a system-wide installer. Do not copy fonts or unrelated modules into deliverable."
+    },
+    {
+      "id": "onnxruntime",
+      "version": "1.22.1",
+      "filename": "onnxruntime-win-x64-1.22.1.zip",
+      "url": "https://github.com/microsoft/onnxruntime/releases/download/v1.22.1/onnxruntime-win-x64-1.22.1.zip",
+      "size": 73731806,
+      "sha256": "855276cd4be3cda14fe636c69eb038d75bf5bcd552bda1193a5d79c51f436dfe",
+      "release_api": "https://api.github.com/repos/microsoft/onnxruntime/releases/tags/v1.22.1",
+      "purpose": "Native C++ CPU inference only; reuse audited PP-OCR model/dictionary contracts. No CUDA or DirectML package."
+    },
+    {
+      "id": "scrcpy_server",
+      "version": "3.3.4",
+      "filename": "scrcpy-server-v3.3.4",
+      "url": "https://github.com/Genymobile/scrcpy/releases/download/v3.3.4/scrcpy-server-v3.3.4",
+      "size": 90980,
+      "sha256": "8588238c9a5a00aa542906b6ec7e6d5541d9ffb9b5d0f6e1bc0e365e2303079e",
+      "release_api": "https://api.github.com/repos/Genymobile/scrcpy/releases/tags/v3.3.4",
+      "purpose": "Pinned Android input-control server only. Host codec must match this version; no scrcpy desktop UI/video/audio stack."
+    }
+  ],
+  "sources": [
+    {
+      "id": "scrcpy",
+      "url": "https://github.com/Genymobile/scrcpy.git",
+      "commit": "fb6381f5b9bb96f3fa823d899f4c32de2ec84ab3",
+      "tag": "v3.3.4",
+      "tag_object": "b64fca97d5ac86bc2233327ee634fed40a2823bc",
+      "purpose": "Pinned wire-protocol reference/adaptation, control_msg and server reader; do not build or launch another desktop controller."
+    },
+    {
+      "id": "rapidocr_onnx",
+      "url": "https://github.com/RapidAI/RapidOcrOnnx.git",
+      "commit": "abd498c13a6dbe5f3b3c0d421d72e01bb3e6ee6d",
+      "purpose": "Vendor only OCR algorithm core with notice, adapt to locked OpenCV/ORT. Do not ship demo, bundled old binary dependencies, or another OCR process/service."
+    }
+  ],
+  "reuse": [
+    {"id":"boost", "version":"1.90.0", "sha256":"5e93d582aff26868d581a52ae78c7d8edf3f3064742c6e77901a1f18a437eea9", "action":"Keep existing verified project dependency; no new framework."},
+    {"id":"json", "version":"3.11.3", "sha256":"9bea4c8066ef4a1c206b2be5a36302f8926f7fdc6087af5d20b417d0cf103ea6", "action":"Keep existing verified project dependency."},
+    {"id":"adb", "action":"Use configured MuMu adb executable after local identity/version/hash check. Do not replace system or emulator adb or kill its global server."},
+    {"id":"mumu_ipc", "action":"Use installed vendor capture SDK/DLL and verified ABI. Inspect current local SDK/old binding; no unverified download or redistribution. Never use MaaController as fallback."},
+    {"id":"ocr_models", "prior_commit":"dabcd4681ac990dc4361de26416d986abd80e4aa", "prior_model":"ppocr_v3/en_us", "det_sha256":"8fe4bf6abfb20402357827f2efc964c8b28cf980e29fe09a99b742ae29725fa9", "rec_sha256":"da12c6e863761d774b07d3bd40fbaaa55516f90570e0b1dd9dc112e457301cc9", "keys_sha256":"5662df9d2d03f0e8ca0d3b0649d6acbab904b6a14b3d3521463c71c37c668ce3", "action":"Copy exact existing verified model/dictionary bytes into independent resource bundle with provenance and all model preprocessing settings. Do not require Maa SDK or Maa cache at runtime; do not claim zh-Hant from English model."},
+    {"id":"vue_toolchain", "action":"Retain current package-lock and locked Node/npm; no frontend framework substitution."}
+  ]
+}

@@ -4,7 +4,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 if(NOT WIN32)
-  message(FATAL_ERROR "M1 currently validates Windows only; Linux/Spark is not implemented")
+  message(FATAL_ERROR "Native WVD Next currently supports Windows only")
 endif()
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/.local/dependencies.json" WVD_DEPS)
 string(JSON BOOST_ROOT GET "${WVD_DEPS}" boost)
@@ -20,41 +20,25 @@ target_include_directories(wvd_http SYSTEM PUBLIC "${BOOST_ROOT}")
 target_compile_definitions(wvd_http PUBLIC BOOST_ERROR_CODE_HEADER_ONLY NOMINMAX WIN32_LEAN_AND_MEAN _WIN32_WINNT=0x0A00)
 target_compile_options(wvd_http PRIVATE /utf-8 /W4 /EHsc)
 target_link_libraries(wvd_http PUBLIC ws2_32 mswsock)
+add_subdirectory(native)
+set(WVD_NATIVE_DEPS "${CMAKE_CURRENT_SOURCE_DIR}/.local/native-deps")
+set(WVD_OPENCV "${WVD_NATIVE_DEPS}/opencv-unpacked/opencv/build")
+set(WVD_ORT "${WVD_NATIVE_DEPS}/ort-unpacked/onnxruntime-win-x64-1.22.1")
 add_executable(automationd native/app/main.cpp)
-target_link_libraries(automationd PRIVATE wvd_http)
+target_link_libraries(automationd PRIVATE wvd_native_application)
 target_compile_options(automationd PRIVATE /utf-8 /W4 /EHsc)
-target_link_options(automationd PRIVATE "/MANIFEST:EMBED" "/MANIFESTINPUT:${CMAKE_CURRENT_SOURCE_DIR}/native/platform/windows/app.manifest")
+target_link_options(automationd PRIVATE "/MANIFEST:EMBED"
+  "/MANIFESTINPUT:${CMAKE_CURRENT_SOURCE_DIR}/native/platform/windows/app.manifest")
+add_dependencies(automationd wvd-capture-host)
+add_custom_command(TARGET automationd POST_BUILD
+  COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+    "${WVD_ORT}/lib/onnxruntime.dll" "$<TARGET_FILE_DIR:automationd>"
+  COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+    "${WVD_OPENCV}/x64/vc16/bin/opencv_world4120.dll" "$<TARGET_FILE_DIR:automationd>"
+  COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+    "${WVD_NATIVE_DEPS}/archives/scrcpy-server-v3.3.4" "$<TARGET_FILE_DIR:automationd>"
+  COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+    "$<TARGET_FILE:wvd-capture-host>" "$<TARGET_FILE_DIR:automationd>")
 add_executable(test_head_response tests/native/test_head_response.cpp)
 target_link_libraries(test_head_response PRIVATE wvd_http)
 target_compile_options(test_head_response PRIVATE /utf-8 /W4 /EHsc)
-option(WVD_BUILD_M2_OFFLINE "Build isolated Maa recognition library and native tests" OFF)
-option(WVD_BUILD_M3 "Build isolated device and WVD vision validation" OFF)
-option(WVD_BUILD_M4 "Build WVD business core and functional Windows application" ON)
-if(WVD_BUILD_M4)
-  set(WVD_BUILD_M3 ON)
-endif()
-if(WVD_BUILD_M2_OFFLINE OR WVD_BUILD_M3 OR WVD_BUILD_M4)
-  add_subdirectory(native/maafw)
-endif()
-if(NOT WVD_BUILD_M4)
-  message(FATAL_ERROR "The Windows functional application requires WVD_BUILD_M4=ON")
-endif()
-add_library(wvd_application native/app/application.cpp)
-target_link_libraries(wvd_application PUBLIC wvd_http wvd_business wvd_vision wvd_device
-  PRIVATE shell32 comdlg32)
-target_compile_options(wvd_application PRIVATE /utf-8 /W4 /EHsc)
-target_link_libraries(automationd PRIVATE wvd_application)
-
-# 只走正式 Application 装配函数，验证启动计划和代表大图的发布闭包；不连接设备。
-add_executable(test_t0_startup tests/native/test_t0_startup.cpp)
-target_link_libraries(test_t0_startup PRIVATE wvd_application)
-target_compile_options(test_t0_startup PRIVATE /utf-8 /W4 /EHsc)
-target_link_options(test_t0_startup PRIVATE
-  "/MANIFEST:EMBED" "/MANIFESTINPUT:${CMAKE_CURRENT_SOURCE_DIR}/native/platform/windows/app.manifest")
-set_target_properties(test_t0_startup PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/t0")
-
-# 公共流程编译模型检查：显式构建/执行，不加入默认全任务矩阵。
-add_executable(test_public_flow EXCLUDE_FROM_ALL tests/native/test_public_flow.cpp)
-target_link_libraries(test_public_flow PRIVATE wvd_business)
-target_compile_options(test_public_flow PRIVATE /utf-8 /W4 /EHsc)
-set_target_properties(test_public_flow PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/authoring")

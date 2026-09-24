@@ -3,7 +3,7 @@
 #include <json.hpp>
 
 namespace wvd::games::quests {
-// 悬赏阶段只存已确认事实。截图/输入与正常续段分别属于Maa和RunCoordinator。
+// 悬赏阶段只存已确认事实；截图和输入由设备会话持有，续段由协调器持有。
 class BountyCycle {
   public:
     enum class Phase { Leap, Travel, Reveal, FirstRoute, FirstReturn, SecondRoute, SecondReturn, Reports, Rest, Completed };

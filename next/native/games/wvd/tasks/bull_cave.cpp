@@ -23,13 +23,6 @@ WvdTaskPlan bull_cave_plan(const WvdQuestDefinition &definition) {
     points.push_back({"LBC/LBC_quit", nullptr, nullptr});
     return WvdTaskPlan::parse(definition).with_route(points);
 }
-void configure_bull_cave_units(runtime::RunDefinition &definition, bool rest, std::size_t cycles) {
-    const auto units = rest ? 3u : 2u;
-    if (!cycles || cycles > 256 / units || definition.max_business_units != 1 || !definition.continuation_units.empty())
-        throw std::runtime_error("BULL_CAVE_UNIT_BUDGET_INVALID");
-    definition.max_business_units = cycles * units;
-    definition.continuation_units.assign(definition.max_business_units - 1, definition.initial);
-}
 CompiledWorkflow bull_cave_cycle(const WvdQuestDefinition &definition, const J &profile,
     const std::set<std::string> &images, bool allow_download) {
     const auto plan = bull_cave_plan(definition);

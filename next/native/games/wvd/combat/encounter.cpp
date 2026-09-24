@@ -33,7 +33,7 @@ tasks::CompiledWorkflow fight_encounter(const nlohmann::json &profile,
     const auto clear = C::all({battle, C::absent(popup)});
     const auto full_auto = C::all({clear, enabled, C::business("/strategy/automatic", true)});
     const auto turn = graph.define_child("Actor", take_turn(profile, available_images), {"BlockedExit"});
-    // 每次真实 Maa 子任务拥有独立的节点预算；共享的是只读图而不是旧帧/动作许可。
+    // 每次子调用独立计数；共享只读定义，不共享旧帧或动作许可。
     // 返回后先重新观察遭遇终点，再允许下一角色。根回合预算仍是显式有限链。
     for (unsigned index = 0; index < max_turns; ++index) {
         const auto name = "Turn" + std::to_string(index);

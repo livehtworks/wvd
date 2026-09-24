@@ -1,7 +1,7 @@
 #include "run_store.hpp"
 #include "platform/windows/runtime_files.hpp"
 #include "platform/windows/file_digest.hpp"
-#include "maafw/buffers.hpp"
+#include <opencv2/imgcodecs.hpp>
 #include <algorithm>
 #include <array>
 #include <fstream>
@@ -51,32 +51,41 @@ struct DiagnosticDirectories {
         }
     }
 };
-void validate_diagnostic_png(const contracts::FrameEnvelope &frame, std::size_t limit) {
-    const auto &bytes = frame.encoded_image;
+std::vector<std::uint8_t> diagnostic_png(const contracts::FrameEnvelope &frame,
+                                         std::size_t limit) {
+    auto bytes = frame.encoded_image;
+    const auto size = frame.identity.recognition_size;
+    if (bytes.empty() && frame.raw_bgr) {
+        diagnostic_require(size.width > 0 && size.height > 0 &&
+            frame.raw_bgr->size() == static_cast<std::uint64_t>(size.width) * size.height * 3,
+            "DIAGNOSTIC_RAW_FRAME_INVALID");
+        const cv::Mat image(size.height, size.width, CV_8UC3,
+            const_cast<std::uint8_t *>(frame.raw_bgr->data()));
+        diagnostic_require(cv::imencode(".png", image, bytes),
+                           "DIAGNOSTIC_PNG_ENCODE_FAILED");
+    }
     constexpr std::array<std::uint8_t, 8> signature{137, 80, 78, 71, 13, 10, 26, 10};
     diagnostic_require(bytes.size() <= limit, "DIAGNOSTIC_FRAME_BYTES_EXCEEDED");
     diagnostic_require(bytes.size() >= 33 &&
         std::equal(signature.begin(), signature.end(), bytes.begin()), "DIAGNOSTIC_NOT_PNG");
-    // 先核对PNG固定IHDR，避免SDK解码前接受异常大尺寸；像素有效性仍由现有SDK验证。
+    // 先核对PNG固定IHDR，限制尺寸后再由OpenCV解码验证像素。
     const auto u32 = [&](std::size_t offset) {
         return (std::uint32_t(bytes[offset]) << 24) | (std::uint32_t(bytes[offset + 1]) << 16) |
                (std::uint32_t(bytes[offset + 2]) << 8) | bytes[offset + 3];
     };
-    const auto size = frame.identity.recognition_size;
     diagnostic_require(u32(8) == 13 && bytes[12] == 'I' && bytes[13] == 'H' &&
         bytes[14] == 'D' && bytes[15] == 'R' && size.width > 0 && size.height > 0 &&
         size.width <= 4096 && size.height <= 4096 && u32(16) == std::uint32_t(size.width) &&
         u32(20) == std::uint32_t(size.height), "DIAGNOSTIC_PNG_SIZE_INVALID");
-    auto image = maafw::image_buffer();
-    auto owned = bytes;
-    diagnostic_require(MaaImageBufferSetEncoded(image.get(), owned.data(), owned.size()) &&
-        MaaImageBufferGetRawData(image.get()) && MaaImageBufferType(image.get()) == 16 &&
-        MaaImageBufferWidth(image.get()) == size.width && MaaImageBufferHeight(image.get()) == size.height,
+    const auto image = cv::imdecode(bytes, cv::IMREAD_COLOR);
+    diagnostic_require(!image.empty() && image.type() == CV_8UC3 &&
+        image.cols == size.width && image.rows == size.height,
         "DIAGNOSTIC_PNG_DECODE_FAILED");
+    return bytes;
 }
 J event_record(const std::string &instance, std::uint64_t run, std::uint64_t generation,
                std::uint64_t seq, std::string type, J payload) {
-    auto node = payload.is_object() ? payload.value("node", J(nullptr)) : J(nullptr);
+    auto node = payload.is_object() ? payload.value("node_id", payload.value("node", J(nullptr))) : J(nullptr);
     if (!node.is_string() && payload.is_object() && payload.contains("name") &&
         payload.at("name").is_string())
         node = payload.at("name");
@@ -92,6 +101,7 @@ J event_record(const std::string &instance, std::uint64_t run, std::uint64_t gen
                                    .count()},
             {"type", std::move(type)},
             {"node_id", std::move(node)},
+            {"source_path", payload.is_object() ? payload.value("source_path", J(nullptr)) : J(nullptr)},
             {"outcome", std::move(outcome)},
             {"payload", std::move(payload)}};
 }
@@ -183,7 +193,6 @@ J snapshot_json(const contracts::RunSnapshot &s) {
             {"completed_business_units", s.completed_business_units},
             {"quiescent", s.quiescent},
             {"result_saved", s.result_saved},
-            {"engine_status", s.engine_status},
             {"inputs",
              {{"attempted", s.inputs.attempted},
               {"accepted", s.inputs.accepted},
@@ -287,7 +296,7 @@ J RunStore::save_diagnostic(const contracts::FrameEnvelope *frame, const Diagnos
             {"captured_at_ns", std::chrono::duration_cast<std::chrono::nanoseconds>(id.captured_at.time_since_epoch()).count()},
             {"age_at_submit_ms", std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - id.captured_at).count()},
             {"input_authorization", false}};
-        validate_diagnostic_png(*frame, diagnostic_limits_.frame_bytes);
+        const auto image_bytes = diagnostic_png(*frame, diagnostic_limits_.frame_bytes);
         DiagnosticDirectories directories;
         directories.ancestors(directory_);
         const auto folder = directory_ / "diagnostics";
@@ -304,8 +313,8 @@ J RunStore::save_diagnostic(const contracts::FrameEnvelope *frame, const Diagnos
                 "DIAGNOSTIC_DIRECTORY_CHANGED");
         }
         const auto relative = "diagnostics/" + std::to_string(entry.at("id").get<std::uint64_t>()) + ".png";
-        const auto hash = platform::bytes_sha256(frame->encoded_image);
-        const std::string content(frame->encoded_image.begin(), frame->encoded_image.end());
+        const auto hash = platform::bytes_sha256(image_bytes);
+        const std::string content(image_bytes.begin(), image_bytes.end());
         platform::atomic_write(directory_ / relative, content, false);
         entry["path"] = relative;
         entry["sha256"] = hash;
@@ -355,11 +364,8 @@ void RunStore::save_terminal(const contracts::RunSnapshot &snapshot,
     document["diagnostics"] = diagnostic_summary();
     document["result_saved"] = true;
     document["events"] = events;
-    document["root_task_id"] = session.root_task_id;
-    document["root_terminal"] = {{"task_id", session.terminal.task_id},
-                                 {"generation", session.terminal.generation},
-                                 {"depth", session.terminal.depth},
-                                 {"node", session.terminal.node}};
+    document["root_terminal"] = {{"generation", session.terminal.generation},
+                                 {"source_path", session.terminal.source_path}};
     platform::atomic_write(directory_ / "result.json", document.dump(2), false);
     saved_ = true;
 }

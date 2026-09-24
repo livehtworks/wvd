@@ -672,6 +672,7 @@ AuthorWorkflowCompilation compile_author_workflow(const J &source,
     std::size_t public_ordinal{};
     std::map<std::string, J> event_handlers;
     J entry_events = J::array();
+    J entry_disabled = J::array();
     for (const auto &[id, node] : graph.nodes) {
         const auto runtime_name = pipeline_name(id, entry, graph.success_end);
         result.node_to_pipeline[id] = {runtime_name};
@@ -721,7 +722,7 @@ AuthorWorkflowCompilation compile_author_workflow(const J &source,
                         runtime_name,
                         static_cast<int>(parameters.at("postcondition_timeout_ms").get<std::int64_t>()));
             } else if (type == "wait") {
-                // 等待由可取消的原生动作持有，不能交给 Maa post_delay 阻塞停止链。
+                // 等待由可取消的原生步骤持有，不阻塞停止链。
                 compiler.wait(runtime_name,
                               static_cast<int>(parameters.at("duration_ms").get<std::int64_t>()),
                               next);
@@ -785,14 +786,19 @@ AuthorWorkflowCompilation compile_author_workflow(const J &source,
             if (type != "end") {
                 const auto effective = authoring::effective_event_policy(inherited_events, document, *node);
                 J active = J::array();
+                J disabled = J::array();
                 for (const auto &[event_id, rule] : effective.items()) {
-                    if (!rule.value("enabled", false)) continue;
+                    if (!rule.value("enabled", false)) {
+                        disabled.push_back(event_id);
+                        continue;
+                    }
                     if (allowed_events && !allowed_events->contains(event_id)) {
                         const auto declared = document.at("execution").value("events", J::object());
                         const auto overrides = node->value("event_overrides", J::object());
                         if ((declared.contains(event_id) && declared.at(event_id).value("enabled", false)) ||
                             (overrides.contains(event_id) && overrides.at(event_id).value("enabled", false)))
                             fail("EVENT_NESTED_NOT_ALLOWED", id + ":" + event_id);
+                        disabled.push_back(event_id);
                         continue;
                     }
                     if (unresolved(unresolved, rule.at("detect")))
@@ -830,7 +836,7 @@ AuthorWorkflowCompilation compile_author_workflow(const J &source,
                                     for (const auto &part : child.source_paths.at(child_name)) path.push_back(part);
                                 result.source_paths[compiled_name] = std::move(path);
                             }
-                            event_handlers[key] = {{"entry", child_entry}, {"reset_hit_counts", reset}};
+                            event_handlers[key] = {{"entry", child_entry}, {"local_counters", reset}};
                         }
                         descriptor.update(event_handlers.at(key));
                         descriptor["resume"] = resume;
@@ -840,9 +846,13 @@ AuthorWorkflowCompilation compile_author_workflow(const J &source,
                     }
                     active.push_back(std::move(descriptor));
                 }
-                if (!active.empty()) {
-                    if (id == entry) entry_events = active;
-                    compiler.event_scope(runtime_name, std::move(active));
+                if (!active.empty() || !disabled.empty()) {
+                    if (id == entry) {
+                        entry_events = active;
+                        entry_disabled = disabled;
+                    }
+                    compiler.event_scope(runtime_name,
+                        {{"rules", std::move(active)}, {"disabled", std::move(disabled)}});
                 }
             }
             if (node->contains("repeat_limit"))
@@ -868,9 +878,10 @@ AuthorWorkflowCompilation compile_author_workflow(const J &source,
         }
     }
     try {
-    if (!entry_events.empty()) {
+    if (!entry_events.empty() || !entry_disabled.empty()) {
         for (auto &rule : entry_events) rule["source_node"] = "Entry";
-        compiler.event_scope("Entry", std::move(entry_events));
+        compiler.event_scope("Entry", {{"rules", std::move(entry_events)},
+            {"disabled", std::move(entry_disabled)}});
     }
     result.workflow = compiler.finish();
     } catch (const nlohmann::json::exception &error) {

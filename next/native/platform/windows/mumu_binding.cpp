@@ -1,6 +1,6 @@
 #include "mumu_binding.hpp"
 #include "metadata_query.hpp"
-#include "maafw/buffers.hpp"
+#include "path_utf8.hpp"
 #include <fstream>
 
 namespace wvd::platform {
@@ -37,9 +37,9 @@ nlohmann::json create_mumu_binding(const std::filesystem::path &manager, int ind
     return {{"schema", 1},
             {"index", index},
             {"created_timestamp", live.at("created_timestamp")},
-            {"manager", maafw::utf8(manager)},
-            {"adb", maafw::utf8(adb)},
-            {"install_root", maafw::utf8(manager.parent_path().parent_path())},
+            {"manager", utf8(manager)},
+            {"adb", utf8(adb)},
+            {"install_root", utf8(manager.parent_path().parent_path())},
             {"serial", std::move(serial)},
             {"controller_audit", "APPLICATION_DEVICE_OWNER"},
             {"initial_manager", live},
@@ -52,7 +52,7 @@ nlohmann::json verify_mumu_binding(const nlohmann::json &source,
     const auto audit = binding.value("controller_audit", std::string{});
     check(audit == "NO_OTHER_CONTROLLER" || audit == "APPLICATION_DEVICE_OWNER",
           "CONTROLLER_OWNERSHIP_UNCONFIRMED");
-    auto manager = maafw::path_from_utf8(binding.at("manager"));
+    auto manager = path_from_utf8(binding.at("manager"));
     check(manager.is_absolute() && manager.filename() == "MuMuManager.exe" &&
               std::filesystem::is_regular_file(manager),
           "MUMU_MANAGER_INVALID");
@@ -74,12 +74,12 @@ nlohmann::json verify_mumu_binding(const nlohmann::json &source,
           "MUMU_ADB_BINDING_MISMATCH");
     check(live.at("created_timestamp") == binding.at("created_timestamp"),
           "MUMU_INSTANCE_REPLACED");
-    auto adb = maafw::path_from_utf8(binding.at("adb"));
+    auto adb = path_from_utf8(binding.at("adb"));
     check(std::filesystem::canonical(adb) ==
               std::filesystem::canonical(manager.parent_path() / "adb.exe"),
           "MUMU_ADB_PATH_MISMATCH");
     auto root = manager.parent_path().parent_path();
-    check(std::filesystem::canonical(maafw::path_from_utf8(binding.at("install_root"))) ==
+    check(std::filesystem::canonical(path_from_utf8(binding.at("install_root"))) ==
               std::filesystem::canonical(root),
           "MUMU_INSTALL_MISMATCH");
     binding["live_manager"] = live;

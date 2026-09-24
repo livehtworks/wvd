@@ -55,12 +55,6 @@ WvdTaskPlan golden_chest_plan(const WvdQuestDefinition &definition) {
     route.push_back({"SSC/SSC_quit", "右下", nullptr});
     return WvdTaskPlan::parse(definition).with_route(route);
 }
-void configure_golden_chest_units(runtime::RunDefinition &definition, std::size_t cycles) {
-    if (!cycles || cycles > 128 || definition.max_business_units != 1 || !definition.continuation_units.empty())
-        throw std::runtime_error("GOLDEN_UNIT_BUDGET_INVALID");
-    definition.max_business_units = cycles * 2;
-    definition.continuation_units.assign(cycles * 2 - 1, definition.initial);
-}
 CompiledWorkflow golden_chest_cycle(const WvdQuestDefinition &definition, const J &profile,
     const std::set<std::string> &images, bool allow_download) {
     const auto plan = golden_chest_plan(definition);

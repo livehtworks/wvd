@@ -5,7 +5,7 @@
 #include "authoring/semantic_assets.hpp"
 
 namespace wvd::games::tasks {
-// 只组织/编译作者定义；执行仍为既有 RunCoordinator -> Maa Pipeline。
+// 只组织和编译作者定义；执行由原生 RunCoordinator 与 FlowExecutor 持有。
 // Snapshot 必须由 WorkflowRepository 在同一读锁内取得，不在编译回调中回读活动文件。
 class PublicFlowLibrary {
   public:

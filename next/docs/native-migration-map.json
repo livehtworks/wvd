@@ -1,0 +1,49 @@
+{
+  "schema": 1,
+  "base_commit": "376ca780fa7432afb48031b048d340531ae8d5c7",
+  "target_engine": "wvd_native",
+  "status": "native_candidate_product_offline_partial",
+  "legacy_adapter_location": "next/archive/maafw",
+  "legacy_runtime_location": "next/archive/legacy-integration",
+  "legacy_tools_location": "next/archive/legacy-tools",
+  "legacy_dependency_lock_location": "next/archive/legacy-locks/opencv.lock.json",
+  "active_build": "next/native/CMakeLists.txt builds only native targets; no Maa SDK link",
+  "compiler_boundary": "Native task factories build a project-owned neutral JSON descriptor; native_program lowers it to typed FlowProgram before runtime. Direct typed construction remains open.",
+  "source_boundary": {
+    "old_python": "read_only_unchanged",
+    "legacy_config_mod_logs": "user_owned_unchanged",
+    "old_next_delivery": "unchanged_until_native_candidate_accepted",
+    "author_documents": "single_existing_workflow_repository"
+  },
+  "legacy_modules": [
+    {"path": "native/maafw/recognition.hpp", "callers": ["storage/pipeline_bundle", "storage/runtime_bundle", "runtime/session_definition", "native/maafw/recognition"], "destination": "contracts/resource_bundle and recognition/requests", "status": "archived_source_replaced"},
+    {"path": "native/maafw/recognition.cpp", "callers": ["app/application", "runtime/execution_session", "storage/pipeline_bundle"], "destination": "recognition/service with direct OpenCV and ORT", "status": "archived_source_replaced"},
+    {"path": "native/maafw/preflight.hpp", "callers": ["storage/karma_writer", "games/wvd/vision/asset_resolver", "games/wvd/tasks/workflow_session"], "destination": "recognition/resource_snapshot", "status": "archived_source_replaced"},
+    {"path": "native/maafw/preflight.cpp", "callers": ["native/maafw/gateway", "storage/pipeline_bundle"], "destination": "recognition/resource_snapshot", "status": "archived_source_replaced"},
+    {"path": "native/maafw/custom_recognition.hpp", "callers": ["games/wvd/vision/asset_resolver", "games/wvd/vision/recognizers"], "destination": "recognition/registry and games/wvd/vision", "status": "archived_source_replaced"},
+    {"path": "native/maafw/buffers.hpp", "callers": ["app/application", "app/m4_check", "storage/pipeline_bundle", "storage/runtime_bundle", "storage/run_store", "platform/windows/bundle_lease", "platform/windows/metadata_query", "platform/windows/mumu_binding"], "destination": "contracts/value_buffers and platform/windows/file_digest", "status": "archived_source_replaced"},
+    {"path": "native/maafw/gateway.hpp", "callers": ["app/application", "runtime/behavior_registry", "runtime/execution_session", "runtime/guarded_action", "runtime/flow_events", "games/wvd/recovery/event_bindings"], "destination": "runtime/flow_executor and recognition/service", "status": "archived_source_replaced"},
+    {"path": "native/maafw/gateway.cpp", "callers": ["runtime/execution_session", "runtime/behavior_registry"], "destination": "runtime/flow_executor; SDK object lifecycle retired", "status": "archived_source_replaced"},
+    {"path": "native/maafw/guarded_controller.hpp", "callers": ["native/maafw/gateway"], "destination": "devices/session and devices/input_gate", "status": "archived_source_replaced"},
+    {"path": "native/maafw/guarded_controller.cpp", "callers": ["native/maafw/gateway"], "destination": "devices/session and devices/input_gate", "status": "archived_source_replaced"},
+    {"path": "native/maafw/adb_backend.hpp", "callers": ["app/application", "app/m3_check"], "destination": "devices/android_command_client and devices/mumu_capture_client", "status": "archived_source_replaced"},
+    {"path": "native/maafw/adb_backend.cpp", "callers": ["app/application", "devices/lifecycle_execution"], "destination": "devices/android_command_client and devices/mumu_capture_client", "status": "archived_source_replaced"},
+    {"path": "native/maafw/CMakeLists.txt", "callers": ["next/CMakeLists.txt"], "destination": "native layer CMake targets without SDK linkage", "status": "archived_source_replaced"},
+    {"path": "native/maafw/README.md", "callers": [], "destination": "historical documentation only", "status": "archived_source_replaced"}
+  ],
+  "cross_layer_migration": [
+    {"area": "author_and_native_program", "sources": ["games/wvd/tasks/pipeline_compiler.*", "games/wvd/tasks/author_workflow.*", "games/wvd/tasks/workflow_session.*", "storage/workflow_repository.*"], "destination": "workflow/FlowProgram and neutral task builder", "status": "runtime_migrated_direct_typed_builder_open"},
+    {"area": "execution_and_events", "sources": ["runtime/execution_session.*", "runtime/flow_events.*", "runtime/guarded_action.*", "runtime/behavior_registry.*", "devices/input_gate.*"], "destination": "runtime/FlowExecutor with scoped events and OperationLedger", "status": "runtime_migrated_acceptance_partial"},
+    {"area": "device_and_stop", "sources": ["native/maafw/adb_backend.*", "devices/backend.hpp", "devices/lifecycle_execution.*", "runtime/run_coordinator.*"], "destination": "one DeviceSession and one input owner", "status": "source_migrated_device_readonly_not_run"},
+    {"area": "ui_and_history", "sources": ["app/application.*", "web/src/pages/WorkbenchPage.vue", "web/src/pages/WorkflowPage.vue", "storage/run_store.*"], "destination": "existing API and UI with native engine result", "status": "formal_application_and_browser_edit_pass_full_ui_open"}
+  ],
+  "business_protection": {
+    "bounty": "refresh by time leap and opening bounty page; no accept action; report completed entries individually",
+    "city_identity": "eight shape icons are action anchors; tower background is Royal City identity evidence",
+    "inn_assets": 6,
+    "outskirts_assets": 29,
+    "harken_stage_assets": 4,
+    "harken_exit": "buff first choice; floor return then outskirts return to town",
+    "game_delivery": "not_accepted"
+  }
+}

@@ -1,6 +1,10 @@
 #pragma once
 #include "contracts/action.hpp"
 #include "lifecycle.hpp"
+#include <filesystem>
+#include <json.hpp>
+#include <memory>
+#include <stop_token>
 
 namespace wvd::devices {
 struct RawFrame {
@@ -12,8 +16,9 @@ struct RawFrame {
     std::uint64_t connection_generation{};
     std::chrono::steady_clock::time_point capture_finished_at{};
     int display_rotation{-1};
+    std::shared_ptr<const std::vector<std::uint8_t>> raw_bgr;
 };
-// 内层始终使用原始设备坐标。M2 的具体设备只存在于 tests，真实适配在 M3。
+// 内层始终使用原始设备坐标；控制权由一个会话独占。
 class DeviceBackend {
   public:
     virtual ~DeviceBackend() = default;
@@ -22,12 +27,31 @@ class DeviceBackend {
         return false;
     }
     virtual void disconnect() {}
+    virtual bool release_owned_inputs() { return true; }
     virtual LifecyclePort *lifecycle_port() { return nullptr; }
     virtual bool context_matches(const contracts::FrameIdentity &, const std::string &) {
         return offline();
     }
     virtual bool connect() = 0;
     virtual RawFrame capture() = 0;
+    virtual RawFrame capture(std::stop_token stop) {
+        if (stop.stop_requested()) throw std::runtime_error("CAPTURE_CANCELLED");
+        return capture();
+    }
+    virtual RawFrame capture_preview() { return capture(); }
     virtual bool execute(const contracts::Command &command) = 0;
+    virtual bool execute(const contracts::Command &command, std::stop_token stop) {
+        return !stop.stop_requested() && execute(command);
+    }
+};
+
+// 产品装配只依赖会话能力；离线验收也必须走同一个 Application 入口。
+class DeviceConnection : public DeviceBackend {
+  public:
+    virtual LifecycleTarget lifecycle_target() const = 0;
+    virtual bool matches_selection(const std::filesystem::path &manager, int index,
+                                   const std::string &serial) const = 0;
+    virtual void set_vpn_required(bool value) = 0;
+    virtual nlohmann::json diagnostics() const = 0;
 };
 } // namespace wvd::devices

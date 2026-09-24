@@ -3,7 +3,6 @@
 #include "games/wvd/chest/chest.hpp"
 #include "games/wvd/combat/encounter.hpp"
 #include "games/wvd/combat/turn.hpp"
-#include "games/wvd/diagnostics.hpp"
 #include "games/wvd/recovery/boot.hpp"
 #include "games/wvd/state.hpp"
 #include "games/wvd/tasks/bounty_cycle.hpp"
@@ -19,18 +18,19 @@
 #include "games/wvd/tasks/giant.hpp"
 #include "games/wvd/tasks/gold_income.hpp"
 #include "games/wvd/tasks/golden_chest.hpp"
+#include "games/wvd/tasks/handoff_provenance.hpp"
 #include "games/wvd/tasks/manual_separation.hpp"
 #include "games/wvd/tasks/mining.hpp"
 #include "games/wvd/tasks/repel_forces.hpp"
 #include "games/wvd/tasks/sandman.hpp"
 #include "games/wvd/tasks/sleep_visits.hpp"
 #include "games/wvd/tasks/steel_trial.hpp"
-#include "games/wvd/tasks/workflow_session.hpp"
+#include "games/wvd/tasks/native_publisher.hpp"
+#include "games/wvd/native_operations.hpp"
 #include "games/wvd/tasks/author_workflow.hpp"
 #include "games/wvd/tasks/public_flow_library.hpp"
-#include "games/wvd/vision/recognizers.hpp"
-#include "maafw/buffers.hpp"
-#include "maafw/gateway.hpp"
+#include "games/wvd/vision/native_recognizers.hpp"
+#include "platform/windows/path_utf8.hpp"
 #include "platform/windows/bundle_lease.hpp"
 #include "platform/windows/file_digest.hpp"
 #include "platform/windows/mumu_binding.hpp"
@@ -41,6 +41,7 @@
 #include <array>
 #include <charconv>
 #include <fstream>
+#include <opencv2/imgcodecs.hpp>
 #include <windows.h>
 
 #include <commdlg.h>
@@ -49,9 +50,47 @@ namespace wvd::app {
 using namespace std::chrono_literals;
 namespace {
 using J = nlohmann::json;
+std::filesystem::path executable_directory() {
+    std::wstring buffer(32768, L'\0');
+    const auto count = GetModuleFileNameW(nullptr, buffer.data(),
+        static_cast<DWORD>(buffer.size()));
+    if (!count || count >= buffer.size())
+        throw std::runtime_error("APPLICATION_PATH_UNAVAILABLE");
+    buffer.resize(count);
+    return std::filesystem::path(buffer).parent_path();
+}
 void require(bool condition, const char *code) {
     if (!condition)
         throw std::runtime_error(code);
+}
+auto wvd_recovery_policy(devices::LifecycleTarget target) {
+    return [target = std::move(target)](const contracts::SessionResult &result,
+        const contracts::BusinessRunState &business, unsigned attempt)
+        -> std::optional<devices::LifecyclePlan> {
+        if (result.end != contracts::SessionEnd::Failed || !result.quiescent ||
+            attempt < 1 || attempt > 3) return std::nullopt;
+        const auto facts = business.summary();
+        if (games::tasks::handoff_has_unconfirmed_effect(facts)) return std::nullopt;
+        const auto leap = facts.value("handoff_intent", J(nullptr));
+        const bool deferred_leap = result.reason == "leap.unknown" && attempt == 1 &&
+            leap.is_object() && leap.value("kind", "") == "wait_7300" &&
+            facts.at("leap_wait").value("active", false);
+        const bool frozen_pause = result.reason == "pause.physics_frozen" &&
+            !leap.is_object() && !facts.at("leap_wait").value("active", false);
+        if (!deferred_leap && !frozen_pause) return std::nullopt;
+        devices::LifecyclePlan plan;
+        plan.target = target;
+        plan.attempt = attempt;
+        if (deferred_leap) {
+            const auto remaining = 7300000LL - facts.at("leap_wait").at("elapsed_ms").get<std::int64_t>();
+            plan.defer_for = std::chrono::milliseconds{std::max(0LL, remaining)};
+        }
+        if (target.vpn_required)
+            plan.operations.push_back(devices::LifecycleOperation::EnsureVpn);
+        plan.operations.push_back(devices::LifecycleOperation::StopApplication);
+        plan.operations.push_back(devices::LifecycleOperation::StartApplication);
+        return plan;
+    };
 }
 std::set<std::string> strategy_names(const J &values) {
     std::set<std::string> names;
@@ -394,7 +433,9 @@ Application::J Application::load_json(const std::filesystem::path &path) const {
     return storage::parse_legacy_json(text);
 }
 
-Application::Application(ApplicationPaths paths) : paths_(std::move(paths)) {
+Application::Application(ApplicationPaths paths,
+                         std::shared_ptr<devices::DeviceConnection> connection)
+    : paths_(std::move(paths)), backend_(std::move(connection)) {
     require(paths_.data_root.is_absolute() && paths_.pack_root.is_absolute() &&
                 paths_.quest_catalog.is_absolute(),
             "APPLICATION_PATH_INVALID");
@@ -446,15 +487,7 @@ Application::Application(ApplicationPaths paths) : paths_(std::move(paths)) {
             initial = importer.parse({{"GENERAL", J::object()}});
         profile_store_->create(initial);
     }
-    registry_ = std::make_shared<runtime::BehaviorRegistry>("windows-functional-t0-ab08538-1");
-    games::vision::register_wvd(*registry_);
-    games::register_wvd_state(*registry_);
-    games::register_wvd_confirmations(*registry_);
-    games::combat::register_combat(*registry_);
-    games::chest::register_chest(*registry_);
-    games::recovery::register_recovery(*registry_);
-    registry_->seal();
-    coordinator_ = std::make_unique<runtime::RunCoordinator>(paths_.data_root / "runs", registry_, 1024);
+    coordinator_ = std::make_unique<runtime::NativeRunCoordinator>(paths_.data_root / "runs", 1024);
     operation_ = {{"state", "idle"}, {"name", nullptr}, {"error", nullptr}};
 }
 
@@ -726,6 +759,10 @@ void Application::start_device_job(std::string name, std::function<void()> job) 
         std::lock_guard lock(mutex_);
         require(!stopping_, "APPLICATION_STOPPING");
         require(!run_active(), "RUN_ACTIVE");
+        require(!handoff_status_.is_object() ||
+            (handoff_status_.value("state", "") != "watching" &&
+             handoff_status_.value("state", "") != "starting"),
+            "TASK_HANDOFF_IN_PROGRESS");
         require(operation_.value("state", "idle") != "running", "DEVICE_OPERATION_BUSY");
     }
     if (device_worker_.joinable()) device_worker_.join();
@@ -812,7 +849,14 @@ Application::J Application::start_task(const J &request) {
         {{"kind", "task"}, {"request", frozen}, {"profile_revision", stored.at("revision")}},
         [this, frozen, stored] {
             const auto backend = ensure_connected_for_run(stored);
-            return prepare_task(frozen, stored, backend);
+            auto result = prepare_task(frozen, stored, backend);
+            const auto &selected = stored.at("values").at("FARM_TARGET");
+            const auto task_id = frozen.value("task_id", selected.is_string()
+                ? selected.get<std::string>() : std::string{});
+            const auto source_values = effective_profile_values(task_id, stored);
+            if (task_id != "7000G" && source_values.at("ACTIVE_BEG_MONEY").get<bool>())
+                watch_task_handoff(stored, source_values, backend, frozen.at("request_id"));
+            return result;
         });
 }
 Application::J Application::start_workflow(const std::string &flow_id, const J &request) {
@@ -854,13 +898,19 @@ Application::J Application::connect_device(const J &request) {
 void Application::connect_selected_device(const J &request) {
     require(request.is_object(), "DEVICE_REQUEST_INVALID");
     require(!stopping_ && !cancel_operation_, "PREPARATION_CANCELLED");
-    const auto path = maafw::path_from_utf8(request.contains("emulator_path")
+    const auto path = platform::path_from_utf8(request.contains("emulator_path")
                                                 ? request.at("emulator_path") : request.at("path"));
     const auto manager = manager_from_path(path);
     const auto index = request.value("emulator_index", request.value("index", 0));
     const auto serial = request.value("adb_address", request.value("serial", std::string{}));
     require(!serial.empty(), "ADB_ADDRESS_REQUIRED");
     const bool vpn = request.value("vpn_required", request.value("auto_start_clash", false));
+    const auto bin = executable_directory();
+    const auto capture_host = bin / "wvd-capture-host.exe";
+    const auto scrcpy_server = bin / "scrcpy-server-v3.3.4";
+    require(std::filesystem::is_regular_file(capture_host) &&
+            std::filesystem::is_regular_file(scrcpy_server),
+            "NATIVE_DEVICE_RUNTIME_MISSING");
     // 在可能启动选定实例之前取得唯一控制权；不启动其他实例、不执行 restart。
     auto lease = std::make_unique<platform::DeviceLease>(serial);
     auto binding = platform::create_mumu_binding(manager, index, serial);
@@ -878,14 +928,15 @@ void Application::connect_selected_device(const J &request) {
         } while (std::chrono::steady_clock::now() < deadline);
         require(binding.at("initial_manager").value("is_android_started", false), "MUMU_START_TIMEOUT");
     }
-    binding["launcher"] = maafw::utf8(path);
+    binding["launcher"] = platform::utf8(path);
     binding["application_id"] = "jp.co.drecom.wizardry.daphne";
     binding["vpn_required"] = vpn;
-    auto next = std::make_shared<maafw::AdbBackend>(std::move(binding));
+    auto next = std::make_shared<devices::DeviceSession>(
+        std::move(binding), capture_host, scrcpy_server);
     require(!stopping_ && !cancel_operation_, "PREPARATION_CANCELLED");
     require(next->connect(), "DEVICE_CONNECT_FAILED");
     require(!stopping_ && !cancel_operation_, "PREPARATION_CANCELLED");
-    auto frame = next->capture();
+    auto frame = next->capture_preview();
     std::lock_guard connected(mutex_);
     require(!stopping_ && !cancel_operation_, "PREPARATION_CANCELLED");
     require(!backend_, "DEVICE_ALREADY_CONNECTED");
@@ -900,21 +951,22 @@ void Application::connect_selected_device(const J &request) {
                    {"display_rotation", frame.display_rotation}};
 }
 
-std::shared_ptr<maafw::AdbBackend> Application::ensure_connected_for_run(const J &stored) {
+std::shared_ptr<devices::DeviceConnection> Application::ensure_connected_for_run(const J &stored) {
     require(!stopping_ && !cancel_operation_, "PREPARATION_CANCELLED");
+    std::shared_ptr<devices::DeviceConnection> backend;
+    { std::lock_guard lock(mutex_); backend = backend_; }
+    if (backend && backend->offline()) return backend;
     const auto &values = stored.at("values"); // 与提交身份相同的冻结版本，不在准备中重读编辑中的配置。
-    const auto path = maafw::path_from_utf8(values.at("EMU_PATH"));
+    const auto path = platform::path_from_utf8(values.at("EMU_PATH"));
     const auto manager = manager_from_path(path);
     const auto index = values.at("EMU_INDEX").get<int>();
     const auto serial = values.at("ADB_ADRESS").get<std::string>();
-    std::shared_ptr<maafw::AdbBackend> backend;
-    { std::lock_guard lock(mutex_); backend = backend_; }
     if (backend) {
         require(backend->matches_selection(manager, index, serial), "DEVICE_BINDING_CHANGED_RECONNECT_REQUIRED");
         return backend;
     }
     // 在现有准备作业中同步调用同一连接实现，不再嵌套第二个作业或第二个控制器。
-    connect_selected_device({{"emulator_path", maafw::utf8(path)}, {"emulator_index", index},
+    connect_selected_device({{"emulator_path", platform::utf8(path)}, {"emulator_index", index},
                              {"adb_address", serial}, {"auto_start_clash", values.at("AUTO_START_CLASH")}});
     require(!stopping_ && !cancel_operation_, "PREPARATION_CANCELLED");
     std::lock_guard lock(mutex_);
@@ -926,7 +978,7 @@ Application::J Application::select_emulator_path() const {
     std::wstring selected(32768, L'\0');
     const auto current = optional_profile_text(profile().at("profile"), "EMU_PATH");
     if (!current.empty()) {
-        const auto wide = maafw::path_from_utf8(current).wstring();
+        const auto wide = platform::path_from_utf8(current).wstring();
         std::copy_n(wide.c_str(), std::min(wide.size(), selected.size() - 1), selected.data());
     }
     constexpr wchar_t filter[] = L"MuMu 启动程序 (MuMuNxDevice.exe)\0MuMuNxDevice.exe\0"
@@ -947,12 +999,12 @@ Application::J Application::select_emulator_path() const {
     const auto path = std::filesystem::path(selected);
     require(path.filename() == "MuMuNxDevice.exe" && std::filesystem::is_regular_file(path),
             "MUMU_LAUNCHER_REQUIRED");
-    return {{"cancelled", false}, {"path", maafw::utf8(path)}};
+    return {{"cancelled", false}, {"path", platform::utf8(path)}};
 }
 
 Application::J Application::disconnect_device() {
     start_device_job("disconnect", [this] {
-        std::shared_ptr<maafw::AdbBackend> old;
+        std::shared_ptr<devices::DeviceConnection> old;
         std::unique_ptr<platform::DeviceLease> lease;
         {
             std::lock_guard lock(mutex_);
@@ -970,7 +1022,7 @@ Application::J Application::disconnect_device() {
 
 Application::J Application::capture_device() {
     start_device_job("capture", [this] {
-        std::shared_ptr<maafw::AdbBackend> backend;
+        std::shared_ptr<devices::DeviceConnection> backend;
         {
             std::lock_guard lock(mutex_);
             backend = backend_;
@@ -980,7 +1032,7 @@ Application::J Application::capture_device() {
         }
         require(bool(backend), "DEVICE_NOT_CONNECTED");
         require(backend->connect(), "DEVICE_RECONNECT_FAILED");
-        auto frame = backend->capture();
+        auto frame = backend->capture_preview();
         std::lock_guard captured(mutex_);
         frame_png_ = std::move(frame.encoded);
         frame_captured_at_ = frame.captured_at;
@@ -1020,7 +1072,7 @@ Application::J Application::run_status() const {
     const auto event_page = coordinator_->events();
     value["events"] = event_page;
     const auto directory = coordinator_->run_directory();
-    value["run_directory"] = directory.empty() ? J(nullptr) : J(maafw::utf8(directory));
+    value["run_directory"] = directory.empty() ? J(nullptr) : J(platform::utf8(directory));
     value["result"] = contracts::name(snapshot.state);
     value["error_code"] = snapshot.reason.empty() ? J(nullptr) : J(snapshot.reason);
     value["message"] = snapshot.reason.empty() ? J(nullptr) : J(snapshot.reason);
@@ -1059,6 +1111,10 @@ Application::J Application::run_status() const {
         {"动作尝试", snapshot.inputs.attempted},
         {"动作执行", snapshot.inputs.backend_called},
         {"动作拒绝", snapshot.inputs.rejected}};
+    {
+        std::lock_guard lock(mutex_);
+        value["handoff"] = handoff_status_;
+    }
     if (event_page.contains("events")) {
         const auto &events = event_page.at("events");
         for (auto it = events.rbegin(); it != events.rend(); ++it) {
@@ -1066,12 +1122,18 @@ Application::J Application::run_status() const {
                 continue;
             const auto pipeline = it->at("node_id").get<std::string>();
             constexpr std::string_view observer_prefix = "__wvd_observe__";
-            const bool observing = pipeline.starts_with(observer_prefix);
-            const auto visible = observing ? pipeline.substr(observer_prefix.size()) : pipeline;
+            constexpr std::string_view await_suffix = "@await";
+            const bool observing = pipeline.starts_with(observer_prefix) ||
+                pipeline.ends_with(await_suffix);
+            const auto visible = pipeline.starts_with(observer_prefix)
+                ? pipeline.substr(observer_prefix.size())
+                : pipeline.ends_with(await_suffix)
+                    ? pipeline.substr(0, pipeline.size() - await_suffix.size()) : pipeline;
             // 派生观察节点映射回作者的输入节点；仍显示真实阶段，不能让等待看起来没执行。
             value["step_name"] = visible + (observing ? "（等待页面结果）" : "");
             value["execution_stage"] = observing ? "transition_observation" : "pipeline";
-            if (source_paths.contains(visible)) value["node_path"] = source_paths.at(visible);
+            if (it->contains("source_path")) value["node_path"] = it->at("source_path");
+            else if (source_paths.contains(visible)) value["node_path"] = source_paths.at(visible);
             if (const auto found = mapping.find(visible); found != mapping.end()) {
                 value["current_node_id"] = found->second;
                 if (snapshot.state == contracts::RunState::Failed)
@@ -1092,15 +1154,32 @@ Application::J Application::run_status() const {
     return value;
 }
 
-runtime::RunDefinition Application::assemble_task(const J &request, const J &stored,
-                                                  const devices::LifecycleTarget &lifecycle) {
+runtime::NativeRunDefinition Application::assemble_task(const J &request, const J &stored,
+    const devices::LifecycleTarget &lifecycle, std::optional<J> frozen_values,
+    bool continuation) {
     if (stopping_ || cancel_operation_) throw std::runtime_error("PREPARATION_CANCELLED");
     const auto &stored_values = stored.at("values");
     const auto task_id = request.value("task_id", stored_values.at("FARM_TARGET").is_string()
         ? stored_values.at("FARM_TARGET").get<std::string>() : std::string{});
     require(!task_id.empty(), "TASK_NOT_SELECTED");
-    const auto values = effective_profile_values(task_id, stored);
+    const auto values = frozen_values ? *frozen_values : effective_profile_values(task_id, stored);
+    require(values.at("FARM_TARGET") == task_id && values.size() == 33,
+            "TASK_FROZEN_PROFILE_INVALID");
     const auto &task = catalog_->at(task_id);
+    J handoff_source = nullptr;
+    if (!continuation && task_id != "7000G" && values.at("ACTIVE_BEG_MONEY").get<bool>()) {
+        const auto &target = catalog_->at("7000G");
+        handoff_source = {{"schema", 1}, {"request_id", checked_request_id(request)},
+            {"task", {{"id", task.id}, {"type", task.type}, {"source", task.source}}},
+            {"target_task", {{"id", target.id}, {"type", target.type},
+                             {"source", target.source}}},
+            {"profile_digest", games::tasks::digest_handoff_json(values)},
+            {"profile_sources", stored.at("sources")},
+            {"selected_section", stored.at("selected_section")},
+            {"legacy_document_digest", games::tasks::digest_handoff_json(stored.at("legacy_document"))},
+            {"legacy_passthrough_digest", games::tasks::digest_handoff_json(stored.at("legacy_passthrough"))}};
+        handoff_source["digest"] = games::tasks::digest_handoff_json(handoff_source);
+    }
     const auto plan = games::WvdTaskPlan::parse(task);
     auto workflow = [&] {
         if (task.type == "dungeon") return games::tasks::dungeon_iteration(plan, values, available_images_);
@@ -1125,46 +1204,81 @@ runtime::RunDefinition Application::assemble_task(const J &request, const J &sto
     require(workflow.nodes.contains("Boot_Entry"), "PRODUCTION_BOOT_ENTRY_MISSING");
     const auto request_id = checked_request_id(request);
     const auto destination = paths_.data_root / "published" / request_id;
-    runtime::RunDefinition definition;
+    auto publication = games::tasks::publish_native(workflow, author_bundle_,
+        destination, aliases_);
+    const auto &root = publication.program.definitions.at(publication.program.root_definition);
+    require(root.steps.contains(workflow.checkpoint), "NATIVE_CHECKPOINT_MISSING");
+    const auto checkpoint_source = root.steps.at(workflow.checkpoint).source_path;
+    runtime::NativeUnit unit{std::move(publication.program),
+        std::move(publication.bundle), games::vision::native_handlers(aliases_),
+        checkpoint_source, workflow.time_limit};
+    std::size_t count = 1;
+    if (task_id == "Scorpionesses_plus_6_hands") count = 4;
+    else if (task_id == "Scorpionesses" || task_id == "jier") count = 3;
+    else if (task_id == "SSC-goldenchest" || task_id == "sandman" ||
+             task_id == "manualSepDemon") count = 2;
+    else if (task_id == "LBC-oneGorgon") count = values.at("ACTIVE_REST").get<bool>() ? 3 : 2;
+    else if (task_id == "repelEnemyForces") count = games::quests::RepelForces::rounds(values) + 2;
+    else if (task_id == "lovesleep") count = games::quests::SleepVisits::units;
+    runtime::NativeRunDefinition definition;
     definition.request_id = request_id;
-    definition.initial = games::tasks::publish_workflow(workflow, author_bundle_, *registry_, destination, aliases_);
-    definition.max_business_units = 1;
-    definition.state_factory = games::wvd_state_binding(values);
+    definition.units.assign(count, unit);
     definition.policy = {lifecycle.device_id, "wvd", "jp.co.drecom.wizardry.daphne",
-        definition.initial.bundle.revision, "900x1600", {900, 1600},
+        unit.bundle.revision, "900x1600", {900, 1600},
         {contracts::ActionKind::Click, contracts::ActionKind::ClickKey, contracts::ActionKind::Swipe},
         {}, {"wvd"}, 0ms};
     for (const auto &action : workflow.required_actions) definition.policy.permissions.insert(action_kind(action));
-    definition.recover = games::recovery::recovery_binding(lifecycle, values);
-    definition.recovery_limit = 3;
-    if (task_id == "Scorpionesses" || task_id == "Scorpionesses_plus_6_hands" || task_id == "jier")
-        games::tasks::configure_bounty_units(definition, task_id == "Scorpionesses_plus_6_hands");
-    else if (task_id == "fishing" || task_id == "fishing2") games::tasks::configure_fishing_units(definition, 1);
-    else if (task_id == "SSC-goldenchest") games::tasks::configure_golden_chest_units(definition);
-    else if (task_id == "sandman") games::tasks::configure_sandman_units(definition);
-    else if (task_id == "LBC-oneGorgon") games::tasks::configure_bull_cave_units(definition, values.at("ACTIVE_REST").get<bool>());
-    else if (task_id == "repelEnemyForces") games::tasks::configure_repel_forces_units(definition, values);
-    else if (task_id == "lovesleep") games::tasks::configure_sleep_units(definition);
-    else if (task_id == "manualSepDemon") games::tasks::configure_manual_separation_units(definition);
-    // 所有普通续段先完成，首段最后附上启动计划。此方法本身不连接设备。
-    games::recovery::bind_initial_startup(definition, lifecycle, values);
-    const auto validate_roots = [&](const runtime::SessionDefinition &unit, bool first) {
-        require(workflow.nodes.contains(unit.entry) && workflow.nodes.contains(unit.terminal_node) &&
-                !unit.checkpoint_node.empty() && workflow.nodes.contains(unit.checkpoint_node),
-                "PRODUCTION_SESSION_ENTRY_MISSING");
-        require(first || !unit.lifecycle, "PRODUCTION_CONTINUATION_HAS_LIFECYCLE");
-        require(unit.bundle.revision == definition.initial.bundle.revision, "PRODUCTION_BUNDLE_REVISION_MISMATCH");
+    if (!continuation)
+        definition.startup = devices::LifecyclePlan{lifecycle,
+            lifecycle.vpn_required
+                ? std::vector{devices::LifecycleOperation::EnsureVpn,
+                              devices::LifecycleOperation::StartApplication}
+                : std::vector{devices::LifecycleOperation::StartApplication}, 1};
+    else if (lifecycle.vpn_required)
+        definition.startup = devices::LifecyclePlan{lifecycle,
+            {devices::LifecycleOperation::EnsureVpn}, 1};
+    definition.total_time_limit = std::min(
+        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::hours{24}),
+        workflow.time_limit * static_cast<std::int64_t>(count) + std::chrono::hours{1} +
+            (values.at("ACTIVE_BEG_MONEY").get<bool>() ? 0ms :
+                std::chrono::milliseconds{7300000}));
+    definition.create_state = [values, handoff_source](const contracts::StateCreationContext &creation) {
+        return std::make_unique<games::WvdRunState>(values, creation, nullptr, handoff_source);
     };
-    validate_roots(definition.initial, true);
-    for (const auto &unit : definition.continuation_units) validate_roots(unit, false);
+    definition.operations = [](contracts::BusinessRunState &base,
+        auto event, auto checkpoint) {
+        return games::wvd_operation_factory(dynamic_cast<games::WvdRunState &>(base),
+            std::move(event), std::move(checkpoint));
+    };
+    definition.recovery = wvd_recovery_policy(lifecycle);
+    if (handoff_source.is_object()) {
+        definition.handoff_ready = [source = handoff_source](
+            const contracts::SessionResult &last, const contracts::BusinessRunState &state) {
+            if (last.reason != "leap.unknown" || !last.quiescent) return false;
+            const auto facts = state.summary();
+            const auto intent = facts.value("handoff_intent", J(nullptr));
+            return intent.is_object() && intent.value("kind", "") == "turn_to_7000G" &&
+                facts.at("handoff_source") == source &&
+                intent.at("run_identity") == facts.at("run_identity") &&
+                intent.at("generation") == facts.at("generation") &&
+                intent.at("unknown_samples").get<std::uint64_t>() >= 5 &&
+                !games::tasks::handoff_has_unconfirmed_effect(facts);
+        };
+    }
     return definition;
 }
 Application::J Application::prepare_task(const J &request, const J &stored,
-                                          std::shared_ptr<maafw::AdbBackend> backend) {
+    std::shared_ptr<devices::DeviceConnection> backend,
+    std::optional<J> frozen_values, J handoff_parent) {
     require(bool(backend), "DEVICE_NOT_CONNECTED");
     backend->set_vpn_required(stored.at("values").at("AUTO_START_CLASH").get<bool>());
-    auto definition = assemble_task(request, stored, backend->lifecycle_target());
-    const auto task_id = definition.state_factory->parameters.at("profile").at("FARM_TARGET").get<std::string>();
+    auto definition = assemble_task(request, stored, backend->lifecycle_target(),
+        std::move(frozen_values), handoff_parent.is_object());
+    definition.handoff_parent = std::move(handoff_parent);
+    const auto &stored_values = stored.at("values");
+    const auto selected = stored_values.at("FARM_TARGET").is_string()
+        ? stored_values.at("FARM_TARGET").get<std::string>() : std::string{};
+    const auto task_id = request.value("task_id", selected);
     const auto &task = catalog_->at(task_id);
     const auto request_id = definition.request_id;
     std::lock_guard command(command_mutex_);
@@ -1184,6 +1298,81 @@ Application::J Application::prepare_task(const J &request, const J &stored,
     result.update({{"accepted", true}, {"task_id", task_id},
                    {"task_name", task.source.value("questName", task_id)}, {"request_id", request_id}});
     return result;
+}
+
+void Application::watch_task_handoff(const J &stored, J source_values,
+    std::shared_ptr<devices::DeviceConnection> backend, std::string request_id) {
+    if (handoff_worker_.joinable()) handoff_worker_.join();
+    require(!stopping_ && !cancel_operation_, "PREPARATION_CANCELLED");
+    {
+        std::lock_guard lock(mutex_);
+        handoff_status_ = {{"state", "watching"}, {"source_request_id", request_id}};
+    }
+    handoff_worker_ = std::jthread([this, stored, source_values = std::move(source_values),
+        backend = std::move(backend), request_id = std::move(request_id)](std::stop_token stop) mutable {
+        const auto update = [this](const std::string &state, const J &detail) {
+            std::lock_guard lock(mutex_);
+            handoff_status_ = {{"state", state}, {"detail", detail}};
+        };
+        try {
+            while (!stop.stop_requested() && !stopping_ && !cancel_operation_) {
+                if (coordinator_->wait_for(250ms)) break;
+                if (coordinator_->wait_for_worker(0ms) && !coordinator_->snapshot().quiescent) {
+                    update("blocked", "SOURCE_CLEANUP_PENDING");
+                    return;
+                }
+            }
+            if (stop.stop_requested() || stopping_ || cancel_operation_) return;
+            const auto snapshot = coordinator_->request_snapshot(request_id);
+            require(snapshot && snapshot->quiescent && snapshot->result_saved &&
+                snapshot->storage_error.empty(), "HANDOFF_SOURCE_NOT_COMMITTED");
+            if (snapshot->outcome_category != "handoff_ready") {
+                update("not_requested", snapshot->reason);
+                return;
+            }
+            const auto &facts = snapshot->business;
+            const auto &intent = facts.at("handoff_intent");
+            require(intent.at("kind") == "turn_to_7000G" &&
+                intent.at("run_identity") == facts.at("run_identity") &&
+                intent.at("generation") == snapshot->generation &&
+                intent.at("unknown_samples").get<std::uint64_t>() >= 5 &&
+                !games::tasks::handoff_has_unconfirmed_effect(facts),
+                "HANDOFF_INTENT_INVALID");
+            const auto source = facts.at("handoff_source");
+            games::tasks::validate_handoff_source(source, source_values);
+            require(source.at("request_id") == request_id, "HANDOFF_SOURCE_REQUEST_CHANGED");
+            const auto directory = coordinator_->run_directory();
+            for (const auto &file : {directory / "result.json", directory / "run.json"})
+                require(std::filesystem::is_regular_file(file) &&
+                    std::filesystem::file_size(file) <= 32 * 1024 * 1024,
+                    "HANDOFF_RESULT_FILE_INVALID");
+            const auto saved = load_json(directory / "result.json");
+            const auto run = load_json(directory / "run.json");
+            require(saved.at("business") == facts && saved.at("run_id") == snapshot->run_id &&
+                saved.at("quiescent") == true && saved.at("result_saved") == true &&
+                run.at("definition").at("request_id") == request_id &&
+                run.at("run_id") == snapshot->run_id,
+                "HANDOFF_RESULT_SOURCE_MISMATCH");
+            auto next_values = source_values;
+            next_values["FARM_TARGET"] = "7000G";
+            const auto next_id = "handoff-" + games::tasks::digest_handoff_json(
+                {{"source", source.at("digest")}, {"intent", intent.at("intent_id")}});
+            const J lineage{{"source_request_id", request_id},
+                {"source_run_id", snapshot->run_id}, {"source_digest", source.at("digest")},
+                {"intent", intent},
+                {"result_sha256", platform::file_sha256(directory / "result.json")}};
+            update("starting", lineage);
+            if (stop.stop_requested() || stopping_ || cancel_operation_) return;
+            const auto started = prepare_task({{"task_id", "7000G"}, {"request_id", next_id}},
+                stored, backend, next_values, lineage);
+            update("started", {{"run_id", started.at("run_id")},
+                {"request_id", next_id}, {"source_run_id", snapshot->run_id}});
+        } catch (const std::exception &error) {
+            update("blocked", error.what());
+        } catch (...) {
+            update("blocked", "HANDOFF_UNEXPECTED_EXCEPTION");
+        }
+    });
 }
 
 Application::J Application::list_workflows() const {
@@ -1250,7 +1439,7 @@ void Application::delete_workflow(const std::string &flow_id, const J &request) 
 }
 
 Application::J Application::prepare_workflow(const std::string &flow_id, const J &request,
-    const J &stored, J document, std::shared_ptr<maafw::AdbBackend> backend,
+    const J &stored, J document, std::shared_ptr<devices::DeviceConnection> backend,
     const J &library_snapshot) {
     require(bool(backend), "DEVICE_NOT_CONNECTED");
     if (stopping_ || cancel_operation_) throw std::runtime_error("PREPARATION_CANCELLED");
@@ -1286,7 +1475,7 @@ Application::J Application::prepare_workflow(const std::string &flow_id, const J
     return result;
 }
 
-runtime::RunDefinition Application::assemble_workflow(
+runtime::NativeRunDefinition Application::assemble_workflow(
     const J &request, const J &stored, J document, const devices::LifecycleTarget &lifecycle,
     std::map<std::string, std::string> *pipeline_to_node, const J &library_snapshot, J *source_paths) {
     if (stopping_ || cancel_operation_) throw std::runtime_error("PREPARATION_CANCELLED");
@@ -1331,30 +1520,40 @@ runtime::RunDefinition Application::assemble_workflow(
     require(executable.nodes.contains("Boot_Entry"), "PRODUCTION_BOOT_ENTRY_MISSING");
     const auto request_id = checked_request_id(request);
     const auto destination = paths_.data_root / "published" / request_id;
-    auto session = games::tasks::publish_workflow(executable, author_bundle_, *registry_,
-                                                   destination, aliases_);
-    runtime::RunDefinition definition;
+    const auto provenance = executable.authoring.value("source_paths", J::object());
+    auto publication = games::tasks::publish_native(executable, author_bundle_,
+        destination, aliases_, provenance);
+    const auto &root = publication.program.definitions.at(publication.program.root_definition);
+    require(root.steps.contains(executable.checkpoint), "NATIVE_CHECKPOINT_MISSING");
+    const auto checkpoint_source = root.steps.at(executable.checkpoint).source_path;
+    runtime::NativeRunDefinition definition;
     definition.request_id = request_id;
-    definition.initial = std::move(session);
-    definition.max_business_units = 1;
+    definition.units.push_back({std::move(publication.program),
+        std::move(publication.bundle), games::vision::native_handlers(aliases_),
+        checkpoint_source, executable.time_limit});
     definition.total_time_limit = std::chrono::milliseconds(
         document.at("execution").at("time_limit_ms").get<std::int64_t>());
-    definition.state_factory = games::wvd_state_binding(values);
     definition.policy = {lifecycle.device_id, "wvd",
-                         "jp.co.drecom.wizardry.daphne", definition.initial.bundle.revision,
+                         "jp.co.drecom.wizardry.daphne", definition.units.front().bundle.revision,
                          "900x1600", {900, 1600},
                          {contracts::ActionKind::Click, contracts::ActionKind::ClickKey,
                           contracts::ActionKind::Swipe}, {}, {"wvd"}, 0ms};
     for (const auto &action : executable.required_actions)
         definition.policy.permissions.insert(action_kind(action));
-    definition.recover = games::recovery::recovery_binding(lifecycle, values);
-    definition.recovery_limit = 3;
-    games::recovery::bind_initial_startup(definition, lifecycle, values);
-    require(executable.nodes.contains(definition.initial.entry) &&
-                executable.nodes.contains(definition.initial.terminal_node) &&
-                !definition.initial.checkpoint_node.empty() &&
-                executable.nodes.contains(definition.initial.checkpoint_node),
-            "PRODUCTION_SESSION_ENTRY_MISSING");
+    definition.startup = devices::LifecyclePlan{lifecycle,
+        lifecycle.vpn_required
+            ? std::vector{devices::LifecycleOperation::EnsureVpn,
+                          devices::LifecycleOperation::StartApplication}
+            : std::vector{devices::LifecycleOperation::StartApplication}, 1};
+    definition.create_state = [values](const contracts::StateCreationContext &creation) {
+        return std::make_unique<games::WvdRunState>(values, creation);
+    };
+    definition.operations = [](contracts::BusinessRunState &base,
+        auto event, auto checkpoint) {
+        return games::wvd_operation_factory(dynamic_cast<games::WvdRunState &>(base),
+            std::move(event), std::move(checkpoint));
+    };
+    definition.recovery = wvd_recovery_policy(lifecycle);
     if (source_paths) *source_paths = executable.authoring.value("source_paths", J::object());
     if (pipeline_to_node) {
         pipeline_to_node->clear();
@@ -1376,6 +1575,14 @@ Application::J Application::stop_run(std::optional<std::uint64_t> requested_run_
                 "SUBMISSION_ID_MISMATCH");
     }
     cancel_operation_ = true;
+    handoff_worker_.request_stop();
+    {
+        std::lock_guard lock(mutex_);
+        if (handoff_status_.is_object() &&
+            (handoff_status_.value("state", "") == "watching" ||
+             handoff_status_.value("state", "") == "starting"))
+            handoff_status_["state"] = "cancelled";
+    }
     coordinator_->request_stop();
     auto result = run_status();
     result["accepted"] = true;
@@ -1410,13 +1617,10 @@ Application::J Application::recognition_probe(const J &request) {
     if (request.contains("image_base64")) {
         require(request.at("image_base64").is_string(), "PROBE_IMAGE_ENCODING_INVALID");
         frame.encoded_image = decode_base64(request.at("image_base64").get<std::string>());
-        auto image = maafw::image_buffer();
-        auto bytes = frame.encoded_image;
-        require(MaaImageBufferSetEncoded(image.get(), bytes.data(), bytes.size()) &&
-                    MaaImageBufferGetRawData(image.get()) && MaaImageBufferChannels(image.get()) == 3,
+        const auto image = cv::imdecode(frame.encoded_image, cv::IMREAD_COLOR);
+        require(!image.empty() && image.type() == CV_8UC3,
                 "PROBE_IMAGE_DECODE_FAILED");
-        const contracts::Size size{static_cast<int>(MaaImageBufferWidth(image.get())),
-                                   static_cast<int>(MaaImageBufferHeight(image.get()))};
+        const contracts::Size size{image.cols, image.rows};
         require(size == contracts::Size{900, 1600}, "PROBE_IMAGE_SIZE_MUST_BE_900X1600");
         frame.identity = {"local-upload", "wvd", author_bundle_.revision, "900x1600", 1, 1, 0,
                           size, size, std::chrono::steady_clock::now(), "BGR8", 1,
@@ -1463,15 +1667,9 @@ Application::J Application::recognition_probe(const J &request) {
             recognition["parameters"] = condition;
         }
     }
-    const auto parsed = maafw::parse_recognition_request(recognition);
-    if (std::holds_alternative<maafw::RecognitionRequest::CustomParameters>(parsed.parameters)) {
-        maafw::MaaGateway gateway(
-            std::move(bundle), nullptr, {}, {},
-            registry_->bind_recognitions({games::vision::binding(aliases_)}));
-        gateway.initialize();
-        return observation_json(gateway.recognize(frame, frame.identity, parsed));
-    }
-    maafw::OfflineRecognizer recognizer(std::move(bundle));
+    const auto parsed = recognition::parse_request(recognition);
+    recognition::Service recognizer(std::move(bundle),
+        games::vision::native_handlers(aliases_));
     return observation_json(recognizer.evaluate(frame, frame.identity, parsed));
 }
 
@@ -1564,16 +1762,19 @@ void Application::request_shutdown() {
     std::lock_guard command(command_mutex_);
     stopping_ = true;
     cancel_operation_ = true;
+    handoff_worker_.request_stop();
     if (coordinator_) coordinator_->request_stop();
 }
 void Application::stop() {
     request_shutdown();
     if (device_worker_.joinable())
         device_worker_.join();
+    if (handoff_worker_.joinable())
+        handoff_worker_.join();
     if (coordinator_)
-        while (!coordinator_->wait_for(1s))
+        while (!coordinator_->wait_for_worker(1s))
             std::this_thread::sleep_for(50ms);
-    std::shared_ptr<maafw::AdbBackend> backend;
+    std::shared_ptr<devices::DeviceConnection> backend;
     {
         std::lock_guard lock(mutex_);
         backend = std::move(backend_);

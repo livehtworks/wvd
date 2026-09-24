@@ -3,12 +3,6 @@
 #include "games/wvd/supply/inn.hpp"
 
 namespace wvd::games::tasks {
-void configure_sleep_units(runtime::RunDefinition &definition) {
-    if (definition.max_business_units != 1 || !definition.continuation_units.empty())
-        throw std::runtime_error("SLEEP_UNITS_ALREADY_CONFIGURED");
-    definition.max_business_units = quests::SleepVisits::units;
-    definition.continuation_units.assign(quests::SleepVisits::units - 1, definition.initial);
-}
 CompiledWorkflow sleep_visits(const WvdQuestDefinition &definition, const nlohmann::json &profile) {
     if (definition.id != "lovesleep" || definition.type != "quest")
         throw std::runtime_error("SLEEP_TASK_INVALID");

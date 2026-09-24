@@ -24,7 +24,7 @@ struct StateCreationContext {
 };
 
 // Coordinator 独占实例。Context 仅在回调范围内借用；观察端只能取得值拷贝。
-// 互斥覆盖原生回调线程，不能假设 Maa 的回调始终等于 Session 工作线程。
+// 状态提交可能来自异步回调，必须在业务状态边界互斥。
 class BusinessRunState {
   public:
     virtual ~BusinessRunState() = default;

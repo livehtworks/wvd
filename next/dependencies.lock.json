@@ -1,7 +1,5 @@
 {
   "boost": {"version":"1.90.0","url":"https://archives.boost.io/release/1.90.0/source/boost_1_90_0.tar.gz","sha256":"5e93d582aff26868d581a52ae78c7d8edf3f3064742c6e77901a1f18a437eea9"},
   "json": {"version":"3.11.3","url":"https://raw.githubusercontent.com/nlohmann/json/v3.11.3/single_include/nlohmann/json.hpp","sha256":"9bea4c8066ef4a1c206b2be5a36302f8926f7fdc6087af5d20b417d0cf103ea6"},
-  "maafw": {"version":"5.13.0","commit":"2bcfa85c66a2eac6ca3e5937f175495275ee0643","sdk_sha256":"179b51b6211fc74317c8dc06f10fae4724aca370df7d1bf694cd00d06ff38efe","loaded_in_m1":false},
-  "ocr": {"commit":"dabcd4681ac990dc4361de26416d986abd80e4aa","model":"ppocr_v3/en_us","loaded_in_m1":false},
   "toolchain": {"cxx_standard":20,"cmake_minimum":"3.24","node":"24.14.1","npm":"11.11.0","windows_generator":"Visual Studio 17 2022"}
 }
