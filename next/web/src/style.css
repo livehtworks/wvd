@@ -592,6 +592,7 @@ body { min-width: 1120px; background: #f3f5f4; }
 .daily-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .run-section { background: #fff; border: 1px solid #dbe2de; margin-top: 14px; }
 .run-section > header { min-height: 52px; display: flex; justify-content: space-between; align-items: center; padding: 8px 14px; border-bottom: 1px solid #e1e6e3; }
+.run-section .run-locale { width: 100px; }
 .run-section h2 { font-size: 14px; }
 .run-section header span { display: block; color: #738078; font-size: 10px; margin-top: 3px; }
 .run-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 13px 14px; }
@@ -604,11 +605,11 @@ body { min-width: 1120px; background: #f3f5f4; }
 .diagnostics figure { margin: 0; flex: 0 0 160px; }.diagnostics img, .diagnostic-placeholder { width: 160px; height: 120px; object-fit: contain; background: #212825; }.diagnostic-placeholder { display: grid; place-items: center; color: #d7dfdb; font-size: 12px; }.diagnostics figcaption { display: grid; gap: 2px; font-size: 10px; color: #69766f; padding-top: 4px; }.diagnostics figcaption strong { color: #39443f; }
 
 /* 流程编辑 */
-.workflow-page { height: calc(100vh - 58px); display: grid; grid-template-rows: 54px auto minmax(0, 1fr); background: #e9eeeb; }
-.editor-toolbar { display: flex; justify-content: space-between; align-items: center; padding: 0 14px; background: #fff; border-bottom: 1px solid #d7dfda; gap: 14px; }
-.workflow-picker { display: flex; align-items: center; gap: 6px; min-width: 0; }.workflow-picker select { width: 250px; }
+.workflow-page { height: calc(100vh - 58px); min-height: 500px; display: flex; flex-direction: column; background: #e9eeeb; }
+.editor-toolbar { display: flex; flex: 0 0 auto; flex-wrap: wrap; justify-content: space-between; align-items: center; min-height: 54px; padding: 8px 14px; background: #fff; border-bottom: 1px solid #d7dfda; gap: 8px 14px; }
+.workflow-picker { display: flex; flex: 1 1 650px; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }.workflow-picker select { width: 250px; }
 .editor-notice { margin: 8px 14px 0; }
-.editor-shell { min-height: 0; display: grid; grid-template-columns: 190px minmax(520px, 1fr) 310px; }
+.editor-shell { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: 190px minmax(520px, 1fr) 310px; }
 .node-library, .property-panel { min-width: 0; overflow-y: auto; background: #fff; }
 .node-library { border-right: 1px solid #d8e0dc; }.property-panel { border-left: 1px solid #d8e0dc; padding: 12px; }
 .node-library > header, .property-panel > header { min-height: 43px; display: flex; align-items: center; justify-content: space-between; padding: 0 12px; border-bottom: 1px solid #e2e7e4; }
@@ -660,7 +661,7 @@ body { min-width: 1120px; background: #f3f5f4; }
   .run-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 0; }
   .run-grid > div:nth-child(odd) { padding-left: 0; }
   .run-grid > div:nth-child(even) { border-right: 0; }
-  .workflow-page { height: auto; min-height: calc(100vh - 92px); grid-template-rows: auto auto minmax(0, 1fr); }
+  .workflow-page { height: auto; min-height: calc(100vh - 92px); }
   .editor-toolbar, .workflow-picker { flex-wrap: wrap; }
   .editor-toolbar { padding: 8px 12px; }
   .workflow-picker select { width: min(100%, 250px); }

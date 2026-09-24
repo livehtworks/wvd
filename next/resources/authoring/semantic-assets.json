@@ -150,6 +150,16 @@
       "category": "公会/委托",
       "role": "position",
       "variants": {
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "guild_commissions_entry_zh_hant",
+            "threshold": 0.8,
+            "roi": [590, 215, 310, 115]
+          },
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "2026-09-24 MuMu 900x1600 guild-menu-live.png"
+        },
         "en": {
           "condition": {
             "mode": "template",
@@ -166,6 +176,16 @@
       "category": "公会/委托",
       "role": "position",
       "variants": {
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "guild_bounties_entry_zh_hant",
+            "threshold": 0.8,
+            "roi": [650, 1330, 250, 120]
+          },
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "2026-09-24 MuMu 900x1600 guild-commissions-swiped-live.png"
+        },
         "en": {
           "condition": {
             "mode": "template",
@@ -213,39 +233,59 @@
       "label": "公会菜单已出现",
       "category": "公会/页面",
       "role": "observation",
-      "condition": {
-        "mode": "any",
-        "conditions": [
-          {
-            "mode": "semantic",
-            "id": "guild.commissions.entry"
+      "variants": {
+        "zh-Hant": {
+          "condition": {"mode": "semantic", "id": "guild.commissions.entry"},
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "2026-09-24 MuMu 900x1600 guild-menu-live.png"
+        },
+        "en": {
+          "condition": {
+            "mode": "any",
+            "conditions": [
+              {"mode": "semantic", "id": "guild.commissions.entry"},
+              {"mode": "semantic", "id": "guild.bounties.entry"},
+              {"mode": "semantic", "id": "guild.featured.entry"},
+              {"mode": "semantic", "id": "guild.report.action"}
+            ]
           },
-          {
-            "mode": "semantic",
-            "id": "guild.bounties.entry"
-          },
-          {
-            "mode": "semantic",
-            "id": "guild.featured.entry"
-          },
-          {
-            "mode": "semantic",
-            "id": "guild.report.action"
-          }
-        ]
+          "validation": "SOURCE_ONLY_NOT_REAL_VERIFIED"
+        }
       }
     },
     "guild.commissions.page": {
-      "label": "委托页（待按实际页面核定）",
+      "label": "委托清单页",
       "category": "公会/页面",
       "role": "observation",
-      "variants": {}
+      "variants": {
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "guild_commissions_page_zh_hant",
+            "threshold": 0.8,
+            "roi": [270, 20, 360, 125]
+          },
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "2026-09-24 MuMu 900x1600 guild-commissions-live.png"
+        }
+      }
     },
     "guild.bounties.page": {
-      "label": "赏金内容区/选中页签证据",
+      "label": "悬赏令列表页",
       "category": "公会/页面",
       "role": "observation",
-      "variants": {}
+      "variants": {
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "guild_bounties_page_zh_hant",
+            "threshold": 0.8,
+            "roi": [270, 20, 360, 125]
+          },
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "2026-09-24 MuMu 900x1600 guild-bounties-live.png"
+        }
+      }
     },
     "guild.bounty.first_item": {
       "label": "赏金列表第一项（待采集）",
@@ -445,6 +485,62 @@
         }
       }
     },
+    "wheel.target.fortress_arrival": {
+      "label": "抵达要塞第3层",
+      "category": "诅咒之轮/目标",
+      "role": "position",
+      "variants": {
+        "en": {
+          "condition": {
+            "mode": "template",
+            "image": "FortressArrival",
+            "threshold": 0.8
+          },
+          "validation": "SOURCE_ONLY_NOT_REAL_VERIFIED"
+        },
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "FortressArrival_zh_hant",
+            "threshold": 0.8,
+            "roi": [150, 250, 650, 900]
+          },
+          "validation": "SOURCE_VARIANT_PRESENT"
+        }
+      }
+    },
+    "wheel.target.rescue_king": {
+      "label": "营救国王",
+      "category": "诅咒之轮/目标",
+      "role": "position",
+      "variants": {
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "RescueKing_zh_hant",
+            "threshold": 0.8,
+            "roi": [150, 250, 650, 900]
+          },
+          "validation": "SOURCE_VARIANT_PRESENT"
+        }
+      }
+    },
+    "wheel.target.return_royal_city": {
+      "label": "归还王都",
+      "category": "诅咒之轮/目标",
+      "role": "position",
+      "variants": {
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "ReturnRoyalCity_zh_hant",
+            "threshold": 0.8,
+            "roi": [150, 250, 650, 900]
+          },
+          "validation": "SOURCE_VARIANT_PRESENT"
+        }
+      }
+    },
     "wheel.chapter.dhi": {
       "label": "美魔矿石所在章节",
       "category": "诅咒之轮/页面与操作",
@@ -507,6 +603,54 @@
         }
       }
     },
+    "wheel.chapter.waterway": {
+      "label": "贸易水路章节",
+      "category": "诅咒之轮/页面与操作",
+      "role": "position",
+      "variants": {
+        "en": {
+          "condition": {
+            "mode": "template",
+            "image": "TradeWaterway",
+            "threshold": 0.8
+          },
+          "validation": "SOURCE_ONLY_NOT_REAL_VERIFIED"
+        },
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "TradeWaterway_zh_hant",
+            "threshold": 0.8,
+            "roi": [250, 120, 400, 220]
+          },
+          "validation": "SOURCE_VARIANT_PRESENT"
+        }
+      }
+    },
+    "wheel.chapter.abyss": {
+      "label": "初始的奈落章节",
+      "category": "诅咒之轮/页面与操作",
+      "role": "position",
+      "variants": {
+        "en": {
+          "condition": {
+            "mode": "template",
+            "image": "beginningAbyss",
+            "threshold": 0.8
+          },
+          "validation": "SOURCE_ONLY_NOT_REAL_VERIFIED"
+        },
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "beginningAbyss_zh_hant",
+            "threshold": 0.8,
+            "roi": [250, 120, 400, 220]
+          },
+          "validation": "SOURCE_VARIANT_PRESENT"
+        }
+      }
+    },
     "city.ruins.entry": {
       "label": "荒屋入口",
       "category": "城市/公共入口",
@@ -565,10 +709,10 @@
             "image": "startdownload",
             "threshold": 0.8,
             "roi": [
-              222,
-              901,
-              465,
-              84
+              200,
+              860,
+              500,
+              460
             ]
           },
           "validation": "SOURCE_VARIANT_PRESENT",
@@ -580,14 +724,14 @@
             "image": "startdownload_zh_hant",
             "threshold": 0.86,
             "roi": [
-              222,
-              901,
-              465,
-              84
+              200,
+              860,
+              500,
+              460
             ]
           },
-          "validation": "REAL_FRAME_REPORTED",
-          "source": "dcc11c18: native/games/wvd/navigation/time_leap.cpp"
+          "validation": "REAL_FRAME_CAPTURED",
+          "source": "2026-09-24 MuMu 古城遗迹下载页按钮位于 y≈1207–1290；此前启动页按钮位于 y≈901–985"
         }
       }
     },
@@ -600,20 +744,226 @@
       },
       "validation": "SOURCE_VARIANT_PRESENT"
     },
+    "combat.active.badge": {
+      "label": "繁中战斗回合标识",
+      "category": "事件/战斗",
+      "role": "observation",
+      "condition": {"mode": "template", "image": "combat_active_zh_hant", "threshold": 0.8,
+                    "roi": [0, 0, 150, 80]},
+      "validation": "REAL_FRAME_REPORTED",
+      "source": "2026-09-24 MuMu 900x1600；左上 ACTIVE 标识，不含敌人和技能内容"
+    },
+    "combat.menu.flee": {
+      "label": "战斗逃跑菜单锚点",
+      "category": "事件/战斗",
+      "role": "observation",
+      "variants": {
+        "en": {"condition": {"mode": "template", "image": "flee", "threshold": 0.8,
+                             "roi": [720, 1120, 180, 130]}, "validation": "SOURCE_VARIANT_PRESENT"},
+        "zh-Hant": {"condition": {"mode": "template", "image": "combat_flee_zh_hant", "threshold": 0.82,
+                                  "roi": [720, 1120, 180, 130]}, "validation": "REAL_FRAME_REPORTED",
+                    "source": "2026-09-24 MuMu 战斗菜单实帧；仅用于确认菜单存在"}
+      }
+    },
+    "combat.auto.off": {
+      "label": "自动战斗关闭状态",
+      "category": "事件/战斗",
+      "role": "observation",
+      "variants": {
+        "en": {"condition": {"mode": "template", "image": "spellskill/CombatAutoDisable", "threshold": 0.8,
+                             "roi": [780, 1030, 120, 160]}, "validation": "SOURCE_VARIANT_PRESENT"},
+        "zh-Hant": {"condition": {"mode": "template", "image": "combat_auto_off_zh_hant", "threshold": 0.82,
+                                  "roi": [780, 1020, 120, 100]}, "validation": "REAL_FRAME_REPORTED",
+                    "source": "2026-09-24 MuMu 战斗中手动开启自动前实帧；白色自動"}
+      }
+    },
+    "combat.auto.on": {
+      "label": "自动战斗开启状态",
+      "category": "事件/战斗",
+      "role": "observation",
+      "variants": {
+        "en": {"condition": {"mode": "template", "image": "spellskill/CombatAutoEnable", "threshold": 0.8,
+                             "roi": [780, 1030, 120, 160]}, "validation": "SOURCE_VARIANT_PRESENT"},
+        "zh-Hant": {"condition": {"mode": "template", "image": "combat_auto_on_zh_hant", "threshold": 0.82,
+                                  "roi": [780, 1020, 120, 100]}, "validation": "REAL_FRAME_REPORTED",
+                    "source": "2026-09-24 MuMu 战斗中手动开启自动后实帧；橙色自動"}
+      }
+    },
+    "city.world_map.open": {
+      "label": "城市右下角世界地图按钮",
+      "category": "城市/导航",
+      "role": "position",
+      "variants": {
+        "en": {"condition": {"mode": "template", "image": "intoWorldMap", "threshold": 0.8,
+                             "roi": [710, 1410, 180, 180]}, "validation": "SOURCE_VARIANT_PRESENT"},
+        "zh-Hant": {"condition": {"mode": "template", "image": "city_world_map_open_zh_hant",
+                                  "threshold": 0.9, "roi": [715, 1430, 170, 150]},
+                    "validation": "REAL_FRAME_CAPTURED",
+                    "source": "2026-09-24 MuMu 王都与港口镇城市主界面；跨城正例0.985，世界地图负例0.229"}
+      }
+    },
+    "worldmap.open": {
+      "label": "世界地图已打开",
+      "category": "大地图/场景",
+      "role": "observation",
+      "variants": {
+        "en": {"condition": {"mode": "template", "image": "worldmapflag", "threshold": 0.8},
+               "validation": "SOURCE_VARIANT_PRESENT"},
+        "zh-Hant": {"condition": {"mode": "all", "conditions": [
+          {"mode": "template", "image": "worldmap_close_zh_hant", "threshold": 0.82, "roi": [730, 1410, 170, 190]},
+          {"mode": "template", "image": "worldmap_zoom_plus_zh_hant", "threshold": 0.82, "roi": [160, 1410, 160, 170]}
+        ]}, "validation": "REAL_FRAME_CAPTURED", "source": "2026-09-24 MuMu 900x1600 世界地图"}
+      }
+    },
+    "worldmap.location.biken_cave": {"label": "虛・比肯的洞窟", "category": "大地图/地点", "role": "observation",
+      "variants": {"zh-Hant": {"condition": {"mode": "all", "conditions": [
+        {"mode": "semantic", "id": "worldmap.open"},
+        {"mode": "template", "image": "worldmap_biken_cave_zh_hant", "threshold": 0.82}
+      ]}, "validation": "REAL_FRAME_CAPTURED"}}},
+    "worldmap.location.flower_garden": {"label": "百花之庭", "category": "大地图/地点", "role": "observation",
+      "variants": {"zh-Hant": {"condition": {"mode": "all", "conditions": [
+        {"mode": "semantic", "id": "worldmap.open"},
+        {"mode": "template", "image": "worldmap_flower_garden_zh_hant", "threshold": 0.82}
+      ]}, "validation": "REAL_FRAME_CAPTURED"}}},
+    "worldmap.location.northern_village": {"label": "諾森霍洛村", "category": "大地图/地点", "role": "observation",
+      "variants": {"zh-Hant": {"condition": {"mode": "all", "conditions": [
+        {"mode": "semantic", "id": "worldmap.open"},
+        {"mode": "template", "image": "worldmap_northern_village_zh_hant", "threshold": 0.82}
+      ]}, "validation": "REAL_FRAME_CAPTURED"}}},
+    "worldmap.location.fordraig_labyrinth": {"label": "弗德萊戈的迷宮", "category": "大地图/地点", "role": "observation",
+      "variants": {"zh-Hant": {"condition": {"mode": "all", "conditions": [
+        {"mode": "semantic", "id": "worldmap.open"},
+        {"mode": "template", "image": "worldmap_fordraig_labyrinth_zh_hant", "threshold": 0.82}
+      ]}, "validation": "REAL_FRAME_CAPTURED"}}},
+    "worldmap.location.mage_trial": {"label": "法師的試煉", "category": "大地图/地点", "role": "observation",
+      "variants": {"zh-Hant": {"condition": {"mode": "all", "conditions": [
+        {"mode": "semantic", "id": "worldmap.open"},
+        {"mode": "template", "image": "worldmap_mage_trial_zh_hant", "threshold": 0.82}
+      ]}, "validation": "REAL_FRAME_CAPTURED"}}},
+    "worldmap.location.knight_trial": {"label": "騎士的試煉", "category": "大地图/地点", "role": "observation",
+      "variants": {"zh-Hant": {"condition": {"mode": "all", "conditions": [
+        {"mode": "semantic", "id": "worldmap.open"},
+        {"mode": "template", "image": "worldmap_knight_trial_zh_hant", "threshold": 0.82}
+      ]}, "validation": "REAL_FRAME_CAPTURED"}}},
+    "worldmap.location.ancient_spirit_temple": {"label": "遠古靈廟", "category": "大地图/地点", "role": "observation",
+      "variants": {"zh-Hant": {"condition": {"mode": "all", "conditions": [
+        {"mode": "semantic", "id": "worldmap.open"},
+        {"mode": "template", "image": "worldmap_ancient_spirit_temple_zh_hant", "threshold": 0.82}
+      ]}, "validation": "REAL_FRAME_CAPTURED"}}},
+    "worldmap.location.royal_city": {"label": "王都盧庫納里亞", "category": "大地图/地点", "role": "observation",
+      "variants": {"zh-Hant": {"condition": {"mode": "all", "conditions": [
+        {"mode": "semantic", "id": "worldmap.open"},
+        {"mode": "template", "image": "worldmap_royal_city_zh_hant", "threshold": 0.82}
+      ]}, "validation": "REAL_FRAME_CAPTURED"}}},
+    "worldmap.location.flower_cave": {"label": "花之洞窟", "category": "大地图/地点", "role": "observation",
+      "variants": {"zh-Hant": {"condition": {"mode": "all", "conditions": [
+        {"mode": "semantic", "id": "worldmap.open"},
+        {"mode": "template", "image": "worldmap_flower_cave_zh_hant", "threshold": 0.82}
+      ]}, "validation": "REAL_FRAME_CAPTURED"}}},
+    "worldmap.location.black_pavilion": {"label": "黑椿亭", "category": "大地图/地点", "role": "observation",
+      "variants": {"zh-Hant": {"condition": {"mode": "all", "conditions": [
+        {"mode": "semantic", "id": "worldmap.open"},
+        {"mode": "template", "image": "worldmap_black_pavilion_zh_hant", "threshold": 0.82}
+      ]}, "validation": "REAL_FRAME_CAPTURED"}}},
+    "worldmap.location.hero_battlefield": {"label": "英雄戰域", "category": "大地图/地点", "role": "observation",
+      "variants": {"zh-Hant": {"condition": {"mode": "all", "conditions": [
+        {"mode": "semantic", "id": "worldmap.open"},
+        {"mode": "template", "image": "worldmap_hero_battlefield_zh_hant", "threshold": 0.82}
+      ]}, "validation": "REAL_FRAME_CAPTURED"}}},
+    "worldmap.location.warrior_trial": {"label": "戰士的試煉", "category": "大地图/地点", "role": "observation",
+      "variants": {"zh-Hant": {"condition": {"mode": "all", "conditions": [
+        {"mode": "semantic", "id": "worldmap.open"},
+        {"mode": "template", "image": "worldmap_warrior_trial_zh_hant", "threshold": 0.82}
+      ]}, "validation": "REAL_FRAME_CAPTURED"}}},
+    "worldmap.location.thief_trial": {"label": "盜賊的試煉", "category": "大地图/地点", "role": "observation",
+      "variants": {"zh-Hant": {"condition": {"mode": "all", "conditions": [
+        {"mode": "semantic", "id": "worldmap.open"},
+        {"mode": "template", "image": "worldmap_thief_trial_zh_hant", "threshold": 0.82}
+      ]}, "validation": "REAL_FRAME_CAPTURED"}}},
+    "worldmap.location.port_town": {"label": "港口鎮大軍團", "category": "大地图/地点", "role": "observation",
+      "variants": {"zh-Hant": {"condition": {"mode": "all", "conditions": [
+        {"mode": "semantic", "id": "worldmap.open"},
+        {"mode": "template", "image": "worldmap_port_town_zh_hant", "threshold": 0.82}
+      ]}, "validation": "REAL_FRAME_CAPTURED"}}},
+    "worldmap.location.sand_cave": {"label": "砂影洞窟", "category": "大地图/地点", "role": "observation",
+      "variants": {"zh-Hant": {"condition": {"mode": "all", "conditions": [
+        {"mode": "semantic", "id": "worldmap.open"},
+        {"mode": "template", "image": "worldmap_sand_cave_zh_hant", "threshold": 0.82}
+      ]}, "validation": "REAL_FRAME_CAPTURED"}}},
+    "worldmap.location.fortress": {"label": "瓜爾達要塞", "category": "大地图/地点", "role": "observation",
+      "variants": {"zh-Hant": {"condition": {"mode": "all", "conditions": [
+        {"mode": "semantic", "id": "worldmap.open"},
+        {"mode": "template", "image": "worldmap_fortress_zh_hant", "threshold": 0.82}
+      ]}, "validation": "REAL_FRAME_CAPTURED"}}},
+    "worldmap.location.white_wolf_cave": {"label": "白堊狼穴", "category": "大地图/地点", "role": "observation",
+      "variants": {"zh-Hant": {"condition": {"mode": "all", "conditions": [
+        {"mode": "semantic", "id": "worldmap.open"},
+        {"mode": "template", "image": "worldmap_white_wolf_cave_zh_hant", "threshold": 0.82}
+      ]}, "validation": "REAL_FRAME_CAPTURED"}}},
+    "worldmap.location.snowfield_isbeck": {"label": "豪雪地帶伊斯貝克", "category": "大地图/地点", "role": "observation",
+      "variants": {"zh-Hant": {"condition": {"mode": "all", "conditions": [
+        {"mode": "semantic", "id": "worldmap.open"},
+        {"mode": "template", "image": "worldmap_snowfield_isbeck_zh_hant", "threshold": 0.82}
+      ]}, "validation": "REAL_FRAME_CAPTURED"}}},
+    "worldmap.location.varian_grassland": {"label": "瓦里安大草原", "category": "大地图/地点", "role": "observation",
+      "variants": {"zh-Hant": {"condition": {"mode": "all", "conditions": [
+        {"mode": "semantic", "id": "worldmap.open"},
+        {"mode": "template", "image": "worldmap_varian_grassland_zh_hant", "threshold": 0.82}
+      ]}, "validation": "REAL_FRAME_CAPTURED"}}},
+    "worldmap.location.ancient_castle": {"label": "古城遺跡", "category": "大地图/地点", "role": "observation",
+      "variants": {"zh-Hant": {"condition": {"mode": "all", "conditions": [
+        {"mode": "semantic", "id": "worldmap.open"},
+        {"mode": "template", "image": "worldmap_ancient_castle_zh_hant", "threshold": 0.82}
+      ]}, "validation": "REAL_FRAME_CAPTURED"}}},
+    "chest.open.option": {
+      "label": "宝箱打开选项",
+      "category": "事件/宝箱",
+      "role": "position",
+      "variants": {
+        "en": {
+          "condition": {"mode": "template", "image": "chestFlag", "threshold": 0.8},
+          "validation": "SOURCE_ONLY_NOT_REAL_VERIFIED"
+        },
+        "zh-Hant": {
+          "condition": {"mode": "template", "image": "chest_open_zh_hant", "threshold": 0.8,
+                        "roi": [330, 1200, 240, 130]},
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "2026-09-24 MuMu 900x1600 宝箱初始交互页"
+        }
+      }
+    },
+    "chest.choose.page": {
+      "label": "宝箱选人页",
+      "category": "事件/宝箱",
+      "role": "observation",
+      "variants": {
+        "en": {
+          "condition": {"mode": "template", "image": "whowillopenit", "threshold": 0.8},
+          "validation": "SOURCE_ONLY_NOT_REAL_VERIFIED"
+        },
+        "zh-Hant": {
+          "condition": {"mode": "template", "image": "chest_choose_zh_hant", "threshold": 0.8,
+                        "roi": [280, 880, 340, 145]},
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "2026-09-24 MuMu 900x1600 宝箱选人页"
+        }
+      }
+    },
+    "chest.reward.page": {
+      "label": "宝箱奖励对话页",
+      "category": "事件/宝箱",
+      "role": "observation",
+      "condition": {"mode": "template", "image": "chest_reward_advance", "threshold": 0.8,
+                    "roi": [750, 1400, 150, 150]},
+      "validation": "REAL_FRAME_REPORTED",
+      "source": "2026-09-24 MuMu 900x1600；取右下继续箭头，不含道具名和图片"
+    },
     "event.chest.present": {
       "label": "宝箱状态（只读）",
       "category": "事件/宝箱",
       "role": "observation",
-      "variants": {
-        "shared": {
-          "condition": {
-            "mode": "template",
-            "image": "chestFlag",
-            "threshold": 0.8
-          },
-          "validation": "UNVERIFIED"
-        }
-      }
+      "condition": {"mode": "semantic", "id": "chest.open.option"},
+      "validation": "REAL_FRAME_REPORTED"
     },
     "event.pause.overlay": {
       "label": "Pause 覆盖层（只读）",

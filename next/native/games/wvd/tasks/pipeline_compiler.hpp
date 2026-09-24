@@ -22,6 +22,7 @@ struct CompiledWorkflow {
     recovery::DialoguePolicy dialogue_policy{recovery::DialoguePolicy::Default};
     // 作者定义和资源选择在编译后封存。
     nlohmann::json authoring = nlohmann::json::object();
+    void refresh_images();
     void validate() const;
 };
 

@@ -33,10 +33,21 @@ void FlowProgram::validate() const {
             if (const auto *operation = std::get_if<RegisteredOperation>(&step.data))
                 if (operation->binding.empty() || !operation->parameters.is_object())
                     throw std::runtime_error("FLOW_OPERATION_INVALID");
-            if (const auto *input = std::get_if<Input>(&step.data))
+            if (const auto *input = std::get_if<Input>(&step.data)) {
                 if (!input->command.is_object() || input->allowed_area.width <= 0 ||
                     input->allowed_area.height <= 0)
                     throw std::runtime_error("FLOW_INPUT_INVALID");
+                if (step.next.size() != 1 || !std::holds_alternative<AwaitResult>(
+                    definition.steps.at(step.next.front()).data))
+                    throw std::runtime_error("FLOW_INPUT_OBSERVER_MISSING");
+                const auto &observer = definition.steps.at(step.next.front());
+                if (observer.max_hit < step.max_hit ||
+                    observer.disabled_events != step.disabled_events)
+                    throw std::runtime_error("FLOW_INPUT_OBSERVER_CONTRACT_MISMATCH");
+            }
+            if (const auto *confirm = std::get_if<BusinessConfirm>(&step.data))
+                if (confirm->binding.empty() || !confirm->parameters.is_object())
+                    throw std::runtime_error("FLOW_BUSINESS_BINDING_MISSING");
             if (const auto *wait = std::get_if<Wait>(&step.data))
                 if (wait->duration.count() < 0 || wait->duration > std::chrono::minutes{5})
                     throw std::runtime_error("FLOW_WAIT_INVALID");
@@ -52,7 +63,7 @@ void FlowProgram::validate() const {
                     (event.disposition == EventDisposition::Handle &&
                      !definitions.contains(event.handler_definition)) ||
                     (event.resume == ResumeMode::Replan &&
-                     !definition.steps.contains(event.replan_step)))
+                     (!definition.steps.contains(event.replan_step) || !event.resume_guard)))
                     throw std::runtime_error("FLOW_EVENT_INVALID");
             }
             if (step.disabled_events.contains(""))

@@ -41,6 +41,7 @@ struct EventRule {
     std::string reason;
     std::chrono::milliseconds exit_budget{5000};
     std::chrono::milliseconds ambiguity_budget{5000};
+    std::optional<recognition::Request> resume_guard;
 };
 
 struct Observe {
@@ -77,6 +78,7 @@ struct BusinessConfirm {
     std::string operation;
     recognition::Request condition;
     nlohmann::json parameters;
+    std::string binding; // 游戏编译层提供绑定名；通用执行器不选择 WVD 实现。
 };
 struct RegisteredOperation {
     std::string binding;
@@ -114,7 +116,7 @@ struct Definition {
 };
 
 struct FlowProgram {
-    static constexpr int schema = 1;
+    static constexpr int schema = 2; // 补齐事件守卫、禁用规则和业务绑定的封存语义。
     std::string engine_kind{"wvd_native"};
     std::string revision;
     std::string root_definition;

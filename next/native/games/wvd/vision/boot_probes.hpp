@@ -1,6 +1,8 @@
 #pragma once
 #include "location_probes.hpp"
 #include "harken_probes.hpp"
+#include "chest_probes.hpp"
+#include "download_probes.hpp"
 #include <json.hpp>
 
 namespace wvd::games::vision {
@@ -14,8 +16,8 @@ inline nlohmann::json blocking_probes(bool include_party_prompts = true) {
             p["roi"] = std::move(roi);
         probes.push_back(std::move(p));
     };
-    add("startdownload", {222, 901, 465, 84});
-    add("startdownload_zh_hant", {222, 901, 465, 84}, .86);
+    probes.push_back(download_button_en());
+    probes.push_back(download_button_zh_hant());
     add("retry_blank", nullptr, .65);
     add("retry");
     add("retry", nullptr, .60);
@@ -46,10 +48,15 @@ inline nlohmann::json boot_probes(bool transient) {
     // 各城市的建筑按钮图标相同，不能用来区分地点。王城身份只由其固定塔楼
     // 背景确认；该锚点只读，不用于点击或推断其他城市业务状态。
     probes.push_back(royal_city());
+    // 公会页也属于已启动的稳定游戏画面；从工作台直接运行子流程时不能卡在启动门禁。
+    for (auto name : {"guild_commissions_page_zh_hant", "guild_bounties_page_zh_hant"})
+        probes.push_back({{"mode", "template"}, {"image", name}, {"threshold", .8},
+                          {"roi", {270, 20, 360, 125}}});
     for (auto name : {"Inn", "dungFlag", "worldmapflag", "openworldmap", "returnText", "returntoTown",
-                       "mapFlag", "chestFlag", "whowillopenit", "fishing/cast", "fishing/striking", "fishing/CloseFishInfo",
+                       "mapFlag", "fishing/cast", "fishing/striking", "fishing/CloseFishInfo",
                        "cursedWheelTitle", "cursedWheel", "ruins"})
         probes.push_back({{"mode", "template"}, {"image", name}, {"threshold", .8}});
+    for (const auto &probe : chest_stage_probes()) probes.push_back(probe);
     probes.push_back({{"mode", "combat_active"}});
     return probes;
 }

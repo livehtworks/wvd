@@ -129,8 +129,11 @@
             "id": "guild.commissions.entry"
           },
           "postcondition": {
-            "mode": "semantic",
-            "id": "guild.commissions.page"
+            "mode": "any",
+            "conditions": [
+              {"mode": "semantic", "id": "guild.commissions.page"},
+              {"mode": "semantic", "id": "guild.bounties.page"}
+            ]
           }
         },
         "repeat_limit": 1
@@ -189,8 +192,38 @@
       "name": "切到赏金页面",
       "description": "公共定义候选；来自 dcc11c18 源码及用户业务说明。编译验证不代表真实游戏验证。"
     },
-    "entry": "Open",
+    "entry": "Entry",
     "nodes": [
+      {
+        "id": "Entry",
+        "type": "route",
+        "name": "按当前页签选择动作",
+        "parameters": {},
+        "repeat_limit": 4
+      },
+      {
+        "id": "Ready",
+        "type": "recognition",
+        "name": "已在悬赏页",
+        "parameters": {
+          "condition": {"mode": "semantic", "id": "guild.bounties.page"}
+        },
+        "repeat_limit": 1
+      },
+      {
+        "id": "SwipeTabs",
+        "type": "action",
+        "name": "横移公会页签",
+        "parameters": {
+          "operation": "swipe",
+          "scene": {"mode": "semantic", "id": "guild.commissions.page"},
+          "postcondition": {"mode": "semantic", "id": "guild.commissions.page"},
+          "coordinates": [600, 1400, 300, 1400],
+          "duration_ms": 400,
+          "delay_after_ms": 1000
+        },
+        "repeat_limit": 1
+      },
       {
         "id": "Open",
         "type": "action",
@@ -224,6 +257,34 @@
     "edges": [
       {
         "id": "e0",
+        "from": "Entry",
+        "to": "Ready",
+        "outcome": "success",
+        "order": 0
+      },
+      {
+        "id": "e1",
+        "from": "Entry",
+        "to": "SwipeTabs",
+        "outcome": "success",
+        "order": 1
+      },
+      {
+        "id": "e2",
+        "from": "Ready",
+        "to": "Done",
+        "outcome": "success",
+        "order": 0
+      },
+      {
+        "id": "e3",
+        "from": "SwipeTabs",
+        "to": "Open",
+        "outcome": "success",
+        "order": 0
+      },
+      {
+        "id": "e4",
         "from": "Open",
         "to": "Done",
         "outcome": "success",
@@ -233,13 +294,28 @@
     "layout": {
       "nodes": [
         {
-          "node_id": "Open",
+          "node_id": "Entry",
           "x": 40,
           "y": 100
         },
         {
-          "node_id": "Done",
+          "node_id": "Ready",
           "x": 260,
+          "y": 20
+        },
+        {
+          "node_id": "SwipeTabs",
+          "x": 260,
+          "y": 180
+        },
+        {
+          "node_id": "Open",
+          "x": 480,
+          "y": 180
+        },
+        {
+          "node_id": "Done",
+          "x": 700,
           "y": 100
         }
       ],

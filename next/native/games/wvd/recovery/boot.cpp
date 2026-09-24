@@ -4,6 +4,7 @@
 #include "karma_prompt.hpp"
 #include "dialogue.hpp"
 #include "games/wvd/vision/harken_probes.hpp"
+#include "games/wvd/vision/download_probes.hpp"
 
 namespace wvd::games::recovery {
 namespace {
@@ -37,9 +38,8 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, Dialogue
                                    scoped("boot_attention_zh", {250, 430, 420, 220}, .86)});
     // 资源下载弹窗同样跟随系统区域设置。繁中模板来自 900x1600 真实页面，
     // 只匹配“開始下載”按钮文字；保留英文模板，不通过降低阈值混淆语言版本。
-    const auto download_en = scoped("startdownload", {222, 901, 465, 84}, .8);
-    const auto download_zh_hant =
-        scoped("startdownload_zh_hant", {222, 901, 465, 84}, .86);
+    const auto download_en = vision::download_button_en();
+    const auto download_zh_hant = vision::download_button_zh_hant();
     const auto download = C::any({download_en, download_zh_hant});
     const auto retry = C::image("retry");
     auto blank = C::image("retry_blank");

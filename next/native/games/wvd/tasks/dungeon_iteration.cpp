@@ -14,8 +14,10 @@ CompiledWorkflow dungeon_iteration(const WvdTaskPlan &plan, const nlohmann::json
     // 外层不能仍用旧 760 秒先截断已扩大但有限的路线。保留原有 360 秒
     // 入本/补给余量；加启动恢复后的最长定义仍在编译器 30 分钟硬上限内。
     C graph("tasks.dungeon_iteration." + plan.definition().id, dungeon_workflow.time_limit + std::chrono::seconds{360});
+    auto reward = C::image("chest_reward_advance");
+    reward["roi"] = {750, 1400, 150, 150};
     const auto inside = C::any({C::image("dungFlag"), C::image("mapFlag"), C::image("chestFlag"),
-                                C::image("whowillopenit"), C::image("RiseAgain"), J{{"mode", "combat_active"}}});
+                                C::image("whowillopenit"), reward, C::image("RiseAgain"), J{{"mode", "combat_active"}}});
     const auto outside = C::all({C::any({C::image("Inn"), C::image("EdgeOfTown"), C::image("returntoTown"),
                                         C::image("openworldmap"), C::image("returnText"), C::image("worldmapflag")}),
                                  C::absent(inside)});

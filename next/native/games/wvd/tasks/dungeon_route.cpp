@@ -77,7 +77,9 @@ CompiledWorkflow traverse_dungeon(const WvdTaskPlan &plan, const J &profile,
     // 是无进展窗口，不能直接拿它截断可达 900 秒的有限子链。不是放宽帧 TTL。
     C graph("tasks.dungeon_route." + plan.definition().id, std::chrono::seconds{400} + chest_workflow.time_limit);
     const J combat{{"mode", "combat_active"}};
-    const auto chest = C::any({C::image("chestFlag"), C::image("whowillopenit"), C::image("chestOpening")});
+    auto reward = C::image("chest_reward_advance");
+    reward["roi"] = {750, 1400, 150, 150};
+    const auto chest = C::any({C::image("chestFlag"), C::image("whowillopenit"), C::image("chestOpening"), reward});
     const auto revive = C::image("RiseAgain");
     const auto encounter = C::any({combat, chest, revive});
     const auto map = C::all({C::image("mapFlag"), C::absent(encounter)});

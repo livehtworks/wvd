@@ -56,8 +56,9 @@ void collect_images(const J &value, std::set<std::string> &images, std::set<std:
         }
         if (expand && mode == "dark_light_clear") {
             for (auto name : {"darklight", "darklight_lightIt", "dungFlag", "mapFlag", "trait", "recover",
-                              "chestFlag", "whowillopenit", "chestOpening", "RiseAgain"})
+                              "RiseAgain"})
                 images.insert(std::string(name) + ".png");
+            collect_images(vision::chest_stage_probes(), images, expanded_modes);
             collect_images(J{{"mode", "combat_active"}}, images, expanded_modes);
             collect_images(J{{"mode", "blocking_screen"}}, images, expanded_modes);
         }
@@ -117,7 +118,7 @@ void collect_images(const J &value, std::set<std::string> &images, std::set<std:
             for (int i = 0; i < 4; ++i)
                 images.insert("cursor_" + std::to_string(i) + ".png");
         if (mode == "combat_active")
-            for (const auto *name : {"combatActive", "combatActive_2", "combatActive_3", "combatActive_4"})
+            for (const auto *name : {"combat_active_zh_hant", "combatActive", "combatActive_2", "combatActive_3", "combatActive_4"})
                 images.insert(std::string(name) + ".png");
         if (mode == "movement_stopped")
             for (const auto *name : {"dungFlag", "mapFlag"})
@@ -320,6 +321,24 @@ void CompiledWorkflow::validate() const {
     const auto actions = collect_actions(nodes);
     require(std::vector<std::string>(actions.begin(), actions.end()) == required_actions,
             "COMPILE_PERMISSION_INDEX_STALE");
+}
+void CompiledWorkflow::refresh_images() {
+    std::set<std::string> indexed;
+    std::set<std::string> expanded;
+    for (const auto &[name, node] : nodes.items()) {
+        try { collect_images(node, indexed, expanded); }
+        catch (const std::exception &error) {
+            throw std::runtime_error("COMPILE_IMAGE_SCAN:" + name + ":" + error.what());
+        }
+    }
+    collect_images(event_scopes, indexed);
+    if (dialogue_policy != recovery::DialoguePolicy::Default) {
+        for (const auto name : recovery::special_dialogue_options(dialogue_policy)) indexed.insert(std::string(name) + ".png");
+        for (const auto name : recovery::dialogue_task_stops(dialogue_policy)) indexed.insert(std::string(name) + ".png");
+        indexed.insert("bondmate_close.png");
+    }
+    images.assign(indexed.begin(), indexed.end());
+    validate();
 }
 PipelineCompiler::PipelineCompiler(std::string kind, std::chrono::milliseconds time_limit) {
     workflow_.kind = std::move(kind);
@@ -758,24 +777,9 @@ CompiledWorkflow PipelineCompiler::finish() {
         {{"operation", "Registered"},
          {"binding", "RequireRecovery"},
          {"operation_args", {{"reason", workflow_.kind + ".budget_exhausted"}}}});
-    std::set<std::string> images;
-    std::set<std::string> expanded;
-    for (const auto &[name, node] : workflow_.nodes.items()) {
-        try { collect_images(node, images, expanded); }
-        catch (const std::exception &error) {
-            throw std::runtime_error("COMPILE_IMAGE_SCAN:" + name + ":" + error.what());
-        }
-    }
-    collect_images(workflow_.event_scopes, images);
-    if (workflow_.dialogue_policy != recovery::DialoguePolicy::Default) {
-        for (const auto name : recovery::special_dialogue_options(workflow_.dialogue_policy)) images.insert(std::string(name) + ".png");
-        for (const auto name : recovery::dialogue_task_stops(workflow_.dialogue_policy)) images.insert(std::string(name) + ".png");
-        images.insert("bondmate_close.png");
-    }
-    workflow_.images.assign(images.begin(), images.end());
     const auto actions = collect_actions(workflow_.nodes);
     workflow_.required_actions.assign(actions.begin(), actions.end());
-    workflow_.validate();
+    workflow_.refresh_images();
     return std::move(workflow_);
 }
 } // namespace wvd::games::tasks

@@ -32,6 +32,15 @@ class DeviceBackend {
     virtual bool context_matches(const contracts::FrameIdentity &, const std::string &) {
         return offline();
     }
+    virtual bool context_matches(const contracts::FrameIdentity &identity,
+                                 const std::string &application, std::stop_token stop) {
+        return !stop.stop_requested() && context_matches(identity, application);
+    }
+    // 控制握手必须早于用于点击的截图；execute 不允许透明重连后使用旧坐标。
+    virtual void prepare_input_channel(std::stop_token stop) {
+        if (stop.stop_requested()) throw std::runtime_error("INPUT_PREPARATION_CANCELLED");
+        if (!offline()) throw std::runtime_error("INPUT_PREPARATION_UNIMPLEMENTED");
+    }
     virtual bool connect() = 0;
     virtual RawFrame capture() = 0;
     virtual RawFrame capture(std::stop_token stop) {

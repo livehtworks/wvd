@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "source_commit": "6585f4075f5714ab522aa582993860c09af912c1",
-  "revision": "bcc1891a3fe67b2403783c96109e8f58085087059fb8e81baaf5874701529dde",
+  "revision": "80ae0df1e6ecf633bad6b820b83f2a2ae98e77b8157e5d7107c7b6456c6e05be",
   "files": [
     {
       "path": "image/7000G/icantagreewithU.png",
@@ -874,7 +874,7 @@
       "sha256": "197bd96260ed326bf71ade54554b71346deab5ff2a77a76ca31314eb3f6689a7",
       "bytes": 48960,
       "source_refs": [
-        "semantic-catalogue:unclassified"
+        "semantic:wheel.target.fortress_arrival"
       ]
     },
     {
@@ -1109,7 +1109,7 @@
       "sha256": "302bd6970ae84b8a30d1a3d80a87f068f09d8b39a837bd6bc4567ba145142dc8",
       "bytes": 30472,
       "source_refs": [
-        "semantic-catalogue:unclassified"
+        "semantic:wheel.target.rescue_king"
       ]
     },
     {
@@ -1118,7 +1118,7 @@
       "sha256": "74fef5e961438df235fac3421e73771c5d1611c3510a32f5b42293a3fe6059d8",
       "bytes": 40088,
       "source_refs": [
-        "semantic-catalogue:unclassified"
+        "semantic:wheel.target.return_royal_city"
       ]
     },
     {
@@ -1313,7 +1313,7 @@
       "sha256": "2ecd62c5b9dda58e5c7f6a524aad25f3539d99b84c144dcc4e025d7f26d37402",
       "bytes": 24853,
       "source_refs": [
-        "semantic-catalogue:unclassified"
+        "semantic:wheel.chapter.waterway"
       ]
     },
     {
@@ -1374,7 +1374,7 @@
       "sha256": "9d7f408de577b59bb018f6430554f782be6f62998550134312a9f1fc5c10fa0f",
       "bytes": 33146,
       "source_refs": [
-        "semantic-catalogue:unclassified"
+        "semantic:wheel.chapter.abyss"
       ]
     },
     {
@@ -1559,6 +1559,33 @@
       ]
     },
     {
+      "path": "image/chest_choose_zh_hant.png",
+      "source": "next/resources/images/chest_choose_zh_hant.png",
+      "source_refs": [
+        "semantic:chest.choose.page"
+      ],
+      "sha256": "d02c475ace82c4390de1b8ddea355e905388b94a36059da735a78427973a3ba8",
+      "bytes": 24858
+    },
+    {
+      "path": "image/chest_open_zh_hant.png",
+      "source": "next/resources/images/chest_open_zh_hant.png",
+      "source_refs": [
+        "semantic:chest.open.option"
+      ],
+      "sha256": "57ef471d176c4bc4d58c30d49916f9b02696008460861e203114ab4ac47db162",
+      "bytes": 6910
+    },
+    {
+      "path": "image/chest_reward_advance.png",
+      "source": "next/resources/images/chest_reward_advance.png",
+      "sha256": "b4d7336fb41be8ee620c2c39ee1144841ad4fb0257d790eb093ef51af97887f8",
+      "bytes": 4303,
+      "source_refs": [
+        "semantic:chest.reward.page"
+      ]
+    },
+    {
       "path": "image/chestfear.png",
       "source": "resources/images/chestfear.png",
       "sha256": "27718ea31faa8fae9f87562ab4ed1cbf8f265cc68745000e63d53765a05cf079",
@@ -1566,6 +1593,13 @@
       "source_refs": [
         "src/script.py:3070"
       ]
+    },
+    {
+      "path": "image/city_world_map_open_zh_hant.png",
+      "source": "next/resources/images/city_world_map_open_zh_hant.png",
+      "sha256": "0834a9d526196c5a6dd447a74d4406b6e54823528a8e5e03c707024c179b450d",
+      "bytes": 12864,
+      "source_refs": ["semantic:city.world_map.open"]
     },
     {
       "path": "image/close.png",
@@ -1674,6 +1708,42 @@
       "sha256": "5ae9e771373067f774990b59dd73694e07aac5d80b0a1d6db764a725733f37af",
       "bytes": 3872,
       "source_refs": []
+    },
+    {
+      "path": "image/combat_active_zh_hant.png",
+      "source": "next/resources/images/combat_active_zh_hant.png",
+      "sha256": "605960c3fc7adc8acee61e745f5ac738aa75a41d66f793da6a7b52a147772655",
+      "bytes": 5197,
+      "source_refs": [
+        "vision:combat_active"
+      ]
+    },
+    {
+      "path": "image/combat_auto_off_zh_hant.png",
+      "source": "next/resources/images/combat_auto_off_zh_hant.png",
+      "sha256": "b9b9a93cd1b233d8f38989b6cf3e65b8556c19dd6b28f3c8e96c475611362b67",
+      "bytes": 8458,
+      "source_refs": [
+        "semantic:combat.combat_auto_off_zh_hant"
+      ]
+    },
+    {
+      "path": "image/combat_auto_on_zh_hant.png",
+      "source": "next/resources/images/combat_auto_on_zh_hant.png",
+      "sha256": "76cb180917bdd459dac80d61009ad0a65bd4f64cfa6500a6115dc8f88be06115",
+      "bytes": 8238,
+      "source_refs": [
+        "semantic:combat.combat_auto_on_zh_hant"
+      ]
+    },
+    {
+      "path": "image/combat_flee_zh_hant.png",
+      "source": "next/resources/images/combat_flee_zh_hant.png",
+      "sha256": "2d7a1cd91146596e0a7daacbd113b4de89b467cda7e72ddd8d40b28aac965f20",
+      "bytes": 11512,
+      "source_refs": [
+        "semantic:combat.combat_flee_zh_hant"
+      ]
     },
     {
       "path": "image/cropped.png",
@@ -2443,6 +2513,42 @@
       "bytes": 11943,
       "source_refs": [
         "semantic:guild.commissions.entry"
+      ]
+    },
+    {
+      "path": "image/guild_bounties_entry_zh_hant.png",
+      "source": "next/resources/images/guild_bounties_entry_zh_hant.png",
+      "sha256": "77a7331a93937a662d9bb6e9ef2f1629fbaef49a93f71f833b16771fa839a8d8",
+      "bytes": 5123,
+      "source_refs": [
+        "semantic:guild.bounties.entry"
+      ]
+    },
+    {
+      "path": "image/guild_bounties_page_zh_hant.png",
+      "source": "next/resources/images/guild_bounties_page_zh_hant.png",
+      "sha256": "44ee0fd84f7538482da76fb7f7ccf4c9cec1cd99eeeb770089e9dc0e3d781990",
+      "bytes": 35114,
+      "source_refs": [
+        "semantic:guild.bounties.page"
+      ]
+    },
+    {
+      "path": "image/guild_commissions_entry_zh_hant.png",
+      "source": "next/resources/images/guild_commissions_entry_zh_hant.png",
+      "sha256": "c8adb70c60e73f4e55ee2d3dc8d54240b0516dd6520dc061f704d2f887ee164b",
+      "bytes": 13206,
+      "source_refs": [
+        "semantic:guild.commissions.entry"
+      ]
+    },
+    {
+      "path": "image/guild_commissions_page_zh_hant.png",
+      "source": "next/resources/images/guild_commissions_page_zh_hant.png",
+      "sha256": "fb59ec7ec094424a536b58525412fabf5049c78a5ba1f948279662471e8db39a",
+      "bytes": 28181,
+      "source_refs": [
+        "semantic:guild.commissions.page"
       ]
     },
     {
@@ -4139,6 +4245,13 @@
       ]
     },
     {
+      "path": "image/story_auto_control.png",
+      "source": "next/resources/images/story_auto_control.png",
+      "sha256": "6a3ae246e629104e9c943662cae97661ac931112e1c1145d20b56e6aaf13098e",
+      "bytes": 6775,
+      "source_refs": ["native/games/wvd/vision/dialogue_probes.hpp"]
+    },
+    {
       "path": "image/supportSkillCheck.png",
       "source": "resources/images/supportSkillCheck.png",
       "sha256": "febed7e3a725681521b4e397011f05df4c8bceed467b122380b6a4dc14ea5122",
@@ -4220,6 +4333,204 @@
       "source_refs": []
     },
     {
+      "path": "image/worldmap_ancient_castle_zh_hant.png",
+      "source": "next/resources/images/worldmap_ancient_castle_zh_hant.png",
+      "source_refs": [
+        "semantic:worldmap"
+      ],
+      "sha256": "b5a426e9b94e65404057bd3353f96206404e4c6f4255cba07fecc5efd339bad7",
+      "bytes": 12494
+    },
+    {
+      "path": "image/worldmap_ancient_spirit_temple_zh_hant.png",
+      "source": "next/resources/images/worldmap_ancient_spirit_temple_zh_hant.png",
+      "source_refs": [
+        "semantic:worldmap"
+      ],
+      "sha256": "fe783c5cc59e15ad1f405ff1aa13ad58b5b40504daa18d3535897cc9b7177737",
+      "bytes": 11744
+    },
+    {
+      "path": "image/worldmap_biken_cave_zh_hant.png",
+      "source": "next/resources/images/worldmap_biken_cave_zh_hant.png",
+      "source_refs": [
+        "semantic:worldmap"
+      ],
+      "sha256": "ebf221280e36ad207942b284abf778dcd3888222acfb5dbd836505c59c23c183",
+      "bytes": 18738
+    },
+    {
+      "path": "image/worldmap_black_pavilion_zh_hant.png",
+      "source": "next/resources/images/worldmap_black_pavilion_zh_hant.png",
+      "source_refs": [
+        "semantic:worldmap"
+      ],
+      "sha256": "06071f53cf2592219287c6c84e4f28630671e05d32f996525bfdf428db784288",
+      "bytes": 8354
+    },
+    {
+      "path": "image/worldmap_close_zh_hant.png",
+      "source": "next/resources/images/worldmap_close_zh_hant.png",
+      "source_refs": [
+        "semantic:worldmap"
+      ],
+      "sha256": "01c610d060fd3bafd0eec7c93b293a6bfd74c208984add5365e6e06e48437724",
+      "bytes": 18707
+    },
+    {
+      "path": "image/worldmap_flower_cave_zh_hant.png",
+      "source": "next/resources/images/worldmap_flower_cave_zh_hant.png",
+      "source_refs": [
+        "semantic:worldmap"
+      ],
+      "sha256": "b8dfa8d931856108962116165cefebdfba88f2899141be29fc14a3f330a7e585",
+      "bytes": 12162
+    },
+    {
+      "path": "image/worldmap_flower_garden_zh_hant.png",
+      "source": "next/resources/images/worldmap_flower_garden_zh_hant.png",
+      "source_refs": [
+        "semantic:worldmap"
+      ],
+      "sha256": "a7ec7d5dcf8a78015401e7b62e04858ba94338fdbc63e2f26686ea5bc4dbcb35",
+      "bytes": 10393
+    },
+    {
+      "path": "image/worldmap_fordraig_labyrinth_zh_hant.png",
+      "source": "next/resources/images/worldmap_fordraig_labyrinth_zh_hant.png",
+      "source_refs": [
+        "semantic:worldmap"
+      ],
+      "sha256": "8ab73327abcf550d5fe290fc2237b5144a067f047611d96afb828f5f06c83f39",
+      "bytes": 21316
+    },
+    {
+      "path": "image/worldmap_fortress_zh_hant.png",
+      "source": "next/resources/images/worldmap_fortress_zh_hant.png",
+      "source_refs": [
+        "semantic:worldmap"
+      ],
+      "sha256": "34b2a90b5bb396ce986205fbde66117bf7289e60c1d16dce944e4b152b26d16a",
+      "bytes": 14273
+    },
+    {
+      "path": "image/worldmap_hero_battlefield_zh_hant.png",
+      "source": "next/resources/images/worldmap_hero_battlefield_zh_hant.png",
+      "source_refs": [
+        "semantic:worldmap"
+      ],
+      "sha256": "df96cd934339b83e834880a7f614fc41fc3480b19a747133e4ca6eee68b4df4c",
+      "bytes": 15800
+    },
+    {
+      "path": "image/worldmap_knight_trial_zh_hant.png",
+      "source": "next/resources/images/worldmap_knight_trial_zh_hant.png",
+      "source_refs": [
+        "semantic:worldmap"
+      ],
+      "sha256": "1b93668af67eb5aeacf81c401afada04eac0cfd869aebbeb3e0b3138223b5d7c",
+      "bytes": 14695
+    },
+    {
+      "path": "image/worldmap_mage_trial_zh_hant.png",
+      "source": "next/resources/images/worldmap_mage_trial_zh_hant.png",
+      "source_refs": [
+        "semantic:worldmap"
+      ],
+      "sha256": "947b5dbf947df410e57b2450fdec5711ede1a09f4bc45bc9801abf2e7c5e8a37",
+      "bytes": 14713
+    },
+    {
+      "path": "image/worldmap_northern_village_zh_hant.png",
+      "source": "next/resources/images/worldmap_northern_village_zh_hant.png",
+      "source_refs": [
+        "semantic:worldmap"
+      ],
+      "sha256": "b5e16f975fe6462cafe6ea5bf757ea3a5ac110c3de179ed46f5ac7c3e7f7414c",
+      "bytes": 13801
+    },
+    {
+      "path": "image/worldmap_port_town_zh_hant.png",
+      "source": "next/resources/images/worldmap_port_town_zh_hant.png",
+      "source_refs": [
+        "semantic:worldmap"
+      ],
+      "sha256": "afe06d2df37bc0485801994e2b46a317e9557a841aa240a78b4ea24d02131e95",
+      "bytes": 19239
+    },
+    {
+      "path": "image/worldmap_royal_city_zh_hant.png",
+      "source": "next/resources/images/worldmap_royal_city_zh_hant.png",
+      "source_refs": [
+        "semantic:worldmap"
+      ],
+      "sha256": "f032b288088be54f6f6578ae08697c445a6813bda922f0e27dc4455b7623e413",
+      "bytes": 19805
+    },
+    {
+      "path": "image/worldmap_sand_cave_zh_hant.png",
+      "source": "next/resources/images/worldmap_sand_cave_zh_hant.png",
+      "source_refs": [
+        "semantic:worldmap"
+      ],
+      "sha256": "03ddd7fbce27d93a3453de1970ea7b046897ba71a849c6e8a9137d36414716d4",
+      "bytes": 12267
+    },
+    {
+      "path": "image/worldmap_snowfield_isbeck_zh_hant.png",
+      "source": "next/resources/images/worldmap_snowfield_isbeck_zh_hant.png",
+      "source_refs": [
+        "semantic:worldmap"
+      ],
+      "sha256": "e2f29f35e5ba456c0a60c67500b2846bc852faeb70e9ef5377d3a1836e728467",
+      "bytes": 25544
+    },
+    {
+      "path": "image/worldmap_thief_trial_zh_hant.png",
+      "source": "next/resources/images/worldmap_thief_trial_zh_hant.png",
+      "source_refs": [
+        "semantic:worldmap"
+      ],
+      "sha256": "b38d065ae5f3b24d3fb03aa84889267ecc57431c9ad952caa3fd8409e614ded4",
+      "bytes": 15197
+    },
+    {
+      "path": "image/worldmap_varian_grassland_zh_hant.png",
+      "source": "next/resources/images/worldmap_varian_grassland_zh_hant.png",
+      "source_refs": [
+        "semantic:worldmap"
+      ],
+      "sha256": "5313736f4495c78e3bace6f4d7dc3cc44185914bf631dbd888384ea9c5d10459",
+      "bytes": 17973
+    },
+    {
+      "path": "image/worldmap_warrior_trial_zh_hant.png",
+      "source": "next/resources/images/worldmap_warrior_trial_zh_hant.png",
+      "source_refs": [
+        "semantic:worldmap"
+      ],
+      "sha256": "75eedb3317e49943d397a966a065db0a849fff85a36cd1c7c9dc9ea871725fbb",
+      "bytes": 16631
+    },
+    {
+      "path": "image/worldmap_white_wolf_cave_zh_hant.png",
+      "source": "next/resources/images/worldmap_white_wolf_cave_zh_hant.png",
+      "source_refs": [
+        "semantic:worldmap"
+      ],
+      "sha256": "e36e9a1e1f95b89d5fc72a5787c00a961d1eb03164b460a92c608188e44224b1",
+      "bytes": 12842
+    },
+    {
+      "path": "image/worldmap_zoom_plus_zh_hant.png",
+      "source": "next/resources/images/worldmap_zoom_plus_zh_hant.png",
+      "source_refs": [
+        "semantic:worldmap"
+      ],
+      "sha256": "7f79a8451e86c07374b815261e804dc5e7b348ec2d568c3eb9a01afdfd37dff2",
+      "bytes": 17219
+    },
+    {
       "path": "image/worldmapflag.png",
       "source": "resources/images/worldmapflag.png",
       "sha256": "19815b7a5779d414f23933ec2cdb0eb8c76871a500b15aad1cb45e864144748c",
@@ -4242,8 +4553,8 @@
     {
       "path": "parameters/public-flows.json",
       "source": "next/resources/authoring/public-flows.json",
-      "sha256": "1bd877cabeeee8ef5609b4ce830cc2b13631f5df1524654eaa0150508d3741e3",
-      "bytes": 63867,
+      "sha256": "791df27981db4aa890ebd8734390f9fafa5e61b1c5e22af756a6bf46728437eb",
+      "bytes": 65680,
       "source_refs": [
         "authoring:public-flow-1"
       ]
@@ -4251,8 +4562,8 @@
     {
       "path": "parameters/semantic-assets.json",
       "source": "next/resources/authoring/semantic-assets.json",
-      "sha256": "779085dc5a764138338a6d8b3137ee83bb67fb392e36f9fd8b2eda2752c739a5",
-      "bytes": 43156,
+      "sha256": "52fd1741f99848f120608ea14766461ab47b54a5f916b2a3340b771f4803b76d",
+      "bytes": 62938,
       "source_refs": [
         "authoring:public-flow-1"
       ]

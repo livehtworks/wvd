@@ -64,7 +64,9 @@ android::ShellReply AdbCommandClient::shell_fixed(const std::string &command,
     const auto marker = "__WVD_RC_" + std::to_string(GetCurrentProcessId()) + "_" +
         std::to_string(++marker_id) + "__";
     const auto script = android::probe_command(command, marker);
-    const auto result = run({L"shell", L"sh", L"-c", wide(script)}, timeout, stop);
+    // ADB shell 自己会将完整命令交给设备端 shell；再嵌一层 sh -c 会让
+    // 部分 MuMu ADB 把括号脚本拆成多个实参，连接后的首个查询就语法失败。
+    const auto result = run({L"shell", wide(script)}, timeout, stop);
     require_transport(result);
     return android::parse_shell_reply(as_text(result.stdout_bytes), marker);
 }

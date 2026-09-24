@@ -41,6 +41,8 @@ class NativeInputGate final {
     std::atomic<bool> stopped_{false};
     std::stop_source stop_source_;
     mutable std::mutex mutex_;
+    // 只串行真实取帧/提交；stop() 不拿此锁，不等待设备 I/O。
+    std::mutex dispatch_mutex_;
     contracts::FrameIdentity last_frame_;
     std::uint64_t frame_id_{}, epoch_{};
     contracts::InputCounts counts_;

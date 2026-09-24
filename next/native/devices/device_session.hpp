@@ -6,6 +6,7 @@
 #include <json.hpp>
 #include <memory>
 #include <mutex>
+#include <atomic>
 
 namespace wvd::devices {
 class DeviceSession final : public DeviceConnection, public LifecyclePort {
@@ -13,10 +14,11 @@ class DeviceSession final : public DeviceConnection, public LifecyclePort {
     DeviceSession(nlohmann::json binding, std::filesystem::path capture_host,
                   std::filesystem::path scrcpy_server,
                   std::stop_token cancellation = {});
-    ~DeviceSession() override { disconnect(); }
+    ~DeviceSession() noexcept override;
     bool offline() const override { return false; }
     bool verified_access() const override { return verified_; }
     bool connect() override;
+    void prepare_input_channel(std::stop_token stop) override;
     void disconnect() override;
     bool release_owned_inputs() override;
     RawFrame capture() override;
@@ -26,6 +28,8 @@ class DeviceSession final : public DeviceConnection, public LifecyclePort {
     bool execute(const contracts::Command &command, std::stop_token stop) override;
     bool context_matches(const contracts::FrameIdentity &identity,
                          const std::string &application) override;
+    bool context_matches(const contracts::FrameIdentity &identity,
+                         const std::string &application, std::stop_token stop) override;
     LifecyclePort *lifecycle_port() override { return this; }
     std::optional<LifecycleObservation> observe_lifecycle() override;
     bool execute_lifecycle(LifecycleOperation operation, const LifecycleTarget &target,
@@ -38,7 +42,7 @@ class DeviceSession final : public DeviceConnection, public LifecyclePort {
 
   private:
     RawFrame capture_impl(bool preview, std::stop_token stop = {});
-    std::string foreground();
+    std::string foreground(std::stop_token stop = {});
     android::ShellReply query(const std::string &command, int timeout = 5000,
                               std::stop_token stop = {});
     bool vpn_connected();
@@ -54,8 +58,10 @@ class DeviceSession final : public DeviceConnection, public LifecyclePort {
     std::unique_ptr<ScrcpyControlClient> control_;
     mutable std::mutex mutex_;
     nlohmann::json diagnostics_ = nlohmann::json::array();
-    std::uint64_t generation_{};
-    bool verified_{}, connected_{}, fast_failed_{};
+    // 状态页只读取这些标量；设备操作仍由唯一会话线程执行。
+    std::atomic<std::uint64_t> generation_{};
+    bool verified_{};
+    std::atomic<bool> connected_{false}, fast_failed_{false};
     contracts::Size latest_size_{};
     int latest_rotation_{-1};
     std::string latest_foreground_;

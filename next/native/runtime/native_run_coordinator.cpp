@@ -166,7 +166,7 @@ void NativeRunCoordinator::drive(NativeRunDefinition definition,
                 const auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(
                     total_deadline - std::chrono::steady_clock::now());
                 require(remaining > 0ms, "NATIVE_RUN_TOTAL_DEADLINE");
-                recognition::Service recognizer(unit.bundle, unit.recognizers);
+                auto recognizer = std::make_shared<recognition::Service>(unit.bundle, unit.recognizers);
                 bool checkpoint_seen = false;
                 auto event = [this, generation](const std::string &type, const nlohmann::json &data) {
                     journal_->emit(generation, type, data);
@@ -206,6 +206,10 @@ void NativeRunCoordinator::drive(NativeRunDefinition definition,
                 quiescent = quiescent && result.inputs_released;
                 last = session_result(result, unit.program, generation,
                     checkpoint_seen ? unit.checkpoint_source_path : std::string{}, *business);
+                event("session.ended", {{"flow_state", static_cast<int>(result.flow.state)},
+                    {"flow_code", result.flow.code}, {"cleanup_error", result.cleanup_error},
+                    {"inputs_released", result.inputs_released},
+                    {"unresolved_input", result.unresolved_input}});
                 if (result.flow.state == TickState::Completed && checkpoint_seen &&
                     !result.unresolved_input && result.inputs_released) {
                     std::lock_guard lock(mutex_);
@@ -221,7 +225,9 @@ void NativeRunCoordinator::drive(NativeRunDefinition definition,
                     : result.unresolved_input ? "NATIVE_INPUT_RESULT_UNCONFIRMED"
                     : !result.inputs_released ? "NATIVE_INPUT_CLEANUP_PENDING"
                     : result.flow.code;
-                if (stop_ || !quiescent || result.unresolved_input || !definition.recovery ||
+                // 外部维护/输入结果未知不是重启理由，禁止进入自动生命周期恢复。
+                if (stop_ || !quiescent || result.unresolved_input ||
+                    result.flow.state == TickState::ExternalBlocked || !definition.recovery ||
                     recovery_attempt >= 3) break;
                 auto plan = definition.recovery(last, *business, recovery_attempt + 1);
                 if (!plan) break;
@@ -269,7 +275,11 @@ void NativeRunCoordinator::drive(NativeRunDefinition definition,
         execution_finished_ = true;
     }
     try {
-        if (!backend->release_owned_inputs()) quiescent = false;
+        const bool final_release = backend->release_owned_inputs();
+        if (!quiescent && final_release)
+            journal_->emit(last.terminal.generation,
+                "cleanup.recovered", {{"initial_release", false}, {"final_release", true}});
+        quiescent = final_release;
     } catch (...) {
         quiescent = false;
     }
@@ -285,13 +295,17 @@ void NativeRunCoordinator::drive(NativeRunDefinition definition,
         terminal.business = nullptr;
         terminal.secondary_errors.push_back("NATIVE_BUSINESS_SUMMARY_FAILED");
     }
+    if (quiescent && failure == "NATIVE_INPUT_CLEANUP_PENDING") {
+        terminal.secondary_errors.push_back("INITIAL_INPUT_CLEANUP_FAILED_FINAL_RELEASE_CONFIRMED");
+        failure = last.reason.empty() ? "NATIVE_SESSION_INCOMPLETE" : last.reason;
+    }
     terminal.reason = std::move(failure);
     terminal.state = !quiescent ? contracts::RunState::Interrupted
         : stop_ ? contracts::RunState::UserStopped
         : !terminal.reason.empty() ? contracts::RunState::Failed
         : terminal.completed_business_units == definition.units.size()
             ? contracts::RunState::Completed : contracts::RunState::Failed;
-    if (quiescent && business && definition.handoff_ready) {
+    if (!stop_ && quiescent && business && definition.handoff_ready) {
         try {
             if (definition.handoff_ready(last, *business)) {
                 terminal.state = contracts::RunState::Interrupted;
@@ -301,7 +315,7 @@ void NativeRunCoordinator::drive(NativeRunDefinition definition,
             terminal.secondary_errors.push_back(std::string("HANDOFF_VALIDATION:") + error.what());
         }
     }
-    if (last.end == contracts::SessionEnd::ExternalBlocked) {
+    if (!stop_ && last.end == contracts::SessionEnd::ExternalBlocked) {
         terminal.state = contracts::RunState::Interrupted;
         terminal.outcome_category = "external_blocked";
     }

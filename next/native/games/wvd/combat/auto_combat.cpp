@@ -10,10 +10,7 @@ tasks::CompiledWorkflow enable_auto() {
         value["roi"] = std::move(roi);
         return value;
     };
-    J active = J::array();
-    for (auto name : {"combatActive", "combatActive_2", "combatActive_3", "combatActive_4"})
-        active.push_back(image(name, {0, 0, 150, 80}));
-    const auto battle = C::any(active);
+    const J battle{{"mode", "combat_active"}};
     const auto ended = C::all({C::any({C::image("dungFlag"), C::image("chestFlag"), C::image("RiseAgain")}),
                                C::absent(battle)});
     const auto recognizable = C::any({battle, ended});

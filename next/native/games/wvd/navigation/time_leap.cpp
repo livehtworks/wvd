@@ -1,5 +1,6 @@
 #include "time_leap.hpp"
 #include "games/wvd/vision/location_probes.hpp"
+#include "games/wvd/vision/download_probes.hpp"
 #include "causality.hpp"
 
 namespace wvd::games::navigation {
@@ -29,13 +30,18 @@ tasks::CompiledWorkflow compile_time_leap(const std::string &target_name,
     else if (target_name == "GhostsOfYore") translated_target_name = "GhostsOfYore_zh_hant";
     else if (target_name == "Triumph") translated_target_name = "Triumph_zh_hant";
     else if (target_name == "FortressArrival") translated_target_name = "FortressArrival_zh_hant";
+    else if (target_name == "RescueKing") translated_target_name = "RescueKing_zh_hant";
+    else if (target_name == "ReturnRoyalCity") translated_target_name = "ReturnRoyalCity_zh_hant";
     const auto target_en = C::image(target_name);
     J target_zh_hant;
     if (!translated_target_name.empty()) {
         target_zh_hant = C::image(translated_target_name);
         target_zh_hant["roi"] = {150, 250, 650, 900};
     }
-    const auto target = translated_target_name.empty() ? target_en : C::any({target_en, target_zh_hant});
+    // 这两个历史目标只有繁中素材，不能把不存在的英文模板编进候选。
+    const bool zh_only_target = target_name == "RescueKing" || target_name == "ReturnRoyalCity";
+    const auto target = translated_target_name.empty() ? target_en
+        : zh_only_target ? target_zh_hant : C::any({target_en, target_zh_hant});
 
     std::string translated_chapter_name;
     if (chapter_name == "cursedwheel_dhi") translated_chapter_name = "cursedwheel_dhi_zh_hant";
@@ -55,11 +61,8 @@ tasks::CompiledWorkflow compile_time_leap(const std::string &target_name,
     leap_zh_hant["roi"] = {250, 1250, 400, 250};
     const auto leap = C::any({leap_en, leap_zh_hant});
     const auto right = C::image("cursedWheelTapRight");
-    auto download_en = C::image("startdownload");
-    download_en["roi"] = {222, 901, 465, 84};
-    auto download_zh_hant = C::image("startdownload_zh_hant");
-    download_zh_hant["roi"] = {222, 901, 465, 84};
-    download_zh_hant["threshold"] = .86;
+    const auto download_en = vision::download_button_en();
+    const auto download_zh_hant = vision::download_button_zh_hant();
     const auto download = C::any({download_en, download_zh_hant});
     const auto chooser = C::any({title, chapter, leap});
     const auto outside = C::all({C::any({vision::royal_city(), vision::city_screen(), C::image("dungFlag"),
@@ -82,7 +85,8 @@ tasks::CompiledWorkflow compile_time_leap(const std::string &target_name,
     graph.delay_after("OpenFromRoyalCity", 1000);
     graph.postcondition_budget("OpenFromRoyalCity", 30000);
     graph.hit_limit("OpenFromRoyalCity", 3);
-    J quick_select = J::array({"QuickSelectEn"});
+    J quick_select = J::array();
+    if (!zh_only_target) quick_select.push_back("QuickSelectEn");
     if (!translated_target_name.empty()) quick_select.push_back("QuickSelectZhHant");
     quick_select.push_back("Reset0");
     graph.observe("AtTitle", title, quick_select);
@@ -101,8 +105,10 @@ tasks::CompiledWorkflow compile_time_leap(const std::string &target_name,
         graph.recovery("DownloadDenied", "boot.download_permission_missing");
     }
     // 原函数的可见目标快路径会直接跳跃，不重置页签也不调整因果。
-    graph.click("QuickSelectEn", C::all({title, target_en}), target_en, leap, {"QuickLeapRoute"});
-    graph.delay_after("QuickSelectEn", 2000);
+    if (!zh_only_target) {
+        graph.click("QuickSelectEn", C::all({title, target_en}), target_en, leap, {"QuickLeapRoute"});
+        graph.delay_after("QuickSelectEn", 2000);
+    }
     if (!translated_target_name.empty()) {
         graph.click("QuickSelectZhHant", C::all({title, target_zh_hant}), target_zh_hant,
                     leap, {"QuickLeapRoute"});
@@ -125,7 +131,8 @@ tasks::CompiledWorkflow compile_time_leap(const std::string &target_name,
     find_chapter.push_back("ReopenWheelEn");
     find_chapter.push_back("ReopenWheelZhHant");
     graph.route("FindChapter", find_chapter);
-    J after_chapter = J::array({"SelectTargetEn"});
+    J after_chapter = J::array();
+    if (!zh_only_target) after_chapter.push_back("SelectTargetEn");
     if (!translated_target_name.empty()) after_chapter.push_back("SelectTargetZhHant");
     after_chapter.push_back("Scroll0");
     graph.click("ChapterEn", C::all({chooser, chapter_en}), chapter_en, chooser, after_chapter);
@@ -143,13 +150,16 @@ tasks::CompiledWorkflow compile_time_leap(const std::string &target_name,
             i == 2 ? J{"FindTarget"} : J{"Scroll" + std::to_string(i + 1)});
         graph.delay_after(name, 2000);
     }
-    J find_target = J::array({"SelectTargetEn"});
+    J find_target = J::array();
+    if (!zh_only_target) find_target.push_back("SelectTargetEn");
     if (!translated_target_name.empty()) find_target.push_back("SelectTargetZhHant");
     find_target.push_back("FineScroll");
     graph.route("FindTarget", find_target);
-    graph.click("SelectTargetEn", C::all({title, target_en}), target_en, leap,
-                causality ? J{"Causality"} : J{"LeapRoute"});
-    graph.delay_after("SelectTargetEn", 1000);
+    if (!zh_only_target) {
+        graph.click("SelectTargetEn", C::all({title, target_en}), target_en, leap,
+                    causality ? J{"Causality"} : J{"LeapRoute"});
+        graph.delay_after("SelectTargetEn", 1000);
+    }
     if (!translated_target_name.empty()) {
         graph.click("SelectTargetZhHant", C::all({title, target_zh_hant}), target_zh_hant,
                     leap, causality ? J{"Causality"} : J{"LeapRoute"});
@@ -163,15 +173,17 @@ tasks::CompiledWorkflow compile_time_leap(const std::string &target_name,
         graph.call_child("Causality", child, {"LeapRoute"});
     }
     graph.route("LeapRoute", {"LeapEn", "LeapZhHant"});
-    J leap_next = J::array({"Done", "ReselectEn"});
+    J leap_next = J::array({"Done"});
+    if (!zh_only_target) leap_next.push_back("ReselectEn");
     if (!translated_target_name.empty()) leap_next.push_back("ReselectZhHant");
     leap_next.push_back(causality ? "Causality" : "LeapRoute");
     graph.click("LeapEn", leap_en, leap_en, after_leap, leap_next);
     graph.click("LeapZhHant", leap_zh_hant, leap_zh_hant, after_leap, leap_next);
     graph.delay_after("LeapEn", 2000);
     graph.delay_after("LeapZhHant", 2000);
-    graph.click("ReselectEn", C::all({title, target_en}), target_en, leap,
-                causality ? J{"Causality"} : J{"LeapRoute"});
+    if (!zh_only_target)
+        graph.click("ReselectEn", C::all({title, target_en}), target_en, leap,
+                    causality ? J{"Causality"} : J{"LeapRoute"});
     if (!translated_target_name.empty())
         graph.click("ReselectZhHant", C::all({title, target_zh_hant}), target_zh_hant,
                     leap, causality ? J{"Causality"} : J{"LeapRoute"});
@@ -181,8 +193,9 @@ tasks::CompiledWorkflow compile_time_leap(const std::string &target_name,
     for (const auto *name : {"Entry", "AtTitle", "OpenWheelEn", "OpenWheelZhHant",
         "RuinsEn", "RuinsZhHant", "DownloadEn", "DownloadZhHant", "FindChapter",
         "NextTab", "ReopenWheelEn", "ReopenWheelZhHant", "FindTarget", "FineScroll",
-        "LeapRoute", "LeapEn", "LeapZhHant", "ReselectEn"})
+        "LeapRoute", "LeapEn", "LeapZhHant"})
         graph.hit_limit(name, 32);
+    if (!zh_only_target) graph.hit_limit("ReselectEn", 32);
     if (!translated_target_name.empty()) graph.hit_limit("ReselectZhHant", 32);
     return graph.finish();
 }

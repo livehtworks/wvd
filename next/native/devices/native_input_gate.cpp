@@ -28,7 +28,10 @@ NativeInputGate::NativeInputGate(DeviceBackend &backend, contracts::InputPolicy 
 }
 
 contracts::FrameEnvelope NativeInputGate::capture() {
+    std::lock_guard dispatch(dispatch_mutex_);
     if (stopped()) throw std::runtime_error("CAPTURE_CANCELLED");
+    if (!policy_.observed_read_only_viewport && !policy_.permissions.empty())
+        backend_.prepare_input_channel(stop_source_.get_token());
     const auto raw = backend_.capture(stop_source_.get_token());
     if (stopped()) throw std::runtime_error("CAPTURE_CANCELLED");
     require(raw.device_id == policy_.device_id && raw.size.width > 0 && raw.size.height > 0 &&
@@ -115,6 +118,7 @@ InputReceipt NativeInputGate::submit(const contracts::Command &command,
                                       const contracts::Observation &scene,
                                       const contracts::Observation &target,
                                       const contracts::Box &area) {
+    std::lock_guard dispatch(dispatch_mutex_);
     if (stopped()) return {InputDisposition::Rejected, 0, {}, "STOP_REQUESTED"};
     contracts::FrameIdentity frame;
     std::uint64_t next_epoch{};
@@ -122,14 +126,15 @@ InputReceipt NativeInputGate::submit(const contracts::Command &command,
         std::lock_guard lock(mutex_);
         ++counts_.attempted;
         frame = last_frame_;
-        if (stopped() || !same(scene.basis, frame) || !same(target.basis, frame) ||
+        if (stopped() || !frame.frame_id || frame.action_epoch != epoch_ ||
+            !same(scene.basis, frame) || !same(target.basis, frame) ||
             scene.outcome != contracts::RecognitionOutcome::Hit ||
             target.outcome != contracts::RecognitionOutcome::Hit ||
             frame.foreground_application != policy_.application_id ||
             frame.display_rotation < 0 || area.width <= 0 || area.height <= 0 ||
             area.x < 0 || area.y < 0 ||
-            area.x + area.width > frame.recognition_size.width ||
-            area.y + area.height > frame.recognition_size.height ||
+            static_cast<std::int64_t>(area.x) + area.width > frame.recognition_size.width ||
+            static_cast<std::int64_t>(area.y) + area.height > frame.recognition_size.height ||
             !policy_.allowed_scenes.contains(policy_.game_id) ||
             !policy_.capabilities.contains(command.kind) ||
             !policy_.permissions.contains(command.kind)) {
@@ -154,9 +159,13 @@ InputReceipt NativeInputGate::submit(const contracts::Command &command,
         }
         ++counts_.accepted;
         next_epoch = ++epoch_;
+        // 消费的是一次性观察证据，不是由毫秒数决定的许可。
+        // 即使随后上下文检查拒绝，也要重新观察，不能重复使用同一帧发输入。
+        last_frame_ = {};
     }
+    bool backend_started = false;
     try {
-        if (stopped() || !backend_.context_matches(frame, policy_.application_id)) {
+        if (stopped() || !backend_.context_matches(frame, policy_.application_id, stop_source_.get_token())) {
             std::lock_guard lock(mutex_);
             ++counts_.rejected;
             return {InputDisposition::Rejected, next_epoch, {}, "INPUT_CONTEXT_CHANGED"};
@@ -166,14 +175,15 @@ InputReceipt NativeInputGate::submit(const contracts::Command &command,
             std::lock_guard lock(mutex_);
             ++counts_.backend_called;
         }
+        backend_started = true;
         const bool sent = backend_.execute(map_command(command, frame), stop_source_.get_token());
         if (!sent) return {InputDisposition::Rejected, next_epoch, {}, "INPUT_NOT_SENT"};
         return {InputDisposition::Submitted, next_epoch,
                 std::chrono::steady_clock::now(), {}};
     } catch (const std::exception &error) {
-        // The transport might have accepted bytes before reporting failure.
-        return {InputDisposition::Unresolved, next_epoch,
-                std::chrono::steady_clock::now(), error.what()};
+        // 设备上下文查询失败时尚未调用输入；只有进入输入通道后才可能送达未知。
+        return {backend_started ? InputDisposition::Unresolved : InputDisposition::Rejected,
+                next_epoch, std::chrono::steady_clock::now(), error.what()};
     }
 }
 
@@ -190,7 +200,8 @@ bool NativeInputGate::cleanup() {
 }
 bool NativeInputGate::current(const contracts::FrameIdentity &identity) const {
     std::lock_guard lock(mutex_);
-    return !stopped() && same(identity, last_frame_);
+    return !stopped() && identity.frame_id && identity.action_epoch == epoch_ &&
+        same(identity, last_frame_);
 }
 contracts::FrameIdentity NativeInputGate::current_identity() const {
     std::lock_guard lock(mutex_);

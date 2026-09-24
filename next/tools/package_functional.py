@@ -16,6 +16,33 @@ MODEL_HASHES = {
 }
 
 
+def check_authoring_assets():
+    source = ROOT / "resources/authoring/semantic-assets.json"
+    packed = ROOT / "packs/wvd/parameters/semantic-assets.json"
+    if source.read_bytes() != packed.read_bytes():
+        raise RuntimeError("繁中语义目录与运行资源包不一致，请先同步 semantic-assets.json")
+    if (ROOT / "resources/authoring/public-flows.json").read_bytes() != \
+            (ROOT / "packs/wvd/parameters/public-flows.json").read_bytes():
+        raise RuntimeError("作者流程与运行资源包不一致，请先同步 public-flows.json")
+    catalogue = json.loads(source.read_text(encoding="utf-8"))
+    referenced = set()
+
+    def collect(value):
+        if isinstance(value, dict):
+            if value.get("mode") == "template" and isinstance(value.get("image"), str):
+                referenced.add(value["image"])
+            for child in value.values():
+                collect(child)
+        elif isinstance(value, list):
+            for child in value:
+                collect(child)
+
+    collect(catalogue["resources"])
+    missing = {path.stem for path in (ROOT / "resources/images").glob("*_zh_hant.png")} - referenced
+    if missing:
+        raise RuntimeError("繁中素材尚未接入语义目录: " + ", ".join(sorted(missing)))
+
+
 def sha256(path):
     with path.open("rb") as source:
         return hashlib.file_digest(source, "sha256").hexdigest()
@@ -33,6 +60,7 @@ def checked_copy(source, target, expected=None):
 
 
 def stage(target):
+    check_authoring_assets()
     binary = ROOT / "build/Release"
     native = ROOT / ".local/native-deps"
     model = ROOT / "resources/ocr/en_us"

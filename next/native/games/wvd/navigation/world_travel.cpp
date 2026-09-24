@@ -1,5 +1,7 @@
 #include "world_travel.hpp"
 #include "games/wvd/vision/location_probes.hpp"
+#include "games/wvd/vision/download_probes.hpp"
+#include "games/wvd/vision/dialogue_probes.hpp"
 #include <array>
 
 namespace wvd::games::navigation {
@@ -18,7 +20,7 @@ tasks::CompiledWorkflow travel_city_to_city(const WorldDestination &destination)
     const auto arrived = C::all({city_arrival(destination), C::absent(world)});
     graph.route("Entry", {"OnWorld", "Open"});
     graph.observe("OnWorld", world, {"Travel"});
-    graph.click("Open", C::all({vision::inn_button(), open, C::absent(world)}), open, world, {"Travel"});
+    graph.click("Open", C::all({open, C::absent(world)}), open, world, {"Travel"});
     const auto travel = graph.define_child("World", travel_world(destination, WorldArrival::City));
     graph.call_child("Travel", travel, {"Arrived"});
     graph.observe("Arrived", arrived, {"Terminal"});
@@ -27,23 +29,37 @@ tasks::CompiledWorkflow travel_city_to_city(const WorldDestination &destination)
 tasks::CompiledWorkflow travel_world(const WorldDestination &destination, WorldArrival arrival) {
     using C = tasks::PipelineCompiler;
     using J = nlohmann::json;
-    C graph("navigation.world_travel");
+    C graph("navigation.world_travel", std::chrono::seconds{300});
     const auto world = C::image("worldmapflag"), target = C::image(destination.target);
     const auto inn = vision::inn_button(), open = C::image("openworldmap"), into = C::image("intoWorldMap");
+    const auto download_en = vision::download_button_en();
+    const auto download_zh_hant = vision::download_button_zh_hant();
+    const auto download = C::any({download_en, download_zh_hant});
+    const auto story = vision::ordinary_story_page();
+    const auto advance = vision::story_advance_arrow();
     const auto expected = arrival == WorldArrival::City ? city_arrival(destination) : C::any({open, C::image("dungFlag")});
     const auto arrived = C::all({expected, C::absent(world)});
     const auto searching = C::all({world, C::absent(expected)});
     const auto located = C::all({searching, target});
     const auto missing = C::all({searching, C::absent(target)});
-    graph.route("Entry", {"Arrived", "OpenWorld", "Locate"});
+    graph.route("Entry", {"DownloadEn", "DownloadZhHant", "Arrived", "Story", "OpenWorld", "Locate", "Poll"});
+    graph.hit_limit("Entry", 256);
+    graph.click("DownloadEn", download_en, download_en, C::absent(download), {"Entry"});
+    graph.click("DownloadZhHant", download_zh_hant, download_zh_hant, C::absent(download), {"Entry"});
+    graph.wait("Poll", 1000, {"Entry"});
+    graph.hit_limit("Poll", 256);
     graph.observe("Arrived", arrived, {"Terminal"});
+    graph.click("Story", story, advance, C::any({story, arrived, download}), {"Entry"});
+    graph.delay_after("Story", 700);
+    graph.hit_limit("Story", 50);
     if (arrival == WorldArrival::City)
-        graph.click("OpenWorld", C::all({open, C::absent(inn), C::absent(world)}), open,
+        graph.click("OpenWorld", C::all({into, C::absent(world)}), into,
                     C::any({world, arrived}), {"Arrived", "Locate"});
     else
         graph.click("OpenWorld", C::all({inn, into, C::absent(world)}), into,
                     C::any({world, arrived}), {"Arrived", "Locate"});
-    graph.route("Locate", {"Arrived", "Click0", "Relocate"});
+    graph.route("Locate", {"DownloadEn", "DownloadZhHant", "Arrived", "Click0", "Relocate"});
+    graph.hit_limit("Locate", 128);
     if (destination.swipe) {
         const auto &s = *destination.swipe;
         graph.swipe("Relocate", missing, C::any({world, arrived}),
@@ -56,8 +72,9 @@ tasks::CompiledWorkflow travel_world(const WorldDestination &destination, WorldA
         {{0, 0}, {0, -55}, {-35, -35}, {35, -35}, {0, 35}}};
     for (std::size_t i = 0; i < offsets.size(); ++i) {
         const auto next = "Click" + std::to_string((i + 1) % offsets.size());
-        graph.click("Click" + std::to_string(i), located, target, C::any({world, arrived}),
-                    {"Arrived", next, "Relocate"}, offsets[i]);
+        graph.click("Click" + std::to_string(i), located, target,
+                    C::any({arrived, download, C::absent(world)}),
+                    {"DownloadEn", "DownloadZhHant", "Arrived", next, "Relocate"}, offsets[i]);
         graph.delay_after("Click" + std::to_string(i), 1500);
         graph.postcondition_budget("Click" + std::to_string(i), 22000);
     }

@@ -50,7 +50,9 @@ target_link_libraries(wvd_native_recognition PUBLIC wvd_native_platform
 target_compile_options(wvd_native_recognition PRIVATE /utf-8 /W4 /EHsc)
 
 add_library(wvd_native_workflow STATIC workflow/program.cpp workflow/serialization.cpp)
-target_link_libraries(wvd_native_workflow PUBLIC wvd_native_recognition)
+# 流程表示/序列化只依赖轻量契约，不通过此目标把 ORT/OpenCV 泄漏给全部编译消费者。
+target_include_directories(wvd_native_workflow PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}"
+  "${PROJECT_BINARY_DIR}/generated")
 target_compile_options(wvd_native_workflow PRIVATE /utf-8 /W4 /EHsc)
 
 add_library(wvd_native_devices STATIC devices/adb_command.cpp devices/mumu_capture.cpp
@@ -82,7 +84,7 @@ target_sources(wvd_native_games PRIVATE
   games/wvd/navigation/return_city.cpp games/wvd/navigation/harken_exit.cpp
   games/wvd/quests/bounty_cycle.cpp games/wvd/tasks/bounty_cycle.cpp
   games/wvd/tasks/fishing.cpp games/wvd/tasks/fishing_supply.cpp
-  games/wvd/fishing/progress.cpp games/wvd/tasks/pipeline_compiler.cpp
+  games/wvd/fishing/progress.cpp games/wvd/tasks/pipeline_compiler.cpp games/wvd/tasks/locale_assets.cpp
   games/wvd/tasks/author_workflow.cpp storage/workflow_repository.cpp
   games/wvd/navigation/world_map.cpp games/wvd/supply/inn.cpp
   games/wvd/tasks/dungeon_route.cpp games/wvd/tasks/departure.cpp
@@ -99,11 +101,12 @@ target_sources(wvd_native_games PRIVATE
   games/wvd/tasks/dark_light.cpp games/wvd/recovery/karma_prompt.cpp
   storage/karma_writer.cpp games/wvd/combat/strategy.cpp
   storage/legacy_import.cpp storage/profile_store.cpp)
-target_link_libraries(wvd_native_games PUBLIC wvd_native_workflow wvd_native_platform)
+target_link_libraries(wvd_native_games PUBLIC wvd_native_workflow wvd_native_platform wvd_native_recognition)
 target_include_directories(wvd_native_games SYSTEM PRIVATE "${BOOST_ROOT}")
 target_compile_options(wvd_native_games PRIVATE /utf-8 /W4 /EHsc)
 
 add_library(wvd_native_runtime STATIC runtime/flow_executor.cpp
+  runtime/flow_executor_events.cpp
   runtime/native_flow_ports.cpp runtime/native_execution_session.cpp
   runtime/native_run_coordinator.cpp storage/run_store.cpp)
 target_link_libraries(wvd_native_runtime PUBLIC wvd_native_workflow

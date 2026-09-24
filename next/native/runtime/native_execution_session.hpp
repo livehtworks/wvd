@@ -3,6 +3,7 @@
 #include "native_flow_ports.hpp"
 #include <condition_variable>
 #include <mutex>
+#include <memory>
 
 namespace wvd::runtime {
 struct NativeExecutionResult {
@@ -20,7 +21,7 @@ class NativeExecutionSession final {
     using OperationFactory = std::function<NativeFlowPorts::OperationHandler(NativeFlowPorts &)>;
     using ProgressSink = std::function<void(const std::string &, const std::string &)>;
     NativeExecutionSession(const workflow::FlowProgram &program,
-        devices::DeviceBackend &backend, recognition::Service &recognizer,
+        devices::DeviceBackend &backend, std::shared_ptr<recognition::Service> recognizer,
         contracts::BusinessRunState &business, contracts::InputPolicy policy,
         std::uint64_t generation, std::chrono::milliseconds total_budget,
         OperationFactory operations, ProgressSink progress = {});
@@ -29,6 +30,8 @@ class NativeExecutionSession final {
 
   private:
     std::stop_source stop_source_;
+    // 成员顺序保证 ports_ 和 executor_ 先析构，识别服务最后释放。
+    std::shared_ptr<recognition::Service> recognizer_owner_;
     NativeFlowPorts ports_;
     FlowExecutor executor_;
     ProgressSink progress_;

@@ -4,7 +4,7 @@
 `source_refs` 是静态引用索引，动态路径只覆盖清单列出的有界候选；无引用不等于运行时一定不用。
 每次改动入口或资源清单后重新核对，不把旧结果当作永久删除授权。
 
-本次索引图片 504 张：已替换旧模板 4 张；有静态/动态/别名引用 284 张；待确认 216 张。
+本次索引图片 508 张：已替换旧模板 4 张；有静态/动态/别名引用 293 张；待确认 211 张。
 
 ## 已由新版入口替换
 
@@ -20,6 +20,7 @@
 ## 待确认：无静态引用（210）
 
 这些文件不能仅凭清单标成废弃；迁移或清理前需核查旧工程动态拼接、配置/mod 引用和实际运行入口。
+例如 `image/Economy.png` 仍由内置英文旅店流程使用，索引中的空引用并不等于源码未使用。
 
 - `image/7000G/icantagreewithU.png`
 - `image/7000G/illgo.png`
@@ -232,15 +233,10 @@
 - `image/whowillyougiveitto.png`
 - `image/wraped.png`
 
-## 待确认：显式未分类（6）
+## 待确认：显式未分类（1）
 
 这些文件不能仅凭清单标成废弃；迁移或清理前需核查旧工程动态拼接、配置/mod 引用和实际运行入口。
 
-- `image/FortressArrival_zh_hant.png`
-- `image/RescueKing_zh_hant.png`
-- `image/ReturnRoyalCity_zh_hant.png`
-- `image/TradeWaterway_zh_hant.png`
-- `image/beginningAbyss_zh_hant.png`
 - `image/boot_attention_zh.png`
 
 ## 使用边界

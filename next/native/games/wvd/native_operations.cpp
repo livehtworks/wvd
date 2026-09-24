@@ -74,7 +74,8 @@ Result NativeOperations::execute(const std::string &binding, const J &parameters
     if (binding != "WvdConfirm" && binding != "WvdCombat" &&
         binding != "WvdChest" && binding != "WvdUnknownLeap")
         throw std::runtime_error("WVD_OPERATION_UNREGISTERED:" + binding);
-    const auto frame = selected_frame.value_or(context_.capture());
+    // value_or 的参数会提前求值；有已选帧时绝不能额外截图推进 frame_id。
+    const auto frame = selected_frame ? *selected_frame : context_.capture();
     (void)selected_observation;
     if (binding == "WvdUnknownLeap") {
         J unknown_parameters{{"mode", "unknown_exhausted"}, {"max_tries", 4}};

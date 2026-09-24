@@ -20,6 +20,7 @@
 #include "games/wvd/tasks/golden_chest.hpp"
 #include "games/wvd/tasks/handoff_provenance.hpp"
 #include "games/wvd/tasks/manual_separation.hpp"
+#include "games/wvd/tasks/locale_assets.hpp"
 #include "games/wvd/tasks/mining.hpp"
 #include "games/wvd/tasks/repel_forces.hpp"
 #include "games/wvd/tasks/sandman.hpp"
@@ -843,6 +844,8 @@ Application::J Application::start_task(const J &request) {
     auto frozen = request;
     frozen["request_id"] = checked_request_id(request);
     const auto stored = profile_store_->load();
+    const auto locale = frozen.value("resource_locale", std::string{"en"});
+    require(locale == "en" || locale == "zh-Hant", "TASK_RESOURCE_LOCALE_UNSUPPORTED");
     if (request.contains("profile_revision"))
         require(request.at("profile_revision") == stored.at("revision"), "PROFILE_REVISION_MISMATCH");
     return queue_run("start_task", frozen,
@@ -1005,17 +1008,20 @@ Application::J Application::select_emulator_path() const {
 Application::J Application::disconnect_device() {
     start_device_job("disconnect", [this] {
         std::shared_ptr<devices::DeviceConnection> old;
-        std::unique_ptr<platform::DeviceLease> lease;
         {
             std::lock_guard lock(mutex_);
-            old = std::move(backend_);
-            lease = std::move(preview_lease_);
+            old = backend_;
+        }
+        if (old) old->disconnect(); // 失败时 backend_/租约仍由产品持有。
+        {
+            std::lock_guard lock(mutex_);
+            require(backend_ == old, "DEVICE_OWNER_CHANGED");
+            backend_.reset();
+            preview_lease_.reset();
             frame_png_.clear();
             frame_info_ = nullptr;
             frame_captured_at_.reset();
         }
-        if (old)
-            old->disconnect();
     });
     return device_status();
 }
@@ -1202,6 +1208,8 @@ runtime::NativeRunDefinition Application::assemble_task(const J &request, const 
     }();
     workflow = games::recovery::with_boot_recovery(workflow, true);
     require(workflow.nodes.contains("Boot_Entry"), "PRODUCTION_BOOT_ENTRY_MISSING");
+    games::tasks::localize_task_assets(workflow, semantic_catalogue_,
+        request.value("resource_locale", std::string{"en"}));
     const auto request_id = checked_request_id(request);
     const auto destination = paths_.data_root / "published" / request_id;
     auto publication = games::tasks::publish_native(workflow, author_bundle_,
@@ -1517,6 +1525,7 @@ runtime::NativeRunDefinition Application::assemble_workflow(
             throw std::runtime_error("AUTHOR_TASK_STAGE_UNSUPPORTED");
         }, supplied, locale);
     auto executable = games::recovery::with_boot_recovery(compiled.workflow, true);
+    games::tasks::localize_task_assets(executable, semantic_catalogue_, locale);
     require(executable.nodes.contains("Boot_Entry"), "PRODUCTION_BOOT_ENTRY_MISSING");
     const auto request_id = checked_request_id(request);
     const auto destination = paths_.data_root / "published" / request_id;

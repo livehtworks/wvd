@@ -23,4 +23,19 @@ inline nlohmann::json default_dialogue_normal_probes() {
         probes.push_back({{"mode", "template"}, {"image", name}});
     return probes;
 }
+inline nlohmann::json story_auto_control() {
+    return {{"mode", "template"}, {"image", "story_auto_control"}, {"threshold", .9},
+            {"roi", {20, 1430, 200, 120}}};
+}
+inline nlohmann::json story_advance_arrow() {
+    return {{"mode", "template"}, {"image", "chest_reward_advance"}, {"threshold", .9},
+            {"roi", {750, 1400, 150, 150}}};
+}
+// 普通剧情只点继续箭头；已知选项页由独立对话策略处理，不能在导航中代选。
+inline nlohmann::json ordinary_story_page() {
+    const nlohmann::json no_choice = {
+        {"mode", "not"}, {"conditions", nlohmann::json::array({{{"mode", "default_dialogue"}}})}};
+    return {{"mode", "all"},
+            {"conditions", nlohmann::json::array({story_auto_control(), story_advance_arrow(), no_choice})}};
+}
 }

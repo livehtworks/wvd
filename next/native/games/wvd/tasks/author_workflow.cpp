@@ -787,20 +787,34 @@ AuthorWorkflowCompilation compile_author_workflow(const J &source,
                 const auto effective = authoring::effective_event_policy(inherited_events, document, *node);
                 J active = J::array();
                 J disabled = J::array();
+                const auto declared = document.at("execution").value("events", J::object());
+                const auto overrides = node->value("event_overrides", J::object());
+                const auto resumes = node->value("resume", J::object());
                 for (const auto &[event_id, rule] : effective.items()) {
+                    // task_stage 内的 Dispatch 已负责遇怪/开箱；作者层不能再接管同一次遭遇。
+                    if (type == "business" && parameters.value("binding", "") == "task_stage" &&
+                        rule.value("class", "") == "encounter") {
+                        disabled.push_back(event_id);
+                        continue;
+                    }
                     if (!rule.value("enabled", false)) {
                         disabled.push_back(event_id);
                         continue;
                     }
                     if (allowed_events && !allowed_events->contains(event_id)) {
-                        const auto declared = document.at("execution").value("events", J::object());
-                        const auto overrides = node->value("event_overrides", J::object());
                         if ((declared.contains(event_id) && declared.at(event_id).value("enabled", false)) ||
                             (overrides.contains(event_id) && overrides.at(event_id).value("enabled", false)))
                             fail("EVENT_NESTED_NOT_ALLOWED", id + ":" + event_id);
                         disabled.push_back(event_id);
                         continue;
                     }
+                    // 未改写的祖先规则由调用帧持有；复制到子定义会把 replan 目标误归给子帧。
+                    if (!declared.contains(event_id) && !overrides.contains(event_id) &&
+                        !resumes.contains(event_id)) continue;
+                    if (!declared.contains(event_id) && overrides.contains(event_id) &&
+                        rule.value("resume", J::object()).value("mode", "") == "replan" &&
+                        !resumes.contains(event_id))
+                        fail("EVENT_REPLAN_OWNER_OVERRIDE_REQUIRED", id + ":" + event_id);
                     if (unresolved(unresolved, rule.at("detect")))
                         fail("EVENT_SEMANTIC_UNRESOLVED", event_id);
                     const auto resume = rule.value("resume", J{{"mode", "reobserve"}});

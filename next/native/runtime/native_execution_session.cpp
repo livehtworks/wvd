@@ -3,12 +3,19 @@
 #include <stdexcept>
 
 namespace wvd::runtime {
+namespace {
+recognition::Service &required_service(const std::shared_ptr<recognition::Service> &owner) {
+    if (!owner) throw std::runtime_error("NATIVE_RECOGNIZER_OWNER_MISSING");
+    return *owner;
+}
+} // namespace
 NativeExecutionSession::NativeExecutionSession(const workflow::FlowProgram &program,
-    devices::DeviceBackend &backend, recognition::Service &recognizer,
+    devices::DeviceBackend &backend, std::shared_ptr<recognition::Service> recognizer,
     contracts::BusinessRunState &business, contracts::InputPolicy policy,
     std::uint64_t generation, std::chrono::milliseconds total_budget,
     OperationFactory operations, ProgressSink progress)
-    : ports_(backend, recognizer, business, std::move(policy), generation,
+    : recognizer_owner_(std::move(recognizer)),
+      ports_(backend, required_service(recognizer_owner_), business, std::move(policy), generation,
              stop_source_.get_token()),
       executor_(program, ports_, total_budget), progress_(std::move(progress)) {
     if (!operations) throw std::runtime_error("NATIVE_OPERATION_FACTORY_MISSING");

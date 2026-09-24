@@ -507,8 +507,8 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
         check(stage == "open" || stage == "confirm", "WVD_DARK_LIGHT_STAGE_INVALID");
         auto image_probe = [](const char *name) { return J{{"mode", "template"}, {"image", name}}; };
         J conditions = J::array({image_probe(stage == "open" ? "darklight" : "darklight_lightIt")});
-        J excluded = J::array({J{{"mode", "combat_active"}}, image_probe("chestFlag"),
-            image_probe("whowillopenit"), image_probe("chestOpening"), image_probe("RiseAgain")});
+        J excluded = J::array({J{{"mode", "combat_active"}}, image_probe("RiseAgain")});
+        for (const auto &probe : chest_stage_probes()) excluded.push_back(probe);
         if (stage == "open") {
             conditions.push_back(image_probe("dungFlag"));
             for (auto name : {"mapFlag", "trait", "recover"}) excluded.push_back(image_probe(name));
@@ -619,8 +619,9 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
                 return decision(false, {}, {{"reason", "single_death_prompt_first"}});
         }
         J guards = J::array();
-        for (const auto *name : {"dungFlag", "chestFlag", "whowillopenit", "mapFlag", "worldmapflag", "Inn"})
+        for (const auto *name : {"dungFlag", "mapFlag", "worldmapflag", "Inn"})
             guards.push_back({{"mode", "template"}, {"image", name}, {"threshold", .8}});
+        for (const auto &probe : chest_stage_probes()) guards.push_back(probe);
         guards.push_back({{"mode", "combat_active"}});
         guards.push_back({{"mode", "pause_negative"}});
         for (const auto &probe : blocking_probes(false))
@@ -940,7 +941,8 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
             else if (name == "flee")
                 parameters["roi"] = {720, 1120, 180, 130};
             else if (name == "combatActive" || name == "combatActive_2" ||
-                     name == "combatActive_3" || name == "combatActive_4")
+                     name == "combatActive_3" || name == "combatActive_4" ||
+                     name == "combat_active_zh_hant")
                 parameters["roi"] = {0, 0, 150, 80};
             if (parameters.contains("roi"))
                 parameters["roi_source"] = "default";
@@ -1039,7 +1041,7 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
     if (mode == "combat_active") {
         J attempts = J::array();
         for (const auto &name :
-             {"combatActive", "combatActive_2", "combatActive_3", "combatActive_4"}) {
+              {"combat_active_zh_hant", "combatActive", "combatActive_2", "combatActive_3", "combatActive_4"}) {
             auto result = one(name, {{"roi", {0, 0, 150, 80}}});
             attempts.push_back(result);
             if (result["outcome"] == "Hit") {

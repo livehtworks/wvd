@@ -33,6 +33,17 @@ DeviceSession::DeviceSession(nlohmann::json binding, std::filesystem::path captu
             std::filesystem::is_regular_file(server_path_), "DEVICE_RUNTIME_FILES_MISSING");
 }
 
+DeviceSession::~DeviceSession() noexcept {
+    try { disconnect(); }
+    catch (...) { OutputDebugStringW(L"WVD DeviceSession destroyed with cleanup unconfirmed\n"); }
+}
+void DeviceSession::prepare_input_channel(std::stop_token stop) {
+    require(!stop.stop_requested(), "INPUT_PREPARATION_CANCELLED");
+    require(connected_ && control_, "DEVICE_INPUT_NOT_READY");
+    require(!control_->unresolved(), "DEVICE_INPUT_RESULT_UNCONFIRMED");
+    if (!control_->connected()) control_->connect(15000ms, stop);
+    require(!stop.stop_requested(), "INPUT_PREPARATION_CANCELLED");
+}
 void DeviceSession::record(nlohmann::json item) {
     std::lock_guard lock(mutex_);
     if (diagnostics_.size() >= 256) diagnostics_.erase(diagnostics_.begin());
@@ -40,8 +51,8 @@ void DeviceSession::record(nlohmann::json item) {
 }
 nlohmann::json DeviceSession::diagnostics() const {
     std::lock_guard lock(mutex_);
-    return { {"connections", diagnostics_}, {"fast_capture_disabled", fast_failed_},
-             {"connection_generation", generation_} };
+    return { {"connections", diagnostics_}, {"fast_capture_disabled", fast_failed_.load()},
+             {"connection_generation", generation_.load()} };
 }
 void DeviceSession::set_vpn_required(bool value) {
     std::lock_guard lock(mutex_);
@@ -65,6 +76,8 @@ LifecycleTarget DeviceSession::lifecycle_target() const {
 }
 
 bool DeviceSession::connect() {
+    require(!capture_host_ || !capture_host_->cleanup_pending(), "DEVICE_CLEANUP_PENDING");
+    require(!control_ || !control_->unresolved(), "DEVICE_INPUT_RESULT_UNCONFIRMED");
     if (connected_ && adb_.connected()) return true;
     if (!adb_.connect()) return false;
     connected_ = true;
@@ -83,13 +96,13 @@ bool DeviceSession::connect() {
     }
     control_ = std::make_unique<ScrcpyControlClient>(adb_, server_path_);
     record({{"event", "connect"}, {"serial", adb_.serial()},
-            {"generation", generation_}, {"fast_capture_available", !fast_failed_}});
+            {"generation", generation_.load()}, {"fast_capture_available", !fast_failed_}});
     return true;
 }
 
 void DeviceSession::disconnect() {
-    if (control_) control_->close();
-    if (capture_host_) capture_host_->close();
+    // 清理失败时保留对象；Application 也必须保留 backend 和租约，不能先 move 掉。
+    require(release_owned_inputs(), "DEVICE_CLEANUP_PENDING");
     control_.reset(); capture_host_.reset();
     if (connected_) ++generation_;
     connected_ = false;
@@ -97,17 +110,21 @@ void DeviceSession::disconnect() {
 }
 
 bool DeviceSession::release_owned_inputs() {
-    if (!control_) return true;
-    control_->close();
-    return !control_->unresolved();
+    const bool control_released = !control_ || control_->close();
+    const bool capture_released = !capture_host_ || capture_host_->close();
+    record({{"event", "device.cleanup"}, {"control_released", control_released},
+            {"capture_released", capture_released},
+            {"control_status", control_ ? control_->cleanup_status() : "absent"},
+            {"capture_pending", capture_host_ && capture_host_->cleanup_pending()}});
+    return control_released && capture_released;
 }
 
 android::ShellReply DeviceSession::query(const std::string &command, int timeout,
                                           std::stop_token stop) {
     return adb_.shell_fixed(command, std::chrono::milliseconds{timeout}, stop);
 }
-std::string DeviceSession::foreground() {
-    const auto answer = query("dumpsys window");
+std::string DeviceSession::foreground(std::stop_token stop) {
+    const auto answer = query("dumpsys window", 5000, stop);
     require(answer.exit_code == 0, "FOREGROUND_QUERY_FAILED");
     return android::focus(answer.output);
 }
@@ -126,8 +143,11 @@ RawFrame DeviceSession::capture_impl(bool preview, std::stop_token stop) {
             cv::cvtColor(rgba, bgr, cv::COLOR_RGBA2BGR);
             cv::flip(bgr, bgr, 0);
             backend = "MUMU_IPC";
+        } catch (const MumuCaptureNotReady &error) {
+            // 游戏显示尚未创建时本次用 ADB 取帧；保持 IPC helper 等待下一帧。
+            record({{"event", "capture.not_ready"}, {"reason", error.what()}});
         } catch (const std::exception &error) {
-            if (stop.stop_requested()) throw;
+            if (stop.stop_requested() || capture_host_->cleanup_pending()) throw;
             fast_failed_ = true;
             record({{"event", "capture.fallback"}, {"reason", error.what()}});
         }
@@ -144,10 +164,10 @@ RawFrame DeviceSession::capture_impl(bool preview, std::stop_token stop) {
     const contracts::Size size{bgr.cols, bgr.rows};
     if (metadata_at_ == std::chrono::steady_clock::time_point{} ||
         finished - metadata_at_ > 1000ms || latest_size_ != size) {
-        latest_foreground_ = foreground();
+        latest_foreground_ = foreground(stop);
         latest_rotation_ = -1;
         try {
-            const auto input = query("dumpsys input");
+            const auto input = query("dumpsys input", 5000, stop);
             const auto viewport = input.exit_code == 0
                 ? android::input_viewport(input.output) : std::nullopt;
             if (viewport && viewport->size == size) latest_rotation_ = viewport->rotation;
@@ -180,19 +200,24 @@ RawFrame DeviceSession::capture_preview() { return capture_impl(true); }
 
 bool DeviceSession::context_matches(const contracts::FrameIdentity &identity,
                                      const std::string &application) {
-    if (!connected_ || !identity.frame_id || identity.connection_generation != generation_ ||
+    return context_matches(identity, application, {});
+}
+bool DeviceSession::context_matches(const contracts::FrameIdentity &identity,
+                                     const std::string &application, std::stop_token stop) {
+    if (stop.stop_requested() || !connected_ || !identity.frame_id || identity.connection_generation != generation_ ||
         identity.device_id != adb_.serial() || identity.display_rotation < 0 ||
         identity.foreground_application != application || application.empty() ||
-        !adb_.connected() || foreground() != application)
+        !adb_.connected(stop) || foreground(stop) != application)
         return false;
-    const auto input = query("dumpsys input");
+    const auto input = query("dumpsys input", 5000, stop);
     const auto viewport = input.exit_code == 0
         ? android::input_viewport(input.output) : std::nullopt;
     return viewport && viewport->size == identity.raw_size &&
         viewport->rotation == identity.display_rotation &&
         identity.viewport_id == std::to_string(viewport->size.width) + "x" +
                                 std::to_string(viewport->size.height) &&
-        foreground() == application && generation_ == identity.connection_generation;
+        !stop.stop_requested() && foreground(stop) == application &&
+        generation_ == identity.connection_generation;
 }
 
 bool DeviceSession::execute(const contracts::Command &command) {
@@ -203,7 +228,8 @@ bool DeviceSession::execute(const contracts::Command &command, std::stop_token s
     require(connected_ && latest_size_.width > 0 && latest_size_.height > 0,
             "DEVICE_INPUT_NOT_READY");
     require(control_ != nullptr, "SCRCPY_CONTROL_MISSING");
-    if (!control_->connected()) control_->connect(15000ms, stop);
+    // 取帧前已经准备控制通道；此处不可在握手后提交旧观察的坐标。
+    require(control_->connected(), "INPUT_CHANNEL_CHANGED_REOBSERVE_REQUIRED");
     if (stop.stop_requested()) return false;
     control_->submit(command, latest_size_.width, latest_size_.height, stop);
     return true; // TransportSubmitted, never a game-level confirmation.
@@ -277,7 +303,14 @@ std::optional<LifecycleObservation> DeviceSession::observe_lifecycle() {
 bool DeviceSession::vpn_ui_step(const std::string &package, bool &start_clicked,
                                  const std::function<bool()> &cancelled) {
     if (cancelled() || vpn_connected()) return false;
+    // 先准备控制通道，再采当前授权界面，不能拿握手前的坐标迟到点击。
+    if (!control_) throw std::runtime_error("SCRCPY_CONTROL_MISSING");
+    if (!control_->connected()) control_->connect(15000ms, {}, cancelled);
+    if (cancelled()) return false;
+    const auto live_frame = capture();
+    if (cancelled()) return false;
     const auto focus = foreground();
+    if (live_frame.foreground_application != focus) return false;
     const bool permission = focus == "com.android.vpndialogs";
     if (!permission && (focus != package || start_clicked)) return false;
     const auto xml = query("uiautomator dump /sdcard/wvd-vpn.xml >/dev/null && "
@@ -297,9 +330,10 @@ bool DeviceSession::vpn_ui_step(const std::string &package, bool &start_clicked,
         require(target.has_value(), "VPN_UI_FALLBACK_UNCONFIRMED");
     }
     if (!target || cancelled() || vpn_connected() || foreground() != focus) return false;
-    if (!control_->connected()) control_->connect(15000ms);
+    if (cancelled()) return false;
     control_->submit(contracts::Command{.kind = contracts::ActionKind::Click,
-        .x = target->x, .y = target->y}, latest_size_.width, latest_size_.height);
+        .x = target->x, .y = target->y}, live_frame.size.width, live_frame.size.height,
+        {}, cancelled);
     if (!permission) start_clicked = true;
     return true;
 }

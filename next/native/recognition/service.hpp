@@ -15,7 +15,7 @@ class Service final {
                                     const contracts::FrameIdentity &current,
                                     const Request &request,
                                     const contracts::BusinessRunState *business = nullptr);
-    void cancel();
+    void cancel() noexcept;
     const Bundle &bundle() const { return bundle_; }
 
   private:
@@ -31,6 +31,8 @@ class Service final {
     std::string frame_pixels_key_;
     std::mutex mutex_;
     std::atomic<std::shared_ptr<OcrEngine>> ocr_;
+    // 粘性取消覆盖首次模型初始化：取消不能因引擎尚未发布而丢失。
+    std::atomic<bool> cancelled_{false};
     std::uint64_t invocation_{};
 };
 } // namespace wvd::recognition

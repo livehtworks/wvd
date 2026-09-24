@@ -32,7 +32,9 @@ J event(const EventRule &value) {
             {"handler", value.handler_definition},
             {"resume", value.resume == ResumeMode::Replan ? "replan" : "reobserve"},
             {"replan_step", value.replan_step}, {"reason", value.reason},
-            {"exit_budget_ms", value.exit_budget.count()}};
+            {"exit_budget_ms", value.exit_budget.count()},
+            {"ambiguity_budget_ms", value.ambiguity_budget.count()},
+            {"resume_guard", value.resume_guard ? request(*value.resume_guard) : J(nullptr)}};
 }
 J data(const StepData &value) {
     if (const auto *observe = std::get_if<Observe>(&value))
@@ -62,7 +64,8 @@ J data(const StepData &value) {
         return {{"kind", "return"}, {"outcome", ret->outcome}};
     if (const auto *confirm = std::get_if<BusinessConfirm>(&value))
         return {{"kind", "business_confirm"}, {"operation", confirm->operation},
-                {"condition", request(confirm->condition)}, {"parameters", confirm->parameters}};
+                {"condition", request(confirm->condition)}, {"parameters", confirm->parameters},
+                {"binding", confirm->binding}};
     if (const auto *operation = std::get_if<RegisteredOperation>(&value))
         return {{"kind", "registered_operation"}, {"binding", operation->binding},
                 {"parameters", operation->parameters}};
@@ -84,6 +87,7 @@ nlohmann::json serialize(const FlowProgram &program) {
                     {"on_error", step.on_error}, {"time_limit_ms", step.time_limit.count()},
                     {"delay_after_ms", step.delay_after.count()}, {"max_hit", step.max_hit}};
             if (step.guard) entry["guard"] = request(*step.guard);
+            entry["disabled_events"] = step.disabled_events;
             entry["events"] = J::array();
             for (const auto &rule : step.event_policy)
                 entry["events"].push_back(event(rule));

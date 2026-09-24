@@ -64,6 +64,7 @@ contracts::Observation Service::evaluate(const contracts::FrameEnvelope &frame,
     result.parameter_revision = request.parameter_revision;
     result.error_stage = "frame_preflight";
     try {
+        require(!cancelled_.load(), "RECOGNITION_CANCELLED");
         require(!request.recognizer_id.empty() && !request.parameter_revision.empty(),
                 "RECO_IDENTITY_INVALID");
         validate_frame_identity(frame, current, bundle_.revision);
@@ -89,6 +90,7 @@ contracts::Observation Service::evaluate(const contracts::FrameEnvelope &frame,
 contracts::Observation Service::evaluate_locked(const FramePixels &pixels, const Request &request,
                                                  const contracts::BusinessRunState *business,
                                                  const contracts::FrameIdentity &basis) {
+    require(!cancelled_.load(), "RECOGNITION_CANCELLED");
     contracts::Observation result;
     result.basis = basis;
     result.recognizer_id = request.recognizer_id;
@@ -189,6 +191,7 @@ contracts::Observation Service::evaluate_locked(const FramePixels &pixels, const
 contracts::Observation Service::recognize_ocr(const FramePixels &pixels,
                                                 const Request &request,
                                                 const contracts::FrameIdentity &basis) {
+    require(!cancelled_.load(), "RECOGNITION_CANCELLED");
     contracts::Observation result;
     result.basis = basis;
     result.recognizer_id = request.recognizer_id;
@@ -214,10 +217,17 @@ contracts::Observation Service::recognize_ocr(const FramePixels &pixels,
             bundle_.lease->require_member(relative);
             require(bundle_.lease->hash(relative) == expected, "OCR_MODEL_NOT_LOCKED");
         }
+        require(!cancelled_.load(), "RECOGNITION_CANCELLED");
         engine = std::make_shared<OcrEngine>(bundle_.root / "model" / "ocr");
         ocr_.store(engine);
     }
+    // 发布前发生的取消由该检查承接；发布后发生的取消直接命中同一引擎。
+    if (cancelled_.load()) {
+        engine->cancel();
+        throw std::runtime_error("RECOGNITION_CANCELLED");
+    }
     auto found = engine->recognize(pixels.mat()(rect(request.roi)));
+    require(!cancelled_.load(), "RECOGNITION_CANCELLED");
     result.evidence = {{"language", "en"}, {"model", "locked-det-rec-2026"},
                        {"candidates", found.size()}};
     for (auto &candidate : found) {
@@ -234,8 +244,10 @@ contracts::Observation Service::recognize_ocr(const FramePixels &pixels,
     return result;
 }
 
-void Service::cancel() {
-    // The service must outlive any in-flight evaluate(); the owner joins before destruction.
-    if (auto engine = ocr_.load()) engine->cancel();
+void Service::cancel() noexcept {
+    cancelled_.store(true);
+    // 请求取消不等于推理已经退出；Session 仍持有所有资源直到调用实际返回。
+    try { if (auto engine = ocr_.load()) engine->cancel(); }
+    catch (...) { /* 取消标记仍有效，不能由控制线程抛出并破坏停止链。 */ }
 }
 } // namespace wvd::recognition

@@ -68,6 +68,10 @@ std::vector<workflow::EventRule> events(const J &rules, const std::string &sourc
             if (resume.value("mode", "") == "replan") {
                 event.resume = workflow::ResumeMode::Replan;
                 event.replan_step = resume.at("node_id");
+                // 原作者规则的返回守卫不能在 lowering 中丢掉；并入同一运行快照。
+                event.resume_guard = request({{"id", "event.resume." + event.id},
+                    {"revision", "1"}, {"type", "custom"}, {"binding", "WvdVision"},
+                    {"roi", {0, 0, 900, 1600}}, {"parameters", resume.at("guard")}});
             } else if (resume.value("mode", "") != "reobserve")
                 throw std::runtime_error("NATIVE_EVENT_RESUME_INVALID");
         } else throw std::runtime_error("NATIVE_EVENT_DISPOSITION_INVALID");
@@ -132,7 +136,7 @@ Step translate(const std::string &id, const J &node, const J &paths,
     } else if (action == "Registered" && binding == "WvdConfirm") {
         const auto &p = node.at("operation_args");
         step.data = workflow::BusinessConfirm{p.at("operation"),
-            request(p.at("confirmation")), p};
+            request(p.at("confirmation")), p, "WvdConfirm"};
     } else if (action == "Registered" &&
                (binding == "WvdCombat" || binding == "WvdChest" ||
                 binding == "WvdUnknownLeap" || binding == "BusinessCheckpoint" ||
@@ -209,7 +213,10 @@ workflow::FlowProgram compile_native_program(const CompiledWorkflow &source,
             await.next = std::move(step.next);
             await.on_error = step.on_error;
             await.time_limit = step.time_limit;
+            // 输入和它的观察器是同一业务步骤；次数/作用域禁用必须完整继承。
+            await.max_hit = step.max_hit;
             await.event_policy = step.event_policy;
+            await.disabled_events = step.disabled_events;
             step.next = {await_id};
             step.delay_after = std::chrono::milliseconds{0};
             definition.steps.emplace(await_id, std::move(await));

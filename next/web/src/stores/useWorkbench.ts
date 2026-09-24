@@ -31,6 +31,10 @@ export function writeStrategies(profile: WvdProfile, groups: StrategyGroup[]) {
 }
 
 export function useWorkbench() {
+  const resourceLocale = ref<"en" | "zh-Hant">(
+    typeof window !== "undefined" && window.localStorage.getItem("wvd.gameResourceLocale") === "en" ? "en" : "zh-Hant",
+  );
+  watch(resourceLocale, (value) => window.localStorage.setItem("wvd.gameResourceLocale", value));
   const envelope = ref<ProfileEnvelope>();
   const draft = ref<WvdProfile>();
   const savedSignature = ref("");
@@ -197,13 +201,13 @@ export function useWorkbench() {
       error.value = dirty.value ? "PROFILE_UNSAVED: 请先保存配置" : "TASK_NOT_SELECTED: 请选择任务";
       return;
     }
-    const fingerprint = JSON.stringify([draft.value.FARM_TARGET, envelope.value?.revision]);
+    const fingerprint = JSON.stringify([draft.value.FARM_TARGET, envelope.value?.revision, resourceLocale.value]);
     if (!pendingRequest || pendingRequest.fingerprint !== fingerprint)
       pendingRequest = { id: crypto.randomUUID(), fingerprint };
     starting.value = true;
     error.value = "";
     try {
-      await startTask(draft.value.FARM_TARGET, pendingRequest.id, envelope.value?.revision);
+      await startTask(draft.value.FARM_TARGET, pendingRequest.id, envelope.value?.revision, resourceLocale.value);
       run.value = await readCurrentRun();
       notice.value = "启动请求已接收；正在执行正式装配和启动检查";
     } catch (reason) { error.value = formatApiError(reason); }
@@ -247,7 +251,7 @@ export function useWorkbench() {
   onBeforeUnmount(() => window.clearInterval(pollHandle));
 
   return reactive({
-    envelope, draft, catalog, device, run, loading, saving, deviceBusy, error, notice,
+    envelope, draft, catalog, device, run, loading, saving, deviceBusy, error, notice, resourceLocale,
     strategies, dirty, runActive, runLabel, runError, starting, selectedTask, load, save, clearTaskOverride, revert, selectTask,
     deviceAction, chooseEmulator, startSelectedTask, requestStop, noteRename,
   });
