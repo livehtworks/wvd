@@ -5,7 +5,7 @@ import {
   readDevice, readProfile, readTaskProfile, saveProfile, stopRun,
   startTask, selectEmulator,
 } from "../api/client";
-import type { Catalog, DeviceState, ProfileEnvelope, RunState, StrategyGroup, WvdProfile } from "../api/types";
+import type { Catalog, DeviceState, ProfileEnvelope, ResourceLocale, RunState, StrategyGroup, WvdProfile } from "../api/types";
 
 // 配置全部是 JSON 数据。JSON 往返可安全解开 Vue 的响应式 Proxy；
 // structuredClone 直接接收 Proxy 会在真实浏览器中抛 DataCloneError。
@@ -31,8 +31,10 @@ export function writeStrategies(profile: WvdProfile, groups: StrategyGroup[]) {
 }
 
 export function useWorkbench() {
-  const resourceLocale = ref<"en" | "zh-Hant">(
-    typeof window !== "undefined" && window.localStorage.getItem("wvd.gameResourceLocale") === "en" ? "en" : "zh-Hant",
+  const savedLocale = typeof window !== "undefined" ? window.localStorage.getItem("wvd.gameResourceLocale") : null;
+  const resourceLocale = ref<ResourceLocale>(
+    savedLocale === "" || savedLocale === "en" || savedLocale === "zh-Hant" ||
+    savedLocale === "zh-Hans" || savedLocale === "ja" ? savedLocale : "zh-Hant",
   );
   watch(resourceLocale, (value) => window.localStorage.setItem("wvd.gameResourceLocale", value));
   const envelope = ref<ProfileEnvelope>();

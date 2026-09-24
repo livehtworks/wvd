@@ -1,5 +1,6 @@
 #include "native_publisher.hpp"
 #include "games/wvd/vision/native_asset_resolver.hpp"
+#include "semantic_catalogue.hpp"
 #include "platform/windows/bundle_lease.hpp"
 #include "platform/windows/file_digest.hpp"
 #include "platform/windows/path_utf8.hpp"
@@ -55,7 +56,9 @@ NativePublication publish_native(const CompiledWorkflow &workflow,
                                 {"path", selected.relative_path},
                                 {"sha256", files.at(selected.relative_path)}};
     }
-    auto program = compile_native_program(workflow, source_paths, "pending");
+    J all_paths = workflow.authoring.value("source_paths", J::object());
+    all_paths.update(source_paths);
+    auto program = compile_native_program(workflow, all_paths, "pending");
     J identity{{"engine_kind", "wvd_native"},
                {"program_schema", workflow::FlowProgram::schema},
                {"source_revision", baseline.revision},
@@ -63,6 +66,7 @@ NativePublication publish_native(const CompiledWorkflow &workflow,
                {"mod_revision", mod ? J(mod->revision) : J(nullptr)},
                {"mod_files", mod_manifest},
                {"image_sources", image_sources},
+               {"native_semantic_source_sha256", wvd_semantic_source_sha256},
                {"aliases", aliases},
                {"authoring", workflow.authoring},
                {"definition", workflow.kind},

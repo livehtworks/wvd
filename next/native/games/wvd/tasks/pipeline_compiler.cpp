@@ -205,6 +205,7 @@ void CompiledWorkflow::validate() const {
                                             node.value("binding", "") == "BeginObservationPhase" ||
                                             node.value("binding", "") == "EndObservationPhase" ||
                                             node.value("binding", "") == "BusinessCheckpoint" ||
+                                            node.value("binding", "") == "AuthorBusinessFailure" ||
                                             node.value("binding", "") == "RequireRecovery")),
                 "COMPILE_UNGUARDED_ACTION");
         require(node.value("observation", "Always") == "Always" ||
@@ -572,6 +573,23 @@ std::string PipelineCompiler::append(const std::string &prefix, const CompiledWo
                 "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_") == std::string::npos,
             "COMPILE_PREFIX_INVALID");
     child.validate();
+    if (child.authoring.contains("source_paths")) {
+        if (!workflow_.authoring.contains("source_paths"))
+            workflow_.authoring["source_paths"] = J::object();
+        for (const auto &[node, path] : child.authoring.at("source_paths").items())
+            workflow_.authoring["source_paths"][prefix + "_" + node] = path;
+    }
+    if (child.authoring.contains("documents")) {
+        if (!workflow_.authoring.contains("public_definitions"))
+            workflow_.authoring["public_definitions"] = J::object();
+        for (const auto &[id, document] : child.authoring.at("documents").items()) {
+            const auto revision = document.value("revision", std::string{});
+            if (workflow_.authoring["public_definitions"].contains(id) &&
+                workflow_.authoring["public_definitions"].at(id) != revision)
+                throw std::runtime_error("COMPILE_PUBLIC_DEFINITION_CONFLICT:" + id);
+            workflow_.authoring["public_definitions"][id] = revision;
+        }
+    }
     use_dialogue(child.dialogue_policy);
     require(normal_exits.is_object(), "COMPILE_EXIT_BINDINGS_INVALID");
     for (const auto &[name, successors] : normal_exits.items())
@@ -665,6 +683,11 @@ void PipelineCompiler::recovery(const std::string &name, const std::string &reas
     add(name, {{"operation", "Registered"}, {"binding", "RequireRecovery"},
                {"operation_args", {{"reason", reason}}}});
 }
+void PipelineCompiler::business_failure(const std::string &name, const std::string &reason) {
+    require(!reason.empty(), "COMPILE_BUSINESS_FAILURE_REASON_EMPTY");
+    add(name, {{"operation", "Registered"}, {"binding", "AuthorBusinessFailure"},
+               {"operation_args", {{"reason", reason}}}});
+}
 void PipelineCompiler::unknown_leap(const std::string &name, J next, J extra_known) {
     require(extra_known.is_array(), "COMPILE_UNKNOWN_KNOWN_INVALID");
     J unknown{{"mode", "unknown_exhausted"}, {"max_tries", 4}};
@@ -681,6 +704,8 @@ void PipelineCompiler::unknown_leap(const std::string &name, J next, J extra_kno
 }
 void PipelineCompiler::failure_route(const std::string &name, J next) {
     require(workflow_.nodes.contains(name) && next.is_array() && !next.empty(), "COMPILE_ERROR_ROUTE_INVALID");
+    if (workflow_.nodes[name].value("binding", "") == "Call")
+        workflow_.nodes[name]["business_failure_route"] = true;
     workflow_.nodes[name]["on_error"] = std::move(next);
 }
 void PipelineCompiler::confirm(const std::string &name, const std::string &operation,

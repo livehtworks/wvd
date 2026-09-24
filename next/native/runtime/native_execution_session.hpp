@@ -11,6 +11,7 @@ struct NativeExecutionResult {
     contracts::InputCounts inputs;
     bool inputs_released{};
     bool unresolved_input{};
+    nlohmann::json unresolved_inputs = nlohmann::json::array();
     std::string cleanup_error;
 };
 
@@ -19,12 +20,13 @@ struct NativeExecutionResult {
 class NativeExecutionSession final {
   public:
     using OperationFactory = std::function<NativeFlowPorts::OperationHandler(NativeFlowPorts &)>;
-    using ProgressSink = std::function<void(const std::string &, const std::string &)>;
+    using ProgressSink = std::function<void(const nlohmann::json &)>;
     NativeExecutionSession(const workflow::FlowProgram &program,
         devices::DeviceBackend &backend, std::shared_ptr<recognition::Service> recognizer,
         contracts::BusinessRunState &business, contracts::InputPolicy policy,
         std::uint64_t generation, std::chrono::milliseconds total_budget,
-        OperationFactory operations, ProgressSink progress = {});
+        OperationFactory operations, ProgressSink progress = {},
+        NativeFlowPorts::InputSink input_sink = {});
     NativeExecutionResult run();
     void request_stop();
 

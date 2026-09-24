@@ -13,27 +13,31 @@ NativeExecutionSession::NativeExecutionSession(const workflow::FlowProgram &prog
     devices::DeviceBackend &backend, std::shared_ptr<recognition::Service> recognizer,
     contracts::BusinessRunState &business, contracts::InputPolicy policy,
     std::uint64_t generation, std::chrono::milliseconds total_budget,
-    OperationFactory operations, ProgressSink progress)
+    OperationFactory operations, ProgressSink progress, NativeFlowPorts::InputSink input_sink)
     : recognizer_owner_(std::move(recognizer)),
       ports_(backend, required_service(recognizer_owner_), business, std::move(policy), generation,
              stop_source_.get_token()),
       executor_(program, ports_, total_budget), progress_(std::move(progress)) {
     if (!operations) throw std::runtime_error("NATIVE_OPERATION_FACTORY_MISSING");
     ports_.set_operation_handler(operations(ports_));
+    ports_.set_input_sink(std::move(input_sink));
 }
 
 NativeExecutionResult NativeExecutionSession::run() {
     NativeExecutionResult result;
-    std::string reported_step;
+    nlohmann::json reported_progress;
     try {
         for (;;) {
             result.flow = executor_.tick();
-            const auto current_step = executor_.current_step_id();
-            if (progress_ && !current_step.empty() && current_step != reported_step) {
-                reported_step = current_step;
-                progress_(current_step, executor_.current_source_path());
+            if (progress_) {
+                auto current = executor_.progress_snapshot();
+                if (current != reported_progress) {
+                    reported_progress = current;
+                    progress_(current);
+                }
             }
             if (result.flow.state == TickState::Completed ||
+                result.flow.state == TickState::BusinessFailed ||
                 result.flow.state == TickState::Failed ||
                 result.flow.state == TickState::Cancelled ||
                 result.flow.state == TickState::ExternalBlocked)
@@ -51,6 +55,7 @@ NativeExecutionResult NativeExecutionSession::run() {
                        executor_.current_source_path()};
     }
     result.unresolved_input = executor_.has_unresolved_input();
+    result.unresolved_inputs = executor_.progress_snapshot().value("pending_inputs", nlohmann::json::array());
     if (stop_source_.stop_requested())
         result.flow = {TickState::Cancelled, {}, "STOP_REQUESTED",
                        executor_.current_source_path()};

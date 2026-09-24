@@ -91,6 +91,7 @@ Step translate(const std::string &id, const J &node, const J &paths,
     step.guard = guard(node, id);
     step.next = edges(node, "next");
     step.on_error = edges(node, "on_error");
+    step.handles_business_failure = node.value("business_failure_route", false);
     step.max_hit = node.value("max_hit", 1);
     step.time_limit = std::chrono::milliseconds{node.value("timeout", 60000LL)};
     step.delay_after = std::chrono::milliseconds{node.value("post_delay", 0LL)};
@@ -133,6 +134,10 @@ Step translate(const std::string &id, const J &node, const J &paths,
         else step.data = workflow::Return{"completed"};
     } else if (action == "Registered" && binding == "RequireRecovery") {
         step.data = workflow::Fail{node.at("operation_args").at("reason")};
+    } else if (action == "Registered" && binding == "AuthorBusinessFailure") {
+        const auto reason = node.at("operation_args").at("reason").get<std::string>();
+        if (root_definition) step.data = workflow::BusinessFail{reason};
+        else step.data = workflow::Return{"failure", reason};
     } else if (action == "Registered" && binding == "WvdConfirm") {
         const auto &p = node.at("operation_args");
         step.data = workflow::BusinessConfirm{p.at("operation"),

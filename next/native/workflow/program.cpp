@@ -25,6 +25,16 @@ void FlowProgram::validate() const {
                 if (!definitions.contains(call->definition))
                     throw std::runtime_error("FLOW_CALL_TARGET_MISSING");
             }
+            if (step.handles_business_failure &&
+                (!std::holds_alternative<Call>(step.data) || step.on_error.empty()))
+                throw std::runtime_error("FLOW_BUSINESS_FAILURE_ROUTE_INVALID");
+            if (const auto *returned = std::get_if<Return>(&step.data))
+                if ((returned->outcome != "completed" && returned->outcome != "failure") ||
+                    (returned->outcome == "failure") != !returned->reason.empty())
+                    throw std::runtime_error("FLOW_RETURN_OUTCOME_INVALID");
+            if (const auto *business = std::get_if<BusinessFail>(&step.data))
+                if (definition_id != root_definition || business->reason.empty())
+                    throw std::runtime_error("FLOW_BUSINESS_FAILURE_INVALID");
             if (const auto *await = std::get_if<AwaitResult>(&step.data))
                 if (await->budget.count() < 1 || await->initial_delay.count() < 0 ||
                     await->poll_interval.count() < 1 ||

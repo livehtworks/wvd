@@ -18,6 +18,8 @@ contracts::SessionResult session_result(const NativeExecutionResult &result,
     contracts::SessionResult session;
     session.end = result.flow.state == TickState::Completed
         ? contracts::SessionEnd::Completed
+        : result.flow.state == TickState::BusinessFailed
+            ? contracts::SessionEnd::BusinessFailed
         : result.flow.state == TickState::Cancelled
             ? contracts::SessionEnd::UserStopped
             : result.flow.state == TickState::ExternalBlocked
@@ -27,12 +29,14 @@ contracts::SessionResult session_result(const NativeExecutionResult &result,
     session.outcome_category = result.flow.state == TickState::ExternalBlocked
         ? "external_blocked" : result.flow.state == TickState::Cancelled
             ? "user_stopped" : result.flow.state == TickState::Completed
-                ? "completed" : "failed";
+                ? "completed" : result.flow.state == TickState::BusinessFailed
+                    ? "business_failed" : "failed";
     session.inputs = result.inputs;
     session.quiescent = result.inputs_released;
     session.terminal = {generation, result.flow.source_path};
     session.checkpoint = {generation, checkpoint};
     session.business = business.summary();
+    session.unresolved_inputs = result.unresolved_inputs;
     (void)program;
     return session;
 }
@@ -181,22 +185,57 @@ void NativeRunCoordinator::drive(NativeRunDefinition definition,
                 auto session = std::make_shared<NativeExecutionSession>(unit.program,
                     *backend, recognizer, *business, definition.policy, generation,
                     std::min(unit.time_limit, remaining), std::move(factory),
-                    [this, generation](const std::string &id, const std::string &source) {
-                        auto source_path = nlohmann::json::parse(source, nullptr, false);
-                        if (source_path.is_discarded()) source_path = source;
-                        journal_->emit(generation, "step", {{"node_id", id},
-                            {"source_path", source_path}});
+                    [this, generation](const nlohmann::json &progress) {
+                        bool step_changed = false;
+                        nlohmann::json previous_pending = nlohmann::json::array();
+                        nlohmann::json current_pending = progress.value("pending_inputs", nlohmann::json::array());
+                        {
+                            std::lock_guard lock(mutex_);
+                            if (snapshot_.generation != generation) return;
+                            step_changed = snapshot_.execution.is_null() ||
+                                snapshot_.execution.value("step_id", "") != progress.value("step_id", "");
+                            previous_pending = snapshot_.unresolved_inputs;
+                            snapshot_.execution = progress;
+                            snapshot_.active_event = progress.value("active_event", nlohmann::json(nullptr));
+                            snapshot_.unresolved_inputs = current_pending;
+                        }
+                        if (step_changed) {
+                            auto source = nlohmann::json::parse(progress.value("source_path", ""), nullptr, false);
+                            if (source.is_discarded()) source = progress.value("source_path", "");
+                            journal_->emit(generation, "step", {{"node_id", progress.value("step_id", "")},
+                                {"source_path", source}});
+                        }
+                        for (const auto &before : previous_pending) {
+                            bool remains = false;
+                            for (const auto &after : current_pending)
+                                if (after.value("source_path", "") == before.value("source_path", "") &&
+                                    after.value("action_epoch", 0ULL) == before.value("action_epoch", 0ULL))
+                                    remains = true;
+                            if (!remains) journal_->emit(generation, "input.observed",
+                                {{"source_path", before.value("source_path", "")},
+                                 {"action_epoch", before.value("action_epoch", 0ULL)}});
+                        }
+                        // 只在值改变时发一条轻量事实；不含帧字节与识别矩阵。
+                        if (!step_changed) journal_->emit(generation, "execution.changed", progress);
+                    },
+                    [this, generation](const nlohmann::json &input) {
+                        journal_->emit(generation, "input.attempt", input);
                     });
                 {
                     std::lock_guard lock(mutex_);
                     session_ = session;
                     snapshot_.generation = generation;
+                    snapshot_.execution = nullptr;
+                    snapshot_.active_event = nullptr;
+                    snapshot_.unresolved_inputs = nlohmann::json::array();
                 }
                 if (stop_) session->request_stop();
                 const auto result = session->run();
                 {
                     std::lock_guard lock(mutex_);
                     session_.reset();
+                    snapshot_.active_event = nullptr;
+                    if (!result.unresolved_input) snapshot_.unresolved_inputs = nlohmann::json::array();
                     snapshot_.inputs.attempted += result.inputs.attempted;
                     snapshot_.inputs.accepted += result.inputs.accepted;
                     snapshot_.inputs.rejected += result.inputs.rejected;
@@ -227,6 +266,7 @@ void NativeRunCoordinator::drive(NativeRunDefinition definition,
                     : result.flow.code;
                 // 外部维护/输入结果未知不是重启理由，禁止进入自动生命周期恢复。
                 if (stop_ || !quiescent || result.unresolved_input ||
+                    result.flow.state == TickState::BusinessFailed ||
                     result.flow.state == TickState::ExternalBlocked || !definition.recovery ||
                     recovery_attempt >= 3) break;
                 auto plan = definition.recovery(last, *business, recovery_attempt + 1);
@@ -305,6 +345,8 @@ void NativeRunCoordinator::drive(NativeRunDefinition definition,
         : !terminal.reason.empty() ? contracts::RunState::Failed
         : terminal.completed_business_units == definition.units.size()
             ? contracts::RunState::Completed : contracts::RunState::Failed;
+    if (last.end == contracts::SessionEnd::BusinessFailed)
+        terminal.outcome_category = "business_failed";
     if (!stop_ && quiescent && business && definition.handoff_ready) {
         try {
             if (definition.handoff_ready(last, *business)) {

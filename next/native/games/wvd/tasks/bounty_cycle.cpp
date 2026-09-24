@@ -75,7 +75,8 @@ WvdTaskPlan jier_plan(const WvdQuestDefinition &definition) {
         {"press", "B4FLabyrinth", {{1, 1}}, 1}}).with_route(points);
 }
 CompiledWorkflow bounty_cycle(const WvdQuestDefinition &definition, const J &profile,
-    const std::set<std::string> &images, bool allow_download) {
+    const std::set<std::string> &images, const PublicFlowLibrary &library,
+    const J &board_root, const std::string &locale, bool allow_download) {
     const bool jier = definition.id == "jier";
     const auto first_plan = jier ? jier_plan(definition) : scorpion_plan(definition);
     const auto dialogue = jier ? recovery::DialoguePolicy::Jier : recovery::DialoguePolicy::Default;
@@ -130,7 +131,8 @@ CompiledWorkflow bounty_cycle(const WvdQuestDefinition &definition, const J &pro
     graph.confirm("Travelled", "bounty.travel.done", ore ? "bounty_travel_skipped" : "bounty_travel_completed",
                   ore ? C::any({royal_city, inn, guild, edge}) : royal_city, {"RevealPhase"});
     graph.observe("RevealPhase", phase(Phase::Reveal), {"Reveal"});
-    const auto board = graph.define_child("BountyBoard", visit_bounty_board(BountyVisit::Reveal));
+    const auto board = graph.define_child("BountyBoard",
+        visit_bounty_board(BountyVisit::Reveal, library, board_root, locale));
     graph.call_child("Reveal", board, {"Revealed"});
     graph.confirm("Revealed", "bounty.cycle.reveal", "bounty_cycle_revealed", edge, {"Terminal"});
     const auto return_guild = graph.define_child("ReturnGuild", return_to_bounty_city(true));
@@ -158,7 +160,8 @@ CompiledWorkflow bounty_cycle(const WvdQuestDefinition &definition, const J &pro
     graph.observe("ReportsPhase", phase(Phase::Reports), {"Reports"});
     graph.route("Reports", {"AllReported", "Deliver"});
     graph.observe("AllReported", C::business("/bounty_cycle/reports_remaining", 0), {"ReportsDone"});
-    const auto report = graph.define_child("BountyReport", visit_bounty_board(BountyVisit::Report));
+    const auto report = graph.define_child("BountyReport",
+        visit_bounty_board(BountyVisit::Report, library, board_root, locale));
     graph.call_child("Deliver", report, {"Reports"});
     graph.hit_limit("Reports", 3);
     graph.hit_limit("Deliver", hands ? 2 : 1);

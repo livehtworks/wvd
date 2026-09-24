@@ -61,7 +61,7 @@ J data(const StepData &value) {
     if (const auto *call = std::get_if<Call>(&value))
         return {{"kind", "call"}, {"definition", call->definition}};
     if (const auto *ret = std::get_if<Return>(&value))
-        return {{"kind", "return"}, {"outcome", ret->outcome}};
+        return {{"kind", "return"}, {"outcome", ret->outcome}, {"reason", ret->reason}};
     if (const auto *confirm = std::get_if<BusinessConfirm>(&value))
         return {{"kind", "business_confirm"}, {"operation", confirm->operation},
                 {"condition", request(confirm->condition)}, {"parameters", confirm->parameters},
@@ -70,6 +70,8 @@ J data(const StepData &value) {
         return {{"kind", "registered_operation"}, {"binding", operation->binding},
                 {"parameters", operation->parameters}};
     if (std::holds_alternative<Finish>(value)) return {{"kind", "finish"}};
+    if (const auto *business = std::get_if<BusinessFail>(&value))
+        return {{"kind", "business_fail"}, {"reason", business->reason}};
     if (const auto *blocked = std::get_if<ExternalBlocked>(&value))
         return {{"kind", "external_blocked"}, {"reason", blocked->reason}};
     return {{"kind", "fail"}, {"reason", std::get<Fail>(value).reason}};
@@ -85,7 +87,8 @@ nlohmann::json serialize(const FlowProgram &program) {
             J entry{{"id", step.id}, {"source_path", step.source_path},
                     {"data", data(step.data)}, {"next", step.next},
                     {"on_error", step.on_error}, {"time_limit_ms", step.time_limit.count()},
-                    {"delay_after_ms", step.delay_after.count()}, {"max_hit", step.max_hit}};
+                    {"delay_after_ms", step.delay_after.count()}, {"max_hit", step.max_hit},
+                    {"handles_business_failure", step.handles_business_failure}};
             if (step.guard) entry["guard"] = request(*step.guard);
             entry["disabled_events"] = step.disabled_events;
             entry["events"] = J::array();

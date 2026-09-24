@@ -50,6 +50,39 @@ const std::string &FlowExecutor::current_source_path() const {
 std::string FlowExecutor::current_step_id() const {
     return stack_.empty() ? std::string{} : stack_.back().current;
 }
+nlohmann::json FlowExecutor::progress_snapshot() const {
+    nlohmann::json call_stack = nlohmann::json::array();
+    nlohmann::json pending = nlohmann::json::array();
+    nlohmann::json active_event = nullptr;
+    nlohmann::json suspended = nullptr;
+    for (std::size_t i = 0; i < stack_.size(); ++i) {
+        const auto &frame = stack_[i];
+        const auto &node = program_.definitions.at(frame.definition).steps.at(frame.current);
+        call_stack.push_back({{"definition", frame.definition}, {"node_id", frame.current},
+                              {"source_path", nlohmann::json::parse(node.source_path, nullptr, false)}});
+        if (frame.pending) {
+            const auto &input = *frame.pending;
+            pending.push_back({{"source_path", input.source_path},
+                               {"basis_frame", input.before.frame_id},
+                               {"basis_epoch", input.before.action_epoch},
+                               {"action_epoch", input.action_epoch},
+                               {"delivery_unknown", input.delivery_unknown}});
+        }
+        if (frame.event) {
+            const auto &rule = frame.event->rule;
+            const auto &owner = stack_.at(frame.event->owner);
+            const auto &source = program_.definitions.at(owner.definition).steps.at(owner.current);
+            suspended = {{"pipeline_node", owner.current},
+                         {"node_path", nlohmann::json::parse(source.source_path, nullptr, false)}};
+            active_event = {{"event_id", rule.id}, {"source_node", owner.current},
+                            {"handler_entry", frame.current}, {"depth", i + 1},
+                            {"resume", {{"mode", rule.resume == workflow::ResumeMode::Replan ? "replan" : "continue"}}}};
+        }
+    }
+    return {{"step_id", current_step_id()}, {"source_path", current_source_path()},
+            {"call_stack", std::move(call_stack)}, {"pending_inputs", std::move(pending)},
+            {"active_event", std::move(active_event)}, {"suspended_step", std::move(suspended)}};
+}
 bool FlowExecutor::has_unresolved_input() const {
     return std::any_of(stack_.begin(), stack_.end(),
                        [](const Frame &f) { return f.pending.has_value(); });
@@ -63,6 +96,28 @@ TickResult FlowExecutor::waiting(std::chrono::milliseconds delay) const {
 TickResult FlowExecutor::fail(std::string code) {
     terminal_ = {TickState::Failed, {}, std::move(code), current_source_path()};
     return terminal_;
+}
+TickResult FlowExecutor::business_fail(std::string reason, std::string source) {
+    terminal_ = {TickState::BusinessFailed, {}, std::move(reason), std::move(source)};
+    return terminal_;
+}
+TickResult FlowExecutor::return_business_failure(const std::string &reason) {
+    if (has_unresolved_input()) return blocked("CHILD_INPUT_UNRESOLVED:" + reason);
+    const auto source = current_source_path();
+    account_event_time();
+    while (stack_.size() > 1) {
+        const auto ended = std::move(stack_.back());
+        stack_.pop_back();
+        if (ended.event) {
+            terminal_ = {TickState::Failed, {}, "EVENT_HANDLER_BUSINESS_FAILURE:" + reason, source};
+            return terminal_;
+        }
+        auto &parent = stack_.back();
+        const auto &caller = step();
+        if (caller.handles_business_failure)
+            return route_error(parent, caller, "BUSINESS_FAILURE:" + reason);
+    }
+    return business_fail(reason, source);
 }
 TickResult FlowExecutor::blocked(std::string code) {
     terminal_ = {TickState::ExternalBlocked, {}, std::move(code), current_source_path()};
@@ -301,13 +356,12 @@ TickResult FlowExecutor::execute_step(Frame &frame, const workflow::Step &curren
     }
     if (const auto *returned = std::get_if<workflow::Return>(&current.data)) {
         if (stack_.size() == 1) return fail("ROOT_RETURN_WITHOUT_FINISH");
-        if (frame.pending) return blocked("CHILD_INPUT_UNRESOLVED");
+        if (returned->outcome == "failure") return return_business_failure(returned->reason);
+        if (has_unresolved_input()) return blocked("CHILD_INPUT_UNRESOLVED");
         account_event_time();
         const auto ended = std::move(stack_.back());
         stack_.pop_back();
         auto &parent = stack_.back();
-        if (returned->outcome != "completed")
-            return route_error(parent, step(), "CHILD_RETURN:" + returned->outcome);
         parent.selected_frame.reset(); parent.selected_observation.reset();
         if (ended.event) {
             const auto &event = ended.event->rule;
@@ -356,6 +410,11 @@ TickResult FlowExecutor::execute_step(Frame &frame, const workflow::Step &curren
         if (stack_.size() != 1 || has_unresolved_input()) return fail("ROOT_FINISH_INVALID");
         terminal_ = {TickState::Completed, {}, {}, current_source_path()};
         return terminal_;
+    }
+    if (const auto *value = std::get_if<workflow::BusinessFail>(&current.data)) {
+        if (stack_.size() != 1) return fail("CHILD_BUSINESS_FAILURE_NOT_RETURNED");
+        if (has_unresolved_input()) return blocked("BUSINESS_FAILURE_INPUT_UNRESOLVED");
+        return business_fail(value->reason, current.source_path);
     }
     if (const auto *value = std::get_if<workflow::ExternalBlocked>(&current.data)) return blocked(value->reason);
     if (const auto *value = std::get_if<workflow::Fail>(&current.data)) return fail(value->reason);

@@ -38,7 +38,7 @@ inline std::string_view name(RunState state) {
     }
     return "Failed";
 }
-enum class SessionEnd { Completed, Failed, UserStopped, RecoveryRequired, ExternalBlocked };
+enum class SessionEnd { Completed, BusinessFailed, Failed, UserStopped, RecoveryRequired, ExternalBlocked };
 struct RootEvidence {
     std::uint64_t generation{};
     std::string source_path;
@@ -52,6 +52,7 @@ struct SessionResult {
     bool quiescent{};
     RootEvidence checkpoint;
     nlohmann::json business;
+    nlohmann::json unresolved_inputs = nlohmann::json::array();
 };
 struct RunSnapshot {
     std::uint64_t run_id{}, generation{};
@@ -66,5 +67,7 @@ struct RunSnapshot {
     nlohmann::json business = nullptr;
     std::size_t completed_business_units{};
     nlohmann::json active_event = nullptr;
+    nlohmann::json execution = nullptr;
+    nlohmann::json unresolved_inputs = nlohmann::json::array();
 };
 } // namespace wvd::contracts

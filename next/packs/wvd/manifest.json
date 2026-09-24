@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "source_commit": "6585f4075f5714ab522aa582993860c09af912c1",
-  "revision": "80ae0df1e6ecf633bad6b820b83f2a2ae98e77b8157e5d7107c7b6456c6e05be",
+  "revision": "d23740048f525d534cc6b81ffbb9a26ae866f08ace7b3574ac67c4264f17c2c0",
   "files": [
     {
       "path": "image/7000G/icantagreewithU.png",
@@ -1599,7 +1599,9 @@
       "source": "next/resources/images/city_world_map_open_zh_hant.png",
       "sha256": "0834a9d526196c5a6dd447a74d4406b6e54823528a8e5e03c707024c179b450d",
       "bytes": 12864,
-      "source_refs": ["semantic:city.world_map.open"]
+      "source_refs": [
+        "semantic:city.world_map.open"
+      ]
     },
     {
       "path": "image/close.png",
@@ -4249,7 +4251,9 @@
       "source": "next/resources/images/story_auto_control.png",
       "sha256": "6a3ae246e629104e9c943662cae97661ac931112e1c1145d20b56e6aaf13098e",
       "bytes": 6775,
-      "source_refs": ["native/games/wvd/vision/dialogue_probes.hpp"]
+      "source_refs": [
+        "native/games/wvd/vision/dialogue_probes.hpp"
+      ]
     },
     {
       "path": "image/supportSkillCheck.png",
@@ -4553,8 +4557,8 @@
     {
       "path": "parameters/public-flows.json",
       "source": "next/resources/authoring/public-flows.json",
-      "sha256": "791df27981db4aa890ebd8734390f9fafa5e61b1c5e22af756a6bf46728437eb",
-      "bytes": 65680,
+      "sha256": "6a8289881d3fd28febc1130685511f7e17c2f5dea53f0da00c2514cd877ae20b",
+      "bytes": 67080,
       "source_refs": [
         "authoring:public-flow-1"
       ]

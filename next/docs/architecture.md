@@ -22,6 +22,14 @@ Vue 工作台 -> 同源 HTTP API -> Application
 
 作者文档仍由唯一 WorkflowRepository 保存。运行前封存作者闭包、资源内容与版本，编译为 FlowProgram；历史 Maa 结果只读。正式 CMake 和打包只链接原生目标。旧 SDK 集成源码及过时验证工具位于 `next/archive/`，不是当前程序或测试的执行路径。
 
+## 本轮修复后的责任边界
+
+- `authoring/workflow_validator` 只校验作者文档结构；`storage/WorkflowRepository` 保存正文及独立的内置来源元数据，显式 CAS 同步前保留旧文档备份。固定 `expected_revision` 的调用不被自动改写。`games/wvd/tasks/run_builder` 决定任务工厂、轮数、7300 秒等待及恢复条件；Application 冻结配置与定义、编译预检后才连接设备。
+- `workflow/FlowProgram` 的 Call 将子定义的业务失败作为有类型的返回，不把有效子任务 ID 或框架完成态当作业务成功。`runtime/FlowExecutor` 由唯一会话线程推进调用栈及事件栈，普通失败走调用者的失败边，致命错误终止会话；`BusinessConfirm` 只在观察到正面业务证据后改变 WVD 计数。`RegisteredOperation` 通过门禁发一次输入，结果不明时保存未确认回执并禁止重发。停止先封输入，再取消等待/回收自有设备通道，未静止不能标为完成。
+- `FlowExecutor::progress_snapshot()` 只给出当前步骤/调用栈/事件与未决操作标量，Coordinator 存入历史并同源展示在工作台。HTTP 不推进流程；事件与输入的所有者仍是会话线程。
+- `resources/authoring/semantic-assets.json` 是人工配方源，打包同步到资源包并校验清单；作者及旧原生映射在编译/发布前解析。诊断的非 OCR 条件走同一 WVD 识别绑定。城市公共配方、繁中公会页及开箱/选人/奖励动态探针由同源目录生成于构建期，发布身份带源哈希且打包拒绝 EXE/资源包错配；其他内部动态 boot/地点探针尚未全部做到发布期依赖收集和语义冻结，不能宣称 R05 全面闭合。
+- 公会悬赏 Reveal 由原生任务调用同一 `PublicFlowLibrary` 闭包。已处于目标页时零输入；打开列表不是跳轮或提交。繁中 Report 无可靠提交素材，保持不可执行，不通过旧菜单路线回退。
+
 ## 尚需核对的边界
 
 - 原生任务生成器当前使用项目中立的发布期 JSON 图描述，经 `native_program.cpp` 严格转换为强类型 FlowProgram；运行时不解释该 JSON。工厂直接构造强类型步骤尚待完成。

@@ -3,6 +3,27 @@ set(WVD_NATIVE_DEPS "${PROJECT_SOURCE_DIR}/.local/native-deps")
 set(WVD_OPENCV "${WVD_NATIVE_DEPS}/opencv-unpacked/opencv/build")
 set(WVD_ORT "${WVD_NATIVE_DEPS}/ort-unpacked/onnxruntime-win-x64-1.22.1")
 set(WVD_RAPID "${CMAKE_CURRENT_SOURCE_DIR}/../third_party/rapidocr_core")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+  "${PROJECT_SOURCE_DIR}/resources/authoring/semantic-assets.json")
+file(READ "${PROJECT_SOURCE_DIR}/resources/authoring/semantic-assets.json" WVD_SEMANTIC_CATALOGUE)
+file(SHA256 "${PROJECT_SOURCE_DIR}/resources/authoring/semantic-assets.json" WVD_SEMANTIC_SOURCE_SHA256)
+file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/generated")
+file(WRITE "${PROJECT_BINARY_DIR}/generated/semantic_catalogue.sha256" "${WVD_SEMANTIC_SOURCE_SHA256}\n")
+set(WVD_PROBE_RESOURCES "")
+foreach(ID IN ITEMS city.royal.identity city.inn.entry city.temple.entry
+  city.blacksmith.entry city.ruins.entry city.guild.entry city.ore_merchant.entry
+  city.item_shop.entry city.edge.entry city.any
+  guild.commissions.page guild.bounties.page chest.open.option chest.choose.page
+  chest.reward.page)
+  string(JSON ENTRY GET "${WVD_SEMANTIC_CATALOGUE}" resources "${ID}")
+  if(NOT WVD_PROBE_RESOURCES STREQUAL "")
+    string(APPEND WVD_PROBE_RESOURCES ",")
+  endif()
+  string(APPEND WVD_PROBE_RESOURCES "\"${ID}\":${ENTRY}")
+endforeach()
+set(WVD_SEMANTIC_CATALOGUE "{\"schema\":1,\"resources\":{${WVD_PROBE_RESOURCES}}}")
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/games/wvd/vision/semantic_catalogue.hpp.in"
+  "${PROJECT_BINARY_DIR}/generated/semantic_catalogue.hpp" @ONLY)
 file(READ "${PROJECT_SOURCE_DIR}/native-dependencies.lock.json" WVD_NATIVE_LOCK)
 foreach(INDEX RANGE 0 2)
   string(JSON NAME GET "${WVD_NATIVE_LOCK}" binaries ${INDEX} filename)
@@ -74,6 +95,7 @@ target_sources(wvd_native_games PRIVATE
   games/wvd/profile.cpp games/wvd/tasks/quest_catalog.cpp
   games/wvd/tasks/task_plan.cpp games/wvd/mining/progress.cpp
   games/wvd/tasks/mining.cpp games/wvd/tasks/manual_separation.cpp
+  games/wvd/tasks/run_builder.cpp
   games/wvd/tasks/bounty_visit.cpp games/wvd/quests/manual_separation.cpp
   games/wvd/quests/sleep_visits.cpp games/wvd/tasks/sleep_visits.cpp
   games/wvd/tasks/featured_request.cpp games/wvd/tasks/golden_chest.cpp
@@ -85,7 +107,8 @@ target_sources(wvd_native_games PRIVATE
   games/wvd/quests/bounty_cycle.cpp games/wvd/tasks/bounty_cycle.cpp
   games/wvd/tasks/fishing.cpp games/wvd/tasks/fishing_supply.cpp
   games/wvd/fishing/progress.cpp games/wvd/tasks/pipeline_compiler.cpp games/wvd/tasks/locale_assets.cpp
-  games/wvd/tasks/author_workflow.cpp storage/workflow_repository.cpp
+  games/wvd/tasks/author_workflow.cpp authoring/workflow_validator.cpp
+  storage/workflow_repository.cpp
   games/wvd/navigation/world_map.cpp games/wvd/supply/inn.cpp
   games/wvd/tasks/dungeon_route.cpp games/wvd/tasks/departure.cpp
   games/wvd/tasks/dungeon_iteration.cpp games/wvd/navigation/map_route.cpp
@@ -101,9 +124,10 @@ target_sources(wvd_native_games PRIVATE
   games/wvd/tasks/dark_light.cpp games/wvd/recovery/karma_prompt.cpp
   storage/karma_writer.cpp games/wvd/combat/strategy.cpp
   storage/legacy_import.cpp storage/profile_store.cpp)
-target_link_libraries(wvd_native_games PUBLIC wvd_native_workflow wvd_native_platform wvd_native_recognition)
+target_link_libraries(wvd_native_games PUBLIC wvd_native_workflow wvd_native_platform wvd_native_recognition psapi)
 target_include_directories(wvd_native_games SYSTEM PRIVATE "${BOOST_ROOT}")
 target_compile_options(wvd_native_games PRIVATE /utf-8 /W4 /EHsc)
+target_compile_definitions(wvd_native_games PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
 
 add_library(wvd_native_runtime STATIC runtime/flow_executor.cpp
   runtime/flow_executor_events.cpp

@@ -33,43 +33,54 @@ const std::unordered_map<std::string, std::string> legacy_observations{
     {"spellskill/CombatAutoEnable", "combat.auto.on"},
 };
 
-void replace_templates(J &node, authoring::SemanticAssets &assets) {
+void replace_templates(J &node, authoring::SemanticAssets &assets, const std::string &locale,
+                       authoring::ResourceUse use = authoring::ResourceUse::Observation) {
     if (node.is_array()) {
-        for (auto &child : node) replace_templates(child, assets);
+        for (auto &child : node) replace_templates(child, assets, locale, use);
         return;
     }
     if (!node.is_object()) return;
     if (node.value("mode", std::string{}) == "template" && node.contains("image")) {
         const auto image = node.at("image").get<std::string>();
+        std::string id;
         if (image == "whowillopenit") {
-            node = assets.condition("chest.choose.page", "zh-Hant", authoring::ResourceUse::Observation);
-            return;
+            id = "chest.choose.page";
         }
         const auto observation = legacy_observations.find(image);
-        if (observation != legacy_observations.end()) {
-            node = assets.condition(observation->second, "zh-Hant", authoring::ResourceUse::Observation);
-            return;
-        }
+        if (observation != legacy_observations.end()) id = observation->second;
         const auto found = legacy_assets.find(image);
-        if (found != legacy_assets.end()) {
-            node = assets.condition(found->second, "zh-Hant", authoring::ResourceUse::Position);
+        if (found != legacy_assets.end()) id = found->second;
+        if (!id.empty()) {
+            auto resolved = assets.condition(id, locale, use);
+            if (resolved.value("mode", "") != "template")
+                throw std::runtime_error("NATIVE_LEGACY_COMPOSITE_OVERRIDE_UNSUPPORTED:" + image);
+            for (const auto &[key, value] : node.items()) {
+                if (key == "mode" || key == "image") continue;
+                if (key == "threshold" && value == 0.8 && node.size() == 3) continue;
+                if (key != "threshold" && key != "roi" && key != "grayscale" &&
+                    key != "preprocess")
+                    throw std::runtime_error("NATIVE_LEGACY_OVERRIDE_UNSUPPORTED:" + image + ":" + key);
+                resolved[key] = value;
+            }
+            node = std::move(resolved);
             return;
         }
     }
     for (auto &[key, child] : node.items()) {
-        (void)key;
-        replace_templates(child, assets);
+        const auto child_use = key == "target_recognition" ? authoring::ResourceUse::Position : use;
+        replace_templates(child, assets, locale, child_use);
     }
 }
 } // namespace
 
 void localize_task_assets(CompiledWorkflow &workflow, const J &catalogue,
                           const std::string &locale) {
-    if (locale == "en") return;
-    if (locale != "zh-Hant") throw std::runtime_error("TASK_RESOURCE_LOCALE_UNSUPPORTED:" + locale);
+    authoring::validate_resource_locale(locale);
+    // 未选语言或英文时保留原生任务明确指定的原图；作者显式图片不经此兼容映射。
+    if (locale.empty() || locale == "en") return;
     authoring::SemanticAssets assets(catalogue);
-    replace_templates(workflow.nodes, assets);
-    replace_templates(workflow.event_scopes, assets);
+    replace_templates(workflow.nodes, assets, locale);
+    replace_templates(workflow.event_scopes, assets, locale);
     workflow.authoring["resource_locale"] = locale;
     workflow.authoring["semantic_selections"] = assets.selections();
     workflow.refresh_images();

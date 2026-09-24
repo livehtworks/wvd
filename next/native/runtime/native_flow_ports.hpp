@@ -13,10 +13,12 @@ class NativeFlowPorts final : public FlowPorts {
         const std::string &, const nlohmann::json &,
         const std::optional<contracts::FrameEnvelope> &,
         const std::optional<contracts::Observation> &, const std::string &)>;
+    using InputSink = std::function<void(const nlohmann::json &)>;
     NativeFlowPorts(devices::DeviceBackend &backend, recognition::Service &recognizer,
                     contracts::BusinessRunState &business, contracts::InputPolicy policy,
                     std::uint64_t generation, std::stop_token stop);
     void set_operation_handler(OperationHandler handler);
+    void set_input_sink(InputSink sink) { input_sink_ = std::move(sink); }
     contracts::FrameEnvelope capture() override;
     contracts::Observation recognize(const contracts::FrameEnvelope &frame,
                                       const recognition::Request &request) override;
@@ -42,5 +44,7 @@ class NativeFlowPorts final : public FlowPorts {
     devices::NativeInputGate gate_;
     const std::stop_token stop_token_;
     OperationHandler operation_handler_;
+    InputSink input_sink_;
+    std::uint64_t input_sequence_{};
 };
 } // namespace wvd::runtime

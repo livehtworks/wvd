@@ -1,0 +1,4 @@
+#pragma once
+// 由 CMake 从唯一人工维护的 semantic-assets.json 生成，运行时不读取活动文件。
+inline constexpr const char *wvd_semantic_catalogue = R"wvd(@WVD_SEMANTIC_CATALOGUE@)wvd";
+inline constexpr const char *wvd_semantic_source_sha256 = "@WVD_SEMANTIC_SOURCE_SHA256@";

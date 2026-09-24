@@ -73,6 +73,7 @@ struct Call {
 };
 struct Return {
     std::string outcome;
+    std::string reason;
 };
 struct BusinessConfirm {
     std::string operation;
@@ -85,6 +86,9 @@ struct RegisteredOperation {
     nlohmann::json parameters;
 };
 struct Finish {};
+struct BusinessFail {
+    std::string reason;
+};
 struct ExternalBlocked {
     std::string reason;
 };
@@ -93,7 +97,8 @@ struct Fail {
 };
 
 using StepData = std::variant<Observe, Route, Input, AwaitResult, Wait, Call, Return,
-                              BusinessConfirm, RegisteredOperation, Finish, ExternalBlocked, Fail>;
+                              BusinessConfirm, RegisteredOperation, Finish, BusinessFail,
+                              ExternalBlocked, Fail>;
 
 struct Step {
     std::string id;
@@ -105,6 +110,7 @@ struct Step {
     std::chrono::milliseconds time_limit{60000};
     std::chrono::milliseconds delay_after{0};
     int max_hit{1};
+    bool handles_business_failure{};
     std::vector<EventRule> event_policy;
     std::set<std::string> disabled_events;
 };
@@ -116,7 +122,7 @@ struct Definition {
 };
 
 struct FlowProgram {
-    static constexpr int schema = 2; // 补齐事件守卫、禁用规则和业务绑定的封存语义。
+    static constexpr int schema = 3; // 显式业务失败与致命运行故障不再共享同一终点。
     std::string engine_kind{"wvd_native"};
     std::string revision;
     std::string root_definition;

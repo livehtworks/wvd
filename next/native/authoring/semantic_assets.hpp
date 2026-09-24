@@ -1,5 +1,5 @@
 #pragma once
-#include "document_parameters.hpp"
+#include "resource_locale.hpp"
 
 namespace wvd::authoring {
 enum class ResourceUse { Observation, Position };
@@ -77,8 +77,7 @@ class SemanticAssets {
   private:
     Json catalogue_, selections_ = Json::object();
     static void check_locale(const std::string &locale) {
-        if (locale != "" && locale != "en" && locale != "zh-Hant" && locale != "zh-Hans" && locale != "ja")
-            contract_error("AUTHOR_RESOURCE_LOCALE_INVALID", locale);
+        validate_resource_locale(locale);
     }
     Json lower_condition(const Json &p, const std::string &locale,
                          ResourceUse use = ResourceUse::Observation) {

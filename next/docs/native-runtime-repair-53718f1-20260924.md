@@ -3,6 +3,8 @@
 日期：2026-09-24。准确基线：`53718f1bf54980fbdbb7bdccf753cb0b77c2a95f`。
 本文件说明本包候选代码和本地必须补齐的接线，不是“架构已通过实机”的声明。
 
+> 2026-09-25 补充：本文件是 `53718f1` 阶段的设计基线，不代表 `8f61540` 修复候选已实机验收。当前任务选择/恢复条件已移入 `games/wvd/tasks/run_builder`；中立作者文档校验位于 `authoring/workflow_validator`；公会 Reveal 复用 `PublicFlowLibrary`，Report 仍阻断；Call/Return 普通业务失败与致命故障分离。来源、内置同步、事件栈及未决输入按 `architecture.md` 和 `../../docs/repair-8f61540-closure.md` 的当前事实为准。旧设计中的实机限制只适用于当时阶段，本轮必须由用户现场选定范围。
+
 ## 1. 不改变的产品目标
 
 Windows / C++20 / Vue 仍是唯一当前产品路线；不回装 Maa，不接入另一套通用流程框架，不建设安装器、更新器或跨平台部署。

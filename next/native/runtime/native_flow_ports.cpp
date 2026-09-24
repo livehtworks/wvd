@@ -27,13 +27,38 @@ contracts::Observation NativeFlowPorts::recognize(
 
 Submission NativeFlowPorts::submit(const contracts::Command &command,
     const contracts::Observation &scene, const contracts::Observation &target,
-    contracts::Box allowed_area, const std::string &) {
-    const auto receipt = gate_.submit(command, scene, target, allowed_area);
+    contracts::Box allowed_area, const std::string &source_path) {
+    const auto sequence = ++input_sequence_;
+    const auto record = [&](const char *state, std::uint64_t action_epoch,
+                            const std::string &detail) {
+        if (!input_sink_) return;
+        try {
+            input_sink_({{"sequence", sequence}, {"source_path", source_path},
+                         {"command_kind", static_cast<int>(command.kind)},
+                         {"state", state}, {"basis_frame", scene.basis.frame_id},
+                         {"basis_epoch", scene.basis.action_epoch},
+                         {"action_epoch", action_epoch}, {"detail", detail}});
+        } catch (...) { /* Diagnostics cannot alter or repeat an input. */ }
+    };
+    record("attempted", 0, "");
+    devices::InputReceipt receipt;
+    try {
+        receipt = gate_.submit(command, scene, target, allowed_area);
+    } catch (const std::exception &error) {
+        record("error", 0, error.what());
+        throw;
+    } catch (...) {
+        record("error", 0, "unknown");
+        throw;
+    }
     SubmissionState state = SubmissionState::Rejected;
     if (receipt.disposition == devices::InputDisposition::Submitted)
         state = SubmissionState::Accepted;
     else if (receipt.disposition == devices::InputDisposition::Unresolved)
         state = SubmissionState::Unresolved;
+    record(state == SubmissionState::Accepted ? "accepted" :
+           state == SubmissionState::Unresolved ? "unresolved" : "rejected",
+           receipt.action_epoch, receipt.detail);
     return {state, receipt.action_epoch, receipt.submitted_at, receipt.detail};
 }
 

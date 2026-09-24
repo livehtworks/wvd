@@ -12,12 +12,24 @@
 #include <cmath>
 #include <chrono>
 #include <exception>
+#include <new>
+#include <windows.h>
+#include <psapi.h>
 #include <opencv2/imgproc.hpp>
 #include <opencv2/objdetect.hpp>
 
 namespace wvd::games::vision {
 using J = nlohmann::json;
 namespace {
+thread_local int diagnostic_partitions = 1;
+J process_memory_summary() {
+    PROCESS_MEMORY_COUNTERS_EX counters{};
+    if (!GetProcessMemoryInfo(GetCurrentProcess(),
+            reinterpret_cast<PROCESS_MEMORY_COUNTERS *>(&counters), sizeof(counters)))
+        return nullptr;
+    return {{"private_bytes", static_cast<std::uint64_t>(counters.PrivateUsage)},
+            {"working_set_bytes", static_cast<std::uint64_t>(counters.WorkingSetSize)}};
+}
 struct MovementSample {
     cv::Mat gray;
     std::chrono::steady_clock::time_point at;
@@ -233,6 +245,8 @@ ProbeBatch evaluate_batch(const recognition::Bundle &bundle, recognition::Pixels
             if (key.starts_with("template:") || key.starts_with("mask:"))
                 worker.assets.emplace(key, value);
     cv::parallel_for_(cv::Range(0, partitions), [&](const cv::Range &range) {
+        const auto previous = diagnostic_partitions;
+        diagnostic_partitions = partitions;
         for (int worker = range.start; worker < range.end; ++worker)
             for (std::size_t i = worker; i < probes.size(); i += partitions) {
                 try {
@@ -242,6 +256,7 @@ ProbeBatch evaluate_batch(const recognition::Bundle &bundle, recognition::Pixels
                     batch.errors[i] = std::current_exception();
                 }
             }
+        diagnostic_partitions = previous;
     }, partitions);
     for (const auto &worker : workers)
         for (const auto &[key, value] : worker.assets) {
@@ -894,8 +909,28 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
         auto effective = has_roi ? rect(parameters.at("roi"), image.size()) : allowed_rect;
         check((effective & allowed_rect) == effective, "WVD_ROI_OUTSIDE_SCOPE");
         parameters["roi"] = box(effective);
-        auto result =
-            match(image, assets.load(name), parameters, cache, bundle.revision + ":" + name);
+        cv::Mat templ;
+        J result;
+        try {
+            templ = assets.load(name);
+            result = match(image, templ, parameters, cache, bundle.revision + ":" + name);
+        } catch (const cv::Exception &error) {
+            const std::string original = error.what();
+            const auto detail = J{{"parameter_image", name},
+                {"source_size", {image.cols, image.rows}},
+                {"roi", box(effective)}, {"template_size", {templ.cols, templ.rows}},
+                {"partitions", diagnostic_partitions}, {"cache_items", cache.assets.size()},
+                {"process_memory", process_memory_summary()},
+                {"opencv", original.substr(0, 512)}};
+            throw std::runtime_error("WVD_MATCH_OPENCV_ERROR:" + detail.dump());
+        } catch (const std::bad_alloc &error) {
+            const auto detail = J{{"parameter_image", name},
+                {"source_size", {image.cols, image.rows}}, {"roi", box(effective)},
+                {"template_size", {templ.cols, templ.rows}},
+                {"partitions", diagnostic_partitions}, {"cache_items", cache.assets.size()},
+                {"process_memory", process_memory_summary()}, {"error", error.what()}};
+            throw std::runtime_error("WVD_MATCH_ALLOCATION_ERROR:" + detail.dump());
+        }
         result["effective_roi"] = box(effective);
         result["roi_source"] = parameters.value("roi_source", has_roi ? "explicit" : "scope");
         return result;

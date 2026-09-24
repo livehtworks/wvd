@@ -7,6 +7,7 @@ import {
   ArrowLeft, Beaker, CircleStop, Copy, GitBranch, Play, Plus, Redo2, RefreshCw, Save, Trash2, Undo2,
 } from "@lucide/vue";
 import { formatApiError, probeRecognition } from "../api/client";
+import { resourceLocaleOptions } from "../api/types";
 import type { EventResume, EventRule, JsonObject, RecognitionProbeResult, WorkflowEdge, WorkflowNode } from "../api/types";
 import { useWorkflowEditor } from "../stores/useWorkflowEditor";
 import FlowCallInspector from "../features/authoring/FlowCallInspector.vue";
@@ -16,6 +17,7 @@ import ConditionEditor from "../features/authoring/ConditionEditor.vue";
 import EventPolicyPanel from "../features/authoring/EventPolicyPanel.vue";
 import ArgumentFields from "../features/authoring/ArgumentFields.vue";
 import type { FlowCall, PublicInterface } from "../features/authoring/flowModel";
+import { appendEdge, changeEdgeKind, moveEdge, removeSelection } from "../features/flow/graphMutations";
 
 const state = useWorkflowEditor();
 const emit = defineEmits<{ dirty: [value: boolean] }>();
@@ -72,31 +74,27 @@ function duplicateNode() {
 function deleteSelection() {
   if (!state.current) return;
   if (!state.selectedNodeId && !state.selectedEdgeId) return;
+  const result = removeSelection(state.current.nodes, state.current.edges,
+    state.current.entry_node_id, state.selectedNodeId, state.selectedEdgeId);
   state.checkpoint();
-  if (state.selectedNodeId) {
-    const id = state.selectedNodeId;
-    state.current.nodes = state.current.nodes.filter((node) => node.id !== id);
-    state.current.edges = state.current.edges.filter((edge) => edge.source !== id && edge.target !== id);
-    if (state.current.entry_node_id === id) state.current.entry_node_id = undefined;
-    state.selectedNodeId = "";
-  } else {
-    state.current.edges = state.current.edges.filter((edge) => edge.id !== state.selectedEdgeId);
-    state.selectedEdgeId = "";
-  }
+  state.current.nodes = result.nodes;
+  state.current.edges = result.edges;
+  state.current.entry_node_id = result.entry;
+  state.selectedNodeId = "";
+  state.selectedEdgeId = "";
 }
 function connect(connection: Connection) {
   if (!state.current || !connection.source || !connection.target || connection.source === connection.target) return;
   if (state.current.edges.some((edge) => edge.source === connection.source && edge.target === connection.target && edge.sourceHandle === connection.sourceHandle)) return;
-  state.checkpoint();
   const outcome = connection.sourceHandle === "failure" ? "failure" : "success";
-  const siblings = state.current.edges.filter((edge) => edge.source === connection.source &&
-    (edge.data?.kind === "failure" ? "failure" : "success") === outcome);
-  state.current.edges.push({
+  const edge: WorkflowEdge = {
     id: uid("edge"), source: connection.source, target: connection.target,
     sourceHandle: connection.sourceHandle, targetHandle: connection.targetHandle,
-    label: `${connection.sourceHandle === "failure" ? "failure" : "sequence"} · ${siblings.length}`,
-    data: { kind: connection.sourceHandle === "failure" ? "failure" : "sequence", order: siblings.length },
-  });
+    data: { kind: outcome === "failure" ? "failure" : "sequence" },
+  };
+  const next = appendEdge(state.current.edges, edge);
+  state.checkpoint();
+  state.current.edges = next;
 }
 function selectNode(event: NodeMouseEvent) {
   state.selectedNodeId = event.node.id;
@@ -190,18 +188,18 @@ function setRepeat(event: Event) {
 }
 function edgeOrder(event: Event) {
   if (!state.selectedEdge) return;
+  const next = moveEdge(state.current!.edges, state.selectedEdge.id, Number((event.target as HTMLInputElement).value));
+  if (next === state.current!.edges) return;
   state.checkpoint();
-  state.selectedEdge.data ??= {};
-  state.selectedEdge.data.order = Number((event.target as HTMLInputElement).value);
-  state.selectedEdge.label = edgeLabel(state.selectedEdge);
+  state.current!.edges = next;
 }
 function edgeKind(event: Event) {
   if (!state.selectedEdge) return;
+  const next = changeEdgeKind(state.current!.edges, state.selectedEdge.id,
+    (event.target as HTMLSelectElement).value as "sequence" | "candidate" | "failure");
+  if (next === state.current!.edges) return;
   state.checkpoint();
-  state.selectedEdge.data ??= {};
-  state.selectedEdge.data.kind = (event.target as HTMLSelectElement).value as "sequence" | "candidate" | "failure";
-  state.selectedEdge.sourceHandle = state.selectedEdge.data.kind === "failure" ? "failure" : "success";
-  state.selectedEdge.label = edgeLabel(state.selectedEdge);
+  state.current!.edges = next;
 }
 function chooseProbeFile(event: Event) { probeImage.value = (event.target as HTMLInputElement).files?.[0]; }
 async function runProbe() {
@@ -263,7 +261,6 @@ function patchNodeEventResume(id:string,patch:Partial<EventResume>){
  if(!state.selectedNode?.resume?.[id])return;state.checkpoint();
  state.selectedNode.resume[id]={...state.selectedNode.resume[id],...patch};
 }
-function edgeLabel(edge: WorkflowEdge) { return `${edge.data?.kind ?? "sequence"} · ${edge.data?.order ?? 0}`; }
 </script>
 
 <template>
@@ -272,6 +269,8 @@ function edgeLabel(edge: WorkflowEdge) { return `${edge.data?.kind ?? "sequence"
     <section v-if="state.run?.active_event" class="notice" role="status">{{ state.run.active_event.path?.map(item => item.event_id).join(' → ') ?? state.run.active_event.event_id }} · 原步骤 {{ state.run.suspended_step?.node_id ?? state.run.active_event.source_node }} · {{ state.run.active_event.resume.mode }}</section>
     <div v-if="state.runError" class="notice error" role="alert">{{ state.runError }}</div>
     <nav v-if="state.run?.node_path?.length" aria-label="运行调用路径"><button v-for="(part,i) in state.run.node_path" :key="i" type="button" @click="state.openDefinition(part.flow_id,part.node_id)">{{part.flow_id}} / {{part.node_id}}</button></nav>
+    <div v-if="state.run?.call_stack?.length" class="notice" role="status">调用层次：{{ state.run.call_stack.map(frame => frame.node_id).join(' → ') }}</div>
+    <div v-if="state.run?.unresolved_inputs?.length" class="notice error" role="alert">有 {{ state.run.unresolved_inputs.length }} 次输入结果未确认，流程不会自动重发</div>
     <header class="editor-toolbar">
       <div class="workflow-picker">
         <button v-if="state.definitionCaller" class="button secondary" :title="`返回 ${state.definitionCaller.name}`" @click="state.returnToCaller"><ArrowLeft :size="16" />返回调用者</button>
@@ -281,6 +280,10 @@ function edgeLabel(edge: WorkflowEdge) { return `${edge.data?.kind ?? "sequence"
         <button class="icon-button" title="新建流程" aria-label="新建流程" @click="state.createBlank"><Plus :size="17" /></button>
         <button class="icon-button" title="复制流程" aria-label="复制流程" :disabled="!state.current" @click="state.copyCurrent"><Copy :size="16" /></button>
         <button class="icon-button danger" title="删除流程" aria-label="删除流程" :disabled="!state.current || state.isNew" @click="state.remove"><Trash2 :size="16" /></button>
+        <button v-if="state.workflows.find(item => item.id === state.current?.id)?.builtin_status"
+          class="button secondary" title="查看交付包与本地定义的差异" @click="state.viewBuiltin">
+          <RefreshCw :size="16" />内置定义
+        </button>
         <select v-model="importTaskId" aria-label="复制现有任务"><option value="">复制现有任务…</option><option v-for="task in state.catalog.tasks?.filter((item) => item.type === 'dungeon') ?? []" :key="task.id" :value="task.id">{{ task.name }}</option></select>
         <button class="button secondary" :disabled="!importTaskId" @click="state.importTask(importTaskId)"><Copy :size="16" />生成编辑副本</button>
         <button class="button secondary" :disabled="!state.current" @click="extractSelected">提取选中步骤为公共块</button>
@@ -297,6 +300,17 @@ function edgeLabel(edge: WorkflowEdge) { return `${edge.data?.kind ?? "sequence"
     </header>
     <div v-if="state.error || editorError" class="notice error editor-notice" role="alert">{{ state.error || editorError }}</div>
     <div v-if="state.notice" class="notice success editor-notice" role="status">{{ state.notice }}</div>
+    <section v-if="state.builtinDetail" class="builtin-diff" aria-label="内置定义比较">
+      <header><strong>内置定义 · {{ state.builtinDetail.flow_id }}</strong>
+        <span>{{ { current:'无更新', update_available:'可更新', local_modified:'本地已修改，需核对', source_unknown:'旧来源无法确认' }[state.builtinDetail.status] }}</span>
+        <button class="icon-button" title="关闭比较" aria-label="关闭比较" @click="state.builtinDetail = undefined">×</button>
+      </header>
+      <p v-if="state.builtinDetail.affected_references.length">受影响的调用：{{ state.builtinDetail.affected_references.join('、') }}</p>
+      <div class="builtin-diff-columns"><div><h3>本地定义</h3><pre>{{ JSON.stringify(state.builtinDetail.current, null, 2) }}</pre></div>
+        <div><h3>交付包定义</h3><pre>{{ JSON.stringify(state.builtinDetail.builtin, null, 2) }}</pre></div></div>
+      <button v-if="state.builtinDetail.status === 'update_available'" class="button primary"
+        :disabled="state.dirty" @click="state.applyBuiltin">同步此定义</button>
+    </section>
 
     <div class="editor-shell">
       <aside class="node-library">
@@ -309,7 +323,7 @@ function edgeLabel(edge: WorkflowEdge) { return `${edge.data?.kind ?? "sequence"
           :flows="state.workflows" :current-flow-id="state.current.id" :nodes="state.current.nodes"
           :templates="state.catalog.templates" :resources="publicResources" :recognizers="state.catalog.recognizers"
           @update:model-value="eventsChanged" @open-definition="state.openDefinition" />
-        <label v-if="state.current" class="field"><span>游戏素材语言（不是工作台语言）</span><select v-model="state.current.resource_locale" @focus="state.checkpoint"><option value="">未选择</option><option value="zh-Hant">繁中</option><option value="en">英文</option><option value="zh-Hans">简中</option><option value="ja">日文</option></select></label>
+        <label v-if="state.current" class="field"><span>游戏素材语言（不是工作台语言）</span><select v-model="state.current.resource_locale" @focus="state.checkpoint"><option v-for="option in resourceLocaleOptions" :key="option.value" :value="option.value">{{ option.label }}</option></select></label>
       </aside>
 
       <section class="flow-region" aria-label="流程画布">
@@ -413,3 +427,13 @@ function edgeLabel(edge: WorkflowEdge) { return `${edge.data?.kind ?? "sequence"
     </div>
   </main>
 </template>
+<style scoped>
+.builtin-diff { padding: 12px 20px; border-block: 1px solid #cbd5d2; background: #f7faf9; }
+.builtin-diff header { display: flex; align-items: center; gap: 16px; }
+.builtin-diff header .icon-button { margin-left: auto; }
+.builtin-diff-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.builtin-diff-columns h3 { font-size: 14px; margin: 8px 0; }
+.builtin-diff-columns pre { max-height: 320px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere;
+  border: 1px solid #cbd5d2; background: white; padding: 8px; font-size: 11px; }
+@media (max-width: 700px) { .builtin-diff-columns { grid-template-columns: 1fr; } }
+</style>

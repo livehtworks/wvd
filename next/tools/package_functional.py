@@ -2,9 +2,12 @@
 
 import hashlib
 import json
+from datetime import datetime, timezone
+import os
 from pathlib import Path
 import shutil
 import subprocess
+import time
 import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -16,9 +19,63 @@ MODEL_HASHES = {
 }
 
 
+def sync_authoring_resources():
+    """Only these two authored JSON files are copied into the generated pack."""
+    manifest_path = ROOT / "packs/wvd/manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    members = {row["path"]: row for row in manifest["files"]}
+    changed = False
+    for name in ("semantic-assets.json", "public-flows.json"):
+        source = ROOT / "resources/authoring" / name
+        target = ROOT / "packs/wvd/parameters" / name
+        relative = "parameters/" + name
+        if relative not in members or target.is_symlink() or not target.is_file():
+            raise RuntimeError("作者资源包成员不安全或缺失: " + relative)
+        content = source.read_bytes()
+        json.loads(content.decode("utf-8"))
+        digest = hashlib.sha256(content).hexdigest()
+        if target.read_bytes() != content:
+            target.write_bytes(content)
+            changed = True
+        row = members[relative]
+        if row["sha256"] != digest or row.get("bytes") != len(content):
+            row["sha256"] = digest
+            row["bytes"] = len(content)
+            changed = True
+    if changed:
+        identity = {"files": manifest["files"], "aliases": manifest.get("aliases", {})}
+        manifest["revision"] = hashlib.sha256(json.dumps(identity, sort_keys=True,
+            ensure_ascii=False, separators=(",", ":")).encode("utf-8")).hexdigest()
+        temporary = manifest_path.with_suffix(".json.tmp")
+        temporary.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        os.replace(temporary, manifest_path)
+
+
+def source_identity():
+    repo = ROOT.parent
+    head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True).strip()
+    diff = subprocess.check_output(["git", "diff", "--binary", "--", "next", "docs"], cwd=repo)
+    untracked = subprocess.check_output(["git", "ls-files", "--others", "--exclude-standard", "-z",
+        "--", "next", "docs"], cwd=repo).split(b"\0")
+    digest = hashlib.sha256(diff)
+    names = []
+    for raw in sorted(item for item in untracked if item):
+        name = raw.decode("utf-8", errors="surrogateescape")
+        file = repo / name
+        if file.is_file():
+            digest.update(raw + b"\0")
+            digest.update(file.read_bytes())
+            names.append(name)
+    return {"source_commit": head, "worktree_dirty": bool(diff or names),
+            "worktree_diff_sha256": digest.hexdigest(), "untracked_source_count": len(names)}
+
+
 def check_authoring_assets():
     source = ROOT / "resources/authoring/semantic-assets.json"
     packed = ROOT / "packs/wvd/parameters/semantic-assets.json"
+    compiled_hash = ROOT / "build/generated/semantic_catalogue.sha256"
+    if not compiled_hash.is_file() or compiled_hash.read_text(encoding="ascii").strip() != sha256(source):
+        raise RuntimeError("语义源已变化但原生探针未重新配置构建")
     if source.read_bytes() != packed.read_bytes():
         raise RuntimeError("繁中语义目录与运行资源包不一致，请先同步 semantic-assets.json")
     if (ROOT / "resources/authoring/public-flows.json").read_bytes() != \
@@ -60,6 +117,7 @@ def checked_copy(source, target, expected=None):
 
 
 def stage(target):
+    sync_authoring_resources()
     check_authoring_assets()
     binary = ROOT / "build/Release"
     native = ROOT / ".local/native-deps"
@@ -81,7 +139,9 @@ def stage(target):
                  target / "licenses/MaaCommonAssets-MIT.txt")
     checked_copy(ROOT / "docs/third-party-notices.md",
                  target / "licenses/THIRD_PARTY.md")
-    subprocess.run([str(target / "automationd.exe"), "--version"], check=True,
+    # Windows can retain an image handle briefly after exit; never execute inside
+    # the staging directory that must be renamed immediately afterward.
+    subprocess.run([str(binary / "automationd.exe"), "--version"], check=True,
                    capture_output=True, timeout=10)
     web = ROOT / "web/dist"
     pack = ROOT / "packs/wvd"
@@ -123,9 +183,15 @@ def stage(target):
     )
     (target / "启动WVD原生版.bat").write_bytes(launcher.encode("utf-8-sig"))
     (target / "DELIVERY_STATUS.json").write_text(json.dumps({
-        "source_baseline": "376ca780fa7432afb48031b048d340531ae8d5c7",
-        "engine": "wvd_native", "status": "OFFLINE_ACCEPTANCE_REQUIRED",
-        "device_readonly": "NOT_RUN", "game_scope": "NOT_RUN",
+        "migration_baseline": "8f61540eafa61413852c2c3a85cb81c090e2161f",
+        **source_identity(),
+        "built_at_utc": datetime.now(timezone.utc).isoformat(),
+        "engine": "wvd_native", "status": "BUILT_NOT_GAME_ACCEPTED",
+        "exe_sha256": sha256(target / "automationd.exe"),
+        "web_index_sha256": sha256(target / "web/index.html"),
+        "pack_revision": manifest["revision"],
+        "resource_catalog_sha256": sha256(target / "pack/parameters/semantic-assets.json"),
+        "game_scope": "NOT_RUN_THIS_BUILD",
     }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
@@ -143,7 +209,14 @@ def package():
                 raise RuntimeError("现有目录不是本脚本生成的原生候选，拒绝替换")
             OUTPUT.rename(previous)
         try:
-            staging.rename(OUTPUT)
+            for attempt in range(5):
+                try:
+                    staging.rename(OUTPUT)
+                    break
+                except PermissionError:
+                    if attempt == 4:
+                        raise
+                    time.sleep(0.5)
         except BaseException:
             if previous.exists() and not OUTPUT.exists():
                 previous.rename(OUTPUT)

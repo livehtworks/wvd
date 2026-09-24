@@ -70,6 +70,8 @@ class PublicFlowLibrary {
     }
     AuthorWorkflowCompilation compile(const J &root, AuthorBusinessResolver native,
         const J &args = J::object(), const std::string &locale = {}) const {
+        if (root.at("flow").at("id") == "guild-claim-first-bounty")
+            authoring::contract_error("BOUNTY_CLAIM_SEMANTICS_UNCONFIRMED");
         std::vector<std::string> active;
         std::size_t count{};
         J used = J::object();
@@ -117,6 +119,8 @@ class PublicFlowLibrary {
     };
     const J &lookup(const J &call) const {
         const auto id = call.at("flow_id").get<std::string>();
+        if (id == "guild-claim-first-bounty")
+            authoring::contract_error("BOUNTY_CLAIM_SEMANTICS_UNCONFIRMED");
         if (!documents_.contains(id)) authoring::contract_error("FLOW_REFERENCE_MISSING", id);
         const auto &doc = documents_.at(id);
         if (call.contains("expected_revision") && call.at("expected_revision") != doc.value("revision", ""))

@@ -22,10 +22,16 @@ class WorkflowRepository {
                                     const std::string &expected_revision,
                                     const nlohmann::json &document);
     void erase(const std::string &flow_id, const std::string &expected_revision);
+    void register_builtin(const nlohmann::json &document, const std::string &local_revision);
+    nlohmann::json inspect_builtin(const nlohmann::json &document) const;
+    nlohmann::json sync_builtin(const nlohmann::json &document,
+                                const std::string &expected_local_revision,
+                                const std::string &expected_builtin_revision);
 
   private:
     const std::filesystem::path root_;
     std::filesystem::path path_for(const std::string &flow_id) const;
+    std::filesystem::path builtin_path_for(const std::string &flow_id) const;
     nlohmann::json read_unlocked(const std::string &flow_id) const;
 };
 

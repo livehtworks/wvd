@@ -2,6 +2,7 @@
 
 #include "api/routes.hpp"
 #include "games/wvd/tasks/quest_catalog.hpp"
+#include "games/wvd/tasks/pipeline_compiler.hpp"
 #include "devices/device_session.hpp"
 #include "runtime/native_run_coordinator.hpp"
 #include "storage/profile_store.hpp"
@@ -34,10 +35,13 @@ class Application {
     J effective_profile_values(const std::string &task_id, const J &stored) const;
     J queue_run(const std::string &kind, const J &request, const J &identity,
                 std::function<J()> prepare);
+    games::tasks::CompiledWorkflow compile_task_graph(const J &request,
+        const games::WvdQuestDefinition &task, const J &values) const;
     runtime::NativeRunDefinition assemble_task(const J &request, const J &stored,
                                          const devices::LifecycleTarget &target,
                                          std::optional<J> frozen_values = std::nullopt,
-                                         bool continuation = false);
+                                         bool continuation = false,
+                                         std::optional<games::tasks::CompiledWorkflow> prepared = std::nullopt);
     runtime::NativeRunDefinition assemble_workflow(const J &request, const J &stored, J document,
                                              const devices::LifecycleTarget &target,
                                              std::map<std::string, std::string> *pipeline_to_node = nullptr,
@@ -47,7 +51,8 @@ class Application {
     J prepare_task(const J &request, const J &stored,
                    std::shared_ptr<devices::DeviceConnection> backend,
                    std::optional<J> frozen_values = std::nullopt,
-                   J handoff_parent = nullptr);
+                   J handoff_parent = nullptr,
+                   std::optional<games::tasks::CompiledWorkflow> prepared = std::nullopt);
     void watch_task_handoff(const J &stored, J source_values,
                             std::shared_ptr<devices::DeviceConnection> backend,
                             std::string request_id);
@@ -69,6 +74,8 @@ class Application {
     J capture_device();
     J start_task(const J &request);
     J list_workflows() const;
+    J inspect_builtin(const std::string &flow_id) const;
+    J sync_builtin(const std::string &flow_id, const J &request);
     J create_workflow(const J &request);
     J import_task_workflow(const J &request);
     J read_workflow(const std::string &flow_id) const;
@@ -84,6 +91,7 @@ class Application {
     ApplicationPaths paths_;
     J descriptor_, manifest_, aliases_, operation_;
     J semantic_catalogue_ = J::object();
+    J builtin_documents_ = J::object();
     recognition::Bundle author_bundle_;
     std::set<std::string> available_images_;
     std::unique_ptr<storage::ProfileStore> profile_store_;

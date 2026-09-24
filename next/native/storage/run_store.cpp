@@ -201,6 +201,8 @@ J snapshot_json(const contracts::RunSnapshot &s) {
               {"cleanup_called", s.inputs.cleanup_called}}}};
     if (!s.outcome_category.empty()) result["outcome_category"] = s.outcome_category;
     if (!s.active_event.is_null()) result["active_event"] = s.active_event;
+    if (!s.execution.is_null()) result["execution"] = s.execution;
+    if (!s.unresolved_inputs.empty()) result["unresolved_inputs"] = s.unresolved_inputs;
     return result;
 }
 RunStore::RunStore(const std::filesystem::path &root, const std::string &instance,

@@ -65,6 +65,7 @@ class PipelineCompiler {
     void hit_limit(const std::string &name, int limit);
     void event_scope(const std::string &name, nlohmann::json rules);
     void failure_route(const std::string &name, nlohmann::json next);
+    void business_failure(const std::string &name, const std::string &reason);
     void delay_after(const std::string &name, int milliseconds);
     void postcondition_budget(const std::string &name, int milliseconds);
     void allowed_area(const std::string &name, nlohmann::json area);

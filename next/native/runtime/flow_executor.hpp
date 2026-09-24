@@ -42,7 +42,7 @@ class FlowPorts {
                                     const std::string &source_path) = 0;
     virtual bool cancelled() const = 0;
 };
-enum class TickState { Progress, Waiting, Completed, Failed, ExternalBlocked, Cancelled };
+enum class TickState { Progress, Waiting, Completed, BusinessFailed, Failed, ExternalBlocked, Cancelled };
 struct TickResult {
     TickState state{TickState::Failed};
     std::chrono::steady_clock::time_point wake_at{};
@@ -59,6 +59,7 @@ class FlowExecutor final {
     TickResult tick();
     const std::string &current_source_path() const;
     std::string current_step_id() const;
+    nlohmann::json progress_snapshot() const;
     std::size_t invocation_depth() const { return stack_.size(); }
     bool has_unresolved_input() const;
 
@@ -121,6 +122,8 @@ class FlowExecutor final {
     TickResult progress() const;
     TickResult waiting(std::chrono::milliseconds delay) const;
     TickResult fail(std::string code);
+    TickResult business_fail(std::string reason, std::string source);
+    TickResult return_business_failure(const std::string &reason);
     TickResult blocked(std::string code);
     TickResult route_error(Frame &frame, const workflow::Step &current, std::string code);
     TickResult select_next(Frame &frame, const workflow::Step &current);

@@ -49,9 +49,8 @@ inline nlohmann::json boot_probes(bool transient) {
     // 背景确认；该锚点只读，不用于点击或推断其他城市业务状态。
     probes.push_back(royal_city());
     // 公会页也属于已启动的稳定游戏画面；从工作台直接运行子流程时不能卡在启动门禁。
-    for (auto name : {"guild_commissions_page_zh_hant", "guild_bounties_page_zh_hant"})
-        probes.push_back({{"mode", "template"}, {"image", name}, {"threshold", .8},
-                          {"roi", {270, 20, 360, 125}}});
+    probes.push_back(resource("guild.commissions.page", "zh-Hant"));
+    probes.push_back(resource("guild.bounties.page", "zh-Hant"));
     for (auto name : {"Inn", "dungFlag", "worldmapflag", "openworldmap", "returnText", "returntoTown",
                        "mapFlag", "fishing/cast", "fishing/striking", "fishing/CloseFishInfo",
                        "cursedWheelTitle", "cursedWheel", "ruins"})

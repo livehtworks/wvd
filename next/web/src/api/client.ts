@@ -56,6 +56,10 @@ export const listWorkflows = () => get<{ workflows: WorkflowDefinition[] } | Wor
 export const createWorkflow = (workflow: Omit<WorkflowDefinition, "revision">) => send<WorkflowDefinition>("/api/v1/workflows", "POST", workflow);
 export const importTaskWorkflow = (taskId: string, flowId: string) => send<WorkflowDefinition>("/api/v1/workflows/from-task", "POST", { task_id: taskId, flow_id: flowId });
 export const readWorkflow = (id: string) => get<WorkflowDefinition>(`/api/v1/workflows/${encodeURIComponent(id)}`);
+export const inspectBuiltin = (id: string) => get<import("./types").BuiltinInspection>(`/api/v1/workflows/${encodeURIComponent(id)}/builtin`);
+export const syncBuiltin = (id: string, localRevision: string, builtinRevision: string) =>
+  send<WorkflowDefinition>(`/api/v1/workflows/${encodeURIComponent(id)}/builtin`, "POST",
+    { local_revision: localRevision, builtin_revision: builtinRevision });
 export const saveWorkflow = (workflow: WorkflowDefinition) => send<WorkflowDefinition>(`/api/v1/workflows/${encodeURIComponent(workflow.id)}`, "PUT", workflow);
 export const deleteWorkflow = (id: string, revision: string) => send<void>(`/api/v1/workflows/${encodeURIComponent(id)}`, "DELETE", { revision });
 export const runWorkflow = (id: string, body: JsonObject = {}) => send<SubmissionReceipt>(`/api/v1/workflows/${encodeURIComponent(id)}/run`, "POST", body);
@@ -64,7 +68,7 @@ export const stopRun = (id?: string | number, requestId?: string) => send<RunSta
   "POST", requestId ? { request_id: requestId } : {},
 );
 export const readCurrentRun = () => get<RunState>("/api/v1/runs/current");
-export const startTask = (taskId: string, requestId: string, profileRevision: string | undefined, resourceLocale: "en" | "zh-Hant") =>
+export const startTask = (taskId: string, requestId: string, profileRevision: string | undefined, resourceLocale: import("./types").ResourceLocale) =>
   send<SubmissionReceipt>("/api/v1/runs/start", "POST", {
     task_id: taskId, request_id: requestId, resource_locale: resourceLocale,
     ...(profileRevision ? { profile_revision: profileRevision } : {}),

@@ -3,14 +3,14 @@ import { runBusy, displayRunState } from "./runStatus";
 import { extractPublicBlock, type PublicInterface } from "../features/authoring/flowModel";
 import {
   createWorkflow, deleteWorkflow, formatApiError, importTaskWorkflow, listWorkflows, readCatalog, readCurrentRun,
-  readWorkflow, runWorkflow, saveWorkflow, stopRun,
+  readWorkflow, runWorkflow, saveWorkflow, stopRun, inspectBuiltin, syncBuiltin,
 } from "../api/client";
-import type { Catalog, RunState, WorkflowDefinition } from "../api/types";
+import type { BuiltinInspection, Catalog, RunState, WorkflowDefinition } from "../api/types";
 
 // 作者数据是纯 JSON。先序列化可避免把 Vue Proxy 传给 structuredClone。
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 const signature = (value: unknown) => JSON.stringify(value);
-interface Snapshot { nodes: WorkflowDefinition["nodes"]; edges: WorkflowDefinition["edges"]; entry_node_id?: string; name: string; description?: string; time_limit_ms?: number; interface?: PublicInterface; resource_locale?: string; events?: WorkflowDefinition["events"] }
+interface Snapshot { nodes: WorkflowDefinition["nodes"]; edges: WorkflowDefinition["edges"]; entry_node_id?: string; name: string; description?: string; time_limit_ms?: number; interface?: PublicInterface; resource_locale?: WorkflowDefinition["resource_locale"]; events?: WorkflowDefinition["events"] }
 interface DefinitionTrailEntry { flowId: string; nodeId: string }
 
 function cleanWorkflow(workflow: WorkflowDefinition): WorkflowDefinition {
@@ -41,6 +41,7 @@ export function useWorkflowEditor() {
   const saving = ref(false);
   const error = ref("");
   const notice = ref("");
+  const builtinDetail = ref<BuiltinInspection>();
   let pollHandle: number | undefined;
 
   const dirty = computed(() => Boolean(current.value) && signature(cleanWorkflow(current.value!)) !== savedSignature.value);
@@ -99,6 +100,7 @@ export function useWorkflowEditor() {
     selectedEdgeId.value = "";
     history.value = [];
     future.value = [];
+    builtinDetail.value = undefined;
   }
   async function refreshList() {
     const response = await listWorkflows();
@@ -169,6 +171,21 @@ export function useWorkflowEditor() {
     finally { saving.value = false; }
   }
   async function reload() { if (current.value && !isNew.value) await open(current.value.id); }
+  async function viewBuiltin() {
+    if (!current.value) return;
+    try { builtinDetail.value = await inspectBuiltin(current.value.id); }
+    catch (reason) { error.value = formatApiError(reason); }
+  }
+  async function applyBuiltin() {
+    const detail = builtinDetail.value;
+    if (!detail || detail.status !== "update_available" || dirty.value) return;
+    if (!window.confirm(`用交付包内置定义更新“${current.value?.name}”？旧文档会备份，固定版本引用不会自动改写。`)) return;
+    try {
+      accept(await syncBuiltin(detail.flow_id, detail.local_revision, detail.builtin_revision));
+      await refreshList();
+      notice.value = "内置定义已同步，新运行将使用新版本";
+    } catch (reason) { error.value = formatApiError(reason); }
+  }
   async function remove() {
     if (!current.value || isNew.value || !window.confirm(`删除流程“${current.value.name}”？`)) return;
     try {
@@ -261,8 +278,8 @@ export function useWorkflowEditor() {
   onBeforeUnmount(() => window.clearInterval(pollHandle));
 
   return reactive({
-    catalog, workflows, current, isNew, selectedNodeId, selectedEdgeId, selectedNode, selectedEdge,
+    catalog, workflows, current, isNew, selectedNodeId, selectedEdgeId, selectedNode, selectedEdge, builtinDetail,
     history, future, definitionCaller, run, loading, saving, error, notice, dirty, runActive, runLabel, runError, starting, activeNodeId,
-    checkpoint, undo, redo, load, open, createBlank, copyCurrent, importTask, save, reload, remove, runSaved, requestStop, extractSelection, openDefinition, returnToCaller,
+    checkpoint, undo, redo, load, open, createBlank, copyCurrent, importTask, save, reload, remove, runSaved, requestStop, extractSelection, openDefinition, returnToCaller, viewBuiltin, applyBuiltin,
   });
 }

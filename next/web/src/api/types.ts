@@ -9,6 +9,11 @@ export interface Capabilities {
 }
 export interface ApiErrorBody { error_code: string; message: string; details?: unknown }
 export type JsonObject = Record<string, unknown>;
+export type ResourceLocale = "" | "en" | "zh-Hant" | "zh-Hans" | "ja";
+export const resourceLocaleOptions: ReadonlyArray<{ value: ResourceLocale; label: string }> = [
+  { value: "", label: "未选择" }, { value: "zh-Hant", label: "繁中" },
+  { value: "en", label: "英文" }, { value: "zh-Hans", label: "简中" }, { value: "ja", label: "日文" },
+];
 
 export interface ProfileEnvelope {
   profile: WvdProfile;
@@ -73,9 +78,16 @@ export interface WorkflowDefinition extends JsonObject {
   nodes: WorkflowNode[]; edges: WorkflowEdge[]; created_from?: string; runnable?: boolean;
   time_limit_ms?: number;
   interface?: import("../features/authoring/flowModel").PublicInterface;
-  slots?: string[]; resource_locale?: string;
+  slots?: string[]; resource_locale?: ResourceLocale;
   events?: Record<string, EventRule>;
   validation_errors?: Array<{ node_id?: string; error_code: string; message: string }>;
+  builtin_status?: "current" | "update_available" | "local_modified" | "source_unknown";
+  builtin_revision?: string;
+}
+export interface BuiltinInspection {
+  flow_id: string; status: "current" | "update_available" | "local_modified" | "source_unknown";
+  local_revision: string; builtin_revision: string; accepted_builtin?: string;
+  current: JsonObject; builtin: JsonObject; affected_references: string[];
 }
 export interface SubmissionReceipt extends JsonObject {
   accepted: boolean; request_id: string; submission_state?: string; replayed?: boolean;
@@ -83,6 +95,9 @@ export interface SubmissionReceipt extends JsonObject {
 }
 export interface RunState extends JsonObject {
   busy?: boolean; quiescent?: boolean;
+  call_stack?: Array<{ definition: string; node_id: string; source_path: Array<{flow_id?:string;node_id?:string;native_node?:string}> }>;
+  unresolved_inputs?: Array<{ source_path:string; basis_frame:number; basis_epoch:number; action_epoch:number; delivery_unknown:boolean }>;
+  execution?: JsonObject;
   node_path?: Array<{flow_id:string;node_id:string}>;
   active_event?: {event_id:string;class?:string;source_node:string;handler_entry?:string;phase?:string;
     depth:number;resume:{mode:string;node_id?:string};path?:Array<{event_id:string;source_node:string}>};

@@ -342,8 +342,12 @@
       "name": "打开公会赏金页面",
       "description": "公共定义候选；来自 dcc11c18 源码及用户业务说明。编译验证不代表真实游戏验证。"
     },
-    "entry": "Guild",
+    "entry": "Entry",
     "nodes": [
+      {"id":"Entry","type":"route","name":"确认当前公会页面","parameters":{},"repeat_limit":4},
+      {"id":"Already","type":"recognition","name":"已在悬赏页","parameters":{"condition":{"mode":"semantic","id":"guild.bounties.page"}}},
+      {"id":"OnCommissions","type":"recognition","name":"已在委托页","parameters":{"condition":{"mode":"semantic","id":"guild.commissions.page"}}},
+      {"id":"OnGuild","type":"recognition","name":"已在公会菜单","parameters":{"condition":{"mode":"semantic","id":"guild.menu"}}},
       {
         "id": "Guild",
         "type": "call",
@@ -389,6 +393,13 @@
       }
     ],
     "edges": [
+      {"id":"entry_already","from":"Entry","to":"Already","outcome":"success","order":0},
+      {"id":"entry_commissions","from":"Entry","to":"OnCommissions","outcome":"success","order":1},
+      {"id":"entry_guild","from":"Entry","to":"OnGuild","outcome":"success","order":2},
+      {"id":"entry_city","from":"Entry","to":"Guild","outcome":"success","order":3},
+      {"id":"already_done","from":"Already","to":"Done","outcome":"success","order":0},
+      {"id":"commissions_bounties","from":"OnCommissions","to":"Bounties","outcome":"success","order":0},
+      {"id":"guild_commissions","from":"OnGuild","to":"Commissions","outcome":"success","order":0},
       {
         "id": "e0",
         "from": "Guild",
@@ -413,6 +424,10 @@
     ],
     "layout": {
       "nodes": [
+        {"node_id":"Entry","x":0,"y":100},
+        {"node_id":"Already","x":210,"y":-200},
+        {"node_id":"OnCommissions","x":210,"y":-100},
+        {"node_id":"OnGuild","x":210,"y":0},
         {
           "node_id": "Guild",
           "x": 40,
@@ -472,7 +487,7 @@
     "flow": {
       "id": "guild-claim-first-bounty",
       "name": "领取列表第一项赏金",
-      "description": "公共定义候选；来自 dcc11c18 源码及用户业务说明。编译验证不代表真实游戏验证。"
+      "description": "业务待核定，暂不可运行。悬赏无需前置接案；此旧定义保留引用以待现场区分讨伐后提交。"
     },
     "entry": "Page",
     "nodes": [

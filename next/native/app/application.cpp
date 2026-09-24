@@ -30,7 +30,10 @@
 #include "games/wvd/native_operations.hpp"
 #include "games/wvd/tasks/author_workflow.hpp"
 #include "games/wvd/tasks/public_flow_library.hpp"
+#include "games/wvd/tasks/run_builder.hpp"
 #include "games/wvd/vision/native_recognizers.hpp"
+#include "games/wvd/vision/native_asset_resolver.hpp"
+#include "authoring/resource_locale.hpp"
 #include "platform/windows/path_utf8.hpp"
 #include "platform/windows/bundle_lease.hpp"
 #include "platform/windows/file_digest.hpp"
@@ -63,35 +66,6 @@ std::filesystem::path executable_directory() {
 void require(bool condition, const char *code) {
     if (!condition)
         throw std::runtime_error(code);
-}
-auto wvd_recovery_policy(devices::LifecycleTarget target) {
-    return [target = std::move(target)](const contracts::SessionResult &result,
-        const contracts::BusinessRunState &business, unsigned attempt)
-        -> std::optional<devices::LifecyclePlan> {
-        if (result.end != contracts::SessionEnd::Failed || !result.quiescent ||
-            attempt < 1 || attempt > 3) return std::nullopt;
-        const auto facts = business.summary();
-        if (games::tasks::handoff_has_unconfirmed_effect(facts)) return std::nullopt;
-        const auto leap = facts.value("handoff_intent", J(nullptr));
-        const bool deferred_leap = result.reason == "leap.unknown" && attempt == 1 &&
-            leap.is_object() && leap.value("kind", "") == "wait_7300" &&
-            facts.at("leap_wait").value("active", false);
-        const bool frozen_pause = result.reason == "pause.physics_frozen" &&
-            !leap.is_object() && !facts.at("leap_wait").value("active", false);
-        if (!deferred_leap && !frozen_pause) return std::nullopt;
-        devices::LifecyclePlan plan;
-        plan.target = target;
-        plan.attempt = attempt;
-        if (deferred_leap) {
-            const auto remaining = 7300000LL - facts.at("leap_wait").at("elapsed_ms").get<std::int64_t>();
-            plan.defer_for = std::chrono::milliseconds{std::max(0LL, remaining)};
-        }
-        if (target.vpn_required)
-            plan.operations.push_back(devices::LifecycleOperation::EnsureVpn);
-        plan.operations.push_back(devices::LifecycleOperation::StopApplication);
-        plan.operations.push_back(devices::LifecycleOperation::StartApplication);
-        return plan;
-    };
 }
 std::set<std::string> strategy_names(const J &values) {
     std::set<std::string> names;
@@ -471,7 +445,12 @@ Application::Application(ApplicationPaths paths,
         require(library.is_array(), "FLOW_SEED_INVALID");
         for (const auto &document : library) {
             const auto id = document.at("flow").at("id").get<std::string>();
-            if (!existing.contains(id)) { workflow_store_->create(document); existing.insert(id); }
+            builtin_documents_[id] = document;
+            if (!existing.contains(id)) {
+                const auto created = workflow_store_->create(document);
+                workflow_store_->register_builtin(document, created.at("revision"));
+                existing.insert(id);
+            }
         }
     }
 
@@ -844,19 +823,27 @@ Application::J Application::start_task(const J &request) {
     auto frozen = request;
     frozen["request_id"] = checked_request_id(request);
     const auto stored = profile_store_->load();
-    const auto locale = frozen.value("resource_locale", std::string{"en"});
-    require(locale == "en" || locale == "zh-Hant", "TASK_RESOURCE_LOCALE_UNSUPPORTED");
+    frozen["resource_locale"] = authoring::effective_resource_locale(frozen, J::object());
     if (request.contains("profile_revision"))
         require(request.at("profile_revision") == stored.at("revision"), "PROFILE_REVISION_MISMATCH");
     return queue_run("start_task", frozen,
         {{"kind", "task"}, {"request", frozen}, {"profile_revision", stored.at("revision")}},
         [this, frozen, stored] {
-            const auto backend = ensure_connected_for_run(stored);
-            auto result = prepare_task(frozen, stored, backend);
             const auto &selected = stored.at("values").at("FARM_TARGET");
             const auto task_id = frozen.value("task_id", selected.is_string()
                 ? selected.get<std::string>() : std::string{});
             const auto source_values = effective_profile_values(task_id, stored);
+            auto prepared = compile_task_graph(frozen, catalog_->at(task_id), source_values);
+            for (const auto &image : prepared.images) {
+                const auto selected_image = games::vision::resolve_image_source(
+                    author_bundle_, aliases_, image);
+                if (!std::any_of(author_bundle_.files.begin(), author_bundle_.files.end(),
+                    [&](const auto &file) { return file.relative_path == selected_image.relative_path; }))
+                    throw std::runtime_error("NATIVE_IMAGE_MISSING:" + selected_image.relative_path);
+            }
+            const auto backend = ensure_connected_for_run(stored);
+            auto result = prepare_task(frozen, stored, backend, source_values, nullptr,
+                std::move(prepared));
             if (task_id != "7000G" && source_values.at("ACTIVE_BEG_MONEY").get<bool>())
                 watch_task_handoff(stored, source_values, backend, frozen.at("request_id"));
             return result;
@@ -872,13 +859,14 @@ Application::J Application::start_workflow(const std::string &flow_id, const J &
     const auto document = workflow_store_->read(flow_id);
     require(frozen.value("revision", std::string{}) == document.at("revision").get<std::string>(),
             "WORKFLOW_REVISION_MISMATCH");
+    frozen["resource_locale"] = authoring::effective_resource_locale(frozen, document.at("execution"));
     const auto library = workflow_store_->snapshot_closure(document);
     return queue_run("start_workflow", frozen,
         {{"kind", "workflow"}, {"flow_id", flow_id}, {"request", frozen},
          {"profile_revision", stored.at("revision")}, {"library", library}},
         [this, flow_id, frozen, stored, document, library] {
             // 不齐全的语言素材/循环引用在连接和启动模拟器之前暴露。
-            const auto locale = frozen.value("resource_locale", document.at("execution").value("resource_locale", std::string{}));
+            const auto locale = authoring::effective_resource_locale(frozen, document.at("execution"));
             (void)games::tasks::PublicFlowLibrary(library, semantic_catalogue_).task_profiles(
                 document, frozen.value("arguments", J::object()), locale);
             require(!stopping_ && !cancel_operation_, "PREPARATION_CANCELLED");
@@ -1157,12 +1145,46 @@ Application::J Application::run_status() const {
             {"node_path", source_paths.value(source, J::array())}
         };
     }
+    if (value.contains("execution") && value.at("execution").is_object()) {
+        const auto &execution = value.at("execution");
+        value["call_stack"] = execution.value("call_stack", J::array());
+        if (snapshot.state == contracts::RunState::Running ||
+            snapshot.state == contracts::RunState::Recovering ||
+            snapshot.state == contracts::RunState::StopRequested) {
+            value["suspended_step"] = execution.value("suspended_step", J(nullptr));
+            if (!execution.value("step_id", "").empty()) value["step_name"] = execution.at("step_id");
+            auto path = J::parse(execution.value("source_path", ""), nullptr, false);
+            if (path.is_array()) value["node_path"] = std::move(path);
+        }
+    }
     return value;
+}
+
+games::tasks::CompiledWorkflow Application::compile_task_graph(const J &request,
+    const games::WvdQuestDefinition &task, const J &values) const {
+    auto workflow = games::tasks::build_task_workflow(task, values, available_images_,
+        [this, &request](const games::WvdQuestDefinition &selected, const J &profile,
+                         const std::set<std::string> &images) {
+            const auto board = workflow_store_->read("guild-open-bounty-page");
+            const auto status = workflow_store_->inspect_builtin(
+                builtin_documents_.at("guild-open-bounty-page")).at("status").get<std::string>();
+            require(status != "update_available" && status != "source_unknown",
+                "BOUNTY_PUBLIC_BOARD_REQUIRES_REVIEW");
+            const auto closure = workflow_store_->snapshot_closure(board);
+            const games::tasks::PublicFlowLibrary library(closure, semantic_catalogue_);
+            return games::tasks::bounty_cycle(selected, profile, images, library, board,
+                authoring::effective_resource_locale(request, J::object()));
+        });
+    workflow = games::recovery::with_boot_recovery(workflow, true);
+    require(workflow.nodes.contains("Boot_Entry"), "PRODUCTION_BOOT_ENTRY_MISSING");
+    games::tasks::localize_task_assets(workflow, semantic_catalogue_,
+        authoring::effective_resource_locale(request, J::object()));
+    return workflow;
 }
 
 runtime::NativeRunDefinition Application::assemble_task(const J &request, const J &stored,
     const devices::LifecycleTarget &lifecycle, std::optional<J> frozen_values,
-    bool continuation) {
+    bool continuation, std::optional<games::tasks::CompiledWorkflow> prepared) {
     if (stopping_ || cancel_operation_) throw std::runtime_error("PREPARATION_CANCELLED");
     const auto &stored_values = stored.at("values");
     const auto task_id = request.value("task_id", stored_values.at("FARM_TARGET").is_string()
@@ -1186,30 +1208,7 @@ runtime::NativeRunDefinition Application::assemble_task(const J &request, const 
             {"legacy_passthrough_digest", games::tasks::digest_handoff_json(stored.at("legacy_passthrough"))}};
         handoff_source["digest"] = games::tasks::digest_handoff_json(handoff_source);
     }
-    const auto plan = games::WvdTaskPlan::parse(task);
-    auto workflow = [&] {
-        if (task.type == "dungeon") return games::tasks::dungeon_iteration(plan, values, available_images_);
-        if (task_id == "Scorpionesses" || task_id == "Scorpionesses_plus_6_hands" || task_id == "jier")
-            return games::tasks::bounty_cycle(task, values, available_images_);
-        if (task_id == "fishing" || task_id == "fishing2") return games::tasks::fishing_cycle(task, values, available_images_);
-        if (task_id == "SSC-goldenchest") return games::tasks::golden_chest_cycle(task, values, available_images_);
-        if (task_id == "sandman") return games::tasks::sandman_cycle(task, values, available_images_);
-        if (task_id == "7000G") return games::tasks::gold_income_cycle(task);
-        if (task_id == "LBC-oneGorgon") return games::tasks::bull_cave_cycle(task, values, available_images_);
-        if (task_id == "steeltrail") return games::tasks::steel_trial_cycle(task, values, available_images_);
-        if (task_id == "repelEnemyForces") return games::tasks::repel_forces_cycle(task, values, available_images_);
-        if (task_id == "lovesleep") return games::tasks::sleep_visits(task, values);
-        if (task_id == "manualSepDemon") return games::tasks::manual_separation(task, values, available_images_);
-        if (task_id == "FFXI-Org") return games::tasks::mining_iteration(task, values);
-        if (task_id == "darkLight") return games::tasks::dark_light(task, values, available_images_);
-        if (task_id == "gaintKiller") return games::tasks::giant_iteration(task, values, available_images_);
-        if (task_id == "fortress-B8F_trap") return games::tasks::fortress_trap_iteration(task, values, available_images_);
-        throw std::runtime_error("TASK_EXECUTION_NOT_IMPLEMENTED");
-    }();
-    workflow = games::recovery::with_boot_recovery(workflow, true);
-    require(workflow.nodes.contains("Boot_Entry"), "PRODUCTION_BOOT_ENTRY_MISSING");
-    games::tasks::localize_task_assets(workflow, semantic_catalogue_,
-        request.value("resource_locale", std::string{"en"}));
+    auto workflow = prepared ? std::move(*prepared) : compile_task_graph(request, task, values);
     const auto request_id = checked_request_id(request);
     const auto destination = paths_.data_root / "published" / request_id;
     auto publication = games::tasks::publish_native(workflow, author_bundle_,
@@ -1220,14 +1219,7 @@ runtime::NativeRunDefinition Application::assemble_task(const J &request, const 
     runtime::NativeUnit unit{std::move(publication.program),
         std::move(publication.bundle), games::vision::native_handlers(aliases_),
         checkpoint_source, workflow.time_limit};
-    std::size_t count = 1;
-    if (task_id == "Scorpionesses_plus_6_hands") count = 4;
-    else if (task_id == "Scorpionesses" || task_id == "jier") count = 3;
-    else if (task_id == "SSC-goldenchest" || task_id == "sandman" ||
-             task_id == "manualSepDemon") count = 2;
-    else if (task_id == "LBC-oneGorgon") count = values.at("ACTIVE_REST").get<bool>() ? 3 : 2;
-    else if (task_id == "repelEnemyForces") count = games::quests::RepelForces::rounds(values) + 2;
-    else if (task_id == "lovesleep") count = games::quests::SleepVisits::units;
+    const auto count = games::tasks::task_unit_count(task_id, values);
     runtime::NativeRunDefinition definition;
     definition.request_id = request_id;
     definition.units.assign(count, unit);
@@ -1258,30 +1250,23 @@ runtime::NativeRunDefinition Application::assemble_task(const J &request, const 
         return games::wvd_operation_factory(dynamic_cast<games::WvdRunState &>(base),
             std::move(event), std::move(checkpoint));
     };
-    definition.recovery = wvd_recovery_policy(lifecycle);
+    definition.recovery = games::tasks::recovery_policy(lifecycle);
     if (handoff_source.is_object()) {
         definition.handoff_ready = [source = handoff_source](
             const contracts::SessionResult &last, const contracts::BusinessRunState &state) {
-            if (last.reason != "leap.unknown" || !last.quiescent) return false;
-            const auto facts = state.summary();
-            const auto intent = facts.value("handoff_intent", J(nullptr));
-            return intent.is_object() && intent.value("kind", "") == "turn_to_7000G" &&
-                facts.at("handoff_source") == source &&
-                intent.at("run_identity") == facts.at("run_identity") &&
-                intent.at("generation") == facts.at("generation") &&
-                intent.at("unknown_samples").get<std::uint64_t>() >= 5 &&
-                !games::tasks::handoff_has_unconfirmed_effect(facts);
+            return games::tasks::handoff_ready(last, state, source);
         };
     }
     return definition;
 }
 Application::J Application::prepare_task(const J &request, const J &stored,
     std::shared_ptr<devices::DeviceConnection> backend,
-    std::optional<J> frozen_values, J handoff_parent) {
+    std::optional<J> frozen_values, J handoff_parent,
+    std::optional<games::tasks::CompiledWorkflow> prepared) {
     require(bool(backend), "DEVICE_NOT_CONNECTED");
     backend->set_vpn_required(stored.at("values").at("AUTO_START_CLASH").get<bool>());
     auto definition = assemble_task(request, stored, backend->lifecycle_target(),
-        std::move(frozen_values), handoff_parent.is_object());
+        std::move(frozen_values), handoff_parent.is_object(), std::move(prepared));
     definition.handoff_parent = std::move(handoff_parent);
     const auto &stored_values = stored.at("values");
     const auto selected = stored_values.at("FARM_TARGET").is_string()
@@ -1384,7 +1369,28 @@ void Application::watch_task_handoff(const J &stored, J source_values,
 }
 
 Application::J Application::list_workflows() const {
-    return {{"workflows", workflow_store_->list()}};
+    auto entries = workflow_store_->list();
+    for (auto &entry : entries) {
+        const auto id = entry.at("id").get<std::string>();
+        if (!builtin_documents_.contains(id)) continue;
+        const auto status = workflow_store_->inspect_builtin(builtin_documents_.at(id));
+        entry["builtin_status"] = status.at("status");
+        entry["builtin_revision"] = status.at("builtin_revision");
+    }
+    return {{"workflows", std::move(entries)}};
+}
+
+Application::J Application::inspect_builtin(const std::string &flow_id) const {
+    require(builtin_documents_.contains(flow_id), "BUILTIN_FLOW_NOT_FOUND");
+    return workflow_store_->inspect_builtin(builtin_documents_.at(flow_id));
+}
+
+Application::J Application::sync_builtin(const std::string &flow_id, const J &request) {
+    require(builtin_documents_.contains(flow_id), "BUILTIN_FLOW_NOT_FOUND");
+    const auto updated = workflow_store_->sync_builtin(builtin_documents_.at(flow_id),
+        request.at("local_revision").get<std::string>(),
+        request.at("builtin_revision").get<std::string>());
+    return ui_document_from_author(updated);
 }
 
 Application::J Application::create_workflow(const J &request) {
@@ -1427,6 +1433,9 @@ Application::J Application::import_task_workflow(const J &request) {
                     J{{"node_id", "complete"}, {"x", 820}, {"y", 100}}})},
                     {"viewport", {{"x", 0}, {"y", 0}, {"zoom", 1}}}}},
                {"execution", {{"time_limit_ms", 1800000}}}};
+    if (request.contains("resource_locale"))
+        document["execution"]["resource_locale"] =
+            authoring::effective_resource_locale(request, J::object());
     return ui_document_from_author(workflow_store_->create(document));
 }
 
@@ -1496,7 +1505,7 @@ runtime::NativeRunDefinition Application::assemble_workflow(
         document = selected_node_document(std::move(document), request.at("node_id"));
     }
     const games::tasks::PublicFlowLibrary library(library_snapshot, semantic_catalogue_);
-    const auto locale = request.value("resource_locale", document.at("execution").value("resource_locale", std::string{}));
+    const auto locale = authoring::effective_resource_locale(request, document.at("execution"));
     auto supplied = request.value("arguments", J::object());
     if (request.value("mode", "workflow") == "selected_node") supplied = J::object();
     const auto task_ids = library.task_profiles(document, supplied, locale);
@@ -1562,7 +1571,7 @@ runtime::NativeRunDefinition Application::assemble_workflow(
         return games::wvd_operation_factory(dynamic_cast<games::WvdRunState &>(base),
             std::move(event), std::move(checkpoint));
     };
-    definition.recovery = wvd_recovery_policy(lifecycle);
+    definition.recovery = games::tasks::recovery_policy(lifecycle);
     if (source_paths) *source_paths = executable.authoring.value("source_paths", J::object());
     if (pipeline_to_node) {
         pipeline_to_node->clear();
@@ -1663,14 +1672,11 @@ Application::J Application::recognition_probe(const J &request) {
         const auto roi = condition.value("roi", J::array({0, 0, 900, 1600}));
         recognition = {{"id", request.value("node_id", "probe")},
                        {"revision", author_bundle_.revision}, {"roi", roi}};
-        if (mode == "template") {
-            recognition["type"] = "template";
-            recognition["image"] = condition.at("image");
-            recognition["threshold"] = condition.value("threshold", 0.8);
-        } else if (mode == "ocr") {
+        if (mode == "ocr") {
             recognition["type"] = "ocr";
             recognition["expected"] = condition.at("expected");
         } else {
+            // 诊断与发布后的 WVD 条件共用匹配器，保留灰度/遮罩/预处理等配方字段。
             recognition["type"] = "custom";
             recognition["binding"] = "WvdVision";
             recognition["parameters"] = condition;
@@ -1705,12 +1711,19 @@ api::DynamicReply Application::handle(const api::Request &request) {
         if (path.starts_with(workflow_prefix)) {
             auto suffix = path.substr(workflow_prefix.size());
             const bool run = suffix.ends_with("/run");
+            const bool builtin = suffix.ends_with("/builtin");
             if (run)
                 suffix.resize(suffix.size() - 4);
+            if (builtin)
+                suffix.resize(suffix.size() - 8);
             require(!suffix.empty() && suffix.find('/') == std::string::npos,
                     "WORKFLOW_PATH_INVALID");
             if (run && method == api::http::verb::post)
                 return json_reply(start_workflow(suffix, parse_body(request)), api::http::status::accepted);
+            if (builtin && (method == api::http::verb::get || method == api::http::verb::head))
+                return json_reply(inspect_builtin(suffix));
+            if (builtin && method == api::http::verb::post)
+                return json_reply(sync_builtin(suffix, parse_body(request)));
             if (method == api::http::verb::get || method == api::http::verb::head)
                 return json_reply(read_workflow(suffix));
             if (method == api::http::verb::put)
