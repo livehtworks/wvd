@@ -30,6 +30,14 @@ export function writeStrategies(profile: WvdProfile, groups: StrategyGroup[]) {
   profile.STRATEGY = groups;
 }
 
+function ensureCombatSettings(profile: WvdProfile) {
+  profile.TASK_POINT_STRATEGY ??= { overall_strategy: "", task_point: {} };
+  profile.TASK_POINT_STRATEGY.special_combat ??= {
+    skull: false, portrait: false, portrait_image: "combat_scorpion_portrait",
+    normal_strategy: "", special_strategy: "",
+  };
+}
+
 export function useWorkbench() {
   const savedLocale = typeof window !== "undefined" ? window.localStorage.getItem("wvd.gameResourceLocale") : null;
   const resourceLocale = ref<ResourceLocale>(
@@ -77,7 +85,7 @@ export function useWorkbench() {
       ]);
       envelope.value = normalizeEnvelope(profileValue);
       draft.value = clone(envelope.value.profile);
-      draft.value.TASK_POINT_STRATEGY ??= { overall_strategy: "", task_point: {} };
+      ensureCombatSettings(draft.value);
       strategies.value = readStrategies(draft.value);
       strategyRenames.value = {};
       savedSignature.value = signature(draft.value);
@@ -97,6 +105,12 @@ export function useWorkbench() {
     error.value = "";
     notice.value = "";
     try {
+      const special = draft.value.TASK_POINT_STRATEGY?.special_combat;
+      if (special?.skull || special?.portrait) {
+        const names = new Set(strategies.value.map((group) => group.group_name));
+        if (!names.has(special.normal_strategy) || !names.has(special.special_strategy))
+          throw new Error("请先选择普通敌人和特殊敌人的战斗方案");
+      }
       writeStrategies(draft.value, clone(strategies.value));
       const saved = normalizeEnvelope(await saveProfile({
         ...envelope.value,
@@ -105,7 +119,7 @@ export function useWorkbench() {
       }));
       envelope.value = saved;
       draft.value = clone(saved.profile);
-      draft.value.TASK_POINT_STRATEGY ??= { overall_strategy: "", task_point: {} };
+      ensureCombatSettings(draft.value);
       strategies.value = readStrategies(draft.value);
       strategyRenames.value = {};
       savedSignature.value = signature(draft.value);
@@ -135,7 +149,7 @@ export function useWorkbench() {
       }));
       envelope.value = saved;
       draft.value = clone(saved.profile);
-      draft.value.TASK_POINT_STRATEGY ??= { overall_strategy: "", task_point: {} };
+      ensureCombatSettings(draft.value);
       strategies.value = readStrategies(draft.value);
       strategyRenames.value = {};
       savedSignature.value = signature(draft.value);
@@ -147,7 +161,7 @@ export function useWorkbench() {
   function revert() {
     if (!envelope.value) return;
     draft.value = clone(envelope.value.profile);
-    draft.value.TASK_POINT_STRATEGY ??= { overall_strategy: "", task_point: {} };
+    ensureCombatSettings(draft.value);
     strategies.value = readStrategies(draft.value);
     savedSignature.value = signature(draft.value);
     strategyRenames.value = {};
@@ -160,7 +174,7 @@ export function useWorkbench() {
     try {
       const selected = normalizeEnvelope(await readTaskProfile(taskId));
       draft.value = clone(selected.profile);
-      draft.value.TASK_POINT_STRATEGY ??= { overall_strategy: "", task_point: {} };
+      ensureCombatSettings(draft.value);
       strategies.value = readStrategies(draft.value);
       envelope.value = selected;
       savedSignature.value = signature(draft.value);

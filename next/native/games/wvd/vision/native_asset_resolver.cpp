@@ -38,16 +38,32 @@ cv::Mat AssetResolver::load(const std::string &name) {
     if (!owner->lease)
         throw std::runtime_error("BUNDLE_LEASE_REQUIRED");
     owner->lease->require_member(relative);
-    auto key = "template:" + owner->revision + ":" + owner->lease->identity() + ":" + relative;
-    if (auto found = cache_.assets.find(key); found != cache_.assets.end())
-        return std::any_cast<cv::Mat>(found->second);
-    const auto &bytes = owner->lease->bytes(relative);
-    auto image = cv::imdecode(bytes, cv::IMREAD_COLOR);
-    if (image.empty() || image.type() != CV_8UC3)
-        throw std::runtime_error("WVD_TEMPLATE_DECODE_INVALID");
-    if (cache_.assets.size() >= 2048)
-        throw std::runtime_error("WVD_SESSION_ASSET_CAPACITY");
-    cache_.assets.emplace(key, image);
-    return image;
+    const auto key = owner->revision + ":" + owner->lease->identity() + ":" + relative;
+    auto lease = cache_.decoded->load(key, [&] {
+        const auto &bytes = owner->lease->bytes(relative);
+        const auto stats = cache_.decoded->stats();
+        auto diagnostic = cache_.diagnostics ? cache_.diagnostics->begin({
+            cache_.source_id, std::hash<std::string>{}(relative), bytes.size(),
+            0, 0, 0, 0, 0, 0, 3, -2, false, false, false,
+            stats.retained_bytes, stats.in_use_bytes}) : platform::MemoryDiagnostics::Slot{};
+        cv::Mat image;
+        try { image = cv::imdecode(bytes, cv::IMREAD_COLOR); }
+        catch (const std::bad_alloc &) { diagnostic.failure(-1); throw; }
+        catch (const cv::Exception &error) {
+            if (error.code == cv::Error::StsNoMem) diagnostic.failure(error.code);
+            throw;
+        }
+        if (image.empty() || image.type() != CV_8UC3)
+            throw std::runtime_error("WVD_TEMPLATE_DECODE_INVALID");
+        return image;
+    }, cache_.cancelled);
+    auto pixels = lease.mat(); // 仅复制 Mat 头，像素租约由 resolver 持有。
+    leases_.push_back(std::move(lease));
+    return pixels;
+}
+std::string AssetResolver::canonical_key(const std::string &name) const {
+    const auto [owner, relative] = resolve_image_source(baseline_, aliases_, name, mod_);
+    if (!owner->lease) throw std::runtime_error("BUNDLE_LEASE_REQUIRED");
+    return owner->revision + ":" + owner->lease->identity() + ":" + relative;
 }
 } // namespace wvd::games::vision

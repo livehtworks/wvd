@@ -88,6 +88,8 @@ function renameStrategy(group: StrategyGroup, value: string) {
   group.group_name = name;
   if (!state.draft) return;
   if (state.draft.DEFAULT_OVERALL_STRATEGY === old) state.draft.DEFAULT_OVERALL_STRATEGY = name;
+  if (state.draft.TASK_POINT_STRATEGY?.special_combat?.normal_strategy === old) state.draft.TASK_POINT_STRATEGY.special_combat.normal_strategy = name;
+  if (state.draft.TASK_POINT_STRATEGY?.special_combat?.special_strategy === old) state.draft.TASK_POINT_STRATEGY.special_combat.special_strategy = name;
   if (state.draft.TASK_POINT_STRATEGY?.overall_strategy === old) state.draft.TASK_POINT_STRATEGY.overall_strategy = name;
   const bindings = pointBindings();
   for (const point of Object.keys(bindings)) if (bindings[point] === old) bindings[point] = name;
@@ -96,6 +98,8 @@ function strategyReferences(name: string) {
   if (!state.draft) return [];
   const result: string[] = [];
   if (state.draft.DEFAULT_OVERALL_STRATEGY === name) result.push("全程策略");
+  if (state.draft.TASK_POINT_STRATEGY?.special_combat?.normal_strategy === name) result.push("普通敌人方案");
+  if (state.draft.TASK_POINT_STRATEGY?.special_combat?.special_strategy === name) result.push("特殊敌人方案");
   if (state.draft.TASK_POINT_STRATEGY?.overall_strategy === name) result.push("任务覆盖策略");
   const bindings = pointBindings();
   for (const [point, strategy] of Object.entries(bindings)) if (strategy === name) result.push(`任务点：${point}`);
@@ -197,6 +201,11 @@ function updateSkill(skill: SkillSetting, key: keyof SkillSetting, event: Event)
           <label class="field"><span>全程策略</span><select v-model="state.draft.DEFAULT_OVERALL_STRATEGY"><option v-if="!strategyNames.includes('全自动战斗')" value="全自动战斗">全自动战斗</option><option v-for="name in strategyNames" :key="name" :value="name">{{ name }}</option></select></label>
           <label class="field"><span>任务专用模式</span><select v-model="state.draft.TASK_POINT_STRATEGY!.overall_strategy"><option value="">继承全局</option><option value="自定义任务点策略">按任务点分别设置</option><option v-for="name in strategyNames" :key="name" :value="name">{{ name }}</option></select></label>
           <div v-if="taskPoints.length && state.draft.TASK_POINT_STRATEGY!.overall_strategy === '自定义任务点策略'" class="binding-table span-2"><div class="binding-head"><span>任务点</span><span>策略</span></div><label v-for="point in taskPoints" :key="optionValue(point)" class="binding-row"><span>{{ point.label }}</span><select v-model="pointBindings()[String(point.value)]"><option value="">继承全程</option><option v-for="name in strategyNames" :key="name" :value="name">{{ name }}</option></select></label></div>
+          <label class="check-field"><input v-model="state.draft.TASK_POINT_STRATEGY!.special_combat!.skull" type="checkbox" />红骷髅识别特殊敌人</label>
+          <label class="check-field"><input v-model="state.draft.TASK_POINT_STRATEGY!.special_combat!.portrait" type="checkbox" />行动栏头像识别特殊敌人</label>
+          <label v-if="state.draft.TASK_POINT_STRATEGY!.special_combat!.skull || state.draft.TASK_POINT_STRATEGY!.special_combat!.portrait" class="field"><span>普通敌人方案</span><select v-model="state.draft.TASK_POINT_STRATEGY!.special_combat!.normal_strategy"><option value="">请选择</option><option v-for="name in strategyNames" :key="name" :value="name">{{ name }}</option></select></label>
+          <label v-if="state.draft.TASK_POINT_STRATEGY!.special_combat!.skull || state.draft.TASK_POINT_STRATEGY!.special_combat!.portrait" class="field"><span>特殊敌人方案</span><select v-model="state.draft.TASK_POINT_STRATEGY!.special_combat!.special_strategy"><option value="">请选择</option><option v-for="name in strategyNames" :key="name" :value="name">{{ name }}</option></select></label>
+          <label v-if="state.draft.TASK_POINT_STRATEGY!.special_combat!.portrait" class="field"><span>头像模板</span><select v-model="state.draft.TASK_POINT_STRATEGY!.special_combat!.portrait_image"><option value="combat_scorpion_portrait">蝎女头像</option></select></label>
         </div>
       </details>
 

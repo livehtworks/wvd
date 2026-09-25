@@ -59,26 +59,36 @@ CompiledWorkflow return_to_bounty_city(bool guild) {
     return graph.finish();
 }
 }
-WvdTaskPlan scorpion_plan(const WvdQuestDefinition &definition, bool hands_route) {
+WvdTaskPlan scorpion_plan(const WvdQuestDefinition &definition, bool hands_route,
+                         const std::string &locale) {
     if (definition.type != "quest" || (definition.id != "Scorpionesses" && definition.id != "Scorpionesses_plus_6_hands") ||
         (hands_route && definition.id != "Scorpionesses_plus_6_hands")) throw std::runtime_error("SCORPION_TASK_INVALID");
-    return WvdTaskPlan::parse(definition).with_entry({{"press", "beginningAbyss", {"EdgeOfTown", {1, 1}}, 1},
-        {"press", hands_route ? "B5FWarpedOnesNest" : "B2FTemple", {{1, 1}}, 1}})
+    const bool zh_hant = locale == "zh-Hant";
+    const auto abyss = zh_hant ? "outskirts_abyss_zh_hant" : "beginningAbyss";
+    const auto floor = hands_route ?
+        (zh_hant ? "outskirts_abyss_b5f_zh_hant" : "B5FWarpedOnesNest") :
+        (zh_hant ? "outskirts_abyss_b2f_zh_hant" : "B2FTemple");
+    auto plan = WvdTaskPlan::parse(definition).with_entry({{"press", abyss, {"EdgeOfTown", {1, 1}}, 1},
+        {"press", floor, {{1, 1}}, 1}})
         .with_route(hands_route ? J{{"position", "左上", {454, 662}}, {"position", "左上", {135, 714}}}
             : J{{"position", "左下", {505, 760}}, {"position", "左上", {506, 821}}});
+    if (zh_hant && !hands_route)
+        plan = plan.with_floor("map_abyss_b2f_zh_hant");
+    return hands_route ? plan : plan.with_last_harken_arrival();
 }
-WvdTaskPlan jier_plan(const WvdQuestDefinition &definition) {
+WvdTaskPlan jier_plan(const WvdQuestDefinition &definition, const std::string &locale) {
     if (definition.type != "quest" || definition.id != "jier") throw std::runtime_error("JIER_TASK_INVALID");
     auto points = jier_positions;
     points.push_back({"harken", "左上", nullptr});
-    return WvdTaskPlan::parse(definition).with_entry({{"press", "beginningAbyss", {"EdgeOfTown", {1, 1}}, 1},
-        {"press", "B4FLabyrinth", {{1, 1}}, 1}}).with_route(points);
+    const bool zh_hant = locale == "zh-Hant";
+    return WvdTaskPlan::parse(definition).with_entry({{"press", zh_hant ? "outskirts_abyss_zh_hant" : "beginningAbyss", {"EdgeOfTown", {1, 1}}, 1},
+        {"press", zh_hant ? "outskirts_abyss_b4f_zh_hant" : "B4FLabyrinth", {{1, 1}}, 1}}).with_route(points);
 }
 CompiledWorkflow bounty_cycle(const WvdQuestDefinition &definition, const J &profile,
     const std::set<std::string> &images, const PublicFlowLibrary &library,
     const J &board_root, const std::string &locale, bool allow_download) {
     const bool jier = definition.id == "jier";
-    const auto first_plan = jier ? jier_plan(definition) : scorpion_plan(definition);
+    const auto first_plan = jier ? jier_plan(definition, locale) : scorpion_plan(definition, false, locale);
     const auto dialogue = jier ? recovery::DialoguePolicy::Jier : recovery::DialoguePolicy::Default;
     const bool hands = definition.id == "Scorpionesses_plus_6_hands";
     const bool ore = !jier && profile.at("ACTIVE_BEAUTIFUL_ORE").get<bool>();
@@ -99,7 +109,7 @@ CompiledWorkflow bounty_cycle(const WvdQuestDefinition &definition, const J &pro
         C::absent(C::image("chestFlag"))});
     const auto outside = C::any({royal_city, inn, edge, C::image("dungFlag"), C::image("returnText"),
         C::image("returntotown"), C::image("openworldmap")});
-    graph.route("Entry", {"PendingTransfer", "PendingPayment", "PendingReport", "Resume", "Start"});
+    graph.route("Entry", {"PendingTransfer", "PendingPayment", "PendingReport", "Resume", "InspectBoard"});
     graph.observe("PendingTransfer", C::business("/bounty_cycle/transfer_pending", true), {"TransferUncertain"});
     graph.recovery("TransferUncertain", "quest.bounty_transfer_unconfirmed");
     graph.observe("PendingPayment", C::business("/inn_payment_pending", true), {"PaymentUncertain"});
@@ -107,10 +117,39 @@ CompiledWorkflow bounty_cycle(const WvdQuestDefinition &definition, const J &pro
     graph.observe("PendingReport", C::business("/bounty_report_pending", true), {"ReportUncertain"});
     graph.recovery("ReportUncertain", "quest.bounty_report_unconfirmed");
     graph.observe("Resume", C::business("/bounty_cycle/active", true), {"Stage"});
+    // 先收掉上一轮尚未提交的悬赏。仅报告按钮实际可见时才提交、住宿；
+    // 无报告则退出公会直接开始本轮，不能把查看列表算作领取悬赏。
+    const auto board_page = locale == "zh-Hant" ?
+        library.resource_condition("guild.bounties.page", locale, authoring::ResourceUse::Observation) :
+        C::image("Bounties");
+    const auto ready_report = library.resource_condition("guild.report.action", locale,
+        authoring::ResourceUse::Position);
+    const auto board_open = library.compile(board_root,
+        [](const J &) -> CompiledWorkflow { throw std::runtime_error("BOUNTY_PUBLIC_NATIVE_BINDING_FORBIDDEN"); },
+        J{{"location", 0}}, locale);
+    const auto inspect = graph.define_child("InspectBountyBoard", board_open.workflow);
+    graph.call_child("InspectBoard", inspect, {"CheckOldReports"});
+    graph.route("CheckOldReports", {"OldReportReady", "NoOldReport"});
+    graph.observe("OldReportReady", C::all({board_page, ready_report}), {"CollectOldReports"});
+    const auto old_report = graph.define_child("OldBountyReport",
+        visit_bounty_board(BountyVisit::Report, library, board_root, locale));
+    graph.call_child("CollectOldReports", old_report, {"RestAfterOldReports"});
+    const auto old_rest = graph.define_child("OldBountyRest",
+        supply::rest_at_inn(profile.at("ACTIVE_ROYALSUITE_REST").get<bool>(), true));
+    graph.call_child("RestAfterOldReports", old_rest, {"Start"});
+    graph.observe("NoOldReport", C::all({board_page, C::absent(ready_report)}), {"LeaveBoard"});
+    const auto board_menu = C::any({board_page, vision::guild_button(),
+        library.resource_condition("guild.commissions.entry", locale, authoring::ResourceUse::Position),
+        library.resource_condition("guild.bounties.entry", locale, authoring::ResourceUse::Position)});
+    graph.back("LeaveBoard", board_menu, C::any({board_menu, edge}), {"BoardExit"});
+    graph.route("BoardExit", {"AtCityEdge", "LeaveBoard"});
+    graph.observe("AtCityEdge", edge, {"Start"});
+    graph.hit_limit("BoardExit", 16);
+    graph.hit_limit("LeaveBoard", 16);
     graph.confirm("Start", "bounty.cycle.start", jier ? "jier_started" : hands ? "scorpion_hands_started" : "scorpion_started", start_page, {"Stage"});
     graph.route("Stage", hands ? J{"LeapPhase", "TravelPhase", "RevealPhase", "FirstRoutePhase", "FirstReturnPhase",
-        "SecondRoutePhase", "SecondReturnPhase", "ReportsPhase", "RestPhase"} :
-        J{"LeapPhase", "TravelPhase", "RevealPhase", "FirstRoutePhase", "FirstReturnPhase", "ReportsPhase", "RestPhase"});
+            "SecondRoutePhase", "SecondReturnPhase", "ReportsPhase", "RestPhase"} :
+            J{"LeapPhase", "TravelPhase", "RevealPhase", "FirstRoutePhase", "FirstReturnPhase", "ReportsPhase", "RestPhase"});
     graph.observe("LeapPhase", phase(Phase::Leap), {"PrepareLeap"});
     graph.confirm("PrepareLeap", "bounty.leap.prepare", "bounty_leap_prepared", start_page, {"Leap"});
     // 这两个原case没有传CSC_symbol，即便ACTIVE_CSC开启也不修改因果；并非忽略配置。
@@ -139,7 +178,7 @@ CompiledWorkflow bounty_cycle(const WvdQuestDefinition &definition, const J &pro
     for (const bool second : {false, true}) {
         const std::string name = second ? "Second" : "First";
         if (second && !hands) continue;
-        const auto plan = second ? scorpion_plan(definition, true) : first_plan;
+        const auto plan = second ? scorpion_plan(definition, true, locale) : first_plan;
         graph.observe(name + "RoutePhase", phase(second ? Phase::SecondRoute : Phase::FirstRoute), {name + "Enter"});
         const auto entry = graph.define_child(name + "Entry", navigation::enter_dungeon(plan));
         graph.call_child(name + "Enter", entry, {name + "Traverse"});
@@ -151,7 +190,9 @@ CompiledWorkflow bounty_cycle(const WvdQuestDefinition &definition, const J &pro
             graph.call_child("LeaveByHarken", exit, {name + "RouteDone"});
         }
         graph.confirm(name + "RouteDone", "bounty.route." + name, "bounty_route_completed",
-            jier ? C::all({C::any({inn, guild, edge, C::image("returnText"), C::image("openworldmap")}), C::absent(map)}) : map, {name + "ReturnPhase"});
+            jier ? C::all({C::any({inn, guild, edge, C::image("returnText"), C::image("openworldmap")}), C::absent(map)})
+                 : plan.route().back().harken_arrival ? C::any({map, vision::harken_floor_menu()}) : map,
+            {name + "ReturnPhase"});
         graph.observe(name + "ReturnPhase", phase(second ? Phase::SecondReturn : Phase::FirstReturn), {name + "Return"});
         graph.call_child(name + "Return", return_guild, {name + "Returned"});
         graph.confirm(name + "Returned", "bounty.return." + name, "bounty_return_completed", guild, {"Terminal"});

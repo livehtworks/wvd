@@ -30,7 +30,10 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, Dialogue
     graph.use_dialogue(policy);
     const auto task_stop = task_stop_condition(policy);
     const auto panel = C::any({C::image("trait"), C::image("recover")});
-    const J ready = C::all({common ? C::any({J{{"mode", "boot_ready"}}, panel, C::image("RiseAgain")}) : J{{"mode", "boot_ready"}},
+    // 选择加护后会先到哈肯楼层菜单；交还调用者决定是否“歸還”，
+    // 通用弹窗层不能把稳定菜单继续当作未处理的阻塞页轮询。
+    const J ready = C::all({common ? C::any({J{{"mode", "boot_ready"}}, panel, C::image("RiseAgain"),
+        vision::harken_floor_menu()}) : J{{"mode", "boot_ready"}},
                            C::absent(J{{"mode", "blocking_screen"}})});
     const auto title = scoped("boot_title_logo", {100, 300, 700, 470}, .86);
     // 首次免责声明跟随系统区域设置，游戏主体即使配置为英文也可能显示繁中。

@@ -98,6 +98,8 @@ class Application {
     std::unique_ptr<storage::WorkflowRepository> workflow_store_;
     std::unique_ptr<games::WvdQuestCatalog> catalog_;
     std::unique_ptr<runtime::NativeRunCoordinator> coordinator_;
+    std::shared_ptr<recognition::MatchBudget> match_budget_ =
+        std::make_shared<recognition::MatchBudget>();
     std::shared_ptr<devices::DeviceConnection> backend_;
     std::unique_ptr<platform::DeviceLease> preview_lease_;
     std::vector<std::uint8_t> frame_png_;

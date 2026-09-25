@@ -53,8 +53,8 @@ tasks::CompiledWorkflow take_turn(const J &profile, const std::set<std::string> 
     if (catalog.size() > 128)
         throw std::runtime_error("COMBAT_SKILL_CATALOG_INVALID");
     const J battle{{"mode", "combat_active"}};
-    const auto detail = C::image("spellskill/skillDetail");
-    const auto ok = C::image("OK");
+    const auto detail = C::image("combat_skill_detail");
+    const auto ok = C::image("combat_skill_confirm");
     const auto close = roi_image("close", {250, 1420, 420, 150});
     const auto popup = C::any({detail, ok, close});
     const auto ended = C::any({C::image("dungFlag"), C::image("chestFlag"), C::image("RiseAgain")});
@@ -62,7 +62,9 @@ tasks::CompiledWorkflow take_turn(const J &profile, const std::set<std::string> 
     const auto enabled = roi_image("spellskill/CombatAutoEnable", {780, 1030, 120, 160});
     const auto disabled = roi_image("spellskill/CombatAutoDisable", {780, 1030, 120, 160});
     const auto clear = C::all({battle, C::absent(popup)});
-    const auto speed = C::any({C::image("combatSpd"), C::image("combatSpd_DHI")});
+    const auto speed_off_zh = roi_image("combat_speed_off_zh_hant", {10, 1015, 80, 70});
+    const auto speed_on_zh = roi_image("combat_speed_on_zh_hant", {10, 1015, 80, 70});
+    const auto speed = C::any({C::image("combatSpd"), C::image("combatSpd_DHI"), speed_off_zh});
     const auto actor = J{{"mode", "prepared_actor"}, {"portraits", portraits}};
     const auto support = roi_image("supportSkillCheck", {677, 1475, 189, 80});
     const auto errors = C::any({C::image("notenoughsp"), C::image("notenoughmp")});
@@ -73,7 +75,11 @@ tasks::CompiledWorkflow take_turn(const J &profile, const std::set<std::string> 
     graph.fixed_click("DisableCharAuto", C::all({clear, enabled}), C::any({C::all({clear, disabled}), ended}),
                       {850, 1100}, {"AutoEnded"});
     graph.observe("AutoEnded", C::any({C::all({clear, disabled}), ended}), {"Terminal"});
-    graph.route("Entry", {"Ended", "Speed", "SpeedAlt", "Automatic", "Prepare", "UnexpectedPopup"});
+    graph.route("Entry", {"Ended", "SpeedZh", "Speed", "SpeedAlt", "Automatic", "Prepare", "UnexpectedPopup"});
+    graph.click("SpeedZh", clear, speed_off_zh,
+                C::any({C::all({battle, speed_on_zh}), ended}),
+                {"Ended", "Automatic", "Prepare", "UnexpectedPopup"});
+    graph.hit_limit("SpeedZh", 1);
     for (const auto &[node, image] : {std::pair{"Speed", "combatSpd"}, std::pair{"SpeedAlt", "combatSpd_DHI"}}) {
         graph.click(node, clear, C::image(image), C::any({C::all({battle, C::absent(speed)}), ended}),
                     {"Ended", "Automatic", "Prepare", "UnexpectedPopup"});

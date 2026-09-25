@@ -1177,7 +1177,7 @@
       {
         "id": "Entry",
         "type": "route",
-        "name": "先用当前可见目标",
+        "name": "先选可见目标，再按当前章节导航",
         "parameters": {},
         "repeat_limit": 32
       },
@@ -1209,486 +1209,6 @@
             "id": "wheel.leap"
           },
           "delay_after_ms": 2000
-        },
-        "repeat_limit": 1
-      },
-      {
-        "id": "Reset0",
-        "type": "action",
-        "name": "回到起始章节页签",
-        "parameters": {
-          "operation": "fixed_click",
-          "scene": {
-            "mode": "any",
-            "conditions": [
-              {
-                "mode": "semantic",
-                "id": "wheel.title"
-              },
-              {
-                "mode": "semantic",
-                "id": "wheel.chapter.dhi"
-              },
-              {
-                "mode": "semantic",
-                "id": "wheel.leap"
-              }
-            ]
-          },
-          "postcondition": {
-            "mode": "any",
-            "conditions": [
-              {
-                "mode": "semantic",
-                "id": "wheel.title"
-              },
-              {
-                "mode": "semantic",
-                "id": "wheel.chapter.dhi"
-              },
-              {
-                "mode": "semantic",
-                "id": "wheel.leap"
-              }
-            ]
-          },
-          "position": [
-            105,
-            230
-          ],
-          "delay_after_ms": 500
-        },
-        "repeat_limit": 1
-      },
-      {
-        "id": "Reset1",
-        "type": "action",
-        "name": "回到起始章节页签",
-        "parameters": {
-          "operation": "fixed_click",
-          "scene": {
-            "mode": "any",
-            "conditions": [
-              {
-                "mode": "semantic",
-                "id": "wheel.title"
-              },
-              {
-                "mode": "semantic",
-                "id": "wheel.chapter.dhi"
-              },
-              {
-                "mode": "semantic",
-                "id": "wheel.leap"
-              }
-            ]
-          },
-          "postcondition": {
-            "mode": "any",
-            "conditions": [
-              {
-                "mode": "semantic",
-                "id": "wheel.title"
-              },
-              {
-                "mode": "semantic",
-                "id": "wheel.chapter.dhi"
-              },
-              {
-                "mode": "semantic",
-                "id": "wheel.leap"
-              }
-            ]
-          },
-          "position": [
-            105,
-            230
-          ],
-          "delay_after_ms": 500
-        },
-        "repeat_limit": 1
-      },
-      {
-        "id": "Reset2",
-        "type": "action",
-        "name": "回到起始章节页签",
-        "parameters": {
-          "operation": "fixed_click",
-          "scene": {
-            "mode": "any",
-            "conditions": [
-              {
-                "mode": "semantic",
-                "id": "wheel.title"
-              },
-              {
-                "mode": "semantic",
-                "id": "wheel.chapter.dhi"
-              },
-              {
-                "mode": "semantic",
-                "id": "wheel.leap"
-              }
-            ]
-          },
-          "postcondition": {
-            "mode": "any",
-            "conditions": [
-              {
-                "mode": "semantic",
-                "id": "wheel.title"
-              },
-              {
-                "mode": "semantic",
-                "id": "wheel.chapter.dhi"
-              },
-              {
-                "mode": "semantic",
-                "id": "wheel.leap"
-              }
-            ]
-          },
-          "position": [
-            105,
-            230
-          ],
-          "delay_after_ms": 500
-        },
-        "repeat_limit": 1
-      },
-      {
-        "id": "Reset3",
-        "type": "action",
-        "name": "回到起始章节页签",
-        "parameters": {
-          "operation": "fixed_click",
-          "scene": {
-            "mode": "any",
-            "conditions": [
-              {
-                "mode": "semantic",
-                "id": "wheel.title"
-              },
-              {
-                "mode": "semantic",
-                "id": "wheel.chapter.dhi"
-              },
-              {
-                "mode": "semantic",
-                "id": "wheel.leap"
-              }
-            ]
-          },
-          "postcondition": {
-            "mode": "any",
-            "conditions": [
-              {
-                "mode": "semantic",
-                "id": "wheel.title"
-              },
-              {
-                "mode": "semantic",
-                "id": "wheel.chapter.dhi"
-              },
-              {
-                "mode": "semantic",
-                "id": "wheel.leap"
-              }
-            ]
-          },
-          "position": [
-            105,
-            230
-          ],
-          "delay_after_ms": 500
-        },
-        "repeat_limit": 1
-      },
-      {
-        "id": "Reset4",
-        "type": "action",
-        "name": "回到起始章节页签",
-        "parameters": {
-          "operation": "fixed_click",
-          "scene": {
-            "mode": "any",
-            "conditions": [
-              {
-                "mode": "semantic",
-                "id": "wheel.title"
-              },
-              {
-                "mode": "semantic",
-                "id": "wheel.chapter.dhi"
-              },
-              {
-                "mode": "semantic",
-                "id": "wheel.leap"
-              }
-            ]
-          },
-          "postcondition": {
-            "mode": "any",
-            "conditions": [
-              {
-                "mode": "semantic",
-                "id": "wheel.title"
-              },
-              {
-                "mode": "semantic",
-                "id": "wheel.chapter.dhi"
-              },
-              {
-                "mode": "semantic",
-                "id": "wheel.leap"
-              }
-            ]
-          },
-          "position": [
-            105,
-            230
-          ],
-          "delay_after_ms": 500
-        },
-        "repeat_limit": 1
-      },
-      {
-        "id": "Reset5",
-        "type": "action",
-        "name": "回到起始章节页签",
-        "parameters": {
-          "operation": "fixed_click",
-          "scene": {
-            "mode": "any",
-            "conditions": [
-              {
-                "mode": "semantic",
-                "id": "wheel.title"
-              },
-              {
-                "mode": "semantic",
-                "id": "wheel.chapter.dhi"
-              },
-              {
-                "mode": "semantic",
-                "id": "wheel.leap"
-              }
-            ]
-          },
-          "postcondition": {
-            "mode": "any",
-            "conditions": [
-              {
-                "mode": "semantic",
-                "id": "wheel.title"
-              },
-              {
-                "mode": "semantic",
-                "id": "wheel.chapter.dhi"
-              },
-              {
-                "mode": "semantic",
-                "id": "wheel.leap"
-              }
-            ]
-          },
-          "position": [
-            105,
-            230
-          ],
-          "delay_after_ms": 500
-        },
-        "repeat_limit": 1
-      },
-      {
-        "id": "Reset6",
-        "type": "action",
-        "name": "回到起始章节页签",
-        "parameters": {
-          "operation": "fixed_click",
-          "scene": {
-            "mode": "any",
-            "conditions": [
-              {
-                "mode": "semantic",
-                "id": "wheel.title"
-              },
-              {
-                "mode": "semantic",
-                "id": "wheel.chapter.dhi"
-              },
-              {
-                "mode": "semantic",
-                "id": "wheel.leap"
-              }
-            ]
-          },
-          "postcondition": {
-            "mode": "any",
-            "conditions": [
-              {
-                "mode": "semantic",
-                "id": "wheel.title"
-              },
-              {
-                "mode": "semantic",
-                "id": "wheel.chapter.dhi"
-              },
-              {
-                "mode": "semantic",
-                "id": "wheel.leap"
-              }
-            ]
-          },
-          "position": [
-            105,
-            230
-          ],
-          "delay_after_ms": 500
-        },
-        "repeat_limit": 1
-      },
-      {
-        "id": "Reset7",
-        "type": "action",
-        "name": "回到起始章节页签",
-        "parameters": {
-          "operation": "fixed_click",
-          "scene": {
-            "mode": "any",
-            "conditions": [
-              {
-                "mode": "semantic",
-                "id": "wheel.title"
-              },
-              {
-                "mode": "semantic",
-                "id": "wheel.chapter.dhi"
-              },
-              {
-                "mode": "semantic",
-                "id": "wheel.leap"
-              }
-            ]
-          },
-          "postcondition": {
-            "mode": "any",
-            "conditions": [
-              {
-                "mode": "semantic",
-                "id": "wheel.title"
-              },
-              {
-                "mode": "semantic",
-                "id": "wheel.chapter.dhi"
-              },
-              {
-                "mode": "semantic",
-                "id": "wheel.leap"
-              }
-            ]
-          },
-          "position": [
-            105,
-            230
-          ],
-          "delay_after_ms": 500
-        },
-        "repeat_limit": 1
-      },
-      {
-        "id": "Reset8",
-        "type": "action",
-        "name": "回到起始章节页签",
-        "parameters": {
-          "operation": "fixed_click",
-          "scene": {
-            "mode": "any",
-            "conditions": [
-              {
-                "mode": "semantic",
-                "id": "wheel.title"
-              },
-              {
-                "mode": "semantic",
-                "id": "wheel.chapter.dhi"
-              },
-              {
-                "mode": "semantic",
-                "id": "wheel.leap"
-              }
-            ]
-          },
-          "postcondition": {
-            "mode": "any",
-            "conditions": [
-              {
-                "mode": "semantic",
-                "id": "wheel.title"
-              },
-              {
-                "mode": "semantic",
-                "id": "wheel.chapter.dhi"
-              },
-              {
-                "mode": "semantic",
-                "id": "wheel.leap"
-              }
-            ]
-          },
-          "position": [
-            105,
-            230
-          ],
-          "delay_after_ms": 500
-        },
-        "repeat_limit": 1
-      },
-      {
-        "id": "Reset9",
-        "type": "action",
-        "name": "回到起始章节页签",
-        "parameters": {
-          "operation": "fixed_click",
-          "scene": {
-            "mode": "any",
-            "conditions": [
-              {
-                "mode": "semantic",
-                "id": "wheel.title"
-              },
-              {
-                "mode": "semantic",
-                "id": "wheel.chapter.dhi"
-              },
-              {
-                "mode": "semantic",
-                "id": "wheel.leap"
-              }
-            ]
-          },
-          "postcondition": {
-            "mode": "any",
-            "conditions": [
-              {
-                "mode": "semantic",
-                "id": "wheel.title"
-              },
-              {
-                "mode": "semantic",
-                "id": "wheel.chapter.dhi"
-              },
-              {
-                "mode": "semantic",
-                "id": "wheel.leap"
-              }
-            ]
-          },
-          "position": [
-            105,
-            230
-          ],
-          "delay_after_ms": 500
         },
         "repeat_limit": 1
       },
@@ -1756,43 +1276,25 @@
         "repeat_limit": 32
       },
       {
-        "id": "NextTab",
+        "id": "NextFromAbyss",
         "type": "action",
-        "name": "翻到下一章节页签",
+        "name": "从初始的奈落向右切换一章",
         "parameters": {
           "operation": "click",
           "scene": {
             "mode": "all",
             "conditions": [
               {
-                "mode": "any",
-                "conditions": [
-                  {
-                    "mode": "semantic",
-                    "id": "wheel.title"
-                  },
-                  {
-                    "mode": "semantic",
-                    "id": "wheel.chapter.dhi"
-                  },
-                  {
-                    "mode": "semantic",
-                    "id": "wheel.leap"
-                  }
-                ]
+                "mode": "semantic",
+                "id": "wheel.title"
+              },
+              {
+                "mode": "semantic",
+                "id": "wheel.chapter.abyss"
               },
               {
                 "mode": "semantic",
                 "id": "wheel.next_tab"
-              },
-              {
-                "mode": "not",
-                "conditions": [
-                  {
-                    "mode": "semantic",
-                    "id": "wheel.chapter.dhi"
-                  }
-                ]
               }
             ]
           },
@@ -1801,7 +1303,91 @@
             "id": "wheel.next_tab"
           },
           "postcondition": {
-            "mode": "any",
+            "mode": "semantic",
+            "id": "wheel.chapter.waterway"
+          },
+          "delay_after_ms": 500
+        },
+        "repeat_limit": 4
+      },
+      {
+        "id": "NextFromWaterway",
+        "type": "action",
+        "name": "从贸易水路向右切换一章",
+        "parameters": {
+          "operation": "click",
+          "scene": {
+            "mode": "all",
+            "conditions": [
+              {
+                "mode": "semantic",
+                "id": "wheel.title"
+              },
+              {
+                "mode": "semantic",
+                "id": "wheel.chapter.waterway"
+              },
+              {
+                "mode": "semantic",
+                "id": "wheel.next_tab"
+              }
+            ]
+          },
+          "target": {
+            "mode": "semantic",
+            "id": "wheel.next_tab"
+          },
+          "postcondition": {
+            "mode": "semantic",
+            "id": "wheel.chapter.fortress"
+          },
+          "delay_after_ms": 500
+        },
+        "repeat_limit": 4
+      },
+      {
+        "id": "NextFromFortress",
+        "type": "action",
+        "name": "从城塞向右切换一章",
+        "parameters": {
+          "operation": "click",
+          "scene": {
+            "mode": "all",
+            "conditions": [
+              {
+                "mode": "semantic",
+                "id": "wheel.title"
+              },
+              {
+                "mode": "semantic",
+                "id": "wheel.chapter.fortress"
+              },
+              {
+                "mode": "semantic",
+                "id": "wheel.next_tab"
+              }
+            ]
+          },
+          "target": {
+            "mode": "semantic",
+            "id": "wheel.next_tab"
+          },
+          "postcondition": {
+            "mode": "semantic",
+            "id": "wheel.chapter.dhi"
+          },
+          "delay_after_ms": 500
+        },
+        "repeat_limit": 4
+      },
+      {
+        "id": "PrevFromDhi",
+        "type": "action",
+        "name": "从豪雪地带向左切换一章",
+        "parameters": {
+          "operation": "click",
+          "scene": {
+            "mode": "all",
             "conditions": [
               {
                 "mode": "semantic",
@@ -1813,12 +1399,98 @@
               },
               {
                 "mode": "semantic",
-                "id": "wheel.leap"
+                "id": "wheel.previous_tab"
               }
             ]
-          }
+          },
+          "target": {
+            "mode": "semantic",
+            "id": "wheel.previous_tab"
+          },
+          "postcondition": {
+            "mode": "semantic",
+            "id": "wheel.chapter.fortress"
+          },
+          "delay_after_ms": 500
         },
-        "repeat_limit": 32
+        "repeat_limit": 4
+      },
+      {
+        "id": "PrevFromFortress",
+        "type": "action",
+        "name": "从城塞向左切换一章",
+        "parameters": {
+          "operation": "click",
+          "scene": {
+            "mode": "all",
+            "conditions": [
+              {
+                "mode": "semantic",
+                "id": "wheel.title"
+              },
+              {
+                "mode": "semantic",
+                "id": "wheel.chapter.fortress"
+              },
+              {
+                "mode": "semantic",
+                "id": "wheel.previous_tab"
+              }
+            ]
+          },
+          "target": {
+            "mode": "semantic",
+            "id": "wheel.previous_tab"
+          },
+          "postcondition": {
+            "mode": "semantic",
+            "id": "wheel.chapter.waterway"
+          },
+          "delay_after_ms": 500
+        },
+        "repeat_limit": 4
+      },
+      {
+        "id": "PrevFromWaterway",
+        "type": "action",
+        "name": "从贸易水路向左切换一章",
+        "parameters": {
+          "operation": "click",
+          "scene": {
+            "mode": "all",
+            "conditions": [
+              {
+                "mode": "semantic",
+                "id": "wheel.title"
+              },
+              {
+                "mode": "semantic",
+                "id": "wheel.chapter.waterway"
+              },
+              {
+                "mode": "semantic",
+                "id": "wheel.previous_tab"
+              }
+            ]
+          },
+          "target": {
+            "mode": "semantic",
+            "id": "wheel.previous_tab"
+          },
+          "postcondition": {
+            "mode": "semantic",
+            "id": "wheel.chapter.abyss"
+          },
+          "delay_after_ms": 500
+        },
+        "repeat_limit": 4
+      },
+      {
+        "id": "ReverseFindChapter",
+        "type": "route",
+        "name": "向左查找目标章节",
+        "parameters": {},
+        "repeat_limit": 16
       },
       {
         "id": "Reopen",
@@ -1912,7 +1584,7 @@
       {
         "id": "FineScroll",
         "type": "action",
-        "name": "向下查找",
+        "name": "每次滚动后重新查找矿石",
         "parameters": {
           "operation": "swipe",
           "scene": {
@@ -1934,19 +1606,22 @@
             ]
           },
           "postcondition": {
-            "mode": "semantic",
-            "id": "wheel.title"
+            "mode": "any",
+            "conditions": [
+              {"mode": "semantic", "id": "wheel.title"},
+              {"mode": "semantic", "id": "wheel.target.ore"}
+            ]
           },
           "coordinates": [
-            50,
-            1200,
-            50,
-            1300
+            450,
+            1100,
+            450,
+            600
           ],
           "duration_ms": 400,
           "delay_after_ms": 1000
         },
-        "repeat_limit": 32
+        "repeat_limit": 6
       },
       {
         "id": "Scroll0",
@@ -1973,86 +1648,11 @@
             ]
           },
           "postcondition": {
-            "mode": "semantic",
-            "id": "wheel.title"
-          },
-          "coordinates": [
-            450,
-            1200,
-            450,
-            200
-          ],
-          "duration_ms": 400,
-          "delay_after_ms": 2000
-        },
-        "repeat_limit": 1
-      },
-      {
-        "id": "Scroll1",
-        "type": "action",
-        "name": "目标未出现时大幅向下查找",
-        "parameters": {
-          "operation": "swipe",
-          "scene": {
-            "mode": "all",
+            "mode": "any",
             "conditions": [
-              {
-                "mode": "semantic",
-                "id": "wheel.title"
-              },
-              {
-                "mode": "not",
-                "conditions": [
-                  {
-                    "mode": "semantic",
-                    "id": "wheel.target.ore"
-                  }
-                ]
-              }
+              {"mode": "semantic", "id": "wheel.title"},
+              {"mode": "semantic", "id": "wheel.target.ore"}
             ]
-          },
-          "postcondition": {
-            "mode": "semantic",
-            "id": "wheel.title"
-          },
-          "coordinates": [
-            450,
-            1200,
-            450,
-            200
-          ],
-          "duration_ms": 400,
-          "delay_after_ms": 2000
-        },
-        "repeat_limit": 1
-      },
-      {
-        "id": "Scroll2",
-        "type": "action",
-        "name": "目标未出现时大幅向下查找",
-        "parameters": {
-          "operation": "swipe",
-          "scene": {
-            "mode": "all",
-            "conditions": [
-              {
-                "mode": "semantic",
-                "id": "wheel.title"
-              },
-              {
-                "mode": "not",
-                "conditions": [
-                  {
-                    "mode": "semantic",
-                    "id": "wheel.target.ore"
-                  }
-                ]
-              }
-            ]
-          },
-          "postcondition": {
-            "mode": "semantic",
-            "id": "wheel.title"
           },
           "coordinates": [
             450,
@@ -2085,7 +1685,7 @@
       {
         "id": "e1",
         "from": "Entry",
-        "to": "Reset0",
+        "to": "FindChapter",
         "outcome": "success",
         "order": 1
       },
@@ -2093,76 +1693,6 @@
         "id": "e2",
         "from": "QuickSelect",
         "to": "Done",
-        "outcome": "success",
-        "order": 0
-      },
-      {
-        "id": "e3",
-        "from": "Reset0",
-        "to": "Reset1",
-        "outcome": "success",
-        "order": 0
-      },
-      {
-        "id": "e4",
-        "from": "Reset1",
-        "to": "Reset2",
-        "outcome": "success",
-        "order": 0
-      },
-      {
-        "id": "e5",
-        "from": "Reset2",
-        "to": "Reset3",
-        "outcome": "success",
-        "order": 0
-      },
-      {
-        "id": "e6",
-        "from": "Reset3",
-        "to": "Reset4",
-        "outcome": "success",
-        "order": 0
-      },
-      {
-        "id": "e7",
-        "from": "Reset4",
-        "to": "Reset5",
-        "outcome": "success",
-        "order": 0
-      },
-      {
-        "id": "e8",
-        "from": "Reset5",
-        "to": "Reset6",
-        "outcome": "success",
-        "order": 0
-      },
-      {
-        "id": "e9",
-        "from": "Reset6",
-        "to": "Reset7",
-        "outcome": "success",
-        "order": 0
-      },
-      {
-        "id": "e10",
-        "from": "Reset7",
-        "to": "Reset8",
-        "outcome": "success",
-        "order": 0
-      },
-      {
-        "id": "e11",
-        "from": "Reset8",
-        "to": "Reset9",
-        "outcome": "success",
-        "order": 0
-      },
-      {
-        "id": "e12",
-        "from": "Reset9",
-        "to": "FindChapter",
         "outcome": "success",
         "order": 0
       },
@@ -2176,24 +1706,35 @@
       {
         "id": "e14",
         "from": "FindChapter",
-        "to": "NextTab",
+        "to": "NextFromAbyss",
         "outcome": "success",
         "order": 1
       },
+      {"id": "e28", "from": "FindChapter", "to": "NextFromWaterway", "outcome": "success", "order": 2},
+      {"id": "e29", "from": "FindChapter", "to": "NextFromFortress", "outcome": "success", "order": 3},
+      {"id": "e32", "from": "FindChapter", "to": "PrevFromDhi", "outcome": "success", "order": 4},
       {
         "id": "e15",
         "from": "FindChapter",
         "to": "Reopen",
         "outcome": "success",
-        "order": 2
+        "order": 5
       },
       {
         "id": "e16",
-        "from": "NextTab",
+        "from": "NextFromAbyss",
         "to": "FindChapter",
         "outcome": "success",
         "order": 0
       },
+      {"id": "e30", "from": "NextFromWaterway", "to": "FindChapter", "outcome": "success", "order": 0},
+      {"id": "e31", "from": "NextFromFortress", "to": "FindChapter", "outcome": "success", "order": 0},
+      {"id": "e33", "from": "PrevFromDhi", "to": "ReverseFindChapter", "outcome": "success", "order": 0},
+      {"id": "e34", "from": "ReverseFindChapter", "to": "Chapter", "outcome": "success", "order": 0},
+      {"id": "e35", "from": "ReverseFindChapter", "to": "PrevFromFortress", "outcome": "success", "order": 1},
+      {"id": "e36", "from": "ReverseFindChapter", "to": "PrevFromWaterway", "outcome": "success", "order": 2},
+      {"id": "e37", "from": "PrevFromFortress", "to": "ReverseFindChapter", "outcome": "success", "order": 0},
+      {"id": "e38", "from": "PrevFromWaterway", "to": "ReverseFindChapter", "outcome": "success", "order": 0},
       {
         "id": "e17",
         "from": "Reopen",
@@ -2253,20 +1794,6 @@
       {
         "id": "e25",
         "from": "Scroll0",
-        "to": "Scroll1",
-        "outcome": "success",
-        "order": 0
-      },
-      {
-        "id": "e26",
-        "from": "Scroll1",
-        "to": "Scroll2",
-        "outcome": "success",
-        "order": 0
-      },
-      {
-        "id": "e27",
-        "from": "Scroll2",
         "to": "FindTarget",
         "outcome": "success",
         "order": 0
@@ -2285,59 +1812,9 @@
           "y": 100
         },
         {
-          "node_id": "Reset0",
-          "x": 480,
-          "y": 100
-        },
-        {
-          "node_id": "Reset1",
-          "x": 700,
-          "y": 100
-        },
-        {
-          "node_id": "Reset2",
-          "x": 40,
-          "y": 260
-        },
-        {
-          "node_id": "Reset3",
-          "x": 260,
-          "y": 260
-        },
-        {
-          "node_id": "Reset4",
-          "x": 480,
-          "y": 260
-        },
-        {
-          "node_id": "Reset5",
-          "x": 700,
-          "y": 260
-        },
-        {
-          "node_id": "Reset6",
-          "x": 40,
-          "y": 420
-        },
-        {
-          "node_id": "Reset7",
-          "x": 260,
-          "y": 420
-        },
-        {
-          "node_id": "Reset8",
-          "x": 480,
-          "y": 420
-        },
-        {
-          "node_id": "Reset9",
-          "x": 700,
-          "y": 420
-        },
-        {
           "node_id": "FindChapter",
-          "x": 40,
-          "y": 580
+          "x": 480,
+          "y": 100
         },
         {
           "node_id": "Chapter",
@@ -2345,10 +1822,16 @@
           "y": 580
         },
         {
-          "node_id": "NextTab",
+          "node_id": "NextFromAbyss",
           "x": 480,
           "y": 580
         },
+        {"node_id": "NextFromWaterway", "x": 480, "y": 680},
+        {"node_id": "NextFromFortress", "x": 480, "y": 780},
+        {"node_id": "PrevFromDhi", "x": 600, "y": 900},
+        {"node_id": "PrevFromFortress", "x": 600, "y": 1000},
+        {"node_id": "PrevFromWaterway", "x": 600, "y": 1100},
+        {"node_id": "ReverseFindChapter", "x": 380, "y": 1000},
         {
           "node_id": "Reopen",
           "x": 700,
@@ -2380,16 +1863,6 @@
           "y": 900
         },
         {
-          "node_id": "Scroll1",
-          "x": 260,
-          "y": 900
-        },
-        {
-          "node_id": "Scroll2",
-          "x": 480,
-          "y": 900
-        },
-        {
           "node_id": "Done",
           "x": 700,
           "y": 900
@@ -2416,86 +1889,6 @@
           "default": "wheel.chapter.dhi",
           "bindings": [
             {
-              "node": "Reset0",
-              "path": "/scene/conditions/1/id"
-            },
-            {
-              "node": "Reset0",
-              "path": "/postcondition/conditions/1/id"
-            },
-            {
-              "node": "Reset1",
-              "path": "/scene/conditions/1/id"
-            },
-            {
-              "node": "Reset1",
-              "path": "/postcondition/conditions/1/id"
-            },
-            {
-              "node": "Reset2",
-              "path": "/scene/conditions/1/id"
-            },
-            {
-              "node": "Reset2",
-              "path": "/postcondition/conditions/1/id"
-            },
-            {
-              "node": "Reset3",
-              "path": "/scene/conditions/1/id"
-            },
-            {
-              "node": "Reset3",
-              "path": "/postcondition/conditions/1/id"
-            },
-            {
-              "node": "Reset4",
-              "path": "/scene/conditions/1/id"
-            },
-            {
-              "node": "Reset4",
-              "path": "/postcondition/conditions/1/id"
-            },
-            {
-              "node": "Reset5",
-              "path": "/scene/conditions/1/id"
-            },
-            {
-              "node": "Reset5",
-              "path": "/postcondition/conditions/1/id"
-            },
-            {
-              "node": "Reset6",
-              "path": "/scene/conditions/1/id"
-            },
-            {
-              "node": "Reset6",
-              "path": "/postcondition/conditions/1/id"
-            },
-            {
-              "node": "Reset7",
-              "path": "/scene/conditions/1/id"
-            },
-            {
-              "node": "Reset7",
-              "path": "/postcondition/conditions/1/id"
-            },
-            {
-              "node": "Reset8",
-              "path": "/scene/conditions/1/id"
-            },
-            {
-              "node": "Reset8",
-              "path": "/postcondition/conditions/1/id"
-            },
-            {
-              "node": "Reset9",
-              "path": "/scene/conditions/1/id"
-            },
-            {
-              "node": "Reset9",
-              "path": "/postcondition/conditions/1/id"
-            },
-            {
               "node": "Chapter",
               "path": "/scene/conditions/0/conditions/1/id"
             },
@@ -2509,18 +1902,6 @@
             },
             {
               "node": "Chapter",
-              "path": "/postcondition/conditions/1/id"
-            },
-            {
-              "node": "NextTab",
-              "path": "/scene/conditions/0/conditions/1/id"
-            },
-            {
-              "node": "NextTab",
-              "path": "/scene/conditions/2/conditions/0/id"
-            },
-            {
-              "node": "NextTab",
               "path": "/postcondition/conditions/1/id"
             },
             {
@@ -2560,12 +1941,12 @@
               "path": "/scene/conditions/1/conditions/0/id"
             },
             {
-              "node": "Scroll1",
-              "path": "/scene/conditions/1/conditions/0/id"
+              "node": "FineScroll",
+              "path": "/postcondition/conditions/1/id"
             },
             {
-              "node": "Scroll2",
-              "path": "/scene/conditions/1/conditions/0/id"
+              "node": "Scroll0",
+              "path": "/postcondition/conditions/1/id"
             }
           ]
         }

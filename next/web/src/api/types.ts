@@ -27,6 +27,10 @@ export interface SkillSetting extends JsonObject {
 export interface StrategyGroup extends JsonObject {
   group_name: string; skill_settings: SkillSetting[]; complete_one_as_all?: boolean;
 }
+export interface SpecialCombatSettings extends JsonObject {
+  skull: boolean; portrait: boolean; portrait_image: string;
+  normal_strategy: string; special_strategy: string;
+}
 export interface WvdProfile extends JsonObject {
   EMU_PATH?: string; ADB_ADRESS?: string; EMU_INDEX?: number; AUTO_START_CLASH?: boolean;
   FARM_TARGET_TEXT?: string; FARM_TARGET?: string; TASK_SPECIFIC_CONFIG?: boolean;
@@ -34,7 +38,7 @@ export interface WvdProfile extends JsonObject {
   SKIP_COMBAT_RECOVER?: boolean; SKIP_CHEST_RECOVER?: boolean; RECOVER_WHEN_BEGINNING?: boolean;
   ACTIVE_REST?: boolean; REST_INTERVEL?: number; KARMA_ADJUST?: string | number; RE_ASSEMBLE_PARTY?: boolean;
   DEFAULT_OVERALL_STRATEGY?: string;
-  TASK_POINT_STRATEGY?: { overall_strategy?: string; task_point?: Record<string, string> | Array<{ point: string; strategy: string }>; [key: string]: unknown };
+  TASK_POINT_STRATEGY?: { overall_strategy?: string; task_point?: Record<string, string> | Array<{ point: string; strategy: string }>; special_combat?: SpecialCombatSettings; [key: string]: unknown };
   STRATEGY?: StrategyGroup[] | Record<string, Omit<StrategyGroup, "group_name">>;
   RELOAD_STRATEGY_WHEN?: string;
   ACTIVE_BEG_MONEY?: boolean; ACTIVE_ROYALSUITE_REST?: boolean; ACTIVE_TRIUMPH?: boolean;

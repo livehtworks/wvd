@@ -7,6 +7,7 @@
 #include "games/wvd/supply/dungeon_recover.hpp"
 #include "games/wvd/recovery/boot.hpp"
 #include "games/wvd/recovery/revival.hpp"
+#include "games/wvd/vision/harken_probes.hpp"
 
 namespace wvd::games::tasks {
 using J = nlohmann::json;
@@ -31,7 +32,8 @@ J point_confirmation(const MapTarget &target, const J &map) {
         J reached{{"mode", target.target == "position" ? "reached" : "through_stair"}, {"position", *target.position}};
         if (target.target != "position")
             reached["image"] = target.target;
-        return C::all({map, reached});
+        const auto on_map = C::all({map, reached});
+        return target.harken_arrival ? C::any({on_map, vision::harken_floor_menu()}) : on_map;
     }
     auto image = C::image(target.target);
     if (!target.regions.empty()) {
@@ -108,7 +110,25 @@ CompiledWorkflow traverse_dungeon(const WvdTaskPlan &plan, const J &profile,
     graph.delay_after("UnknownWait", 1000);
     graph.hit_limit("UnknownWait", 128);
     graph.confirm("Entered", "dungeon.enter", "dungeon_entered", inside, {"Dispatch"});
-    graph.route("Dispatch", candidates({"UnknownFrozen", "Blocked", "Combat", "Chest", "Revive", "Outside", "HealingPanel", "Resume", "Map", "UnknownLeap", "UnknownTimeout", "UnknownLimit", "UnknownWait"}));
+    J dispatch = {"UnknownFrozen"};
+    if (plan.route().back().harken_arrival) dispatch.push_back("HarkenCompleted");
+    for (const auto *name : {"Blocked", "Combat", "Chest", "Revive", "Outside", "HealingPanel", "Resume", "Map"})
+        dispatch.push_back(name);
+    if (plan.route().back().harken_arrival) dispatch.push_back("HarkenArrived");
+    for (const auto *name : {"UnknownLeap", "UnknownTimeout", "UnknownLimit", "UnknownWait"})
+        dispatch.push_back(name);
+    graph.route("Dispatch", candidates(std::move(dispatch)));
+    if (plan.route().back().harken_arrival) {
+        // 最后一个地图点已由确认事件写入业务进度后，楼层菜单就是本段终点；
+        // 不再回到需要迷宫/地图图标的 Dispatch 中等待到超时。
+        graph.observe("HarkenCompleted", C::all({vision::harken_floor_menu(),
+            C::business("/task_step", plan.route().size())}), {"Terminal"});
+        // 地图子图可能先被随机加护打断；返回楼层菜单后仍需结合最后任务点
+        // 的业务进度确认到达，不能把任意哈肯菜单直接算作完成。
+        graph.observe("HarkenArrived", C::all({vision::harken_floor_menu(),
+            C::business("/task_step", plan.route().size() - 1)}),
+            {"Confirm" + std::to_string(plan.route().size() - 1)});
+    }
     const auto common = graph.define_child("Common", recovery::clear_common_screens(allow_download, dialogue));
     graph.observe("Blocked", {{"mode", "blocking_screen"}}, {"ClearBlocking"});
     graph.call_child("ClearBlocking", common, {"Dispatch"});

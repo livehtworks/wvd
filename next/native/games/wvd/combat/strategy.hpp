@@ -21,6 +21,7 @@ class CombatStrategy {
   public:
     explicit CombatStrategy(nlohmann::json profile);
     void reload(std::size_t task_step);
+    void begin_encounter(bool special);
     bool uses_task_points() const;
     bool automatic() const;
     std::optional<SkillSelection> select(const std::vector<PortraitScore> &scores) const;
@@ -28,6 +29,7 @@ class CombatStrategy {
     nlohmann::json summary() const;
 
   private:
+    void load_group(const std::string &key);
     const nlohmann::json profile_;
     const bool english_;
     nlohmann::json current_ = nlohmann::json::object();

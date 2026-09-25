@@ -53,14 +53,16 @@ target_compile_options(wvd_native_rapid PRIVATE /utf-8 /EHsc)
 add_library(wvd_native_platform STATIC
   platform/windows/process.cpp platform/windows/file_digest.cpp
   platform/windows/runtime_files.cpp platform/windows/bundle_lease.cpp
-  platform/windows/mumu_binding.cpp platform/windows/metadata_query.cpp)
+  platform/windows/mumu_binding.cpp platform/windows/metadata_query.cpp
+  platform/windows/memory_diagnostics.cpp)
 target_include_directories(wvd_native_platform PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}"
   "${PROJECT_BINARY_DIR}/generated")
-target_link_libraries(wvd_native_platform PUBLIC bcrypt ole32)
+target_link_libraries(wvd_native_platform PUBLIC bcrypt ole32 psapi)
 target_compile_options(wvd_native_platform PRIVATE /utf-8 /W4 /EHsc)
 
 add_library(wvd_native_recognition STATIC
-  recognition/request.cpp recognition/frame.cpp recognition/ocr.cpp recognition/service.cpp)
+  recognition/request.cpp recognition/frame.cpp recognition/ocr.cpp recognition/service.cpp
+  recognition/resources.cpp)
 target_include_directories(wvd_native_recognition PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}"
   "${PROJECT_BINARY_DIR}/generated" "${WVD_OPENCV}/include")
 target_include_directories(wvd_native_recognition PRIVATE "${WVD_RAPID}/include"

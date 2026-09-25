@@ -181,7 +181,7 @@
             "mode": "template",
             "image": "guild_bounties_entry_zh_hant",
             "threshold": 0.8,
-            "roi": [650, 1330, 250, 120]
+            "roi": [600, 1320, 250, 150]
           },
           "validation": "REAL_FRAME_REPORTED",
           "source": "2026-09-24 MuMu 900x1600 guild-commissions-swiped-live.png"
@@ -202,6 +202,16 @@
       "category": "公会/委托",
       "role": "position",
       "variants": {
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "guild_report_ready_zh_hant",
+            "threshold": 0.8,
+            "roi": [20, 220, 860, 1140]
+          },
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "2026-09-25 MuMu scorpion-bounty-list-now.png"
+        },
         "en": {
           "condition": {
             "mode": "template",
@@ -210,6 +220,57 @@
           },
           "validation": "SOURCE_ONLY_NOT_REAL_VERIFIED",
           "source": "dcc11c18: native/games/wvd/tasks/bounty_visit.cpp"
+        }
+      }
+    },
+    "guild.bounty.reveal.close": {
+      "label": "关闭新悬赏展示",
+      "category": "公会/悬赏",
+      "role": "position",
+      "variants": {
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "guild_reveal_close_zh_hant",
+            "threshold": 0.8,
+            "roi": [330, 1460, 230, 130]
+          },
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "2026-09-25 MuMu scorpion-after-leap-board.png"
+        }
+      }
+    },
+    "guild.report.receipt": {
+      "label": "悬赏领取回执",
+      "category": "公会/委托",
+      "role": "observation",
+      "variants": {
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "guild_report_receipt_zh_hant",
+            "threshold": 0.8,
+            "roi": [250, 810, 400, 160]
+          },
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "2026-09-25 MuMu scorpion-bounty-report-after-click.png"
+        }
+      }
+    },
+    "guild.report.receipt.close": {
+      "label": "关闭悬赏领取回执",
+      "category": "公会/委托",
+      "role": "position",
+      "variants": {
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "guild_report_receipt_close_zh_hant",
+            "threshold": 0.8,
+            "roi": [320, 940, 260, 110]
+          },
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "2026-09-25 MuMu scorpion-bounty-report-after-click.png"
         }
       }
     },
@@ -690,6 +751,21 @@
         }
       }
     },
+    "wheel.previous_tab": {
+      "label": "章节左侧翻页",
+      "category": "诅咒之轮/操作",
+      "role": "position",
+      "variants": {
+        "shared": {
+          "condition": {
+            "mode": "template",
+            "image": "cursedWheelTapLeft",
+            "threshold": 0.8
+          },
+          "validation": "SOURCE_VARIANT_PRESENT"
+        }
+      }
+    },
     "game.stable": {
       "label": "现有 boot_ready 分类（不是具体地点）",
       "category": "公共/页面分类",
@@ -763,6 +839,50 @@
         "zh-Hant": {"condition": {"mode": "template", "image": "combat_flee_zh_hant", "threshold": 0.82,
                                   "roi": [720, 1120, 180, 130]}, "validation": "REAL_FRAME_REPORTED",
                     "source": "2026-09-24 MuMu 战斗菜单实帧；仅用于确认菜单存在"}
+      }
+    },
+    "combat.skill.detail": {
+      "label": "战斗技能详情已打开",
+      "category": "事件/战斗",
+      "role": "observation",
+      "variants": {
+        "en": {"condition": {"mode": "template", "image": "spellskill/skillDetail", "threshold": 0.8,
+                             "roi": [750, 800, 130, 150]}, "validation": "SOURCE_VARIANT_PRESENT"},
+        "zh-Hant": {"condition": {"mode": "template", "image": "combat_skill_detail_zh_hant", "threshold": 0.82,
+                                  "roi": [750, 800, 130, 150]}, "validation": "REAL_FRAME_REPORTED",
+                    "source": "2026-09-26 MuMu 蝎女战斗技能详情实帧；明細按钮"}
+      }
+    },
+    "combat.skill.confirm": {
+      "label": "战斗技能确认按钮",
+      "category": "事件/战斗",
+      "role": "position",
+      "variants": {
+        "en": {"condition": {"mode": "template", "image": "OK", "threshold": 0.8,
+                             "roi": [420, 1420, 340, 160]}, "validation": "SOURCE_VARIANT_PRESENT"},
+        "zh-Hant": {"condition": {"mode": "template", "image": "combat_skill_confirm_zh_hant", "threshold": 0.82,
+                                  "roi": [420, 1420, 340, 160]}, "validation": "REAL_FRAME_REPORTED",
+                    "source": "2026-09-26 MuMu 蝎女战斗技能详情实帧；確定按钮"}
+      }
+    },
+    "combat.speed.off": {
+      "label": "繁中战斗倍速关闭状态",
+      "category": "事件/战斗",
+      "role": "position",
+      "variants": {
+        "zh-Hant": {"condition": {"mode": "template", "image": "combat_speed_off_zh_hant", "threshold": 0.9,
+                                  "roi": [10, 1015, 80, 70]}, "validation": "REAL_FRAME_REPORTED",
+                    "source": "2026-09-25 MuMu 蝎女战斗实帧；白色倍速图标，点击前"}
+      }
+    },
+    "combat.speed.on": {
+      "label": "繁中战斗倍速开启状态",
+      "category": "事件/战斗",
+      "role": "observation",
+      "variants": {
+        "zh-Hant": {"condition": {"mode": "template", "image": "combat_speed_on_zh_hant", "threshold": 0.9,
+                                  "roi": [10, 1015, 80, 70]}, "validation": "REAL_FRAME_REPORTED",
+                    "source": "2026-09-25 MuMu 蝎女战斗实帧；黄色倍速图标，点击后"}
       }
     },
     "combat.auto.off": {
@@ -1084,6 +1204,23 @@
           },
           "validation": "REAL_FRAME_REPORTED",
           "source": "native/games/wvd/vision/location_probes.hpp"
+        }
+      }
+    },
+    "inn.payment.confirm": {
+      "label": "标准房付款确认",
+      "category": "旅店/住宿",
+      "role": "position",
+      "variants": {
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "inn_confirm_zh_hant",
+            "threshold": 0.8,
+            "roi": [470, 900, 300, 180]
+          },
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "2026-09-25 MuMu scorpion-preflight-inn.png"
         }
       }
     },
@@ -1688,6 +1825,81 @@
           "validation": "REAL_FRAME_REPORTED",
           "source": "2026-09-23 MuMu 900x1600 outskirts screenshot: outskirts-abyss.png"
         }
+      }
+    },
+    "map.abyss.b2f.title": {
+      "label": "聖堂地图标题",
+      "category": "迷宫/地图",
+      "role": "observation",
+      "variants": {
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "map_abyss_b2f_zh_hant",
+            "threshold": 0.8,
+            "roi": [280, 35, 340, 105]
+          },
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "2026-09-25 MuMu B2F map: scorpion-old-first-selected.png"
+        }
+      }
+    },
+    "map.auto_move": {
+      "label": "地图自动移动按钮",
+      "category": "迷宫/地图",
+      "role": "position",
+      "variants": {
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "map_auto_move_zh_hant",
+            "threshold": 0.8,
+            "roi": [330, 500, 420, 450]
+          },
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "2026-09-25 MuMu B2F map: scorpion-old-first-selected.png"
+        }
+      }
+    },
+    "dungeon.map.open": {
+      "label": "迷宫地图已打开",
+      "category": "迷宫/地图",
+      "role": "observation",
+      "variants": {
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "dungeon_map_close_zh_hant",
+            "threshold": 0.8,
+            "roi": [300, 1460, 300, 130]
+          },
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "2026-09-26 MuMu B2F map: vpn-repair-dungeon.png"
+        }
+      }
+    },
+    "character.panel": {
+      "label": "角色状态面板",
+      "category": "迷宫/恢复",
+      "role": "observation",
+      "variants": {
+        "en": {"condition": {"mode": "template", "image": "trait", "threshold": 0.8},
+               "validation": "SOURCE_VARIANT_PRESENT"},
+        "zh-Hant": {"condition": {"mode": "template", "image": "character_panel_zh_hant", "threshold": 0.84,
+                                  "roi": [90, 1400, 240, 190]}, "validation": "REAL_FRAME_REPORTED",
+                    "source": "2026-09-26 MuMu 蝎女战后角色强度面板"}
+      }
+    },
+    "dungeon.recovery.panel": {
+      "label": "迷宫整体恢复面板",
+      "category": "迷宫/恢复",
+      "role": "observation",
+      "variants": {
+        "en": {"condition": {"mode": "template", "image": "recover", "threshold": 0.8},
+               "validation": "SOURCE_VARIANT_PRESENT"},
+        "zh-Hant": {"condition": {"mode": "template", "image": "recovery_panel_zh_hant", "threshold": 0.84,
+                                  "roi": [250, 300, 400, 220]}, "validation": "REAL_FRAME_REPORTED",
+                    "source": "2026-09-26 MuMu 蝎女战后整体恢复面板"}
       }
     },
     "outskirts.abyss.b3f": {

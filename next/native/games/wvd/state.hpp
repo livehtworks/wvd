@@ -33,7 +33,7 @@ class WvdRunState final : public contracts::BusinessRunState {
     bool poll_leap_wait();
     void enter_dungeon();
     void target_point_completed();
-    void observe_combat();
+    void observe_combat(bool special = false);
     void observe_chest();
     void prepare_chest_character(const std::array<bool, 6> &fear, int preferred, std::uint32_t seed);
     void resume_dungeon();

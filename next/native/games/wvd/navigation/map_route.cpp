@@ -1,5 +1,7 @@
 #include "map_route.hpp"
 #include "games/wvd/vision/location_probes.hpp"
+#include "games/wvd/vision/harken_probes.hpp"
+#include <algorithm>
 
 namespace wvd::games::navigation {
 using J = nlohmann::json;
@@ -54,9 +56,13 @@ tasks::CompiledWorkflow reach_map_target(const MapTarget &target,
     if (floor)
         interrupted.push_back("WrongFloor");
     auto entry = interrupted;
+    if (target.harken_arrival)
+        entry.push_back("HarkenArrived");
     entry.push_back("BeginSearch");
     entry.push_back("OpenMap");
     graph.route("Entry", entry);
+    if (target.harken_arrival)
+        graph.observe("HarkenArrived", vision::harken_floor_menu(), {"Terminal"});
     graph.observe("Encounter", encounter, {"EncounterExit"});
     graph.recovery("EncounterExit", "navigation.encounter_requires_dispatch");
     if (floor) {
@@ -148,14 +154,28 @@ tasks::CompiledWorkflow reach_map_target(const MapTarget &target,
     // 坐标和普通资源目标也可能跨越副本出口。退场由新画面证明，不按目标名称猜测；
     // 父路线先检查 Outside，不能把提前离开误计为当前坐标已到达。
     J after_move = {"Exited", "Encounter", "Frozen", "CloseStaleMap", "Moving"};
+    if (target.harken_arrival)
+        after_move.insert(after_move.begin(), "HarkenArrived");
     graph.observe("Exited", outside, {"Terminal"});
-    graph.fixed_click("AutoMove", correct_map,
-                      {{"mode", "map_route_post"}},
-                      {136, 1431}, {"WaitAfterMove"});
+    auto hint = C::image("AutoMove");
+    if (positional) {
+        // 已采集繁中按钮文字；只在所选格上方寻找，点击匹配框中心。
+        const int x = (*target.position)[0], y = (*target.position)[1];
+        hint.update({{"roi", {std::clamp(x - 116, 0, 520),
+                               std::clamp(y - 200, 140, 1250), 380, 180}},
+                     {"threshold", 0.8}});
+        J acknowledged = {moving, encounter, outside, C::all({map_scene, C::absent(hint)})};
+        if (target.harken_arrival)
+            acknowledged.push_back(vision::harken_floor_menu());
+        graph.click("AutoMove", correct_map, hint, C::any(acknowledged), {"WaitAfterMove"});
+    } else {
+        hint.update({{"roi", {120, 250, 780, 950}}, {"threshold", 0.8}});
+        graph.fixed_click("AutoMove", correct_map,
+                          {{"mode", "map_route_post"}},
+                          {136, 1431}, {"WaitAfterMove"});
+    }
     graph.route("WaitAfterMove", after_move);
     graph.delay_after("AutoMove", 3000);
-    auto hint = C::image("AutoMove");
-    hint.update({{"roi", {120, 250, 780, 950}}, {"threshold", 0.35}});
     graph.observe("Frozen", C::all({map_scene, hint}), {"FrozenExit"});
     graph.recovery("FrozenExit", "navigation.automove_physics_frozen");
     graph.back("CloseStaleMap", C::all({map_scene, C::absent(hint)}),

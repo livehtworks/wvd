@@ -10,13 +10,20 @@
 namespace wvd::recognition {
 class Service final {
   public:
-    Service(Bundle bundle, Handlers handlers);
+    Service(Bundle bundle, Handlers handlers,
+            std::shared_ptr<MatchBudget> budget = {},
+            std::filesystem::path diagnostics_path = {},
+            std::uint64_t run_id = 0, std::uint64_t generation = 0);
     contracts::Observation evaluate(const contracts::FrameEnvelope &frame,
                                     const contracts::FrameIdentity &current,
                                     const Request &request,
                                     const contracts::BusinessRunState *business = nullptr);
     void cancel() noexcept;
     const Bundle &bundle() const { return bundle_; }
+    ResourceStats resource_stats() const;
+    bool diagnostic_write_failed() const noexcept {
+        return cache_.diagnostics && cache_.diagnostics->write_failed();
+    }
 
   private:
     contracts::Observation evaluate_locked(const FramePixels &pixels, const Request &request,

@@ -22,7 +22,7 @@ inline nlohmann::json blocking_probes(bool include_party_prompts = true) {
     add("retry");
     add("retry", nullptr, .60);
     add("totitle");
-    add("resume");
+    // 小地图的继续移动按钮也叫 resume；它常驻迷宫，不是阻塞页。
     add("boot_attention", {250, 430, 420, 220}, .86);
     add("boot_attention_zh", {250, 430, 420, 220}, .86);
     add("boot_title_logo", {100, 300, 700, 470}, .86);

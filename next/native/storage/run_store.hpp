@@ -51,6 +51,7 @@ class RunStore {
                  std::make_shared<contracts::SteadyClock>(), DiagnosticLimits limits = {});
     nlohmann::json save_diagnostic(const contracts::FrameEnvelope *frame,
                                   const DiagnosticRequest &request);
+    bool save_recent_frame(const contracts::FrameEnvelope &frame);
     nlohmann::json diagnostic_summary() const;
     void note_diagnostic_hook_failure() noexcept;
     void save_events(const EventJournal &events);
@@ -64,6 +65,8 @@ class RunStore {
 
   private:
     std::filesystem::path directory_;
+    std::filesystem::path recent_directory_;
+    contracts::MonotonicClock::TimePoint recent_last_{};
     bool saved_{};
     const std::string instance_;
     const std::uint64_t run_;

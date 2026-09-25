@@ -18,6 +18,11 @@ class PublicFlowLibrary {
             validate_author_workflow(document);
         }
     }
+    J resource_condition(const std::string &id, const std::string &locale,
+                         authoring::ResourceUse use) const {
+        authoring::SemanticAssets assets(semantic_catalogue_);
+        return assets.condition(id, locale, use);
+    }
     // 先收集实际绑定后的 task_stage，后选择同一份有效配置；不能漏掉嵌套块里的任务覆盖。
     std::set<std::string> task_profiles(const J &root, const J &args = J::object(), const std::string &locale = {}) const {
         std::set<std::string> ids;

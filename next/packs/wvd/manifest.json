@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "source_commit": "6585f4075f5714ab522aa582993860c09af912c1",
-  "revision": "d23740048f525d534cc6b81ffbb9a26ae866f08ace7b3574ac67c4264f17c2c0",
+  "revision": "eb4a91addf614ce51e78d1ffa53495e371d7ca9ee6d847390c2edfd2a6d20233",
   "files": [
     {
       "path": "image/7000G/icantagreewithU.png",
@@ -1467,6 +1467,13 @@
       "source_refs": []
     },
     {
+      "path": "image/character_panel_zh_hant.png",
+      "source": "resources/images/character_panel_zh_hant.png",
+      "sha256": "36178184484b01a7a2448fa6dee96c1d96b4a7096d7c94e35d8c3fcabb7317ae",
+      "bytes": 16094,
+      "source_refs": []
+    },
+    {
       "path": "image/chest.png",
       "source": "resources/images/chest.png",
       "sha256": "956163541b542824ce0f0a346c897c953febec918ec68383d1f81c6bba38af7c",
@@ -1746,6 +1753,48 @@
       "source_refs": [
         "semantic:combat.combat_flee_zh_hant"
       ]
+    },
+    {
+      "path": "image/combat_scorpion_portrait.png",
+      "source": "resources/images/combat_scorpion_portrait.png",
+      "sha256": "81e87efb6cf574d9833828741cbefe95e69235442c9f11501e06534ee6d8f30f",
+      "bytes": 8188,
+      "source_refs": []
+    },
+    {
+      "path": "image/combat_special_skull.png",
+      "source": "resources/images/combat_special_skull.png",
+      "sha256": "ea4cbbc658ef22d73bf8f3557a403b9105ab53bf1ec30a51d09d3d27c9300ab8",
+      "bytes": 2615,
+      "source_refs": []
+    },
+    {
+      "path": "image/combat_skill_confirm_zh_hant.png",
+      "source": "resources/images/combat_skill_confirm_zh_hant.png",
+      "sha256": "64ec000d02ab6abfba0dce16ee3ec083788baf50110d603da8c5f11be749a216",
+      "bytes": 19353,
+      "source_refs": []
+    },
+    {
+      "path": "image/combat_skill_detail_zh_hant.png",
+      "source": "resources/images/combat_skill_detail_zh_hant.png",
+      "sha256": "8dc095f162c3b79a88326cfdde46de4bed07a7dd870f718a2f44acfb9dad7579",
+      "bytes": 8561,
+      "source_refs": []
+    },
+    {
+      "path": "image/combat_speed_off_zh_hant.png",
+      "source": "resources/images/combat_speed_off_zh_hant.png",
+      "sha256": "fa0d211be9f8e70b9259d2cd0803a404e8737bb67289b8d4ae8a5150e1f2931e",
+      "bytes": 2996,
+      "source_refs": []
+    },
+    {
+      "path": "image/combat_speed_on_zh_hant.png",
+      "source": "resources/images/combat_speed_on_zh_hant.png",
+      "sha256": "69f5cfbe9f4bc993769d3e5a00cb07f9a197662dacf2dd29451baddbaf976b95",
+      "bytes": 2998,
+      "source_refs": []
     },
     {
       "path": "image/cropped.png",
@@ -2035,6 +2084,15 @@
         "src/script.py:3251",
         "src/script.py:4733",
         "src/script.py:4749"
+      ]
+    },
+    {
+      "path": "image/dungeon_map_close_zh_hant.png",
+      "source": "next/resources/images/dungeon_map_close_zh_hant.png",
+      "sha256": "3dbfb85389c20f1ad5e7d274692a8ee59be6cc9581c091ddcfdddd2a096c0356",
+      "bytes": 9699,
+      "source_refs": [
+        "semantic:dungeon.map.open"
       ]
     },
     {
@@ -2572,6 +2630,36 @@
       ]
     },
     {
+      "path": "image/guild_reveal_close_zh_hant.png",
+      "source": "next/resources/images/guild_reveal_close_zh_hant.png",
+      "sha256": "b289797a565922be34afd3ebea11643aa09d0c1318fa55b105aa832cc146e2e2",
+      "bytes": 7798,
+      "source_refs": [
+        "semantic:guild.bounty.reveal.close"
+      ]
+    },
+    {
+      "path": "image/guild_report_ready_zh_hant.png",
+      "source": "resources/images/guild_report_ready_zh_hant.png",
+      "sha256": "0ee99873d95f0416fccf0505a57bb448efc7314fb52fcbe1030257704fcf04c5",
+      "bytes": 15057,
+      "source_refs": []
+    },
+    {
+      "path": "image/guild_report_receipt_close_zh_hant.png",
+      "source": "resources/images/guild_report_receipt_close_zh_hant.png",
+      "sha256": "91bfc0ad52ab8bb9ad3a6b2cdba444622470e4035b1c0f0318a67c3e275c0de4",
+      "bytes": 10087,
+      "source_refs": []
+    },
+    {
+      "path": "image/guild_report_receipt_zh_hant.png",
+      "source": "resources/images/guild_report_receipt_zh_hant.png",
+      "sha256": "b2351a05832758e93790e68479670186109bbb73f628a59919ad42035f41accf",
+      "bytes": 16365,
+      "source_refs": []
+    },
+    {
       "path": "image/harken.png",
       "source": "resources/images/harken.png",
       "sha256": "510a9c36c9bce77437fc2db10b3302338735f8f6be66c6efe63c368fd0c91c97",
@@ -2675,6 +2763,15 @@
       "bytes": 10580,
       "source_refs": [
         "semantic:inn.room.back"
+      ]
+    },
+    {
+      "path": "image/inn_confirm_zh_hant.png",
+      "source": "next/resources/images/inn_confirm_zh_hant.png",
+      "sha256": "e25d5c77e808aa837911cd7dc2ffe3479ca3f3727edf13181941e8a2029dfb2f",
+      "bytes": 6255,
+      "source_refs": [
+        "semantic:inn.payment.confirm"
       ]
     },
     {
@@ -2861,6 +2958,24 @@
         "src/script.py:2952",
         "src/script.py:3251",
         "src/script.py:3335"
+      ]
+    },
+    {
+      "path": "image/map_abyss_b2f_zh_hant.png",
+      "source": "next/resources/images/map_abyss_b2f_zh_hant.png",
+      "sha256": "63cd9ede7a5617a2328110667538a38b27b492424e91e26cd7585d51da7a1963",
+      "bytes": 20439,
+      "source_refs": [
+        "semantic:map.abyss.b2f.title"
+      ]
+    },
+    {
+      "path": "image/map_auto_move_zh_hant.png",
+      "source": "next/resources/images/map_auto_move_zh_hant.png",
+      "sha256": "c22ecb758fc527f8b8b560ddbb5dee9e18a904966fc41e0de316fc8239e1dd77",
+      "bytes": 9205,
+      "source_refs": [
+        "semantic:map.auto_move"
       ]
     },
     {
@@ -3262,6 +3377,13 @@
         "src/script.py:3262",
         "src/script.py:3785"
       ]
+    },
+    {
+      "path": "image/recovery_panel_zh_hant.png",
+      "source": "resources/images/recovery_panel_zh_hant.png",
+      "sha256": "0dcda546cbfaae845b9c58cdeeca02d02fac35db201c654d690bc9d5d02cdb9b",
+      "bytes": 18360,
+      "source_refs": []
     },
     {
       "path": "image/requestToRescueTheDuke.png",
@@ -4557,8 +4679,8 @@
     {
       "path": "parameters/public-flows.json",
       "source": "next/resources/authoring/public-flows.json",
-      "sha256": "6a8289881d3fd28febc1130685511f7e17c2f5dea53f0da00c2514cd877ae20b",
-      "bytes": 67080,
+      "sha256": "d791c19139f52c12551ced67ccb5aece57b2b4aa57b4fc76aaeeed3fc17a4b87",
+      "bytes": 53987,
       "source_refs": [
         "authoring:public-flow-1"
       ]
@@ -4566,8 +4688,8 @@
     {
       "path": "parameters/semantic-assets.json",
       "source": "next/resources/authoring/semantic-assets.json",
-      "sha256": "52fd1741f99848f120608ea14766461ab47b54a5f916b2a3340b771f4803b76d",
-      "bytes": 62938,
+      "sha256": "76a77f9f05b18d46d84e4fe0509d283454f3c81a9dac5cc0a0dddc18a8339a6b",
+      "bytes": 70944,
       "source_refs": [
         "authoring:public-flow-1"
       ]

@@ -21,6 +21,12 @@ inline nlohmann::json default_dialogue_normal_probes() {
     for (auto name : {"trait", "recover", "spellskill/skillDetail", "City_RoyalCityLuknalia",
                       "City_fortress", "City_DHI", "City_portTownGrandLegion"})
         probes.push_back({{"mode", "template"}, {"image", name}});
+    probes.push_back({{"mode", "template"}, {"image", "character_panel_zh_hant"},
+        {"threshold", 0.84}, {"roi", {90, 1400, 240, 190}}});
+    probes.push_back({{"mode", "template"}, {"image", "recovery_panel_zh_hant"},
+        {"threshold", 0.84}, {"roi", {250, 300, 400, 220}}});
+    probes.push_back({{"mode", "template"}, {"image", "combat_skill_detail_zh_hant"},
+        {"threshold", 0.82}, {"roi", {750, 800, 130, 150}}});
     return probes;
 }
 inline nlohmann::json story_auto_control() {

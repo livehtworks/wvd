@@ -75,6 +75,33 @@ struct LayerPorts final : Ports {
         return observation;
     }
 };
+struct PendingEventPorts final : Ports {
+    std::uint64_t epoch{};
+    std::string seen;
+    contracts::FrameEnvelope capture() override {
+        auto frame = Ports::capture();
+        frame.identity.raw_size = {900, 1600};
+        frame.identity.action_epoch = epoch;
+        return frame;
+    }
+    contracts::Observation recognize(const contracts::FrameEnvelope &frame,
+                                      const recognition::Request &request) override {
+        auto result = Ports::recognize(frame, request);
+        seen += request.recognizer_id + ":" + std::to_string(frame.identity.frame_id) + ",";
+        if (request.recognizer_id == "event.network" && frame.identity.frame_id != 3)
+            result.outcome = contracts::RecognitionOutcome::NoHit;
+        result.box = contracts::Box{100, 100, 20, 20};
+        result.center = contracts::Point{110, 110};
+        return result;
+    }
+    runtime::Submission submit(const contracts::Command &,
+        const contracts::Observation &, const contracts::Observation &,
+        contracts::Box, const std::string &) override {
+        ++epoch;
+        return {runtime::SubmissionState::Accepted, epoch,
+            std::chrono::steady_clock::now(), {}};
+    }
+};
 
 workflow::Step step(std::string id, workflow::StepData data,
                     std::vector<std::string> next = {}) {
@@ -323,6 +350,60 @@ int main() {
         if (layer_result.state != runtime::TickState::Completed ||
             chest_calls != 1 || network_calls != 1 || layer_ports.captures < 5)
             throw std::runtime_error("NESTED_EVENT_EXIT_LOST:" + layer_result.code);
+        workflow::FlowProgram pending_program;
+        pending_program.revision = "event-parent-pending";
+        pending_program.root_definition = "root";
+        recognition::Request probe{"scene", "1", {0, 0, 900, 1600},
+            recognition::CustomParameters{"WvdVision", nlohmann::json::object()}};
+        workflow::Definition pending_root;
+        pending_root.id = "root";
+        pending_root.entry = "input";
+        pending_root.steps.emplace("input", step("input", workflow::Input{probe, probe,
+            {{"kind", "Click"}}, {0, 0, 900, 1600}, std::nullopt, true, false}, {"await"}));
+        auto await_step = step("await", workflow::AwaitResult{probe, 2s, 0ms, 10ms}, {"finish"});
+        workflow::EventRule pending_event;
+        pending_event.id = "network";
+        pending_event.category = workflow::EventClass::Overlay;
+        pending_event.priority = 10;
+        pending_event.disposition = workflow::EventDisposition::Handle;
+        pending_event.handler_definition = "handler";
+        pending_event.detect = recognition::Request{"event.network", "1", {0, 0, 900, 1600},
+            recognition::CustomParameters{"WvdVision", nlohmann::json::object()}};
+        await_step.event_policy.push_back(std::move(pending_event));
+        pending_root.steps.emplace("await", std::move(await_step));
+        pending_root.steps.emplace("finish", step("finish", workflow::Finish{}));
+        pending_program.definitions.emplace("root", std::move(pending_root));
+        workflow::Definition pending_handler;
+        pending_handler.id = "handler";
+        pending_handler.entry = "return";
+        pending_handler.steps.emplace("return", step("return", workflow::Return{"completed"}));
+        pending_program.definitions.emplace("handler", std::move(pending_handler));
+        PendingEventPorts pending_ports;
+        runtime::FlowExecutor pending_executor(pending_program, pending_ports, 3s);
+        auto pending_result = pending_executor.tick();
+        if (pending_result.state != runtime::TickState::Progress || !pending_executor.has_unresolved_input())
+            throw std::runtime_error("PARENT_INPUT_NOT_PENDING");
+        pending_result = pending_executor.tick();
+        pending_result = pending_executor.tick();
+        if (pending_executor.invocation_depth() != 2)
+            throw std::runtime_error("PENDING_EVENT_NOT_ENTERED:" + pending_result.code +
+                ":step=" + pending_executor.current_step_id() +
+                ":captures=" + std::to_string(pending_ports.captures) +
+                ":seen=" + pending_ports.seen);
+        pending_result = pending_executor.tick();
+        if (pending_result.state != runtime::TickState::Progress ||
+            pending_executor.invocation_depth() != 1 || !pending_executor.has_unresolved_input())
+            throw std::runtime_error("PARENT_PENDING_LOST_ON_RETURN:" + pending_result.code);
+        for (int i = 0; i < 8; ++i) {
+            pending_result = pending_executor.tick();
+            if (pending_result.state == runtime::TickState::Waiting)
+                std::this_thread::sleep_until(pending_result.wake_at);
+            if (pending_result.state == runtime::TickState::Completed ||
+                pending_result.state == runtime::TickState::Failed) break;
+        }
+        if (pending_result.state != runtime::TickState::Completed ||
+            pending_executor.has_unresolved_input() || pending_ports.epoch != 1)
+            throw std::runtime_error("PARENT_PENDING_NOT_CONFIRMED:" + pending_result.code);
         std::cout << "flow reobservation, event scope and exit budget passed\n";
     } catch (const std::exception &error) {
         std::cerr << error.what() << '\n';

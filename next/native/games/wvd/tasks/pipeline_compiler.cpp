@@ -56,6 +56,7 @@ void collect_images(const J &value, std::set<std::string> &images, std::set<std:
         }
         if (expand && mode == "dark_light_clear") {
             for (auto name : {"darklight", "darklight_lightIt", "dungFlag", "mapFlag", "trait", "recover",
+                              "character_panel_zh_hant", "recovery_panel_zh_hant",
                               "RiseAgain"})
                 images.insert(std::string(name) + ".png");
             collect_images(vision::chest_stage_probes(), images, expanded_modes);
@@ -70,7 +71,9 @@ void collect_images(const J &value, std::set<std::string> &images, std::set<std:
         if (expand && (mode == "unknown_frozen" || mode == "unknown_exhausted")) {
             collect_images(J{{"mode", "boot_ready"}}, images, expanded_modes);
             collect_images(J{{"mode", "blocking_screen"}}, images, expanded_modes);
-            for (const auto *name : {"trait", "recover", "spellskill/skillDetail"})
+            collect_images(vision::harken_floor_menu(), images, expanded_modes);
+            for (const auto *name : {"trait", "recover", "character_panel_zh_hant", "recovery_panel_zh_hant",
+                "spellskill/skillDetail", "combat_skill_detail_zh_hant"})
                 images.insert(std::string(name) + ".png");
         }
         if (expand && (mode == "boot_ready" || mode == "boot_post"))
@@ -112,7 +115,8 @@ void collect_images(const J &value, std::set<std::string> &images, std::set<std:
             collect_images(vision::boot_probes(true), images, expanded_modes);
         }
         if (mode == "pause" || mode == "pause_negative")
-            for (const auto *name : {"trait", "recover", "spellskill/skillDetail", "close"})
+            for (const auto *name : {"trait", "recover", "character_panel_zh_hant", "recovery_panel_zh_hant",
+                "spellskill/skillDetail", "combat_skill_detail_zh_hant", "close"})
                 images.insert(std::string(name) + ".png");
         if (mode == "reached")
             for (int i = 0; i < 4; ++i)
@@ -129,7 +133,8 @@ void collect_images(const J &value, std::set<std::string> &images, std::set<std:
             for (const auto *prefix : {"lv", "s_lv"})
                 images.insert(std::string("spellskill/skillLvl/") + prefix + std::to_string(value.at("level").get<int>()) + ".png");
         if (mode == "skill_target")
-            for (const auto *name : {"next", "combatTarget", "spellskill/skillDetail", "OK", "supportSkillCheck"})
+            for (const auto *name : {"next", "combatTarget", "spellskill/skillDetail", "combat_skill_detail_zh_hant",
+                    "OK", "combat_skill_confirm_zh_hant", "supportSkillCheck"})
                 images.insert(std::string(name) + ".png");
         for (const auto &[key, child] : value.items()) {
             if (key == "image") {
@@ -150,6 +155,9 @@ void collect_images(const J &value, std::set<std::string> &images, std::set<std:
 void collect_images(const J &value, std::set<std::string> &images) {
     std::set<std::string> expanded_modes;
     collect_images(value, images, expanded_modes);
+    // 原生复合识别器按语言选地图锚点，两张图都属于该识别能力的静态依赖。
+    if (images.contains("mapFlag.png"))
+        images.insert("dungeon_map_close_zh_hant.png");
 }
 std::set<std::string> collect_actions(const J &nodes) {
     std::set<std::string> actions;
@@ -710,7 +718,7 @@ void PipelineCompiler::failure_route(const std::string &name, J next) {
 }
 void PipelineCompiler::confirm(const std::string &name, const std::string &operation,
                                const std::string &event, const J &condition, J next, J step) {
-    const std::set<std::string> events{"target_completed", "dungeon_entered", "combat_observed",
+    const std::set<std::string> events{"target_completed", "dungeon_entered", "combat_observed", "combat_special_observed",
                                       "chest_observed", "dungeon_resumed", "dungeon_completed", "revival_observed", "resurrected", "game_restarted",
                                       "healing_requested", "healing_completed", "inn_payment_prepared", "inn_rest_completed", "party_reassembled", "chest_character_attempted",
                                       "party_death_observed", "party_death_cleared", "party_defeat_observed",

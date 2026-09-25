@@ -16,7 +16,9 @@ void NativeFlowPorts::set_operation_handler(OperationHandler handler) {
 
 contracts::FrameEnvelope NativeFlowPorts::capture() {
     if (cancelled()) throw std::runtime_error("CAPTURE_CANCELLED");
-    return gate_.capture();
+    auto frame = gate_.capture();
+    if (capture_sink_) capture_sink_(frame);
+    return frame;
 }
 
 contracts::Observation NativeFlowPorts::recognize(

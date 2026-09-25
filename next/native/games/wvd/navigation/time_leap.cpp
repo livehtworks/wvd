@@ -2,6 +2,7 @@
 #include "games/wvd/vision/location_probes.hpp"
 #include "games/wvd/vision/download_probes.hpp"
 #include "causality.hpp"
+#include <array>
 
 namespace wvd::games::navigation {
 namespace {
@@ -60,7 +61,24 @@ tasks::CompiledWorkflow compile_time_leap(const std::string &target_name,
     auto leap_zh_hant = C::image("leap_zh_hant");
     leap_zh_hant["roi"] = {250, 1250, 400, 250};
     const auto leap = C::any({leap_en, leap_zh_hant});
+    const std::array<std::pair<const char *, const char *>, 4> chapter_order{{
+        {"beginningAbyss", "beginningAbyss_zh_hant"},
+        {"TradeWaterway", "TradeWaterway_zh_hant"},
+        {"cursedwheel_impregnableFortress", "cursedwheel_impregnableFortress_zh_hant"},
+        {"cursedwheel_dhi", "cursedwheel_dhi_zh_hant"},
+    }};
+    const auto chapter_at = [&](std::size_t index) -> J {
+        auto zh_hant = C::image(chapter_order[index].second);
+        zh_hant["roi"] = {250, 120, 400, 220};
+        return C::any({C::image(chapter_order[index].first), zh_hant});
+    };
+    std::size_t target_chapter = chapter_order.size();
+    for (std::size_t i = 0; i < chapter_order.size(); ++i)
+        if (chapter_name == chapter_order[i].first) target_chapter = i;
+    if (target_chapter == chapter_order.size())
+        throw std::runtime_error("TIME_LEAP_CHAPTER_UNSUPPORTED");
     const auto right = C::image("cursedWheelTapRight");
+    const auto left = C::image("cursedWheelTapLeft");
     const auto download_en = vision::download_button_en();
     const auto download_zh_hant = vision::download_button_zh_hant();
     const auto download = C::any({download_en, download_zh_hant});
@@ -88,7 +106,7 @@ tasks::CompiledWorkflow compile_time_leap(const std::string &target_name,
     J quick_select = J::array();
     if (!zh_only_target) quick_select.push_back("QuickSelectEn");
     if (!translated_target_name.empty()) quick_select.push_back("QuickSelectZhHant");
-    quick_select.push_back("Reset0");
+    quick_select.push_back("FindChapter");
     graph.observe("AtTitle", title, quick_select);
     graph.click("OpenWheelEn", C::all({wheel_en, C::absent(title)}), wheel_en, opened_wheel, {"Entry"});
     graph.click("OpenWheelZhHant", C::all({wheel_zh_hant, C::absent(title)}), wheel_zh_hant,
@@ -115,45 +133,50 @@ tasks::CompiledWorkflow compile_time_leap(const std::string &target_name,
         graph.delay_after("QuickSelectZhHant", 2000);
     }
     graph.route("QuickLeapRoute", {"QuickLeapEn", "QuickLeapZhHant"});
-    graph.click("QuickLeapEn", leap_en, leap_en, after_leap, {"Done", "Reset0"});
-    graph.click("QuickLeapZhHant", leap_zh_hant, leap_zh_hant, after_leap, {"Done", "Reset0"});
+    graph.click("QuickLeapEn", leap_en, leap_en, after_leap, {"Done", "FindChapter"});
+    graph.click("QuickLeapZhHant", leap_zh_hant, leap_zh_hant, after_leap, {"Done", "FindChapter"});
     graph.delay_after("QuickLeapEn", 2000);
     graph.delay_after("QuickLeapZhHant", 2000);
-    for (int i = 0; i < 10; ++i) {
-        const auto name = "Reset" + std::to_string(i);
-        graph.fixed_click(name, chooser, chooser, {105, 230},
-            i == 9 ? J{"FindChapter"} : J{"Reset" + std::to_string(i + 1)});
-        graph.delay_after(name, 500);
-    }
     J find_chapter = J::array({"ChapterEn"});
     if (!translated_chapter_name.empty()) find_chapter.push_back("ChapterZhHant");
-    find_chapter.push_back("NextTab");
+    // Time Leap 下方的章节标题决定方向；每次只移动一格并确认相邻章节。
+    for (std::size_t i = 0; i < chapter_order.size(); ++i)
+        if (i != target_chapter) find_chapter.push_back("MoveFrom" + std::to_string(i));
     find_chapter.push_back("ReopenWheelEn");
     find_chapter.push_back("ReopenWheelZhHant");
     graph.route("FindChapter", find_chapter);
     J after_chapter = J::array();
     if (!zh_only_target) after_chapter.push_back("SelectTargetEn");
     if (!translated_target_name.empty()) after_chapter.push_back("SelectTargetZhHant");
-    after_chapter.push_back("Scroll0");
+    after_chapter.push_back("FindTarget");
     graph.click("ChapterEn", C::all({chooser, chapter_en}), chapter_en, chooser, after_chapter);
     if (!translated_chapter_name.empty())
         graph.click("ChapterZhHant", C::all({chooser, chapter_zh_hant}), chapter_zh_hant,
                     chooser, after_chapter);
-    graph.click("NextTab", C::all({chooser, right, C::absent(chapter)}), right, chooser, {"FindChapter"});
+    for (std::size_t i = 0; i < chapter_order.size(); ++i) {
+        if (i == target_chapter) continue;
+        const bool forward = i < target_chapter;
+        const auto name = "MoveFrom" + std::to_string(i);
+        const auto &arrow = forward ? right : left;
+        const auto adjacent = chapter_at(forward ? i + 1 : i - 1);
+        graph.click(name, C::all({title, chapter_at(i), arrow}), arrow, adjacent, {"FindChapter"});
+        graph.delay_after(name, 500);
+        graph.postcondition_budget(name, 20000);
+        graph.hit_limit(name, 4);
+    }
     graph.click("ReopenWheelEn", C::all({wheel_en, C::absent(chapter)}), wheel_en,
                 opened_wheel, {"FindChapter"});
     graph.click("ReopenWheelZhHant", C::all({wheel_zh_hant, C::absent(chapter)}), wheel_zh_hant,
                 opened_wheel, {"FindChapter"});
-    for (int i = 0; i < 3; ++i) {
-        const auto name = "Scroll" + std::to_string(i);
-        graph.swipe(name, C::all({title, C::absent(target)}), title, {450, 1200, 450, 200},
-            i == 2 ? J{"FindTarget"} : J{"Scroll" + std::to_string(i + 1)});
-        graph.delay_after(name, 2000);
-    }
+    // 每次滚动后重新识别目标，不能继续盲滚到目标已经可见还错过。
+    graph.swipe("Scroll0", C::all({title, C::absent(target)}), C::any({title, target}),
+        {450, 1200, 450, 200}, {"FindTarget"});
+    graph.delay_after("Scroll0", 1000);
+    graph.hit_limit("Scroll0", 6);
     J find_target = J::array();
     if (!zh_only_target) find_target.push_back("SelectTargetEn");
     if (!translated_target_name.empty()) find_target.push_back("SelectTargetZhHant");
-    find_target.push_back("FineScroll");
+    find_target.push_back("Scroll0");
     graph.route("FindTarget", find_target);
     if (!zh_only_target) {
         graph.click("SelectTargetEn", C::all({title, target_en}), target_en, leap,
@@ -165,14 +188,12 @@ tasks::CompiledWorkflow compile_time_leap(const std::string &target_name,
                     leap, causality ? J{"Causality"} : J{"LeapRoute"});
         graph.delay_after("SelectTargetZhHant", 1000);
     }
-    graph.swipe("FineScroll", C::all({title, C::absent(target)}), title,
-        {50, 1200, 50, 1300}, {"FindTarget"});
-    graph.delay_after("FineScroll", 1000);
     if (causality) {
         const auto child = graph.define_child("CausalitySettings", adjust_causality(*causality));
         graph.call_child("Causality", child, {"LeapRoute"});
     }
-    graph.route("LeapRoute", {"LeapEn", "LeapZhHant"});
+    // 跳轮点击后的过渡帧可能仍像轮盘；再次进入此节点时先接受已返回的游戏画面。
+    graph.route("LeapRoute", {"Done", "LeapEn", "LeapZhHant"});
     J leap_next = J::array({"Done"});
     if (!zh_only_target) leap_next.push_back("ReselectEn");
     if (!translated_target_name.empty()) leap_next.push_back("ReselectZhHant");
@@ -192,7 +213,7 @@ tasks::CompiledWorkflow compile_time_leap(const std::string &target_name,
     graph.observe("Done", outside, {"Terminal"});
     for (const auto *name : {"Entry", "AtTitle", "OpenWheelEn", "OpenWheelZhHant",
         "RuinsEn", "RuinsZhHant", "DownloadEn", "DownloadZhHant", "FindChapter",
-        "NextTab", "ReopenWheelEn", "ReopenWheelZhHant", "FindTarget", "FineScroll",
+        "ReopenWheelEn", "ReopenWheelZhHant", "FindTarget",
         "LeapRoute", "LeapEn", "LeapZhHant"})
         graph.hit_limit(name, 32);
     if (!zh_only_target) graph.hit_limit("ReselectEn", 32);

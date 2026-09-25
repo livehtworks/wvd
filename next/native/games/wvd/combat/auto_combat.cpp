@@ -15,8 +15,8 @@ tasks::CompiledWorkflow enable_auto() {
                                C::absent(battle)});
     const auto recognizable = C::any({battle, ended});
     const auto close = image("close", {250, 1420, 420, 150});
-    const auto ok = image("OK", {420, 1420, 340, 160});
-    const auto detail = C::image("spellskill/skillDetail");
+    const auto ok = image("combat_skill_confirm", {420, 1420, 340, 160});
+    const auto detail = C::image("combat_skill_detail");
     const auto popup = C::any({detail, close, ok});
     const auto enabled = image("spellskill/CombatAutoEnable", {780, 1030, 120, 160});
     const auto disabled = image("spellskill/CombatAutoDisable", {780, 1030, 120, 160});

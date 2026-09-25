@@ -130,11 +130,12 @@ void WvdRunState::target_point_completed() {
     if (strategy_.uses_task_points())
         strategy_.reload(task_step_);
 }
-void WvdRunState::observe_combat() {
+void WvdRunState::observe_combat(bool special) {
     if (!pending_combat_) {
         ++combat_sequence_;
         last_encounter_ = Encounter::Combat;
         healing_active_ = false;
+        strategy_.begin_encounter(special);
     }
     if (!combat_started_)
         combat_started_ = clock_->now();
@@ -295,7 +296,7 @@ std::string WvdRunState::confirmation_id(const std::string &operation, const std
     // 仅该局部路线开始新轮；住宿/善恶/专项开始回执仍保留，不能按 generation 全部重放。
     if (event == "dungeon_entered" || event == "target_completed")
         id += ":route:" + std::to_string(lifecycle_recovery_sequence_);
-    else if (event == "combat_observed")
+    else if (event == "combat_observed" || event == "combat_special_observed")
         id += ":combat:" + std::to_string(combat_sequence_ + (pending_combat_ ? 0 : 1));
     else if (event == "chest_observed")
         id += ":chest:" + std::to_string(chest_sequence_ + (pending_chest_ ? 0 : 1));
@@ -651,7 +652,9 @@ bool WvdRunState::confirm_event(const std::string &operation, const std::string 
         if (inn_payment_pending_ || bounty_report_pending_) throw std::runtime_error("BOUNTY_SIDE_EFFECT_PENDING");
         const auto interval = profile_.at("REST_INTERVEL").get<std::int64_t>();
         if (interval < 0) throw std::runtime_error("BOUNTY_REST_INTERVAL_INVALID");
-        const bool due = dungeons_ % (static_cast<std::uint64_t>(interval) + 1) == 0;
+        // 悬赏配置的 N 表示每出战 N 次休息；0 沿用每次休息的含义。
+        const auto rest_every = std::max<std::uint64_t>(1, static_cast<std::uint64_t>(interval));
+        const bool due = (dungeons_ + 1) % rest_every == 0;
         const auto now = clock_->now();
         if (lap_started_ && now < *lap_started_) throw std::runtime_error("WVD_CLOCK_MOVED_BACKWARD");
         bounty_cycle_.start(unit_index_, event == "scorpion_hands_started", due, bounty_reports_, bounty_reveals_);
@@ -794,6 +797,8 @@ bool WvdRunState::confirm_event(const std::string &operation, const std::string 
         enter_dungeon();
     else if (event == "combat_observed")
         observe_combat();
+    else if (event == "combat_special_observed")
+        observe_combat(true);
     else if (event == "chest_observed")
         observe_chest();
     else if (event == "chest_character_attempted") {

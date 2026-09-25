@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <array>
 #include <fstream>
+#include <cstdio>
 #include <windows.h>
 
 namespace wvd::storage {
@@ -218,6 +219,7 @@ RunStore::RunStore(const std::filesystem::path &root, const std::string &instanc
     auto parent = root / instance;
     std::filesystem::create_directories(parent);
     directory_ = parent / std::to_string(run);
+    recent_directory_ = root.parent_path() / "recent-frames";
     if (!std::filesystem::create_directory(directory_))
         throw std::runtime_error("RUN_DIRECTORY_EXISTS");
     platform::atomic_write(
@@ -229,6 +231,56 @@ RunStore::RunStore(const std::filesystem::path &root, const std::string &instanc
               {"default_interval_seconds", 60}, {"pause_interval_seconds", 120}}}}.dump(
             2),
         false);
+}
+bool RunStore::save_recent_frame(const contracts::FrameEnvelope &frame) {
+    std::lock_guard lock(diagnostic_mutex_);
+    const auto now = diagnostic_clock_->now();
+    if (recent_last_ != contracts::MonotonicClock::TimePoint{} &&
+        now - recent_last_ < std::chrono::seconds{15}) return false;
+    recent_last_ = now;
+    const auto size = frame.identity.recognition_size;
+    if (size.width != 900 || size.height != 1600) return false;
+    cv::Mat image;
+    if (frame.raw_bgr && frame.raw_bgr->size() == std::size_t(size.width) * size.height * 3)
+        image = cv::Mat(size.height, size.width, CV_8UC3,
+            const_cast<std::uint8_t *>(frame.raw_bgr->data()));
+    else if (!frame.encoded_image.empty())
+        image = cv::imdecode(frame.encoded_image, cv::IMREAD_COLOR);
+    if (image.empty() || image.cols != size.width || image.rows != size.height)
+        throw std::runtime_error("RECENT_FRAME_INVALID");
+    std::vector<std::uint8_t> jpeg;
+    if (!cv::imencode(".jpg", image, jpeg, {cv::IMWRITE_JPEG_QUALITY, 72}))
+        throw std::runtime_error("RECENT_FRAME_ENCODE_FAILED");
+    if (jpeg.size() > 2 * 1024 * 1024) throw std::runtime_error("RECENT_FRAME_TOO_LARGE");
+    std::filesystem::create_directories(recent_directory_);
+    if (std::filesystem::is_symlink(recent_directory_))
+        throw std::runtime_error("RECENT_FRAME_DIRECTORY_LINK");
+    SYSTEMTIME utc{};
+    GetSystemTime(&utc);
+    char name[100]{};
+    std::snprintf(name, sizeof(name), "%04u%02u%02uT%02u%02u%02u%03u_r%llu_f%llu.jpg",
+        utc.wYear, utc.wMonth, utc.wDay, utc.wHour, utc.wMinute, utc.wSecond,
+        utc.wMilliseconds, static_cast<unsigned long long>(run_),
+        static_cast<unsigned long long>(frame.identity.frame_id));
+    platform::atomic_write(recent_directory_ / name,
+        std::string(reinterpret_cast<const char *>(jpeg.data()), jpeg.size()), false);
+    std::vector<std::filesystem::directory_entry> files;
+    std::uintmax_t total_bytes = 0;
+    for (const auto &entry : std::filesystem::directory_iterator(recent_directory_)) {
+        if (!entry.is_regular_file() || entry.path().extension() != ".jpg") continue;
+        total_bytes += entry.file_size();
+        files.push_back(entry);
+    }
+    std::sort(files.begin(), files.end(), [](const auto &a, const auto &b) {
+        return a.path().filename() < b.path().filename();
+    });
+    constexpr std::uintmax_t byte_limit = 128ULL * 1024 * 1024;
+    for (std::size_t i = 0; i < files.size() &&
+        (files.size() - i > 240 || total_bytes > byte_limit); ++i) {
+        total_bytes -= files[i].file_size();
+        std::filesystem::remove(files[i].path());
+    }
+    return true;
 }
 J RunStore::save_diagnostic(const contracts::FrameEnvelope *frame, const DiagnosticRequest &request) {
     std::lock_guard lock(diagnostic_mutex_);

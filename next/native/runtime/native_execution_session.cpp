@@ -13,7 +13,8 @@ NativeExecutionSession::NativeExecutionSession(const workflow::FlowProgram &prog
     devices::DeviceBackend &backend, std::shared_ptr<recognition::Service> recognizer,
     contracts::BusinessRunState &business, contracts::InputPolicy policy,
     std::uint64_t generation, std::chrono::milliseconds total_budget,
-    OperationFactory operations, ProgressSink progress, NativeFlowPorts::InputSink input_sink)
+    OperationFactory operations, ProgressSink progress, NativeFlowPorts::InputSink input_sink,
+    NativeFlowPorts::CaptureSink capture_sink)
     : recognizer_owner_(std::move(recognizer)),
       ports_(backend, required_service(recognizer_owner_), business, std::move(policy), generation,
              stop_source_.get_token()),
@@ -21,6 +22,7 @@ NativeExecutionSession::NativeExecutionSession(const workflow::FlowProgram &prog
     if (!operations) throw std::runtime_error("NATIVE_OPERATION_FACTORY_MISSING");
     ports_.set_operation_handler(operations(ports_));
     ports_.set_input_sink(std::move(input_sink));
+    ports_.set_capture_sink(std::move(capture_sink));
 }
 
 NativeExecutionResult NativeExecutionSession::run() {

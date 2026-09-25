@@ -357,7 +357,8 @@ TickResult FlowExecutor::execute_step(Frame &frame, const workflow::Step &curren
     if (const auto *returned = std::get_if<workflow::Return>(&current.data)) {
         if (stack_.size() == 1) return fail("ROOT_RETURN_WITHOUT_FINISH");
         if (returned->outcome == "failure") return return_business_failure(returned->reason);
-        if (has_unresolved_input()) return blocked("CHILD_INPUT_UNRESOLVED");
+        // 事件返回时父输入可仍待新帧确认；只检查即将弹出的子帧。
+        if (frame.pending) return blocked("CHILD_INPUT_UNRESOLVED");
         account_event_time();
         const auto ended = std::move(stack_.back());
         stack_.pop_back();

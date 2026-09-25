@@ -37,6 +37,7 @@ struct MapTarget {
     std::optional<TaskPoint> position;
     std::string stair_reference;
     std::vector<std::array<int, 4>> regions;
+    bool harken_arrival = false;
 };
 
 class WvdTaskPlan {
@@ -44,6 +45,7 @@ class WvdTaskPlan {
     static WvdTaskPlan parse(const WvdQuestDefinition &definition);
     // 专项代码中的 StateDungeon([...]) 是局部路线，不改写目录中的原始任务树。
     WvdTaskPlan with_route(const nlohmann::json &targets) const;
+    WvdTaskPlan with_last_harken_arrival() const;
     WvdTaskPlan with_entry(const nlohmann::json &steps) const;
     WvdTaskPlan with_floor(const std::string &image) const;
     nlohmann::json inspect() const;

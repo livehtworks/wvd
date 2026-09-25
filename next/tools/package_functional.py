@@ -184,6 +184,7 @@ def stage(target):
     (target / "启动WVD原生版.bat").write_bytes(launcher.encode("utf-8-sig"))
     (target / "DELIVERY_STATUS.json").write_text(json.dumps({
         "migration_baseline": "8f61540eafa61413852c2c3a85cb81c090e2161f",
+        "memory_work_package_baseline": "661069f5688253270d1b940e084ce19ceca01373",
         **source_identity(),
         "built_at_utc": datetime.now(timezone.utc).isoformat(),
         "engine": "wvd_native", "status": "BUILT_NOT_GAME_ACCEPTED",

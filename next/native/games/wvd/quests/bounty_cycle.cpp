@@ -56,7 +56,7 @@ void BountyCycle::returned(std::size_t unit) {
 }
 void BountyCycle::reported(std::size_t unit, std::size_t reports) {
     require_phase(unit, Phase::Reports);
-    if (reports != initial_reports_ + (hands_ ? 2 : 1))
+    if (reports < initial_reports_ + (hands_ ? 2 : 1))
         throw std::runtime_error("BOUNTY_REPORT_COUNT_INVALID");
     phase_ = Phase::Rest;
 }

@@ -9,27 +9,17 @@
 #include "image_ops.hpp"
 #include "games/wvd/business_condition.hpp"
 #include "games/wvd/recovery/dialogue_policy.hpp"
+#include <bit>
 #include <cmath>
 #include <chrono>
 #include <exception>
 #include <new>
-#include <windows.h>
-#include <psapi.h>
 #include <opencv2/imgproc.hpp>
 #include <opencv2/objdetect.hpp>
 
 namespace wvd::games::vision {
 using J = nlohmann::json;
 namespace {
-thread_local int diagnostic_partitions = 1;
-J process_memory_summary() {
-    PROCESS_MEMORY_COUNTERS_EX counters{};
-    if (!GetProcessMemoryInfo(GetCurrentProcess(),
-            reinterpret_cast<PROCESS_MEMORY_COUNTERS *>(&counters), sizeof(counters)))
-        return nullptr;
-    return {{"private_bytes", static_cast<std::uint64_t>(counters.PrivateUsage)},
-            {"working_set_bytes", static_cast<std::uint64_t>(counters.WorkingSetSize)}};
-}
 struct MovementSample {
     cv::Mat gray;
     std::chrono::steady_clock::time_point at;
@@ -58,11 +48,68 @@ J decision(bool hit, cv::Rect area, J evidence, bool target = false) {
             {"target", target},
             {"evidence", std::move(evidence)}};
 }
+J dungeon_map_probe(const J &bound) {
+    if (bound.value("resource_locale", std::string{}) == "zh-Hant")
+        return {{"mode", "template"}, {"image", "dungeon_map_close_zh_hant"},
+            {"threshold", 0.8}, {"roi", {300, 1460, 300, 130}}};
+    return {{"mode", "template"}, {"image", "mapFlag"}, {"threshold", 0.8}};
+}
+J combat_detail_probe(const J &bound) {
+    if (bound.value("resource_locale", std::string{}) == "zh-Hant")
+        return {{"mode", "template"}, {"image", "combat_skill_detail_zh_hant"},
+            {"threshold", 0.82}, {"roi", {750, 800, 130, 150}}};
+    return {{"mode", "template"}, {"image", "spellskill/skillDetail"}, {"threshold", 0.8}};
+}
+J combat_confirm_probe(const J &bound) {
+    if (bound.value("resource_locale", std::string{}) == "zh-Hant")
+        return {{"mode", "template"}, {"image", "combat_skill_confirm_zh_hant"},
+            {"threshold", 0.82}, {"roi", {420, 1420, 340, 160}}};
+    return {{"mode", "template"}, {"image", "OK"}, {"threshold", 0.8}};
+}
+J character_panel_probe(const J &bound) {
+    if (bound.value("resource_locale", std::string{}) == "zh-Hant")
+        return {{"mode", "template"}, {"image", "character_panel_zh_hant"},
+            {"threshold", 0.84}, {"roi", {90, 1400, 240, 190}}};
+    return {{"mode", "template"}, {"image", "trait"}, {"threshold", 0.8}};
+}
+J recovery_panel_probe(const J &bound) {
+    if (bound.value("resource_locale", std::string{}) == "zh-Hant")
+        return {{"mode", "template"}, {"image", "recovery_panel_zh_hant"},
+            {"threshold", 0.84}, {"roi", {250, 300, 400, 220}}};
+    return {{"mode", "template"}, {"image", "recover"}, {"threshold", 0.8}};
+}
 J match(const cv::Mat &source, cv::Mat templ, J p, recognition::Cache &cache,
         const std::string &key) {
     cv::Rect main(0, 0, source.cols, source.rows);
     if (p.contains("roi"))
         main = rect(p["roi"], source.size());
+    double scale = p.value("scale", 1.0), threshold = p.value("threshold", 0.8);
+    check(std::isfinite(scale) && scale >= 0.3 && scale <= 2.0, "WVD_SCALE_INVALID");
+    check(std::isfinite(threshold) && threshold >= 0 && threshold <= 1, "THRESHOLD_INVALID");
+    const cv::Size scaled = scale == 1.0 ? templ.size() :
+        cv::Size(cvRound(templ.cols * scale), cvRound(templ.rows * scale));
+    check(scaled.width > 0 && scaled.height > 0, "WVD_SCALE_INVALID");
+    const auto cropped = p.contains("crop") ? rect(p["crop"], scaled).size() : scaled;
+    check(cropped.width <= main.width && cropped.height <= main.height, "TEMPLATE_EXCEEDS_ROI");
+    const bool bright = p.value("bright_mask", false);
+    const bool grayscale = p.value("grayscale", false);
+    const auto estimated = recognition::estimate_match_workspace(
+        main.size(), cropped, bright ? 3 : grayscale ? 1 : 3, bright,
+        p.contains("exclude"), scale != 1.0, p.contains("preprocess"));
+    const auto assets_before = cache.decoded->stats();
+    auto diagnostic = cache.diagnostics ? cache.diagnostics->begin({
+        cache.source_id, std::hash<std::string>{}(key), estimated, source.cols, source.rows,
+        main.width, main.height, cropped.width, cropped.height, bright ? 3 : grayscale ? 1 : 3,
+        bright ? cv::TM_CCORR_NORMED : cv::TM_CCOEFF_NORMED, bright, grayscale,
+        p.contains("exclude"), assets_before.retained_bytes, assets_before.in_use_bytes,
+        cache.match_budget->stats().active_matches})
+        : platform::MemoryDiagnostics::Slot{};
+    try {
+    static const std::atomic<bool> never_cancelled{false};
+    auto ticket = cache.match_budget->acquire(estimated,
+        cache.cancelled ? *cache.cancelled : never_cancelled);
+    if (scale != 1.0) cv::resize(templ, templ, {}, scale, scale, cv::INTER_LINEAR);
+    if (p.contains("crop")) templ = templ(rect(p["crop"], templ.size()));
     auto search = source(main);
     if (p.contains("exclude")) {
         search = search.clone();
@@ -75,35 +122,26 @@ J match(const cv::Mat &source, cv::Mat templ, J p, recognition::Cache &cache,
             }
         }
     }
-    double scale = p.value("scale", 1.0), threshold = p.value("threshold", 0.8);
-    check(std::isfinite(scale) && scale >= 0.3 && scale <= 2.0, "WVD_SCALE_INVALID");
-    check(std::isfinite(threshold) && threshold >= 0 && threshold <= 1, "THRESHOLD_INVALID");
-    if (scale != 1.0)
-        cv::resize(templ, templ, {}, scale, scale, cv::INTER_LINEAR);
-    if (p.contains("crop"))
-        templ = templ(rect(p["crop"], templ.size()));
-    check(templ.cols <= search.cols && templ.rows <= search.rows, "TEMPLATE_EXCEEDS_ROI");
     cv::Mat scores;
     const auto match_started = std::chrono::steady_clock::now();
-    const bool bright = p.value("bright_mask", false);
     if (bright) {
         int minimum = p.value("min_brightness", 145);
         check(minimum >= 0 && minimum <= 255, "WVD_MASK_INVALID");
-        auto mask_key = "mask:" + key + ":" + p.dump();
-        cv::Mat mask;
-        if (auto found = cache.assets.find(mask_key); found != cache.assets.end())
-            mask = std::any_cast<cv::Mat>(found->second);
-        else {
+        const auto mask_key = "mask:" + key + ":" +
+            std::to_string(std::bit_cast<std::uint64_t>(scale)) + ":" +
+            (p.contains("crop") ? p.at("crop").dump() : "full") + ":" +
+            std::to_string(minimum);
+        auto mask_lease = cache.decoded->load(mask_key, [&] {
+            cv::Mat mask;
             cv::Mat gray;
             cv::cvtColor(templ, gray, cv::COLOR_BGR2GRAY);
             cv::inRange(gray, minimum, 255, mask);
             cv::dilate(mask, mask, cv::Mat::ones(2, 2, CV_8U));
             check(cv::countNonZero(mask) > 0, "WVD_MASK_EMPTY");
-            check(cache.assets.size() < 2048, "WVD_SESSION_ASSET_CAPACITY");
-            cache.assets.emplace(mask_key, mask);
-        }
-        cv::matchTemplate(search, templ, scores, cv::TM_CCORR_NORMED, mask);
-    } else if (p.value("grayscale", false)) {
+            return mask;
+        }, cache.cancelled);
+        cv::matchTemplate(search, templ, scores, cv::TM_CCORR_NORMED, mask_lease.mat());
+    } else if (grayscale) {
         cv::Mat gray_search, gray_template;
         cv::cvtColor(search, gray_search, cv::COLOR_BGR2GRAY);
         cv::cvtColor(templ, gray_template, cv::COLOR_BGR2GRAY);
@@ -129,11 +167,24 @@ J match(const cv::Mat &source, cv::Mat templ, J p, recognition::Cache &cache,
                {"threshold", threshold},
                {"scale", scale},
                {"method", bright ? "CCORR_NORMED_BRIGHT_MASK" :
-                   p.value("grayscale", false) ? "CCOEFF_NORMED_GRAY" : "CCOEFF_NORMED"},
+                   grayscale ? "CCOEFF_NORMED_GRAY" : "CCOEFF_NORMED"},
                // 只保存有界标量诊断，不保存像素，也不把耗时参与识别结果或缓存身份。
                {"timing_ms", {{"match", milliseconds(match_started, match_finished)},
                               {"sanitize", milliseconds(match_finished, sanitize_finished)},
                               {"reduce", milliseconds(sanitize_finished, reduce_finished)}}}};
+    const auto assets_now = cache.decoded->stats();
+    const auto work_now = cache.match_budget->stats();
+    evidence["resources"] = {{"estimated_workspace_bytes", estimated},
+        {"oversized_single", ticket.oversized_single()},
+        {"active_matches", work_now.active_matches},
+        {"peak_matches", work_now.peak_matches},
+        {"peak_estimated_workspace_bytes", work_now.peak_estimated_workspace_bytes},
+        {"cache_retained_bytes", assets_now.retained_bytes},
+        {"cache_in_use_bytes", assets_now.in_use_bytes},
+        {"cache_evictable_bytes", assets_now.evictable_bytes},
+        {"cache_decode_count", assets_now.decode_count},
+        {"cache_mask_build_count", assets_now.mask_build_count},
+        {"diagnostic_write_failed", cache.diagnostics && cache.diagnostics->write_failed()}};
     if (p.value("multiple", false)) {
         std::vector<cv::Rect> rectangles;
         for (int y = 0; y < scores.rows; ++y)
@@ -149,6 +200,11 @@ J match(const cv::Mat &source, cv::Mat templ, J p, recognition::Cache &cache,
             evidence["boxes"].push_back(box(value));
     }
     return decision(maximum >= threshold, found, std::move(evidence), true);
+    } catch (const std::bad_alloc &) { diagnostic.failure(-1); throw; }
+    catch (const cv::Exception &error) {
+        if (error.code == cv::Error::StsNoMem) diagnostic.failure(error.code);
+        throw;
+    } catch (const recognition::ResourcePressure &) { diagnostic.failure(-2); throw; }
 }
 J layout(const cv::Mat &source) {
     cv::Mat gray, mask, labels, stats, centers;
@@ -218,7 +274,10 @@ J evaluate_impl(const recognition::Bundle &bundle, recognition::Pixels pixels, c
     if (const auto found = memo.values.find(key); found != memo.values.end())
         return found->second;
     auto result = evaluate_uncached(bundle, pixels, p, bound, scope, cache, depth, memo);
-    memo.values.emplace(key, result);
+    // 只缓存小型、无时序副作用的叶子证据；多框 JSON 不能变成第二份无界帧缓存。
+    if (p.value("mode", "") == "template" && memo.values.size() < 256 &&
+        !p.value("multiple", false) && result.dump().size() <= 8192)
+        memo.values.emplace(key, result);
     return result;
 }
 struct ProbeBatch {
@@ -230,39 +289,67 @@ struct ProbeBatch {
         return results.at(index);
     }
 };
+enum class BatchUse { OrderedFirst, EvaluateAll };
 ProbeBatch evaluate_batch(const recognition::Bundle &bundle, recognition::Pixels pixels,
                          const J &probes, const J &bound, const recognition::Scope &scope,
                          recognition::Cache &cache, unsigned depth, EvaluationMemo &memo,
-                         int partitions) {
+                         int partitions, BatchUse use = BatchUse::EvaluateAll) {
     check(partitions >= 1 && partitions <= 4, "WVD_PROBE_PARTITIONS_INVALID");
     ProbeBatch batch{std::vector<J>(probes.size()), std::vector<std::exception_ptr>(probes.size())};
+    if (use == BatchUse::OrderedFirst) {
+        for (std::size_t i = 0; i < probes.size(); ++i) {
+            check(!scope.cancelled(), "RECOGNITION_CANCELLED");
+            batch.results[i] = evaluate_impl(bundle, pixels, probes[i], bound, scope,
+                                             cache, depth + 1, memo);
+            const auto outcome = batch.results[i].value("outcome", "");
+            if (outcome == "Hit" || outcome == "Error") break;
+        }
+        return batch;
+    }
     std::vector<recognition::Cache> workers(partitions);
-    std::vector<EvaluationMemo> worker_memos(partitions, memo);
+    std::vector<EvaluationMemo> worker_memos(partitions);
     for (auto &worker : worker_memos) worker.in_parallel = true;
-    // 只借用 OpenCV 的同步分片。每路模板索引和 memo 独占；没有线程/会话所有权转交。
-    for (auto &worker : workers)
-        for (const auto &[key, value] : cache.assets)
-            if (key.starts_with("template:") || key.starts_with("mask:"))
-                worker.assets.emplace(key, value);
+    for (auto &worker : workers) {
+        worker.decoded = cache.decoded;
+        worker.match_budget = cache.match_budget;
+        worker.diagnostics = cache.diagnostics;
+        worker.cancelled = cache.cancelled;
+        worker.source_id = cache.source_id;
+        worker.frame_key = cache.frame_key;
+    }
+    std::atomic<bool> resource_failure{false};
     cv::parallel_for_(cv::Range(0, partitions), [&](const cv::Range &range) {
-        const auto previous = diagnostic_partitions;
-        diagnostic_partitions = partitions;
         for (int worker = range.start; worker < range.end; ++worker)
             for (std::size_t i = worker; i < probes.size(); i += partitions) {
+                if (resource_failure || scope.cancelled()) break;
                 try {
                     batch.results[i] = evaluate_impl(bundle, pixels, probes[i], bound, scope,
                         workers[worker], depth + 1, worker_memos[worker]);
+                } catch (const std::bad_alloc &) {
+                    resource_failure = true;
+                    batch.errors[i] = std::current_exception();
+                } catch (const recognition::ResourcePressure &) {
+                    resource_failure = true;
+                    batch.errors[i] = std::current_exception();
+                } catch (const cv::Exception &error) {
+                    if (error.code == cv::Error::StsNoMem) resource_failure = true;
+                    batch.errors[i] = std::current_exception();
                 } catch (...) {
                     batch.errors[i] = std::current_exception();
                 }
             }
-        diagnostic_partitions = previous;
     }, partitions);
-    for (const auto &worker : workers)
-        for (const auto &[key, value] : worker.assets) {
-            check(cache.assets.contains(key) || cache.assets.size() < 2048, "WVD_SESSION_ASSET_CAPACITY");
-            cache.assets.try_emplace(key, value);
-        }
+    if (resource_failure)
+        for (const auto &error : batch.errors)
+            if (error) {
+                try { std::rethrow_exception(error); }
+                catch (const std::bad_alloc &) { throw; }
+                catch (const recognition::ResourcePressure &) { throw; }
+                catch (const cv::Exception &cv_error) {
+                    if (cv_error.code == cv::Error::StsNoMem) throw;
+                } catch (...) {}
+            }
+    check(!scope.cancelled(), "RECOGNITION_CANCELLED");
     // 工作线程已经同步结束。同帧、同scope、同参数的模板叶节点可供本次调用后继
     // 复用；否则后继反证会重做刚才的matchTemplate。只合并叶节点，不合并复合模式，
     // 避免其内部深度校验/时序状态被缓存绕过。异常不缓存，仍由消费顺序传播。
@@ -285,8 +372,23 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
         const auto &transform = p["preprocess"];
         const auto operation = transform.at("operation").get<std::string>();
         check(operation == "multiply" || operation == "subtract", "WVD_COLOR_OPERATION_INVALID");
-        image = transform_rgb(image, transform.at("rgb").get<std::array<double, 3>>(),
-                              operation == "subtract");
+        if (image.total() > std::numeric_limits<std::uint64_t>::max() / 6)
+            throw recognition::ResourcePressure("MATCH_WORKSPACE_OVERFLOW");
+        const auto estimated = image.total() * 6;
+        static const std::atomic<bool> never_cancelled{false};
+        const auto assets_before = cache.decoded->stats();
+        auto diagnostic = cache.diagnostics ? cache.diagnostics->begin({
+            cache.source_id, 0, estimated, image.cols, image.rows,
+            image.cols, image.rows, 0, 0, 3, -5, false, false, false,
+            assets_before.retained_bytes, assets_before.in_use_bytes,
+            cache.match_budget->stats().active_matches}) : platform::MemoryDiagnostics::Slot{};
+        try {
+            auto ticket = cache.match_budget->acquire(estimated,
+                cache.cancelled ? *cache.cancelled : never_cancelled);
+            image = transform_rgb(image, transform.at("rgb").get<std::array<double, 3>>(),
+                                  operation == "subtract");
+        } catch (const std::bad_alloc &) { diagnostic.failure(-1); throw; }
+        catch (const recognition::ResourcePressure &) { diagnostic.failure(-2); throw; }
     }
     const J aliases = bound.value("aliases", J::object());
     AssetResolver assets(bundle, aliases, cache);
@@ -354,10 +456,9 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
     }
     if (mode == "blocking_screen" && p.value("parallel_basic", false)) {
         check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");
-        // 条件和消费优先级与 blocking_screen 相同。基础探针同步分片，包含嵌套
-        // 默认对话的后三项仍串行调用，避免 OpenCV 嵌套并行使内层退化。
+        // 基础探针按优先级逐项识别；已命中时不再启动无关尾项。
         const auto probes = blocking_probes(false);
-        const auto matches = evaluate_batch(bundle, pixels, probes, bound, scope, cache, depth, memo, 4);
+        const auto matches = evaluate_batch(bundle, pixels, probes, bound, scope, cache, depth, memo, 4, BatchUse::OrderedFirst);
         for (std::size_t i = 0; i < probes.size(); ++i) {
             const auto &result = matches.at(i);
             check(result.at("outcome") != "Error", "WVD_BOOT_RECOGNITION_ERROR");
@@ -375,8 +476,8 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
     if (mode == "boot_ready" && p.value("parallel_basic", false)) {
         check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");
         const auto probes = boot_probes(false);
-        const auto matches = evaluate_batch(bundle, pixels, probes, bound, scope, cache, depth, memo, 4);
-        // 顺序消费，保持原稳定页优先级；只并行不带状态的模板/战斗标记探针。
+        const auto matches = evaluate_batch(bundle, pixels, probes, bound, scope, cache, depth, memo, 4, BatchUse::OrderedFirst);
+        // 按原稳定页优先级逐项计算；首项命中后不再安排尾项。
         for (std::size_t i = 0; i < probes.size(); ++i) {
             const auto &result = matches.at(i);
             check(result.at("outcome") != "Error", "WVD_BOOT_RECOGNITION_ERROR");
@@ -526,7 +627,9 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
         for (const auto &probe : chest_stage_probes()) excluded.push_back(probe);
         if (stage == "open") {
             conditions.push_back(image_probe("dungFlag"));
-            for (auto name : {"mapFlag", "trait", "recover"}) excluded.push_back(image_probe(name));
+            excluded.push_back(dungeon_map_probe(bound));
+            excluded.push_back(character_panel_probe(bound));
+            excluded.push_back(recovery_panel_probe(bound));
         }
         conditions.push_back({{"mode", "not"}, {"conditions", J::array({J{{"mode", "any"}, {"conditions", excluded}}})}});
         auto scene = evaluate_impl(bundle, pixels, {{"mode", "all"}, {"conditions", conditions}},
@@ -536,7 +639,7 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
         // 基础覆盖层可同帧四路扫描，仍按原优先级消费结果/错误。
         // 打开灯已证明Dungeon；按旧分类顺序，死亡和默认对话不能抢占正常Dungeon。
         const auto probes = blocking_probes(false);
-        const auto matches = evaluate_batch(bundle, pixels, probes, bound, scope, cache, depth, memo, 4);
+        const auto matches = evaluate_batch(bundle, pixels, probes, bound, scope, cache, depth, memo, 4, BatchUse::OrderedFirst);
         for (std::size_t i = 0; i < probes.size(); ++i) {
             const auto &result = matches.at(i);
             check(result.at("outcome") != "Error", "WVD_DARK_LIGHT_RECOGNITION_ERROR");
@@ -581,8 +684,8 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
         }
         // 先按已有分类识别正常页/覆盖层；已知静止页面不能成为“未知冻结”。
         J probes = J::array({J{{"mode", "boot_ready"}, {"parallel_basic", true}}, J{{"mode", "blocking_screen"}, {"parallel_basic", true}},
-            J{{"mode", "template"}, {"image", "trait"}}, J{{"mode", "template"}, {"image", "recover"}},
-            J{{"mode", "template"}, {"image", "spellskill/skillDetail"}}});
+            character_panel_probe(bound), recovery_panel_probe(bound), harken_floor_menu(),
+            combat_detail_probe(bound)});
         if (p.contains("extra_known")) {
             check(p.at("extra_known").is_array() && p.at("extra_known").size() <= 16,
                 "WVD_UNKNOWN_KNOWN_LIST_INVALID");
@@ -591,11 +694,11 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
         }
         std::optional<ProbeBatch> panel_matches;
         for (std::size_t i = 0; i < probes.size(); ++i) {
-            // 两组正常页/覆盖层都未命中后，三个独立面板反证同步计算。
-            // 仍按原先顺序消费异常；专属extra_known可能含状态，不能一并并行。
+            // 两组正常页/覆盖层都未命中后，再按优先级检查面板反证；
+            // 专属 extra_known 可能含时序状态，不能并行预先执行。
             if (i == 2)
                 panel_matches = evaluate_batch(bundle, pixels, J::array({probes[2], probes[3], probes[4]}),
-                    bound, scope, cache, depth, memo, 3);
+                    bound, scope, cache, depth, memo, 3, BatchUse::OrderedFirst);
             const auto known = i >= 2 && i < 5 ? panel_matches->at(i - 2) :
                 evaluate_impl(bundle, pixels, probes[i], bound, scope, cache, depth + 1, memo);
             check(known.at("outcome") != "Error", "WVD_UNKNOWN_RECOGNITION_ERROR");
@@ -634,8 +737,9 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
                 return decision(false, {}, {{"reason", "single_death_prompt_first"}});
         }
         J guards = J::array();
-        for (const auto *name : {"dungFlag", "mapFlag", "worldmapflag", "Inn"})
+        for (const auto *name : {"dungFlag", "worldmapflag", "Inn"})
             guards.push_back({{"mode", "template"}, {"image", name}, {"threshold", .8}});
+        guards.push_back(dungeon_map_probe(bound));
         for (const auto &probe : chest_stage_probes()) guards.push_back(probe);
         guards.push_back({{"mode", "combat_active"}});
         guards.push_back({{"mode", "pause_negative"}});
@@ -697,7 +801,7 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
             check(result.at("outcome") != "Error", "WVD_NAVIGATION_RECOGNITION_ERROR");
             return result.at("outcome") == "Hit";
         };
-        const bool map = observe({{"mode", "template"}, {"image", "mapFlag"}, {"threshold", .8}});
+        const bool map = observe(dungeon_map_probe(bound));
         // 原式 moving|encounter|outside|no_target 中，!map && dungFlag 足以证明结果；
         // 即使同时出现遭遇/退场图标也属于允许返回状态，不必重算所有排除条件。
         // 这里只作后置分类，绝不授权下一次输入；通用 any/all 的 Error 传播不变。
@@ -765,9 +869,9 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
         std::string selected;
         J probes = J::array();
         for (const auto option : options) probes.push_back({{"mode", "template"}, {"image", option}});
-        // 专用选项最多三张，沿用默认对话的同步批处理；选择和Error优先级仍按原列表。
-        // 不把包含此批处理的复合模式加入外层并行白名单，避免嵌套并行退化。
-        const auto matches = evaluate_batch(bundle, pixels, probes, bound, scope, cache, depth, memo, 4);
+        // 专用选项最多三张，按原列表顺序命中即停，已执行的 Error 仍传播。
+        // 专用对话包含后续反证，不放入外层并行白名单。
+        const auto matches = evaluate_batch(bundle, pixels, probes, bound, scope, cache, depth, memo, 4, BatchUse::OrderedFirst);
         for (std::size_t i = 0; i < options.size(); ++i) {
             candidate = matches.at(i);
             check(candidate.at("outcome") != "Error", "WVD_DIALOGUE_RECOGNITION_ERROR");
@@ -784,7 +888,7 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
                 guards.push_back(probe);
         }
         guards.push_back({{"mode", "party_death"}});
-        const auto checked = evaluate_batch(bundle, pixels, guards, bound, scope, cache, depth, memo, 4);
+        const auto checked = evaluate_batch(bundle, pixels, guards, bound, scope, cache, depth, memo, 4, BatchUse::OrderedFirst);
         for (std::size_t i = 0; i < guards.size(); ++i) {
             const auto &result = checked.at(i);
             check(result.at("outcome") != "Error", "WVD_DIALOGUE_RECOGNITION_ERROR");
@@ -804,7 +908,7 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
             check(p.at("selected").is_string() && std::find(default_dialogue_names.begin(), default_dialogue_names.end(),
                   p.at("selected").get<std::string>()) != default_dialogue_names.end(), "WVD_DIALOGUE_OPTION_INVALID");
         const auto candidates = default_dialogue_probes();
-        const auto matches = evaluate_batch(bundle, pixels, candidates, bound, scope, cache, depth, memo, 4);
+        const auto matches = evaluate_batch(bundle, pixels, candidates, bound, scope, cache, depth, memo, 4, BatchUse::OrderedFirst);
         std::optional<std::size_t> selected;
         for (std::size_t i = 0; i < candidates.size(); ++i) {
             const auto &result = matches.at(i);
@@ -819,7 +923,7 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
         for (const auto &probe : blocking_probes(false))
             guards.push_back(probe);
         guards.push_back({{"mode", "party_death"}});
-        const auto guarded = evaluate_batch(bundle, pixels, guards, bound, scope, cache, depth, memo, 4);
+        const auto guarded = evaluate_batch(bundle, pixels, guards, bound, scope, cache, depth, memo, 4, BatchUse::OrderedFirst);
         for (std::size_t i = 0; i < guards.size(); ++i) {
             const auto &result = guarded.at(i);
             check(result.at("outcome") != "Error", "WVD_DIALOGUE_RECOGNITION_ERROR");
@@ -895,42 +999,24 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
         check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");
         const cv::Rect field(250, 500, 400, 600);
         check((field & allowed_rect) == field, "WVD_ROI_OUTSIDE_SCOPE");
-        const auto result = detect_bobber(image(field), assets.load("fishing/bobber"));
+        const auto result = detect_bobber(image(field), assets.load("fishing/bobber"),
+            cache, std::hash<std::string>{}(assets.canonical_key("fishing/bobber")));
         // 原Farm先CutRoI再调用浮标算法。这里输出存在性，不把局部坐标当全屏点击点。
         return decision(result.at("outcome") == "Hit", allowed_rect,
             {{"roi", {250, 500, 400, 600}}, {"local_detections", result.at("evidence").at("detections")}}, false);
     }
     if (mode == "bobber") {
         check(allowed_rect == cv::Rect(0, 0, image.cols, image.rows), "WVD_ROI_OUTSIDE_SCOPE");
-        return detect_bobber(image, assets.load("fishing/bobber"));
+        return detect_bobber(image, assets.load("fishing/bobber"), cache,
+            std::hash<std::string>{}(assets.canonical_key("fishing/bobber")));
     }
     auto one = [&](const std::string &name, J parameters) {
         const bool has_roi = parameters.contains("roi");
         auto effective = has_roi ? rect(parameters.at("roi"), image.size()) : allowed_rect;
         check((effective & allowed_rect) == effective, "WVD_ROI_OUTSIDE_SCOPE");
         parameters["roi"] = box(effective);
-        cv::Mat templ;
-        J result;
-        try {
-            templ = assets.load(name);
-            result = match(image, templ, parameters, cache, bundle.revision + ":" + name);
-        } catch (const cv::Exception &error) {
-            const std::string original = error.what();
-            const auto detail = J{{"parameter_image", name},
-                {"source_size", {image.cols, image.rows}},
-                {"roi", box(effective)}, {"template_size", {templ.cols, templ.rows}},
-                {"partitions", diagnostic_partitions}, {"cache_items", cache.assets.size()},
-                {"process_memory", process_memory_summary()},
-                {"opencv", original.substr(0, 512)}};
-            throw std::runtime_error("WVD_MATCH_OPENCV_ERROR:" + detail.dump());
-        } catch (const std::bad_alloc &error) {
-            const auto detail = J{{"parameter_image", name},
-                {"source_size", {image.cols, image.rows}}, {"roi", box(effective)},
-                {"template_size", {templ.cols, templ.rows}},
-                {"partitions", diagnostic_partitions}, {"cache_items", cache.assets.size()},
-                {"process_memory", process_memory_summary()}, {"error", error.what()}};
-            throw std::runtime_error("WVD_MATCH_ALLOCATION_ERROR:" + detail.dump());
-        }
+        auto templ = assets.load(name);
+        auto result = match(image, templ, parameters, cache, assets.canonical_key(name));
         result["effective_roi"] = box(effective);
         result["roi_source"] = parameters.value("roi_source", has_roi ? "explicit" : "scope");
         return result;
@@ -942,7 +1028,9 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
         const cv::Rect area(650, 25, 225, 225);
         check((area & allowed_rect) == area, "WVD_ROI_OUTSIDE_SCOPE");
         const auto dungeon = one("dungFlag", J::object());
-        const auto map = one("mapFlag", J::object());
+        const auto map = evaluate_impl(bundle, pixels, dungeon_map_probe(bound),
+            bound, scope, cache, depth + 1, memo);
+        check(map.at("outcome") != "Error", "WVD_NAVIGATION_RECOGNITION_ERROR");
         const std::string key = "movement.sample";
         if (dungeon.at("outcome") != "Hit" || map.at("outcome") == "Hit") {
             cache.assets.erase(key);
@@ -1056,11 +1144,12 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
                  {"ocr_status", "UNVERIFIED_TESSERACT_NOT_MIGRATED"}};
         if (mode == "pause" && !(dark > 0.65 && white > 0.015 && white < 0.09 && maximum > 135))
             return decision(false, {}, detail);
-        for (const auto &name : {"trait", "recover", "spellskill/skillDetail", "close"}) {
-            J args = J::object();
-            if (std::string_view(name) == "close")
-                args["roi"] = {250, 1420, 420, 150};
-            auto evidence = one(name, args);
+        J negative_probes = J::array({character_panel_probe(bound), recovery_panel_probe(bound),
+            combat_detail_probe(bound), J{{"mode", "template"}, {"image", "close"},
+                {"roi", {250, 1420, 420, 150}}}});
+        for (const auto &probe : negative_probes) {
+            const auto name = probe.at("image").get<std::string>();
+            auto evidence = evaluate_impl(bundle, pixels, probe, bound, scope, cache, depth + 1, memo);
             if (evidence["outcome"] == "Hit") {
                 detail["negative"] = name;
                 detail["match"] = evidence;
@@ -1102,8 +1191,10 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
             return actor;
         // 0.60 只在已选技能、同一角色、详情仍开且没有友方/OK 确认的单体阶段生效。
         // 普通 next_low_confidence 的低信任契约不变，不能用组合条件直接抬升它。
-        auto detail = one("spellskill/skillDetail", J::object());
-        auto ok = one("OK", J::object());
+        auto detail = evaluate_impl(bundle, pixels, combat_detail_probe(bound),
+            bound, scope, cache, depth + 1, memo);
+        auto ok = evaluate_impl(bundle, pixels, combat_confirm_probe(bound),
+            bound, scope, cache, depth + 1, memo);
         auto support = one("supportSkillCheck", {{"roi", {677, 1475, 189, 80}}});
         if (detail.at("outcome") != "Hit" || ok.at("outcome") == "Hit" || support.at("outcome") == "Hit")
             return decision(false, {}, {{"reason", "not_enemy_selection"}});
@@ -1142,7 +1233,7 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
                           {{"roi", {base.x + crop.x, base.y + crop.y, crop.width, crop.height}},
                            {"crop", box(crop)},
                            {"threshold", p.value("threshold", 0.8)}},
-                          cache, bundle.revision + name);
+                          cache, assets.canonical_key(name));
                 if (result["evidence"]["best_score"].get<double>() > score) {
                     score = result["evidence"]["best_score"];
                     best = result;
@@ -1220,12 +1311,13 @@ J evaluate(const recognition::Bundle &bundle, recognition::Pixels pixels, const 
     return evaluate_impl(bundle, pixels, p, bound, scope, cache, 0, memo);
 }
 } // namespace
-recognition::Handlers native_handlers(const J &aliases) {
-    return {{"WvdVision", [aliases](const recognition::Bundle &bundle,
+recognition::Handlers native_handlers(const J &aliases, const std::string &resource_locale) {
+    return {{"WvdVision", [aliases, resource_locale](const recognition::Bundle &bundle,
                                      recognition::Pixels pixels, const J &parameters,
                                      const recognition::Scope &scope,
                                      recognition::Cache &cache) {
-        return evaluate(bundle, pixels, parameters, {{"aliases", aliases}}, scope, cache);
+        return evaluate(bundle, pixels, parameters,
+            {{"aliases", aliases}, {"resource_locale", resource_locale}}, scope, cache);
     }}};
 }
 } // namespace wvd::games::vision

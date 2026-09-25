@@ -1,10 +1,27 @@
 #include "bobber.hpp"
 #include <algorithm>
+#include <limits>
 #include <opencv2/imgproc.hpp>
 
 namespace wvd::games::vision {
-nlohmann::json detect_bobber(const cv::Mat &image, const cv::Mat &template_image) {
+nlohmann::json detect_bobber(const cv::Mat &image, const cv::Mat &template_image,
+                             recognition::Cache &cache, std::uint64_t asset_id) {
     using J = nlohmann::json;
+    if (image.total() > std::numeric_limits<std::uint64_t>::max() / 64 ||
+        template_image.total() >
+            (std::numeric_limits<std::uint64_t>::max() - image.total() * 64) / 32)
+        throw recognition::ResourcePressure("MATCH_WORKSPACE_OVERFLOW");
+    const auto estimated = image.total() * 64 + template_image.total() * 32;
+    const auto assets = cache.decoded->stats();
+    auto diagnostic = cache.diagnostics ? cache.diagnostics->begin({
+        cache.source_id, asset_id, estimated, image.cols, image.rows,
+        image.cols, image.rows, template_image.cols, template_image.rows,
+        1, -4, false, true, false, assets.retained_bytes, assets.in_use_bytes,
+        cache.match_budget->stats().active_matches}) : platform::MemoryDiagnostics::Slot{};
+    static const std::atomic<bool> never_cancelled{false};
+    try {
+    auto ticket = cache.match_budget->acquire(estimated,
+        cache.cancelled ? *cache.cancelled : never_cancelled);
     cv::Mat templ, field, gxt, gyt, magnitude;
     cv::cvtColor(template_image, templ, cv::COLOR_BGR2GRAY);
     templ.convertTo(field, CV_32F, 1.0 / 255);
@@ -83,5 +100,10 @@ nlohmann::json detect_bobber(const cv::Mat &image, const cv::Mat &template_image
             {"box", results.empty() ? J(nullptr) : results[0]["box"]},
             {"target", true},
             {"evidence", {{"detections", results}}}};
+    } catch (const std::bad_alloc &) { diagnostic.failure(-1); throw; }
+    catch (const cv::Exception &error) {
+        if (error.code == cv::Error::StsNoMem) diagnostic.failure(error.code);
+        throw;
+    } catch (const recognition::ResourcePressure &) { diagnostic.failure(-2); throw; }
 }
 } // namespace wvd::games::vision

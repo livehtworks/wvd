@@ -14,9 +14,38 @@ tasks::CompiledWorkflow fight_encounter(const nlohmann::json &profile,
     const J battle{{"mode", "combat_active"}};
     const auto dungeon = C::all({C::image("dungFlag"), C::absent(battle)});
     const auto chest = C::all({C::image("chestFlag"), C::absent(battle)});
-    graph.route("Entry", {"Observed", "Dungeon", "Chest", "Revive"});
     const bool repel = end == EncounterEnd::RepelPrompt;
-    graph.confirm("Observed", "combat.begin", repel ? "repel_battle_observed" : "combat_observed", battle, {"Turn0"});
+    const auto special = profile.at("TASK_POINT_STRATEGY").value("special_combat", J::object());
+    const bool detect_skull = !repel && special.value("skull", false);
+    const bool detect_portrait = !repel && special.value("portrait", false);
+    if (detect_skull || detect_portrait) {
+        auto flee = C::image("flee");
+        flee["roi"] = {720, 1120, 180, 130};
+        const auto ready = C::all({battle, flee});
+        J detectors = J::array();
+        if (detect_skull) {
+            auto skull = C::image("combat_special_skull");
+            skull.update({{"roi", {160, 100, 740, 800}}, {"grayscale", true}, {"threshold", 0.84}});
+            detectors.push_back(skull);
+        }
+        if (detect_portrait) {
+            auto portrait = C::image(special.at("portrait_image").get<std::string>());
+            portrait.update({{"roi", {20, 45, 160, 855}}, {"grayscale", true}, {"threshold", 0.88}});
+            detectors.push_back(portrait);
+        }
+        const auto match = C::any(detectors);
+        graph.route("Entry", {"Special", "Ordinary", "WaitingForMenu", "Dungeon", "Chest", "Revive"});
+        graph.confirm("Special", "combat.begin", "combat_special_observed",
+                      C::all({ready, match}), {"Turn0"});
+        graph.confirm("Ordinary", "combat.begin", "combat_observed",
+                      C::all({ready, C::absent(match)}), {"Turn0"});
+        graph.observe("WaitingForMenu", C::all({battle, C::absent(flee)}), {"Entry"});
+        graph.delay_after("WaitingForMenu", 500);
+        graph.hit_limit("WaitingForMenu", 120);
+    } else {
+        graph.route("Entry", {"Observed", "Dungeon", "Chest", "Revive"});
+        graph.confirm("Observed", "combat.begin", repel ? "repel_battle_observed" : "combat_observed", battle, {"Turn0"});
+    }
     // 击退敌势力在战后对话结束一场战斗；不扩大普通遭遇的成功条件。
     graph.confirm("Dungeon", "combat.resume", repel ? "repel_battle_completed" : "dungeon_resumed",
         repel ? C::all({C::image("icanstillgo"), C::absent(battle)}) : dungeon, {"Terminal"});
@@ -29,7 +58,7 @@ tasks::CompiledWorkflow fight_encounter(const nlohmann::json &profile,
     graph.recovery("AutoTimeout", "combat.auto_progress_timeout");
     auto enabled = C::image("spellskill/CombatAutoEnable"), disabled = C::image("spellskill/CombatAutoDisable");
     enabled["roi"] = disabled["roi"] = {780, 1030, 120, 160};
-    const auto popup = C::any({C::image("spellskill/skillDetail"), C::image("OK"), C::image("close")});
+    const auto popup = C::any({C::image("combat_skill_detail"), C::image("combat_skill_confirm"), C::image("close")});
     const auto clear = C::all({battle, C::absent(popup)});
     const auto full_auto = C::all({clear, enabled, C::business("/strategy/automatic", true)});
     const auto turn = graph.define_child("Actor", take_turn(profile, available_images), {"BlockedExit"});

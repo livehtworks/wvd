@@ -35,10 +35,24 @@ void hit(contracts::Observation &observation, contracts::Box location, bool targ
     if (target) observation.center = contracts::Point{location.x + location.width / 2,
                                                         location.y + location.height / 2};
 }
+bool bounded_json(const nlohmann::json &value, std::size_t &remaining) {
+    if (!remaining--) return false;
+    if (value.is_array() || value.is_object())
+        for (const auto &child : value)
+            if (!bounded_json(child, remaining)) return false;
+    return true;
+}
 } // namespace
 
-Service::Service(Bundle bundle, Handlers handlers)
+Service::Service(Bundle bundle, Handlers handlers, std::shared_ptr<MatchBudget> budget,
+                 std::filesystem::path diagnostics_path,
+                 std::uint64_t run_id, std::uint64_t generation)
     : bundle_(std::move(bundle)), handlers_(std::move(handlers)) {
+    cache_.decoded = std::make_shared<DecodedAssetCache>();
+    cache_.match_budget = budget ? std::move(budget) : std::make_shared<MatchBudget>();
+    cache_.cancelled = &cancelled_;
+    cache_.diagnostics = std::make_shared<platform::MemoryDiagnostics>(
+        diagnostics_path, run_id, generation);
     require(bundle_.root.is_absolute() && !bundle_.revision.empty(), "BUNDLE_IDENTITY_INVALID");
     platform::BundleLease::Manifest manifest;
     for (const auto &file : bundle_.files)
@@ -70,7 +84,17 @@ contracts::Observation Service::evaluate(const contracts::FrameEnvelope &frame,
         validate_frame_identity(frame, current, bundle_.revision);
         const auto key = frame_key(frame.identity);
         if (key != frame_pixels_key_) {
-            frame_pixels_ = std::make_unique<FramePixels>(frame, current, bundle_.revision);
+            auto diagnostic = cache_.diagnostics->begin({
+                std::hash<std::string>{}(request.recognizer_id), 0,
+                frame.encoded_image.size(), frame.identity.raw_size.width,
+                frame.identity.raw_size.height, 0, 0, 0, 0, 3, -3,
+                false, false, false, 0, 0});
+            try { frame_pixels_ = std::make_unique<FramePixels>(frame, current, bundle_.revision); }
+            catch (const std::bad_alloc &) { diagnostic.failure(-1); throw; }
+            catch (const cv::Exception &error) {
+                if (error.code == cv::Error::StsNoMem) diagnostic.failure(error.code);
+                throw;
+            }
             frame_pixels_key_ = key;
         }
         require(within(request.roi, frame_pixels_->size()), "ROI_INVALID");
@@ -78,8 +102,23 @@ contracts::Observation Service::evaluate(const contracts::FrameEnvelope &frame,
         if (key != cache_.frame_key) {
             cache_.frame_key = key;
             cache_.results.clear();
+            cache_.result_bytes = 0;
         }
         return evaluate_locked(*frame_pixels_, request, business, frame.identity);
+    } catch (const ResourcePressure &) {
+        result.error_code = "RECOGNITION_RESOURCE_PRESSURE";
+        result.outcome = contracts::RecognitionOutcome::Error;
+        return result;
+    } catch (const std::bad_alloc &) {
+        result.error_code = "OOM";
+        result.outcome = contracts::RecognitionOutcome::Error;
+        return result;
+    } catch (const cv::Exception &error) {
+        result.error_code = error.code == cv::Error::StsNoMem ?
+            "CV_OOM:-4" :
+            "RECOGNITION_OPENCV_ERROR:" + std::to_string(error.code);
+        result.outcome = contracts::RecognitionOutcome::Error;
+        return result;
     } catch (const std::exception &error) {
         result.error_code = error.what();
         result.outcome = contracts::RecognitionOutcome::Error;
@@ -97,29 +136,57 @@ contracts::Observation Service::evaluate_locked(const FramePixels &pixels, const
     result.parameter_revision = request.parameter_revision;
     result.outcome = contracts::RecognitionOutcome::NoHit;
     result.error_stage = "recognition";
+    cache_.source_id = std::hash<std::string>{}(request.recognizer_id);
     if (const auto *templ = std::get_if<TemplateParameters>(&request.parameters)) {
         require(std::isfinite(templ->threshold) && templ->threshold >= 0 &&
                     templ->threshold <= 1, "THRESHOLD_INVALID");
         const auto relative = std::string("image/") + templ->image;
         bundle_.lease->require_member(relative);
-        auto found = cache_.assets.find("template:" + relative);
-        cv::Mat image;
-        if (found != cache_.assets.end()) image = std::any_cast<cv::Mat>(found->second);
-        else {
+        const auto asset_key = bundle_.revision + ":" + bundle_.lease->identity() + ":" + relative;
+        auto lease = cache_.decoded->load(asset_key, [&] {
             const auto &bytes = bundle_.lease->bytes(relative);
             require(!bytes.empty() && bytes.size() <= 64 * 1024 * 1024,
                     "TEMPLATE_BYTES_INVALID");
-            image = cv::imdecode(bytes, cv::IMREAD_COLOR);
+            const auto stats = cache_.decoded->stats();
+            auto diagnostic = cache_.diagnostics->begin({
+                cache_.source_id, std::hash<std::string>{}(asset_key), bytes.size(),
+                0, 0, 0, 0, 0, 0, 3, -2, false, false, false,
+                stats.retained_bytes, stats.in_use_bytes});
+            cv::Mat image;
+            try { image = cv::imdecode(bytes, cv::IMREAD_COLOR); }
+            catch (const std::bad_alloc &) { diagnostic.failure(-1); throw; }
+            catch (const cv::Exception &error) {
+                if (error.code == cv::Error::StsNoMem) diagnostic.failure(error.code);
+                throw;
+            }
             require(!image.empty() && image.type() == CV_8UC3,
                     "TEMPLATE_DECODE_INVALID");
-            require(cache_.assets.size() < 2048, "SESSION_ASSET_CAPACITY");
-            cache_.assets.emplace("template:" + relative, image);
-        }
+            return image;
+        }, &cancelled_);
+        const auto &image = lease.mat();
         require(image.cols <= request.roi.width && image.rows <= request.roi.height,
                 "TEMPLATE_EXCEEDS_ROI");
+        const auto estimated = estimate_match_workspace(
+            {request.roi.width, request.roi.height}, image.size(), 3, false, false, false);
+        const auto assets = cache_.decoded->stats();
+        auto diagnostic = cache_.diagnostics->begin({
+            cache_.source_id, std::hash<std::string>{}(asset_key), estimated, pixels.size().width,
+            pixels.size().height, request.roi.width, request.roi.height,
+            image.cols, image.rows, image.channels(), cv::TM_CCOEFF_NORMED,
+            false, false, false, assets.retained_bytes, assets.in_use_bytes,
+            cache_.match_budget->stats().active_matches});
+        MatchBudget::Ticket ticket;
         cv::Mat scores;
-        cv::matchTemplate(pixels.mat()(rect(request.roi)), image, scores,
-                          cv::TM_CCOEFF_NORMED);
+        try {
+            ticket = cache_.match_budget->acquire(estimated, cancelled_);
+            cv::matchTemplate(pixels.mat()(rect(request.roi)), image, scores,
+                              cv::TM_CCOEFF_NORMED);
+        } catch (const std::bad_alloc &) { diagnostic.failure(-1); throw; }
+        catch (const cv::Exception &error) {
+            if (error.code == cv::Error::StsNoMem) diagnostic.failure(error.code);
+            throw;
+        } catch (const ResourcePressure &) { diagnostic.failure(-2); throw;
+        }
         require(!scores.empty(), "TEMPLATE_MATCH_INVALID");
         for (int y = 0; y < scores.rows; ++y)
             for (int x = 0; x < scores.cols; ++x)
@@ -166,12 +233,22 @@ contracts::Observation Service::evaluate_locked(const FramePixels &pixels, const
                     observed.box->y, observed.box->width, observed.box->height}) : nlohmann::json(nullptr)},
                 {"target", bool(observed.center)}, {"evidence", observed.evidence}};
         };
-        Scope scope(request.roi, ++invocation_, business, ocr);
+        Scope scope(request.roi, ++invocation_, business, ocr, &cancelled_);
         detail = handler->second(bundle_, {pixels.bgr(), pixels.size()}, custom.parameters,
                                  scope, cache_);
         require(detail.is_object() && detail.value("schema", 0) == 1,
                 "CUSTOM_DETAIL_INVALID");
-        if (cache_.results.size() < 512) cache_.results.emplace(key, detail);
+        if (cache_.results.size() < 128) {
+            std::size_t nodes = 256;
+            if (bounded_json(detail, nodes)) {
+                const auto payload_bytes = detail.dump().size();
+                if (payload_bytes <= 8192 &&
+                    cache_.result_bytes + key.size() + payload_bytes <= 1024 * 1024) {
+                    cache_.results.emplace(key, detail);
+                    cache_.result_bytes += key.size() + payload_bytes;
+                }
+            }
+        }
     }
     const auto outcome = detail.at("outcome").get<std::string>();
     require(outcome == "Hit" || outcome == "NoHit", "CUSTOM_OUTCOME_INVALID");
@@ -246,8 +323,20 @@ contracts::Observation Service::recognize_ocr(const FramePixels &pixels,
 
 void Service::cancel() noexcept {
     cancelled_.store(true);
+    if (cache_.match_budget) cache_.match_budget->wake();
     // 请求取消不等于推理已经退出；Session 仍持有所有资源直到调用实际返回。
     try { if (auto engine = ocr_.load()) engine->cancel(); }
     catch (...) { /* 取消标记仍有效，不能由控制线程抛出并破坏停止链。 */ }
+}
+ResourceStats Service::resource_stats() const {
+    auto result = cache_.decoded->stats();
+    const auto work = cache_.match_budget->stats();
+    result.active_matches = work.active_matches;
+    result.peak_matches = work.peak_matches;
+    result.estimated_workspace_bytes = work.estimated_workspace_bytes;
+    result.peak_estimated_workspace_bytes = work.peak_estimated_workspace_bytes;
+    result.result_cache_entries = cache_.results.size();
+    result.result_cache_estimated_bytes = cache_.result_bytes;
+    return result;
 }
 } // namespace wvd::recognition

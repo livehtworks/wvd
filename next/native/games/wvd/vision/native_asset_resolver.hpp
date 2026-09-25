@@ -15,11 +15,13 @@ class AssetResolver {
     AssetResolver(const recognition::Bundle &baseline, const nlohmann::json &aliases,
                   recognition::Cache &cache, const recognition::Bundle *mod = nullptr);
     cv::Mat load(const std::string &name);
+    std::string canonical_key(const std::string &name) const;
 
   private:
     const recognition::Bundle &baseline_;
     const nlohmann::json aliases_;
     recognition::Cache &cache_;
     const recognition::Bundle *mod_;
+    std::vector<recognition::DecodedAssetCache::Lease> leases_;
 };
 } // namespace wvd::games::vision

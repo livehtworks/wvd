@@ -30,6 +30,7 @@ struct NativeRunDefinition {
     nlohmann::json handoff_parent = nullptr;
     contracts::InputPolicy policy;
     std::vector<NativeUnit> units;
+    std::shared_ptr<recognition::MatchBudget> match_budget;
     std::optional<devices::LifecyclePlan> startup;
     std::chrono::milliseconds total_time_limit{std::chrono::minutes{30}};
     std::function<std::unique_ptr<contracts::BusinessRunState>(

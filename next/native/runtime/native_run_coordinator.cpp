@@ -170,7 +170,9 @@ void NativeRunCoordinator::drive(NativeRunDefinition definition,
                 const auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(
                     total_deadline - std::chrono::steady_clock::now());
                 require(remaining > 0ms, "NATIVE_RUN_TOTAL_DEADLINE");
-                auto recognizer = std::make_shared<recognition::Service>(unit.bundle, unit.recognizers);
+                auto recognizer = std::make_shared<recognition::Service>(
+                    unit.bundle, unit.recognizers, definition.match_budget,
+                    store_->directory() / "recognition-memory.log", run_id, generation);
                 bool checkpoint_seen = false;
                 auto event = [this, generation](const std::string &type, const nlohmann::json &data) {
                     journal_->emit(generation, type, data);
@@ -220,6 +222,16 @@ void NativeRunCoordinator::drive(NativeRunDefinition definition,
                     },
                     [this, generation](const nlohmann::json &input) {
                         journal_->emit(generation, "input.attempt", input);
+                    },
+                    [this, generation, warned = false](const contracts::FrameEnvelope &frame) mutable {
+                        try { store_->save_recent_frame(frame); }
+                        catch (const std::exception &error) {
+                            if (!warned) {
+                                warned = true;
+                                journal_->emit(generation, "recent_frame.write_failed",
+                                    {{"error", error.what()}});
+                            }
+                        }
                     });
                 {
                     std::lock_guard lock(mutex_);
@@ -231,6 +243,30 @@ void NativeRunCoordinator::drive(NativeRunDefinition definition,
                 }
                 if (stop_) session->request_stop();
                 const auto result = session->run();
+                const auto resources = recognizer->resource_stats();
+                const auto memory = platform::sample_memory();
+                event("recognition.resources", {{"cache_retained_bytes", resources.retained_bytes},
+                    {"cache_in_use_bytes", resources.in_use_bytes},
+                    {"cache_evictable_bytes", resources.evictable_bytes},
+                    {"cache_live_bytes", resources.live_bytes},
+                    {"decode_count", resources.decode_count},
+                    {"mask_build_count", resources.mask_build_count},
+                    {"cache_entries", resources.entries},
+                    {"result_cache_entries", resources.result_cache_entries},
+                    {"result_cache_estimated_bytes", resources.result_cache_estimated_bytes},
+                    {"active_matches", resources.active_matches}, {"peak_matches", resources.peak_matches},
+                    {"peak_estimated_workspace_bytes", resources.peak_estimated_workspace_bytes},
+                    {"diagnostic_write_failed", recognizer->diagnostic_write_failed()},
+                    {"process_memory_available", memory.process_ok},
+                    {"private_bytes", memory.process_ok ? memory.private_bytes : 0},
+                    {"working_set_bytes", memory.process_ok ? memory.working_set_bytes : 0},
+                    {"peak_working_set_bytes", memory.process_ok ? memory.peak_working_set_bytes : 0},
+                    {"system_memory_available", memory.system_ok},
+                    {"commit_total_pages", memory.system_ok ? memory.commit_total_pages : 0},
+                    {"commit_limit_pages", memory.system_ok ? memory.commit_limit_pages : 0},
+                    {"commit_peak_pages", memory.system_ok ? memory.commit_peak_pages : 0},
+                    {"physical_available_pages", memory.system_ok ? memory.physical_available_pages : 0},
+                    {"page_size", memory.system_ok ? memory.page_size : 0}});
                 {
                     std::lock_guard lock(mutex_);
                     session_.reset();

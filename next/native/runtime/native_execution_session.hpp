@@ -26,7 +26,8 @@ class NativeExecutionSession final {
         contracts::BusinessRunState &business, contracts::InputPolicy policy,
         std::uint64_t generation, std::chrono::milliseconds total_budget,
         OperationFactory operations, ProgressSink progress = {},
-        NativeFlowPorts::InputSink input_sink = {});
+        NativeFlowPorts::InputSink input_sink = {},
+        NativeFlowPorts::CaptureSink capture_sink = {});
     NativeExecutionResult run();
     void request_stop();
 

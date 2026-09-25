@@ -226,6 +226,13 @@ WvdTaskPlan WvdTaskPlan::with_route(const J &targets) const {
         plan.route_.push_back(map_target(target));
     return plan;
 }
+WvdTaskPlan WvdTaskPlan::with_last_harken_arrival() const {
+    if (route_.empty() || route_.back().target != "position")
+        throw std::runtime_error("TASK_HARKEN_ARRIVAL_REQUIRES_POSITION");
+    auto plan = *this;
+    plan.route_.back().harken_arrival = true;
+    return plan;
+}
 WvdTaskPlan WvdTaskPlan::with_entry(const J &steps) const {
     if (!steps.is_array() || steps.empty() || steps.size() > 64)
         throw std::runtime_error("TASK_LOCAL_ENTRY_INVALID");
@@ -265,7 +272,8 @@ nlohmann::json WvdTaskPlan::inspect() const {
                                                                             : "none"},
              {"position", target.position ? J(*target.position) : J(nullptr)},
              {"stair_reference", target.stair_reference},
-             {"regions", target.regions}});
+             {"regions", target.regions},
+             {"harken_arrival", target.harken_arrival}});
     }
     // 解析产物不是可运行 Pipeline。特别是 quest 的代码分支不能由这里伪造成功入口。
     return {{"task_id", definition_.id},

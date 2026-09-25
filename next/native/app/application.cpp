@@ -88,6 +88,11 @@ void strategy_references(J &scope, const std::function<void(J &)> &visit) {
     if (scope.contains("DEFAULT_OVERALL_STRATEGY")) visit(scope["DEFAULT_OVERALL_STRATEGY"]);
     if (!scope.contains("TASK_POINT_STRATEGY") || !scope["TASK_POINT_STRATEGY"].is_object()) return;
     auto &bindings = scope["TASK_POINT_STRATEGY"];
+    if (bindings.contains("special_combat") && bindings["special_combat"].is_object()) {
+        auto &special = bindings["special_combat"];
+        if (special.contains("normal_strategy")) visit(special["normal_strategy"]);
+        if (special.contains("special_strategy")) visit(special["special_strategy"]);
+    }
     if (bindings.contains("overall_strategy")) visit(bindings["overall_strategy"]);
     if (!bindings.contains("task_point")) return;
     auto &points = bindings["task_point"];
@@ -717,6 +722,23 @@ Application::J Application::save_profile(const J &request) {
         document["default_values"] = std::move(defaults);
     }
     const auto new_names = strategy_names(document.at("values"));
+    const auto &points = document.at("values").at("TASK_POINT_STRATEGY");
+    if (points.contains("special_combat")) {
+        const auto &special = points.at("special_combat");
+        require(special.is_object(), "SPECIAL_COMBAT_INVALID");
+        const bool enabled = special.value("skull", false) || special.value("portrait", false);
+        if (enabled) {
+            for (const auto *field : {"normal_strategy", "special_strategy"})
+                require(special.contains(field) && special.at(field).is_string() &&
+                    new_names.contains(special.at(field).get<std::string>()),
+                    "SPECIAL_COMBAT_STRATEGY_INVALID");
+            if (special.value("portrait", false)) {
+                require(special.contains("portrait_image") && special.at("portrait_image").is_string() &&
+                    available_images_.contains(special.at("portrait_image").get<std::string>() + ".png"),
+                    "SPECIAL_COMBAT_PORTRAIT_MISSING");
+            }
+        }
+    }
     all_profile_references(document, [&](J &reference) {
         if (reference.is_string()) {
             const auto name = reference.get<std::string>();
@@ -1191,6 +1213,7 @@ runtime::NativeRunDefinition Application::assemble_task(const J &request, const 
         ? stored_values.at("FARM_TARGET").get<std::string>() : std::string{});
     require(!task_id.empty(), "TASK_NOT_SELECTED");
     const auto values = frozen_values ? *frozen_values : effective_profile_values(task_id, stored);
+    const auto resource_locale = authoring::effective_resource_locale(request, J::object());
     require(values.at("FARM_TARGET") == task_id && values.size() == 33,
             "TASK_FROZEN_PROFILE_INVALID");
     const auto &task = catalog_->at(task_id);
@@ -1217,11 +1240,12 @@ runtime::NativeRunDefinition Application::assemble_task(const J &request, const 
     require(root.steps.contains(workflow.checkpoint), "NATIVE_CHECKPOINT_MISSING");
     const auto checkpoint_source = root.steps.at(workflow.checkpoint).source_path;
     runtime::NativeUnit unit{std::move(publication.program),
-        std::move(publication.bundle), games::vision::native_handlers(aliases_),
+        std::move(publication.bundle), games::vision::native_handlers(aliases_, resource_locale),
         checkpoint_source, workflow.time_limit};
     const auto count = games::tasks::task_unit_count(task_id, values);
     runtime::NativeRunDefinition definition;
     definition.request_id = request_id;
+    definition.match_budget = match_budget_;
     definition.units.assign(count, unit);
     definition.policy = {lifecycle.device_id, "wvd", "jp.co.drecom.wizardry.daphne",
         unit.bundle.revision, "900x1600", {900, 1600},
@@ -1546,8 +1570,9 @@ runtime::NativeRunDefinition Application::assemble_workflow(
     const auto checkpoint_source = root.steps.at(executable.checkpoint).source_path;
     runtime::NativeRunDefinition definition;
     definition.request_id = request_id;
+    definition.match_budget = match_budget_;
     definition.units.push_back({std::move(publication.program),
-        std::move(publication.bundle), games::vision::native_handlers(aliases_),
+        std::move(publication.bundle), games::vision::native_handlers(aliases_, locale),
         checkpoint_source, executable.time_limit});
     definition.total_time_limit = std::chrono::milliseconds(
         document.at("execution").at("time_limit_ms").get<std::int64_t>());
@@ -1684,7 +1709,8 @@ Application::J Application::recognition_probe(const J &request) {
     }
     const auto parsed = recognition::parse_request(recognition);
     recognition::Service recognizer(std::move(bundle),
-        games::vision::native_handlers(aliases_));
+        games::vision::native_handlers(aliases_,
+            authoring::effective_resource_locale(request, J::object())), match_budget_);
     return observation_json(recognizer.evaluate(frame, frame.identity, parsed));
 }
 
