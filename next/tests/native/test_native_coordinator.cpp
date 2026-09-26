@@ -90,7 +90,7 @@ int main() {
         definition.policy.viewport_id = "900x1600";
         definition.policy.recognition_size = {900, 1600};
         definition.policy.allowed_scenes.insert("wvd");
-        definition.units.push_back({std::move(program), std::move(bundle), {},
+        definition.units.push_back({std::make_shared<const workflow::FlowProgram>(std::move(program)), std::move(bundle), {},
             "test/checkpoint", 5s});
         definition.total_time_limit = 5s;
         definition.create_state = [](const auto &) { return std::make_unique<State>(); };
@@ -108,9 +108,18 @@ int main() {
         };
         runtime::NativeRunCoordinator coordinator(data_root / "runs");
         auto backend = std::make_shared<Backend>();
-        auto pending_definition = definition;
-        auto deferred_definition = definition;
-        auto capture_definition = definition;
+        const auto fixture = [&] {
+            runtime::NativeRunDefinition value;
+            value.policy = definition.policy;
+            value.units = definition.units; // 不可变程序共享；修改场景另行显式封存。
+            value.total_time_limit = definition.total_time_limit;
+            value.create_state = definition.create_state;
+            value.operations = definition.operations;
+            return value;
+        };
+        auto pending_definition = fixture();
+        auto deferred_definition = fixture();
+        auto capture_definition = fixture();
         pending_definition.request_id = "native-cleanup-pending";
         const auto started = coordinator.start(std::move(definition), backend);
         if (!started.run_id || !coordinator.wait_for(5s))
@@ -131,8 +140,10 @@ int main() {
                 throw std::runtime_error("CLEANUP_PENDING_TERMINAL_INVALID");
         }
         {
-            auto &root = deferred_definition.units.front().program.definitions.at("root");
+            auto adjusted = std::make_shared<workflow::FlowProgram>(*deferred_definition.units.front().program);
+            auto &root = adjusted->definitions.at("root");
             root.steps.at("checkpoint").data = workflow::Fail{"deferred.recovery"};
+            deferred_definition.units.front().program = std::move(adjusted);
             deferred_definition.request_id = "native-deferred-stop";
             deferred_definition.total_time_limit = 10s;
             deferred_definition.recovery = [](const contracts::SessionResult &result,
@@ -168,10 +179,12 @@ int main() {
                 throw std::runtime_error("DEFERRED_RECOVERY_STOP_FAILED");
         }
         {
-            auto &root = capture_definition.units.front().program.definitions.at("root");
+            auto adjusted = std::make_shared<workflow::FlowProgram>(*capture_definition.units.front().program);
+            auto &root = adjusted->definitions.at("root");
             root.steps.at("checkpoint").guard = recognition::Request{
                 "capture-check", "1", {0, 0, 900, 1600},
                 recognition::CustomParameters{"WvdVision", nlohmann::json::object()}};
+            capture_definition.units.front().program = std::move(adjusted);
             capture_definition.request_id = "native-capture-stop";
             runtime::NativeRunCoordinator capture(data_root / "capture-runs");
             auto blocked = std::make_shared<BlockingBackend>();

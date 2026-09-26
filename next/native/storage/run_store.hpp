@@ -8,6 +8,10 @@
 #include <mutex>
 #include <map>
 #include <set>
+#include <atomic>
+#include <condition_variable>
+#include <optional>
+#include <thread>
 
 namespace wvd::storage {
 // 只有Context/Session填写归属；原因和业务ID永不参与路径拼接。
@@ -49,9 +53,11 @@ class RunStore {
              const nlohmann::json &frozen_definition,
              std::shared_ptr<const contracts::MonotonicClock> diagnostic_clock =
                  std::make_shared<contracts::SteadyClock>(), DiagnosticLimits limits = {});
+    ~RunStore();
     nlohmann::json save_diagnostic(const contracts::FrameEnvelope *frame,
                                   const DiagnosticRequest &request);
-    bool save_recent_frame(const contracts::FrameEnvelope &frame);
+    bool save_recent_frame(const contracts::FrameEnvelope &frame) noexcept;
+    void finish_recent_frames() noexcept;
     nlohmann::json diagnostic_summary() const;
     void note_diagnostic_hook_failure() noexcept;
     void save_events(const EventJournal &events);
@@ -83,6 +89,15 @@ class RunStore {
     bool diagnostic_closed_{}, diagnostic_directory_created_{};
     std::uint64_t diagnostic_directory_id_{};
     unsigned long diagnostic_volume_{};
+    // RunStore 唯一所有者：最多一个待处理帧和一个在途帧，丢弃仅影响辅助历史图。
+    std::mutex recent_mutex_;
+    std::condition_variable recent_wake_;
+    std::optional<contracts::FrameEnvelope> recent_pending_;
+    bool recent_closed_{};
+    std::atomic<std::uint64_t> recent_saved_{}, recent_dropped_{}, recent_failed_{}, recent_work_ns_{};
+    std::jthread recent_worker_;
+    void recent_loop() noexcept;
+    bool write_recent_frame(const contracts::FrameEnvelope &frame);
 };
 nlohmann::json snapshot_json(const contracts::RunSnapshot &snapshot);
 } // namespace wvd::storage

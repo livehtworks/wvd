@@ -10,6 +10,8 @@
 | `published/<request_id>/` | 本次编译封存的程序与资源身份；不可替代作者原文档。 | `publish_native` | 本次 `NativeRunDefinition` |
 | `active-snapshots/` | 运行时物化快照，供原生会话读取；不是用户编辑入口。 | Bundle 发布/租约 | 识别与诊断 |
 | `runs/<instance>/<run_id>/run.json`、`events.json`、`result.json` | 分别记录请求、活动事件和最终结果；只有 `result.json` 是持久化终态证据，`events.json` 不能反推业务完成。 | `RunStore`/`NativeRunCoordinator` | 工作台历史与诊断 |
+| `recent-frames/*.jpg` | 辅助滚动现场历史，不授权输入、不证明业务完成；至多每15秒提交一帧，沿用240张/128MiB保留上限。pending/in-flight各一张，共享不可变BGR。 | `RunStore`自有线程 | 用户与诊断 |
+| `runs/.../memory-matches.jsonl`及运行诊断文件 | 资源调查标量及必要故障证据，不是资源稳定或泄漏归因结论；普通采样限频，故障即时。 | Recognition/MemoryDiagnostics | 用户与诊断 |
 | `legacy-import/` | 首次导入时对旧配置的私有副本，不回写源 `config.json`。 | 显式初次导入 | `ProfileStore` 初始化 |
 
 候选目录的 `pack/`、`data/quest.json`、`web/` 是构建产物和只读输入，不能拿运行数据覆盖。历史 Maa 发布包及其诊断保留在旧目录或 Git 归档，只读展示，不作为新运行入口。当前结构以 `Application`、`ProfileStore`、`WorkflowRepository` 和 `RunStore` 的实际路径为准；旧阶段数据说明见 `archive/data-authority-maa-20260924.md`。

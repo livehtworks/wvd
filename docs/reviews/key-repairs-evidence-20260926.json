@@ -1,0 +1,889 @@
+{
+  "schema": 1,
+  "scope": "c1666a0关键修复：K01-K09/R01-R06；限定普通蝎女链，不外推全部任务、资源稳定或任意阻塞取消",
+  "baseline": "c1666a02b348e1641b8ab90ac98d024ea43dd824",
+  "work_package_sha256": "4a45789da557dfc05f1b65a54154751cd80a39d569db8d1e12442c8ba442d3d7",
+  "build_identity_at_package_time": {
+    "migration_baseline": "8f61540eafa61413852c2c3a85cb81c090e2161f",
+    "memory_work_package_baseline": "661069f5688253270d1b940e084ce19ceca01373",
+    "source_commit": "c1666a02b348e1641b8ab90ac98d024ea43dd824",
+    "worktree_dirty": true,
+    "worktree_diff_sha256": "363a71307852b676cd67216628d2555bd20872d1685abc547192f20b43054580",
+    "untracked_source_count": 3,
+    "built_at_utc": "2026-09-26T17:35:55.03423+08:00",
+    "engine": "wvd_native",
+    "status": "BUILT_NOT_GAME_ACCEPTED",
+    "exe_sha256": "69210c1440e843fa527db452e6e73e5b640a81b74ffc63af202b3f2845ddc123",
+    "web_index_sha256": "f4840e987923104f8dba88d43aaf7ab14abe0e854ceb5fb046d49e4724bdb5ea",
+    "pack_revision": "d1fa6662612dfd51ea50f3b31d4a3f31515f8e2fc38a74611cad867f434d9197",
+    "resource_catalog_sha256": "7aa5d2aa9fe22a1b219325fcc4e815f6d779370f9e5a26df6c8781d6722dd153",
+    "game_scope": "NOT_RUN_THIS_BUILD"
+  },
+  "native_source_files": [
+    {
+      "path": "next/native/app/application.cpp",
+      "sha256": "2253fb260123ca6b574bf0946dbdc68570ad3dae919571aeaa4c3b44a292a541"
+    },
+    {
+      "path": "next/native/contracts/run.hpp",
+      "sha256": "c311b1d251c72701bf1e85ba942c7ac172193e38279841bad901f0bb1fc2d3a8"
+    },
+    {
+      "path": "next/native/devices/adb_command.cpp",
+      "sha256": "bfeef7e7eb786974d641394e1044a929726d8d4f1c98aeff2a95ceacf0781613"
+    },
+    {
+      "path": "next/native/devices/adb_command.hpp",
+      "sha256": "cc1f0b4792433d9b99e1528402be23749beaadbd5abb9ac0e68c7e2f0ffd1923"
+    },
+    {
+      "path": "next/native/devices/android_context_query.hpp",
+      "sha256": "198f5a5a0aa51e2f85543c5d141fb75247311fcae4806add859c9617d4872449"
+    },
+    {
+      "path": "next/native/devices/android_probe.hpp",
+      "sha256": "35bafe9a7e4f6b936fa82e6bc71d412dff74179e146c146ae7d473ce40238623"
+    },
+    {
+      "path": "next/native/devices/device_session.cpp",
+      "sha256": "30759c3c8842233d4691277671fcd40d226f2b0dda37946966301353c2dc4d0c"
+    },
+    {
+      "path": "next/native/devices/native_input_gate.cpp",
+      "sha256": "cbfedb4b1b40da330ea5ba68cdfa61cd18a5af6adb57446b2bd564491a18ecbe"
+    },
+    {
+      "path": "next/native/devices/native_input_gate.hpp",
+      "sha256": "875db702ba0e6540ad7b518c006fb5dd3170f0878ff51f85d41ffc197ff74b7c"
+    },
+    {
+      "path": "next/native/devices/README.md",
+      "sha256": "0b661f651e701dfa564ca46f3855de89c6dd3a2116111b66039da4acbc86b306"
+    },
+    {
+      "path": "next/native/games/wvd/combat/turn.cpp",
+      "sha256": "9995214e0d67b7c1b4d87b88154769b69d8fc5424d10ca01ae91a1972518bb69"
+    },
+    {
+      "path": "next/native/games/wvd/native_operations.cpp",
+      "sha256": "933e80e16b4eb45458f55bfe311d7d8433f56d18ff2a77e3da20a81cbe9c358a"
+    },
+    {
+      "path": "next/native/games/wvd/recovery/boot.cpp",
+      "sha256": "31e6f1c2592ebab7120f12408f3750ffd0b2063984c630f08af0ce6fcb3f4175"
+    },
+    {
+      "path": "next/native/games/wvd/tasks/native_program.cpp",
+      "sha256": "00f154a210a88f695d15aaed65008bdc21f0034884488475342861bf275e541e"
+    },
+    {
+      "path": "next/native/games/wvd/tasks/pipeline_compiler.cpp",
+      "sha256": "136815755b0b46e3fdd079f5698f291ff41f876d34c1a4166c33e6c80bedeafb"
+    },
+    {
+      "path": "next/native/games/wvd/tasks/pipeline_compiler.hpp",
+      "sha256": "dd8048f68fe8d894948bd439ca7eebc389378a9f949d9dba3b40537672147d90"
+    },
+    {
+      "path": "next/native/games/wvd/vision/native_recognizers.cpp",
+      "sha256": "d9cbbb3eff2642b3a5f31eda9087a405caf8c390f20d73259b6d46a5db916ad8"
+    },
+    {
+      "path": "next/native/games/wvd/vision/native_recognizers.hpp",
+      "sha256": "38481e3dc3bedb733585ac3569e89bf2bdb2dee30bd9244f1540db71d8256bdf"
+    },
+    {
+      "path": "next/native/platform/execution_timing.hpp",
+      "sha256": "9b84afe03dc7cd987ef210f0a3cf651502356c91d009a845d0758cad48aa3d00"
+    },
+    {
+      "path": "next/native/platform/windows/memory_diagnostics.cpp",
+      "sha256": "3524791636054833b12304737b77b539ab1983bdaac95f682bd04ffa794fad58"
+    },
+    {
+      "path": "next/native/platform/windows/memory_diagnostics.hpp",
+      "sha256": "eeae2f36bf099c35280cdafe4875ace504967741c805f7656c136aa066bc639b"
+    },
+    {
+      "path": "next/native/recognition/resources.cpp",
+      "sha256": "321f15bcc20f8ac7850e8e6473f18aa09f1b8009a08708223fecfa7779786ce3"
+    },
+    {
+      "path": "next/native/recognition/resources.hpp",
+      "sha256": "2cd9faa01dc0667b341ccdfcbf6a7a88d2ba76aa702ee65e8756bc06a555e6ce"
+    },
+    {
+      "path": "next/native/recognition/service.cpp",
+      "sha256": "07236cbce33049571917b093595d90588df496e66f790208d1a55175f6d06678"
+    },
+    {
+      "path": "next/native/runtime/flow_executor_events.cpp",
+      "sha256": "3f34994b102889c534cf202b579deed1cf4fd08f9b83a7ca441a2e4f19560236"
+    },
+    {
+      "path": "next/native/runtime/flow_executor.cpp",
+      "sha256": "676caebb35fd3f35409956bc40e71590227cd522aa108a5fe478b169cab818f6"
+    },
+    {
+      "path": "next/native/runtime/flow_executor.hpp",
+      "sha256": "ce4b98aacebcdecac6342cf1d5bf4a1bfd846cd2cbfc53743778004bbd29e158"
+    },
+    {
+      "path": "next/native/runtime/native_execution_session.cpp",
+      "sha256": "f8c9dd0e375b6c6cfef43ad75ad9372ca53dc3f6ab2e8a734ee5cb0248a410af"
+    },
+    {
+      "path": "next/native/runtime/native_execution_session.hpp",
+      "sha256": "e1ca3b1de94b0494f0f2710c9727f1f3097de841af7d05c6236c04c2308e165c"
+    },
+    {
+      "path": "next/native/runtime/native_flow_ports.cpp",
+      "sha256": "b55ecf82498912048fd4f29fce45a5a90fdd41aad1e4da47180b67d57a28a9cb"
+    },
+    {
+      "path": "next/native/runtime/native_flow_ports.hpp",
+      "sha256": "9c836c3437bc969039903bfa01fb4327361c357383da3e1697af580ccf943d36"
+    },
+    {
+      "path": "next/native/runtime/native_run_coordinator.cpp",
+      "sha256": "ac87af189ee86e849ace9d31408ec6bad4420f00f24a5267e24cc7bc6e22b4ca"
+    },
+    {
+      "path": "next/native/runtime/native_run_coordinator.hpp",
+      "sha256": "6ca80e4004c96c80f0d889f3c449638f65c521fb3a4f8dd6b57604f53edd328e"
+    },
+    {
+      "path": "next/native/runtime/README.md",
+      "sha256": "a99abbf162a0f8032bb9d94554c2070350f5e12f938b9c94502642eaa5bbd4bd"
+    },
+    {
+      "path": "next/native/storage/README.md",
+      "sha256": "27260110f647507e61e0decc2b499bae5cf62639c9045b4cea9f53f8a5ecbbd2"
+    },
+    {
+      "path": "next/native/storage/run_store.cpp",
+      "sha256": "3450d88224f0e67839f97b4b3272b6c938e90c46a4d015d5d0660443c7296891"
+    },
+    {
+      "path": "next/native/storage/run_store.hpp",
+      "sha256": "0fa924fb8eaa586dcef5118d2f57ef651d0c29c84967b5e229d9488ea35f4d36"
+    },
+    {
+      "path": "next/native/workflow/program.cpp",
+      "sha256": "462da1ce9dab9197e498b7227d66a988f46c84b5424556244e8f3a254311926b"
+    },
+    {
+      "path": "next/native/workflow/program.hpp",
+      "sha256": "f6bd5e514e86a2f6a07dc77bb8a808726120a1a407e72e3df5481ee31d85b434"
+    },
+    {
+      "path": "next/native/workflow/serialization.cpp",
+      "sha256": "d33baf41a3f0b6d4785a22817f0a9cc6491ba675139b8cd2bf6ceb0044bb2ee3"
+    }
+  ],
+  "formal_program": {
+    "actor_budget": null,
+    "revision": "8e660377551066cda8df0e92e6ae9a3d6b9fe656d3c85f4594d9d035c182b0eb",
+    "battle_budget": null,
+    "definition_count": 40,
+    "network_budget": 180000,
+    "schema": 4,
+    "sha256": "e047020873849ddefe590484e43a999a578bf2e37a4c652f7c92c7697f6e30b0",
+    "bytes": 56997726,
+    "root_budget": 1780000,
+    "step_count": 5907,
+    "level_selected": {
+      "levels": [
+        {
+          "mode": "skill_level",
+          "level": 5,
+          "selected": true
+        }
+      ],
+      "node": "Task_FirstDungeon_Battle_Actor_Skill17Try0LevelSelected"
+    }
+  },
+  "final_stop": {
+    "run": {
+      "run_id": 1,
+      "state": "UserStopped",
+      "reason": "STOP_REQUESTED",
+      "quiescent": true,
+      "result_saved": true,
+      "details_complete": true,
+      "inputs": {
+        "accepted": 1,
+        "attempted": 1,
+        "backend_called": 1,
+        "cleanup_called": 1,
+        "rejected": 0
+      }
+    },
+    "observed_stop_ms": 232,
+    "before_step": "Boot_Entry",
+    "result": "<DATA_ROOT>/runs/C445C09B-5DD6-4432-8F98-1E459319611B/1/result.json",
+    "ordinary_story_input_observed": true,
+    "pending_inputs": 0
+  },
+  "final_run": {
+    "recent_frames": {
+      "dropped": 0,
+      "failed": 0,
+      "inflight_limit": 1,
+      "pending_limit": 1,
+      "saved": 50,
+      "worker_ns": 1370121700
+    },
+    "reason": "",
+    "quiescent": true,
+    "run_id": 2,
+    "level_steps": [
+      "Task_FirstDungeon_Battle_Actor_Skill17Try0LevelSelected"
+    ],
+    "events": [],
+    "elapsed_seconds": 776.4849113,
+    "session_summaries": [
+      {
+        "generation": 1,
+        "outcome": "Completed",
+        "details_complete": true
+      },
+      {
+        "generation": 2,
+        "outcome": "Completed",
+        "details_complete": true
+      },
+      {
+        "generation": 3,
+        "outcome": "Completed",
+        "details_complete": true
+      }
+    ],
+    "business": {
+      "active": false,
+      "completed_cycles": 1,
+      "hands": false,
+      "phase": 9,
+      "reports_remaining": 0,
+      "rest_due": true,
+      "transfer_pending": false,
+      "unit_matches": false
+    },
+    "raw_result_sha256": "53dd2a7bcabcf39be3d32cb29c017517e96ec7e6bcebe2ee7d7bf84403058802",
+    "resources": [
+      {
+        "active_matches": 0,
+        "cache_entries": 89,
+        "cache_evictable_bytes": 4306878,
+        "cache_in_use_bytes": 0,
+        "cache_live_bytes": 4306878,
+        "cache_maintenance_failed": false,
+        "cache_retained_bytes": 4306878,
+        "commit_limit_pages": 13874604,
+        "commit_peak_pages": 8072214,
+        "commit_total_pages": 7812721,
+        "decode_count": 89,
+        "diagnostic_write_failed": false,
+        "mask_build_count": 0,
+        "page_size": 4096,
+        "peak_estimated_workspace_bytes": 247416756,
+        "peak_matches": 2,
+        "peak_working_set_bytes": 853647360,
+        "physical_available_pages": 2323753,
+        "private_bytes": 404402176,
+        "process_memory_available": true,
+        "result_cache_entries": 4,
+        "result_cache_estimated_bytes": 4942,
+        "system_memory_available": true,
+        "working_set_bytes": 402677760
+      },
+      {
+        "active_matches": 0,
+        "cache_entries": 119,
+        "cache_evictable_bytes": 4729665,
+        "cache_in_use_bytes": 0,
+        "cache_live_bytes": 4729665,
+        "cache_maintenance_failed": false,
+        "cache_retained_bytes": 4729665,
+        "commit_limit_pages": 13874604,
+        "commit_peak_pages": 8179248,
+        "commit_total_pages": 7779298,
+        "decode_count": 119,
+        "diagnostic_write_failed": false,
+        "mask_build_count": 0,
+        "page_size": 4096,
+        "peak_estimated_workspace_bytes": 247416756,
+        "peak_matches": 2,
+        "peak_working_set_bytes": 853647360,
+        "physical_available_pages": 2398591,
+        "private_bytes": 414253056,
+        "process_memory_available": true,
+        "result_cache_entries": 4,
+        "result_cache_estimated_bytes": 4950,
+        "system_memory_available": true,
+        "working_set_bytes": 414400512
+      },
+      {
+        "active_matches": 0,
+        "cache_entries": 52,
+        "cache_evictable_bytes": 3145635,
+        "cache_in_use_bytes": 0,
+        "cache_live_bytes": 3145635,
+        "cache_maintenance_failed": false,
+        "cache_retained_bytes": 3145635,
+        "commit_limit_pages": 13874604,
+        "commit_peak_pages": 8179248,
+        "commit_total_pages": 7785788,
+        "decode_count": 52,
+        "diagnostic_write_failed": false,
+        "mask_build_count": 0,
+        "page_size": 4096,
+        "peak_estimated_workspace_bytes": 247416756,
+        "peak_matches": 2,
+        "peak_working_set_bytes": 853647360,
+        "physical_available_pages": 2467482,
+        "private_bytes": 414298112,
+        "process_memory_available": true,
+        "result_cache_entries": 4,
+        "result_cache_estimated_bytes": 4942,
+        "system_memory_available": true,
+        "working_set_bytes": 414461952
+      }
+    ],
+    "sessions": [
+      {
+        "generation": 1,
+        "performance": {
+          "accounted_ns": 251547294100,
+          "counts": {
+            "actual_matches": 5342,
+            "adb_clients": 270,
+            "business_predicates": 0,
+            "captures": 444,
+            "context_transactions": 26,
+            "frame_reuse": 180,
+            "leaf_cache_hits": 2420,
+            "overlay_checks": 451,
+            "overlay_reuse": 173
+          },
+          "exclusive_ns": {
+            "archive_submit": 1323000,
+            "budget_queue": 393700,
+            "capture_metadata": 32595687300,
+            "explicit_wait": 17302691000,
+            "input_delivery": 3686500,
+            "input_validation": 7253325200,
+            "json_events": 26003200,
+            "match": 145249737900,
+            "parallel_wait": 34998766500,
+            "pixel_capture": 5534750000,
+            "pixel_convert": 922169200,
+            "recognition_other": 7658760600
+          },
+          "skills": [],
+          "unattributed_ns": 777888400,
+          "wall_ns": 252325182500,
+          "worker_exclusive_ns": {
+            "archive_submit": 0,
+            "budget_queue": 10280003400,
+            "capture_metadata": 0,
+            "explicit_wait": 0,
+            "input_delivery": 0,
+            "input_validation": 0,
+            "json_events": 0,
+            "match": 39582253300,
+            "parallel_wait": 0,
+            "pixel_capture": 0,
+            "pixel_convert": 0,
+            "recognition_other": 0
+          },
+          "worker_times_additive_to_wall": false
+        }
+      },
+      {
+        "generation": 2,
+        "performance": {
+          "accounted_ns": 360228187600,
+          "counts": {
+            "actual_matches": 10022,
+            "adb_clients": 340,
+            "business_predicates": 20,
+            "captures": 354,
+            "context_transactions": 20,
+            "frame_reuse": 247,
+            "leaf_cache_hits": 7077,
+            "overlay_checks": 358,
+            "overlay_reuse": 243
+          },
+          "exclusive_ns": {
+            "archive_submit": 944900,
+            "budget_queue": 581200,
+            "capture_metadata": 41374275000,
+            "explicit_wait": 11631462200,
+            "input_delivery": 833268300,
+            "input_validation": 5583893900,
+            "json_events": 20670700,
+            "match": 236916671400,
+            "parallel_wait": 46245631400,
+            "pixel_capture": 4240733400,
+            "pixel_convert": 652062700,
+            "recognition_other": 12727992500
+          },
+          "skills": [
+            {
+              "accounted_ns": 33659139600,
+              "confirmed": true,
+              "counts": {
+                "actual_matches": 1155,
+                "adb_clients": 28,
+                "business_predicates": 20,
+                "captures": 22,
+                "context_transactions": 2,
+                "frame_reuse": 20,
+                "leaf_cache_hits": 513,
+                "overlay_checks": 22,
+                "overlay_reuse": 20
+              },
+              "exclusive_ns": {
+                "archive_submit": 73300,
+                "budget_queue": 89300,
+                "capture_metadata": 3487317600,
+                "explicit_wait": 454515900,
+                "input_delivery": 317500,
+                "input_validation": 566756600,
+                "json_events": 2092200,
+                "match": 25253962000,
+                "parallel_wait": 2237901800,
+                "pixel_capture": 271051000,
+                "pixel_convert": 42895700,
+                "recognition_other": 1342166700
+              },
+              "from": "Task_FirstDungeon_Battle_Actor_Prepare",
+              "to": "Task_FirstDungeon_Battle_Actor_Skill17Success",
+              "unattributed_ns": 20994800,
+              "wall_ns": 33680134400,
+              "worker_exclusive_ns": {
+                "archive_submit": 0,
+                "budget_queue": 1151185900,
+                "capture_metadata": 0,
+                "explicit_wait": 0,
+                "input_delivery": 0,
+                "input_validation": 0,
+                "json_events": 0,
+                "match": 2417167800,
+                "parallel_wait": 0,
+                "pixel_capture": 0,
+                "pixel_convert": 0,
+                "recognition_other": 0
+              },
+              "worker_times_additive_to_wall": false
+            }
+          ],
+          "unattributed_ns": 731176000,
+          "wall_ns": 360959363600,
+          "worker_exclusive_ns": {
+            "archive_submit": 0,
+            "budget_queue": 21022201300,
+            "capture_metadata": 0,
+            "explicit_wait": 0,
+            "input_delivery": 0,
+            "input_validation": 0,
+            "json_events": 0,
+            "match": 48585360000,
+            "parallel_wait": 0,
+            "pixel_capture": 0,
+            "pixel_convert": 0,
+            "recognition_other": 0
+          },
+          "worker_times_additive_to_wall": false
+        }
+      },
+      {
+        "generation": 3,
+        "performance": {
+          "accounted_ns": 161760743100,
+          "counts": {
+            "actual_matches": 3207,
+            "adb_clients": 177,
+            "business_predicates": 0,
+            "captures": 160,
+            "context_transactions": 15,
+            "frame_reuse": 116,
+            "leaf_cache_hits": 2110,
+            "overlay_checks": 160,
+            "overlay_reuse": 116
+          },
+          "exclusive_ns": {
+            "archive_submit": 435300,
+            "budget_queue": 271600,
+            "capture_metadata": 20622382700,
+            "explicit_wait": 3285780000,
+            "input_delivery": 1756900,
+            "input_validation": 4182261100,
+            "json_events": 8154300,
+            "match": 118660260100,
+            "parallel_wait": 6490202100,
+            "pixel_capture": 1959366600,
+            "pixel_convert": 303774600,
+            "recognition_other": 6246097800
+          },
+          "skills": [],
+          "unattributed_ns": 686436100,
+          "wall_ns": 162447179200,
+          "worker_exclusive_ns": {
+            "archive_submit": 0,
+            "budget_queue": 371026700,
+            "capture_metadata": 0,
+            "explicit_wait": 0,
+            "input_delivery": 0,
+            "input_validation": 0,
+            "json_events": 0,
+            "match": 8128928400,
+            "parallel_wait": 0,
+            "pixel_capture": 0,
+            "pixel_convert": 0,
+            "recognition_other": 0
+          },
+          "worker_times_additive_to_wall": false
+        }
+      }
+    ],
+    "state": "Completed",
+    "details_complete": true,
+    "route_steps": [
+      "Task_FirstDungeon_Route1_Entry",
+      "Task_FirstDungeon_Route1_CloseMap",
+      "Task_FirstDungeon_Route1_CloseMap@await",
+      "Task_FirstDungeon_Route1_Entry",
+      "Task_FirstDungeon_Route1_Ready",
+      "Task_FirstDungeon_Route1_Choose",
+      "Task_FirstDungeon_Route1_Choose@await",
+      "Task_FirstDungeon_Route1_Resume",
+      "Task_FirstDungeon_Route1_Choose@await",
+      "Task_FirstDungeon_Route1_Retreated",
+      "Task_FirstDungeon_Route1_Terminal"
+    ],
+    "result_saved": true,
+    "skills": [
+      {
+        "accounted_ns": 33659139600,
+        "confirmed": true,
+        "counts": {
+          "actual_matches": 1155,
+          "adb_clients": 28,
+          "business_predicates": 20,
+          "captures": 22,
+          "context_transactions": 2,
+          "frame_reuse": 20,
+          "leaf_cache_hits": 513,
+          "overlay_checks": 22,
+          "overlay_reuse": 20
+        },
+        "exclusive_ns": {
+          "archive_submit": 73300,
+          "budget_queue": 89300,
+          "capture_metadata": 3487317600,
+          "explicit_wait": 454515900,
+          "input_delivery": 317500,
+          "input_validation": 566756600,
+          "json_events": 2092200,
+          "match": 25253962000,
+          "parallel_wait": 2237901800,
+          "pixel_capture": 271051000,
+          "pixel_convert": 42895700,
+          "recognition_other": 1342166700
+        },
+        "from": "Task_FirstDungeon_Battle_Actor_Prepare",
+        "to": "Task_FirstDungeon_Battle_Actor_Skill17Success",
+        "unattributed_ns": 20994800,
+        "wall_ns": 33680134400,
+        "worker_exclusive_ns": {
+          "archive_submit": 0,
+          "budget_queue": 1151185900,
+          "capture_metadata": 0,
+          "explicit_wait": 0,
+          "input_delivery": 0,
+          "input_validation": 0,
+          "json_events": 0,
+          "match": 2417167800,
+          "parallel_wait": 0,
+          "pixel_capture": 0,
+          "pixel_convert": 0,
+          "recognition_other": 0
+        },
+        "worker_times_additive_to_wall": false
+      }
+    ],
+    "instance": "C445C09B-5DD6-4432-8F98-1E459319611B",
+    "completed_business_units": 3,
+    "inputs": {
+      "accepted": 61,
+      "attempted": 61,
+      "backend_called": 61,
+      "cleanup_called": 3,
+      "rejected": 0
+    },
+    "program": {
+      "device_id": "127.0.0.1:16448",
+      "engine_kind": "wvd_native",
+      "game_id": "wvd",
+      "handoff_parent": null,
+      "observed_read_only_viewport": false,
+      "pack_revision": "8e660377551066cda8df0e92e6ae9a3d6b9fe656d3c85f4594d9d035c182b0eb",
+      "program_revision": "8e660377551066cda8df0e92e6ae9a3d6b9fe656d3c85f4594d9d035c182b0eb",
+      "program_schema": 4,
+      "request_id": "b35e9731-22bc-4acb-861c-3de21acaf02e",
+      "unique_program_count": 1,
+      "unit_count": 3,
+      "unit_program_owners": [
+        0,
+        0,
+        0
+      ],
+      "viewport": "900x1600"
+    },
+    "result": "<DATA_ROOT>/runs/C445C09B-5DD6-4432-8F98-1E459319611B/2/result.json",
+    "inn_rest_completed": true,
+    "skill_success_consumed": true,
+    "final_scene": "RoyalCity",
+    "manual_inputs_during_formal_run": 0
+  },
+  "timing_arithmetic": [
+    {
+      "from": "Task_FirstDungeon_Battle_Actor_Prepare",
+      "to": "Task_FirstDungeon_Battle_Actor_Skill17Success",
+      "wall_ns": 33680134400,
+      "exclusive_sum_ns": 33659139600,
+      "accounted_ns": 33659139600,
+      "unattributed_ns": 20994800,
+      "exact_sum": true,
+      "worker_not_added": true
+    }
+  ],
+  "prior_budget_failure": {
+    "state": "Failed",
+    "recent_frames": {
+      "dropped": 0,
+      "failed": 0,
+      "inflight_limit": 1,
+      "pending_limit": 1,
+      "saved": 19,
+      "worker_ns": 423748700
+    },
+    "run_id": 1,
+    "quiescent": true,
+    "skill": [
+      {
+        "accounted_ns": 31428285000,
+        "confirmed": true,
+        "counts": {
+          "actual_matches": 1155,
+          "adb_clients": 28,
+          "business_predicates": 20,
+          "captures": 22,
+          "context_transactions": 2,
+          "frame_reuse": 20,
+          "leaf_cache_hits": 513,
+          "overlay_checks": 22,
+          "overlay_reuse": 20
+        },
+        "exclusive_ns": {
+          "archive_submit": 40100,
+          "budget_queue": 48100,
+          "capture_metadata": 3383908400,
+          "explicit_wait": 453426400,
+          "input_delivery": 161200,
+          "input_validation": 592282000,
+          "json_events": 1293500,
+          "match": 23838584800,
+          "parallel_wait": 1879476600,
+          "pixel_capture": 280737500,
+          "pixel_convert": 44477100,
+          "recognition_other": 953849300
+        },
+        "from": "Task_FirstDungeon_Battle_Actor_Prepare",
+        "to": "Task_FirstDungeon_Battle_Actor_Skill17Success",
+        "unattributed_ns": 13828200,
+        "wall_ns": 31442113200,
+        "worker_exclusive_ns": {
+          "archive_submit": 0,
+          "budget_queue": 912018000,
+          "capture_metadata": 0,
+          "explicit_wait": 0,
+          "input_delivery": 0,
+          "input_validation": 0,
+          "json_events": 0,
+          "match": 2033969700,
+          "parallel_wait": 0,
+          "pixel_capture": 0,
+          "pixel_convert": 0,
+          "recognition_other": 0
+        },
+        "worker_times_additive_to_wall": false
+      }
+    ],
+    "instance": "E5870061-3194-433D-B8C1-28973BABBFA6",
+    "result_saved": true,
+    "reason": "FLOW_INVOCATION_TIMEOUT:Task_FirstDungeon_Battle_Entry",
+    "details_complete": true,
+    "inputs": {
+      "accepted": 22,
+      "attempted": 22,
+      "backend_called": 22,
+      "cleanup_called": 2,
+      "rejected": 0
+    },
+    "exe_sha256": "dd626725586d9137c52921a3fb8a39f9e8a659156ffca391d443066894d7dc43",
+    "result": "<DATA_ROOT>/runs/E5870061-3194-433D-B8C1-28973BABBFA6/1/result.json",
+    "dedicated_fault_png": false
+  },
+  "prior_navigation_failure": {
+    "result_saved": true,
+    "step_tail": [
+      "Task_FirstDungeon_Route1_CloseMap@await",
+      "Task_FirstDungeon_Route1_Entry",
+      "Task_FirstDungeon_Route1_Ready",
+      "Task_FirstDungeon_Route1_Choose",
+      "Task_FirstDungeon_Route1_Choose@await",
+      "Task_FirstDungeon_Route1_Resume",
+      "Task_FirstDungeon_Route1_RecoveryRequired"
+    ],
+    "inputs": {
+      "accepted": 44,
+      "attempted": 44,
+      "backend_called": 44,
+      "cleanup_called": 2,
+      "rejected": 0
+    },
+    "details_complete": true,
+    "quiescent": true,
+    "recent_frames": {
+      "dropped": 0,
+      "failed": 0,
+      "inflight_limit": 1,
+      "pending_limit": 1,
+      "saved": 35,
+      "worker_ns": 856491300
+    },
+    "instance": "7B9146D7-3B9A-4D1A-8C5B-8901E96319AE",
+    "resources": {
+      "active_matches": 0,
+      "cache_entries": 118,
+      "cache_evictable_bytes": 4710477,
+      "cache_in_use_bytes": 0,
+      "cache_live_bytes": 4710477,
+      "cache_maintenance_failed": false,
+      "cache_retained_bytes": 4710477,
+      "commit_limit_pages": 13874604,
+      "commit_peak_pages": 8072214,
+      "commit_total_pages": 7802808,
+      "decode_count": 118,
+      "diagnostic_write_failed": false,
+      "mask_build_count": 0,
+      "page_size": 4096,
+      "peak_estimated_workspace_bytes": 247416756,
+      "peak_matches": 2,
+      "peak_working_set_bytes": 875040768,
+      "physical_available_pages": 2571127,
+      "private_bytes": 424935424,
+      "process_memory_available": true,
+      "result_cache_entries": 4,
+      "result_cache_estimated_bytes": 4946,
+      "system_memory_available": true,
+      "working_set_bytes": 422051840
+    },
+    "state": "Failed",
+    "skills": [
+      {
+        "accounted_ns": 27933830200,
+        "confirmed": true,
+        "counts": {
+          "actual_matches": 1155,
+          "adb_clients": 28,
+          "business_predicates": 20,
+          "captures": 22,
+          "context_transactions": 2,
+          "frame_reuse": 20,
+          "leaf_cache_hits": 513,
+          "overlay_checks": 22,
+          "overlay_reuse": 20
+        },
+        "exclusive_ns": {
+          "archive_submit": 53300,
+          "budget_queue": 59900,
+          "capture_metadata": 3366010600,
+          "explicit_wait": 453945000,
+          "input_delivery": 205600,
+          "input_validation": 575821700,
+          "json_events": 1288200,
+          "match": 20435177300,
+          "parallel_wait": 1723935800,
+          "pixel_capture": 258038700,
+          "pixel_convert": 34427000,
+          "recognition_other": 1084867100
+        },
+        "from": "Task_FirstDungeon_Battle_Actor_Prepare",
+        "to": "Task_FirstDungeon_Battle_Actor_Skill17Success",
+        "unattributed_ns": 13882200,
+        "wall_ns": 27947712400,
+        "worker_exclusive_ns": {
+          "archive_submit": 0,
+          "budget_queue": 850033300,
+          "capture_metadata": 0,
+          "explicit_wait": 0,
+          "input_delivery": 0,
+          "input_validation": 0,
+          "json_events": 0,
+          "match": 1855632800,
+          "parallel_wait": 0,
+          "pixel_capture": 0,
+          "pixel_convert": 0,
+          "recognition_other": 0
+        },
+        "worker_times_additive_to_wall": false
+      }
+    ],
+    "reason": "navigation.auto_route.budget_exhausted",
+    "run_id": 2,
+    "completed_business_units": 1,
+    "exe_sha256": "1dbe4a5d8d1688a76164ae84b2f9d9282b16463cf32bc1bc193e0d997c31e0be",
+    "result": "<DATA_ROOT>/runs/7B9146D7-3B9A-4D1A-8C5B-8901E96319AE/2/result.json",
+    "dedicated_fault_png": false,
+    "investigation_image": "next/.local/repair-c1666a0-20260926/navigation-harken-20260926.png",
+    "harken_probe_scores": [
+      0.9999814629554749,
+      1
+    ]
+  },
+  "prior_startup_story_gap": {
+    "exe_sha256": "6d6e7c3b59f02e4115bfac35822f16aae45d635afd768bba6e9640c72363fe70",
+    "state": "UserStopped",
+    "result": "<DATA_ROOT>/runs/301EC7F8-21B5-4A37-BDB7-9ECCC2AA776F/2/result.json",
+    "ordinary_story_was_not_handled": true,
+    "default_dialogue_meaning": "known options only; not ordinary continue"
+  },
+  "not_observed": [
+    "network_overlay_exit",
+    "maintenance",
+    "special_dialogue_choice",
+    "diagnostic_allocation_failure",
+    "permanent_native_wait_cancellation",
+    "permanent_disk_block"
+  ],
+  "resource_status": "RESOURCE_UNRESOLVED",
+  "performance_status": "MEASURED_NOT_PROVEN_FASTER",
+  "test_scope": {
+    "production_release_built": true,
+    "capture_host_built": true,
+    "coordinator_helper_compiled_not_run": true,
+    "vue_unchanged": true,
+    "no_full_test_matrix": true,
+    "no_fault_injection": true,
+    "no_long_resource_test": true
+  },
+  "final_scene_image": {
+    "path": "next/.local/repair-c1666a0-20260926/final-city-20260926.png",
+    "sha256": "8bf47f4cb5e3186e067822f7a33e46184bff609839fe4c782b7d1edd4e2b79b9"
+  },
+  "no_commit_or_push_at_acceptance": true
+}

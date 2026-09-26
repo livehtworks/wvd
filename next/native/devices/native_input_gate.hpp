@@ -28,6 +28,7 @@ class NativeInputGate final {
     bool stopped() const { return stopped_.load(); }
     bool cleanup();
     bool current(const contracts::FrameIdentity &identity) const;
+    bool reusable(const contracts::FrameIdentity &identity) const;
     contracts::FrameIdentity current_identity() const;
     std::uint64_t action_epoch() const;
     contracts::InputCounts counts() const;

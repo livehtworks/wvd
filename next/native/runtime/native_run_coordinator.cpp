@@ -64,9 +64,16 @@ contracts::RunSnapshot NativeRunCoordinator::start(
             definition.total_time_limit > 0ms &&
             definition.total_time_limit <= std::chrono::hours{24},
             "NATIVE_RUN_DEFINITION_INVALID");
+    std::set<const workflow::FlowProgram *> validated;
+    nlohmann::json program_owners = nlohmann::json::array();
+    std::map<const workflow::FlowProgram *, std::size_t> owner_ids;
     for (const auto &unit : definition.units) {
-        unit.program.validate();
-        require(unit.program.revision == unit.bundle.revision &&
+        require(bool(unit.program), "NATIVE_PROGRAM_OWNER_MISSING");
+        if (validated.insert(unit.program.get()).second) unit.program->validate();
+        const auto [owner, inserted] = owner_ids.emplace(unit.program.get(), owner_ids.size());
+        (void)inserted;
+        program_owners.push_back(owner->second);
+        require(unit.program->revision == unit.bundle.revision &&
                 !unit.checkpoint_source_path.empty() && unit.time_limit > 0ms &&
                 unit.time_limit <= std::chrono::minutes{30},
                 "NATIVE_RUN_UNIT_INVALID");
@@ -86,8 +93,11 @@ contracts::RunSnapshot NativeRunCoordinator::start(
     const nlohmann::json frozen{{"engine_kind", "wvd_native"},
                                 {"request_id", definition.request_id},
                                 {"unit_count", definition.units.size()},
+                                {"program_schema", workflow::FlowProgram::schema},
+                                {"unique_program_count", owner_ids.size()},
+                                {"unit_program_owners", program_owners},
                                 {"handoff_parent", definition.handoff_parent},
-                                {"program_revision", definition.units.front().program.revision},
+                                {"program_revision", definition.units.front().program->revision},
                                 {"device_id", definition.policy.device_id},
                                 {"game_id", definition.policy.game_id},
                                 {"pack_revision", definition.policy.pack_revision},
@@ -114,7 +124,9 @@ contracts::RunSnapshot NativeRunCoordinator::start(
     try {
         worker_ = std::jthread([this, definition = std::move(definition),
                                 backend = std::move(backend)] {
-            drive(definition, backend);
+            // 参数转换和最后的落盘也在边界内；异常不能逸出 jthread 入口。
+            try { drive(definition, backend); }
+            catch (...) { worker_failed(backend); }
         });
     } catch (...) {
         std::lock_guard lock(mutex_);
@@ -130,14 +142,42 @@ contracts::RunSnapshot NativeRunCoordinator::start(
     return snapshot();
 }
 
+void NativeRunCoordinator::worker_failed(
+    const std::shared_ptr<devices::DeviceBackend> &backend) noexcept {
+    stop_.store(true);
+    bool released = false;
+    try {
+        std::shared_ptr<NativeExecutionSession> session;
+        { std::lock_guard lock(mutex_); session = session_; }
+        if (session) session->request_stop();
+    } catch (...) {}
+    try { released = backend && backend->release_owned_inputs(); } catch (...) {}
+    try { if (store_) store_->finish_recent_frames(); } catch (...) {}
+    try {
+        std::lock_guard lock(mutex_);
+        snapshot_.state = contracts::RunState::Failed;
+        snapshot_.quiescent = released;
+        snapshot_.result_saved = false;
+        snapshot_.details_complete = false;
+        // 不在极端内存不足路径组装 JSON；既有未决输入快照原样保留。
+        try { snapshot_.reason = "WORKER_ABORT"; } catch (...) {}
+        execution_finished_ = true;
+        terminal_recorded_ = true; // 工作线程已结束；result_saved=false 单独表达未落盘。
+        active_ = !released;
+        if (released) lease_.reset();
+        session_.reset();
+    } catch (...) { /* 控制面不得被异常穿透；没有写出 Completed。 */ }
+    complete_.notify_all();
+}
+
 void NativeRunCoordinator::publish_state(contracts::RunState state, std::string reason) {
     std::lock_guard lock(mutex_);
     snapshot_.state = state;
     if (!reason.empty()) snapshot_.reason = std::move(reason);
 }
 
-void NativeRunCoordinator::drive(NativeRunDefinition definition,
-                                 std::shared_ptr<devices::DeviceBackend> backend) noexcept {
+void NativeRunCoordinator::drive(const NativeRunDefinition &definition,
+                                 const std::shared_ptr<devices::DeviceBackend> &backend) {
     contracts::SessionResult last;
     std::unique_ptr<contracts::BusinessRunState> business;
     std::string failure;
@@ -252,6 +292,7 @@ void NativeRunCoordinator::drive(NativeRunDefinition definition,
                     {"decode_count", resources.decode_count},
                     {"mask_build_count", resources.mask_build_count},
                     {"cache_entries", resources.entries},
+                    {"cache_maintenance_failed", resources.cache_maintenance_failed},
                     {"result_cache_entries", resources.result_cache_entries},
                     {"result_cache_estimated_bytes", resources.result_cache_estimated_bytes},
                     {"active_matches", resources.active_matches}, {"peak_matches", resources.peak_matches},
@@ -271,7 +312,9 @@ void NativeRunCoordinator::drive(NativeRunDefinition definition,
                     std::lock_guard lock(mutex_);
                     session_.reset();
                     snapshot_.active_event = nullptr;
-                    if (!result.unresolved_input) snapshot_.unresolved_inputs = nlohmann::json::array();
+                    snapshot_.details_complete = snapshot_.details_complete && result.details_complete;
+                    if (result.details_complete && !result.unresolved_input)
+                        snapshot_.unresolved_inputs = nlohmann::json::array();
                     snapshot_.inputs.attempted += result.inputs.attempted;
                     snapshot_.inputs.accepted += result.inputs.accepted;
                     snapshot_.inputs.rejected += result.inputs.rejected;
@@ -279,29 +322,40 @@ void NativeRunCoordinator::drive(NativeRunDefinition definition,
                     snapshot_.inputs.cleanup_called += result.inputs.cleanup_called;
                 }
                 quiescent = quiescent && result.inputs_released;
-                last = session_result(result, unit.program, generation,
+                last = session_result(result, *unit.program, generation,
                     checkpoint_seen ? unit.checkpoint_source_path : std::string{}, *business);
                 event("session.ended", {{"flow_state", static_cast<int>(result.flow.state)},
                     {"flow_code", result.flow.code}, {"cleanup_error", result.cleanup_error},
                     {"inputs_released", result.inputs_released},
-                    {"unresolved_input", result.unresolved_input}});
+                    {"unresolved_input", result.unresolved_input},
+                    {"performance", result.performance},
+                    {"details_complete", result.details_complete}});
                 if (result.flow.state == TickState::Completed && checkpoint_seen &&
-                    !result.unresolved_input && result.inputs_released) {
+                    !result.unresolved_input && result.inputs_released && result.details_complete) {
                     std::lock_guard lock(mutex_);
                     ++snapshot_.completed_business_units;
                     snapshot_.business = business->summary();
                     snapshot_.sessions.push_back({{"generation", generation},
                         {"engine_kind", "wvd_native"}, {"outcome", "Completed"},
+                        {"details_complete", result.details_complete}, {"performance", result.performance},
                         {"checkpoint", unit.checkpoint_source_path}});
                     break;
                 }
-                failure = result.flow.state == TickState::Completed && !checkpoint_seen
+                failure = !result.details_complete ? "NATIVE_RESULT_DETAILS_INCOMPLETE"
+                    : result.flow.state == TickState::Completed && !checkpoint_seen
                     ? "NATIVE_BUSINESS_CHECKPOINT_MISSING"
                     : result.unresolved_input ? "NATIVE_INPUT_RESULT_UNCONFIRMED"
                     : !result.inputs_released ? "NATIVE_INPUT_CLEANUP_PENDING"
                     : result.flow.code;
+                {
+                    std::lock_guard lock(mutex_);
+                    snapshot_.sessions.push_back({{"generation", generation}, {"engine_kind", "wvd_native"},
+                        {"outcome", "NotCompleted"}, {"flow_state", static_cast<int>(result.flow.state)},
+                        {"flow_code", result.flow.code}, {"details_complete", result.details_complete},
+                        {"unresolved_input", result.unresolved_input}, {"performance", result.performance}});
+                }
                 // 外部维护/输入结果未知不是重启理由，禁止进入自动生命周期恢复。
-                if (stop_ || !quiescent || result.unresolved_input ||
+                if (stop_ || !quiescent || result.unresolved_input || !result.details_complete ||
                     result.flow.state == TickState::BusinessFailed ||
                     result.flow.state == TickState::ExternalBlocked || !definition.recovery ||
                     recovery_attempt >= 3) break;
@@ -383,7 +437,7 @@ void NativeRunCoordinator::drive(NativeRunDefinition definition,
             ? contracts::RunState::Completed : contracts::RunState::Failed;
     if (last.end == contracts::SessionEnd::BusinessFailed)
         terminal.outcome_category = "business_failed";
-    if (!stop_ && quiescent && business && definition.handoff_ready) {
+    if (!stop_ && quiescent && terminal.details_complete && business && definition.handoff_ready) {
         try {
             if (definition.handoff_ready(last, *business)) {
                 terminal.state = contracts::RunState::Interrupted;
@@ -399,6 +453,7 @@ void NativeRunCoordinator::drive(NativeRunDefinition definition,
     }
     if (!quiescent && terminal.reason.empty()) terminal.reason = "NATIVE_CLEANUP_PENDING";
     terminal.result_saved = true;
+    store_->finish_recent_frames();
     try {
         journal_->commit_terminal(terminal.generation, storage::snapshot_json(terminal),
             [&](const nlohmann::json &events) {

@@ -41,6 +41,8 @@ class FlowPorts {
                                     const std::optional<contracts::Observation> &observation,
                                     const std::string &source_path) = 0;
     virtual bool cancelled() const = 0;
+    // 未实现复用能力的端口始终重新观察；正式端口还检查输入门禁的身份和 TTL。
+    virtual bool reusable(const contracts::FrameIdentity &) const { return false; }
 };
 enum class TickState { Progress, Waiting, Completed, BusinessFailed, Failed, ExternalBlocked, Cancelled };
 struct TickResult {
@@ -62,6 +64,8 @@ class FlowExecutor final {
     nlohmann::json progress_snapshot() const;
     std::size_t invocation_depth() const { return stack_.size(); }
     bool has_unresolved_input() const;
+    bool is_operation(const std::string &binding, const std::string &operation) const;
+    bool operation_advanced() const { return !stack_.empty() && stack_.back().next_pending && !stack_.back().error_pending; }
 
   private:
     using Clock = std::chrono::steady_clock;
@@ -90,11 +94,17 @@ class FlowExecutor final {
         std::size_t owner{};
     };
     struct Frame {
+        struct InputSelection {
+            std::string predecessor;
+            Clock::time_point entered_at;
+            bool error_pending{};
+        };
         std::string definition;
         std::string current;
         std::map<std::string, int> hits;
         std::map<std::string, Clock::time_point> phase_deadlines;
         Clock::time_point invoked_at;
+        std::optional<Clock::time_point> invocation_deadline;
         Clock::time_point entered_at;
         Clock::time_point next_event_poll{};
         std::optional<Clock::time_point> delay_until;
@@ -103,6 +113,7 @@ class FlowExecutor final {
         bool error_pending{};
         std::optional<contracts::FrameEnvelope> selected_frame;
         std::optional<contracts::Observation> selected_observation;
+        std::optional<InputSelection> input_selection;
         std::optional<ScopedEvent> event;
         std::optional<PendingInput> pending;
         std::vector<EventExit> event_exits;
@@ -117,10 +128,18 @@ class FlowExecutor final {
     Clock::time_point accounted_at_;
     std::vector<Frame> stack_;
     TickResult terminal_{TickState::Progress};
+    struct ObservationCycle {
+        contracts::FrameEnvelope frame;
+        std::optional<std::string> clear_overlay_scope;
+    };
+    std::optional<ObservationCycle> observation_cycle_;
+    contracts::FrameEnvelope observation_frame();
+    void invalidate_observation();
 
     const workflow::Step &step() const;
     TickResult progress() const;
-    TickResult waiting(std::chrono::milliseconds delay) const;
+    TickResult waiting(std::chrono::milliseconds delay);
+    TickResult reconsider_unsubmitted_input(Frame &frame);
     TickResult fail(std::string code);
     TickResult business_fail(std::string reason, std::string source);
     TickResult return_business_failure(const std::string &reason);

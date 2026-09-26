@@ -1,4 +1,5 @@
 #include "resources.hpp"
+#include "platform/execution_timing.hpp"
 #include "platform/windows/memory_diagnostics.hpp"
 #include <algorithm>
 #include <chrono>
@@ -33,6 +34,7 @@ MatchBudget::Ticket &MatchBudget::Ticket::operator=(Ticket &&other) noexcept {
 MatchBudget::Ticket::~Ticket() { if (owner_) owner_->release(bytes_); }
 MatchBudget::Ticket MatchBudget::acquire(std::uint64_t bytes,
                                          const std::atomic<bool> &cancelled) {
+    platform::timing::Scope measure(platform::timing::Part::Queue);
     std::unique_lock lock(mutex_);
     // 超目标单项等待其他票据退出后独占。短间隔唤醒兜住跨 Service 取消。
     while ((bytes > target_ ? active_ != 0 : used_ > target_ - bytes) && !cancelled)
@@ -126,33 +128,45 @@ void DecodedAssetCache::Lease::release() noexcept {
 }
 const cv::Mat &DecodedAssetCache::Lease::mat() const { return asset_->pixels; }
 DecodedAssetCache::DecodedAssetCache(std::uint64_t target) : target_(target) {}
-void DecodedAssetCache::trim_after_release() {
-    std::lock_guard lock(mutex_);
-    trim_locked();
+void DecodedAssetCache::trim_after_release() noexcept {
+    try {
+        std::lock_guard lock(mutex_);
+        trim_locked();
+    } catch (...) {
+        // 析构路径不允许抛出；异常事实保留，下一次装载拒绝继续使用异常缓存。
+        maintenance_failed_.store(true);
+    }
 }
-void DecodedAssetCache::trim_locked() {
+void DecodedAssetCache::trim_locked() noexcept {
     while (retained_ > target_ && !lru_.empty()) {
         auto candidate = lru_.end();
+        auto entry_it = entries_.end();
         for (auto cursor = lru_.end(); cursor != lru_.begin();) {
             --cursor;
-            const auto &entry = entries_.at(*cursor);
+            const auto found = entries_.find(*cursor);
+            if (found == entries_.end() || !found->second->asset) {
+                maintenance_failed_.store(true);
+                return;
+            }
+            const auto &entry = found->second;
             if (!entry->waiters && !entry->asset->borrowers.load()) {
                 candidate = cursor;
+                entry_it = found;
                 break;
             }
         }
         if (candidate == lru_.end()) break;
-        const auto key = *candidate;
-        auto entry = entries_.at(key);
-        retained_ -= entry->asset->bytes;
+        // 全部使用已找到的迭代器，不复制 string、不调用可能抛 out_of_range 的 at。
+        // 活动租约不会被驱逐；像素释放由 Asset 最后持有者负责。
+        retained_ -= entry_it->second->asset->bytes;
         lru_.erase(candidate);
-        entries_.erase(key);
-        // 已借用的像素由租约继续持有；删除 LRU 键不代表底层缓冲已释放。
+        entries_.erase(entry_it);
     }
 }
 DecodedAssetCache::Lease DecodedAssetCache::load(const std::string &key,
                                                  const std::function<cv::Mat()> &decode,
                                                  const std::atomic<bool> *cancelled) {
+    if (maintenance_failed_.load()) throw ResourcePressure("ASSET_CACHE_MAINTENANCE_FAILED");
     std::shared_ptr<Entry> entry;
     bool loader = false;
     {
@@ -218,9 +232,10 @@ ResourceStats DecodedAssetCache::stats() const {
     result.retained_bytes = retained_;
     result.in_use_bytes = counters_->borrowed.load();
     result.live_bytes = counters_->live.load();
-    for (const auto &[key, entry] : entries_)
-        if (entry->asset && !entry->asset->borrowers.load())
-            result.evictable_bytes += entry->asset->bytes;
+    // trim_locked 不驱逐活动租约，借用像素属于 retained 的子集。
+    // release 可并发减少 borrowed；这是有界标量快照，不为每次匹配遍历全部条目。
+    result.evictable_bytes = retained_ - std::min(retained_, result.in_use_bytes);
+    result.cache_maintenance_failed = maintenance_failed_.load();
     result.decode_count = decodes_;
     result.mask_build_count = mask_builds_;
     result.entries = entries_.size();

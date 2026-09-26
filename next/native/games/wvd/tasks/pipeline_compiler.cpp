@@ -188,6 +188,9 @@ void CompiledWorkflow::validate() const {
     require(!kind.empty() && nodes.is_object() && nodes.contains(entry) && nodes.contains(terminal),
             "COMPILE_ENTRY_INVALID");
     require(event_scopes.is_object(), "COMPILE_EVENT_SCOPE_INVALID");
+    for (const auto &[entry, budget] : definition_budgets)
+        require(nodes.contains(entry) && budget.count() > 0 && budget <= std::chrono::minutes{30},
+                "COMPILE_DEFINITION_BUDGET_INVALID");
     for (const auto &[name, scope] : event_scopes.items()) {
         require(nodes.contains(name), "COMPILE_EVENT_SCOPE_INVALID");
         (void)scope_rules(scope);
@@ -201,6 +204,11 @@ void CompiledWorkflow::validate() const {
         if (!reached.insert(name).second)
             return;
         const auto &node = nodes.at(name);
+        if (node.value("pure_business_guard", false))
+            require(node.value("operation", "Route") == "Route" &&
+                node.value("observation", "") == "Registered" &&
+                node.at("observation_args").value("mode", "") == "business",
+                "COMPILE_BUSINESS_GUARD_INVALID");
         require(node.value("max_hit", 0) >= 1 && node.value("max_hit", 0) <= 256,
                 "COMPILE_UNBOUNDED_NODE");
         const auto action = node.value("operation", "Route");
@@ -355,6 +363,11 @@ void CompiledWorkflow::refresh_images() {
 PipelineCompiler::PipelineCompiler(std::string kind, std::chrono::milliseconds time_limit) {
     workflow_.kind = std::move(kind);
     workflow_.time_limit = time_limit;
+    workflow_.declared_budget = time_limit;
+}
+PipelineCompiler::PipelineCompiler(std::string kind)
+    : PipelineCompiler(std::move(kind), std::chrono::milliseconds{60000}) {
+    workflow_.declared_budget.reset();
 }
 J PipelineCompiler::image(const std::string &name) {
     // 保留旧普通模板默认 0.8，不以降低阈值代替导航界面确认。
@@ -403,6 +416,11 @@ void PipelineCompiler::observe(const std::string &name, const J &condition, J ne
                {"roi", {0, 0, 900, 1600}},
                {"operation", "Route"},
                {"next", std::move(next)}});
+}
+void PipelineCompiler::observe_business(const std::string &name, const J &condition, J next) {
+    require(condition.is_object() && condition.value("mode", "") == "business", "COMPILE_BUSINESS_GUARD_INVALID");
+    observe(name, condition, std::move(next));
+    workflow_.nodes.at(name)["pure_business_guard"] = true;
 }
 void PipelineCompiler::observe_ocr(const std::string &name,
                                    const std::vector<std::string> &expected, J roi, J next) {
@@ -514,7 +532,7 @@ void PipelineCompiler::compile_interruption() {
         const auto action = node.value("binding", "");
         if (action == "RequireRecovery")
             continue;
-        if (node.value("observation", "") == "Registered")
+        if (node.value("observation", "") == "Registered" && !node.value("pure_business_guard", false))
             node["observation_args"] = all({clear, node.at("observation_args")});
         if (action == "Input") {
             auto &p = node["operation_args"];
@@ -602,6 +620,10 @@ std::string PipelineCompiler::append(const std::string &prefix, const CompiledWo
         }
     }
     use_dialogue(child.dialogue_policy);
+    if (child.declared_budget)
+        workflow_.definition_budgets.insert_or_assign(prefix + "_" + child.entry, *child.declared_budget);
+    for (const auto &[entry, budget] : child.definition_budgets)
+        workflow_.definition_budgets.emplace(prefix + "_" + entry, budget);
     require(normal_exits.is_object(), "COMPILE_EXIT_BINDINGS_INVALID");
     for (const auto &[name, successors] : normal_exits.items())
         require(child.nodes.contains(name) && child.nodes.at(name).value("binding", "") == "RequireRecovery" &&
@@ -668,7 +690,9 @@ std::string PipelineCompiler::define_child(const std::string &prefix, const Comp
         require(name != "RecoveryRequired" && !returns.contains(name), "COMPILE_CHILD_RETURN_INVALID");
         returns[name] = {prefix + "_" + child.terminal};
     }
-    return append(prefix, child, J::array(), returns);
+    const auto entry = append(prefix, child, J::array(), returns);
+    if (child.declared_budget) workflow_.definition_budgets.insert_or_assign(entry, *child.declared_budget);
+    return entry;
 }
 void PipelineCompiler::call_child(const std::string &name, const std::string &entry, J next) {
     require(!entry.empty(), "COMPILE_CHILD_ENTRY_INVALID");

@@ -1,4 +1,5 @@
 #include "native_input_gate.hpp"
+#include "platform/execution_timing.hpp"
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
 #include <stdexcept>
@@ -118,6 +119,7 @@ InputReceipt NativeInputGate::submit(const contracts::Command &command,
                                       const contracts::Observation &scene,
                                       const contracts::Observation &target,
                                       const contracts::Box &area) {
+    platform::timing::Scope measure(platform::timing::Part::InputValidation);
     std::lock_guard dispatch(dispatch_mutex_);
     if (stopped()) return {InputDisposition::Rejected, 0, {}, "STOP_REQUESTED"};
     contracts::FrameIdentity frame;
@@ -206,6 +208,10 @@ bool NativeInputGate::current(const contracts::FrameIdentity &identity) const {
 contracts::FrameIdentity NativeInputGate::current_identity() const {
     std::lock_guard lock(mutex_);
     return last_frame_;
+}
+bool NativeInputGate::reusable(const contracts::FrameIdentity &identity) const {
+    return current(identity) && (policy_.max_frame_age.count() <= 0 ||
+        std::chrono::steady_clock::now() - identity.captured_at <= policy_.max_frame_age);
 }
 std::uint64_t NativeInputGate::action_epoch() const {
     std::lock_guard lock(mutex_);

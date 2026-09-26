@@ -1,10 +1,23 @@
 #include "flow_executor.hpp"
+#include "platform/execution_timing.hpp"
 #include <algorithm>
 #include <limits>
 #include <stdexcept>
 
 namespace wvd::runtime {
-namespace { using namespace std::chrono_literals; }
+namespace {
+using namespace std::chrono_literals;
+nlohmann::json request_key(const recognition::Request &request) {
+    nlohmann::json key{{"id", request.recognizer_id}, {"revision", request.parameter_revision},
+        {"roi", {request.roi.x, request.roi.y, request.roi.width, request.roi.height}}};
+    if (const auto *custom = std::get_if<recognition::CustomParameters>(&request.parameters))
+        key["parameters"] = {{"binding", custom->binding}, {"value", custom->parameters}};
+    else if (const auto *image = std::get_if<recognition::TemplateParameters>(&request.parameters))
+        key["parameters"] = {{"image", image->image}, {"threshold", image->threshold}};
+    else key["parameters"] = std::get<recognition::OcrParameters>(request.parameters).expected_text;
+    return key;
+}
+}
 
 void FlowExecutor::account_event_time() {
     const auto now = Clock::now();
@@ -17,7 +30,9 @@ void FlowExecutor::account_event_time() {
         if (!descendant_event && frame.event_exits.empty()) continue;
         // 使用布尔“处于暂停区间”，不按事件深度乘 elapsed。
         frame.entered_at += elapsed;
+        if (frame.input_selection) frame.input_selection->entered_at += elapsed;
         frame.paused_event_time += elapsed;
+        if (frame.invocation_deadline) *frame.invocation_deadline += elapsed;
         if (frame.pending) frame.pending->event_pause += elapsed;
         if (frame.delay_until) *frame.delay_until += elapsed;
         for (auto &[name, deadline] : frame.phase_deadlines) { (void)name; deadline += elapsed; }
@@ -41,13 +56,37 @@ std::vector<FlowExecutor::ScopedEvent> FlowExecutor::effective_events(const work
 std::optional<TickResult> FlowExecutor::poll_wait_events(Frame &frame, const workflow::Step &current) {
     if (effective_events(current).empty() || Clock::now() < frame.next_event_poll) return std::nullopt;
     frame.next_event_poll = Clock::now() + 100ms; // 轮询节奏，不是页面变化的期限。
-    const auto image = ports_.capture();
+    invalidate_observation();
+    const auto image = observation_frame();
     frame.selected_frame.reset(); frame.selected_observation.reset();
     if (auto result = check_events(frame, current, image, workflow::EventClass::Overlay)) return result;
     return check_events(frame, current, image, workflow::EventClass::Encounter);
 }
 std::optional<TickResult> FlowExecutor::check_events(Frame &frame, const workflow::Step &current,
     const contracts::FrameEnvelope &image, workflow::EventClass category) {
+    const auto rules = effective_events(current);
+    std::string scope_key;
+    if (category == workflow::EventClass::Overlay && frame.event_exits.empty() && observation_cycle_) {
+        nlohmann::json key = nlohmann::json::array();
+        for (const auto &scoped : rules) {
+            const auto &rule = scoped.rule;
+            if (rule.category != category) continue;
+            key.push_back({{"owner", scoped.owner}, {"id", rule.id}, {"detect", request_key(rule.detect)},
+                {"priority", rule.priority}, {"disposition", static_cast<int>(rule.disposition)},
+                {"handler", rule.handler_definition}, {"resume", static_cast<int>(rule.resume)},
+                {"replan", rule.replan_step}, {"reason", rule.reason},
+                {"exit_ms", rule.exit_budget.count()}, {"ambiguity_ms", rule.ambiguity_budget.count()},
+                {"resume_guard", rule.resume_guard ? request_key(*rule.resume_guard) : nlohmann::json(nullptr)}});
+        }
+        for (const auto &active : stack_)
+            if (active.event) key.push_back({{"active", active.event->rule.id}});
+        scope_key = key.dump();
+        if (observation_cycle_->frame.identity == image.identity &&
+            observation_cycle_->clear_overlay_scope == scope_key) {
+            platform::timing::count(platform::timing::Counter::OverlayReuse);
+            return std::nullopt;
+        }
+    }
     bool exiting = false;
     if (category == workflow::EventClass::Overlay && !frame.event_exits.empty()) {
         for (auto it = frame.event_exits.begin(); it != frame.event_exits.end();) {
@@ -61,7 +100,6 @@ std::optional<TickResult> FlowExecutor::check_events(Frame &frame, const workflo
             } else it = frame.event_exits.erase(it);
         }
     }
-    const auto rules = effective_events(current);
     std::vector<const ScopedEvent *> hits;
     int priority = std::numeric_limits<int>::min();
     for (const auto &scoped : rules) {
@@ -73,6 +111,7 @@ std::optional<TickResult> FlowExecutor::check_events(Frame &frame, const workflo
             return active.event && active.event->rule.id == rule.id;
         })) continue;
         const auto observation = ports_.recognize(image, rule.detect);
+        platform::timing::count(platform::timing::Counter::OverlayChecks);
         if (observation.outcome == contracts::RecognitionOutcome::Error)
             return fail(observation.error_code.empty() ? "EVENT_RECOGNITION_ERROR" : observation.error_code);
         if (observation.outcome == contracts::RecognitionOutcome::NoHit) continue;
@@ -97,6 +136,9 @@ std::optional<TickResult> FlowExecutor::check_events(Frame &frame, const workflo
             frame.selected_frame.reset(); frame.selected_observation.reset();
             return waiting(50ms);
         }
+        // 只复用完全检查过的 NoHit；Error、歧义和退出等待永不缓存为“安全”。
+        if (!scope_key.empty() && observation_cycle_ && observation_cycle_->frame.identity == image.identity)
+            observation_cycle_->clear_overlay_scope = std::move(scope_key);
         return std::nullopt;
     }
     const auto selected = *hits.front();
@@ -106,9 +148,11 @@ std::optional<TickResult> FlowExecutor::check_events(Frame &frame, const workflo
     Frame handler;
     handler.definition = definition.id; handler.current = definition.entry;
     handler.invoked_at = handler.entered_at = Clock::now();
+    if (definition.cumulative_budget) handler.invocation_deadline = handler.invoked_at + *definition.cumulative_budget;
     handler.hits[definition.entry] = 1; handler.event = selected;
     frame.selected_frame.reset(); frame.selected_observation.reset();
     account_event_time();
+    invalidate_observation();
     stack_.push_back(std::move(handler));
     return progress();
 }
@@ -118,7 +162,7 @@ TickResult FlowExecutor::resume_event(Frame &frame, const workflow::Step &curren
     if (!resume.rule.resume_guard) return fail("EVENT_RESUME_GUARD_MISSING");
     if (frame.event_exits.empty() && Clock::now() - frame.entered_at >= current.time_limit)
         return route_error(frame, current, "EVENT_RESUME_UNCONFIRMED");
-    const auto image = ports_.capture();
+    const auto image = observation_frame();
     if (auto event = check_events(frame, current, image, workflow::EventClass::Overlay)) return *event;
     for (std::size_t i = resume.owner; i < stack_.size(); ++i) {
         const auto &pending = stack_[i].pending;
@@ -168,8 +212,10 @@ TickResult FlowExecutor::resume_event(Frame &frame, const workflow::Step &curren
     ++target.hits[found->first];
     target.next_pending = target.error_pending = false;
     target.selected_frame.reset(); target.selected_observation.reset();
+    target.input_selection.reset();
     target.resume.reset(); target.delay_until.reset(); target.event_exits.clear();
     target.entered_at = Clock::now(); // 仅新步骤起点，phase_deadlines 与全任务期限不重置。
+    invalidate_observation();
     return progress();
 }
 } // namespace wvd::runtime

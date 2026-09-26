@@ -38,8 +38,10 @@ inline std::string probe_command(const std::string &fixed_command, const std::st
     // 通道断开或超时必须明确报告，缺尾标绝不视为命令成功。
     return "(" + fixed_command + ") 2>&1; __wvd_rc=$?; printf '\\n" + marker + "%d\\n' \"$__wvd_rc\"";
 }
-inline ShellReply parse_shell_reply(const std::string &raw, const std::string &marker) {
-    if (raw.size() > 2 * 1024 * 1024 || marker.empty()) throw std::runtime_error("ADB_PROBE_OUTPUT_INVALID");
+inline ShellReply parse_shell_reply(const std::string &raw, const std::string &marker,
+                                    std::size_t output_limit = 2 * 1024 * 1024) {
+    if (!output_limit || output_limit > 8ULL * 1024 * 1024 || raw.size() > output_limit || marker.empty())
+        throw std::runtime_error("ADB_PROBE_OUTPUT_INVALID");
     const auto last = raw.rfind("\n" + marker);
     if (last == std::string::npos || raw.find(marker) != last + 1)
         throw std::runtime_error("ADB_PROBE_TRAILER_MISSING_OR_DUPLICATE");

@@ -18,7 +18,8 @@
 
 namespace wvd::runtime {
 struct NativeUnit {
-    workflow::FlowProgram program;
+    // 相同发布图只持有一份；各 Session 的游标、次数和事件栈仍完全独立。
+    std::shared_ptr<const workflow::FlowProgram> program;
     recognition::Bundle bundle;
     recognition::Handlers recognizers;
     std::string checkpoint_source_path;
@@ -26,6 +27,11 @@ struct NativeUnit {
 };
 
 struct NativeRunDefinition {
+    NativeRunDefinition() = default;
+    NativeRunDefinition(const NativeRunDefinition &) = delete;
+    NativeRunDefinition &operator=(const NativeRunDefinition &) = delete;
+    NativeRunDefinition(NativeRunDefinition &&) = default;
+    NativeRunDefinition &operator=(NativeRunDefinition &&) = default;
     std::string request_id;
     nlohmann::json handoff_parent = nullptr;
     contracts::InputPolicy policy;
@@ -63,8 +69,10 @@ class NativeRunCoordinator final {
     std::filesystem::path run_directory() const;
 
   private:
-    void drive(NativeRunDefinition definition,
-               std::shared_ptr<devices::DeviceBackend> backend) noexcept;
+    // definition 由线程闭包拥有，drive 只借用；严禁在线程入口再复制整图。
+    void drive(const NativeRunDefinition &definition,
+               const std::shared_ptr<devices::DeviceBackend> &backend);
+    void worker_failed(const std::shared_ptr<devices::DeviceBackend> &backend) noexcept;
     void publish_state(contracts::RunState state, std::string reason = {});
     const std::filesystem::path data_root_;
     const std::string instance_id_;

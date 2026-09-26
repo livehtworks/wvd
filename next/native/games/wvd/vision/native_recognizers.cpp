@@ -1,4 +1,5 @@
 #include "native_recognizers.hpp"
+#include "platform/execution_timing.hpp"
 #include "dialogue_probes.hpp"
 #include "native_asset_resolver.hpp"
 #include "bobber.hpp"
@@ -140,14 +141,21 @@ J match(const cv::Mat &source, cv::Mat templ, J p, recognition::Cache &cache,
             check(cv::countNonZero(mask) > 0, "WVD_MASK_EMPTY");
             return mask;
         }, cache.cancelled);
+        platform::timing::Scope measure(platform::timing::Part::Match);
+        platform::timing::count(platform::timing::Counter::Matches);
         cv::matchTemplate(search, templ, scores, cv::TM_CCORR_NORMED, mask_lease.mat());
     } else if (grayscale) {
         cv::Mat gray_search, gray_template;
         cv::cvtColor(search, gray_search, cv::COLOR_BGR2GRAY);
         cv::cvtColor(templ, gray_template, cv::COLOR_BGR2GRAY);
+        platform::timing::Scope measure(platform::timing::Part::Match);
+        platform::timing::count(platform::timing::Counter::Matches);
         cv::matchTemplate(gray_search, gray_template, scores, cv::TM_CCOEFF_NORMED);
-    } else
+    } else {
+        platform::timing::Scope measure(platform::timing::Part::Match);
+        platform::timing::count(platform::timing::Counter::Matches);
         cv::matchTemplate(search, templ, scores, cv::TM_CCOEFF_NORMED);
+    }
     const auto match_finished = std::chrono::steady_clock::now();
     for (int y = 0; y < scores.rows; ++y)
         for (int x = 0; x < scores.cols; ++x)
@@ -234,7 +242,20 @@ J layout(const cv::Mat &source) {
                     false);
 }
 struct EvaluationMemo {
+    // values 只放本轮新增叶子。父 memo/帧缓存始终只读，主线程在 parallel_for_ 返回后合并。
     std::map<std::string, J> values;
+    const EvaluationMemo *parent{};
+    const std::map<std::string, J> *frame_values{};
+    std::string frame_prefix;
+    const J *find(const std::string &key) const {
+        if (const auto it = values.find(key); it != values.end()) return &it->second;
+        if (parent) return parent->find(key);
+        if (frame_values) {
+            const auto it = frame_values->find(frame_prefix + key);
+            if (it != frame_values->end()) return &it->second;
+        }
+        return nullptr;
+    }
     // 语法树深度不等于正在并行。阻塞反证之后的纯子树也可同步分片，
     // 但已经进入分片的工作项不能再启动嵌套并行。
     bool in_parallel{};
@@ -266,13 +287,28 @@ J evaluate_impl(const recognition::Bundle &bundle, recognition::Pixels pixels, c
                 recognition::Cache &cache, unsigned depth, EvaluationMemo &memo) {
     check(depth <= 8, "WVD_CONDITION_DEPTH");
     auto identity = p;
-    // boot探针显式填写默认阈值，死亡/对话反证往往省略；二者模板计算语义相同。
-    // 只规范已确定的默认值，不合并ROI来源、不同阈值或不同预处理。
-    if (identity.value("mode", "") == "template" && !identity.contains("threshold"))
-        identity["threshold"] = .8;
+    // 普通单最佳匹配的测量值与最终阈值无关。复用 score/box，不能复用旧 Hit/NoHit。
+    // ROI、预处理、缩放、遮罩和其它参数仍全部参与身份；multiple 不进入此路径。
+    const bool single_template = identity.value("mode", "") == "template" &&
+        !identity.value("multiple", false);
+    const double threshold = single_template ? p.value("threshold", .8) : .8;
+    if (single_template) {
+        check(std::isfinite(threshold) && threshold >= 0 && threshold <= 1, "THRESHOLD_INVALID");
+        identity.erase("threshold");
+    }
     const auto key = identity.dump();
-    if (const auto found = memo.values.find(key); found != memo.values.end())
-        return found->second;
+    if (const auto *measured = memo.find(key)) {
+        platform::timing::count(platform::timing::Counter::CacheHits);
+        auto reused = *measured;
+        if (single_template) {
+            auto &evidence = reused.at("evidence");
+            const bool hit = evidence.at("best_score").get<double>() >= threshold;
+            reused["outcome"] = hit ? "Hit" : "NoHit";
+            reused["box"] = hit ? evidence.at("best_box") : J(nullptr);
+            evidence["threshold"] = threshold;
+        }
+        return reused;
+    }
     auto result = evaluate_uncached(bundle, pixels, p, bound, scope, cache, depth, memo);
     // 只缓存小型、无时序副作用的叶子证据；多框 JSON 不能变成第二份无界帧缓存。
     if (p.value("mode", "") == "template" && memo.values.size() < 256 &&
@@ -310,7 +346,7 @@ ProbeBatch evaluate_batch(const recognition::Bundle &bundle, recognition::Pixels
     std::vector<EvaluationMemo> worker_memos(partitions);
     for (auto &worker : worker_memos) {
         worker.in_parallel = true;
-        worker.values = memo.values;
+        worker.parent = &memo; // 外层同步等待期间不修改父 memo，不复制历史 JSON。
     }
     for (auto &worker : workers) {
         worker.decoded = cache.decoded;
@@ -321,7 +357,10 @@ ProbeBatch evaluate_batch(const recognition::Bundle &bundle, recognition::Pixels
         worker.frame_key = cache.frame_key;
     }
     std::atomic<bool> resource_failure{false};
+    auto *metrics = platform::timing::active;
+    platform::timing::Scope parallel_time(platform::timing::Part::ParallelWait);
     cv::parallel_for_(cv::Range(0, partitions), [&](const cv::Range &range) {
+        platform::timing::Bind bind(metrics, true);
         for (int worker = range.start; worker < range.end; ++worker)
             for (std::size_t i = worker; i < probes.size(); i += partitions) {
                 if (resource_failure || scope.cancelled()) break;
@@ -342,6 +381,7 @@ ProbeBatch evaluate_batch(const recognition::Bundle &bundle, recognition::Pixels
                 }
             }
     }, partitions);
+    parallel_time.finish();
     if (resource_failure)
         for (const auto &error : batch.errors)
             if (error) {
@@ -358,7 +398,7 @@ ProbeBatch evaluate_batch(const recognition::Bundle &bundle, recognition::Pixels
     // 避免其内部深度校验/时序状态被缓存绕过。异常不缓存，仍由消费顺序传播。
     for (const auto &worker : worker_memos)
         for (const auto &[key, value] : worker.values)
-            if (J::parse(key).value("mode", "") == "template")
+            if (memo.values.size() < 256 && !memo.find(key))
                 memo.values.try_emplace(key, value);
     // 有序候选只消费优先级到达的结果/异常；all/any 调用者必须消费全部结果。
     return batch;
@@ -1334,8 +1374,8 @@ J evaluate(const recognition::Bundle &bundle, recognition::Pixels pixels, const 
         bound.value("resource_locale", ""), bound.value("dialogue_task", ""),
         area.x, area.y, area.width, area.height}).dump() + ":";
     EvaluationMemo memo;
-    for (const auto &[key, value] : cache.template_results)
-        if (key.starts_with(prefix)) memo.values.emplace(key.substr(prefix.size()), value);
+    memo.frame_values = &cache.template_results;
+    memo.frame_prefix = prefix;
     auto result = evaluate_impl(bundle, pixels, p, bound, scope, cache, 0, memo);
     for (const auto &[key, value] : memo.values) {
         const auto full_key = prefix + key;
@@ -1349,13 +1389,17 @@ J evaluate(const recognition::Bundle &bundle, recognition::Pixels pixels, const 
     return result;
 }
 } // namespace
-recognition::Handlers native_handlers(const J &aliases, const std::string &resource_locale) {
-    return {{"WvdVision", [aliases, resource_locale](const recognition::Bundle &bundle,
+recognition::Handlers native_handlers(const J &aliases, const std::string &resource_locale,
+                                      recovery::DialoguePolicy dialogue_policy) {
+    // 仅从冻结编译结果接收；运行期间不重读活动配置，也不根据任务名猜测策略。
+    const auto dialogue_task = recovery::dialogue_policy_name(dialogue_policy);
+    return {{"WvdVision", [aliases, resource_locale, dialogue_task](const recognition::Bundle &bundle,
                                      recognition::Pixels pixels, const J &parameters,
                                      const recognition::Scope &scope,
                                      recognition::Cache &cache) {
         return evaluate(bundle, pixels, parameters,
-            {{"aliases", aliases}, {"resource_locale", resource_locale}}, scope, cache);
+            {{"aliases", aliases}, {"resource_locale", resource_locale},
+             {"dialogue_task", dialogue_task}}, scope, cache);
     }}};
 }
 } // namespace wvd::games::vision

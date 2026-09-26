@@ -1,4 +1,5 @@
 #include "service.hpp"
+#include "platform/execution_timing.hpp"
 #include "platform/windows/bundle_lease.hpp"
 #include <algorithm>
 #include <cmath>
@@ -181,6 +182,8 @@ contracts::Observation Service::evaluate_locked(const FramePixels &pixels, const
         cv::Mat scores;
         try {
             ticket = cache_.match_budget->acquire(estimated, cancelled_);
+            platform::timing::Scope measure(platform::timing::Part::Match);
+            platform::timing::count(platform::timing::Counter::Matches);
             cv::matchTemplate(pixels.mat()(rect(request.roi)), image, scores,
                               cv::TM_CCOEFF_NORMED);
         } catch (const std::bad_alloc &) { diagnostic.failure(-1); throw; }

@@ -90,6 +90,7 @@ nlohmann::json serialize(const FlowProgram &program) {
                     {"delay_after_ms", step.delay_after.count()}, {"max_hit", step.max_hit},
                     {"handles_business_failure", step.handles_business_failure}};
             if (step.guard) entry["guard"] = request(*step.guard);
+            if (step.business_guard) entry["business_guard"] = *step.business_guard;
             entry["disabled_events"] = step.disabled_events;
             entry["events"] = J::array();
             for (const auto &rule : step.event_policy)
@@ -98,6 +99,8 @@ nlohmann::json serialize(const FlowProgram &program) {
         }
         definitions[id] = {{"id", definition.id}, {"entry", definition.entry},
                            {"steps", std::move(steps)}};
+        definitions[id]["cumulative_budget_ms"] = definition.cumulative_budget
+            ? J(definition.cumulative_budget->count()) : J(nullptr);
     }
     return {{"program_schema", FlowProgram::schema}, {"engine_kind", program.engine_kind},
             {"revision", program.revision}, {"root_definition", program.root_definition},

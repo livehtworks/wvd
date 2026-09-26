@@ -1,5 +1,7 @@
 #include "device_session.hpp"
+#include "platform/execution_timing.hpp"
 #include "android_viewport.hpp"
+#include "android_context_query.hpp"
 #include "platform/windows/metadata_query.hpp"
 #include "platform/windows/mumu_binding.hpp"
 #include "platform/windows/path_utf8.hpp"
@@ -130,6 +132,8 @@ std::string DeviceSession::foreground(std::stop_token stop) {
 }
 
 RawFrame DeviceSession::capture_impl(bool preview, std::stop_token stop) {
+    namespace timing = platform::timing;
+    timing::Scope capture_time(timing::Part::Capture);
     if (stop.stop_requested()) throw std::runtime_error("CAPTURE_CANCELLED");
     require(connected_, "DEVICE_NOT_CONNECTED");
     const auto started = std::chrono::steady_clock::now();
@@ -138,6 +142,7 @@ RawFrame DeviceSession::capture_impl(bool preview, std::stop_token stop) {
     if (!fast_failed_ && capture_host_) {
         try {
             const auto raw = capture_host_->capture(3000ms, stop);
+            timing::Scope convert_time(timing::Part::Convert);
             const cv::Mat rgba(raw.height, raw.width, CV_8UC4,
                                const_cast<std::uint8_t *>(raw.rgba_bottom_up.data()));
             cv::cvtColor(rgba, bgr, cv::COLOR_RGBA2BGR);
@@ -154,6 +159,7 @@ RawFrame DeviceSession::capture_impl(bool preview, std::stop_token stop) {
     }
     if (bgr.empty()) {
         auto png = adb_.screenshot_png(8000ms, stop);
+        timing::Scope convert_time(timing::Part::Convert);
         bgr = cv::imdecode(png, cv::IMREAD_COLOR);
         require(!bgr.empty(), "ADB_CAPTURE_DECODE_FAILED");
         backend = "ADB_PNG";
@@ -161,9 +167,11 @@ RawFrame DeviceSession::capture_impl(bool preview, std::stop_token stop) {
     require(bgr.cols > 0 && bgr.rows > 0 && bgr.isContinuous(),
             "CAPTURE_PIXELS_INVALID");
     const auto finished = std::chrono::steady_clock::now();
+    capture_time.finish();
     const contracts::Size size{bgr.cols, bgr.rows};
     if (metadata_at_ == std::chrono::steady_clock::time_point{} ||
         finished - metadata_at_ > 1000ms || latest_size_ != size) {
+        timing::Scope metadata_time(timing::Part::Metadata);
         latest_foreground_ = foreground(stop);
         latest_rotation_ = -1;
         try {
@@ -173,8 +181,10 @@ RawFrame DeviceSession::capture_impl(bool preview, std::stop_token stop) {
             if (viewport && viewport->size == size) latest_rotation_ = viewport->rotation;
         } catch (...) { latest_rotation_ = -1; }
         latest_size_ = size;
-        metadata_at_ = finished;
+        // finished 是像素就绪时刻，不是元数据完成时刻；不能把慢查询本身算成缓存年龄。
+        metadata_at_ = std::chrono::steady_clock::now();
     }
+    timing::Scope payload_time(timing::Part::Convert);
     auto payload = std::make_shared<std::vector<std::uint8_t>>(
         bgr.data, bgr.data + bgr.total() * bgr.elemSize());
     RawFrame frame;
@@ -204,26 +214,41 @@ bool DeviceSession::context_matches(const contracts::FrameIdentity &identity,
 }
 bool DeviceSession::context_matches(const contracts::FrameIdentity &identity,
                                      const std::string &application, std::stop_token stop) {
+    platform::timing::Scope measure(platform::timing::Part::InputValidation);
     if (stop.stop_requested() || !connected_ || !identity.frame_id || identity.connection_generation != generation_ ||
         identity.device_id != adb_.serial() || identity.display_rotation < 0 ||
-        identity.foreground_application != application || application.empty() ||
-        !adb_.connected(stop) || foreground(stop) != application)
+        identity.foreground_application != application || application.empty())
         return false;
-    const auto input = query("dumpsys input", 5000, stop);
-    const auto viewport = input.exit_code == 0
-        ? android::input_viewport(input.output) : std::nullopt;
-    return viewport && viewport->size == identity.raw_size &&
-        viewport->rotation == identity.display_rotation &&
+    // 成功的带返回码事务本身证明 transport 可达；不再单独启动 adb get-state。
+    // 保留前台 -> viewport -> 前台的原安全顺序，不把它冒充设备端原子快照。
+    platform::timing::count(platform::timing::Counter::ContextTransactions);
+    const auto answer = adb_.shell_fixed(std::string(android::context_probe_command),
+        20000ms, stop, 8ULL * 1024 * 1024);
+    if (stop.stop_requested() || answer.exit_code != 0) return false;
+    const auto sections = android::parse_context_dump(answer.output);
+    if (!sections) return false;
+    const auto before = android::focus(std::string(sections->before_focus));
+    const auto viewport = android::input_viewport(std::string(sections->input));
+    const auto after = android::focus(std::string(sections->after_focus));
+    const bool valid = before == application && after == application && viewport &&
+        viewport->size == identity.raw_size && viewport->rotation == identity.display_rotation &&
         identity.viewport_id == std::to_string(viewport->size.width) + "x" +
                                 std::to_string(viewport->size.height) &&
-        !stop.stop_requested() && foreground(stop) == application &&
-        generation_ == identity.connection_generation;
+        !stop.stop_requested() && connected_ && generation_ == identity.connection_generation;
+    if (valid) {
+        latest_foreground_ = after;
+        latest_size_ = viewport->size;
+        latest_rotation_ = viewport->rotation;
+        metadata_at_ = std::chrono::steady_clock::now();
+    }
+    return valid;
 }
 
 bool DeviceSession::execute(const contracts::Command &command) {
     return execute(command, {});
 }
 bool DeviceSession::execute(const contracts::Command &command, std::stop_token stop) {
+    platform::timing::Scope measure(platform::timing::Part::InputDelivery);
     if (stop.stop_requested()) return false;
     require(connected_ && latest_size_.width > 0 && latest_size_.height > 0,
             "DEVICE_INPUT_NOT_READY");

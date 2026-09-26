@@ -56,11 +56,11 @@ class MemoryDiagnostics {
     friend class Slot;
     struct Record { std::atomic<bool> busy{false}; Context context; MemorySample memory; };
     void write(unsigned index, const char *event, int code) noexcept;
-    std::array<Record, 4> records_{};
+    std::array<Record, 16> records_{}; // 最多4路匹配及嵌套解码的固定标量槽，不保存像素。
     HANDLE file_{INVALID_HANDLE_VALUE};
     std::mutex write_mutex_;
     std::atomic<bool> write_failed_{false};
-    std::atomic<std::uint64_t> starts_{0};
+    std::atomic<std::uint64_t> next_sample_ms_{0};
     std::atomic<std::uint64_t> sampled_peak_private_{0};
     const std::uint64_t run_id_, generation_;
 };

@@ -6,6 +6,7 @@
 #include "games/wvd/vision/harken_probes.hpp"
 #include "games/wvd/vision/download_probes.hpp"
 #include "games/wvd/vision/network_probes.hpp"
+#include "games/wvd/vision/dialogue_probes.hpp"
 
 namespace wvd::games::recovery {
 namespace {
@@ -45,18 +46,41 @@ tasks::CompiledWorkflow retry_network_prompt() {
     }
     graph.hit_limit("Entry", 24);
     graph.hit_limit("Settle", 20);
-    return graph.finish();
+    auto result = graph.finish();
+    // 子图被 define_child 后，节点 timeout 不等于整次调用的累计预算。
+    // 复用已有阶段计时：只有外层入口签发，内部 Entry 循环不能刷新180秒。
+    const std::string begin = "NetworkBudgetBegin", end = "NetworkBudgetEnd";
+    const std::string phase = "wvd.network-retry";
+    if (result.nodes.contains(begin) || result.nodes.contains(end))
+        throw std::runtime_error("NETWORK_BUDGET_NODE_CONFLICT");
+    for (auto &node : result.nodes)
+        for (const auto *field : {"next", "on_error"})
+            if (node.contains(field))
+                for (auto &edge : node[field])
+                    if (edge == result.terminal) edge = end;
+    result.nodes[begin] = {{"operation", "Registered"}, {"binding", "BeginObservationPhase"},
+        {"operation_args", {{"phase", phase}, {"budget_ms", 180000}}},
+        {"next", {result.entry}}, {"on_error", {"RecoveryRequired"}},
+        {"pre_delay", 0}, {"post_delay", 0}, {"rate_limit", 50}, {"timeout", 180000}, {"max_hit", 1}};
+    result.nodes[end] = {{"operation", "Registered"}, {"binding", "EndObservationPhase"},
+        {"operation_args", {{"phase", phase}}}, {"next", {result.terminal}},
+        {"on_error", {"RecoveryRequired"}}, {"pre_delay", 0}, {"post_delay", 0},
+        {"rate_limit", 50}, {"timeout", 180000}, {"max_hit", 1}};
+    result.entry = begin;
+    result.validate();
+    return result;
 }
 tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, DialoguePolicy policy = DialoguePolicy::Default) {
     C graph(common ? "recovery.common_screens" : "recovery.boot_ready", std::chrono::seconds{120});
     graph.use_dialogue(policy);
     const auto task_stop = task_stop_condition(policy);
     const auto panel = C::any({C::image("trait"), C::image("recover")});
+    const auto story = vision::ordinary_story_page();
     // 选择加护后会先到哈肯楼层菜单；交还调用者决定是否“歸還”，
     // 通用弹窗层不能把稳定菜单继续当作未处理的阻塞页轮询。
     const J ready = C::all({common ? C::any({J{{"mode", "boot_ready"}}, panel, C::image("RiseAgain"),
         vision::harken_floor_menu()}) : J{{"mode", "boot_ready"}},
-                           C::absent(J{{"mode", "blocking_screen"}})});
+                           C::absent(J{{"mode", "blocking_screen"}}), C::absent(story)});
     const auto title = scoped("boot_title_logo", {100, 300, 700, 470}, .86);
     // 首次免责声明跟随系统区域设置，游戏主体即使配置为英文也可能显示繁中。
     const auto attention = C::any({scoped("boot_attention", {250, 430, 420, 220}, .86),
@@ -78,8 +102,8 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, Dialogue
     // 这里只等待离开刚处理的提示；它不是“游戏就绪”的证据。
     // recognized 包含当前提示，不能放进 any 后把页面未变化认作进展。
     const auto progressed = [](const J &current) { return C::absent(current); };
-    J entry = common ? J{"NetworkZhHant", "DownloadZhHant", "DownloadEn", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title", "Pause", "Death", "Sandman", "Blessing", "Karma", "Dialogue", "Defeat", "Ready", "Poll"}
-                     : J{"Ready", "NetworkZhHant", "DownloadZhHant", "DownloadEn", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title", "Pause", "Sandman", "Blessing", "Karma", "Dialogue", "Poll"};
+    J entry = common ? J{"NetworkZhHant", "DownloadZhHant", "DownloadEn", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title", "Pause", "Death", "Sandman", "Blessing", "Karma", "Dialogue", "Story", "Defeat", "Ready", "Poll"}
+                     : J{"Ready", "NetworkZhHant", "DownloadZhHant", "DownloadEn", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title", "Pause", "Sandman", "Blessing", "Karma", "Dialogue", "Story", "Poll"};
     if (policy != DialoguePolicy::Default) {
         entry.insert(entry.begin(), "SpecialDialogue");
         const auto special = graph.define_child("SpecialChoice", choose_special_dialogue(policy));
@@ -94,6 +118,11 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, Dialogue
         graph.observe("TaskStop", task_stop, {"Terminal"});
     }
     graph.route("Entry", entry);
+    // 启动时也可能留在城市普通剧情；只复用已确认的继续箭头，
+    // ordinary_story_page 排除选项页，不能由城市背景提前宣布 Ready。
+    graph.click("Story", story, vision::story_advance_arrow(), C::any({story, ready}), {"Entry"});
+    graph.delay_after("Story", 2000);
+    graph.hit_limit("Story", 12);
     graph.observe("NetworkZhHant", vision::network_prompt_zh_hant(), {"HandleNetwork"});
     const auto network = graph.define_child("Network", retry_network_prompt());
     graph.call_child("HandleNetwork", network, {"Entry"});

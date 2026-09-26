@@ -47,23 +47,38 @@ void MemoryDiagnostics::Slot::finish() noexcept {
     owner_ = nullptr;
 }
 void MemoryDiagnostics::Slot::failure(int opencv_code) noexcept {
-    if (owner_) owner_->write(index_, "resource_failure", opencv_code);
+    if (!owner_) return;
+    // 故障记录使用故障处理时的新样本，不再把准入排队前的 begin 样本称为 OOM 现场。
+    auto &memory = owner_->records_[index_].memory;
+    memory = sample_memory();
+    if (memory.process_ok) {
+        auto previous = owner_->sampled_peak_private_.load();
+        while (previous < memory.private_bytes &&
+               !owner_->sampled_peak_private_.compare_exchange_weak(previous, memory.private_bytes)) {}
+        memory.sampled_peak_private_bytes = owner_->sampled_peak_private_.load();
+    }
+    owner_->write(index_, "resource_failure", opencv_code);
 }
 MemoryDiagnostics::Slot MemoryDiagnostics::begin(const Context &context) noexcept {
     for (unsigned i = 0; i < records_.size(); ++i) {
         bool free = false;
         if (!records_[i].busy.compare_exchange_strong(free, true)) continue;
         records_[i].context = context;
-        records_[i].memory = sample_memory();
-        if (records_[i].memory.process_ok) {
-            auto previous = sampled_peak_private_.load();
-            const auto current = records_[i].memory.private_bytes;
-            while (previous < current &&
-                   !sampled_peak_private_.compare_exchange_weak(previous, current)) {}
-            records_[i].memory.sampled_peak_private_bytes = sampled_peak_private_.load();
+        records_[i].memory = {};
+        const auto now = static_cast<std::uint64_t>(GetTickCount64());
+        auto due = next_sample_ms_.load();
+        // 采样限频仅控制诊断开销，不参与识别、输入许可和页面等待判定。
+        if (now >= due && next_sample_ms_.compare_exchange_strong(due, now + 1000)) {
+            records_[i].memory = sample_memory();
+            if (records_[i].memory.process_ok) {
+                auto previous = sampled_peak_private_.load();
+                const auto current = records_[i].memory.private_bytes;
+                while (previous < current &&
+                       !sampled_peak_private_.compare_exchange_weak(previous, current)) {}
+                records_[i].memory.sampled_peak_private_bytes = sampled_peak_private_.load();
+            }
+            write(i, "periodic_begin", 0);
         }
-        if (context.estimated_workspace_bytes >= 32ULL * 1024 * 1024 ||
-            starts_.fetch_add(1) % 32 == 0) write(i, "begin", 0);
         return Slot(this, i);
     }
     write_failed_ = true;
@@ -101,9 +116,13 @@ void MemoryDiagnostics::write(unsigned index, const char *event, int code) noexc
         static_cast<unsigned long long>(m.physical_available_pages),
         static_cast<unsigned long long>(m.page_size), code);
     if (length < 0 || length >= static_cast<int>(sizeof(line))) { write_failed_ = true; return; }
-    std::lock_guard lock(write_mutex_);
-    DWORD written{};
-    if (!WriteFile(file_, line, static_cast<DWORD>(length), &written, nullptr) ||
-        written != static_cast<DWORD>(length)) write_failed_ = true;
+    try {
+        std::lock_guard lock(write_mutex_);
+        DWORD written{};
+        if (!WriteFile(file_, line, static_cast<DWORD>(length), &written, nullptr) ||
+            written != static_cast<DWORD>(length)) write_failed_ = true;
+    } catch (...) {
+        write_failed_ = true; // noexcept 诊断边界不能反过来终止运行线程。
+    }
 }
 } // namespace wvd::platform

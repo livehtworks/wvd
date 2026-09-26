@@ -181,6 +181,10 @@ workflow::FlowProgram compile_native_program(const CompiledWorkflow &source,
         workflow::Definition definition;
         definition.id = root;
         definition.entry = root;
+        if (root == source.entry) definition.cumulative_budget = source.declared_budget;
+        else if (const auto budget = source.definition_budgets.find(root);
+                 budget != source.definition_budgets.end())
+            definition.cumulative_budget = budget->second;
         std::set<std::string> seen;
         std::function<void(const std::string &)> visit = [&](const std::string &id) {
             if (!seen.insert(id).second) return;
@@ -194,10 +198,16 @@ workflow::FlowProgram compile_native_program(const CompiledWorkflow &source,
                 for (const auto &next : edges(node, field)) visit(next);
         };
         visit(root);
-        for (const auto &id : seen)
-            definition.steps.emplace(id,
-                translate(id, source.nodes.at(id), source_paths, source.event_scopes,
-                          root == source.entry));
+        for (const auto &id : seen) {
+            auto translated = translate(id, source.nodes.at(id), source_paths, source.event_scopes,
+                                        root == source.entry);
+            if (source.nodes.at(id).value("pure_business_guard", false)) {
+                translated.business_guard = source.nodes.at(id).at("observation_args");
+                translated.guard.reset();
+                translated.data = workflow::Route{};
+            }
+            definition.steps.emplace(id, std::move(translated));
+        }
         program.definitions.emplace(root, std::move(definition));
     }
     for (auto &[root, definition] : program.definitions) {

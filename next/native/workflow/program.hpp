@@ -105,6 +105,8 @@ struct Step {
     std::string source_path;
     StepData data;
     std::optional<recognition::Request> guard;
+    // 只读业务标量条件，不携带视觉证据，也不能授权输入。
+    std::optional<nlohmann::json> business_guard;
     std::vector<std::string> next;
     std::vector<std::string> on_error;
     std::chrono::milliseconds time_limit{60000};
@@ -119,10 +121,11 @@ struct Definition {
     std::string id;
     std::string entry;
     std::map<std::string, Step> steps;
+    std::optional<std::chrono::milliseconds> cumulative_budget;
 };
 
 struct FlowProgram {
-    static constexpr int schema = 3; // 显式业务失败与致命运行故障不再共享同一终点。
+    static constexpr int schema = 4; // 每次调用的累计预算及独立纯业务 guard。
     std::string engine_kind{"wvd_native"};
     std::string revision;
     std::string root_definition;

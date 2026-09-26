@@ -25,6 +25,7 @@ struct ResourceStats {
     std::uint64_t decode_count{}, mask_build_count{}, entries{}, active_matches{}, peak_matches{};
     std::uint64_t estimated_workspace_bytes{}, peak_estimated_workspace_bytes{};
     std::uint64_t result_cache_entries{}, result_cache_estimated_bytes{};
+    bool cache_maintenance_failed{};
 };
 
 // Application 持有同一份准入；合法超目标匹配独占执行。目标仅约束并发，
@@ -107,13 +108,14 @@ class DecodedAssetCache : public std::enable_shared_from_this<DecodedAssetCache>
         std::condition_variable ready;
         std::list<std::string>::iterator lru;
     };
-    void trim_locked();
-    void trim_after_release();
+    void trim_locked() noexcept;
+    void trim_after_release() noexcept;
     const std::uint64_t target_;
     std::shared_ptr<SharedCounters> counters_ = std::make_shared<SharedCounters>();
     mutable std::mutex mutex_;
     std::map<std::string, std::shared_ptr<Entry>> entries_;
     std::list<std::string> lru_;
     std::uint64_t retained_{}, decodes_{}, mask_builds_{};
+    std::atomic<bool> maintenance_failed_{false};
 };
 } // namespace wvd::recognition

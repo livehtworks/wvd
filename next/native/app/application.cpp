@@ -1239,8 +1239,9 @@ runtime::NativeRunDefinition Application::assemble_task(const J &request, const 
     const auto &root = publication.program.definitions.at(publication.program.root_definition);
     require(root.steps.contains(workflow.checkpoint), "NATIVE_CHECKPOINT_MISSING");
     const auto checkpoint_source = root.steps.at(workflow.checkpoint).source_path;
-    runtime::NativeUnit unit{std::move(publication.program),
-        std::move(publication.bundle), games::vision::native_handlers(aliases_, resource_locale),
+    runtime::NativeUnit unit{std::make_shared<const wvd::workflow::FlowProgram>(std::move(publication.program)),
+        std::move(publication.bundle), games::vision::native_handlers(aliases_, resource_locale,
+            workflow.dialogue_policy),
         checkpoint_source, workflow.time_limit};
     const auto count = games::tasks::task_unit_count(task_id, values);
     runtime::NativeRunDefinition definition;
@@ -1571,8 +1572,9 @@ runtime::NativeRunDefinition Application::assemble_workflow(
     runtime::NativeRunDefinition definition;
     definition.request_id = request_id;
     definition.match_budget = match_budget_;
-    definition.units.push_back({std::move(publication.program),
-        std::move(publication.bundle), games::vision::native_handlers(aliases_, locale),
+    definition.units.push_back({std::make_shared<const wvd::workflow::FlowProgram>(std::move(publication.program)),
+        std::move(publication.bundle), games::vision::native_handlers(aliases_, locale,
+            executable.dialogue_policy),
         checkpoint_source, executable.time_limit});
     definition.total_time_limit = std::chrono::milliseconds(
         document.at("execution").at("time_limit_ms").get<std::int64_t>());
@@ -1710,7 +1712,9 @@ Application::J Application::recognition_probe(const J &request) {
     const auto parsed = recognition::parse_request(recognition);
     recognition::Service recognizer(std::move(bundle),
         games::vision::native_handlers(aliases_,
-            authoring::effective_resource_locale(request, J::object())), match_budget_);
+            authoring::effective_resource_locale(request, J::object()),
+            games::recovery::dialogue_policy_from_name(
+                request.value("dialogue_policy", std::string{}))), match_budget_);
     return observation_json(recognizer.evaluate(frame, frame.identity, parsed));
 }
 

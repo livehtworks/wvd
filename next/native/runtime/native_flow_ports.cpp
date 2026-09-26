@@ -1,4 +1,5 @@
 #include "native_flow_ports.hpp"
+#include "platform/execution_timing.hpp"
 
 namespace wvd::runtime {
 NativeFlowPorts::NativeFlowPorts(devices::DeviceBackend &backend,
@@ -17,13 +18,18 @@ void NativeFlowPorts::set_operation_handler(OperationHandler handler) {
 contracts::FrameEnvelope NativeFlowPorts::capture() {
     if (cancelled()) throw std::runtime_error("CAPTURE_CANCELLED");
     auto frame = gate_.capture();
-    if (capture_sink_) capture_sink_(frame);
+    platform::timing::count(platform::timing::Counter::Captures);
+    if (capture_sink_) {
+        platform::timing::Scope measure(platform::timing::Part::ArchiveSubmit);
+        capture_sink_(frame);
+    }
     return frame;
 }
 
 contracts::Observation NativeFlowPorts::recognize(
     const contracts::FrameEnvelope &frame, const recognition::Request &request) {
     if (cancelled()) throw std::runtime_error("RECOGNITION_CANCELLED");
+    platform::timing::Scope measure(platform::timing::Part::Recognition);
     return recognizer_.evaluate(frame, gate_.current_identity(), request, &business_);
 }
 
@@ -34,6 +40,7 @@ Submission NativeFlowPorts::submit(const contracts::Command &command,
     const auto record = [&](const char *state, std::uint64_t action_epoch,
                             const std::string &detail) {
         if (!input_sink_) return;
+        platform::timing::Scope measure(platform::timing::Part::JsonEvents);
         try {
             input_sink_({{"sequence", sequence}, {"source_path", source_path},
                          {"command_kind", static_cast<int>(command.kind)},
@@ -71,6 +78,7 @@ OperationResult NativeFlowPorts::operate(const std::string &binding,
     const std::string &source_path) {
     if (!operation_handler_)
         return {OperationState::Failed, "NATIVE_OPERATION_HANDLER_MISSING"};
+    if (binding == "BusinessPredicate") platform::timing::count(platform::timing::Counter::BusinessPredicates);
     return operation_handler_(binding, parameters, frame, observation, source_path);
 }
 

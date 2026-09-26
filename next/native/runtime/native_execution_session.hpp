@@ -11,7 +11,9 @@ struct NativeExecutionResult {
     contracts::InputCounts inputs;
     bool inputs_released{};
     bool unresolved_input{};
+    bool details_complete{true}; // 富诊断失败不能被解释为没有未决输入。
     nlohmann::json unresolved_inputs = nlohmann::json::array();
+    nlohmann::json performance = nullptr;
     std::string cleanup_error;
 };
 
@@ -21,7 +23,7 @@ class NativeExecutionSession final {
   public:
     using OperationFactory = std::function<NativeFlowPorts::OperationHandler(NativeFlowPorts &)>;
     using ProgressSink = std::function<void(const nlohmann::json &)>;
-    NativeExecutionSession(const workflow::FlowProgram &program,
+    NativeExecutionSession(std::shared_ptr<const workflow::FlowProgram> program,
         devices::DeviceBackend &backend, std::shared_ptr<recognition::Service> recognizer,
         contracts::BusinessRunState &business, contracts::InputPolicy policy,
         std::uint64_t generation, std::chrono::milliseconds total_budget,
@@ -33,7 +35,8 @@ class NativeExecutionSession final {
 
   private:
     std::stop_source stop_source_;
-    // 成员顺序保证 ports_ 和 executor_ 先析构，识别服务最后释放。
+    // executor_/ports_ 先析构；程序和识别服务覆盖停止线程所持 Session 的完整寿命。
+    std::shared_ptr<const workflow::FlowProgram> program_owner_;
     std::shared_ptr<recognition::Service> recognizer_owner_;
     NativeFlowPorts ports_;
     FlowExecutor executor_;

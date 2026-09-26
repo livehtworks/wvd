@@ -24,6 +24,15 @@ Vue 工作台 -> 同源 HTTP API -> Application
 
 作者文档仍由唯一 WorkflowRepository 保存。运行前封存作者闭包、资源内容与版本，编译为 FlowProgram；历史 Maa 结果只读。正式 CMake 和打包只链接原生目标。旧 SDK 集成源码及过时验证工具位于 `next/archive/`，不是当前程序或测试的执行路径。
 
+## 程序与观察所有权
+
+- 发布图为 `shared_ptr<const FlowProgram>`，同一请求的重复 NativeUnit 引用同一对象；RunDefinition 不可复制。每个 Session 的执行栈、命中计数、回执和事件状态独立，停止线程持有的 Session 覆盖程序/识别服务寿命。
+- FlowProgram schema 4 显式保存 Definition 累计预算和纯业务 guard；作者文档仍经正式发布重编译，历史图只读，不做旧 schema 自动回退。预算来自原声明，新 Call 签发新期限，内部跳转不刷新；嵌套事件暂停父有效时间，Run 墙钟始终继续。
+- FlowExecutor 的 ObservationCycle 只保留本轮帧和同有效事件作用域的覆盖层 NoHit；输入、等待轮询、事件返回、身份/TTL失效后重新取帧。技能索引通过游戏层只读业务谓词选路；不是视觉命中，不授权点击，也不消费技能次数。场景和目标仍走 InputGate 单次消费。
+- 结果先保存无分配安全事实并回收输入，再构造富诊断。`details_complete=false` 在 API/历史/终态明示，不能清除未决输入、报告 Completed 或自动恢复。WORKER_ABORT 是最外层兜底，不替代正常存储错误。
+- 最近帧 JPEG 由 RunStore 的受控单线程与单 pending 槽完成，另最多一张 in-flight，结束关闭接收并 join；不移动业务/故障证据到可丢弃槽。匹配日志 OS 标量采样/普通写入至多每秒一次，资源失败仍即时记录。
+- 性能固定数组只记累计分类和次数；主线程嵌套耗时排除子段，并行 worker 耗时不与墙钟相加。每次技能的来源起止、实际 match/缓存/ADB 数和未归因余量随现有会话结果落盘，不新增性能后台服务。
+
 ## 本轮修复后的责任边界
 
 - `authoring/workflow_validator` 只校验作者文档结构；`storage/WorkflowRepository` 保存正文及独立的内置来源元数据，显式 CAS 同步前保留旧文档备份。固定 `expected_revision` 的调用不被自动改写。`games/wvd/tasks/run_builder` 决定任务工厂、轮数、7300 秒等待及恢复条件；Application 冻结配置与定义、编译预检后才连接设备。

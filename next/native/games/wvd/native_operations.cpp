@@ -1,5 +1,6 @@
 #include "native_operations.hpp"
 #include "games/wvd/state.hpp"
+#include "games/wvd/business_condition.hpp"
 #include "recognition/request.hpp"
 #include <array>
 #include <stdexcept>
@@ -67,6 +68,8 @@ Result NativeOperations::execute(const std::string &binding, const J &parameters
     const std::optional<contracts::Observation> &selected_observation,
     const std::string &source_path) {
     if (context_.cancelled()) return {State::ExternalBlocked, "CANCELLED"};
+    if (binding == "BusinessPredicate")
+        return business_condition(state_.summary(), parameters) ? done() : waiting();
     if (binding == "BusinessCheckpoint") {
         context_.checkpoint(source_path);
         return done();

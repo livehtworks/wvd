@@ -1,4 +1,5 @@
 #include "adb_command.hpp"
+#include "platform/execution_timing.hpp"
 #include <algorithm>
 #include <atomic>
 #include <cctype>
@@ -51,6 +52,7 @@ platform::ProcessResult AdbCommandClient::run(const std::vector<std::wstring> &a
                                                std::stop_token stop,
                                                std::size_t output_limit) const {
     std::vector<std::wstring> scoped{L"-s", wide(serial_)};
+    platform::timing::count(platform::timing::Counter::AdbClients);
     scoped.insert(scoped.end(), arguments.begin(), arguments.end());
     // ADB may launch its shared server; cancelling our client must not kill that daemon.
     return platform::run_process(executable_, scoped, timeout, stop, output_limit, false);
@@ -58,17 +60,19 @@ platform::ProcessResult AdbCommandClient::run(const std::vector<std::wstring> &a
 
 android::ShellReply AdbCommandClient::shell_fixed(const std::string &command,
                                                    std::chrono::milliseconds timeout,
-                                                   std::stop_token stop) const {
-    if (command.empty() || command.size() > 8192)
+                                                   std::stop_token stop,
+                                                   std::size_t output_limit) const {
+    if (command.empty() || command.size() > 8192 || output_limit == 0 ||
+        output_limit > 8ULL * 1024 * 1024)
         throw std::runtime_error("ADB_COMMAND_INVALID");
     const auto marker = "__WVD_RC_" + std::to_string(GetCurrentProcessId()) + "_" +
         std::to_string(++marker_id) + "__";
     const auto script = android::probe_command(command, marker);
     // ADB shell 自己会将完整命令交给设备端 shell；再嵌一层 sh -c 会让
     // 部分 MuMu ADB 把括号脚本拆成多个实参，连接后的首个查询就语法失败。
-    const auto result = run({L"shell", wide(script)}, timeout, stop);
+    const auto result = run({L"shell", wide(script)}, timeout, stop, output_limit);
     require_transport(result);
-    return android::parse_shell_reply(as_text(result.stdout_bytes), marker);
+    return android::parse_shell_reply(as_text(result.stdout_bytes), marker, output_limit);
 }
 
 std::vector<std::uint8_t> AdbCommandClient::screenshot_png(

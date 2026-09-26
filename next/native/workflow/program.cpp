@@ -11,7 +11,13 @@ void FlowProgram::validate() const {
     for (const auto &[definition_id, definition] : definitions) {
         if (definition_id != definition.id || !definition.steps.contains(definition.entry))
             throw std::runtime_error("FLOW_DEFINITION_INVALID");
+        if (definition.cumulative_budget && (definition.cumulative_budget->count() <= 0 ||
+            *definition.cumulative_budget > std::chrono::minutes{30}))
+            throw std::runtime_error("FLOW_DEFINITION_BUDGET_INVALID");
         for (const auto &[step_id, step] : definition.steps) {
+            if (step.business_guard && (step.guard || !step.business_guard->is_object() ||
+                !std::holds_alternative<Route>(step.data)))
+                throw std::runtime_error("FLOW_BUSINESS_GUARD_INVALID");
             if (step_id != step.id || step.source_path.empty() || step.max_hit < 1 ||
                 step.time_limit.count() < 1 || step.delay_after.count() < 0)
                 throw std::runtime_error("FLOW_STEP_INVALID");

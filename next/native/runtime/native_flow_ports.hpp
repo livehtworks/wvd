@@ -35,6 +35,7 @@ class NativeFlowPorts final : public FlowPorts {
                             const std::optional<contracts::Observation> &observation,
                             const std::string &source_path) override;
     bool cancelled() const override;
+    bool reusable(const contracts::FrameIdentity &identity) const override { return gate_.reusable(identity); }
     void stop();
     bool cleanup();
     contracts::InputCounts input_counts() const;

@@ -1,6 +1,7 @@
 #pragma once
 #include <chrono>
 #include <map>
+#include <optional>
 #include <json.hpp>
 #include <string>
 #include <vector>
@@ -19,6 +20,9 @@ struct CompiledWorkflow {
     std::vector<std::string> images;
     std::vector<std::string> required_actions;
     std::chrono::milliseconds time_limit{60000};
+    // 默认节点等待上限不等于调用累计期限；只有显式构造参数/作者声明才签发。
+    std::optional<std::chrono::milliseconds> declared_budget;
+    std::map<std::string, std::chrono::milliseconds> definition_budgets;
     recovery::DialoguePolicy dialogue_policy{recovery::DialoguePolicy::Default};
     // 作者定义和资源选择在编译后封存。
     nlohmann::json authoring = nlohmann::json::object();
@@ -28,7 +32,8 @@ struct CompiledWorkflow {
 
 class PipelineCompiler {
   public:
-    explicit PipelineCompiler(std::string kind, std::chrono::milliseconds time_limit = std::chrono::milliseconds{60000});
+    explicit PipelineCompiler(std::string kind);
+    PipelineCompiler(std::string kind, std::chrono::milliseconds time_limit);
     static nlohmann::json image(const std::string &name);
     static nlohmann::json any(nlohmann::json conditions);
     static nlohmann::json all(nlohmann::json conditions);
@@ -38,6 +43,7 @@ class PipelineCompiler {
     void route(const std::string &name, nlohmann::json next);
     void wait(const std::string &name, int milliseconds, nlohmann::json next);
     void observe(const std::string &name, const nlohmann::json &condition, nlohmann::json next);
+    void observe_business(const std::string &name, const nlohmann::json &condition, nlohmann::json next);
     void observe_ocr(const std::string &name, const std::vector<std::string> &expected,
                      nlohmann::json roi, nlohmann::json next);
     void click(const std::string &name, const nlohmann::json &scene, const nlohmann::json &target,

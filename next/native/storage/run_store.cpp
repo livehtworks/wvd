@@ -194,6 +194,7 @@ J snapshot_json(const contracts::RunSnapshot &s) {
             {"completed_business_units", s.completed_business_units},
             {"quiescent", s.quiescent},
             {"result_saved", s.result_saved},
+            {"details_complete", s.details_complete},
             {"inputs",
              {{"attempted", s.inputs.attempted},
               {"accepted", s.inputs.accepted},
@@ -231,13 +232,59 @@ RunStore::RunStore(const std::filesystem::path &root, const std::string &instanc
               {"default_interval_seconds", 60}, {"pause_interval_seconds", 120}}}}.dump(
             2),
         false);
+    recent_worker_ = std::jthread([this] { recent_loop(); });
 }
-bool RunStore::save_recent_frame(const contracts::FrameEnvelope &frame) {
-    std::lock_guard lock(diagnostic_mutex_);
-    const auto now = diagnostic_clock_->now();
-    if (recent_last_ != contracts::MonotonicClock::TimePoint{} &&
-        now - recent_last_ < std::chrono::seconds{15}) return false;
-    recent_last_ = now;
+RunStore::~RunStore() { finish_recent_frames(); }
+void RunStore::finish_recent_frames() noexcept {
+    try {
+        { std::lock_guard lock(recent_mutex_); recent_closed_ = true; }
+        recent_wake_.notify_all();
+        // 不持 diagnostic_mutex_ 或 recent_mutex_ 等待 I/O 完成。
+        if (recent_worker_.joinable()) recent_worker_.join();
+    } catch (...) { ++recent_failed_; }
+}
+bool RunStore::save_recent_frame(const contracts::FrameEnvelope &frame) noexcept {
+    try {
+        std::unique_lock lock(recent_mutex_, std::try_to_lock);
+        if (!lock.owns_lock()) { ++recent_dropped_; return false; }
+        if (recent_closed_) return false;
+        const auto now = diagnostic_clock_->now();
+        if (recent_last_ != contracts::MonotonicClock::TimePoint{} &&
+            now - recent_last_ < std::chrono::seconds{15}) return false;
+        recent_last_ = now;
+        if (recent_pending_) { ++recent_dropped_; return false; }
+        // 原生识别帧已有不可变 BGR 所有权，不在生产者端复制/压缩整图。
+        if (!frame.raw_bgr || frame.raw_bgr->size() != 900ULL * 1600 * 3) {
+            ++recent_failed_; return false;
+        }
+        recent_pending_.emplace();
+        recent_pending_->identity = frame.identity;
+        recent_pending_->raw_bgr = frame.raw_bgr;
+        lock.unlock();
+        recent_wake_.notify_one();
+        return true;
+    } catch (...) { ++recent_failed_; return false; }
+}
+void RunStore::recent_loop() noexcept {
+    for (;;) {
+        try {
+            contracts::FrameEnvelope frame;
+            {
+                std::unique_lock lock(recent_mutex_);
+                recent_wake_.wait(lock, [this] { return recent_closed_ || recent_pending_.has_value(); });
+                if (!recent_pending_) return;
+                frame = std::move(*recent_pending_);
+                recent_pending_.reset();
+            }
+            const auto started = std::chrono::steady_clock::now();
+            try { if (write_recent_frame(frame)) ++recent_saved_; }
+            catch (...) { ++recent_failed_; }
+            recent_work_ns_ += std::chrono::duration_cast<std::chrono::nanoseconds>(
+                std::chrono::steady_clock::now() - started).count();
+        } catch (...) { ++recent_failed_; return; }
+    }
+}
+bool RunStore::write_recent_frame(const contracts::FrameEnvelope &frame) {
     const auto size = frame.identity.recognition_size;
     if (size.width != 900 || size.height != 1600) return false;
     cv::Mat image;
@@ -389,6 +436,9 @@ J RunStore::save_diagnostic(const contracts::FrameEnvelope *frame, const Diagnos
 J RunStore::diagnostic_summary() const {
     std::lock_guard lock(diagnostic_mutex_);
     return {{"schema", 1}, {"entries", diagnostic_entries_}, {"bytes_saved", diagnostic_bytes_},
+        {"recent_frames", {{"saved", recent_saved_.load()}, {"dropped", recent_dropped_.load()},
+            {"failed", recent_failed_.load()}, {"worker_ns", recent_work_ns_.load()},
+            {"pending_limit", 1}, {"inflight_limit", 1}}},
         {"reserved_bytes", (diagnostic_rewards_ + diagnostic_failures_) * diagnostic_limits_.frame_bytes},
         {"reward_attempts", diagnostic_rewards_}, {"failure_attempts", diagnostic_failures_},
         {"failed", diagnostic_failed_}, {"unavailable", diagnostic_unavailable_},
@@ -435,6 +485,8 @@ J RunStore::read_summary(const std::filesystem::path &directory) {
     std::ifstream result(directory / "result.json");
     J value;
     result >> value;
+    // 历史结果只读展示未知，不把旧文件没有该字段解释成诊断完整。
+    if (!value.contains("details_complete")) value["details_complete"] = nullptr;
     return value;
 }
 } // namespace wvd::storage

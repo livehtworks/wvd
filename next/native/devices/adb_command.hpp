@@ -17,7 +17,8 @@ class AdbCommandClient final {
                                 std::size_t output_limit = 2 * 1024 * 1024) const;
     android::ShellReply shell_fixed(const std::string &command,
                                     std::chrono::milliseconds timeout,
-                                    std::stop_token stop = {}) const;
+                                    std::stop_token stop = {},
+                                    std::size_t output_limit = 2 * 1024 * 1024) const;
     std::vector<std::uint8_t> screenshot_png(std::chrono::milliseconds timeout,
                                               std::stop_token stop = {}) const;
     bool connected(std::stop_token stop = {}) const;

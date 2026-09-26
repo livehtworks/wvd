@@ -92,14 +92,14 @@ tasks::CompiledWorkflow take_turn(const J &profile, const std::set<std::string> 
     for (std::size_t index = 0; index < catalog.size(); ++index)
         choices.push_back("Select" + std::to_string(index));
     graph.combat_step("Prepare", menu, {{"operation", "prepare"}, {"portraits", portraits}, {"catalog", catalog}}, choices);
-    graph.observe("NoSelection", C::business("/has_prepared_skill", false), {char_auto});
+    graph.observe_business("NoSelection", C::business("/has_prepared_skill", false), {char_auto});
     for (std::size_t index = 0; index < catalog.size(); ++index) {
         const auto &skill = catalog[index];
         const auto prefix = "Skill" + std::to_string(index);
         const auto skill_name = skill.at("skill_var").get<std::string>();
         if (skill_name == "防御" || skill_name == "defend") {
             const auto advanced = C::all({finished, C::any({ended, C::absent(actor)})});
-            graph.observe("Select" + std::to_string(index), C::business("/prepared_skill_index", index), {prefix + "Defend"});
+            graph.observe_business("Select" + std::to_string(index), C::business("/prepared_skill_index", index), {prefix + "Defend"});
             graph.fixed_click(prefix + "Defend", C::all({menu, actor}), C::any({clear, ended}), {513, 1200},
                               {prefix + "Success", prefix + "DefendConfirm"});
             graph.fixed_click(prefix + "DefendConfirm", C::all({menu, actor}), advanced, {513, 1200}, {prefix + "Success"});
@@ -118,7 +118,7 @@ tasks::CompiledWorkflow take_turn(const J &profile, const std::set<std::string> 
         const int level = skill.at("skill_lvl");
         if (level < 1 || level > 9)
             throw std::runtime_error("WVD_SKILL_LEVEL_INVALID");
-        graph.observe("Select" + std::to_string(index), C::business("/prepared_skill_index", index), {prefix + "Open0"});
+        graph.observe_business("Select" + std::to_string(index), C::business("/prepared_skill_index", index), {prefix + "Open0"});
         const auto casting = C::all({battle, actor, detail});
         // 正常等级失败可有界重试一次 1 级；第二次资源不足保留为恢复出口。
         const int attempts = level == 1 ? 1 : 2;

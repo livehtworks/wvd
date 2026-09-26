@@ -60,6 +60,7 @@ struct RunSnapshot {
     std::string reason;
     std::string outcome_category;
     bool quiescent{true}, result_saved{};
+    bool details_complete{true};
     InputCounts inputs;
     std::string storage_error;
     std::vector<std::string> secondary_errors;
