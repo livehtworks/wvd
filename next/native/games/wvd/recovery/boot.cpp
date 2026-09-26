@@ -5,6 +5,7 @@
 #include "dialogue.hpp"
 #include "games/wvd/vision/harken_probes.hpp"
 #include "games/wvd/vision/download_probes.hpp"
+#include "games/wvd/vision/network_probes.hpp"
 
 namespace wvd::games::recovery {
 namespace {
@@ -25,6 +26,27 @@ J task_stop_condition(DialoguePolicy policy) {
 }
 }
 namespace {
+tasks::CompiledWorkflow retry_network_prompt() {
+    C graph("recovery.network_retry", std::chrono::seconds{180});
+    const auto prompt = vision::network_retry_prompt();
+    const auto cleared = C::absent(prompt);
+    graph.route("Entry", {"Cleared", "RetryZhHant", "RetryEn"});
+    graph.observe("Cleared", cleared, {"Terminal"});
+    graph.click("RetryZhHant", vision::network_prompt_zh_hant(),
+                vision::network_retry_button_zh_hant(), cleared, {"Settle"});
+    const auto english = C::all({prompt, C::absent(vision::network_prompt_zh_hant())});
+    graph.click("RetryEn", english, C::image("retry"), cleared, {"Settle"});
+    // 重试是网络弹窗自身的动作，不重放挂起的提交、付款或跳轮。
+    // 给慢网络留出等待；弹窗再次出现则按新帧重试，绝不把弹窗消失当作业务成功。
+    graph.wait("Settle", 3000, {"Entry"});
+    for (const auto *name : {"RetryZhHant", "RetryEn"}) {
+        graph.postcondition_budget(name, 120000);
+        graph.hit_limit(name, 20);
+    }
+    graph.hit_limit("Entry", 24);
+    graph.hit_limit("Settle", 20);
+    return graph.finish();
+}
 tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, DialoguePolicy policy = DialoguePolicy::Default) {
     C graph(common ? "recovery.common_screens" : "recovery.boot_ready", std::chrono::seconds{120});
     graph.use_dialogue(policy);
@@ -56,8 +78,8 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, Dialogue
     // 这里只等待离开刚处理的提示；它不是“游戏就绪”的证据。
     // recognized 包含当前提示，不能放进 any 后把页面未变化认作进展。
     const auto progressed = [](const J &current) { return C::absent(current); };
-    J entry = common ? J{"DownloadEn", "DownloadZhHant", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title", "Pause", "Death", "Sandman", "Blessing", "Karma", "Dialogue", "Defeat", "Ready", "Poll"}
-                     : J{"Ready", "DownloadEn", "DownloadZhHant", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title", "Pause", "Sandman", "Blessing", "Karma", "Dialogue", "Poll"};
+    J entry = common ? J{"NetworkZhHant", "DownloadZhHant", "DownloadEn", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title", "Pause", "Death", "Sandman", "Blessing", "Karma", "Dialogue", "Defeat", "Ready", "Poll"}
+                     : J{"Ready", "NetworkZhHant", "DownloadZhHant", "DownloadEn", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title", "Pause", "Sandman", "Blessing", "Karma", "Dialogue", "Poll"};
     if (policy != DialoguePolicy::Default) {
         entry.insert(entry.begin(), "SpecialDialogue");
         const auto special = graph.define_child("SpecialChoice", choose_special_dialogue(policy));
@@ -72,6 +94,11 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, Dialogue
         graph.observe("TaskStop", task_stop, {"Terminal"});
     }
     graph.route("Entry", entry);
+    graph.observe("NetworkZhHant", vision::network_prompt_zh_hant(), {"HandleNetwork"});
+    const auto network = graph.define_child("Network", retry_network_prompt());
+    graph.call_child("HandleNetwork", network, {"Entry"});
+    graph.hit_limit("NetworkZhHant", 20);
+    graph.hit_limit("HandleNetwork", 20);
     // 应用刚切到前台时可能仍是黑帧，免责声明也可能在首轮候选扫描后才出现。
     // NoHit 只做有界等待后重扫；任何识别 Error 仍通过各节点 on_error 立即退出。
     graph.wait("Poll", 500, {"Entry"});
@@ -231,7 +258,28 @@ tasks::CompiledWorkflow with_boot_recovery(const tasks::CompiledWorkflow &task, 
     // 正常首段也必须先处理启动页。Task_Entry 常为 DirectHit，放在前面会使 Boot 永远不可达。
     // 非恢复首段不执行 game_restarted，避免把首次进入误记成崩溃/重置策略。
     graph.route("Entry", {boot});
+    const auto network_entry = graph.define_child("NetworkOverlay", retry_network_prompt());
+    graph.event_scope("Entry", J::array({J{{"id", "wvd-network-retry"},
+        {"class", "overlay"}, {"priority", 1000}, {"detect", vision::network_retry_prompt()},
+        {"source_node", "Entry"}, {"entry", network_entry}, {"resume", {{"mode", "reobserve"}}}}}));
     auto result = graph.finish();
+    // 所有业务步骤及输入等待器都继承同一个网络处理器；覆盖层期间暂停父级
+    // 等待预算，处理后重新观察原后置条件，不跳回任务入口、不自动重启模拟器。
+    for (const auto &[name, node] : result.nodes.items()) {
+        // 共享失败出口也被子处理器引用，不能在这里再注册处理器自身。
+        if (name == "Entry" || name.starts_with("NetworkOverlay_") ||
+            node.value("binding", "") == "RequireRecovery") continue;
+        J rule{{"id", "wvd-network-retry"}, {"class", "overlay"}, {"priority", 1000},
+               {"detect", vision::network_retry_prompt()}, {"source_node", name},
+               {"entry", network_entry}, {"resume", {{"mode", "reobserve"}}}};
+        if (!result.event_scopes.contains(name))
+            result.event_scopes[name] = {{"rules", J::array()}, {"disabled", J::array()}};
+        auto &scope = result.event_scopes[name];
+        if (scope.is_array()) scope.push_back(rule);
+        else scope["rules"].push_back(rule);
+    }
+    result.refresh_images();
+    result.validate();
     result.authoring = task.authoring;
     if (result.authoring.contains("source_paths")) {
         J renamed = J::object();

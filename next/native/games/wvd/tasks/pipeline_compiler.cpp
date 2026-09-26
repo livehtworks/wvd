@@ -129,9 +129,12 @@ void collect_images(const J &value, std::set<std::string> &images, std::set<std:
                 images.insert(std::string(name) + ".png");
         if (mode == "harken_stair" && value.contains("stair"))
             images.insert(value.at("stair").get<std::string>() + ".png");
-        if (mode == "skill_level")
+        if (mode == "skill_level") {
+            const int level = value.at("level");
+            if (level <= 7) images.insert("combat_level" + std::to_string(level) + "_label.png");
             for (const auto *prefix : {"lv", "s_lv"})
                 images.insert(std::string("spellskill/skillLvl/") + prefix + std::to_string(value.at("level").get<int>()) + ".png");
+        }
         if (mode == "skill_target")
             for (const auto *name : {"next", "combatTarget", "spellskill/skillDetail", "combat_skill_detail_zh_hant",
                     "OK", "combat_skill_confirm_zh_hant", "supportSkillCheck"})

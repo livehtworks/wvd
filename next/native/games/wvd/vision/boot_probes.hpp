@@ -3,6 +3,7 @@
 #include "harken_probes.hpp"
 #include "chest_probes.hpp"
 #include "download_probes.hpp"
+#include "network_probes.hpp"
 #include <json.hpp>
 
 namespace wvd::games::vision {
@@ -16,15 +17,16 @@ inline nlohmann::json blocking_probes(bool include_party_prompts = true) {
             p["roi"] = std::move(roi);
         probes.push_back(std::move(p));
     };
-    probes.push_back(download_button_en());
     probes.push_back(download_button_zh_hant());
+    probes.push_back(network_prompt_zh_hant());
+    probes.push_back(download_button_en());
     add("retry_blank", nullptr, .65);
     add("retry");
     add("retry", nullptr, .60);
     add("totitle");
     // 小地图的继续移动按钮也叫 resume；它常驻迷宫，不是阻塞页。
-    add("boot_attention", {250, 430, 420, 220}, .86);
     add("boot_attention_zh", {250, 430, 420, 220}, .86);
+    add("boot_attention", {250, 430, 420, 220}, .86);
     add("boot_title_logo", {100, 300, 700, 470}, .86);
     // Pause 可能保留底层战斗/地图图标，必须先作为覆盖层处理。
     probes.push_back({{"mode", "pause"}});

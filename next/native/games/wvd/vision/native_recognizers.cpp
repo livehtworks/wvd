@@ -308,7 +308,10 @@ ProbeBatch evaluate_batch(const recognition::Bundle &bundle, recognition::Pixels
     }
     std::vector<recognition::Cache> workers(partitions);
     std::vector<EvaluationMemo> worker_memos(partitions);
-    for (auto &worker : worker_memos) worker.in_parallel = true;
+    for (auto &worker : worker_memos) {
+        worker.in_parallel = true;
+        worker.values = memo.values;
+    }
     for (auto &worker : workers) {
         worker.decoded = cache.decoded;
         worker.match_budget = cache.match_budget;
@@ -1247,13 +1250,32 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
         int level = p.at("level");
         check(level >= 1 && level <= 9, "WVD_SKILL_LEVEL_INVALID");
         J attempts = J::array();
-        for (auto prefix : {"lv", "s_lv"}) {
+        std::vector<std::string> names;
+        if (level <= 7) names.push_back("combat_level" + std::to_string(level) + "_label");
+        for (auto prefix : {"lv", "s_lv"}) names.push_back(std::string("spellskill/skillLvl/") + prefix + std::to_string(level));
+        for (const auto &name : names) {
             auto args = p;
-            args["roi"] = {0, 0, image.cols, image.rows};
-            auto result =
-                one(std::string("spellskill/skillLvl/") + prefix + std::to_string(level), args);
+            args["roi"] = p.value("roi", J::array({50, 1050, 790, 370}));
+            if (name.starts_with("combat_level")) args["grayscale"] = true;
+            auto result = one(name, args);
             attempts.push_back(result);
             if (result["outcome"] == "Hit") {
+                if (p.value("selected", false)) {
+                    const auto found = rect(result.at("box"), image.size());
+                    const auto center = cv::Point(found.x + found.width / 2, found.y + found.height / 2);
+                    const auto button = cv::Rect(center.x - 55, center.y - 30, 110, 60) & allowed_rect;
+                    cv::Mat hsv, gold;
+                    cv::cvtColor(image(button), hsv, cv::COLOR_BGR2HSV);
+                    cv::inRange(hsv, cv::Scalar(10, 100, 100), cv::Scalar(45, 255, 255), gold);
+                    const double ratio = double(cv::countNonZero(gold)) / button.area();
+                    result["evidence"]["selection_gold_ratio"] = ratio;
+                    if (ratio < .05) {
+                        if (name.starts_with("combat_level"))
+                            return decision(false, {}, {{"reason", "level_not_selected"}, {"level", level},
+                                {"selection_gold_ratio", ratio}, {"match", result}});
+                        continue;
+                    }
+                }
                 result["attempts"] = attempts;
                 return result;
             }
@@ -1305,10 +1327,26 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
 }
 J evaluate(const recognition::Bundle &bundle, recognition::Pixels pixels, const J &p, const J &bound,
            const recognition::Scope &scope, recognition::Cache &cache) {
-    // 同次调用的 bundle、像素和范围固定。只复用完全相同的子参数；不同条件仍全部
-    // 求值，Error 不短路掩盖。离开本次调用即释放，不跨帧/代次增加常驻缓存。
+    // 候选选路会在同一帧用多个条件检查同一个阻塞页。复用纯模板叶子，
+    // 不缓存业务/运动判断，不跳过 Error，也绝不跨帧或跨范围复用。
+    const auto area = scope.allowed_roi();
+    const auto prefix = J::array({"WvdVision", bundle.revision,
+        bound.value("resource_locale", ""), bound.value("dialogue_task", ""),
+        area.x, area.y, area.width, area.height}).dump() + ":";
     EvaluationMemo memo;
-    return evaluate_impl(bundle, pixels, p, bound, scope, cache, 0, memo);
+    for (const auto &[key, value] : cache.template_results)
+        if (key.starts_with(prefix)) memo.values.emplace(key.substr(prefix.size()), value);
+    auto result = evaluate_impl(bundle, pixels, p, bound, scope, cache, 0, memo);
+    for (const auto &[key, value] : memo.values) {
+        const auto full_key = prefix + key;
+        if (cache.template_results.contains(full_key)) continue;
+        const auto bytes = full_key.size() + value.dump().size();
+        if (cache.results.size() + cache.template_results.size() >= 128 ||
+            cache.result_bytes + cache.template_result_bytes + bytes > 1024 * 1024) break;
+        cache.template_results.emplace(full_key, value);
+        cache.template_result_bytes += bytes;
+    }
+    return result;
 }
 } // namespace
 recognition::Handlers native_handlers(const J &aliases, const std::string &resource_locale) {

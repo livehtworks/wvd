@@ -127,6 +127,8 @@ tasks::CompiledWorkflow take_turn(const J &profile, const std::set<std::string> 
             const int use_level = attempt ? 1 : level;
             const auto lv1 = J{{"mode", "skill_level"}, {"level", 1}};
             const auto wanted = J{{"mode", "skill_level"}, {"level", use_level}};
+            const auto selected = J{{"mode", "skill_level"}, {"level", use_level}, {"selected", true}};
+            const auto selected_one = J{{"mode", "skill_level"}, {"level", 1}, {"selected", true}};
             const J target_choices{s + "Support", s + "Confirm", s + "Enemy0", s + "Missing"};
             graph.route(prefix + "Open" + std::to_string(attempt), {s + "Open0"});
             for (int opening = 0; opening < 3; ++opening) {
@@ -136,11 +138,15 @@ tasks::CompiledWorkflow take_turn(const J &profile, const std::set<std::string> 
                 graph.hit_limit(open, 1);
                 graph.delay_after(open, 600);
             }
-            graph.observe(s + "Detail", casting, {s + "Level", s + "Level1", s + "DefaultLevel"});
+            graph.observe(s + "Detail", casting, {s + "LevelSelected", s + "Level", s + "Level1", s + "DefaultLevel"});
             graph.observe(s + "OpenFailed", C::all({menu, actor}), {automatic});
-            graph.click(s + "Level", C::all({casting, lv1}), wanted, casting, target_choices);
-            graph.click(s + "Level1", C::all({casting, lv1, C::absent(wanted)}), lv1, casting, target_choices);
-            graph.observe(s + "DefaultLevel", C::all({casting, C::absent(lv1)}), target_choices);
+            graph.observe(s + "LevelSelected", C::all({casting, selected}), target_choices);
+            graph.click(s + "Level", C::all({casting, lv1}), wanted, C::all({casting, selected}), target_choices);
+            graph.click(s + "Level1", C::all({casting, lv1, C::absent(wanted)}), lv1,
+                        C::all({casting, selected_one}), target_choices);
+            // 高等级配置不能在等级条未识别时直接放行默认等级。
+            graph.observe(s + "DefaultLevel", C::all({casting, C::absent(lv1)}),
+                          use_level == 1 ? target_choices : J{automatic});
             const auto recipient = support_position(skill.value("target_var", ""));
             if (!recipient.is_null()) {
                 graph.fixed_click(s + "Support", C::all({casting, support}), C::any({casting, finished, errors}), recipient,

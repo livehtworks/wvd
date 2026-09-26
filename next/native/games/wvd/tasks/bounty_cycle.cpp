@@ -71,7 +71,7 @@ WvdTaskPlan scorpion_plan(const WvdQuestDefinition &definition, bool hands_route
     auto plan = WvdTaskPlan::parse(definition).with_entry({{"press", abyss, {"EdgeOfTown", {1, 1}}, 1},
         {"press", floor, {{1, 1}}, 1}})
         .with_route(hands_route ? J{{"position", "左上", {454, 662}}, {"position", "左上", {135, 714}}}
-            : J{{"position", "左下", {505, 760}}, {"position", "左上", {506, 821}}});
+            : J{{"position", "左下", {505, 760}}, {"dungFlag"}});
     if (zh_hant && !hands_route)
         plan = plan.with_floor("map_abyss_b2f_zh_hant");
     return hands_route ? plan : plan.with_last_harken_arrival();
@@ -94,7 +94,7 @@ CompiledWorkflow bounty_cycle(const WvdQuestDefinition &definition, const J &pro
     const bool ore = !jier && profile.at("ACTIVE_BEAUTIFUL_ORE").get<bool>();
     const bool triumph = !jier && profile.at("ACTIVE_TRIUMPH").get<bool>();
     if (profile.at("REST_INTERVEL").get<std::int64_t>() < 0) throw std::runtime_error("BOUNTY_REST_INTERVAL_INVALID");
-    // harken是退出动作，不是假装仍在地图上确认的第三个坐标点。两点完成后独立执行它。
+    // 普通蝎女路线的第二步是快捷返哈肯，不再在战后重新选地图坐标。
     const auto first_route = traverse_dungeon(jier ? first_plan.with_route(jier_positions) : first_plan, profile, images, allow_download, dialogue);
     C graph("tasks." + definition.id, first_route.time_limit + std::chrono::seconds{360});
     const auto inn = vision::inn_button(), guild = vision::guild_button(),

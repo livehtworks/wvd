@@ -20,6 +20,8 @@ bool automatic_target(const MapTarget &target) {
 // 子图完成只是到达确认入口；仍用新帧复核任务点，而非按已发送的动作计数。
 J point_confirmation(const MapTarget &target, const J &map) {
     if (automatic_target(target)) {
+        if (target.harken_arrival)
+            return vision::harken_floor_menu();
         const auto unavailable = C::any({C::image("NoChestCanBeFound"), C::image("theRouteToTheDestinationCannotBeFound")});
         if (target.target == "mark_auto" || target.target == "chest_auto") {
             auto focus = C::image(target.target);

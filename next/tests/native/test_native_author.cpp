@@ -2,22 +2,28 @@
 #include "games/wvd/tasks/native_program.hpp"
 #include "games/wvd/tasks/public_flow_library.hpp"
 #include "games/wvd/tasks/bounty_visit.hpp"
+#include "games/wvd/tasks/bounty_cycle.hpp"
 #include "games/wvd/tasks/locale_assets.hpp"
 #include "games/wvd/tasks/native_publisher.hpp"
 #include "games/wvd/navigation/time_leap.hpp"
 #include "games/wvd/navigation/map_route.hpp"
+#include "games/wvd/navigation/harken_exit.hpp"
 #include "games/wvd/combat/encounter.hpp"
 #include "games/wvd/combat/strategy.hpp"
 #include "games/wvd/supply/inn.hpp"
 #include "games/wvd/recovery/boot.hpp"
 #include "games/wvd/vision/boot_probes.hpp"
+#include "games/wvd/vision/native_recognizers.hpp"
+#include "games/wvd/vision/native_asset_resolver.hpp"
+#include "recognition/service.hpp"
+#include <opencv2/imgcodecs.hpp>
 #include "platform/windows/file_digest.hpp"
 #include <chrono>
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
 
-int main() {
+int main(int argc, char **argv) {
     try {
         using J = nlohmann::json;
         for (const auto &point : {wvd::games::TaskPoint{505, 760},
@@ -41,6 +47,119 @@ int main() {
                 map.nodes.contains("HarkenArrived") != target.harken_arrival ||
                 (target.harken_arrival && move.at("postcondition").dump().find("harken_floor_return_zh_hant") == std::string::npos))
                 throw std::runtime_error("MAP_AUTOMOVE_POPUP_GUARD_INVALID");
+        }
+        const wvd::games::WvdQuestDefinition scorpion{"Scorpionesses", "quest", J::object()};
+        const auto scorpion_route = wvd::games::tasks::scorpion_plan(scorpion, false, "zh-Hant");
+        const auto &scorpion_exit = scorpion_route.route().back();
+        if (scorpion_route.route().size() != 2 || scorpion_exit.target != "dungFlag" ||
+            scorpion_exit.position || !scorpion_exit.harken_arrival)
+            throw std::runtime_error("SCORPION_EXIT_MUST_USE_SHORTCUT");
+        const J route_profile{{"WHO_WILL_OPEN_IT", 0}, {"QUICK_DISARM_CHEST", false},
+            {"MAX_TRY_LIMIT", 10}, {"BYPASS_THE_WALL", false},
+            {"TASK_POINT_STRATEGY", J::object()}, {"STRATEGY", J::array()}};
+        const auto scorpion_dungeon = wvd::games::tasks::traverse_dungeon(
+            scorpion_route, route_profile, {}, false);
+        if (!scorpion_dungeon.nodes.contains("Route1_Choose") ||
+            scorpion_dungeon.nodes.contains("Route1_Search0") ||
+            scorpion_dungeon.nodes.at("Route1_Choose").at("operation_args")
+                .at("target_recognition").dump().find("dungFlag") == std::string::npos ||
+            scorpion_dungeon.nodes.at("Confirm1").at("observation_args").dump()
+                .find("harken_floor_return_zh_hant") == std::string::npos)
+            throw std::runtime_error("SCORPION_EXIT_GRAPH_NOT_SHORTCUT_TO_HARKEN");
+        scorpion_dungeon.validate();
+        const auto harken_exit = wvd::games::navigation::leave_harken();
+        const auto &return_post = harken_exit.nodes.at("Outskirts").at("operation_args").at("postcondition");
+        if (harken_exit.nodes.at("Entry").at("next").front() != "Story" ||
+            return_post.dump().find("story_auto_control") == std::string::npos ||
+            return_post.dump().find("chest_reward_advance") == std::string::npos ||
+            !harken_exit.nodes.at("Story").at("operation_args").at("use_target_center").get<bool>() ||
+            harken_exit.nodes.at("Story").at("next").back() != "Entry")
+            throw std::runtime_error("HARKEN_RETURN_STORY_HANDOFF_MISSING");
+        harken_exit.validate();
+        wvd::games::tasks::PipelineCompiler network_parent("network-parent");
+        network_parent.fixed_click("Entry", {{"mode", "template"}, {"image", "ruins"}},
+            {{"mode", "template"}, {"image", "cursedWheel"}}, {450, 600}, {"Terminal"});
+        const auto with_network = wvd::games::recovery::with_boot_recovery(network_parent.finish(), false);
+        const auto network_program = wvd::games::tasks::compile_native_program(with_network, J::object(), "network-test");
+        const auto &parent_await = network_program.definitions.at("Entry").steps.at("Task_Entry@await");
+        if (parent_await.event_policy.empty() || parent_await.event_policy.back().id != "wvd-network-retry" ||
+            parent_await.event_policy.back().resume != wvd::workflow::ResumeMode::Reobserve)
+            throw std::runtime_error("NETWORK_EVENT_AWAIT_NOT_CONNECTED");
+        const bool network_sample = argc == 3 && std::string(argv[1]) == "--network";
+        const bool skill_sample = argc == 3 && std::string(argv[1]) == "--skill";
+        wvd::games::tasks::PipelineCompiler skill_probes("skill-probes");
+        skill_probes.observe("Entry", {{"mode", "any"}, {"conditions", {
+            {{"mode", "skill_level"}, {"level", 1}},
+            {{"mode", "skill_level"}, {"level", 3}, {"selected", true}},
+            {{"mode", "skill_level"}, {"level", 5}, {"selected", true}}}}}, {"Terminal"});
+        const auto skill_samples = skill_probes.finish();
+        // 可选现场帧验证只读正式资源包，不需要设备输入或改写用户数据。
+        if (argc == 2 || network_sample || skill_sample) {
+            const auto image = cv::imread(argv[network_sample || skill_sample ? 2 : 1], cv::IMREAD_COLOR);
+            if (image.empty() || image.cols != 900 || image.rows != 1600)
+                throw std::runtime_error("HARKEN_STORY_SAMPLE_INVALID");
+            std::ifstream input("packs/wvd/manifest.json");
+            J manifest;
+            input >> manifest;
+            wvd::recognition::Bundle bundle{std::filesystem::absolute("packs/wvd"),
+                manifest.at("revision"), {}};
+            for (const auto &member : manifest.at("files"))
+                bundle.files.push_back({member.at("path"), member.at("sha256")});
+            const auto sample_root = std::filesystem::absolute(".local") /
+                ("test-harken-story-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+            wvd::recognition::Bundle sample_bundle{sample_root, bundle.revision, {}};
+            std::set<std::string> copied;
+            for (const auto &name : skill_sample ? skill_samples.images : network_sample ? with_network.images : harken_exit.images) {
+                const auto selected = wvd::games::vision::resolve_image_source(
+                    bundle, manifest.value("aliases", J::object()), name);
+                if (!copied.insert(selected.relative_path).second) continue;
+                const auto target = sample_root / selected.relative_path;
+                std::filesystem::create_directories(target.parent_path());
+                std::filesystem::copy_file(bundle.root / selected.relative_path, target);
+                sample_bundle.files.push_back({selected.relative_path, wvd::platform::file_sha256(target)});
+            }
+            auto service = std::make_unique<wvd::recognition::Service>(sample_bundle,
+                wvd::games::vision::native_handlers(manifest.value("aliases", J::object()), "zh-Hant"));
+            wvd::contracts::FrameEnvelope frame;
+            frame.identity.device_id = "recorded-harken-story";
+            frame.identity.game_id = "wvd";
+            frame.identity.pack_revision = bundle.revision;
+            frame.identity.viewport_id = "900x1600";
+            frame.identity.generation = 1;
+            frame.identity.frame_id = 1;
+            frame.identity.raw_size = {900, 1600};
+            frame.identity.recognition_size = frame.identity.raw_size;
+            frame.identity.captured_at = std::chrono::steady_clock::now();
+            frame.identity.capture_finished_at = frame.identity.captured_at;
+            frame.raw_bgr = std::make_shared<const std::vector<std::uint8_t>>(
+                image.data, image.data + image.total() * image.elemSize());
+            const auto checks = skill_sample ? std::vector<std::pair<J, wvd::contracts::RecognitionOutcome>>{
+                {J{{"mode", "skill_level"}, {"level", 1}}, wvd::contracts::RecognitionOutcome::Hit},
+                {J{{"mode", "skill_level"}, {"level", 5}}, wvd::contracts::RecognitionOutcome::Hit},
+                {J{{"mode", "skill_level"}, {"level", 3}, {"selected", true}}, wvd::contracts::RecognitionOutcome::Hit},
+                {J{{"mode", "skill_level"}, {"level", 5}, {"selected", true}}, wvd::contracts::RecognitionOutcome::NoHit}}
+                : network_sample ? std::vector<std::pair<J, wvd::contracts::RecognitionOutcome>>{
+                {wvd::games::vision::network_prompt_zh_hant(), wvd::contracts::RecognitionOutcome::Hit},
+                {wvd::games::vision::network_retry_prompt(), wvd::contracts::RecognitionOutcome::Hit},
+                {wvd::games::vision::network_retry_button_zh_hant(), wvd::contracts::RecognitionOutcome::Hit}}
+                : std::vector<std::pair<J, wvd::contracts::RecognitionOutcome>>{
+                {harken_exit.nodes.at("Story").at("observation_args"), wvd::contracts::RecognitionOutcome::Hit},
+                {harken_exit.nodes.at("City").at("observation_args"), wvd::contracts::RecognitionOutcome::NoHit},
+                {return_post.at("parameters"), wvd::contracts::RecognitionOutcome::Hit}};
+            for (const auto &[condition, expected] : checks) {
+                const wvd::recognition::Request request{"custom", "recorded-harken-story", {0, 0, 900, 1600},
+                    wvd::recognition::CustomParameters{"WvdVision", condition}};
+                const auto observed = service->evaluate(frame, frame.identity, request);
+                if (observed.outcome != expected)
+                    throw std::runtime_error("HARKEN_STORY_SAMPLE_MISMATCH:" + observed.error_code);
+            }
+            service.reset();
+            std::cout << (skill_sample ? "recorded skill detail: level 1/5 Hit, selected 3 Hit, selected 5 NoHit\n"
+                          : network_sample ? "recorded network popup: prompt Hit, retry Hit, await event connected\n"
+                                        : "recorded harken story: story Hit, city NoHit, return post Hit\n");
+            if (sample_root.parent_path() != std::filesystem::absolute(".local"))
+                throw std::runtime_error("HARKEN_STORY_TEST_PATH_INVALID");
+            std::filesystem::remove_all(sample_root);
         }
         J special_profile{{"LANGUAGE", "zh_CN"}, {"TASK_SPECIFIC_CONFIG", false},
             {"DEFAULT_OVERALL_STRATEGY", "普通方案"},

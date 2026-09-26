@@ -1,0 +1,58 @@
+{
+  "schema": 1,
+  "purpose": "只读摘取的实机诊断证据，不是配置或运行输入",
+  "baseline_commit": "8583719c36d19d5bbb6261b397995b715c8acc2d",
+  "time_unit": "monotonic_nanoseconds",
+  "formula_seconds": "(end - start) / 1000000000",
+  "before": {
+    "instance": "826F1E46-009A-44E1-8668-B31C518E7827",
+    "run_id": 2,
+    "events": [
+      {"seq": 312, "node_id": "Task_FirstDungeon_Battle_Actor_Prepare", "monotonic_time": 52819983617600},
+      {"seq": 314, "node_id": "Task_FirstDungeon_Battle_Actor_Select17", "monotonic_time": 52851290043100},
+      {"seq": 324, "node_id": "Task_FirstDungeon_Battle_Actor_Skill17Try0DefaultLevel", "monotonic_time": 52872348236500},
+      {"seq": 325, "node_id": "Task_FirstDungeon_Battle_Actor_Skill17Try0Confirm", "monotonic_time": 52878749845200},
+      {"seq": 332, "node_id": "Task_FirstDungeon_Battle_Actor_Skill17Success", "monotonic_time": 52886531129300}
+    ],
+    "select_seconds": 31.3064255,
+    "skill_success_seconds": 66.5475117
+  },
+  "after": {
+    "instance": "EE847900-2EC1-4783-99C3-A1D2E9F836D1",
+    "run_id": 1,
+    "events": [
+      {"seq": 312, "node_id": "Task_FirstDungeon_Battle_Actor_Prepare", "monotonic_time": 54299102042200},
+      {"seq": 314, "node_id": "Task_FirstDungeon_Battle_Actor_Select17", "monotonic_time": 54301019463900},
+      {"seq": 324, "node_id": "Task_FirstDungeon_Battle_Actor_Skill17Try0Level", "monotonic_time": 54311481104300},
+      {"seq": 328, "node_id": "Task_FirstDungeon_Battle_Actor_Skill17Try0Level@await", "monotonic_time": 54312254347000},
+      {"seq": 331, "node_id": "Task_FirstDungeon_Battle_Actor_Skill17Try0Confirm", "monotonic_time": 54315858196000},
+      {"seq": 338, "node_id": "Task_FirstDungeon_Battle_Actor_Skill17Success", "monotonic_time": 54320671440800}
+    ],
+    "select_seconds": 1.9174217,
+    "skill_success_seconds": 21.5693986,
+    "result": {
+      "state": "Completed",
+      "quiescent": true,
+      "result_saved": true,
+      "completed_business_units": 3,
+      "completed_cycles": 1,
+      "reports_remaining": 0,
+      "inputs_attempted": 52,
+      "inputs_accepted": 52,
+      "inputs_backend_called": 52,
+      "inputs_rejected": 0,
+      "elapsed_seconds": 494.5739974,
+      "combat_seconds": 41.7131896,
+      "crashes": 0
+    },
+    "sampled_peak_private_bytes": 971223040
+  },
+  "candidate_exe_sha256": "3eb4ce81971ceffcc8e8ce7aa67b43d7f753d44ad0f541102eaa46e147fb44f1",
+  "limitations": [
+    "两次单轮事件比较，不是单图基准或统计性能保证",
+    "网络重试及返城剧情自动续段尚无修正后实机触发证据",
+    "Lv5 来自实际输入后置确认，不包含点击后截图",
+    "内存数字为日志采样峰值，不证明泄漏或资源稳定性",
+    "原始完整日志保留本机；本摘要不替代第三方原生重现"
+  ]
+}

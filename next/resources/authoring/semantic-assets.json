@@ -1095,18 +1095,32 @@
       "validation": "UNVERIFIED"
     },
     "event.network.prompt": {
-      "label": "网络提示（缺少可区分的完整判定）",
+      "label": "网络重试提示（正文与按钮共同确认）",
       "category": "事件/网络",
       "role": "observation",
-      "variants": {},
-      "validation": "MISSING_REAL_RECIPE"
+      "variants": {
+        "zh-Hant": {
+          "condition": {
+            "mode": "all",
+            "conditions": [
+              {"mode": "template", "image": "network_error_zh_hant", "threshold": 0.86, "roi": [200, 650, 500, 180]},
+              {"mode": "template", "image": "network_retry_zh_hant", "threshold": 0.86, "roi": [260, 800, 380, 220]}
+            ]
+          },
+          "validation": "REAL_FRAME_REPORTED"
+        }
+      }
     },
     "event.network.retry.action": {
-      "label": "网络重试按钮（缺少安全位置配方）",
+      "label": "网络重试按钮",
       "category": "事件/网络",
       "role": "position",
-      "variants": {},
-      "validation": "MISSING_REAL_RECIPE"
+      "variants": {
+        "zh-Hant": {
+          "condition": {"mode": "template", "image": "network_retry_zh_hant", "threshold": 0.86, "roi": [260, 800, 380, 220]},
+          "validation": "REAL_FRAME_REPORTED"
+        }
+      }
     },
     "event.maintenance.prompt": {
       "label": "明确维护提示（缺少实机配方）",

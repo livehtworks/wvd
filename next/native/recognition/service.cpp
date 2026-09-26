@@ -103,6 +103,8 @@ contracts::Observation Service::evaluate(const contracts::FrameEnvelope &frame,
             cache_.frame_key = key;
             cache_.results.clear();
             cache_.result_bytes = 0;
+            cache_.template_results.clear();
+            cache_.template_result_bytes = 0;
         }
         return evaluate_locked(*frame_pixels_, request, business, frame.identity);
     } catch (const ResourcePressure &) {
@@ -238,12 +240,12 @@ contracts::Observation Service::evaluate_locked(const FramePixels &pixels, const
                                  scope, cache_);
         require(detail.is_object() && detail.value("schema", 0) == 1,
                 "CUSTOM_DETAIL_INVALID");
-        if (cache_.results.size() < 128) {
+        if (cache_.results.size() + cache_.template_results.size() < 128) {
             std::size_t nodes = 256;
             if (bounded_json(detail, nodes)) {
                 const auto payload_bytes = detail.dump().size();
                 if (payload_bytes <= 8192 &&
-                    cache_.result_bytes + key.size() + payload_bytes <= 1024 * 1024) {
+                    cache_.result_bytes + cache_.template_result_bytes + key.size() + payload_bytes <= 1024 * 1024) {
                     cache_.results.emplace(key, detail);
                     cache_.result_bytes += key.size() + payload_bytes;
                 }
@@ -335,8 +337,8 @@ ResourceStats Service::resource_stats() const {
     result.peak_matches = work.peak_matches;
     result.estimated_workspace_bytes = work.estimated_workspace_bytes;
     result.peak_estimated_workspace_bytes = work.peak_estimated_workspace_bytes;
-    result.result_cache_entries = cache_.results.size();
-    result.result_cache_estimated_bytes = cache_.result_bytes;
+    result.result_cache_entries = cache_.results.size() + cache_.template_results.size();
+    result.result_cache_estimated_bytes = cache_.result_bytes + cache_.template_result_bytes;
     return result;
 }
 } // namespace wvd::recognition

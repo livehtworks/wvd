@@ -58,6 +58,9 @@ struct Cache {
     std::string frame_key;
     std::map<std::string, nlohmann::json> results;
     std::uint64_t result_bytes{};
+    // 单帧的纯模板叶子证据，服务换帧时清空；不保存像素或业务/运动状态。
+    std::map<std::string, nlohmann::json> template_results;
+    std::uint64_t template_result_bytes{};
 };
 
 using Handler = std::function<nlohmann::json(const Bundle &, Pixels, const nlohmann::json &,

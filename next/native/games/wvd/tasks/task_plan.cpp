@@ -227,8 +227,8 @@ WvdTaskPlan WvdTaskPlan::with_route(const J &targets) const {
     return plan;
 }
 WvdTaskPlan WvdTaskPlan::with_last_harken_arrival() const {
-    if (route_.empty() || route_.back().target != "position")
-        throw std::runtime_error("TASK_HARKEN_ARRIVAL_REQUIRES_POSITION");
+    if (route_.empty() || (route_.back().target != "position" && route_.back().target != "dungFlag"))
+        throw std::runtime_error("TASK_HARKEN_ARRIVAL_REQUIRES_EXIT_TARGET");
     auto plan = *this;
     plan.route_.back().harken_arrival = true;
     return plan;

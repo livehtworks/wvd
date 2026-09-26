@@ -6,7 +6,7 @@
 - Windows Next 的活动服务由 `next/native/app/main.cpp` 启动，`Application` 装配唯一原生 `FlowExecutor`、MuMu/ADB/scrcpy 设备会话和 OpenCV/ORT 识别。Vue 通过同源 API 编辑配置、战斗方案和作者流程。
 - 独立候选在 `next/dist/wvd-next-native`，入口为 `启动WVD原生版.bat`；数据目录为 `%LOCALAPPDATA%/WvdNext`。候选不是生产切换。
 - Maa SDK 集成源码和旧阶段工具/测试已移至 `next/archive/`；当前 CMake、构建和有限验收不调用 Maa。
-- 当前工作树基于 `661069f`，内存工作集、共享像素缓存和事件/地图/悬赏回归见 [本轮交付](memory-work-package-661069f-result.md)；上一轮 R01-R10 见 [修复收口](repair-8f61540-closure.md)。候选的实际 commit、未提交 diff、EXE、前端和资源身份以 `next/dist/wvd-next-native/DELIVERY_STATUS.json` 为准；打包不等于实机通过。
+- 本轮修复比较基线为 `8583719`；内存工作集、共享像素缓存和事件/地图/悬赏回归见 [内存交付](memory-work-package-661069f-result.md)，上一轮 R01-R10 见 [修复收口](repair-8f61540-closure.md)。候选的实际构建基线、dirty diff、EXE、前端和资源身份以 `next/dist/wvd-next-native/DELIVERY_STATUS.json` 为准；提交源码不冒充重新构建，打包不等于实机通过。
 - OpenCV 34 MB 分配异常的历史归因与本轮治理现状已分栏记录于 [内存复核报告](opencv-memory-review-20260925.md)；目前没有足够现场证据认定泄漏或宣布资源稳定。
 
 ## 已有证据
@@ -24,8 +24,14 @@
 - 早期 B2F 战斗曾依赖自动战斗保底，且被常驻 `resume` 图标误判为阻塞页；现已通过真实繁中技能节点并在根任务达到 `Completed`。特殊敌人双条件 OR 与 A/B 方案虽已接入，真实配置开关仍关闭，未实证分流。见 [实战记录](../next/docs/scorpion-combat-live-20260925.md)与[分流说明](../next/docs/special-combat-recognition-20260925.md)。
 - 2026-09-26，繁中 `Scorpionesses` 根任务从王城经正式 `/api/v1/runs/start` 连续实跑到 `Completed`：提交旧报告、200G 住宿、矿石跳轮、悬赏刷新、初始奈落 B2F 自动地图导航、蝎女战斗技能、战后整体恢复、哈肯返城、提交本轮报告和按间隔住宿。落盘 `completed_cycles=1`、`reports_remaining=0`、`completed_business_units=3`，62 次输入执行、0 次拒绝，最终画面为王城；记录见 [蝎女实机续段](../next/docs/scorpion-cycle-live-20260925.md)。之前直连失败、繁中技能弹窗、恢复面板和哈肯终点交接均在该任务的有限修复与重跑中定位，不能把这一轮成功外推到其它任务或异常分支。
 - 蝎女连续运行由 `next/tools/run_scorpion_loop.ps1` 通过正式 API 串联完整单轮；只有业务、结果和输入全部确认成功才开始下一轮。原生截帧复用现有识别帧，`%LOCALAPPDATA%/WvdNext/recent-frames` 最多保留 240 张、128 MiB，每 15 秒至多一张 JPEG；异常 PNG 仍在各轮 `diagnostics/` 中，不受滚动裁剪。守护日志在 `%LOCALAPPDATA%/WvdNext/overnight`。这只是连续运行保护和取证能力，长期稳定性须以后续现场结果判定。
+- 2026-09-26 普通蝎女 B2F 路线将战后第二个地图坐标改为 `dungFlag` 快捷返哈肯；原生路线图断言确认不再进入第二次地图搜索，且仅在识别到哈肯楼层菜单后确认该任务点。更新候选后的循环实际完成 5 轮；第 6 轮已返哈肯，在郊外归还王城后遇狮樱普通剧情，以 `NATIVE_INPUT_RESULT_UNCONFIRMED` 中断，循环正常停下，并非模拟器闪退。
+- 哈肯返城链已补普通剧情交接：归还后可进入剧情分支，仅点击识别到的继续箭头，建筑菜单恢复后才完成返城，不重放归还输入。第 6 轮失败帧由正式原生识别器得到剧情 Hit、城市就绪 NoHit、修正后返城后置条件 Hit；定向编译检查通过，新的实际返城剧情续段尚未验收。证据见 [返城剧情记录](scorpion-return-dialogue-20260926.md)。
+- 续跑在进入诅咒之轮时遇繁中网络重试框中断。网络正文/按钮素材和默认覆盖层事件已补入正式任务封装（包含 `@await`），沿用事件挂起与原后置条件确认，不重放业务输入、不自动重启模拟器；实机随机网络恢复待自然触发，记录合并在上述返城续修文档。
+- 网络修正版已实际完成两轮。第二轮暴露技能选择候选的同帧重复阻塞扫描和等级条未识别后直接放行默认等级的问题；同帧有界叶子复用、现场等级素材与新帧选中态确认已接入候选。修正后真实蝎女战斗选到第 17 条从 31.31 秒降为 1.917 秒，整次技能链从 66.55 秒降为 21.569 秒，并完成配置 Lv5 的输入后置确认；14:14:57 完整循环完成，包括恢复、返城、提交和住宿，循环继续。整体仍偏慢，剩余新帧扫描与 ADB 元数据开销未分项测量，见 [战斗延迟记录](combat-latency-and-levels-20260926.md)。
 
 ## 剩余边界
+
+- 2026-09-26 修复源码、前后事件证据、实机通过范围和未解决问题集中于 [GPT 审核交接](reviews/runtime-repair-review-20260926.md)；整次技能仍约 21.6 秒，元数据/识别/输入的分段计时与随机网络/剧情续段未闭合。
 
 - 原生任务工厂已改用项目中立的编译期图字段，发布后运行时只消费强类型 `FlowProgram`；工厂直接构造强类型步骤仍待完成。
 - `661069f` 内存与回归工作包完成代码接线、增量 Release 构建和有限定向原生检查；本次蝎女实跑不能替代工作台 UI、其它事件或内存峰值验证。旧 OpenCV 34 MB 分配失败仍未最终归因，新预算也不是安全内存上限。
