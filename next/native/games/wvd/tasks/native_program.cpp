@@ -50,6 +50,8 @@ std::vector<workflow::EventRule> events(const J &rules, const std::string &sourc
         const auto category = rule.at("class").get<std::string>();
         if (category == "overlay") event.category = workflow::EventClass::Overlay;
         else if (category == "encounter") event.category = workflow::EventClass::Encounter;
+        else if (category == "exception") event.category = workflow::EventClass::Exception;
+        else if (category == "special") event.category = workflow::EventClass::Special;
         else throw std::runtime_error("NATIVE_EVENT_CLASS_INVALID");
         event.priority = rule.at("priority").get<int>();
         event.exit_budget = std::chrono::milliseconds{rule.value("exit_budget_ms", 5000)};
@@ -92,6 +94,8 @@ Step translate(const std::string &id, const J &node, const J &paths,
     step.next = edges(node, "next");
     step.on_error = edges(node, "on_error");
     step.handles_business_failure = node.value("business_failure_route", false);
+    step.check_group = node.value("check_group", "business");
+    step.unexpected_only = node.value("unexpected_only", false);
     step.max_hit = node.value("max_hit", 1);
     step.time_limit = std::chrono::milliseconds{node.value("timeout", 60000LL)};
     step.delay_after = std::chrono::milliseconds{node.value("post_delay", 0LL)};
@@ -232,6 +236,7 @@ workflow::FlowProgram compile_native_program(const CompiledWorkflow &source,
             await.max_hit = step.max_hit;
             await.event_policy = step.event_policy;
             await.disabled_events = step.disabled_events;
+            await.check_group = step.check_group;
             step.next = {await_id};
             step.delay_after = std::chrono::milliseconds{0};
             definition.steps.emplace(await_id, std::move(await));

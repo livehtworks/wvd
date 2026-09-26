@@ -80,6 +80,12 @@ void collect_images(const J &value, std::set<std::string> &images, std::set<std:
             collect_images(vision::boot_probes(mode == "boot_post"), images, expanded_modes);
         if (expand && mode == "blocking_screen")
             collect_images(vision::blocking_probes(), images, expanded_modes);
+        if (expand && mode == "exception_screen")
+            collect_images(vision::exception_probes(), images, expanded_modes);
+        if (expand && mode == "special_screen") {
+            collect_images(vision::special_screen_probes(), images, expanded_modes);
+            collect_images(vision::ordinary_story_page(), images, expanded_modes);
+        }
         if (expand && (mode == "dialogue_post" || mode == "special_dialogue_post")) {
             collect_images(J{{"mode", "default_dialogue"}}, images, expanded_modes);
             collect_images(vision::boot_probes(true), images, expanded_modes);
@@ -258,7 +264,11 @@ void CompiledWorkflow::validate() const {
     };
     visit(entry);
     require(reached.contains(terminal), "COMPILE_TERMINAL_UNREACHABLE");
-    require(reached.size() == nodes.size(), "COMPILE_ORPHAN_NODE");
+    if (reached.size() != nodes.size())
+        for (const auto &[name, node] : nodes.items()) {
+            (void)node;
+            if (!reached.contains(name)) throw std::runtime_error("COMPILE_ORPHAN_NODE:" + name);
+        }
     require(nodes.at(terminal).value("binding", "") == "Finish",
             "COMPILE_TERMINAL_INVALID");
     // next/on_error 不能越过子任务边界；只有 RunChild 可进入子任务，只有根图可到根终点。
@@ -387,6 +397,13 @@ J PipelineCompiler::request(const J &condition) const {
 }
 void PipelineCompiler::add(const std::string &name, J node) {
     require(!workflow_.nodes.contains(name), "COMPILE_NODE_DUPLICATE");
+    // 子图 append 保留自己的组；只有本构建器创建的节点按业务职责归组。
+    node["check_group"] = workflow_.kind.starts_with("combat.") ? "combat"
+        : workflow_.kind.starts_with("chest.") ? "chest"
+        : workflow_.kind.starts_with("recovery.dialogue") || workflow_.kind.starts_with("recovery.special")
+            || workflow_.kind == "recovery.default_dialogue" || workflow_.kind == "recovery.karma_choice"
+            || workflow_.kind.starts_with("recovery.global_prompt.")
+            ? "special" : workflow_.kind.starts_with("recovery.") ? "exception" : "business";
     node.update({{"pre_delay", 0},
                  {"post_delay", 0},
                  {"rate_limit", 50},
@@ -524,46 +541,33 @@ void PipelineCompiler::compile_interruption() {
     }
     require(!workflow_.nodes.contains("Interrupt") && !workflow_.nodes.contains("BlockedExit"),
             "COMPILE_INTERRUPTION_NAME_CONFLICT");
-    const auto clear = absent(interruption_);
-    // 仅改此构建器声明的节点。append/define_child 的节点已有自己的出口和作用域，
-    // 不能跨进去重写，更不能把 Common 处理器也拦在自己要关闭的弹窗之前。
+    // 不再给正常识别、输入前置和后置套全量 !blocking_screen。
+    // 业务结果不符时由执行器先调异常/特殊处理器；本地出口仅在没有处理器接住时使用。
     for (const auto &name : local_nodes_) {
         auto &node = workflow_.nodes[name];
         const auto action = node.value("binding", "");
         if (action == "RequireRecovery")
             continue;
-        if (node.value("observation", "") == "Registered" && !node.value("pure_business_guard", false))
-            node["observation_args"] = all({clear, node.at("observation_args")});
-        if (action == "Input") {
-            auto &p = node["operation_args"];
-            p["scene_recognition"]["parameters"] = all({clear, p.at("scene_recognition").at("parameters")});
-            // 固定点位/返回键原本就以同一条件证明场景和目标，包装后仍须保持一致。
-            // 否则同一帧会先查完整 guarded scene，再把未包装的原场景重查一遍。
-            if (!p.at("use_target_center").get<bool>())
-                p["target_recognition"] = p.at("scene_recognition");
-            // 弹窗只是动作后的普通插入，不是业务成功。后继先返回外层；下面所有
-            // WvdConfirm/WvdCombat 的新帧确认也排除弹窗，不能因此消费技能或任务点。
-            p["postcondition"]["parameters"] = any({interruption_, p.at("postcondition").at("parameters")});
-        } else if (action == "WvdConfirm" || action == "WvdCombat" || action == "WvdChest") {
-            auto &confirmation = node["operation_args"]["confirmation"]["parameters"];
-            confirmation = all({clear, confirmation});
-        }
         if (node.contains("next") && !node.at("next").empty()) {
             if (!node.at("next").is_array())
                 throw std::runtime_error("COMPILE_INTERRUPTION_NEXT_NOT_ARRAY:" + name);
             // 已点出技能/恢复等动作时，不把覆盖层当成可重新入场的普通中断。
             // 专属出口保留动作事件和未消费状态；调用者不会将它绑定为正常子返回。
-            node["next"].insert(node["next"].begin(),
+            node["next"].push_back(
                 uncertain_actions_.contains(name) ? name + "OutcomeBlocked" : "Interrupt");
         }
         // on_error 不作正常返回：原生输入拒绝、识别 Error 和预算失败仍须失败/恢复。
     }
     for (const auto &[name, reason] : uncertain_actions_) {
         observe(name + "OutcomeBlocked", interruption_, {name + "OutcomeUnconfirmed"});
+        workflow_.nodes[name + "OutcomeBlocked"]["unexpected_only"] = true;
+        workflow_.nodes[name + "OutcomeBlocked"]["check_group"] = "exception";
         hit_limit(name + "OutcomeBlocked", 128);
         recovery(name + "OutcomeUnconfirmed", reason);
     }
     observe("Interrupt", interruption_, {"BlockedExit"});
+    workflow_.nodes["Interrupt"]["unexpected_only"] = true;
+    workflow_.nodes["Interrupt"]["check_group"] = "exception";
     hit_limit("Interrupt", 128);
     recovery("BlockedExit", interruption_reason_);
 }

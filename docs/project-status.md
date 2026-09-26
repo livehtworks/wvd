@@ -7,12 +7,13 @@
 - 独立候选在 `next/dist/wvd-next-native`，入口为 `启动WVD原生版.bat`；数据目录为 `%LOCALAPPDATA%/WvdNext`。候选不是生产切换。
 - Maa SDK 集成源码和旧阶段工具/测试已移至 `next/archive/`；当前 CMake、构建和有限验收不调用 Maa。
 - 当前关键修复工作包比较基线为 `c1666a0`，K01-K09、R01-R06 已按限定范围收口，见 [当前报告](reviews/key-repairs-review-20260926.md)与[证据索引](reviews/key-repairs-evidence-20260926.json)。原内存治理见 [内存交付](memory-work-package-661069f-result.md)，历史 R01-R10 见 [修复收口](repair-8f61540-closure.md)。本轮提交包含源码、报告和证据索引；候选身份仍以实际构建的 `next/dist/wvd-next-native/DELIVERY_STATUS.json` 为准，源码提交不冒充重新构建或全部任务实机通过。
+- 最新源码已拆开正常战斗/宝箱检查与结果不符后的异常/特殊分派，FlowProgram schema 5；已知异常处理后恢复原观察、不重发输入。受影响 Release 目标及有限接线检查通过，见 [分组说明及剩余边界](reviews/flow-check-dispatch-20260926.md)。本轮按用户要求提交后交 GPT 讨论，没有打包、替换候选或启动游戏；以下候选 EXE 与实机证据仍属于上轮构建。
 - OpenCV 34 MB 分配异常的历史归因与本轮治理现状已分栏记录于 [内存复核报告](opencv-memory-review-20260925.md)；目前没有足够现场证据认定泄漏或宣布资源稳定。
 
 ## 已有证据
 
 - 当前候选 EXE SHA256 `69210c1440e843fa527db452e6e73e5b640a81b74ffc63af202b3f2845ddc123` 已通过同一正式 API 的停止和蝎女普通完整循环：3段 Completed、循环1、报告余量0、住宿已确认、61次底层输入/0拒绝，输入静止、明细完整、结果已落盘，最终在王城。自然启动/住宿普通剧情已经过继续节点；随机网络/维护未触发。真实技能 Lv5 确认33.68秒，完整一轮776.48秒，不宣称提速。
-- 当前 Application 封存共享不可变 FlowProgram，三段共享1个图、各自 Session/Call 状态独立；schema4 累计预算只取显式声明，默认节点60秒不冒充战斗总期限。有效观察周期在输入/等待/事件/身份失效时撤销；未提交的转场失效点击回原分支选择，已提交/送达未知不重发。输入前ADB夹持采用单客户端 window-input-window；最近帧JPEG在RunStore有界线程处理并在终态join。分类计时和details_complete已接入正式结果/API/历史，历史缺字段保持未知。
+- 当前 Application 封存共享不可变 FlowProgram，三段共享1个图、各自 Session/Call 状态独立；最新源码 schema5 的累计预算只取显式声明，默认节点60秒不冒充战斗总期限。有效观察周期在输入/等待/事件/身份失效时撤销；未提交的转场失效点击回原分支选择，已提交/送达未知不重发。输入前ADB夹持采用单客户端 window-input-window；最近帧JPEG在RunStore有界线程处理并在终态join。分类计时和details_complete已接入正式结果/API/历史，历史缺字段保持未知。
 - 锁定依赖通过哈希校验，独立目录 Windows Release 与 Vue 构建并打包。直接 OpenCV 模板、真实 ORT 英文 OCR、原生执行器、双事件退出、scrcpy/ADB 报文、公共 slot 六轮/两处调用及协调器的定向离线检查通过。
 - 正式 `Application` API 在隔离数据目录完成作者流程保存、应用重开、编译、执行、根业务终点及结果落盘；同一应用入口能带 `ACTIVE_BEG_MONEY` 装配蝎女原生任务并进入 `Task_` 步骤。协调器的延期恢复可响应停止。离线后端禁止游戏输入，不表示任务实机通过。
 - 候选在桌面及 390px 手机浏览器中完成工作台配置保存重开和页面切换；候选进程实际加载自身目录 OpenCV/ORT，PE 导入无 Maa。先前旧引擎的实操不能转记为新链结果。新链在隔离候选上已连接真实 MuMu，并通过同一 Application API 实跑一次王城→公会→委托→悬赏列表（2 次输入，终态 Completed）；从悬赏列表再次运行打开悬赏页，以 0 次输入完成。此次不是工作台 UI 点击验收，也不代表完整任务通过，见 [实机记录](../next/docs/native-real-device-validation-53718f1-20260924.md)。

@@ -82,9 +82,43 @@ int main(int argc, char **argv) {
         const auto with_network = wvd::games::recovery::with_boot_recovery(network_parent.finish(), false);
         const auto network_program = wvd::games::tasks::compile_native_program(with_network, J::object(), "network-test");
         const auto &parent_await = network_program.definitions.at("Entry").steps.at("Task_Entry@await");
-        if (parent_await.event_policy.empty() || parent_await.event_policy.back().id != "wvd-network-retry" ||
-            parent_await.event_policy.back().resume != wvd::workflow::ResumeMode::Reobserve)
+        if (parent_await.event_policy.size() != 3 || parent_await.event_policy.front().id != "wvd-network-retry" ||
+            parent_await.event_policy.front().category != wvd::workflow::EventClass::Exception ||
+            parent_await.event_policy.front().resume != wvd::workflow::ResumeMode::Reobserve ||
+            parent_await.event_policy.back().category != wvd::workflow::EventClass::Special)
             throw std::runtime_error("NETWORK_EVENT_AWAIT_NOT_CONNECTED");
+        if (argc == 2 && std::string(argv[1]) == "--dispatch") {
+            std::cout << "deferred network observer compiled\n";
+            auto turn_profile = route_profile;
+            turn_profile["STRATEGY"] = J::array({J{{"group_name", "技能检查"}, {"skill_settings", J::array({
+                J{{"role_var", ""}, {"skill_var", "左上技能"}, {"skill_lvl", 5}, {"target_var", "next"}}
+            })}}});
+            const auto turn = wvd::games::combat::take_turn(turn_profile, {});
+            turn.validate();
+            std::cout << "normal combat turn compiled\n";
+            if (turn.nodes.at("Prepare").at("observation_args").dump().find("blocking_screen") != std::string::npos ||
+                !turn.nodes.at("Interrupt").value("unexpected_only", false) ||
+                turn.nodes.at("Prepare").at("check_group") != "combat")
+                throw std::runtime_error("NORMAL_TURN_STILL_SCANS_BLOCKING_SCREENS");
+            for (const auto &[name, node] : turn.nodes.items()) {
+                if (node.value("unexpected_only", false) || node.value("binding", "") == "RequireRecovery") continue;
+                for (const auto *field : {"observation_args", "operation_args"})
+                    if (node.contains(field) && node.at(field).dump().find("blocking_screen") != std::string::npos)
+                        throw std::runtime_error("NORMAL_SKILL_PHASE_STILL_SCANS_EXCEPTIONS:" + name);
+            }
+            const auto compiled = wvd::games::tasks::compile_native_program(
+                wvd::games::recovery::with_boot_recovery(scorpion_dungeon, false), J::object(), "dispatch-test");
+            compiled.validate();
+            for (const auto &[id, definition] : compiled.definitions)
+                for (const auto &[name, node] : definition.steps)
+                    if (name.starts_with("Task_") && (node.check_group == "combat" || node.check_group == "chest")) {
+                        for (const auto &rule : node.event_policy)
+                            if (rule.id.starts_with("wvd-") && rule.category == wvd::workflow::EventClass::Overlay)
+                                throw std::runtime_error("BUSINESS_DOMAIN_HAS_PROACTIVE_EXCEPTION_SCAN:" + name);
+                    }
+            std::cout << "production compiler: combat/chest groups, deferred handlers and await scopes passed\n";
+            return 0;
+        }
         const bool network_sample = argc == 3 && std::string(argv[1]) == "--network";
         const bool skill_sample = argc == 3 && std::string(argv[1]) == "--skill";
         wvd::games::tasks::PipelineCompiler skill_probes("skill-probes");

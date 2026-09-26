@@ -15,6 +15,11 @@ void FlowProgram::validate() const {
             *definition.cumulative_budget > std::chrono::minutes{30}))
             throw std::runtime_error("FLOW_DEFINITION_BUDGET_INVALID");
         for (const auto &[step_id, step] : definition.steps) {
+            if (step.check_group != "business" && step.check_group != "combat" &&
+                step.check_group != "chest" && step.check_group != "special" && step.check_group != "exception")
+                throw std::runtime_error("FLOW_CHECK_GROUP_INVALID");
+            if (step.unexpected_only && (!step.guard || !std::holds_alternative<Observe>(step.data)))
+                throw std::runtime_error("FLOW_UNEXPECTED_STEP_INVALID");
             if (step.business_guard && (step.guard || !step.business_guard->is_object() ||
                 !std::holds_alternative<Route>(step.data)))
                 throw std::runtime_error("FLOW_BUSINESS_GUARD_INVALID");

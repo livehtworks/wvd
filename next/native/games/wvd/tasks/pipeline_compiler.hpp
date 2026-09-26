@@ -75,7 +75,7 @@ class PipelineCompiler {
     void delay_after(const std::string &name, int milliseconds);
     void postcondition_budget(const std::string &name, int milliseconds);
     void allowed_area(const std::string &name, nlohmann::json area);
-    // 显式启用本作用域的普通插入出口；不改子图、不吞掉错误或伪造业务完成。
+    // 仅在正常候选全未命中、且异常处理器未接住时检查本作用域的插入出口。
     // 调用者必须把 BlockedExit 绑定到重新观察入口；独立运行则报告需要外层处理。
     void interrupt_on(nlohmann::json condition, std::string reason);
     void use_dialogue(recovery::DialoguePolicy policy);

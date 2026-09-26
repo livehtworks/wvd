@@ -7,6 +7,7 @@
 #include "games/wvd/vision/download_probes.hpp"
 #include "games/wvd/vision/network_probes.hpp"
 #include "games/wvd/vision/dialogue_probes.hpp"
+#include <tuple>
 
 namespace wvd::games::recovery {
 namespace {
@@ -96,6 +97,9 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, Dialogue
     auto low_retry = retry;
     low_retry["threshold"] = .60;
     const auto to_title = C::image("totitle"), resume = C::image("resume");
+    // 地图快捷继续也复用 resume；异常处理器不能把底层常驻导航按钮当启动提示。
+    const auto resume_prompt = C::all({resume, C::absent(J{{"mode", "combat_active"}}),
+        C::absent(C::image("dungFlag")), C::absent(C::image("mapFlag"))});
     J recognized = common ? C::any({J{{"mode", "boot_post"}}, panel}) : J{{"mode", "boot_post"}};
     if (!task_stop.is_null())
         recognized = C::any({task_stop, recognized});
@@ -182,7 +186,7 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, Dialogue
     graph.click("Retry", retry, retry, progressed(retry), {"Entry"});
     graph.fixed_click("RetryLow", low_retry, progressed(low_retry), {450, 900}, {"Entry"});
     graph.click("ReturnTitle", to_title, to_title, progressed(to_title), {"Entry"});
-    graph.click("Resume", resume, resume, progressed(resume), {"Entry"});
+    graph.click("Resume", resume_prompt, resume, progressed(resume), {"Entry"});
     graph.fixed_click("Attention", attention, progressed(attention), {450, 1450}, {"Entry"});
     graph.fixed_click("Title", title, progressed(title), {450, 1450}, {"Entry"});
     const J pause{{"mode", "pause"}};
@@ -288,24 +292,53 @@ tasks::CompiledWorkflow with_boot_recovery(const tasks::CompiledWorkflow &task, 
     // 非恢复首段不执行 game_restarted，避免把首次进入误记成崩溃/重置策略。
     graph.route("Entry", {boot});
     const auto network_entry = graph.define_child("NetworkOverlay", retry_network_prompt());
-    graph.event_scope("Entry", J::array({J{{"id", "wvd-network-retry"},
-        {"class", "overlay"}, {"priority", 1000}, {"detect", vision::network_retry_prompt()},
-        {"source_node", "Entry"}, {"entry", network_entry}, {"resume", {{"mode", "reobserve"}}}}}));
+    const auto diagnostics_entry = graph.define_child("UnexpectedScreens", clear_common_screens(allow_download, task.dialogue_policy));
+    // finish 会验证完整调用闭包，处理器必须从声明入口可达，而非封存后才补孤立引用。
+    graph.event_scope("Entry", J::array({
+        J{{"id", "wvd-network-retry"}, {"class", "exception"}, {"priority", 1000},
+          {"detect", vision::network_retry_prompt()}, {"source_node", "Entry"}, {"entry", network_entry},
+          {"resume", {{"mode", "reobserve"}}}},
+        J{{"id", "wvd-exception-screen"}, {"class", "exception"}, {"priority", 800},
+          {"detect", {{"mode", "exception_screen"}}}, {"source_node", "Entry"}, {"entry", diagnostics_entry},
+          {"resume", {{"mode", "reobserve"}}}},
+        J{{"id", "wvd-special-screen"}, {"class", "special"}, {"priority", 400},
+          {"detect", {{"mode", "special_screen"}}}, {"source_node", "Entry"}, {"entry", diagnostics_entry},
+          {"resume", {{"mode", "reobserve"}}}}
+    }));
     auto result = graph.finish();
-    // 所有业务步骤及输入等待器都继承同一个网络处理器；覆盖层期间暂停父级
-    // 等待预算，处理后重新观察原后置条件，不跳回任务入口、不自动重启模拟器。
-    for (const auto &[name, node] : result.nodes.items()) {
-        // 共享失败出口也被子处理器引用，不能在这里再注册处理器自身。
-        if (name == "Entry" || name.starts_with("NetworkOverlay_") ||
-            node.value("binding", "") == "RequireRecovery") continue;
-        J rule{{"id", "wvd-network-retry"}, {"class", "overlay"}, {"priority", 1000},
-               {"detect", vision::network_retry_prompt()}, {"source_node", name},
-               {"entry", network_entry}, {"resume", {{"mode", "reobserve"}}}};
+    // 启动页自己分派；业务子图只有结果不符才进入异常→特殊流程。
+    // 挂起原调用/输入回执，处理后核对原结果，不跳回任务入口、不重放业务输入。
+    for (auto &[name, node] : result.nodes.items()) {
+        if (name.starts_with("UnexpectedScreens_") || name.starts_with("NetworkOverlay_")) {
+            // 处理器自己的阶段已按已知页面推进，禁止再次继承入口的同组处理器。
+            if (!result.event_scopes.contains(name))
+                result.event_scopes[name] = {{"rules", J::array()}, {"disabled", J::array()}};
+            auto &scope = result.event_scopes[name];
+            if (scope.is_array()) scope = {{"rules", scope}, {"disabled", J::array()}};
+            for (auto id : {"wvd-network-retry", "wvd-exception-screen", "wvd-special-screen"})
+                scope["disabled"].push_back(id);
+            continue;
+        }
+        if (!name.starts_with("Task_")) continue;
+        // 旧外层 Dispatch 也常把 Blocked 放在战斗/地图之前；把正向阻塞观察
+        // 一并归到诊断候选，不能只优化技能子图而保留外层同一问题。
+        if (node.value("operation", "Route") == "Route" && node.value("observation", "") == "Registered" &&
+            node.at("observation_args").value("mode", "") == "blocking_screen") {
+            node["unexpected_only"] = true;
+            node["check_group"] = "exception";
+        }
         if (!result.event_scopes.contains(name))
             result.event_scopes[name] = {{"rules", J::array()}, {"disabled", J::array()}};
         auto &scope = result.event_scopes[name];
-        if (scope.is_array()) scope.push_back(rule);
-        else scope["rules"].push_back(rule);
+        auto &rules = scope.is_array() ? scope : scope["rules"];
+        for (const auto &[id, category, priority, detect, entry] : {
+                std::tuple{"wvd-network-retry", "exception", 1000, vision::network_retry_prompt(), network_entry},
+                std::tuple{"wvd-exception-screen", "exception", 800, J{{"mode", "exception_screen"}}, diagnostics_entry},
+                std::tuple{"wvd-special-screen", "special", 400, J{{"mode", "special_screen"}}, diagnostics_entry}}) {
+            rules.push_back({{"id", id}, {"class", category}, {"priority", priority},
+                {"detect", detect}, {"source_node", name}, {"entry", entry},
+                {"resume", {{"mode", "reobserve"}}}});
+        }
     }
     result.refresh_images();
     result.validate();

@@ -51,7 +51,34 @@ std::vector<FlowExecutor::ScopedEvent> FlowExecutor::effective_events(const work
     merge(current, stack_.size() - 1);
     std::vector<ScopedEvent> result;
     for (const auto &[id, rule] : inherited) { (void)id; result.push_back(rule); }
+    std::stable_sort(result.begin(), result.end(), [](const auto &a, const auto &b) {
+        return a.rule.priority > b.rule.priority;
+    });
     return result;
+}
+std::optional<TickResult> FlowExecutor::check_unexpected(Frame &frame, const workflow::Step &current,
+    const contracts::FrameEnvelope &image, const std::string &reason, bool force) {
+    if (!frame.no_progress_since) frame.no_progress_since = Clock::now();
+    // 一帧 NoHit 常是动画/加载，不是异常。这里只延迟诊断，不缩短原业务等待预算。
+    const auto now = Clock::now();
+    const bool diagnose = force || (now - *frame.no_progress_since >= 1s && now >= frame.next_diagnostic_poll);
+    frame.diagnostic_checked = diagnose;
+    if (diagnose) frame.next_diagnostic_poll = now + 1s;
+    last_diagnostic_ = {{"source_path", current.source_path}, {"reason", reason},
+        {"business_group", current.check_group}, {"checked_groups", nlohmann::json::array()}};
+    // 异常先处理，特殊剧情其次；遭遇事件仍是原作用域的正常交接，不能提前全图扫描。
+    const auto rules = effective_events(current);
+    for (const auto &[category, name] : {std::pair{workflow::EventClass::Exception, "exception"},
+                                       std::pair{workflow::EventClass::Special, "special"},
+                                       std::pair{workflow::EventClass::Encounter, "encounter"}}) {
+        if (!diagnose && category != workflow::EventClass::Encounter) continue;
+        if (std::none_of(rules.begin(), rules.end(),
+            [category](const ScopedEvent &event) { return event.rule.category == category; })) continue;
+        last_diagnostic_["checked_groups"].push_back(name);
+        if (auto result = check_events(frame, current, image, category)) return result;
+    }
+    last_diagnostic_["outcome"] = "waiting_for_business_result";
+    return std::nullopt;
 }
 std::optional<TickResult> FlowExecutor::poll_wait_events(Frame &frame, const workflow::Step &current) {
     if (effective_events(current).empty() || Clock::now() < frame.next_event_poll) return std::nullopt;
@@ -60,6 +87,7 @@ std::optional<TickResult> FlowExecutor::poll_wait_events(Frame &frame, const wor
     const auto image = observation_frame();
     frame.selected_frame.reset(); frame.selected_observation.reset();
     if (auto result = check_events(frame, current, image, workflow::EventClass::Overlay)) return result;
+    // 显式延时没有“结果不符”，不能顺手全扫异常/特殊页面。
     return check_events(frame, current, image, workflow::EventClass::Encounter);
 }
 std::optional<TickResult> FlowExecutor::check_events(Frame &frame, const workflow::Step &current,
@@ -105,6 +133,8 @@ std::optional<TickResult> FlowExecutor::check_events(Frame &frame, const workflo
     for (const auto &scoped : rules) {
         const auto &rule = scoped.rule;
         if (rule.category != category) continue;
+        // 同优先级仍检查歧义；已命中高优先级时不再计算任何低优先级候选。
+        if (!hits.empty() && rule.priority < priority) break;
         if (std::any_of(frame.event_exits.begin(), frame.event_exits.end(),
             [&](const EventExit &exit) { return exit.id == rule.id; })) continue;
         if (std::any_of(stack_.begin(), stack_.end(), [&](const Frame &active) {
@@ -142,6 +172,10 @@ std::optional<TickResult> FlowExecutor::check_events(Frame &frame, const workflo
         return std::nullopt;
     }
     const auto selected = *hits.front();
+    if (category == workflow::EventClass::Exception || category == workflow::EventClass::Special) {
+        last_diagnostic_["selected_event"] = selected.rule.id;
+        last_diagnostic_["outcome"] = "handling";
+    }
     if (selected.rule.disposition == workflow::EventDisposition::ExternalBlocked) return blocked(selected.rule.reason);
     if (stack_.size() >= 8) return fail("EVENT_DEPTH_LIMIT");
     const auto &definition = program_.definitions.at(selected.rule.handler_definition);
@@ -173,7 +207,7 @@ TickResult FlowExecutor::resume_event(Frame &frame, const workflow::Step &curren
     if (guard.outcome == contracts::RecognitionOutcome::Error)
         return fail(guard.error_code.empty() ? "EVENT_RESUME_RECOGNITION_ERROR" : guard.error_code);
     if (guard.outcome == contracts::RecognitionOutcome::NoHit) {
-        if (auto event = check_events(frame, current, image, workflow::EventClass::Encounter)) return *event;
+        if (auto event = check_unexpected(frame, current, image, "event_resume_not_confirmed")) return *event;
         return waiting(50ms);
     }
     // 不把“处理器结束/回到地图”当作原动作成功。只有原后置条件的新证据才结清回执。
@@ -188,7 +222,7 @@ TickResult FlowExecutor::resume_event(Frame &frame, const workflow::Step &curren
         if (result.outcome == contracts::RecognitionOutcome::Error)
             return fail(result.error_code.empty() ? "EVENT_PARENT_RESULT_ERROR" : result.error_code);
         if (result.outcome == contracts::RecognitionOutcome::NoHit) {
-            if (auto event = check_events(frame, current, image, workflow::EventClass::Encounter)) return *event;
+            if (auto event = check_unexpected(frame, current, image, "event_parent_result_not_confirmed")) return *event;
             return waiting(50ms);
         }
         const auto &a = result.basis; const auto &b = pending.before;

@@ -5,8 +5,33 @@
 #include "download_probes.hpp"
 #include "network_probes.hpp"
 #include <json.hpp>
+#include <utility>
 
 namespace wvd::games::vision {
+// 结果不符后的异常诊断：网络/资源/启动/Pause/死亡。正常业务帧不调用此表。
+inline nlohmann::json exception_probes() {
+    using J = nlohmann::json;
+    J probes = J::array({network_prompt_zh_hant(), download_button_zh_hant(), download_button_en()});
+    for (const auto &[image, threshold] : {std::pair{"retry_blank", .65}, std::pair{"retry", .8},
+                                         std::pair{"retry", .60}, std::pair{"totitle", .8}})
+        probes.push_back({{"mode", "template"}, {"image", image}, {"threshold", threshold}});
+    for (const auto *image : {"boot_attention_zh", "boot_attention"})
+        probes.push_back({{"mode", "template"}, {"image", image}, {"threshold", .86},
+                          {"roi", {250, 430, 420, 220}}});
+    probes.push_back({{"mode", "template"}, {"image", "boot_title_logo"}, {"threshold", .86},
+                      {"roi", {100, 300, 700, 470}}});
+    for (const auto *mode : {"pause", "party_death", "party_defeat"}) probes.push_back({{"mode", mode}});
+    return probes;
+}
+// 特殊流程不与网络故障、战斗、开箱混成一个全局候选池。
+inline nlohmann::json special_screen_probes() {
+    using J = nlohmann::json;
+    J probes = J::array({J{{"mode", "special_dialogue"}}, J{{"mode", "default_dialogue"}}});
+    for (const auto *image : {"sandman_recover", "blessing", "ambush", "ignore"})
+        probes.push_back({{"mode", "template"}, {"image", image}});
+    probes.push_back(harken_buff_menu());
+    return probes;
+}
 // 阻塞页的资源/参数由视觉和发布清单共同消费；低阈值仅保留旧 Retry 退路。
 inline nlohmann::json blocking_probes(bool include_party_prompts = true) {
     using J = nlohmann::json;

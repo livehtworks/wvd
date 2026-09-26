@@ -27,11 +27,12 @@ Vue 工作台 -> 同源 HTTP API -> Application
 ## 程序与观察所有权
 
 - 发布图为 `shared_ptr<const FlowProgram>`，同一请求的重复 NativeUnit 引用同一对象；RunDefinition 不可复制。每个 Session 的执行栈、命中计数、回执和事件状态独立，停止线程持有的 Session 覆盖程序/识别服务寿命。
-- FlowProgram schema 4 显式保存 Definition 累计预算和纯业务 guard；作者文档仍经正式发布重编译，历史图只读，不做旧 schema 自动回退。预算来自原声明，新 Call 签发新期限，内部跳转不刷新；嵌套事件暂停父有效时间，Run 墙钟始终继续。
+- FlowProgram schema 5 显式保存 Definition 累计预算、纯业务 guard、业务检查组和结果不符后的异常候选；作者文档仍经正式发布重编译，历史图只读，不做旧 schema 自动回退。预算来自原声明，新 Call 签发新期限，内部跳转不刷新；嵌套事件暂停父有效时间，Run 墙钟始终继续。
 - FlowExecutor 的 ObservationCycle 只保留本轮帧和同有效事件作用域的覆盖层 NoHit；输入、等待轮询、事件返回、身份/TTL失效后重新取帧。技能索引通过游戏层只读业务谓词选路；不是视觉命中，不授权点击，也不消费技能次数。场景和目标仍走 InputGate 单次消费。
 - 结果先保存无分配安全事实并回收输入，再构造富诊断。`details_complete=false` 在 API/历史/终态明示，不能清除未决输入、报告 Completed 或自动恢复。WORKER_ABORT 是最外层兜底，不替代正常存储错误。
 - 最近帧 JPEG 由 RunStore 的受控单线程与单 pending 槽完成，另最多一张 in-flight，结束关闭接收并 join；不移动业务/故障证据到可丢弃槽。匹配日志 OS 标量采样/普通写入至多每秒一次，资源失败仍即时记录。
 - 性能固定数组只记累计分类和次数；主线程嵌套耗时排除子段，并行 worker 耗时不与墙钟相加。每次技能的来源起止、实际 match/缓存/ADB 数和未归因余量随现有会话结果落盘，不新增性能后台服务。
+- 正常战斗/开箱按各自 Definition 推进；内置异常和特殊处理器只在当前结果持续不符时按优先级分派，不再给每个正常节点包裹整组 `!blocking_screen`。动画/加载去抖为 1 秒，仅控制诊断开始与限频，不是页面跳转期限；处理器恢复后核对原回执，不重放输入。作者显式 overlay 抢占规则保留。详见 [分组与恢复边界](../../docs/reviews/flow-check-dispatch-20260926.md)。
 
 ## 本轮修复后的责任边界
 

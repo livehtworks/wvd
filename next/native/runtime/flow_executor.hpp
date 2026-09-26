@@ -107,6 +107,9 @@ class FlowExecutor final {
         std::optional<Clock::time_point> invocation_deadline;
         Clock::time_point entered_at;
         Clock::time_point next_event_poll{};
+        std::optional<Clock::time_point> no_progress_since;
+        Clock::time_point next_diagnostic_poll{};
+        bool diagnostic_checked{};
         std::optional<Clock::time_point> delay_until;
         Clock::duration paused_event_time{};
         bool next_pending{};
@@ -133,6 +136,7 @@ class FlowExecutor final {
         std::optional<std::string> clear_overlay_scope;
     };
     std::optional<ObservationCycle> observation_cycle_;
+    nlohmann::json last_diagnostic_ = nullptr;
     contracts::FrameEnvelope observation_frame();
     void invalidate_observation();
 
@@ -151,6 +155,9 @@ class FlowExecutor final {
     std::optional<TickResult> check_events(Frame &frame, const workflow::Step &current,
         const contracts::FrameEnvelope &image, workflow::EventClass category);
     std::optional<TickResult> poll_wait_events(Frame &frame, const workflow::Step &current);
+    // 仅在当前业务的候选/场景/目标/后置条件不符时调用；不把正常动画当成失败。
+    std::optional<TickResult> check_unexpected(Frame &frame, const workflow::Step &current,
+        const contracts::FrameEnvelope &image, const std::string &reason, bool force = false);
     std::vector<ScopedEvent> effective_events(const workflow::Step &current) const;
     // 按暂停区间并集记账，嵌套事件不得重复延长期限；覆盖所有祖先帧。
     void account_event_time();

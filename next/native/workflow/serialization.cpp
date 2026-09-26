@@ -25,8 +25,11 @@ J request(const recognition::Request &value) {
     return result;
 }
 J event(const EventRule &value) {
+    const auto category = value.category == EventClass::Overlay ? "overlay"
+        : value.category == EventClass::Encounter ? "encounter"
+        : value.category == EventClass::Exception ? "exception" : "special";
     return {{"id", value.id},
-            {"class", value.category == EventClass::Overlay ? "overlay" : "encounter"},
+            {"class", category},
             {"priority", value.priority}, {"detect", request(value.detect)},
             {"disposition", value.disposition == EventDisposition::Handle ? "handle" : "external_blocked"},
             {"handler", value.handler_definition},
@@ -88,7 +91,8 @@ nlohmann::json serialize(const FlowProgram &program) {
                     {"data", data(step.data)}, {"next", step.next},
                     {"on_error", step.on_error}, {"time_limit_ms", step.time_limit.count()},
                     {"delay_after_ms", step.delay_after.count()}, {"max_hit", step.max_hit},
-                    {"handles_business_failure", step.handles_business_failure}};
+                    {"handles_business_failure", step.handles_business_failure},
+                    {"check_group", step.check_group}, {"unexpected_only", step.unexpected_only}};
             if (step.guard) entry["guard"] = request(*step.guard);
             if (step.business_guard) entry["business_guard"] = *step.business_guard;
             entry["disabled_events"] = step.disabled_events;

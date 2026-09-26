@@ -980,6 +980,19 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
         result["evidence"]["selected"] = name;
         return result;
     }
+    if (mode == "exception_screen" || mode == "special_screen") {
+        check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");
+        auto probes = mode == "exception_screen" ? exception_probes() : special_screen_probes();
+        if (mode == "special_screen") probes.push_back(ordinary_story_page());
+        // 分组内按已知优先级顺序判断；命中后不再穷举其余页面，实际 Error 仍传播。
+        for (const auto &probe : probes) {
+            const auto result = evaluate_impl(bundle, pixels, probe, bound, scope, cache, depth + 1, memo);
+            check(result.at("outcome") != "Error", "WVD_DIAGNOSTIC_RECOGNITION_ERROR");
+            if (result.at("outcome") == "Hit")
+                return decision(true, allowed_rect, {{"group", mode}, {"matched", result}});
+        }
+        return decision(false, {}, {{"group", mode}, {"stage", "unknown"}});
+    }
     if (mode == "boot_ready" || mode == "boot_post" || mode == "blocking_screen") {
         check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");
         if (mode == "boot_post") {

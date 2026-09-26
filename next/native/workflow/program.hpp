@@ -25,7 +25,9 @@ enum class StepKind {
     Fail
 };
 
-enum class EventClass { Overlay, Encounter };
+// Overlay 是作者显式声明的抢占观察；Exception/Special 只在业务结果不符时扫描。
+// 战斗和宝箱的正常阶段由各自 Definition 推进，不注册成全局页面穷举事件。
+enum class EventClass { Overlay, Encounter, Exception, Special };
 enum class EventDisposition { Handle, ExternalBlocked };
 enum class ResumeMode { Reobserve, Replan };
 
@@ -113,6 +115,9 @@ struct Step {
     std::chrono::milliseconds delay_after{0};
     int max_hit{1};
     bool handles_business_failure{};
+    std::string check_group{"business"};
+    // 仅作为正常候选全部未命中后的出口，不能抢在正常业务之前识图。
+    bool unexpected_only{};
     std::vector<EventRule> event_policy;
     std::set<std::string> disabled_events;
 };
@@ -125,7 +130,7 @@ struct Definition {
 };
 
 struct FlowProgram {
-    static constexpr int schema = 4; // 每次调用的累计预算及独立纯业务 guard。
+    static constexpr int schema = 5; // 业务检查组及结果不符后的分组事件。
     std::string engine_kind{"wvd_native"};
     std::string revision;
     std::string root_definition;

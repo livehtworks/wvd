@@ -2,6 +2,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <thread>
+#include <tuple>
 
 namespace {
 using namespace wvd;
@@ -77,6 +78,7 @@ struct LayerPorts final : Ports {
 };
 struct PendingEventPorts final : Ports {
     std::uint64_t epoch{};
+    int network_probes{};
     std::string seen;
     contracts::FrameEnvelope capture() override {
         auto frame = Ports::capture();
@@ -88,7 +90,8 @@ struct PendingEventPorts final : Ports {
                                       const recognition::Request &request) override {
         auto result = Ports::recognize(frame, request);
         seen += request.recognizer_id + ":" + std::to_string(frame.identity.frame_id) + ",";
-        if (request.recognizer_id == "event.network" && frame.identity.frame_id != 3)
+        // 按“输入在途、网络尚未处理”建场景，不依赖进入 Await 前浪费一张截图。
+        if (request.recognizer_id == "event.network" && (!epoch || ++network_probes > 1))
             result.outcome = contracts::RecognitionOutcome::NoHit;
         result.box = contracts::Box{100, 100, 20, 20};
         result.center = contracts::Point{110, 110};
@@ -100,6 +103,53 @@ struct PendingEventPorts final : Ports {
         ++epoch;
         return {runtime::SubmissionState::Accepted, epoch,
             std::chrono::steady_clock::now(), {}};
+    }
+};
+
+// 核心验收对象是生产 FlowExecutor 的分派/回执行为；识图与设备输入在此隔离。
+struct MismatchPorts final : Ports {
+    std::uint64_t epoch{};
+    int exception_probes{}, lower_probes{}, special_probes{}, handler_calls{};
+    int result_probes{};
+    bool interrupted{}, handled{}, unknown{}, animation{}, before_input{};
+    contracts::FrameEnvelope capture() override {
+        auto frame = Ports::capture();
+        frame.identity.raw_size = {900, 1600};
+        frame.identity.action_epoch = epoch;
+        return frame;
+    }
+    contracts::Observation recognize(const contracts::FrameEnvelope &frame,
+                                      const recognition::Request &request) override {
+        auto value = Ports::recognize(frame, request);
+        value.box = contracts::Box{100, 100, 20, 20};
+        value.center = contracts::Point{110, 110};
+        if (request.recognizer_id == "scene" && (epoch || before_input) && interrupted && !handled)
+            value.outcome = contracts::RecognitionOutcome::NoHit;
+        if (request.recognizer_id == "scene" && epoch && animation && ++result_probes <= 2)
+            value.outcome = contracts::RecognitionOutcome::NoHit;
+        if (request.recognizer_id == "never") value.outcome = contracts::RecognitionOutcome::NoHit;
+        if (request.recognizer_id == "event.network") {
+            ++exception_probes;
+            if (!interrupted || handled || unknown) value.outcome = contracts::RecognitionOutcome::NoHit;
+        } else if (request.recognizer_id == "event.lower") {
+            ++lower_probes;
+            value.outcome = contracts::RecognitionOutcome::NoHit;
+        } else if (request.recognizer_id == "event.special") {
+            ++special_probes;
+            value.outcome = contracts::RecognitionOutcome::NoHit;
+        }
+        return value;
+    }
+    runtime::Submission submit(const contracts::Command &, const contracts::Observation &,
+        const contracts::Observation &, contracts::Box, const std::string &) override {
+        return {runtime::SubmissionState::Accepted, ++epoch, std::chrono::steady_clock::now(), {}};
+    }
+    runtime::OperationResult operate(const std::string &, const nlohmann::json &,
+        const std::optional<contracts::FrameEnvelope> &, const std::optional<contracts::Observation> &,
+        const std::string &) override {
+        ++handler_calls;
+        handled = true;
+        return {runtime::OperationState::Done};
     }
 };
 
@@ -404,6 +454,71 @@ int main() {
         if (pending_result.state != runtime::TickState::Completed ||
             pending_executor.has_unresolved_input() || pending_ports.epoch != 1)
             throw std::runtime_error("PARENT_PENDING_NOT_CONFIRMED:" + pending_result.code);
+
+        // 同一正式步骤：正常结果不扫异常；不符先异常再特殊；处理后原回执完成且不重发。
+        auto mismatch_program = pending_program;
+        auto &mismatch_await = mismatch_program.definitions.at("root").steps.at("await");
+        mismatch_await.check_group = "combat";
+        std::get<workflow::AwaitResult>(mismatch_await.data).budget = 80ms;
+        auto &network_rule = mismatch_await.event_policy.front();
+        network_rule.category = workflow::EventClass::Exception;
+        network_rule.priority = 1000;
+        const auto diagnostic_rule = network_rule;
+        for (const auto &[id, category, priority] : {
+                std::tuple{"lower", workflow::EventClass::Exception, 800},
+                std::tuple{"special", workflow::EventClass::Special, 400}}) {
+            auto rule = diagnostic_rule;
+            rule.id = id;
+            rule.category = category;
+            rule.priority = priority;
+            rule.detect.recognizer_id = "event." + std::string(id);
+            mismatch_await.event_policy.push_back(std::move(rule));
+        }
+        auto &mismatch_handler = mismatch_program.definitions.at("handler");
+        mismatch_handler.entry = "handle";
+        mismatch_handler.steps.emplace("handle", step("handle",
+            workflow::RegisteredOperation{"Recovery", nlohmann::json::object()}, {"return"}));
+        for (const auto mode : {"normal", "animation", "interrupted", "before_input", "unknown"}) {
+            MismatchPorts dispatch_ports;
+            dispatch_ports.animation = std::string(mode) == "animation";
+            dispatch_ports.before_input = std::string(mode) == "before_input";
+            dispatch_ports.interrupted = std::string(mode) != "normal" && !dispatch_ports.animation;
+            dispatch_ports.unknown = std::string(mode) == "unknown";
+            auto scenario = mismatch_program;
+            if (dispatch_ports.before_input) {
+                auto &root = scenario.definitions.at("root");
+                root.entry = "choose";
+                root.steps.emplace("choose", step("choose", workflow::Route{}, {"input", "never"}));
+                auto guarded_input = probe;
+                guarded_input.recognizer_id = "candidate";
+                root.steps.at("input").guard = guarded_input;
+                root.steps.at("input").event_policy = mismatch_await.event_policy;
+                auto never_probe = probe;
+                never_probe.recognizer_id = "never";
+                root.steps.emplace("never", step("never", workflow::Observe{never_probe}, {"finish"}));
+                root.steps.at("never").guard = never_probe;
+            }
+            runtime::FlowExecutor dispatch(scenario, dispatch_ports, 3s);
+            runtime::TickResult end;
+            for (int i = 0; i < 100; ++i) {
+                end = dispatch.tick();
+                if (end.state == runtime::TickState::Waiting) std::this_thread::sleep_until(end.wake_at);
+                if (end.state != runtime::TickState::Waiting && end.state != runtime::TickState::Progress) break;
+            }
+            if (dispatch_ports.epoch != 1) throw std::runtime_error("DISPATCH_REPLAYED_INPUT");
+            if (std::string(mode) == "normal" || dispatch_ports.animation) {
+                if (end.state != runtime::TickState::Completed || dispatch_ports.exception_probes ||
+                    dispatch_ports.special_probes || dispatch_ports.lower_probes || dispatch_ports.handler_calls)
+                    throw std::runtime_error("NORMAL_COMBAT_SCANNED_DIAGNOSTICS:" + end.code);
+            } else if (std::string(mode) == "interrupted" || dispatch_ports.before_input) {
+                if (end.state != runtime::TickState::Completed || dispatch_ports.handler_calls != 1 ||
+                    dispatch_ports.lower_probes || dispatch_ports.special_probes || dispatch.has_unresolved_input())
+                    throw std::runtime_error("MISMATCH_RECOVERY_OR_PRIORITY_FAILED:" + end.code);
+            } else if (end.state != runtime::TickState::ExternalBlocked ||
+                dispatch_ports.handler_calls || !dispatch_ports.exception_probes || !dispatch_ports.special_probes ||
+                !dispatch.has_unresolved_input())
+                throw std::runtime_error("UNKNOWN_RESULT_WAS_REPLAYED_OR_SUCCEEDED:" + end.code);
+        }
         std::cout << "flow reobservation, event scope and exit budget passed\n";
     } catch (const std::exception &error) {
         std::cerr << error.what() << '\n';
