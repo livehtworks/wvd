@@ -2,6 +2,7 @@
 
 - 每轮先界定唯一用户功能和最短验证路径。构建、Mock、离线流程、接口 2xx 均不等于真实游戏任务成功；不跑旧全任务矩阵、资源长测或重复失败用例挑成功。实机副作用必须遵守当轮明确范围。
 - Windows 中文文件与输出使用 UTF-8。长构建日志写 `next/.local/logs`，只检查退出码和关键摘要；不要按截断输出下结论。
+- Git 推送若报本地代理连接拒绝，先核对 `git config --show-origin` 的代理及当前可用监听；全局旧代理可能覆盖进程环境中的新代理。仅对当次命令用 `git -c http.proxy=<已确认的当前代理> push fork ...`，不擅自改全局 Git 配置或切换游戏 VPN。直连也可能不可达，不持续挂起推送进程。
 - 新版完整构建入口是 `python next/tools/build.py`；本轮只需受影响的 CMake Release、Vue 类型/构建、资源一致性和候选整理。`validate.py` 是旧大验证入口，不用于本轮修复收口。Maa 准备脚本和 M2/M3/M4 旧验收已归档。
 - CMake 通过 PATH 或 VS 2022 的 vswhere 定位；Node/npm 版本按 `next/dependencies.lock.json`。OpenCV、ORT、scrcpy 文件按 `next/native-dependencies.lock.json` 校验。系统 PATH 中旧 ORT 可能抢先加载，构建与测试可执行文件旁必须放锁定 DLL。
 - Windows 平台头会定义 `min/max` 宏；含 OpenCV/`std::numeric_limits` 的新平台头须在引入 `<windows.h>` 前定义 `NOMINMAX`。本仓库可执行目标名为 `automationd`，不是打包目录名 `wvd-next-native`；误用后者会报 `MSB1009`。
