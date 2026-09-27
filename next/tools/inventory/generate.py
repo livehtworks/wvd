@@ -260,17 +260,10 @@ def generate():
             "只读基础任务与源码字段，未加载用户 config/mod。",
         ],
     }
-    output = NEXT / "docs/migration"
+    # 冻结基线的手动审计工具，不参与产品构建、不写产品 public 或当前事实文档。
+    output = NEXT / ".local/audit/migration-baseline"
     write(output / "feature_inventory.json", report)
     write(output / "asset_case_report.json", assets)
-    public = NEXT / "web/public/migration"
-    write(public / "feature_inventory.json", report)
-    write(public / "asset_case_report.json", assets)
-    # 目录只读资产预览，不注册为可执行 Maa 游戏包。
-    for path in assets["images"]:
-        target = NEXT / "web/public/reference-assets" / path[len("resources/images/") :]
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(content(path))
     print(
         json.dumps(
             {

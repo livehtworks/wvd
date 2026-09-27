@@ -31,6 +31,7 @@ class Application {
     using J = nlohmann::json;
     J load_json(const std::filesystem::path &path) const;
     J profile() const;
+    void require_storage_space() const;
     J effective_profile_values(const std::string &task_id) const;
     J effective_profile_values(const std::string &task_id, const J &stored) const;
     J queue_run(const std::string &kind, const J &request, const J &identity,
@@ -89,6 +90,9 @@ class Application {
     bool run_active() const;
 
     ApplicationPaths paths_;
+    // 窄依赖便于隔离验收；正式实例只调用标准库，不创建容量监控线程。
+    std::function<std::filesystem::space_info(const std::filesystem::path &)> space_query_ =
+        [](const auto &path) { return std::filesystem::space(path); };
     J descriptor_, manifest_, aliases_, operation_;
     J semantic_catalogue_ = J::object();
     J builtin_documents_ = J::object();

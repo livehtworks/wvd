@@ -160,7 +160,7 @@ target_link_libraries(test_native_capture PRIVATE wvd_native_devices)
 target_compile_options(test_native_capture PRIVATE /utf-8 /W4 /EHsc)
 add_executable(test_native_author EXCLUDE_FROM_ALL
   ../tests/native/test_native_author.cpp)
-target_link_libraries(test_native_author PRIVATE wvd_native_games)
+target_link_libraries(test_native_author PRIVATE wvd_native_games wvd_native_runtime)
 target_compile_options(test_native_author PRIVATE /utf-8 /W4 /EHsc)
 add_executable(test_native_coordinator EXCLUDE_FROM_ALL
   ../tests/native/test_native_coordinator.cpp)

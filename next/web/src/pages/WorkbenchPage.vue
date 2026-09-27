@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import ExecutionStatus from "../components/ExecutionStatus.vue";
+
 import { computed, ref, watch } from "vue";
 import {
-  Camera, ChevronDown, CircleStop, FolderOpen, Link, Link2Off, Play, Plus, RefreshCw, Save, Trash2, Undo2,
+  Camera, ChevronDown, FolderOpen, Link, Link2Off, Play, Plus, RefreshCw, Save, Trash2, Undo2,
 } from "@lucide/vue";
 import { useWorkbench } from "../stores/useWorkbench";
 import { resourceLocaleOptions } from "../api/types";
@@ -11,6 +11,10 @@ import type { CatalogOption, SkillSetting, StrategyGroup } from "../api/types";
 const state = useWorkbench();
 const emit = defineEmits<{ dirty: [value: boolean] }>();
 watch(() => state.dirty, (value) => emit("dirty", value), { immediate: true });
+const tab = ref("common");
+const previewDialog = ref<HTMLDialogElement>();
+const previewButton = ref<HTMLButtonElement>();
+function closePreview() { previewDialog.value?.close(); previewButton.value?.focus(); }
 const taskCategory = ref("");
 const taskSelectVersion = ref(0);
 const strategyQuery = ref("");
@@ -40,27 +44,26 @@ function optionsWithCurrent(options: CatalogOption[] | undefined, current: unkno
 }
 function asNumber(event: Event) { return Number((event.target as HTMLInputElement).value); }
 function today() { return new Date().toLocaleDateString("sv-SE"); }
-function markWebsiteVisit() { if (state.draft) state.draft.WEBSITE_ORG_TIME = today(); }
+function markWebsiteVisit() { if (!state.editLocked && state.draft) state.draft.WEBSITE_ORG_TIME = today(); }
 function switchTempleTarget() {
+  if (state.editLocked) return;
   if (!state.draft) return;
   const task = state.catalog.tasks?.find((item) => item.name.includes("炉壶灵庙"));
   if (!task) { window.alert("任务目录中没有找到炉壶灵庙目标"); return; }
-  state.draft.FARM_TARGET = task.id;
-  state.draft.FARM_TARGET_TEXT = task.name;
-  state.draft.AM_REFRESH_TIME = today();
+  void state.selectTask(task.id, { AM_REFRESH_TIME: today(), FARM_TARGET_TEXT: task.name });
+}
+async function reloadProfile() {
+  if (state.editLocked || (state.dirty && !window.confirm("放弃当前配置中未保存的更改，并重新读取服务端？"))) return;
+  await state.load();
 }
 async function updateTask(event: Event) {
   if (!state.draft) return;
   const value = (event.target as HTMLSelectElement).value;
-  if (state.dirty && value !== state.draft.FARM_TARGET) {
-    const discard = window.confirm("当前配置有未保存更改。放弃这些更改后切换任务？");
-    if (!discard) { taskSelectVersion.value++; return; }
-    state.revert();
-  }
-  if (!state.draft) return;
   await state.selectTask(value);
+  taskSelectVersion.value++;
 }
 function setRecovery(field: "SKIP_COMBAT_RECOVER" | "SKIP_CHEST_RECOVER", enabled: boolean) {
+  if (state.editLocked) return;
   if (state.draft) state.draft[field] = !enabled;
 }
 function pointBindings() {
@@ -74,6 +77,7 @@ function pointBindings() {
   return current.task_point as Record<string, string>;
 }
 function addStrategy() {
+  if (state.editLocked) return;
   const base = "新方案";
   let index = 1;
   while (strategyNames.value.includes(`${base}${index}`)) index++;
@@ -82,6 +86,7 @@ function addStrategy() {
   strategyQuery.value = "";
 }
 function renameStrategy(group: StrategyGroup, value: string) {
+  if (state.editLocked) return;
   const old = group.group_name;
   const name = value.trim();
   if (!name || (name !== old && strategyNames.value.includes(name))) return;
@@ -107,6 +112,7 @@ function strategyReferences(name: string) {
   return result;
 }
 function removeStrategy(index: number) {
+  if (state.editLocked) return;
   const group = state.strategies[index];
   const references = strategyReferences(group.group_name);
   if (references.length) {
@@ -123,10 +129,13 @@ function removeStrategy(index: number) {
   }
 }
 function addSkill(group: StrategyGroup) {
+  if (state.editLocked) return;
   group.skill_settings.push({ role_var: "", skill_var: "", target_var: "", skill_lvl: 1, freq_var: "" });
 }
-function removeSkill(group: StrategyGroup, index: number) { group.skill_settings.splice(index, 1); }
+function removeSkill(group: StrategyGroup, index: number) {
+  if (state.editLocked) return; group.skill_settings.splice(index, 1); }
 function updateSkill(skill: SkillSetting, key: keyof SkillSetting, event: Event) {
+  if (state.editLocked) return;
   const input = event.target as HTMLInputElement | HTMLSelectElement;
   skill[key] = key === "skill_lvl" ? Number(input.value) : input.value;
 }
@@ -135,19 +144,39 @@ function updateSkill(skill: SkillSetting, key: keyof SkillSetting, event: Event)
 <template>
   <main class="app-main workbench-page">
     <header class="page-heading">
-      <div><h1>工作台</h1><p>配置、设备和运行状态均来自本地服务</p></div>
+      <div><h1>工作台</h1></div>
       <div class="command-row">
         <span v-if="state.dirty" class="status-chip warning">有未保存更改</span>
-        <button class="button secondary" :disabled="!state.dirty || state.saving" @click="state.revert"><Undo2 :size="16" />重载</button>
-        <button class="button primary" :disabled="!state.dirty || state.saving" @click="state.save"><Save :size="16" />保存配置</button>
+        <button class="button secondary" :disabled="!state.dirty || state.editLocked" @click="state.revert"><Undo2 :size="16" />重载</button>
+        <button class="button primary" :disabled="!state.dirty || state.editLocked" @click="state.save"><Save :size="16" />保存配置</button>
       </div>
     </header>
-    <div v-if="state.error" class="notice error" role="alert">{{ state.error }}</div>
+    <div v-if="state.error" class="notice error" role="alert">{{ state.error }}<button v-if="/PROFILE_.*CONFLICT/.test(state.error)" class="button secondary" :disabled="state.editLocked" @click="reloadProfile">重新读取配置</button></div>
     <div v-if="state.notice" class="notice success" role="status">{{ state.notice }}</div>
     <div v-if="state.loading" class="loading-line"><RefreshCw :size="16" class="spinning" />正在读取服务端配置</div>
 
     <template v-if="state.draft">
-      <details class="config-section" open>
+      <section class="workbench-actions">
+        <div class="section-body form-grid">
+          <label class="field"><span>任务类别</span><select v-model="taskCategory" :disabled="state.saving"><option value="">全部类别</option><option v-for="item in state.catalog.task_categories ?? []" :key="optionValue(item)" :value="optionValue(item)">{{ item.label }}</option></select></label>
+          <label class="field"><span>任务目标</span><select :key="taskSelectVersion" :value="state.selectionId" :disabled="state.saving" @change="updateTask"><option value="" disabled>请选择</option><option v-if="state.draft.FARM_TARGET && !tasks.some((item) => item.id === state.draft!.FARM_TARGET)" :value="state.draft.FARM_TARGET">现有值：{{ state.draft.FARM_TARGET_TEXT ?? state.draft.FARM_TARGET }}</option><option v-for="task in tasks" :key="task.id" :value="task.id">{{ task.name }}</option></select></label>
+
+          <label class="check-field"><input v-model="state.draft.TASK_SPECIFIC_CONFIG" :disabled="state.editLocked" type="checkbox" />使用任务专用配置</label>
+          <button class="button danger-inline" type="button" :disabled="!state.draft.TASK_SPECIFIC_CONFIG || state.editLocked" @click="state.clearTaskOverride"><Trash2 :size="15" />清除当前任务覆盖</button>
+        <div v-if="state.draft?.FARM_TARGET === 'Scorpionesses'" class="command-row">
+          <label class="field"><span>循环模式</span><select v-model="state.repeatMode" :disabled="state.editLocked || state.runActive"><option value="forever">一直循环</option><option value="count">指定次数</option></select></label>
+          <label v-if="state.repeatMode === 'count'" class="field"><span>循环次数</span><input v-model.number="state.repeatCount" type="number" min="1" max="1000000" :disabled="state.editLocked || state.runActive" /></label>
+        </div>
+<label class="field run-locale"><span>游戏素材语言</span><select v-model="state.resourceLocale" :disabled="state.editLocked || state.runActive"><option v-for="option in resourceLocaleOptions" :key="option.value" :value="option.value">{{ option.label }}</option></select></label><button class="button run" :disabled="state.editLocked || state.runActive || state.deviceBusy || state.dirty || !state.draft?.FARM_TARGET" @click="state.startSelectedTask"><Play :size="16" />开始任务</button>
+          <span class="source-line span-2">当前来源：{{ state.envelope?.effective_source ?? (state.draft.TASK_SPECIFIC_CONFIG ? '任务覆盖' : '默认配置') }}</span>
+          <details v-if="state.selectedTask?.description" class="task-description"><summary>任务说明</summary><p>{{ state.selectedTask.description }}</p></details>
+        </div>
+      </section>
+      <nav class="config-tabs" aria-label="工作台设置">
+        <button v-for="item in [{id:'common',name:'常用参数'},{id:'combat',name:'战斗方案'},{id:'advanced',name:'设备与高级'}]" :key="item.id" :aria-pressed="tab === item.id" @click="tab = item.id">{{ item.name }}</button>
+      </nav>
+      <fieldset class="editor-fields" :disabled="state.editLocked" :inert="state.editLocked">
+      <details v-show="tab === 'advanced'" class="config-section" open>
         <summary><span>模拟器</span><ChevronDown :size="17" /></summary>
         <div class="section-body device-layout">
           <div class="form-grid">
@@ -163,25 +192,16 @@ function updateSkill(skill: SkillSetting, key: keyof SkillSetting, event: Event)
           </div>
           <aside class="device-preview">
             <div class="preview-header"><span :class="['connection-dot', { online: state.device?.connected }]" />{{ state.device?.display_name ?? state.device?.state ?? '未连接' }}<small>{{ state.device?.captured_at ?? '' }}</small></div>
-            <img v-if="state.device?.screenshot_url" :src="state.device.screenshot_url" alt="当前模拟器截图" />
-            <div v-else class="preview-empty">连接后可获取当前画面</div>
+            <button v-if="state.device?.screenshot_url" ref="previewButton" class="screenshot-thumb" title="查看已有截图" aria-label="查看已有截图" @click="previewDialog?.show()"><img :src="state.device.screenshot_url" alt="最近一次截图" /></button>
+            <dialog ref="previewDialog" class="screenshot-dialog" @cancel.prevent="closePreview" @keydown.esc.prevent="closePreview"><button class="button secondary" @click="closePreview">关闭</button><img v-if="state.device?.screenshot_url" :src="state.device.screenshot_url" alt="已有截图大图" /></dialog>
+            <div v-if="!state.device?.screenshot_url" class="preview-empty">暂无已保存截图</div>
           </aside>
         </div>
       </details>
 
-      <details class="config-section" open>
-        <summary><span>目标</span><ChevronDown :size="17" /></summary>
-        <div class="section-body form-grid">
-          <label class="field"><span>任务类别</span><select v-model="taskCategory"><option value="">全部类别</option><option v-for="item in state.catalog.task_categories ?? []" :key="optionValue(item)" :value="optionValue(item)">{{ item.label }}</option></select></label>
-          <label class="field"><span>任务目标</span><select :key="taskSelectVersion" :value="state.draft.FARM_TARGET" @change="updateTask"><option value="" disabled>请选择</option><option v-if="state.draft.FARM_TARGET && !tasks.some((item) => item.id === state.draft!.FARM_TARGET)" :value="state.draft.FARM_TARGET">现有值：{{ state.draft.FARM_TARGET_TEXT ?? state.draft.FARM_TARGET }}</option><option v-for="task in tasks" :key="task.id" :value="task.id">{{ task.name }}</option></select></label>
-          <p v-if="state.selectedTask?.description" class="field-help span-2">{{ state.selectedTask.description }}</p>
-          <label class="check-field"><input v-model="state.draft.TASK_SPECIFIC_CONFIG" type="checkbox" />使用任务专用配置</label>
-          <button class="button danger-inline" type="button" :disabled="!state.draft.TASK_SPECIFIC_CONFIG || state.saving" @click="state.clearTaskOverride"><Trash2 :size="15" />清除当前任务覆盖</button>
-          <span class="source-line span-2">当前来源：{{ state.envelope?.effective_source ?? (state.draft.TASK_SPECIFIC_CONFIG ? '任务覆盖' : '默认配置') }}</span>
-        </div>
-      </details>
 
-      <details class="config-section" open>
+
+      <details v-show="tab === 'common'" class="config-section" open>
         <summary><span>探索</span><ChevronDown :size="17" /></summary>
         <div class="section-body form-grid">
           <label class="field"><span>开箱人选</span><select v-model="state.draft.WHO_WILL_OPEN_IT"><option v-for="item in optionsWithCurrent(state.catalog.chest_openers, state.draft.WHO_WILL_OPEN_IT)" :key="optionValue(item)" :value="item.value">{{ item.label }}</option></select></label>
@@ -196,7 +216,7 @@ function updateSkill(skill: SkillSetting, key: keyof SkillSetting, event: Event)
         </div>
       </details>
 
-      <details class="config-section" open>
+      <details v-show="tab === 'common'" class="config-section" open>
         <summary><span>战斗</span><ChevronDown :size="17" /></summary>
         <div class="section-body form-grid">
           <label class="field"><span>全程策略</span><select v-model="state.draft.DEFAULT_OVERALL_STRATEGY"><option v-if="!strategyNames.includes('全自动战斗')" value="全自动战斗">全自动战斗</option><option v-for="name in strategyNames" :key="name" :value="name">{{ name }}</option></select></label>
@@ -206,11 +226,11 @@ function updateSkill(skill: SkillSetting, key: keyof SkillSetting, event: Event)
           <label class="check-field"><input v-model="state.draft.TASK_POINT_STRATEGY!.special_combat!.portrait" type="checkbox" />行动栏头像识别特殊敌人</label>
           <label v-if="state.draft.TASK_POINT_STRATEGY!.special_combat!.skull || state.draft.TASK_POINT_STRATEGY!.special_combat!.portrait" class="field"><span>普通敌人方案</span><select v-model="state.draft.TASK_POINT_STRATEGY!.special_combat!.normal_strategy"><option value="">请选择</option><option v-for="name in strategyNames" :key="name" :value="name">{{ name }}</option></select></label>
           <label v-if="state.draft.TASK_POINT_STRATEGY!.special_combat!.skull || state.draft.TASK_POINT_STRATEGY!.special_combat!.portrait" class="field"><span>特殊敌人方案</span><select v-model="state.draft.TASK_POINT_STRATEGY!.special_combat!.special_strategy"><option value="">请选择</option><option v-for="name in strategyNames" :key="name" :value="name">{{ name }}</option></select></label>
-          <label v-if="state.draft.TASK_POINT_STRATEGY!.special_combat!.portrait" class="field"><span>头像模板</span><select v-model="state.draft.TASK_POINT_STRATEGY!.special_combat!.portrait_image"><option value="combat_scorpion_portrait">蝎女头像</option></select></label>
+          <label v-if="state.draft.TASK_POINT_STRATEGY!.special_combat!.portrait" class="field"><span>头像模板</span><select v-model="state.draft.TASK_POINT_STRATEGY!.special_combat!.portrait_image"><option value="combat_scorpion_portrait">蝎女头像</option><option v-if="state.draft.TASK_POINT_STRATEGY!.special_combat!.portrait_image && state.draft.TASK_POINT_STRATEGY!.special_combat!.portrait_image !== 'combat_scorpion_portrait'" :value="state.draft.TASK_POINT_STRATEGY!.special_combat!.portrait_image">{{ state.draft.TASK_POINT_STRATEGY!.special_combat!.portrait_image }}</option></select></label>
         </div>
       </details>
 
-      <details class="config-section" open>
+      <details v-show="tab === 'combat'" class="config-section" open>
         <summary><span>战斗方案</span><ChevronDown :size="17" /></summary>
         <div class="section-body strategy-editor">
           <div class="section-commands strategy-commands"><label class="field compact"><span>额外重置时机</span><select v-model="state.draft.RELOAD_STRATEGY_WHEN"><option v-for="item in optionsWithCurrent(state.catalog.strategy_reload_timings, state.draft.RELOAD_STRATEGY_WHEN)" :key="optionValue(item)" :value="item.value">{{ item.label }}</option></select></label></div>
@@ -242,7 +262,7 @@ function updateSkill(skill: SkillSetting, key: keyof SkillSetting, event: Event)
         </div>
       </details>
 
-      <details class="config-section">
+      <details v-show="tab === 'advanced'" class="config-section" open>
         <summary><span>日常 / 周常</span><ChevronDown :size="17" /></summary>
         <div class="section-body daily-layout">
           <div class="daily-actions"><a class="button secondary" href="https://store.wizardry.info/" target="_blank" rel="noreferrer" @click="markWebsiteVisit">领取 50 钻（旧）</a><a class="button secondary" href="https://webstore.wizardry.info/" target="_blank" rel="noreferrer" @click="markWebsiteVisit">领取 50 钻（新）</a><button class="button secondary" @click="switchTempleTarget">灵庙已刷新，切换目标</button></div>
@@ -250,7 +270,7 @@ function updateSkill(skill: SkillSetting, key: keyof SkillSetting, event: Event)
         </div>
       </details>
 
-      <details class="config-section">
+      <details v-show="tab === 'advanced'" class="config-section" open>
         <summary><span>高级</span><ChevronDown :size="17" /></summary>
         <div class="section-body form-grid">
           <label class="check-field"><input v-model="state.draft.ACTIVE_BEG_MONEY" type="checkbox" />自动要钱</label>
@@ -264,25 +284,8 @@ function updateSkill(skill: SkillSetting, key: keyof SkillSetting, event: Event)
         </div>
       </details>
 
-      <section class="run-section" aria-label="运行结果">
-        <div v-if="state.draft?.FARM_TARGET === 'Scorpionesses'" class="command-row">
-          <label class="field"><span>循环模式</span><select v-model="state.repeatMode" :disabled="state.runActive"><option value="forever">一直循环</option><option value="count">指定次数</option></select></label>
-          <label v-if="state.repeatMode === 'count'" class="field"><span>循环次数</span><input v-model.number="state.repeatCount" type="number" min="1" max="1000000" :disabled="state.runActive" /></label>
-        </div>
-        <div v-if="state.run?.repeat && state.run.repeat.state !== 'disabled'" class="notice" role="status">循环已完成 {{ state.run.repeat.completed_cycles }}<template v-if="state.run.repeat.target_cycles"> / {{ state.run.repeat.target_cycles }}</template> 轮<span v-if="state.run.repeat.state === 'completed'"> · 已达到设定次数</span><span v-else-if="!state.run.repeat.active"> · 已停止</span></div>
-        <div v-if="state.runError" class="notice error" role="alert">{{ state.runError }}</div>
-        <header><div><h2>运行结果</h2><span>{{ state.run?.run_id ?? '当前没有运行' }}</span></div><div class="command-row"><label class="field run-locale"><span>游戏素材语言</span><select v-model="state.resourceLocale" :disabled="state.runActive"><option v-for="option in resourceLocaleOptions" :key="option.value" :value="option.value">{{ option.label }}</option></select></label><button class="button run" :disabled="state.runActive || state.deviceBusy || state.dirty || !state.draft?.FARM_TARGET" @click="state.startSelectedTask"><Play :size="16" />开始任务</button><button class="button danger" :disabled="!state.runActive" @click="state.requestStop"><CircleStop :size="16" />停止</button></div></header>
-        <div v-if="state.error" class="notice error" role="alert">{{ state.error }}</div>
-        <div class="run-grid"><div><span>状态</span><strong>{{ state.runLabel }}</strong></div><div><span>任务 / 步骤</span><strong>{{ state.run?.task_name ?? '—' }} / {{ state.run?.step_name ?? '—' }}</strong></div><div><span>耗时</span><strong>{{ state.run?.elapsed_seconds ?? 0 }} 秒</strong></div><div><span>结果</span><strong>{{ state.run?.result ?? '—' }}</strong></div></div>
-        <div v-if="state.run?.active_event" class="notice" role="status">正在处理 {{ state.run.active_event.event_id }} · {{ state.run.active_event.phase ?? state.run.active_event.class }} · 第 {{ state.run.active_event.depth }} 层；原步骤 {{ state.run.suspended_step?.node_id ?? state.run.active_event.source_node }}，返回方式 {{ state.run.active_event.resume.mode }}</div>
-        <ExecutionStatus :run="state.run" />
-        <div v-if="state.run?.call_stack?.length" class="notice" role="status">调用层次：{{ state.run.call_stack.map(frame => frame.node_id).join(' → ') }}</div>
-        <div v-if="state.run?.unresolved_inputs?.length" class="notice error" role="alert">有 {{ state.run.unresolved_inputs.length }} 次输入结果未确认，流程不会自动重发</div>
-        <div v-if="state.run?.outcome_category === 'external_blocked'" class="notice warning" role="status">外部阻断：{{ state.run?.message ?? state.run?.error_code }}</div>
-        <div v-if="state.run?.error_code || state.run?.message" class="notice error">{{ state.run.error_code }}: {{ state.run.message }}</div>
-        <div v-if="state.run?.statistics" class="statistics"><span v-for="(value, key) in state.run.statistics" :key="key"><small>{{ key }}</small><strong>{{ value }}</strong></span></div>
-        <div v-if="state.run?.diagnostics?.length" class="diagnostics"><figure v-for="item in state.run.diagnostics" :key="item.id ?? item.image_url ?? item.label"><img v-if="item.image_url" :src="item.image_url" :alt="item.label ?? '诊断截图'" /><div v-else class="diagnostic-placeholder">{{ item.status ?? '未保存图片' }}</div><figcaption><strong>{{ item.label ?? item.id }}</strong><span v-if="item.stage || item.node_id">{{ item.stage ?? '阶段未知' }} · {{ item.node_id ?? '节点未知' }}</span><span v-if="item.frame_age_ms !== undefined">帧龄 {{ item.frame_age_ms }} ms</span><span v-if="item.error">{{ item.error }}</span></figcaption></figure></div>
-      </section>
+
+      </fieldset>
     </template>
   </main>
 </template>

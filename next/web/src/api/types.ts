@@ -99,6 +99,7 @@ export interface SubmissionReceipt extends JsonObject {
   run_id?: string | number;
 }
 export interface RunState extends JsonObject {
+  secondary_errors?: string[]; storage_error?: string;
   repeat?: { active: boolean; state: string; completed_cycles: number; target_cycles?: number | null; reason: string; request_id: string } | null;
   busy?: boolean; quiescent?: boolean;
   call_stack?: Array<{ definition: string; node_id: string; source_path: Array<{flow_id?:string;node_id?:string;native_node?:string}> }>;
@@ -124,12 +125,3 @@ export interface RecognitionProbeResult extends JsonObject {
   outcome?: "Hit" | "NoHit" | "Error"; score?: number; roi?: number[];
   match?: { x: number; y: number; width: number; height: number }; image_url?: string; error_code?: string; message?: string;
 }
-
-export interface Item {
-  id: string; kind: string; legacy_symbol: string; original_semantics: string; source_ref: string;
-  new_owner: string; new_entry: string; acceptance_ids: string[]; status: string;
-  name?: string; task_title?: string; path?: string; [key: string]: unknown;
-}
-export interface Inventory { baseline: string; counts: Record<string, number>; items: Item[]; coverage: { unmapped_items: number }; calls: { resolution: string }[] }
-export interface AssetReference { reference: string; source_ref: string; context: string; status: string; matches: string[] }
-export interface AssetReport { references: AssetReference[]; case_collisions: string[][] }

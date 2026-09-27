@@ -1,11 +1,11 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue";
-import { runBusy, displayRunState } from "./runStatus";
+import { useRunSession } from "./useRunSession";
 import { extractPublicBlock, type PublicInterface } from "../features/authoring/flowModel";
 import {
-  createWorkflow, deleteWorkflow, formatApiError, importTaskWorkflow, listWorkflows, readCatalog, readCurrentRun,
-  readWorkflow, runWorkflow, saveWorkflow, stopRun, inspectBuiltin, syncBuiltin,
+  createWorkflow, deleteWorkflow, formatApiError, importTaskWorkflow, listWorkflows, readCatalog,
+  readWorkflow, runWorkflow, saveWorkflow, inspectBuiltin, syncBuiltin,
 } from "../api/client";
-import type { BuiltinInspection, Catalog, RunState, WorkflowDefinition } from "../api/types";
+import type { BuiltinInspection, Catalog, WorkflowDefinition } from "../api/types";
 
 // 作者数据是纯 JSON。先序列化可避免把 Vue Proxy 传给 structuredClone。
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
@@ -22,6 +22,10 @@ function cleanWorkflow(workflow: WorkflowDefinition): WorkflowDefinition {
 }
 
 export function useWorkflowEditor() {
+  const session = useRunSession();
+  let alive = true;
+  let operation = 0;
+  let readSequence = 0;
   const catalog = ref<Catalog>({});
   const workflows = ref<WorkflowDefinition[]>([]);
   const current = ref<WorkflowDefinition>();
@@ -32,24 +36,28 @@ export function useWorkflowEditor() {
   const history = ref<Snapshot[]>([]);
   const future = ref<Snapshot[]>([]);
   const definitionTrail = ref<DefinitionTrailEntry[]>([]);
-  const run = ref<RunState>();
-  const starting = ref(false);
-  const linkError = ref("");
-  let pendingRequest: { id: string; fingerprint: string } | undefined;
-  let polling = false;
+  const run = computed(() => session.run);
+  const starting = computed(() => session.starting);
   const loading = ref(false);
   const saving = ref(false);
   const error = ref("");
   const notice = ref("");
   const builtinDetail = ref<BuiltinInspection>();
-  let pollHandle: number | undefined;
+  const editLocked = computed(() => saving.value || loading.value);
+  function beginWrite() {
+    if (editLocked.value) return;
+    saving.value = true; session.writing.workflow = true; ++readSequence;
+    return ++operation;
+  }
+  function owns(id: number) { return alive && id === operation; }
+  function endWrite(id: number) { if (owns(id)) { saving.value = false; session.writing.workflow = false; } }
 
   const dirty = computed(() => Boolean(current.value) && signature(cleanWorkflow(current.value!)) !== savedSignature.value);
   const selectedNode = computed(() => current.value?.nodes.find((node) => node.id === selectedNodeId.value));
   const selectedEdge = computed(() => current.value?.edges.find((edge) => edge.id === selectedEdgeId.value));
-  const runActive = computed(() => starting.value || runBusy(run.value));
-  const runLabel = computed(() => starting.value ? "提交启动请求" : displayRunState(run.value));
-  const runError = computed(() => run.value?.submission?.error ?? linkError.value);
+  const runActive = computed(() => !session.canStart);
+  const runLabel = computed(() => session.label);
+  const runError = computed(() => session.error);
   const activeNodeId = computed(() => [...(run.value?.node_path??[])].reverse().find(p=>p.flow_id===current.value?.id)?.node_id
     ?? (run.value?.workflow_id===current.value?.id ? run.value?.current_node_id ?? run.value?.failed_node_id ?? "" : ""));
   const definitionCaller = computed(() => {
@@ -63,6 +71,7 @@ export function useWorkflowEditor() {
     return clone({ nodes: current.value.nodes, edges: current.value.edges, entry_node_id: current.value.entry_node_id, name: current.value.name, description: current.value.description, time_limit_ms: current.value.time_limit_ms as number | undefined, interface:current.value.interface, resource_locale:current.value.resource_locale, events:current.value.events, checks:current.value.checks });
   }
   function checkpoint() {
+    if (editLocked.value) return;
     const value = snapshot();
     if (!value) return;
     history.value.push(value);
@@ -79,6 +88,7 @@ export function useWorkflowEditor() {
     selectedEdgeId.value = "";
   }
   function undo() {
+    if (editLocked.value) return;
     const value = history.value.pop();
     const now = snapshot();
     if (!value || !now) return;
@@ -86,6 +96,7 @@ export function useWorkflowEditor() {
     applySnapshot(value);
   }
   function redo() {
+    if (editLocked.value) return;
     const value = future.value.pop();
     const now = snapshot();
     if (!value || !now) return;
@@ -104,36 +115,46 @@ export function useWorkflowEditor() {
   }
   async function refreshList() {
     const response = await listWorkflows();
-    workflows.value = Array.isArray(response) ? response : response.workflows;
+    if (alive) workflows.value = Array.isArray(response) ? response : response.workflows;
   }
   async function load() {
+    if (editLocked.value) return;
     loading.value = true;
     error.value = "";
     try {
-      const [catalogValue, runValue] = await Promise.all([readCatalog(), readCurrentRun()]);
+      const catalogValue = await readCatalog();
+      if (!alive) return;
       catalog.value = catalogValue;
-      run.value = runValue;
       await refreshList();
-      if (!current.value && workflows.value.length) await open(workflows.value[0].id);
-    } catch (reason) { error.value = formatApiError(reason); }
-    finally { loading.value = false; }
+      if (alive && !current.value && workflows.value.length) {
+        const value = await readWorkflow(workflows.value[0].id);
+        if (alive) accept(value);
+      }
+    } catch (reason) { if (alive) error.value = formatApiError(reason); }
+    finally { if (alive) loading.value = false; }
   }
   async function switchTo(id: string) {
+    if (editLocked.value) return false;
     if (dirty.value && !window.confirm("放弃当前流程中未保存的更改？")) return;
     error.value = "";
-    try { accept(await readWorkflow(id)); return true; }
-    catch (reason) { error.value = formatApiError(reason); return false; }
+    const seq = ++readSequence;
+    loading.value = true;
+    try { const value = await readWorkflow(id); if (!alive || seq !== readSequence) return false; accept(value); return true; }
+    catch (reason) { if (alive && seq === readSequence) error.value = formatApiError(reason); return false; }
+    finally { if (alive && seq === readSequence) loading.value = false; }
   }
   async function open(id: string) {
     if (await switchTo(id)) definitionTrail.value = [];
   }
   function createBlank() {
+    if (editLocked.value) return;
     if (dirty.value && !window.confirm("放弃当前流程中未保存的更改？")) return;
     definitionTrail.value = [];
     accept({ id: `new-${crypto.randomUUID()}`, name: "未命名流程", description: "", nodes: [], edges: [] }, true);
     savedSignature.value = "";
   }
   function copyCurrent() {
+    if (editLocked.value) return;
     if (!current.value) return;
     definitionTrail.value = [];
     const copy = cleanWorkflow(clone(current.value));
@@ -145,78 +166,98 @@ export function useWorkflowEditor() {
     savedSignature.value = "";
   }
   async function importTask(taskId: string) {
-    if (!taskId) return;
+    if (!taskId || editLocked.value) return;
     if (dirty.value && !window.confirm("放弃当前流程中未保存的更改？")) return;
     error.value = "";
+    const id = beginWrite(); if (id === undefined) return;
     try {
       const flowId = `task-${taskId}-${Date.now().toString(36)}`.replace(/[^A-Za-z0-9_-]/g, "-").slice(0, 64);
       definitionTrail.value = [];
-      accept(await importTaskWorkflow(taskId, flowId));
+      const value = await importTaskWorkflow(taskId, flowId);
+      if (!owns(id)) return;
+      accept(value);
       await refreshList();
-      notice.value = "已复制现有任务为可编辑流程，原任务保持不变";
-    } catch (reason) { error.value = formatApiError(reason); }
+      if (owns(id)) notice.value = "已复制现有任务为可编辑流程，原任务保持不变";
+    } catch (reason) { if (owns(id)) error.value = formatApiError(reason); }
+    finally { endWrite(id); }
   }
   async function save() {
     if (!current.value) return;
-    saving.value = true;
+    const id = beginWrite(); if (id === undefined) return;
+    const payload = cleanWorkflow(clone(current.value));
+    const fresh = isNew.value;
     error.value = "";
     notice.value = "";
     try {
-      const payload = cleanWorkflow(current.value);
-      const saved = isNew.value ? await createWorkflow(payload) : await saveWorkflow(payload);
+      const saved = fresh ? await createWorkflow(payload) : await saveWorkflow(payload);
+      if (!owns(id)) return;
       accept(saved);
       await refreshList();
-      notice.value = "流程已由服务端校验并保存";
-    } catch (reason) { error.value = formatApiError(reason); }
-    finally { saving.value = false; }
+      if (owns(id)) notice.value = "流程已由服务端校验并保存";
+    } catch (reason) { if (owns(id)) error.value = formatApiError(reason); }
+    finally { endWrite(id); }
   }
   async function reload() { if (current.value && !isNew.value) await open(current.value.id); }
   async function viewBuiltin() {
-    if (!current.value) return;
-    try { builtinDetail.value = await inspectBuiltin(current.value.id); }
-    catch (reason) { error.value = formatApiError(reason); }
+    if (!current.value || editLocked.value) return;
+    const seq = readSequence, flowId = current.value.id;
+    try { const value = await inspectBuiltin(flowId); if (alive && seq === readSequence && current.value?.id === flowId) builtinDetail.value = value; }
+    catch (reason) { if (alive && seq === readSequence && current.value?.id === flowId) error.value = formatApiError(reason); }
   }
   async function applyBuiltin() {
     const detail = builtinDetail.value;
-    if (!detail || detail.status !== "update_available" || dirty.value) return;
+    if (!detail || detail.status !== "update_available" || dirty.value || editLocked.value) return;
     if (!window.confirm(`用交付包内置定义更新“${current.value?.name}”？旧文档会备份，固定版本引用不会自动改写。`)) return;
+    const id = beginWrite(); if (id === undefined) return;
+    const frozen = clone(detail);
     try {
-      accept(await syncBuiltin(detail.flow_id, detail.local_revision, detail.builtin_revision));
+      const value = await syncBuiltin(frozen.flow_id, frozen.local_revision, frozen.builtin_revision);
+      if (!owns(id)) return;
+      accept(value);
       await refreshList();
-      notice.value = "内置定义已同步，新运行将使用新版本";
-    } catch (reason) { error.value = formatApiError(reason); }
+      if (owns(id)) notice.value = "内置定义已同步，新运行将使用新版本";
+    } catch (reason) { if (owns(id)) error.value = formatApiError(reason); }
+    finally { endWrite(id); }
   }
   async function remove() {
-    if (!current.value || isNew.value || !window.confirm(`删除流程“${current.value.name}”？`)) return;
+    if (!current.value || isNew.value || editLocked.value || !window.confirm(`删除流程“${current.value.name}”？`)) return;
+    const id = beginWrite(); if (id === undefined) return;
+    const frozen = clone(current.value);
     try {
-      if (!current.value.revision) throw new Error("WORKFLOW_REVISION_REQUIRED");
-      await deleteWorkflow(current.value.id, current.value.revision);
+      if (!frozen.revision) throw new Error("WORKFLOW_REVISION_REQUIRED");
+      await deleteWorkflow(frozen.id, frozen.revision);
+      if (!owns(id)) return;
       current.value = undefined;
       definitionTrail.value = [];
       savedSignature.value = "";
       await refreshList();
-      if (workflows.value.length) await open(workflows.value[0].id);
-    } catch (reason) { error.value = formatApiError(reason); }
+      if (workflows.value.length) { const value = await readWorkflow(workflows.value[0].id); if (owns(id)) accept(value); }
+    } catch (reason) { if (owns(id)) error.value = formatApiError(reason); }
+    finally { endWrite(id); }
   }
   async function extractSelection(ids: string[]) {
-    if (!current.value || !ids.length) return;
+    if (!current.value || !ids.length || editLocked.value) return;
     const name = window.prompt("公共块名称");
     if (!name?.trim()) return;
     const before = signature(cleanWorkflow(current.value));
+    const id = beginWrite(); if (id === undefined) return;
     try {
-      const value = extractPublicBlock(current.value, ids, `block-${crypto.randomUUID()}`, name);
+      const value = extractPublicBlock(clone(current.value), [...ids], `block-${crypto.randomUUID()}`, name);
       // 先创建完整公共定义。失败时原草稿不变；成功后调用者仍是草稿，不暗中保存或覆盖 CAS。
       await createWorkflow(value.block as WorkflowDefinition);
+      if (!owns(id)) return;
       if (!current.value || signature(cleanWorkflow(current.value)) !== before) {
         await refreshList(); throw new Error("EXTRACT_CALLER_CHANGED: 公共块已创建，当前草稿未覆盖");
       }
-      checkpoint(); current.value = value.caller;
+      const previous = snapshot(); if (previous) history.value.push(previous);
+      future.value = []; current.value = value.caller;
       selectedNodeId.value = ""; selectedEdgeId.value = "";
-      await refreshList(); notice.value = "公共块已创建；调用者替换已进入草稿，请保存。";
-    } catch (reason) { error.value = formatApiError(reason); }
+      await refreshList(); if (owns(id)) notice.value = "公共块已创建；调用者替换已进入草稿，请保存。";
+    } catch (reason) { if (owns(id)) error.value = formatApiError(reason); }
+    finally { endWrite(id); }
   }
   async function openDefinition(id:string,nodeId?:string) {
-    if (!current.value) return;
+    if (!current.value || editLocked.value) return;
     if (current.value.id === id) {
       if (nodeId) selectedNodeId.value = nodeId;
       return;
@@ -234,52 +275,30 @@ export function useWorkflowEditor() {
     selectedNodeId.value = caller.nodeId;
   }
   async function runSaved(selectedOnly = false) {
-    if (!current.value || runActive.value || starting.value) return;
+    if (!current.value || runActive.value || editLocked.value) return;
     if (dirty.value || isNew.value) {
       error.value = "WORKFLOW_UNSAVED: 请先保存当前流程，运行只使用服务端保存版本";
       return;
     }
     const fingerprint = JSON.stringify([current.value.id, current.value.revision,
       selectedOnly, selectedOnly ? selectedNodeId.value : null, current.value.resource_locale]);
-    if (!pendingRequest || pendingRequest.fingerprint !== fingerprint)
-      pendingRequest = { id: crypto.randomUUID(), fingerprint };
-    starting.value = true;
+    const flow = clone(current.value), nodeId = selectedNodeId.value;
     error.value = "";
     try {
-      await runWorkflow(current.value.id, {
+      await session.submit(fingerprint, flow.name, (requestId) => runWorkflow(flow.id, {
         mode: selectedOnly ? "selected_node" : "workflow",
-        ...(selectedOnly ? { node_id: selectedNodeId.value } : {}),
-        revision: current.value.revision, request_id: pendingRequest.id, resource_locale:current.value.resource_locale??"",
-      });
-      run.value = await readCurrentRun();
-      notice.value = "流程启动已接收，查看真实运行/准备状态";
-    } catch (reason) { error.value = formatApiError(reason); }
-    finally { starting.value = false; }
+        ...(selectedOnly ? { node_id: nodeId } : {}),
+        revision: flow.revision, request_id: requestId, resource_locale:flow.resource_locale??"",
+      }));
+      if (alive) notice.value = "流程启动已接收，查看真实运行/准备状态";
+    } catch (reason) { if (alive) error.value = formatApiError(reason); }
   }
-  async function requestStop() {
-    if (!run.value?.run_id && !pendingRequest && !run.value?.submission?.request_id) return;
-    try { run.value = await stopRun(run.value?.run_id,
-      run.value?.submission?.state === "preparing" ? run.value.submission.request_id :
-        starting.value ? pendingRequest?.id : undefined); }
-    catch (reason) { error.value = formatApiError(reason); }
-  }
-  async function pollRun() {
-    if (polling) return;
-    polling = true;
-    try {
-      run.value = await readCurrentRun();
-      linkError.value = "";
-      if (pendingRequest && run.value.submission?.request_id === pendingRequest.id &&
-          ["submitted", "failed", "cancelled"].includes(run.value.submission?.state ?? "") && !runBusy(run.value)) pendingRequest = undefined;
-    } catch (reason) { linkError.value = `状态连接中断，不能确认已停止：${formatApiError(reason)}`; }
-    finally { polling = false; }
-  }
-  onMounted(() => { void load(); pollHandle = window.setInterval(pollRun, 1000); });
-  onBeforeUnmount(() => window.clearInterval(pollHandle));
+  onMounted(() => { void load(); });
+  onBeforeUnmount(() => { alive = false; ++operation; ++readSequence; session.writing.workflow = false; });
 
   return reactive({
     catalog, workflows, current, isNew, selectedNodeId, selectedEdgeId, selectedNode, selectedEdge, builtinDetail,
     history, future, definitionCaller, run, loading, saving, error, notice, dirty, runActive, runLabel, runError, starting, activeNodeId,
-    checkpoint, undo, redo, load, open, createBlank, copyCurrent, importTask, save, reload, remove, runSaved, requestStop, extractSelection, openDefinition, returnToCaller, viewBuiltin, applyBuiltin,
+    checkpoint, undo, redo, load, open, createBlank, copyCurrent, importTask, save, reload, remove, runSaved, requestStop: session.requestStop, extractSelection, openDefinition, returnToCaller, viewBuiltin, applyBuiltin, editLocked,
   });
 }

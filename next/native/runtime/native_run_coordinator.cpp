@@ -519,6 +519,11 @@ void NativeRunCoordinator::drive(const NativeRunDefinition &definition,
     terminal.result_saved = true;
     store_->finish_recent_frames();
     try {
+        const auto diagnostics = store_->diagnostic_summary();
+        if (!diagnostics.at("action_timing").value("complete", false))
+            terminal.secondary_errors.push_back("ACTION_TIMING_INCOMPLETE");
+        if (!diagnostics.value("complete", false))
+            terminal.secondary_errors.push_back("DIAGNOSTIC_INCOMPLETE");
         journal_->commit_terminal(terminal.generation, storage::snapshot_json(terminal),
             [&](const nlohmann::json &events) {
                 store_->save_terminal(terminal, last, events);

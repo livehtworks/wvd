@@ -1,4 +1,5 @@
 #include "runtime/flow_executor.hpp"
+#include "devices/metadata_read_fault.hpp"
 #include <iostream>
 #include <stdexcept>
 #include <thread>
@@ -105,7 +106,7 @@ struct PendingEventPorts final : Ports {
             std::chrono::steady_clock::now(), {}};
     }
 };
-struct MenuRetryPorts final : Ports {
+struct MenuRetryPorts : Ports {
     std::string mode;
     std::uint64_t epoch{};
     int ready_checks{};
@@ -195,6 +196,73 @@ workflow::Step step(std::string id, workflow::StepData data,
 
 int main(int argc, char **argv) {
     try {
+        if (argc == 2 && std::string(argv[1]) == "--closure-recovery") {
+            struct ReadPorts final : MenuRetryPorts {
+                int recoveries{};
+                bool recovered{}, forever{}, stop{};
+                std::chrono::steady_clock::time_point window{};
+                void observation_window(std::chrono::steady_clock::time_point value) override { window = value; }
+                contracts::FrameEnvelope capture() override {
+                    if (epoch && !recovered)
+                        throw contracts::ObservationUnavailable({contracts::ReadFaultKind::TransportUnavailable,
+                            contracts::ReadFaultStage::Capture, "ADB_OFFLINE", "offline.capture", {}, {}});
+                    return MenuRetryPorts::capture();
+                }
+                std::optional<contracts::ObservationReconnect> recover_observation() override {
+                    if (++recoveries <= 2 || forever) {
+                        devices::require_metadata_read({{"success", false}, {"error", "METADATA_TIMEOUT"},
+                            {"primary_error", "METADATA_TIMEOUT"}, {"quiescent", true}, {"handles_released", true},
+                            {"helper_exited", true}, {"pending_io", 0}, {"elapsed_ms", 1}},
+                            std::chrono::duration_cast<std::chrono::milliseconds>(window - std::chrono::steady_clock::now()));
+                    }
+                    recovered = true;
+                    return {};
+                }
+                bool cancelled() const override { return stop; }
+                contracts::Observation recognize(const contracts::FrameEnvelope &f, const recognition::Request &r) override {
+                    auto result = Ports::recognize(f, r);
+                    result.box = contracts::Box{100,100,20,20}; result.center = contracts::Point{110,110};
+                    result.action_eligible = true;
+                    return result;
+                }
+            };
+            for (const auto *scenario : {"recover", "exhaust", "stop"}) {
+                workflow::FlowProgram program; program.revision = "closure-read"; program.root_definition = "root";
+                recognition::Request probe{"scene", "1", {0,0,900,1600}, recognition::CustomParameters{"WvdVision", nlohmann::json::object()}};
+                workflow::Definition root; root.id = "root"; root.entry = "input";
+                root.steps.emplace("input", step("input", workflow::Input{probe, probe, {{"kind","Click"}}, {0,0,900,1600}}, {"await"}));
+                root.steps.emplace("await", step("await", workflow::AwaitResult{probe, 1s, 0ms, 1ms}, {"done"}));
+                root.steps.emplace("done", step("done", workflow::Finish{}));
+                program.definitions.emplace("root", std::move(root));
+                ReadPorts ports; ports.forever = std::string(scenario) == "exhaust";
+                runtime::FlowExecutor executor(program, ports, 2s, {80ms, 5ms, 10ms});
+                nlohmann::json pending;
+                runtime::TickResult result;
+                const auto began = std::chrono::steady_clock::now();
+                for (int i=0; i<300; ++i) {
+                    result = executor.tick();
+                    const auto state = executor.progress_snapshot();
+                    const auto current = state.at("pending_inputs");
+                    if (!current.empty()) {
+                        if (pending.is_null()) pending = current;
+                        else if (pending != current) throw std::runtime_error("READ_PENDING_CHANGED");
+                    }
+                    if (std::string(scenario) == "stop" && ports.recoveries) ports.stop = true;
+                    if (result.state != runtime::TickState::Progress && result.state != runtime::TickState::Waiting) break;
+                    if (result.state == runtime::TickState::Waiting) std::this_thread::sleep_until(result.wake_at);
+                }
+                if (ports.epoch != 1 || pending.is_null()) throw std::runtime_error("READ_INPUT_COUNT_OR_BASIS_LOST");
+                if (std::string(scenario) == "recover" && (result.state != runtime::TickState::Completed || ports.recoveries != 3))
+                    throw std::runtime_error("READ-01:" + result.code);
+                if (std::string(scenario) == "exhaust" && (result.state != runtime::TickState::Failed ||
+                    std::chrono::steady_clock::now() - began > 1s || !executor.has_unresolved_input()))
+                    throw std::runtime_error("READ-02:" + result.code);
+                if (std::string(scenario) == "stop" && (result.state != runtime::TickState::Cancelled || !executor.has_unresolved_input()))
+                    throw std::runtime_error("READ-03:" + result.code);
+                std::cout << "READ " << scenario << " inputs=" << ports.epoch << " recoveries=" << ports.recoveries << " result=" << result.code << '\n';
+            }
+            return 0;
+        }
         // 只隔离图像来源，实际执行生产 Poll/期限逻辑；不能以此替代实机完整一轮。
         struct ProgressPorts final : Ports {
             bool progressing{};

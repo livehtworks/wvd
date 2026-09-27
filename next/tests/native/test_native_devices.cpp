@@ -1,6 +1,7 @@
 #include "devices/android_probe.hpp"
 #include "devices/scrcpy_codec.hpp"
 #include "devices/lifecycle_execution.hpp"
+#include "devices/metadata_read_fault.hpp"
 #include "platform/windows/mumu_binding.hpp"
 #include <iostream>
 #include <stdexcept>
@@ -32,9 +33,45 @@ void rejected(Call call, const char *reason) {
 }
 }
 
-int main() {
+int main(int argc, char **argv) {
     try {
         namespace d = wvd::devices;
+        if (argc == 2 && std::string(argv[1]) == "--closure-metadata") {
+            using J = nlohmann::json;
+            const J timeout{{"success", false}, {"primary_error", "METADATA_TIMEOUT"},
+                {"error", "METADATA_TIMEOUT"}, {"quiescent", true}, {"handles_released", true},
+                {"helper_exited", true}, {"pending_io", 0}, {"elapsed_ms", 23.75}};
+            bool retryable{};
+            try { d::require_metadata_read(timeout, std::chrono::milliseconds{17}); }
+            catch (const wvd::contracts::ObservationUnavailable &e) {
+                retryable = e.fault().kind == wvd::contracts::ReadFaultKind::Timeout &&
+                    e.fault().timeout.count() == 17 && e.fault().elapsed.count() == 23 &&
+                    e.fault().details.at("elapsed_ms") == 23.75 &&
+                    J::parse(e.fault().details.at("report").get<std::string>()) == timeout;
+            }
+            if (!retryable) throw std::runtime_error("META-01");
+            const auto blocked = [&](J report) {
+                try { d::require_metadata_read(report, std::chrono::milliseconds{17}); }
+                catch (const wvd::contracts::ObservationUnavailable &) { throw std::runtime_error("META-02_RETRY_FORBIDDEN"); }
+                catch (const std::runtime_error &e) {
+                    if (std::string(e.what()).find(report.value("error", "")) == std::string::npos)
+                        throw std::runtime_error("META-02_ORIGINAL_ERROR_LOST");
+                    return;
+                }
+                throw std::runtime_error("META-02_NOT_BLOCKED");
+            };
+            for (const auto *field : {"quiescent", "handles_released", "helper_exited", "pending_io"}) {
+                auto report = timeout; report.erase(field); blocked(report);
+            }
+            for (const auto *error : {"METADATA_CLEANUP_PENDING", "MUMU_INSTANCE_MISMATCH", "MUMU_ADB_BINDING_MISMATCH",
+                "METADATA_JSON_INVALID", "METADATA_COMMAND_INVALID", "METADATA_CANCELLED", "OTHER_ERROR"}) {
+                auto report = timeout; report["error"] = error;
+                if (std::string(error) != "METADATA_CLEANUP_PENDING") report["primary_error"] = error;
+                blocked(report);
+            }
+            std::cout << "META-01 META-02 PASS: classified report only; no helper or device launched\n";
+            return 0;
+        }
         // 只保护本次修复的准入边界；不把假端口结果当成真实MuMu恢复验收。
         const nlohmann::json crashed{{"error_code", 900}, {"is_process_started", false},
             {"is_android_started", false}};

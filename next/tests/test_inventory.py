@@ -23,7 +23,7 @@ class InventoryTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.report = json.loads(
-            (NEXT / "docs/migration/feature_inventory.json").read_text(encoding="utf-8")
+            (NEXT / "docs/archive/migration-baseline-ddc3366/feature_inventory.json").read_text(encoding="utf-8")
         )
         cls.items = cls.report["items"]
         cls.trees = {
@@ -290,7 +290,7 @@ class InventoryTests(unittest.TestCase):
         resources = {p for p in all_paths if p.startswith(("resources/", "locale/"))}
         self.assertEqual({r["path"] for r in self.rows("asset")}, resources)
         report = json.loads(
-            (NEXT / "docs/migration/asset_case_report.json").read_text(encoding="utf-8")
+            (NEXT / "docs/archive/migration-baseline-ddc3366/asset_case_report.json").read_text(encoding="utf-8")
         )
         for row in report["references"]:
             self.assertNotEqual(row["status"], "MISSING_OR_MOD")
@@ -404,7 +404,7 @@ class InventoryTests(unittest.TestCase):
         self.assertTrue(changes)
         print("R02_CHANGES " + json.dumps(changes, ensure_ascii=False))
         assets = json.loads(
-            (NEXT / "docs/migration/asset_case_report.json").read_text(encoding="utf-8")
+            (NEXT / "docs/archive/migration-baseline-ddc3366/asset_case_report.json").read_text(encoding="utf-8")
         )
         self.assertEqual(
             assets, read_review("next/docs/migration/asset_case_report.json")

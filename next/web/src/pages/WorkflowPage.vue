@@ -4,7 +4,7 @@ import { Handle, Position, VueFlow, type Connection, type EdgeMouseEvent, type N
 import "@vue-flow/core/dist/style.css";
 import "@vue-flow/core/dist/theme-default.css";
 import {
-  ArrowLeft, Beaker, CircleStop, Copy, GitBranch, Play, Plus, Redo2, RefreshCw, Save, Trash2, Undo2,
+  ArrowLeft, Beaker, Copy, GitBranch, Play, Plus, Redo2, RefreshCw, Save, Trash2, Undo2,
 } from "@lucide/vue";
 import { formatApiError, probeRecognition } from "../api/client";
 import { resourceLocaleOptions } from "../api/types";
@@ -17,7 +17,7 @@ import SlotInspector from "../features/authoring/SlotInspector.vue";
 import ConditionEditor from "../features/authoring/ConditionEditor.vue";
 import EventPolicyPanel from "../features/authoring/EventPolicyPanel.vue";
 import ArgumentFields from "../features/authoring/ArgumentFields.vue";
-import ExecutionStatus from "../components/ExecutionStatus.vue";
+
 import type { FlowCall, PublicInterface } from "../features/authoring/flowModel";
 import { appendEdge, changeEdgeKind, moveEdge, removeSelection } from "../features/flow/graphMutations";
 
@@ -57,7 +57,7 @@ function handoffPorts(nodeId:string):string[] {
 }
 
 function uid(prefix: string) { return `${prefix}-${crypto.randomUUID()}`; }
-function addNode(type: string) {
+function addNode(type: string) { if (state.editLocked) return;
   if (!state.current) return;
   const definition = nodeTypes.value.find((item) => item.type === type);
   if (!definition) return;
@@ -72,7 +72,7 @@ function addNode(type: string) {
   state.selectedEdgeId = "";
   if (!state.current.entry_node_id) state.current.entry_node_id = node.id;
 }
-function duplicateNode() {
+function duplicateNode() { if (state.editLocked) return;
   if (!state.current || !state.selectedNode) return;
   state.checkpoint();
   const source = state.selectedNode;
@@ -83,7 +83,7 @@ function duplicateNode() {
   state.current.nodes.push(node);
   state.selectedNodeId = node.id;
 }
-function deleteSelection() {
+function deleteSelection() { if (state.editLocked) return;
   if (!state.current) return;
   if (!state.selectedNodeId && !state.selectedEdgeId) return;
   const result = removeSelection(state.current.nodes, state.current.edges,
@@ -95,7 +95,7 @@ function deleteSelection() {
   state.selectedNodeId = "";
   state.selectedEdgeId = "";
 }
-function connect(connection: Connection) {
+function connect(connection: Connection) { if (state.editLocked) return;
   if (!state.current || !connection.source || !connection.target || connection.source === connection.target) return;
   if (state.current.edges.some((edge) => edge.source === connection.source && edge.target === connection.target && edge.sourceHandle === connection.sourceHandle)) return;
   const outcome = connection.sourceHandle?.startsWith("handoff:") ? "handoff" : connection.sourceHandle === "failure" ? "failure" : "success";
@@ -108,22 +108,22 @@ function connect(connection: Connection) {
   state.checkpoint();
   state.current.edges = next;
 }
-function selectNode(event: NodeMouseEvent) {
+function selectNode(event: NodeMouseEvent) { if (state.editLocked) return;
   state.selectedNodeId = event.node.id;
   state.selectedEdgeId = "";
 }
-function selectEdge(event: EdgeMouseEvent) {
+function selectEdge(event: EdgeMouseEvent) { if (state.editLocked) return;
   state.selectedEdgeId = event.edge.id;
   state.selectedNodeId = "";
 }
-function dragStart() { state.checkpoint(); }
-function dragStop(event: NodeDragEvent) {
+function dragStart() { if (state.editLocked) return; state.checkpoint(); }
+function dragStop(event: NodeDragEvent) { if (state.editLocked) return;
   const node = state.current?.nodes.find((item) => item.id === event.node.id);
   if (node) node.position = { x: event.node.position.x, y: event.node.position.y };
 }
-function setEntry() { if (state.current && state.selectedNodeId) { state.checkpoint(); state.current.entry_node_id = state.selectedNodeId; } }
+function setEntry() { if (state.editLocked) return; if (state.current && state.selectedNodeId) { state.checkpoint(); state.current.entry_node_id = state.selectedNodeId; } }
 function param(name: string) { return selectedParameters.value[name]; }
-function textParam(name: string, event: Event) {
+function textParam(name: string, event: Event) { if (state.editLocked) return;
   const value=(event.target as HTMLInputElement | HTMLSelectElement).value;
   setParam(name,value);
   if(name==='outcome'&&state.selectedNode){
@@ -135,7 +135,7 @@ function textParam(name: string, event: Event) {
 }
 function numberParam(name: string, event: Event) { setParam(name, Number((event.target as HTMLInputElement).value)); }
 function boolParam(name: string, event: Event) { setParam(name, (event.target as HTMLInputElement).checked); }
-function setParam(name: string, value: unknown) {
+function setParam(name: string, value: unknown) { if (state.editLocked) return;
   if (!state.selectedNode) return;
   state.checkpoint();
   state.selectedNode.data.parameters[name] = value;
@@ -145,7 +145,7 @@ const selectedCondition = computed<JsonObject>(() => {
   const parameters = selectedParameters.value;
   return (parameters.condition as JsonObject | undefined) ?? {};
 });
-function setRecognitionMode(event: Event) {
+function setRecognitionMode(event: Event) { if (state.editLocked) return;
   if (!state.selectedNode) return;
   state.checkpoint();
   const mode = (event.target as HTMLSelectElement).value;
@@ -154,7 +154,7 @@ function setRecognitionMode(event: Event) {
     : mode === "ocr" ? { mode, expected: ["Pause"], roi: [0, 0, 900, 1600] }
       : { mode };
 }
-function setConditionField(name: string, value: unknown) {
+function setConditionField(name: string, value: unknown) { if (state.editLocked) return;
   if (!state.selectedNode) return;
   state.checkpoint();
   const condition = cloneJson(selectedCondition.value);
@@ -172,7 +172,7 @@ function setRoi(index: number, event: Event) {
   roi[index] = Number((event.target as HTMLInputElement).value);
   setConditionField("roi", roi);
 }
-function changeAction(event: Event) {
+function changeAction(event: Event) { if (state.editLocked) return;
   if (!state.selectedNode) return;
   state.checkpoint();
   const operation = (event.target as HTMLSelectElement).value;
@@ -186,12 +186,12 @@ function changeAction(event: Event) {
 function setActionCondition(name: "scene" | "postcondition" | "target", event: Event) {
   setParam(name, { mode: (event.target as HTMLInputElement).value });
 }
-function setArrayValue(name: string, index: number, event: Event) {
+function setArrayValue(name: string, index: number, event: Event) { if (state.editLocked) return;
   const current = Array.isArray(param(name)) ? [...param(name) as number[]] : [];
   current[index] = Number((event.target as HTMLInputElement).value);
   setParam(name, current);
 }
-function changeBusiness(event: Event) {
+function changeBusiness(event: Event) { if (state.editLocked) return;
   if (!state.selectedNode) return;
   state.checkpoint();
   const binding = (event.target as HTMLSelectElement).value;
@@ -201,20 +201,20 @@ function changeBusiness(event: Event) {
       ? { binding, operation_id: "custom-confirm", event: "target_completed", condition: { mode: "target_marker" }, expected_step: 0 }
       : { binding: "combat" };
 }
-function setRepeat(event: Event) {
+function setRepeat(event: Event) { if (state.editLocked) return;
   if (!state.selectedNode) return;
   state.checkpoint();
   const value = Number((event.target as HTMLInputElement).value);
   state.selectedNode.repeat_limit = value > 1 ? value : undefined;
 }
-function edgeOrder(event: Event) {
+function edgeOrder(event: Event) { if (state.editLocked) return;
   if (!state.selectedEdge) return;
   const next = moveEdge(state.current!.edges, state.selectedEdge.id, Number((event.target as HTMLInputElement).value));
   if (next === state.current!.edges) return;
   state.checkpoint();
   state.current!.edges = next;
 }
-function edgeKind(event: Event) {
+function edgeKind(event: Event) { if (state.editLocked) return;
   if (!state.selectedEdge) return;
   const next = changeEdgeKind(state.current!.edges, state.selectedEdge.id,
     (event.target as HTMLSelectElement).value as "sequence" | "candidate" | "failure");
@@ -240,17 +240,17 @@ async function runProbe() {
 const selectedPublicNodes=ref<string[]>([]);
 watch(()=>state.current?.id,()=>{selectedPublicNodes.value=[];});
 const publicResources=computed(()=>(state.catalog.semantic_resources??[]) as Array<{value:string;label:string;role:string;category:string}>);
-function replaceParameters(value:Record<string,unknown>|FlowCall) {if(state.selectedNode){state.checkpoint();state.selectedNode.data.parameters=cloneJson(value) as JsonObject;}}
-function interfaceChanged(value:PublicInterface) {if(state.current){state.checkpoint();state.current.interface=value;}}
+function replaceParameters(value:Record<string,unknown>|FlowCall) { if (state.editLocked) return;if(state.selectedNode){state.checkpoint();state.selectedNode.data.parameters=cloneJson(value) as JsonObject;}}
+function interfaceChanged(value:PublicInterface) { if (state.editLocked) return;if(state.current){state.checkpoint();state.current.interface=value;}}
 function setWholeCondition(key:string,value:JsonObject) {setParam(key,value);}
 function selectMany(event:{nodes:Array<{id:string}>}) {selectedPublicNodes.value=event.nodes.map(n=>n.id);}
 function extractSelected(){void state.extractSelection(selectedPublicNodes.value.length?selectedPublicNodes.value:state.selectedNodeId?[state.selectedNodeId]:[]);}
-function optionalBudget(name:string,event:Event){
+function optionalBudget(name:string,event:Event){ if (state.editLocked) return;
  if(!state.selectedNode)return;state.checkpoint();const raw=(event.target as HTMLInputElement).value;
  if(raw==='')delete state.selectedNode.data.parameters[name];else state.selectedNode.data.parameters[name]=Number(raw);
 }
-function rootBudget(event:Event){if(state.current){state.checkpoint();state.current.time_limit_ms=Number((event.target as HTMLInputElement).value);}}
-function eventsChanged(value:Record<string,EventRule>){
+function rootBudget(event:Event){ if (state.editLocked) return;if(state.current){state.checkpoint();state.current.time_limit_ms=Number((event.target as HTMLInputElement).value);}}
+function eventsChanged(value:Record<string,EventRule>){ if (state.editLocked) return;
  if(!state.current)return;
  state.checkpoint();state.current.events=value;
  for(const node of state.current.nodes){
@@ -260,17 +260,17 @@ function eventsChanged(value:Record<string,EventRule>){
   if(node.resume && !Object.keys(node.resume).length)delete node.resume;
  }
 }
-function setNodeEvent(id:string,value:"inherit"|"enabled"|"disabled"){
+function setNodeEvent(id:string,value:"inherit"|"enabled"|"disabled"){ if (state.editLocked) return;
  if(!state.selectedNode)return;state.checkpoint();
  if(value==="inherit")delete state.selectedNode.event_overrides?.[id];
  else{state.selectedNode.event_overrides??={};state.selectedNode.event_overrides[id]={...state.selectedNode.event_overrides[id],enabled:value==="enabled"};}
  if(state.selectedNode.event_overrides && !Object.keys(state.selectedNode.event_overrides).length)delete state.selectedNode.event_overrides;
 }
-function setNodeEventArguments(id:string,args:Record<string,string|number|boolean>){
+function setNodeEventArguments(id:string,args:Record<string,string|number|boolean>){ if (state.editLocked) return;
  if(!state.selectedNode)return;state.checkpoint();state.selectedNode.event_overrides??={};
  state.selectedNode.event_overrides[id]={...state.selectedNode.event_overrides[id],arguments:args};
 }
-function setNodeEventResume(id:string,mode:"inherit"|EventResume["mode"]){
+function setNodeEventResume(id:string,mode:"inherit"|EventResume["mode"]){ if (state.editLocked) return;
  if(!state.selectedNode)return;state.checkpoint();
  if(mode==="inherit")delete state.selectedNode.resume?.[id];
  else{state.selectedNode.resume??={};state.selectedNode.resume[id]=mode==="replan"
@@ -278,7 +278,7 @@ function setNodeEventResume(id:string,mode:"inherit"|EventResume["mode"]){
   : {mode:"reobserve"};}
  if(state.selectedNode.resume && !Object.keys(state.selectedNode.resume).length)delete state.selectedNode.resume;
 }
-function patchNodeEventResume(id:string,patch:Partial<EventResume>){
+function patchNodeEventResume(id:string,patch:Partial<EventResume>){ if (state.editLocked) return;
  if(!state.selectedNode?.resume?.[id])return;state.checkpoint();
  state.selectedNode.resume[id]={...state.selectedNode.resume[id],...patch};
 }
@@ -286,13 +286,8 @@ function patchNodeEventResume(id:string,patch:Partial<EventResume>){
 
 <template>
   <main class="workflow-page">
-    <section class="notice" aria-label="流程运行状态" role="status">{{ state.runLabel }}</section>
-    <ExecutionStatus :run="state.run" />
-    <section v-if="state.run?.active_event" class="notice" role="status">{{ state.run.active_event.path?.map(item => item.event_id).join(' → ') ?? state.run.active_event.event_id }} · 原步骤 {{ state.run.suspended_step?.node_id ?? state.run.active_event.source_node }} · {{ state.run.active_event.resume.mode }}</section>
-    <div v-if="state.runError" class="notice error" role="alert">{{ state.runError }}</div>
+    <fieldset class="editor-fields workflow-fields" :disabled="state.editLocked" :inert="state.editLocked">
     <nav v-if="state.run?.node_path?.length" aria-label="运行调用路径"><button v-for="(part,i) in state.run.node_path" :key="i" type="button" @click="state.openDefinition(part.flow_id,part.node_id)">{{part.flow_id}} / {{part.node_id}}</button></nav>
-    <div v-if="state.run?.call_stack?.length" class="notice" role="status">调用层次：{{ state.run.call_stack.map(frame => frame.node_id).join(' → ') }}</div>
-    <div v-if="state.run?.unresolved_inputs?.length" class="notice error" role="alert">有 {{ state.run.unresolved_inputs.length }} 次输入结果未确认，流程不会自动重发</div>
     <header class="editor-toolbar">
       <div class="workflow-picker">
         <button v-if="state.definitionCaller" class="button secondary" :title="`返回 ${state.definitionCaller.name}`" @click="state.returnToCaller"><ArrowLeft :size="16" />返回调用者</button>
@@ -317,7 +312,6 @@ function patchNodeEventResume(id:string,patch:Partial<EventResume>){
         <button class="button secondary" :disabled="!state.current || state.isNew" @click="state.reload"><RefreshCw :size="16" />重载</button>
         <button class="button primary" :disabled="!state.current || !state.dirty || state.saving" @click="state.save"><Save :size="16" />保存</button>
         <button class="button run" :disabled="!state.current || state.dirty || state.runActive" @click="state.runSaved(false)"><Play :size="16" />运行</button>
-        <button class="button danger" :disabled="!state.runActive" @click="state.requestStop"><CircleStop :size="16" />停止</button>
       </div>
     </header>
     <div v-if="state.error || editorError" class="notice error editor-notice" role="alert">{{ state.error || editorError }}</div>
@@ -341,7 +335,7 @@ function patchNodeEventResume(id:string,patch:Partial<EventResume>){
         <p v-else class="empty-state">目录未返回可编排节点</p>
         <label v-if="state.current" class="field"><span>本次根运行总预算（ms）</span><input type="number" min="1" max="1800000" :value="state.current.time_limit_ms??60000" @change="rootBudget" /></label>
         <DefinitionInterfaceEditor v-if="state.current" :model-value="state.current.interface" :nodes="state.current.nodes" @update:model-value="interfaceChanged" />
-        <CheckPolicyEditor v-if="state.current" :model-value="state.current.checks" @update:model-value="state.checkpoint(); state.current.checks=$event" />
+        <CheckPolicyEditor v-if="state.current" :model-value="state.current.checks" @update:model-value="!state.editLocked && (state.checkpoint(), state.current.checks=$event)" />
         <EventPolicyPanel v-if="state.current" :model-value="state.current.events"
           :flows="state.workflows" :current-flow-id="state.current.id" :nodes="state.current.nodes"
           :templates="state.catalog.templates" :resources="publicResources" :recognizers="state.catalog.recognizers"
@@ -354,7 +348,7 @@ function patchNodeEventResume(id:string,patch:Partial<EventResume>){
           <input v-model="state.current.name" aria-label="流程名称" @focus="state.checkpoint" /><input v-model="state.current.description" aria-label="流程说明" placeholder="流程说明" @focus="state.checkpoint" />
           <span class="mono">{{ state.current.revision ?? '尚未保存' }}</span>
         </div>
-        <VueFlow v-if="state.current" :nodes="flowNodes" :edges="flowEdges" :delete-key-code="null" fit-view-on-init class="flow-canvas" @connect="connect" @node-click="selectNode" @edge-click="selectEdge" @node-drag-start="dragStart" @node-drag-stop="dragStop" @selection-change="selectMany">
+        <VueFlow v-if="state.current" :nodes="flowNodes" :edges="flowEdges" :nodes-draggable="!state.editLocked" :nodes-connectable="!state.editLocked" :elements-selectable="!state.editLocked" :delete-key-code="null" fit-view-on-init class="flow-canvas" @connect="connect" @node-click="selectNode" @edge-click="selectEdge" @node-drag-start="dragStart" @node-drag-stop="dragStop" @selection-change="selectMany">
           <template #node-editor="slotProps">
             <div :class="['editor-node', { entry: state.current?.entry_node_id === slotProps.id, active: state.activeNodeId === slotProps.id, failed: state.run?.failed_node_id === slotProps.id }]">
               <Handle type="target" :position="Position.Left" /><span class="node-kind">{{ slotProps.data.node_type }}</span><strong>{{ slotProps.data.label }}</strong><span v-if="state.current?.entry_node_id === slotProps.id" class="node-mark">入口</span><Handle id="success" type="source" :position="Position.Right" /><Handle id="failure" type="source" :position="Position.Bottom" />
@@ -449,6 +443,7 @@ function patchNodeEventResume(id:string,patch:Partial<EventResume>){
         <div v-else class="property-empty">选择节点或连接以编辑参数</div>
       </aside>
     </div>
+    </fieldset>
   </main>
 </template>
 <style scoped>

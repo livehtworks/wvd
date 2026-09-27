@@ -1,11 +1,11 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
-import { runBusy, displayRunState } from "./runStatus";
+import { useRunSession } from "./useRunSession";
 import {
-  captureDevice, connectDevice, disconnectDevice, formatApiError, readCatalog, readCurrentRun,
-  readDevice, readProfile, readTaskProfile, saveProfile, stopRun,
+  captureDevice, connectDevice, disconnectDevice, formatApiError, readCatalog,
+  readProfile, readTaskProfile, saveProfile,
   startTask, selectEmulator,
 } from "../api/client";
-import type { Catalog, DeviceState, ProfileEnvelope, ResourceLocale, RunState, StrategyGroup, WvdProfile } from "../api/types";
+import type { Catalog, ProfileEnvelope, ResourceLocale, StrategyGroup, WvdProfile } from "../api/types";
 
 // 配置全部是 JSON 数据。JSON 往返可安全解开 Vue 的响应式 Proxy；
 // structuredClone 直接接收 Proxy 会在真实浏览器中抛 DataCloneError。
@@ -32,6 +32,9 @@ export function writeStrategies(profile: WvdProfile, groups: StrategyGroup[]) {
 
 function ensureCombatSettings(profile: WvdProfile) {
   profile.TASK_POINT_STRATEGY ??= { overall_strategy: "", task_point: {} };
+  const points = profile.TASK_POINT_STRATEGY;
+  if (Array.isArray(points.task_point)) points.task_point = Object.fromEntries(points.task_point.map(item => [item.point, item.strategy]));
+  points.task_point ??= {};
   profile.TASK_POINT_STRATEGY.special_combat ??= {
     skull: false, portrait: false, portrait_image: "combat_scorpion_portrait",
     normal_strategy: "", special_strategy: "",
@@ -39,6 +42,13 @@ function ensureCombatSettings(profile: WvdProfile) {
 }
 
 export function useWorkbench() {
+  const session = useRunSession();
+  let alive = true;
+  let writeGeneration = 0;
+  let selectionSequence = 0;
+  const taskLoading = ref(false);
+  const selectionId = ref("");
+  const persisted = ref<ProfileEnvelope>();
   const savedLocale = typeof window !== "undefined" ? window.localStorage.getItem("wvd.gameResourceLocale") : null;
   const resourceLocale = ref<ResourceLocale>(
     savedLocale === "" || savedLocale === "en" || savedLocale === "zh-Hant" ||
@@ -49,14 +59,11 @@ export function useWorkbench() {
   const draft = ref<WvdProfile>();
   const savedSignature = ref("");
   const catalog = ref<Catalog>({});
-  const device = ref<DeviceState>();
-  const run = ref<RunState>();
-  const starting = ref(false);
+  const device = computed(() => session.device);
+  const run = computed(() => session.run);
+  const starting = computed(() => session.starting);
   const repeatMode = ref<'forever' | 'count'>('count');
   const repeatCount = ref(1);
-  const linkError = ref("");
-  let pendingRequest: { id: string; fingerprint: string } | undefined;
-  let polling = false;
   const loading = ref(false);
   const saving = ref(false);
   const deviceBusy = ref(false);
@@ -64,47 +71,69 @@ export function useWorkbench() {
   const notice = ref("");
   const strategies = ref<StrategyGroup[]>([]);
   const strategyRenames = ref<Record<string, string>>({});
+  const editLocked = computed(() => saving.value || loading.value || taskLoading.value);
+  function normalized(profile: WvdProfile): WvdProfile {
+    const value = clone(profile);
+    ensureCombatSettings(value);
+    writeStrategies(value, readStrategies(value));
+    return value;
+  }
+  function setDraft(profile: WvdProfile) {
+    draft.value = normalized(profile);
+    strategies.value = readStrategies(draft.value);
+    selectionId.value = draft.value.FARM_TARGET ?? "";
+    strategyRenames.value = {};
+  }
+  function acceptSaved(value: ProfileEnvelope) {
+    persisted.value = clone(value); envelope.value = clone(value);
+    setDraft(value.profile);
+    savedSignature.value = signature(normalized(value.profile));
+  }
+  function beginWrite() {
+    if (editLocked.value) return;
+    saving.value = true; session.writing.workbench = true;
+    return ++writeGeneration;
+  }
+  function owns(id: number) { return alive && writeGeneration === id; }
+  function endWrite(id: number) {
+    if (owns(id)) { saving.value = false; session.writing.workbench = false; }
+  }
   function noteRename(oldName: string, newName: string) {
+    if (editLocked.value) return;
     const original = Object.keys(strategyRenames.value).find((key) => strategyRenames.value[key] === oldName);
     if (original) strategyRenames.value[original] = newName;
     else if (envelope.value && readStrategies(envelope.value.profile).some((group) => group.group_name === oldName))
       strategyRenames.value[oldName] = newName;
   }
-  let pollHandle: number | undefined;
 
   const dirty = computed(() => Boolean(draft.value) && signature(draft.value) !== savedSignature.value);
-  const runActive = computed(() => starting.value || runBusy(run.value));
-  const runLabel = computed(() => starting.value ? "提交启动请求" : displayRunState(run.value));
-  const runError = computed(() => run.value?.repeat?.state === "failed"
-    ? run.value.repeat.reason : run.value?.submission?.error ?? linkError.value);
+  const runActive = computed(() => !session.canStart);
+  const runLabel = computed(() => session.label);
+  const runError = computed(() => session.error);
   const selectedTask = computed(() => catalog.value.tasks?.find((task) => task.id === draft.value?.FARM_TARGET));
 
   async function load() {
+    if (editLocked.value) return;
     loading.value = true;
     error.value = "";
     try {
-      const [profileValue, catalogValue, deviceValue, runValue] = await Promise.all([
-        readProfile(), readCatalog(), readDevice(), readCurrentRun(),
+      const [profileValue, catalogValue] = await Promise.all([
+        readProfile(), readCatalog(),
       ]);
-      envelope.value = normalizeEnvelope(profileValue);
-      draft.value = clone(envelope.value.profile);
-      ensureCombatSettings(draft.value);
-      strategies.value = readStrategies(draft.value);
-      strategyRenames.value = {};
-      savedSignature.value = signature(draft.value);
+      if (!alive) return;
+      acceptSaved(normalizeEnvelope(profileValue));
       catalog.value = catalogValue;
-      device.value = deviceValue;
-      run.value = runValue;
     } catch (reason) {
-      error.value = formatApiError(reason);
+      if (alive) error.value = formatApiError(reason);
     } finally {
-      loading.value = false;
+      if (alive) loading.value = false;
     }
   }
 
   async function save() {
-    if (!draft.value || !envelope.value) return;
-    saving.value = true;
+    if (!draft.value || !persisted.value) return;
+    const id = beginWrite(); if (id === undefined) return;
+    const payload = clone({ ...persisted.value, profile: draft.value, strategy_renames: strategyRenames.value });
     error.value = "";
     notice.value = "";
     try {
@@ -114,108 +143,95 @@ export function useWorkbench() {
         if (!names.has(special.normal_strategy) || !names.has(special.special_strategy))
           throw new Error("请先选择普通敌人和特殊敌人的战斗方案");
       }
-      writeStrategies(draft.value, clone(strategies.value));
-      const saved = normalizeEnvelope(await saveProfile({
-        ...envelope.value,
-        profile: draft.value,
-        strategy_renames: strategyRenames.value,
-      }));
-      envelope.value = saved;
-      draft.value = clone(saved.profile);
-      ensureCombatSettings(draft.value);
-      strategies.value = readStrategies(draft.value);
-      strategyRenames.value = {};
-      savedSignature.value = signature(draft.value);
-      strategyRenames.value = {};
+      const saved = normalizeEnvelope(await saveProfile(payload));
+      if (!owns(id)) return;
+      acceptSaved(saved);
       notice.value = "配置已由服务端保存";
     } catch (reason) {
-      error.value = formatApiError(reason);
+      if (owns(id)) error.value = formatApiError(reason);
     } finally {
-      saving.value = false;
+      endWrite(id);
     }
   }
 
   async function clearTaskOverride() {
-    if (!draft.value || !envelope.value || !draft.value.FARM_TARGET) return;
+    if (!draft.value || !persisted.value || !draft.value.FARM_TARGET || editLocked.value) return;
     if (dirty.value) {
       error.value = "PROFILE_UNSAVED: 请先保存或重载当前更改，再清除任务覆盖";
       return;
     }
-    saving.value = true;
+    const id = beginWrite(); if (id === undefined) return;
+    const payload = clone({ ...persisted.value, profile: draft.value,
+      operation: "clear_task_override", task_id: draft.value.FARM_TARGET });
     error.value = "";
     try {
-      const saved = normalizeEnvelope(await saveProfile({
-        ...envelope.value,
-        profile: draft.value,
-        operation: "clear_task_override",
-        task_id: draft.value.FARM_TARGET,
-      }));
-      envelope.value = saved;
-      draft.value = clone(saved.profile);
-      ensureCombatSettings(draft.value);
-      strategies.value = readStrategies(draft.value);
-      strategyRenames.value = {};
-      savedSignature.value = signature(draft.value);
+      const saved = normalizeEnvelope(await saveProfile(payload));
+      if (!owns(id)) return;
+      acceptSaved(saved);
       notice.value = "当前任务覆盖已清除";
-    } catch (reason) { error.value = formatApiError(reason); }
-    finally { saving.value = false; }
+    } catch (reason) { if (owns(id)) error.value = formatApiError(reason); }
+    finally { endWrite(id); }
   }
 
   function revert() {
-    if (!envelope.value) return;
-    draft.value = clone(envelope.value.profile);
-    ensureCombatSettings(draft.value);
-    strategies.value = readStrategies(draft.value);
-    savedSignature.value = signature(draft.value);
-    strategyRenames.value = {};
+    if (!persisted.value || editLocked.value) return;
+    acceptSaved(persisted.value);
     notice.value = "已恢复为服务端保存版本";
   }
 
-  async function selectTask(taskId: string) {
-    if (!draft.value) return;
+  async function selectTask(taskId: string, patch: Partial<WvdProfile> = {}) {
+    if (!draft.value || saving.value || loading.value) return;
+    if (!taskLoading.value && dirty.value && !window.confirm("放弃当前配置中未保存的更改？")) return;
+    const seq = ++selectionSequence, generation = writeGeneration;
+    const valid = () => alive && seq === selectionSequence && generation === writeGeneration;
+    selectionId.value = taskId; taskLoading.value = true;
     error.value = "";
     try {
       const selected = normalizeEnvelope(await readTaskProfile(taskId));
-      draft.value = clone(selected.profile);
-      ensureCombatSettings(draft.value);
-      strategies.value = readStrategies(draft.value);
+      if (!valid()) return;
+      if (selected.revision !== persisted.value?.revision) throw new Error("PROFILE_REVISION_CONFLICT: 服务端配置已变化，请重载后再选择任务");
+      setDraft({ ...selected.profile, ...patch, FARM_TARGET: taskId });
       envelope.value = selected;
-      savedSignature.value = signature(draft.value);
       notice.value = selected.task_override_active ? "已载入该任务的专用配置" : "已载入默认配置；保存后切换任务";
-    } catch (reason) { error.value = formatApiError(reason); }
+    } catch (reason) {
+      if (valid()) { error.value = formatApiError(reason); selectionId.value = draft.value?.FARM_TARGET ?? ""; }
+    } finally { if (valid()) taskLoading.value = false; }
   }
 
   async function deviceAction(action: "connect" | "disconnect" | "capture") {
-    if (!draft.value) return;
+    if (!draft.value || editLocked.value || deviceBusy.value) return;
+    const profile = clone(draft.value);
     deviceBusy.value = true;
     error.value = "";
     try {
-      device.value = action === "connect"
-        ? await connectDevice({
-          emulator_path: draft.value.EMU_PATH,
-          adb_address: draft.value.ADB_ADRESS,
-          emulator_index: draft.value.EMU_INDEX,
-          auto_start_clash: draft.value.AUTO_START_CLASH,
+      await session.deviceCommand(() => action === "connect"
+        ? connectDevice({
+          emulator_path: profile.EMU_PATH,
+          adb_address: profile.ADB_ADRESS,
+          emulator_index: profile.EMU_INDEX,
+          auto_start_clash: profile.AUTO_START_CLASH,
         })
-        : action === "disconnect" ? await disconnectDevice() : await captureDevice();
+        : action === "disconnect" ? disconnectDevice() : captureDevice());
     } catch (reason) {
-      error.value = formatApiError(reason);
+      if (alive) error.value = formatApiError(reason);
     } finally {
-      deviceBusy.value = false;
+      if (alive) deviceBusy.value = false;
     }
   }
 
   async function chooseEmulator() {
     if (!draft.value) return;
+    const id = beginWrite(); if (id === undefined) return;
     error.value = "";
     try {
       const selected = await selectEmulator();
-      if (!selected.cancelled && selected.path) draft.value.EMU_PATH = selected.path;
-    } catch (reason) { error.value = formatApiError(reason); }
+      if (owns(id) && !selected.cancelled && selected.path) draft.value.EMU_PATH = selected.path;
+    } catch (reason) { if (owns(id)) error.value = formatApiError(reason); }
+    finally { endWrite(id); }
   }
 
   async function startSelectedTask() {
-    if (runActive.value || starting.value) return;
+    if (runActive.value || editLocked.value) return;
     if (!draft.value?.FARM_TARGET || dirty.value) {
       error.value = dirty.value ? "PROFILE_UNSAVED: 请先保存配置" : "TASK_NOT_SELECTED: 请选择任务";
       return;
@@ -227,58 +243,24 @@ export function useWorkbench() {
       return;
     }
     const fingerprint = JSON.stringify([draft.value.FARM_TARGET, envelope.value?.revision, resourceLocale.value, repeat, count]);
-    if (!pendingRequest || pendingRequest.fingerprint !== fingerprint)
-      pendingRequest = { id: crypto.randomUUID(), fingerprint };
-    starting.value = true;
+    const taskId = draft.value.FARM_TARGET, revision = persisted.value?.revision, locale = resourceLocale.value;
     error.value = "";
     try {
-      await startTask(draft.value.FARM_TARGET, pendingRequest.id, envelope.value?.revision, resourceLocale.value, repeat, count);
-      run.value = await readCurrentRun();
-      notice.value = "启动请求已接收；正在执行正式装配和启动检查";
-    } catch (reason) { error.value = formatApiError(reason); }
-    finally { starting.value = false; }
-  }
-
-  async function requestStop() {
-    if (!run.value?.run_id && !pendingRequest && !run.value?.submission?.request_id) return;
-    error.value = "";
-    // 连续运行可能已切到下一轮，停止会话不能拿旧轮ID拒绝用户停止。
-    try { run.value = await stopRun(run.value?.repeat?.active ? undefined : run.value?.run_id,
-      run.value?.submission?.state === "preparing" ? run.value.submission.request_id :
-        starting.value ? pendingRequest?.id : undefined); }
-    catch (reason) { error.value = formatApiError(reason); }
-  }
-
-  async function pollRun() {
-    if (polling) return;
-    polling = true;
-    try {
-      const [runValue, deviceValue] = await Promise.all([readCurrentRun(), readDevice()]);
-      run.value = runValue;
-      device.value = deviceValue;
-      deviceBusy.value = Boolean(deviceValue.busy);
-      linkError.value = "";
-      if (pendingRequest && runValue.submission?.request_id === pendingRequest.id &&
-          ["submitted", "failed", "cancelled"].includes(runValue.submission?.state ?? "") && !runBusy(runValue))
-        pendingRequest = undefined;
-      if (deviceValue.operation?.state === "failed")
-        error.value = `${String(deviceValue.error_code ?? "DEVICE_OPERATION_FAILED")}: ${String(deviceValue.message ?? deviceValue.operation.error ?? "设备操作失败")}`;
-    } catch (reason) { linkError.value = `状态连接中断，最后状态不可作为已停止证明：${formatApiError(reason)}`; }
-    finally { polling = false; }
+      await session.submit(fingerprint, taskId, (id) => startTask(taskId, id, revision, locale, repeat, count));
+      if (alive) notice.value = "启动请求已接收；正在执行正式装配和启动检查";
+    } catch (reason) { if (alive) error.value = formatApiError(reason); }
   }
 
   watch(strategies, () => {
-    if (draft.value) writeStrategies(draft.value, clone(strategies.value));
-  }, { deep: true });
-  onMounted(() => {
-    void load();
-    pollHandle = window.setInterval(pollRun, 1500);
-  });
-  onBeforeUnmount(() => window.clearInterval(pollHandle));
+    if (draft.value) writeStrategies(draft.value, strategies.value);
+  }, { deep: true, flush: "sync" });
+  onMounted(() => { void load(); });
+  onBeforeUnmount(() => { alive = false; ++selectionSequence; ++writeGeneration; session.writing.workbench = false; });
 
   return reactive({
     envelope, draft, catalog, device, run, loading, saving, deviceBusy, error, notice, resourceLocale, repeatMode, repeatCount,
     strategies, dirty, runActive, runLabel, runError, starting, selectedTask, load, save, clearTaskOverride, revert, selectTask,
-    deviceAction, chooseEmulator, startSelectedTask, requestStop, noteRename,
+    deviceAction, chooseEmulator, startSelectedTask, requestStop: session.requestStop, noteRename,
+    editLocked, taskLoading, selectionId,
   });
 }

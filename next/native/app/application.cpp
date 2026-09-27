@@ -794,6 +794,17 @@ void Application::start_device_job(std::string name, std::function<void()> job) 
     }
 }
 
+void Application::require_storage_space() const {
+    std::uintmax_t available;
+    try {
+        available = space_query_(paths_.data_root).available;
+    } catch (...) {
+        throw std::runtime_error("RUN_STORAGE_SPACE_QUERY_FAILED");
+    }
+    require(available != static_cast<std::uintmax_t>(-1), "RUN_STORAGE_SPACE_QUERY_FAILED");
+    require(available >= 1073741824ULL, "RUN_STORAGE_SPACE_LOW");
+}
+
 Application::J Application::queue_run(const std::string &kind, const J &request,
                                       const J &identity, std::function<J()> prepare) {
     std::lock_guard command(command_mutex_);
@@ -812,6 +823,8 @@ Application::J Application::queue_run(const std::string &kind, const J &request,
             result["replayed"] = true;
             return result;
         }
+        // 已登记请求先返回幂等回执；容量仅阻止新意图，不能阻止读取旧结果。
+        require_storage_space();
         require(!stopping_, "APPLICATION_STOPPING");
         require(!run_active(), "RUN_ACTIVE");
         require(operation_.value("state", "idle") != "running", "DEVICE_OPERATION_BUSY");
@@ -1300,6 +1313,7 @@ Application::J Application::prepare_task(const J &request, const J &stored,
     std::shared_ptr<devices::DeviceConnection> backend,
     std::optional<J> frozen_values, J handoff_parent,
     std::optional<games::tasks::CompiledWorkflow> prepared) {
+    require_storage_space();
     require(bool(backend), "DEVICE_NOT_CONNECTED");
     backend->set_vpn_required(stored.at("values").at("AUTO_START_CLASH").get<bool>());
     auto definition = assemble_task(request, stored, backend->lifecycle_target(),
@@ -1417,6 +1431,8 @@ void Application::watch_task_session(const J &request, const J &stored, J source
                 update("not_requested", snapshot->reason);
                 return;
             }
+            require(snapshot->secondary_errors.empty() && snapshot->details_complete,
+                "HANDOFF_SOURCE_DIAGNOSTICS_INCOMPLETE");
             const auto &facts = snapshot->business;
             const auto &intent = facts.at("handoff_intent");
             require(intent.at("kind") == "turn_to_7000G" &&
@@ -1590,6 +1606,7 @@ void Application::delete_workflow(const std::string &flow_id, const J &request) 
 Application::J Application::prepare_workflow(const std::string &flow_id, const J &request,
     const J &stored, J document, std::shared_ptr<devices::DeviceConnection> backend,
     const J &library_snapshot) {
+    require_storage_space();
     require(bool(backend), "DEVICE_NOT_CONNECTED");
     if (stopping_ || cancel_operation_) throw std::runtime_error("PREPARATION_CANCELLED");
     const auto workflow_revision = document.at("revision").get<std::string>();

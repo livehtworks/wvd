@@ -54,7 +54,6 @@ def build():
     cmake = cmake_path()
     run("dependencies", [sys.executable, str(ROOT / "tools/dependencies.py")])
     run("native-dependencies", [sys.executable, str(ROOT / "tools/prepare_native.py")])
-    run("inventory", [sys.executable, str(ROOT / "tools/inventory/generate.py")])
     run("npm-ci", [npm, "ci", "--ignore-scripts", "--no-fund", "--no-audit"], ROOT / "web")
     run("web-build", [npm, "run", "build"], ROOT / "web")
     run("native-configure", [cmake, "--preset", "windows-x64"])

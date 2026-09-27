@@ -6,6 +6,7 @@ test("原生候选工作台保存配置并切换流程页", async ({ page }, inf
   await expect(page.getByRole("button", { name: "开始任务" })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1))
     .toBeTruthy();
+  await page.getByRole("button", { name: "设备与高级", exact: true }).click();
   const vpn = page.getByLabel("重启后自动启动 Clash 并打开 VPN");
   await expect(vpn).toBeVisible();
   const initial = await vpn.isChecked();
@@ -14,15 +15,15 @@ test("原生候选工作台保存配置并切换流程页", async ({ page }, inf
   await page.getByRole("button", { name: "保存配置" }).click();
   await expect(page.getByRole("button", { name: "保存配置" })).toBeDisabled();
   await page.reload();
+  await page.getByRole("button", { name: "设备与高级", exact: true }).click();
   await expect(page.getByLabel("重启后自动启动 Clash 并打开 VPN"))
     .toHaveJSProperty("checked", !initial);
   await page.screenshot({ path: info.outputPath("native-workbench-home.png") });
   await page.getByRole("navigation", { name: "主导航" })
     .getByRole("button", { name: "流程编辑" }).click();
   await expect(page.getByRole("button", { name: "新建流程" })).toBeVisible();
-  await page.getByRole("navigation", { name: "主导航" })
-    .getByRole("button", { name: "迁移盘点" }).click();
-  await expect(page.getByRole("heading", { name: "迁移盘点" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "迁移盘点", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "停止", exact: true })).toBeVisible();
   await page.screenshot({ path: info.outputPath("native-workbench.png"), fullPage: true });
 });
 

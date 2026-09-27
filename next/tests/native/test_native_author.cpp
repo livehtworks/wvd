@@ -28,10 +28,250 @@
 #include <iostream>
 #include <stdexcept>
 #include <thread>
+#include "runtime/flow_executor.hpp"
+#include "games/wvd/state.hpp"
+#include "games/wvd/business_condition.hpp"
+#include "games/wvd/native_operations.hpp"
+#include "games/wvd/vision/dialogue_probes.hpp"
+#include "games/wvd/vision/network_probes.hpp"
+#include "games/wvd/vision/inn_leave_probes.hpp"
+#include "storage/legacy_import.hpp"
+
+namespace closure {
+using namespace wvd;
+using namespace std::chrono_literals;
+using J = nlohmann::json;
+using C = games::tasks::PipelineCompiler;
+void check(bool value, const std::string &code) { if (!value) throw std::runtime_error(code); }
+J read(const char *path) { std::ifstream in(path); return J::parse(in); }
+
+// 只替换帧与叶子识别结果。业务图、执行器、业务条件和住宿账目使用生产实现。
+struct Ports final : runtime::FlowPorts {
+    games::WvdRunState business;
+    games::NativeOperations operations;
+    contracts::FrameIdentity current;
+    std::set<std::string> images;
+    std::map<std::string, bool> conditions;
+    std::function<void(const std::string &)> after_input;
+    std::vector<std::string> inputs;
+    std::uint64_t epoch{}, captures{}, recognitions{};
+    bool stop{}, combat{}, blocker{}, ready{}, network{};
+    Ports() : business(storage::LegacyConfigImporter(read("packs/wvd/parameters/legacy-config-fields.json"))
+            .parse({{"GENERAL", J::object()}}).values,
+            {"closure-transitions", 1, std::make_shared<contracts::SteadyClock>()}),
+        operations(business, {[this] { return capture(); },
+            [this](const auto &frame, const auto &request) { return recognize(frame, request); },
+            [this] { return current; }, [this] { return stop; }, [](auto &, auto &) {}, [](auto &) {}}) {
+        business.enter_segment(contracts::SegmentBoundary::Initial, 1, 0);
+    }
+    contracts::FrameEnvelope capture() override {
+        contracts::FrameEnvelope frame;
+        frame.identity.device_id = "closure"; frame.identity.game_id = "wvd";
+        frame.identity.pack_revision = "closure"; frame.identity.viewport_id = "900x1600";
+        frame.identity.generation = 1; frame.identity.connection_generation = 1;
+        frame.identity.action_epoch = epoch; frame.identity.frame_id = ++captures;
+        frame.identity.raw_size = frame.identity.recognition_size = {900, 1600};
+        frame.identity.captured_at = std::chrono::steady_clock::now(); current = frame.identity;
+        return frame;
+    }
+    bool evaluate(const J &p) {
+        if (const auto it = conditions.find(p.dump()); it != conditions.end()) return it->second;
+        const auto mode = p.value("mode", "");
+        if (mode == "any" || mode == "all" || mode == "not") {
+            bool all = true, any = false;
+            for (const auto &child : p.at("conditions")) { const bool hit = evaluate(child); all &= hit; any |= hit; }
+            return mode == "any" ? any : mode == "all" ? all : !any;
+        }
+        if (mode == "business") return games::business_condition(business.summary(), p);
+        if (mode == "template") return images.contains(p.at("image").get<std::string>());
+        if (mode == "combat_active") return combat;
+        if (mode == "blocking_screen") return blocker || network;
+        if (mode == "boot_ready" || mode == "boot_post") return ready;
+        if (mode == "input_clear") return !blocker && !network;
+        if (mode == "region_quiet") return true;
+        return false;
+    }
+    contracts::Observation recognize(const contracts::FrameEnvelope &frame, const recognition::Request &request) override {
+        ++recognitions;
+        contracts::Observation result; result.basis = frame.identity;
+        const auto &parameters = std::get<recognition::CustomParameters>(request.parameters).parameters;
+        result.outcome = evaluate(parameters) ? contracts::RecognitionOutcome::Hit : contracts::RecognitionOutcome::NoHit;
+        result.box = contracts::Box{400, 800, 50, 50}; result.center = contracts::Point{425, 825};
+        result.action_eligible = parameters.value("mode", "") != "business";
+        return result;
+    }
+    runtime::Submission submit(const contracts::Command &, const contracts::Observation &, const contracts::Observation &,
+                               contracts::Box, const std::string &path) override {
+        inputs.push_back(path); ++epoch;
+        if (after_input) after_input(path);
+        return {runtime::SubmissionState::Accepted, epoch, std::chrono::steady_clock::now(), {}};
+    }
+    runtime::OperationResult operate(const std::string &binding, const J &p,
+        const std::optional<contracts::FrameEnvelope> &frame, const std::optional<contracts::Observation> &observation,
+        const std::string &path) override {
+        if (binding == "BeginObservationPhase" || binding == "EndObservationPhase") return {runtime::OperationState::Done};
+        return operations.execute(binding, p, frame, observation, path);
+    }
+    bool cancelled() const override { return stop; }
+    void scene(const std::string &name) {
+        images.clear(); conditions.clear(); combat = blocker = ready = network = false;
+        const bool city = name == "city";
+        conditions[games::vision::royal_city().dump()] = city;
+        conditions[games::vision::city_screen().dump()] = city;
+        conditions[games::vision::inn_button().dump()] = city;
+        conditions[games::vision::edge_of_town_button().dump()] = city;
+        conditions[games::vision::ordinary_story_page().dump()] = name == "story";
+        conditions[games::vision::story_advance_arrow().dump()] = name == "story";
+        conditions[games::vision::character_page().dump()] = false;
+        conditions[games::vision::network_retry_prompt().dump()] = name == "network";
+        conditions[games::vision::network_prompt_zh_hant().dump()] = name == "network";
+        conditions[games::vision::network_retry_button_zh_hant().dump()] = name == "network";
+        ready = city || name == "outskirts" || name == "harken" || name == "select";
+        network = name == "network";
+        if (name == "select") images = {"cursedWheelTitle", "BeautifulOre"};
+        if (name == "leap" || name == "remnant") images = {"cursedWheelTitle", "leap"};
+        if (name == "map" || name == "stale-map") images = {"mapFlag"};
+        if (name == "map") images.insert("AutoMove");
+        if (name == "moving" || name == "ended") images = {"dungFlag"};
+        if (name == "popup") { combat = true; images = {"combat_skill_detail"}; }
+        if (name == "harken") images = {"harken_floor_move_zh_hant", "harken_floor_return_zh_hant"};
+        if (name == "outskirts") images = {"outskirts_return_to_town_zh_hant"};
+        if (name == "confirmation") images = {"inn_confirm_zh_hant"};
+        if (name == "stayed") {
+            images = {"Stay"};
+            conditions[games::vision::inn_leave_zh().dump()] = true;
+            conditions[games::vision::inn_leave_settled().dump()] = true;
+        }
+    }
+};
+struct Driver {
+    workflow::FlowProgram program;
+    Ports ports;
+    runtime::FlowExecutor executor;
+    runtime::TickResult last{runtime::TickState::Progress};
+    std::vector<std::string> trace;
+    explicit Driver(const games::tasks::CompiledWorkflow &graph)
+      : program(games::tasks::compile_native_program(graph, J::object(), "closure-transitions")),
+        executor(program, ports, 30s) {}
+    bool terminal() const { return last.state != runtime::TickState::Progress && last.state != runtime::TickState::Waiting; }
+    void until(const std::function<bool()> &done, std::chrono::milliseconds budget = 12s) {
+        const auto deadline = std::chrono::steady_clock::now() + budget;
+        while (!done() && !terminal() && std::chrono::steady_clock::now() < deadline) {
+            trace.push_back(executor.current_step_id()); last = executor.tick();
+            if (last.state == runtime::TickState::Waiting) std::this_thread::sleep_until(
+                std::min(last.wake_at, std::chrono::steady_clock::now() + 30ms));
+        }
+        check(done(), "TRANSITION_ASSERTION:" + last.code + ":" + executor.current_step_id());
+    }
+    void observe(const std::string &scene) {
+        ports.scene(scene); const auto before = ports.recognitions;
+        until([&] { return ports.recognitions > before; });
+    }
+    void finish() { until([&] { return terminal(); }); }
+    void evidence(const char *id) {
+        const auto *root = std::getenv("WVD_CLOSURE_ROOT"); check(root && *root, "WVD_CLOSURE_ROOT_REQUIRED");
+        std::ofstream(std::filesystem::path(root) / (std::string(id) + ".json")) << J{
+            {"scope", "formal factory + FlowExecutor; controlled semantic observations; no real images/device"},
+            {"inputs", ports.inputs}, {"trace", trace}, {"progress", executor.progress_snapshot()},
+            {"business", ports.business.summary()}, {"terminal_code", last.code}, {"terminal_state", int(last.state)}}.dump(2);
+        std::cout << id << " PASS\n";
+    }
+};
+int transitions() {
+    const auto leap = games::navigation::time_leap_without_causality("BeautifulOre", "cursedwheel_dhi", true);
+    for (const bool network : {false, true}) {
+        Driver d(network ? games::recovery::with_boot_recovery(leap, true) : leap);
+        d.ports.scene("select");
+        d.ports.after_input = [&](const std::string &path) {
+            if (path.find("QuickSelect") != std::string::npos) d.ports.scene("leap");
+            else if (path.find("QuickLeap") != std::string::npos) d.ports.scene(network ? "network" : "remnant");
+            else if (path.find("Retry") != std::string::npos) d.ports.scene("city");
+            else throw std::runtime_error("LEAP_UNEXPECTED_INPUT:" + path);
+        };
+        d.until([&] { return d.ports.inputs.size() == 2; });
+        if (!network) {
+            const auto pending = d.executor.progress_snapshot().at("pending_inputs");
+            d.observe("remnant"); check(!d.terminal(), "LEAP_REMNANT_COMPLETED");
+            d.observe("black"); check(!d.terminal() && d.ports.inputs.size() == 2, "LEAP_BLACK_REPLAY");
+            check(d.executor.progress_snapshot().at("pending_inputs") == pending, "LEAP_PENDING_REPLACED");
+            d.ports.scene("city");
+        }
+        d.finish(); check(d.last.state == runtime::TickState::Completed && d.ports.inputs.size() == (network ? 3 : 2), "LEAP_REPLAY_OR_INCOMPLETE");
+        d.evidence(network ? "TRANS-02" : "TRANS-01");
+    }
+    {
+        Driver d(leap); d.observe("city"); check(!d.terminal() && d.ports.inputs.empty(), "LEAP_PRE_SUBMIT_FALSE_COMPLETION");
+        d.ports.stop = true; d.finish(); d.evidence("TRANS-03");
+    }
+    for (bool accepts : {true, false}) {
+        games::MapTarget target{}; target.target = "position"; target.position = games::TaskPoint{505, 760};
+        target.swipes.push_back(std::nullopt); target.harken_arrival = accepts;
+        Driver d(games::navigation::reach_map_target(target, std::nullopt)); d.ports.scene("map");
+        d.ports.after_input = [&](const std::string &path) {
+            if (path.find("Select0") != std::string::npos) return;
+            if (path.find("AutoMove") != std::string::npos) d.ports.scene("stale-map");
+            else if (path.find("CloseStaleMap") != std::string::npos) d.ports.scene("moving");
+            else throw std::runtime_error("MAP_UNEXPECTED_INPUT:" + path);
+        };
+        d.until([&] { return d.executor.current_step_id() == "Moving"; });
+        d.observe("harken");
+        if (accepts) { d.finish(); check(d.last.state == runtime::TickState::Completed, "LATE_HARKEN_MISSED"); }
+        else { check(!d.terminal(), "UNDECLARED_HARKEN_COMPLETED"); d.ports.stop = true; d.finish(); }
+        check(d.ports.inputs.size() == 3, "MAP_EXTRA_INPUT"); d.evidence(accepts ? "TRANS-04" : "TRANS-04-negative");
+    }
+    {
+        Driver d(games::combat::enable_auto()); d.ports.scene("popup");
+        d.ports.after_input = [&](const auto &) { d.ports.scene("ended"); };
+        d.finish(); check(d.ports.inputs.size() == 1 && d.last.code == "combat.auto_not_confirmed_before_battle_end", "COMBAT_EXTRA_INPUT_OR_FALSE_AUTO"); d.evidence("TRANS-05");
+    }
+    {
+        Driver d(games::supply::rest_at_inn(false, true));
+        d.ports.business.confirm_event("inn.prepare", "inn_payment_prepared", 1, 1);
+        d.ports.business.inn_payment_submitted(false);
+        d.observe("black"); check(!d.terminal() && d.ports.business.summary().at("inn_payment_pending") == true, "INN_LOADING_LOST_PENDING");
+        d.ports.scene("stayed"); d.ports.after_input = [&](const auto &) { d.ports.scene("city"); };
+        d.finish(); check(d.last.state == runtime::TickState::Completed && d.ports.inputs.size() == 1 &&
+            d.ports.business.summary().at("inn_rest_completed") == true, "INN_PENDING_RECOVERY_FAILED"); d.evidence("TRANS-06");
+    }
+    {
+        Driver d(games::supply::rest_at_inn(false, true)); d.observe("city");
+        check(d.ports.business.summary().at("inn_rest_completed") == false && d.ports.inputs.empty(), "INN_CITY_FALSE_PAID");
+        d.ports.stop = true; d.finish(); d.evidence("TRANS-07");
+    }
+    const auto assets = read("resources/authoring/semantic-assets.json"), flows = read("resources/authoring/public-flows.json");
+    J documents = J::object(); for (const auto &doc : flows) documents[doc.at("flow").at("id").get<std::string>()] = doc;
+    const games::tasks::PublicFlowLibrary library(documents, assets);
+    {
+        Driver d(games::tasks::leave_bounty_board(library, "zh-Hant"));
+        d.ports.scene("black");
+        for (const auto *id : {"guild.bounties.page", "guild.list.back"})
+            d.ports.conditions[library.resource_condition(id, "zh-Hant", std::string(id).ends_with("back") ?
+                authoring::ResourceUse::Position : authoring::ResourceUse::Observation).dump()] = true;
+        d.ports.after_input = [&](const std::string &path) {
+            if (path.find("ListBack") != std::string::npos) {
+                d.ports.scene("black"); d.ports.conditions[library.resource_condition("guild.bounty.reveal.close", "zh-Hant", authoring::ResourceUse::Position).dump()] = true;
+            } else if (path.find("CloseReveal") != std::string::npos) d.ports.scene("story");
+            else if (path.find("Story") != std::string::npos) d.ports.scene("city");
+            else throw std::runtime_error("GUILD_UNEXPECTED_INPUT:" + path);
+        };
+        d.finish(); check(d.last.state == runtime::TickState::Completed && d.ports.inputs.size() == 3, "GUILD_LATE_REVEAL_EXIT"); d.evidence("TRANS-08");
+    }
+    for (const auto *scene : {"outskirts", "harken"}) {
+        Driver d(games::recovery::wait_boot_ready(true)); d.ports.scene(scene);
+        d.ports.blocker = true;
+        const auto before = d.ports.recognitions; d.until([&] { return d.ports.recognitions > before; });
+        check(!d.terminal() && d.ports.inputs.empty(), "BOOT_OVERLAY_FALSE_READY");
+        d.ports.blocker = false; d.finish(); check(d.last.state == runtime::TickState::Completed && d.ports.inputs.empty(), "BOOT_STABLE_HANDOFF_MISSED");
+        d.evidence((std::string("TRANS-09-") + scene).c_str());
+    }
+    return 0;
+}
+}
 
 int main(int argc, char **argv) {
     try {
         using J = nlohmann::json;
+        if (argc == 2 && std::string(argv[1]) == "--closure-transitions") return closure::transitions();
         if (argc == 2 && std::string(argv[1]) == "--transition-contracts") {
             // 本轮只核对正式工厂的结果条件及可达分支，不连接设备、不执行旧全量矩阵。
             const auto require = [](bool ok, const char *message) {

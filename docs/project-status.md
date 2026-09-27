@@ -1,5 +1,10 @@
 # 项目当前事实
 
+## 最新离线收束
+
+- `ddc3366`稳定性/UI工作包K01–K08已完成指定源码整改、隔离验收和独立候选整理，见[收束结果与证据](reviews/closure-ddc3366-result-20260927.md)。元数据恢复分类、编辑锁/任务切换、App唯一状态镜像、紧凑三分组、迁移展示退役、磁盘准入和迟到转场均有对应证据。
+- 新候选位于`next/.local/cl-ddc-927/candidate`，状态`BUILT_NOT_GAME_ACCEPTED`；未部署、未连接设备、未恢复循环，未commit/push。下方candidate32及42/100是此前现场记录，本轮没有重读现场确认，不代表新候选状态。原资源稳定性及实机验证边界继续保留。
+
 ## 当前产品与运行
 
 - 当前操作入口为 `http://127.0.0.1:17654/`，原生候选 `next/.local/c11-flow-product/candidate32`，数据根为上级的 `data`。旧Python入口、配置、mod、日志和旧dist未改动。运行EXE SHA256为`7a59bf8820d8116851fc59dc33a2dd16f13f9a2fc21a1fb1898973617362b0f1`。

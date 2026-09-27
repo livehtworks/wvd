@@ -1,5 +1,5 @@
 import type {
-  ApiErrorBody, AssetReport, Capabilities, Catalog, DeviceState, Inventory, JsonObject,
+  ApiErrorBody, Capabilities, Catalog, DeviceState, JsonObject,
   ProfileEnvelope, RecognitionProbeResult, RunState, SubmissionReceipt, Version, WorkflowDefinition,
 } from "./types";
 
@@ -46,8 +46,6 @@ export const formatApiError = (error: unknown) => error instanceof ApiError
 
 export const readVersion = () => get<Version>("/api/v1/version");
 export const readCapabilities = () => get<Capabilities>("/api/v1/capabilities");
-export const readInventory = () => get<Inventory>("/migration/feature_inventory.json");
-export const readAssets = () => get<AssetReport>("/migration/asset_case_report.json");
 export const readProfile = () => get<ProfileEnvelope>("/api/v1/profile");
 export const readTaskProfile = (taskId: string) => send<ProfileEnvelope>("/api/v1/profile/effective", "POST", { task_id: taskId });
 export const saveProfile = (profile: ProfileEnvelope & JsonObject) => send<ProfileEnvelope>("/api/v1/profile", "PUT", profile);

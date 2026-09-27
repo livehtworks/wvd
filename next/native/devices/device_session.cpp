@@ -1,5 +1,6 @@
 #include "device_session.hpp"
 #include "adb_failure.hpp"
+#include "metadata_read_fault.hpp"
 #include "platform/execution_timing.hpp"
 #include "android_viewport.hpp"
 #include "android_context_query.hpp"
@@ -397,9 +398,10 @@ bool DeviceSession::start_package(const std::string &package) {
 nlohmann::json DeviceSession::instance_metadata() {
     platform::MetadataQuery query_manager;
     std::stop_callback cancel(read_stop_, [&] { query_manager.cancel(); });
+    const auto budget = read_budget(3s);
     const auto metadata = query_manager.run(platform::path_from_utf8(binding_.at("manager")),
-                                            binding_.at("index").get<int>(), read_budget(3s));
-    require(metadata.value("success", false), "MUMU_METADATA_UNAVAILABLE");
+                                            binding_.at("index").get<int>(), budget);
+    require_metadata_read(metadata, budget);
     const auto &live = metadata.at("data");
     require(platform::mumu_metadata_usable(live) &&
         live.at("index").get<std::string>() == std::to_string(binding_.at("index").get<int>()) &&
