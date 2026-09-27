@@ -158,3 +158,19 @@
 最终以OS进程/监听只读核对自有PID及18754/18755，记录`E/process-cleanup-audit.json`。本轮自有测试进程已退出、两个端口无监听。没有结束现场17654或其它未知进程，没有连接设备，没有部署，没有恢复循环，也没有提交/推送。
 
 无需运行现场回退。后续若放弃本轮代码，只能按本报告/manifest识别本轮改动逐项恢复；不得整仓reset/clean或覆盖`.vscode/`等用户内容。历史归档和失败证据继续保留供审查。
+
+## 后续授权：提交与部署（2026-09-28）
+
+本节记录工作包交付后的独立用户指令：“做好commit/push和部署，先不要操作游戏和恢复循环”。上文未部署、未提交是原离线交付时的事实，不是本节结束后的状态。
+
+- 源码提交`055341d`：修复恢复分类和配置并发，收束工作台与运行诊断。普通推送到个人`fork/agent/local-stability-notes`成功，未向原作者仓库提交PR。首次推送因全局旧代理7897未监听失败；仅本次Git命令使用已确认的suyou-mihomo监听17897，未改全局配置或VPN。
+- 部署证据目录：`E/deploy-20260928`。部署前只读核对旧服务run40：Failed、busy=false、quiescent=true、result_saved=true、repeat.active=false。不重新运行任务，也没有把旧轮次计入新候选。
+- 备份正式`profile.json`与`workflows`到该独立目录，保存39文件SHA256。未复制测试profile到正式目录；不清理日志、素材缓存或历史结果。
+- 把已验收候选复制至`D:\programcode\python\wvd\next\.local\c11-flow-product\candidate33`，597个文件逐个核对哈希一致。保留candidate32及原验收候选；未重新运行会回写资源包的stage。
+- 旧服务先通过既有disconnect释放工具持有的输入/截图资源，确认disconnected、操作completed且无错误，再核对PID39856的可执行路径，只结束该旧工具进程。没有关闭游戏、模拟器或VPN，没有发送游戏业务点击或截图命令。
+- 新服务PID34328，原端口17654，显式使用candidate33的web、pack、quest以及原`c11-flow-product/data`；`--no-browser`，不自动连接设备或恢复任务。
+- 部署后只读GET version、runs/current、device及首页，确认Idle、busy=false、quiescent=true、设备disconnected；首页与新候选文件一致。39份原配置/作者文件哈希和文件数均不变。EXE哈希仍为本报告所列`084cde9d...0214f`，完整身份见`verified.json`。
+- 构建时的DELIVERY_STATUS保留真实原始基线与dirty身份，不伪改成后来产生的commit；本节和`copy-verification.json`建立已提交源码与已验收产物的对应关系。部署记录另行提交。
+- 不启动循环、不执行游戏任务、不连接或捕获设备。42/100维持历史口径；新候选未实机验收，不能把服务可访问写成游戏通过。
+
+人工回退：先确认新服务空闲且无未决输入，只退出candidate33工具服务，使用原candidate32 EXE与同一web/pack/quest配套目录及原data、端口17654启动。此次配置/作者文件未变化，无需自动还原备份；若后续用户编辑过数据，必须另行核对，不覆盖新编辑。旧新服务不得同时占用同一数据目录，不设置自动回退或第二个循环所有者。
