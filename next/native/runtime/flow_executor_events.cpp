@@ -35,6 +35,9 @@ void FlowExecutor::account_event_time() {
         if (frame.invocation_deadline) *frame.invocation_deadline += elapsed;
         if (frame.pending) frame.pending->event_pause += elapsed;
         if (frame.delay_until) *frame.delay_until += elapsed;
+        if (frame.poll_until) *frame.poll_until += elapsed;
+        if (frame.no_progress_since) *frame.no_progress_since += elapsed;
+        if (frame.next_diagnostic_poll != Clock::time_point{}) frame.next_diagnostic_poll += elapsed;
         for (auto &[name, deadline] : frame.phase_deadlines) { (void)name; deadline += elapsed; }
         if (descendant_event)
             for (auto &exit : frame.event_exits) exit.deadline += elapsed;
@@ -46,9 +49,17 @@ std::vector<FlowExecutor::ScopedEvent> FlowExecutor::effective_events(const work
         for (const auto &id : scope.disabled_events) inherited.erase(id);
         for (const auto &rule : scope.event_policy) inherited.insert_or_assign(rule.id, ScopedEvent{rule, owner});
     };
-    for (std::size_t i = 0; i + 1 < stack_.size(); ++i)
-        merge(program_.definitions.at(stack_[i].definition).steps.at(stack_[i].current), i);
-    merge(current, stack_.size() - 1);
+    for (std::size_t i = 0; i < stack_.size(); ++i) {
+        const auto &definition = program_.definitions.at(stack_[i].definition);
+        if (i && definition.checks) {
+            for (auto it = inherited.begin(); it != inherited.end();) {
+                if (!definition.checks->inherit.contains(it->first)) it = inherited.erase(it);
+                else ++it;
+            }
+        }
+        for (const auto &rule : definition.events) inherited.insert_or_assign(rule.id, ScopedEvent{rule, i});
+        merge(i + 1 == stack_.size() ? current : definition.steps.at(stack_[i].current), i);
+    }
     std::vector<ScopedEvent> result;
     for (const auto &[id, rule] : inherited) { (void)id; result.push_back(rule); }
     std::stable_sort(result.begin(), result.end(), [](const auto &a, const auto &b) {
@@ -61,9 +72,12 @@ std::optional<TickResult> FlowExecutor::check_unexpected(Frame &frame, const wor
     if (!frame.no_progress_since) frame.no_progress_since = Clock::now();
     // 一帧 NoHit 常是动画/加载，不是异常。这里只延迟诊断，不缩短原业务等待预算。
     const auto now = Clock::now();
-    const bool diagnose = force || (now - *frame.no_progress_since >= 1s && now >= frame.next_diagnostic_poll);
+    const auto &policy = program_.definitions.at(frame.definition).checks;
+    const auto debounce = policy ? policy->debounce : 1s;
+    const auto interval = policy ? policy->interval : 1s;
+    const bool diagnose = force || (now - *frame.no_progress_since >= debounce && now >= frame.next_diagnostic_poll);
     frame.diagnostic_checked = diagnose;
-    if (diagnose) frame.next_diagnostic_poll = now + 1s;
+    if (diagnose) frame.next_diagnostic_poll = now + interval;
     last_diagnostic_ = {{"source_path", current.source_path}, {"reason", reason},
         {"business_group", current.check_group}, {"checked_groups", nlohmann::json::array()}};
     // 异常先处理，特殊剧情其次；遭遇事件仍是原作用域的正常交接，不能提前全图扫描。
@@ -81,14 +95,29 @@ std::optional<TickResult> FlowExecutor::check_unexpected(Frame &frame, const wor
     return std::nullopt;
 }
 std::optional<TickResult> FlowExecutor::poll_wait_events(Frame &frame, const workflow::Step &current) {
-    if (effective_events(current).empty() || Clock::now() < frame.next_event_poll) return std::nullopt;
-    frame.next_event_poll = Clock::now() + 100ms; // 轮询节奏，不是页面变化的期限。
+    const auto rules = effective_events(current);
+    const auto eligible = [&](const ScopedEvent &scoped) {
+        const auto &rule = scoped.rule;
+        if (rule.category != workflow::EventClass::Overlay &&
+            rule.category != workflow::EventClass::Encounter) return false;
+        return std::none_of(stack_.begin(), stack_.end(), [&](const Frame &active) {
+            return active.event && active.event->rule.id == rule.id;
+        });
+    };
+    // 只有 Exception/Special 时，显式延迟没有到期的主动检查，不采“空转帧”。
+    // 事件退出仍须观察，不能因当前没有注册 Overlay 而丢失返回确认。
+    if (frame.event_exits.empty() && std::none_of(rules.begin(), rules.end(), eligible))
+        return std::nullopt;
+    if (Clock::now() < frame.next_event_poll) return std::nullopt;
     invalidate_observation();
     const auto image = observation_frame();
     frame.selected_frame.reset(); frame.selected_observation.reset();
-    if (auto result = check_events(frame, current, image, workflow::EventClass::Overlay)) return result;
-    // 显式延时没有“结果不符”，不能顺手全扫异常/特殊页面。
-    return check_events(frame, current, image, workflow::EventClass::Encounter);
+    auto result = check_events(frame, current, image, workflow::EventClass::Overlay);
+    if (result) return result; // 处理器可能入栈，返回后不再访问旧 Frame 引用。
+    result = check_events(frame, current, image, workflow::EventClass::Encounter);
+    if (result) return result;
+    frame.next_event_poll = Clock::now() + 100ms; // 完成后计轮询节奏，不是页面响应期限。
+    return std::nullopt;
 }
 std::optional<TickResult> FlowExecutor::check_events(Frame &frame, const workflow::Step &current,
     const contracts::FrameEnvelope &image, workflow::EventClass category) {
@@ -200,7 +229,7 @@ TickResult FlowExecutor::resume_event(Frame &frame, const workflow::Step &curren
     if (auto event = check_events(frame, current, image, workflow::EventClass::Overlay)) return *event;
     for (std::size_t i = resume.owner; i < stack_.size(); ++i) {
         const auto &pending = stack_[i].pending;
-        if (pending && Clock::now() >= pending->submitted_at + pending->result_budget + pending->event_pause)
+        if (pending && Clock::now() >= pending->result_started_at + pending->result_budget + pending->event_pause)
             return blocked("EVENT_PARENT_RESULT_TIMEOUT");
     }
     const auto guard = ports_.recognize(image, *resume.rule.resume_guard);
@@ -236,14 +265,15 @@ TickResult FlowExecutor::resume_event(Frame &frame, const workflow::Step &curren
     const auto &definition = program_.definitions.at(owner.definition);
     const auto found = definition.steps.find(resume.rule.replan_step);
     if (found == definition.steps.end()) return fail("EVENT_REPLAN_TARGET_OUTSIDE_OWNER");
-    if (owner.hits[found->first] >= found->second.max_hit) return fail("EVENT_REPLAN_HIT_LIMIT");
+    if (found->second.max_hit > 0 && owner.hits[found->first] >= found->second.max_hit)
+        return fail("EVENT_REPLAN_HIT_LIMIT");
     account_event_time();
     for (std::size_t i = resume.owner; i < stack_.size(); ++i) stack_[i].pending.reset();
     // 索引指向实际调用帧；同名节点不会误跳入触发事件的内层定义。
     stack_.resize(resume.owner + 1);
     auto &target = stack_.back();
     target.current = found->first;
-    ++target.hits[found->first];
+    if (found->second.max_hit > 0) ++target.hits[found->first];
     target.next_pending = target.error_pending = false;
     target.selected_frame.reset(); target.selected_observation.reset();
     target.input_selection.reset();

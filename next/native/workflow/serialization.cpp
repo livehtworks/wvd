@@ -52,6 +52,9 @@ J data(const StepData &value) {
                  {"clip_target_to_area", input->clip_target_to_area}};
         if (input->target_offset)
             result["target_offset"] = J::array({input->target_offset->x, input->target_offset->y});
+        if (input->retry)
+            result["retry"] = {{"ready", request(input->retry->ready)},
+                               {"interval_ms", input->retry->interval.count()}};
         return result;
     }
     if (const auto *await = std::get_if<AwaitResult>(&value))
@@ -61,10 +64,14 @@ J data(const StepData &value) {
                 {"poll_interval_ms", await->poll_interval.count()}};
     if (const auto *wait = std::get_if<Wait>(&value))
         return {{"kind", "wait"}, {"duration_ms", wait->duration.count()}};
+    if (const auto *poll = std::get_if<Poll>(&value))
+        return {{"kind", "poll"}, {"interval_ms", poll->interval.count()},
+                {"ongoing", poll->ongoing ? request(*poll->ongoing) : J(nullptr)},
+                {"progress", poll->progress ? request(*poll->progress) : J(nullptr)}};
     if (const auto *call = std::get_if<Call>(&value))
-        return {{"kind", "call"}, {"definition", call->definition}};
+        return {{"kind", "call"}, {"definition", call->definition}, {"handoffs", call->handoffs}};
     if (const auto *ret = std::get_if<Return>(&value))
-        return {{"kind", "return"}, {"outcome", ret->outcome}, {"reason", ret->reason}};
+        return {{"kind", "return"}, {"outcome", ret->outcome}, {"reason", ret->reason}, {"port", ret->port}};
     if (const auto *confirm = std::get_if<BusinessConfirm>(&value))
         return {{"kind", "business_confirm"}, {"operation", confirm->operation},
                 {"condition", request(confirm->condition)}, {"parameters", confirm->parameters},
@@ -91,8 +98,10 @@ nlohmann::json serialize(const FlowProgram &program) {
                     {"data", data(step.data)}, {"next", step.next},
                     {"on_error", step.on_error}, {"time_limit_ms", step.time_limit.count()},
                     {"delay_after_ms", step.delay_after.count()}, {"max_hit", step.max_hit},
+                    {"consecutive_input_limit", step.consecutive_input_limit},
                     {"handles_business_failure", step.handles_business_failure},
-                    {"check_group", step.check_group}, {"unexpected_only", step.unexpected_only}};
+                    {"check_group", step.check_group}, {"unexpected_only", step.unexpected_only},
+                    {"marks_known_scene", step.marks_known_scene}};
             if (step.guard) entry["guard"] = request(*step.guard);
             if (step.business_guard) entry["business_guard"] = *step.business_guard;
             entry["disabled_events"] = step.disabled_events;
@@ -105,6 +114,12 @@ nlohmann::json serialize(const FlowProgram &program) {
                            {"steps", std::move(steps)}};
         definitions[id]["cumulative_budget_ms"] = definition.cumulative_budget
             ? J(definition.cumulative_budget->count()) : J(nullptr);
+        definitions[id]["handoffs"] = definition.handoffs;
+        definitions[id]["checks"] = definition.checks ? J{{"phase", definition.checks->phase},
+            {"inherit", definition.checks->inherit}, {"debounce_ms", definition.checks->debounce.count()},
+            {"interval_ms", definition.checks->interval.count()}} : J(nullptr);
+        definitions[id]["events"] = J::array();
+        for (const auto &rule : definition.events) definitions[id]["events"].push_back(event(rule));
     }
     return {{"program_schema", FlowProgram::schema}, {"engine_kind", program.engine_kind},
             {"revision", program.revision}, {"root_definition", program.root_definition},

@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "source_commit": "6585f4075f5714ab522aa582993860c09af912c1",
-  "revision": "c501096e3a3cbb75c94cd68b32e38fc7103c9937ef51816a3d5130dc21e483c3",
+  "revision": "6177e106d085472ebed5c582eafad1310493eacc81cc91f21eb0bd01bfe6a8d4",
   "files": [
     {
       "path": "image/7000G/icantagreewithU.png",
@@ -2643,6 +2643,24 @@
       ]
     },
     {
+      "path": "image/guild_bounty_card_header.png",
+      "source": "resources/images/guild_bounty_card_header.png",
+      "sha256": "01f375303230812132b53061f5fe92f2d4d4a99a5465c227c7fa51fdba4a4dfa",
+      "bytes": 16169,
+      "source_refs": [
+        "2026-09-27 live bounty page readiness and exit"
+      ]
+    },
+    {
+      "path": "image/guild_bounty_selected_zh_hant.png",
+      "source": "resources/images/guild_bounty_selected_zh_hant.png",
+      "sha256": "cc994ccd2d838c784cc3018268aece59de3a8352ad14aea12d99f185f60b89f2",
+      "bytes": 8673,
+      "source_refs": [
+        "2026-09-27 live bounty page readiness and exit"
+      ]
+    },
+    {
       "path": "image/guild_commissions_entry_zh_hant.png",
       "source": "next/resources/images/guild_commissions_entry_zh_hant.png",
       "sha256": "c8adb70c60e73f4e55ee2d3dc8d54240b0516dd6520dc061f704d2f887ee164b",
@@ -2676,6 +2694,24 @@
       "bytes": 1250,
       "source_refs": [
         "semantic:city.guild.entry"
+      ]
+    },
+    {
+      "path": "image/guild_leave_zh_hant.png",
+      "source": "resources/images/guild_leave_zh_hant.png",
+      "sha256": "c62e39f232f5a1be9387adee9c343db9663ae976db07e1eaaa335a3158ababd0",
+      "bytes": 9114,
+      "source_refs": [
+        "2026-09-27 live bounty page readiness and exit"
+      ]
+    },
+    {
+      "path": "image/guild_list_back_zh_hant.png",
+      "source": "resources/images/guild_list_back_zh_hant.png",
+      "sha256": "2784c08c5126a4c8dc00e8045ffd0ed3914e5adb405a7c303b746923d8e00746",
+      "bytes": 5075,
+      "source_refs": [
+        "2026-09-27 live bounty page readiness and exit"
       ]
     },
     {
@@ -2848,6 +2884,15 @@
       "bytes": 848,
       "source_refs": [
         "semantic:city.inn.entry"
+      ]
+    },
+    {
+      "path": "image/inn_leave_zh_hant.png",
+      "source": "next/resources/images/inn_leave_zh_hant.png",
+      "sha256": "d422db536d767d456a6cf0381fc6f24f4b99e2d3669a3575d9333dbfa5b3a037",
+      "bytes": 8906,
+      "source_refs": [
+        "semantic:inn.leave.option"
       ]
     },
     {
@@ -4742,8 +4787,8 @@
     {
       "path": "parameters/public-flows.json",
       "source": "next/resources/authoring/public-flows.json",
-      "sha256": "d791c19139f52c12551ced67ccb5aece57b2b4aa57b4fc76aaeeed3fc17a4b87",
-      "bytes": 53987,
+      "sha256": "ea6463a0c92d90664f18651af068c1c85e894ef041c89de92977d9053f66103b",
+      "bytes": 114330,
       "source_refs": [
         "authoring:public-flow-1"
       ]
@@ -4751,8 +4796,8 @@
     {
       "path": "parameters/semantic-assets.json",
       "source": "next/resources/authoring/semantic-assets.json",
-      "sha256": "7aa5d2aa9fe22a1b219325fcc4e815f6d779370f9e5a26df6c8781d6722dd153",
-      "bytes": 71482,
+      "sha256": "b8ad01aba73f61aa3c750a6bdf6ec85d3b975560d51bc3097ecda01af3bdeabc",
+      "bytes": 73323,
       "source_refs": [
         "authoring:public-flow-1"
       ]

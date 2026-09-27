@@ -22,10 +22,116 @@
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
+#include <thread>
 
 int main(int argc, char **argv) {
     try {
         using J = nlohmann::json;
+        if (argc == 4 && std::string(argv[1]) == "--bounty") {
+            // 只检查本次真实悬赏/委托帧和当前公会编译链，不执行旧全量矩阵。
+            const auto read_json = [](const char *path) { std::ifstream in(path); return J::parse(in); };
+            const auto catalogue = read_json("resources/authoring/semantic-assets.json");
+            const auto documents = read_json("resources/authoring/public-flows.json");
+            J library_documents = J::object();
+            for (const auto &doc : documents) library_documents[doc.at("flow").at("id").get<std::string>()] = doc;
+            const wvd::games::tasks::PublicFlowLibrary library(library_documents, catalogue);
+            const auto board = library_documents.at("guild-open-bounty-page");
+            const auto report = wvd::games::tasks::visit_bounty_board(
+                wvd::games::tasks::BountyVisit::Report, library, board, "zh-Hant");
+            wvd::games::tasks::compile_native_program(report, J::object(), "bounty-focused").validate();
+            const auto reveal = wvd::games::tasks::visit_bounty_board(
+                wvd::games::tasks::BountyVisit::Reveal, library, board, "zh-Hant");
+            wvd::games::tasks::compile_native_program(reveal, J::object(), "bounty-reveal-focused").validate();
+            if (!report.nodes.contains("RecheckEmpty") || report.nodes.at("PrepareReport")
+                    .at("observation_args").dump().find("guild_bounty_card_header") == std::string::npos)
+                throw std::runtime_error("BOUNTY_LOADED_PAGE_GUARD_MISSING");
+            const auto page = library.resource_condition("guild.bounties.page", "zh-Hant",
+                wvd::authoring::ResourceUse::Observation);
+            const auto probe_root = std::filesystem::absolute(".local") /
+                ("bounty-probe-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+            std::filesystem::create_directories(probe_root / "image");
+            wvd::recognition::Bundle bundle{probe_root, "bounty-focused", {}};
+            for (const auto *name : {"guild_bounties_page_zh_hant", "guild_bounty_selected_zh_hant",
+                                     "guild_bounty_card_header", "guild_commissions_page_zh_hant"}) {
+                const auto member = std::string("image/") + name + ".png";
+                std::filesystem::copy_file(std::filesystem::path("packs/wvd") / member, bundle.root / member);
+                bundle.files.push_back({member, wvd::platform::file_sha256(bundle.root / member)});
+            }
+            wvd::recognition::Service service(bundle, wvd::games::vision::native_handlers(J::object(), "zh-Hant"));
+            wvd::contracts::FrameEnvelope frame;
+            frame.identity.device_id = "recorded-bounty";
+            frame.identity.game_id = "wvd";
+            frame.identity.pack_revision = bundle.revision;
+            frame.identity.viewport_id = "900x1600";
+            frame.identity.generation = 1;
+            frame.identity.raw_size = frame.identity.recognition_size = {900, 1600};
+            const auto evaluate = [&](const cv::Mat &image, wvd::contracts::RecognitionOutcome expected) {
+                if (image.empty() || image.cols != 900 || image.rows != 1600) throw std::runtime_error("BOUNTY_FRAME_INVALID");
+                ++frame.identity.frame_id;
+                frame.identity.captured_at = frame.identity.capture_finished_at = std::chrono::steady_clock::now();
+                frame.raw_bgr = std::make_shared<const std::vector<std::uint8_t>>(
+                    image.data, image.data + image.total() * image.elemSize());
+                wvd::recognition::Request request{"bounty.page", "1", {0, 0, 900, 1600},
+                    wvd::recognition::CustomParameters{"WvdVision", page}};
+                const auto result = service.evaluate(frame, frame.identity, request);
+                if (result.outcome != expected) throw std::runtime_error("BOUNTY_PAGE_RESULT:" + result.error_code + ":" + result.evidence.dump());
+            };
+            const auto bounty = cv::imread(argv[2]);
+            evaluate(bounty, wvd::contracts::RecognitionOutcome::Hit);
+            evaluate(cv::imread(argv[3]), wvd::contracts::RecognitionOutcome::NoHit);
+            // 显式构造“仅标题存在、列表未加载”的负例，不能冒充现场复现。
+            cv::Mat header_only = cv::Mat::zeros(bounty.size(), bounty.type());
+            bounty(cv::Rect(0, 0, 900, 200)).copyTo(header_only(cv::Rect(0, 0, 900, 200)));
+            evaluate(header_only, wvd::contracts::RecognitionOutcome::NoHit);
+            std::cout << "bounty: real wanted Hit, real commissions NoHit, title-only NoHit; report/reveal graphs valid\n";
+            return 0;
+        }
+        if (argc == 3 && std::string(argv[1]) == "--temporal") {
+            // 只复核本次时序探针的正式Service契约，不运行历史作者图矩阵。
+            const auto image = cv::imread(argv[2], cv::IMREAD_COLOR);
+            if (image.empty() || image.cols != 900 || image.rows != 1600)
+                throw std::runtime_error("TEMPORAL_FRAME_INVALID");
+            const auto root = std::filesystem::absolute(".local") /
+                ("temporal-probe-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+            const std::string member = "image/inn_leave_zh_hant.png";
+            std::filesystem::create_directories(root / "image");
+            std::filesystem::copy_file(std::filesystem::path("packs/wvd") / member, root / member);
+            wvd::recognition::Service service({root, "temporal", {{member, wvd::platform::file_sha256(root / member)}}},
+                wvd::games::vision::native_handlers(J::object(), "zh-Hant"));
+            wvd::contracts::FrameEnvelope frame;
+            frame.identity.device_id = "recorded-temporal";
+            frame.identity.game_id = "wvd";
+            frame.identity.pack_revision = "temporal";
+            frame.identity.viewport_id = "900x1600";
+            frame.identity.generation = frame.identity.frame_id = 1;
+            frame.identity.raw_size = frame.identity.recognition_size = {900, 1600};
+            frame.identity.captured_at = frame.identity.capture_finished_at = std::chrono::steady_clock::now();
+            frame.raw_bgr = std::make_shared<const std::vector<std::uint8_t>>(
+                image.data, image.data + image.total() * image.elemSize());
+            using O = wvd::contracts::RecognitionOutcome;
+            const auto check_probe = [&](const J &p, O expected) {
+                wvd::recognition::Request request{"temporal", "1", {0, 0, 900, 1600},
+                    wvd::recognition::CustomParameters{"WvdVision", p}};
+                const auto observed = service.evaluate(frame, frame.identity, request);
+                if (observed.outcome != expected)
+                    throw std::runtime_error("TEMPORAL_CONTRACT:" + observed.error_code + ":" + p.dump());
+            };
+            J progress{{"mode", "region_changed"}, {"channel", "combat"},
+                {"roi", {15, 40, 145, 800}}, {"reset", true}};
+            check_probe(progress, O::Hit);
+            progress.erase("reset");
+            check_probe(progress, O::NoHit);
+            const J quiet{{"mode", "region_quiet"}, {"roi", {695, 930, 100, 65}}, {"settle_ms", 250}};
+            check_probe(quiet, O::NoHit);
+            std::this_thread::sleep_for(std::chrono::milliseconds{300});
+            check_probe(quiet, O::NoHit); // 同一旧帧等待不能变成静止证据。
+            ++frame.identity.frame_id;
+            frame.identity.captured_at = frame.identity.capture_finished_at = std::chrono::steady_clock::now();
+            check_probe(quiet, O::Hit);
+            check_probe(quiet, O::Hit); // 输入前复核保持一致。
+            std::cout << "temporal: baseline box, fresh-frame settling and same-frame recheck passed\n";
+            return 0;
+        }
         for (const auto &point : {wvd::games::TaskPoint{505, 760},
                                   wvd::games::TaskPoint{506, 821}}) {
             wvd::games::MapTarget target;
@@ -210,7 +316,7 @@ int main(int argc, char **argv) {
         selected.begin_encounter(true);
         if (selected.summary().at("current").at("group_name") != "特殊方案")
             throw std::runtime_error("SPECIAL_COMBAT_BOSS_STRATEGY_INVALID");
-        const auto both = wvd::games::combat::fight_encounter(special_profile, {}, 1);
+        const auto both = wvd::games::combat::fight_encounter(special_profile, {});
         const auto special_condition = both.nodes.at("Special").at("observation_args").dump();
         if (!both.nodes.contains("WaitingForMenu") ||
             special_condition.find("combat_special_skull") == std::string::npos ||
@@ -218,16 +324,16 @@ int main(int argc, char **argv) {
             special_condition.find("\"mode\":\"any\"") == std::string::npos)
             throw std::runtime_error("SPECIAL_COMBAT_OR_BRANCH_INVALID");
         special_profile["TASK_POINT_STRATEGY"]["special_combat"]["portrait"] = false;
-        const auto skull_only = wvd::games::combat::fight_encounter(special_profile, {}, 1);
+        const auto skull_only = wvd::games::combat::fight_encounter(special_profile, {});
         if (skull_only.nodes.at("Special").at("observation_args").dump().find("combat_scorpion_portrait") != std::string::npos)
             throw std::runtime_error("SPECIAL_COMBAT_SKULL_ONLY_INVALID");
         special_profile["TASK_POINT_STRATEGY"]["special_combat"]["portrait"] = true;
         special_profile["TASK_POINT_STRATEGY"]["special_combat"]["skull"] = false;
-        const auto portrait_only = wvd::games::combat::fight_encounter(special_profile, {}, 1);
+        const auto portrait_only = wvd::games::combat::fight_encounter(special_profile, {});
         if (portrait_only.nodes.at("Special").at("observation_args").dump().find("combat_special_skull") != std::string::npos)
             throw std::runtime_error("SPECIAL_COMBAT_PORTRAIT_ONLY_INVALID");
         special_profile["TASK_POINT_STRATEGY"]["special_combat"]["portrait"] = false;
-        const auto legacy = wvd::games::combat::fight_encounter(special_profile, {}, 1);
+        const auto legacy = wvd::games::combat::fight_encounter(special_profile, {});
         if (legacy.nodes.contains("Special") || !legacy.nodes.contains("Observed"))
             throw std::runtime_error("SPECIAL_COMBAT_DISABLED_CHANGED_ENTRY");
         J document{{"schema", 1},
@@ -439,8 +545,11 @@ int main(int argc, char **argv) {
         if (!zh_report.nodes.contains("CloseReceipt") ||
             !zh_report.nodes.contains("ReportConfirmed") ||
             !zh_report.nodes.contains("NoMoreReports") ||
-            zh_report.nodes.at("Report").at("next").back() != "CloseReceipt" ||
-            zh_report.nodes.at("ReportConfirmed").at("next").back() != "ReportLoop")
+            zh_report.nodes.at("Report").at("next").front() != "CloseReceipt" ||
+            zh_report.nodes.at("ReportConfirmed").at("next").front() != "CheckReports" ||
+            !zh_report.nodes.contains("RecheckEmpty") ||
+            zh_report.nodes.at("PrepareReport").at("observation_args").dump()
+                .find("guild_bounty_card_header") == std::string::npos)
             throw std::runtime_error("ZH_BOUNTY_REPORT_RECEIPT_FLOW_MISSING");
         const auto inn = wvd::games::supply::rest_at_inn(false, true);
         const auto inn_program = wvd::games::tasks::compile_native_program(inn, J::object(), "inn-zh-Hant");

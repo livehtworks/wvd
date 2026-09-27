@@ -7,6 +7,7 @@
 #include "games/wvd/vision/download_probes.hpp"
 #include "games/wvd/vision/network_probes.hpp"
 #include "games/wvd/vision/dialogue_probes.hpp"
+#include "games/wvd/vision/inn_leave_probes.hpp"
 #include <tuple>
 
 namespace wvd::games::recovery {
@@ -30,6 +31,7 @@ J task_stop_condition(DialoguePolicy policy) {
 namespace {
 tasks::CompiledWorkflow retry_network_prompt() {
     C graph("recovery.network_retry", std::chrono::seconds{180});
+    graph.check_policy("exception", J::array(), 1000, 1000, false);
     const auto prompt = vision::network_retry_prompt();
     const auto cleared = C::absent(prompt);
     graph.route("Entry", {"Cleared", "RetryZhHant", "RetryEn"});
@@ -43,10 +45,12 @@ tasks::CompiledWorkflow retry_network_prompt() {
     graph.wait("Settle", 3000, {"Entry"});
     for (const auto *name : {"RetryZhHant", "RetryEn"}) {
         graph.postcondition_budget(name, 120000);
+        // 已确认网络弹窗中的“重试”无业务资源副作用；原弹窗和按钮仍在时
+        // 可以再次请求联网。不能套用 input_clear（它会反证此弹窗本身）。
+        graph.retry_menu_input(name, C::all({prompt,
+            J{{"mode", "region_quiet"}, {"roi", {650, 1450, 249, 149}}, {"settle_ms", 1000}}}));
         graph.hit_limit(name, 20);
     }
-    graph.hit_limit("Entry", 24);
-    graph.hit_limit("Settle", 20);
     auto result = graph.finish();
     // 子图被 define_child 后，节点 timeout 不等于整次调用的累计预算。
     // 复用已有阶段计时：只有外层入口签发，内部 Entry 循环不能刷新180秒。
@@ -68,11 +72,14 @@ tasks::CompiledWorkflow retry_network_prompt() {
         {"on_error", {"RecoveryRequired"}}, {"pre_delay", 0}, {"post_delay", 0},
         {"rate_limit", 50}, {"timeout", 180000}, {"max_hit", 1}};
     result.entry = begin;
+    result.definition_checks[begin] = result.definition_checks.at("Entry");
+    result.definition_checks.erase("Entry");
     result.validate();
     return result;
 }
 tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, DialoguePolicy policy = DialoguePolicy::Default) {
     C graph(common ? "recovery.common_screens" : "recovery.boot_ready", std::chrono::seconds{120});
+    graph.check_policy("exception", J::array(), 1000, 1000, false);
     graph.use_dialogue(policy);
     const auto task_stop = task_stop_condition(policy);
     const auto panel = C::any({C::image("trait"), C::image("recover")});
@@ -113,13 +120,31 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, Dialogue
         const auto special = graph.define_child("SpecialChoice", choose_special_dialogue(policy));
         graph.observe("SpecialDialogue", {{"mode", "special_dialogue"}}, {"ChooseSpecial"});
         graph.call_child("ChooseSpecial", special, {"Entry"});
-        graph.hit_limit("SpecialDialogue", 6);
-        graph.hit_limit("ChooseSpecial", 6);
     }
     if (!task_stop.is_null()) {
         // 任务停点先于普通/特殊对话。这里只正常返回子流程，不写UserStopped或COS完成。
         entry.insert(entry.begin(), "TaskStop");
         graph.observe("TaskStop", task_stop, {"Terminal"});
+    }
+    if (!common) {
+        // 启动时可能停在旅店菜单；只退出菜单，不购买房间或推断住宿已完成。
+        // 菜单消失且城市恢复才交还任务，不能把内部菜单当成城市就绪。
+        entry.insert(entry.begin(), {"CloseCharacter", "LeaveInnMenuZh", "LeaveInnMenu"});
+        const auto inn_menu = vision::inn_menu();
+        const auto character = vision::character_page(), leave_zh = vision::inn_leave_zh();
+        const auto left = C::any({C::all({vision::city_screen(), C::absent(inn_menu)}), character});
+        graph.fixed_click("CloseCharacter", character,
+            C::any({inn_menu, ready}), {66, 1500}, {"Entry"});
+        graph.retry_menu_input("CloseCharacter", character, 3000);
+        graph.click("LeaveInnMenuZh", C::all({inn_menu, leave_zh, C::absent(story),
+            C::absent(character), vision::inn_leave_settled()}), leave_zh, left, {"Entry"});
+        graph.retry_menu_input("LeaveInnMenuZh", C::all({inn_menu, leave_zh, C::absent(character)}), 3000);
+        graph.click("LeaveInnMenu", C::all({inn_menu, C::absent(story), C::absent(leave_zh), C::absent(character),
+                        J{{"mode", "input_clear"}, {"phase", "supply"}}}),
+                    C::image("Stay.png"), left,
+                    {"Entry"}, vision::inn_leave_offset());
+        graph.retry_menu_input("LeaveInnMenu", vision::menu_retry_ready(
+            C::all({inn_menu, C::absent(story)}), "supply"));
     }
     graph.route("Entry", entry);
     // 启动时也可能留在城市普通剧情；只复用已确认的继续箭头，
@@ -130,21 +155,15 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, Dialogue
     graph.observe("NetworkZhHant", vision::network_prompt_zh_hant(), {"HandleNetwork"});
     const auto network = graph.define_child("Network", retry_network_prompt());
     graph.call_child("HandleNetwork", network, {"Entry"});
-    graph.hit_limit("NetworkZhHant", 20);
-    graph.hit_limit("HandleNetwork", 20);
     // 应用刚切到前台时可能仍是黑帧，免责声明也可能在首轮候选扫描后才出现。
     // NoHit 只做有界等待后重扫；任何识别 Error 仍通过各节点 on_error 立即退出。
-    graph.wait("Poll", 500, {"Entry"});
+    graph.poll("Poll", 500, {"Entry"});
     const auto dialogue = graph.define_child("DefaultDialogue", choose_default_dialogue());
     graph.observe("Dialogue", {{"mode", "default_dialogue"}}, {"ChooseDialogue"});
     graph.call_child("ChooseDialogue", dialogue, {"Entry"});
-    graph.hit_limit("Dialogue", 6);
-    graph.hit_limit("ChooseDialogue", 6);
     const auto karma = graph.define_child("KarmaPrompt", choose_karma_prompt());
     graph.observe("Karma", C::any({C::image("ambush"), C::image("ignore")}), {"ChooseKarma"});
     graph.call_child("ChooseKarma", karma, {"Entry"});
-    graph.hit_limit("Karma", 6);
-    graph.hit_limit("ChooseKarma", 6);
     for (const auto &[prefix, prompt] : {std::pair{"Sandman", GlobalPrompt::SandmanRecovery},
                                          std::pair{"Blessing", GlobalPrompt::Blessing}}) {
         const std::string name = prefix;
@@ -153,20 +172,14 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, Dialogue
             ? C::any({vision::harken_buff_menu(), C::image("blessing")}) : C::image("sandman_recover");
         graph.observe(name, marker, {name + "Handle"});
         graph.call_child(name + "Handle", child, {"Entry"});
-        graph.hit_limit(name, 6);
-        graph.hit_limit(name + "Handle", 6);
     }
     if (common) {
         const auto death = graph.define_child("PartyDeath", dismiss_party_death(), {"BlockedExit"});
         graph.observe("Death", {{"mode", "party_death"}}, {"DismissDeath"});
         graph.call_child("DismissDeath", death, {"Entry"});
-        graph.hit_limit("Death", 6);
-        graph.hit_limit("DismissDeath", 6);
         const auto defeat = graph.define_child("PartyDefeat", acknowledge_party_defeat());
         graph.observe("Defeat", {{"mode", "party_defeat"}}, {"AcknowledgeDefeat"});
         graph.call_child("AcknowledgeDefeat", defeat, {"Entry"});
-        graph.hit_limit("Defeat", 6);
-        graph.hit_limit("AcknowledgeDefeat", 6);
     }
     graph.observe("Ready", ready, common ? J{"PendingDeathCleared", "Terminal"} : J{"Terminal"});
     if (common) {
@@ -191,7 +204,6 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, Dialogue
     graph.fixed_click("Title", title, progressed(title), {450, 1450}, {"Entry"});
     const J pause{{"mode", "pause"}};
     graph.observe("Pause", pause, {"ResumePause0"});
-    graph.hit_limit("Pause", 6);
     // 按旧版连续六次无效点击判定冻结，但第六次仍须新帧确认：
     // 最后一次已恢复不能重启；角色/技能详情负例由 pause 识别器排除。
     for (unsigned i = 0; i < 6; ++i) {
@@ -203,12 +215,9 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, Dialogue
         graph.postcondition_budget(name, 10000);
     }
     graph.observe("PauseCleared", C::absent(pause), {"Entry"});
-    graph.hit_limit("PauseCleared", 6);
     graph.observe("PauseFrozen", pause, {"PauseFrozenExit"});
     graph.recovery("PauseFrozenExit", "pause.physics_frozen");
-    // 120 秒工作流总预算是最终上限；命中次数只防止观察节点过早结束轮询。
-    graph.hit_limit("Entry", 240);
-    graph.hit_limit("Poll", 240);
+    // 正常恢复分派不累计经过次数；原页持续无效由输入重试/观察期限约束。
     for (auto name : {"DownloadEn", "DownloadZhHant", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title"}) {
         if (!allow_download && (std::string(name) == "DownloadEn" ||
                                std::string(name) == "DownloadZhHant"))
@@ -270,9 +279,61 @@ tasks::CompiledWorkflow wait_boot_ready(bool allow_download) {
 tasks::CompiledWorkflow clear_common_screens(bool allow_download, DialoguePolicy policy) {
     return boot_workflow(allow_download, true, policy);
 }
+namespace {
+// 事件已选中具体页面后只处理该页面及退出，不再进入完整启动目录。
+tasks::CompiledWorkflow handle_download(bool allowed) {
+    C graph("recovery.download", std::chrono::seconds{120});
+    graph.check_policy("exception", {"wvd-network-retry"}, 1000, 1000, false);
+    const auto en = vision::download_button_en(), zh = vision::download_button_zh_hant();
+    const auto prompt = C::any({zh, en});
+    graph.route("Entry", {"Gone", "Zh", "En"});
+    graph.observe("Gone", C::absent(prompt), {"Terminal"});
+    if (allowed) {
+        graph.click("Zh", zh, zh, C::absent(prompt), {"Terminal"});
+        graph.click("En", en, en, C::absent(prompt), {"Terminal"});
+    } else {
+        graph.observe("Zh", zh, {"Denied"}); graph.observe("En", en, {"Denied"});
+        graph.recovery("Denied", "boot.download_permission_missing");
+    }
+    return graph.finish();
+}
+tasks::CompiledWorkflow handle_pause() {
+    C graph("recovery.pause", std::chrono::seconds{120});
+    graph.check_policy("exception", {"wvd-network-retry"}, 1000, 1000, false);
+    const J pause{{"mode", "pause"}};
+    const auto response = C::any({pause, J{{"mode", "combat_active"}}, C::image("dungFlag"), C::image("mapFlag")});
+    graph.route("Entry", {"Gone", "Press0"});
+    graph.observe("Gone", C::absent(pause), {"Terminal"});
+    for (int i = 0; i < 6; ++i) {
+        const auto name = "Press" + std::to_string(i);
+        graph.fixed_click(name, pause, response, {450, 760},
+            {"Gone", i < 5 ? "Press" + std::to_string(i + 1) : "Frozen"});
+        graph.delay_after(name, 2000); graph.postcondition_budget(name, 10000);
+    }
+    graph.observe("Frozen", pause, {"FrozenExit"});
+    graph.recovery("FrozenExit", "pause.physics_frozen");
+    return graph.finish();
+}
+tasks::CompiledWorkflow handle_story() {
+    C graph("recovery.story", std::chrono::seconds{90});
+    graph.check_policy("special", {"wvd-network-retry"}, 1000, 1000, false);
+    const auto story = vision::ordinary_story_page();
+    graph.route("Entry", {"Gone", "Continue"});
+    graph.observe("Gone", C::absent(story), {"Terminal"});
+    graph.click("Continue", story, vision::story_advance_arrow(),
+        C::any({story, vision::city_screen(), J{{"mode", "default_dialogue"}},
+            C::image("dungFlag"), C::image("mapFlag"), J{{"mode", "combat_active"}}}), {"Entry"});
+    graph.delay_after("Continue", 2000); graph.hit_limit("Continue", 12);
+    return graph.finish();
+}
+}
+tasks::CompiledWorkflow handle_download_prompt(bool allowed) {
+    return handle_download(allowed);
+}
 tasks::CompiledWorkflow with_boot_recovery(const tasks::CompiledWorkflow &task, bool allow_download) {
     task.validate();
     C graph("recovery.restartable_task", task.time_limit + std::chrono::seconds{120});
+    graph.check_policy("business", J::array());
     graph.use_dialogue(task.dialogue_policy);
     const auto task_entry = graph.append("Task", task, {"Terminal"});
     const auto stop = task_stop_condition(task.dialogue_policy);
@@ -292,56 +353,34 @@ tasks::CompiledWorkflow with_boot_recovery(const tasks::CompiledWorkflow &task, 
     // 非恢复首段不执行 game_restarted，避免把首次进入误记成崩溃/重置策略。
     graph.route("Entry", {boot});
     const auto network_entry = graph.define_child("NetworkOverlay", retry_network_prompt());
-    const auto diagnostics_entry = graph.define_child("UnexpectedScreens", clear_common_screens(allow_download, task.dialogue_policy));
     // finish 会验证完整调用闭包，处理器必须从声明入口可达，而非封存后才补孤立引用。
-    graph.event_scope("Entry", J::array({
+    J rules = J::array({
         J{{"id", "wvd-network-retry"}, {"class", "exception"}, {"priority", 1000},
           {"detect", vision::network_retry_prompt()}, {"source_node", "Entry"}, {"entry", network_entry},
-          {"resume", {{"mode", "reobserve"}}}},
-        J{{"id", "wvd-exception-screen"}, {"class", "exception"}, {"priority", 800},
-          {"detect", {{"mode", "exception_screen"}}}, {"source_node", "Entry"}, {"entry", diagnostics_entry},
-          {"resume", {{"mode", "reobserve"}}}},
-        J{{"id", "wvd-special-screen"}, {"class", "special"}, {"priority", 400},
-          {"detect", {{"mode", "special_screen"}}}, {"source_node", "Entry"}, {"entry", diagnostics_entry},
           {"resume", {{"mode", "reobserve"}}}}
-    }));
+    });
+    const auto add = [&](const std::string &id, const std::string &category, int priority,
+                         const J &detect, const tasks::CompiledWorkflow &handler) {
+        // 公共规则 ID 不参与内部节点命名；运行权限仍只由显式策略决定。
+        const auto entry = graph.define_child("SelectedHandler" + std::to_string(rules.size()), handler);
+        rules.push_back({{"id", id}, {"class", category}, {"priority", priority},
+            {"detect", detect}, {"source_node", "Entry"}, {"entry", entry}, {"resume", {{"mode", "reobserve"}}}});
+    };
+    add("wvd-download", "exception", 900, C::any({vision::download_button_zh_hant(), vision::download_button_en()}), handle_download(allow_download));
+    add("wvd-pause", "exception", 800, J{{"mode", "pause"}}, handle_pause());
+    add("wvd-party-death", "exception", 700, J{{"mode", "party_death"}}, dismiss_party_death());
+    add("wvd-party-defeat", "exception", 690, J{{"mode", "party_defeat"}}, acknowledge_party_defeat());
+    add("wvd-story", "special", 600, vision::ordinary_story_page(), handle_story());
+    add("wvd-blessing", "special", 500, C::any({vision::harken_buff_menu(), C::image("blessing")}), dismiss_global_prompt(GlobalPrompt::Blessing));
+    add("wvd-karma", "special", 400, C::any({C::image("ambush"), C::image("ignore")}), choose_karma_prompt());
+    add("wvd-dialogue", "special", 300, J{{"mode", "default_dialogue"}}, choose_default_dialogue());
+    add("wvd-sandman", "special", 490, C::image("sandman_recover"), dismiss_global_prompt(GlobalPrompt::SandmanRecovery));
+    if (task.dialogue_policy != DialoguePolicy::Default)
+        add("wvd-special-dialogue", "special", 350,
+            J{{"mode", "special_dialogue"}, {"policy", static_cast<int>(task.dialogue_policy)}},
+            choose_special_dialogue(task.dialogue_policy));
+    graph.event_scope("Entry", rules);
     auto result = graph.finish();
-    // 启动页自己分派；业务子图只有结果不符才进入异常→特殊流程。
-    // 挂起原调用/输入回执，处理后核对原结果，不跳回任务入口、不重放业务输入。
-    for (auto &[name, node] : result.nodes.items()) {
-        if (name.starts_with("UnexpectedScreens_") || name.starts_with("NetworkOverlay_")) {
-            // 处理器自己的阶段已按已知页面推进，禁止再次继承入口的同组处理器。
-            if (!result.event_scopes.contains(name))
-                result.event_scopes[name] = {{"rules", J::array()}, {"disabled", J::array()}};
-            auto &scope = result.event_scopes[name];
-            if (scope.is_array()) scope = {{"rules", scope}, {"disabled", J::array()}};
-            for (auto id : {"wvd-network-retry", "wvd-exception-screen", "wvd-special-screen"})
-                scope["disabled"].push_back(id);
-            continue;
-        }
-        if (!name.starts_with("Task_")) continue;
-        // 旧外层 Dispatch 也常把 Blocked 放在战斗/地图之前；把正向阻塞观察
-        // 一并归到诊断候选，不能只优化技能子图而保留外层同一问题。
-        if (node.value("operation", "Route") == "Route" && node.value("observation", "") == "Registered" &&
-            node.at("observation_args").value("mode", "") == "blocking_screen") {
-            node["unexpected_only"] = true;
-            node["check_group"] = "exception";
-        }
-        if (!result.event_scopes.contains(name))
-            result.event_scopes[name] = {{"rules", J::array()}, {"disabled", J::array()}};
-        auto &scope = result.event_scopes[name];
-        auto &rules = scope.is_array() ? scope : scope["rules"];
-        for (const auto &[id, category, priority, detect, entry] : {
-                std::tuple{"wvd-network-retry", "exception", 1000, vision::network_retry_prompt(), network_entry},
-                std::tuple{"wvd-exception-screen", "exception", 800, J{{"mode", "exception_screen"}}, diagnostics_entry},
-                std::tuple{"wvd-special-screen", "special", 400, J{{"mode", "special_screen"}}, diagnostics_entry}}) {
-            rules.push_back({{"id", id}, {"class", category}, {"priority", priority},
-                {"detect", detect}, {"source_node", name}, {"entry", entry},
-                {"resume", {{"mode", "reobserve"}}}});
-        }
-    }
-    result.refresh_images();
-    result.validate();
     result.authoring = task.authoring;
     if (result.authoring.contains("source_paths")) {
         J renamed = J::object();

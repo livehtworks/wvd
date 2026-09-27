@@ -53,6 +53,8 @@ NativeExecutionResult NativeExecutionSession::run() {
     nlohmann::json skills = nlohmann::json::array();
     NativeExecutionResult result;
     nlohmann::json reported_progress;
+    nlohmann::json objective;
+    std::optional<std::uint64_t> business_version;
     try {
         for (;;) {
             if (!skill_start && executor_.is_operation("WvdCombat", "prepare")) {
@@ -74,6 +76,15 @@ NativeExecutionResult NativeExecutionSession::run() {
             if (progress_) {
                 timing::Scope measure(timing::Part::JsonEvents);
                 auto current = executor_.progress_snapshot();
+                const auto version = ports_.business_version();
+                if (business_version != version) {
+                    const auto summary = ports_.business_summary();
+                    objective = nlohmann::json::object();
+                    for (const auto *key : {"farm_target_text", "task_step", "bounty_cycle", "healing_required"})
+                        if (summary.contains(key)) objective[key] = summary.at(key);
+                    business_version = version;
+                }
+                current["main_objective"] = objective;
                 if (current != reported_progress) {
                     reported_progress = current;
                     progress_(current);

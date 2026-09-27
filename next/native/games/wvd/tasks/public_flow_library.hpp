@@ -23,6 +23,10 @@ class PublicFlowLibrary {
         authoring::SemanticAssets assets(semantic_catalogue_);
         return assets.condition(id, locale, use);
     }
+    CompiledWorkflow compile_step(const std::string &id, const J &arguments,
+                                  const std::string &locale) const {
+        return compile(lookup(J{{"flow_id", id}}), {}, arguments, locale).workflow;
+    }
     // 先收集实际绑定后的 task_stage，后选择同一份有效配置；不能漏掉嵌套块里的任务覆盖。
     std::set<std::string> task_profiles(const J &root, const J &args = J::object(), const std::string &locale = {}) const {
         std::set<std::string> ids;
@@ -105,9 +109,22 @@ class PublicFlowLibrary {
             }
         };
         auto result = compile_one(compile_one, root, args, J::object(), J::object(), std::nullopt);
+        const auto native_documents = result.workflow.authoring.value("documents", J::object());
+        for (const auto &[id, doc] : native_documents.items()) {
+            if (used.contains(id) && used.at(id) != doc) authoring::contract_error("FLOW_SNAPSHOT_CONFLICT", id);
+            used[id] = doc;
+        }
+        for (const auto &[name, path] : result.workflow.authoring.value("source_paths", J::object()).items())
+            if (!result.source_paths.contains(name)) result.source_paths[name] = path;
+        auto resources = assets.selections();
+        for (const auto &[id, selected] : result.workflow.authoring.value("resources", J::object()).items()) {
+            if (resources.contains(id) && resources.at(id) != selected)
+                authoring::contract_error("FLOW_RESOURCE_SNAPSHOT_CONFLICT", id);
+            resources[id] = selected;
+        }
         result.workflow.authoring = {{"schema", 1}, {"format", "public-flow-1"},
             {"root", root.at("flow").at("id")}, {"arguments", args}, {"resource_locale", locale},
-            {"documents", used}, {"resources", assets.selections()}, {"source_paths", result.source_paths}};
+            {"documents", used}, {"resources", resources}, {"source_paths", result.source_paths}};
         return result;
     }
   private:

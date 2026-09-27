@@ -75,13 +75,14 @@ export interface WorkflowNode {
 }
 export interface WorkflowEdge {
   id: string; source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null; label?: string;
-  data?: { order?: number; kind?: "sequence" | "candidate" | "failure"; [key: string]: unknown };
+  data?: { order?: number; kind?: "sequence" | "candidate" | "failure" | "handoff"; [key: string]: unknown };
 }
 export interface WorkflowDefinition extends JsonObject {
   id: string; name: string; revision?: string; description?: string; entry_node_id?: string;
   nodes: WorkflowNode[]; edges: WorkflowEdge[]; created_from?: string; runnable?: boolean;
   time_limit_ms?: number;
   interface?: import("../features/authoring/flowModel").PublicInterface;
+  checks?: { phase: string; inherit: string[]; debounce_ms?: number; interval_ms?: number; protect_input?: boolean };
   slots?: string[]; resource_locale?: ResourceLocale;
   events?: Record<string, EventRule>;
   validation_errors?: Array<{ node_id?: string; error_code: string; message: string }>;
@@ -98,10 +99,12 @@ export interface SubmissionReceipt extends JsonObject {
   run_id?: string | number;
 }
 export interface RunState extends JsonObject {
+  repeat?: { active: boolean; state: string; completed_cycles: number; reason: string; request_id: string } | null;
   busy?: boolean; quiescent?: boolean;
   call_stack?: Array<{ definition: string; node_id: string; source_path: Array<{flow_id?:string;node_id?:string;native_node?:string}> }>;
   unresolved_inputs?: Array<{ source_path:string; basis_frame:number; basis_epoch:number; action_epoch:number; delivery_unknown:boolean }>;
-  execution?: JsonObject;
+  execution?: {step_id?:string;current_block?:string;phase?:string;wait_state?:string;return_targets?:string[];
+    main_objective?:{farm_target_text?:string;task_step?:number};[key:string]:unknown};
   node_path?: Array<{flow_id:string;node_id:string}>;
   active_event?: {event_id:string;class?:string;source_node:string;handler_entry?:string;phase?:string;
     depth:number;resume:{mode:string;node_id?:string};path?:Array<{event_id:string;source_node:string}>};

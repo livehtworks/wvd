@@ -40,9 +40,9 @@ CompiledWorkflow return_to_bounty_city(bool guild) {
     const auto harken_exit = graph.define_child("HarkenExit", navigation::leave_harken());
     graph.observe("Harken", harken, {"LeaveHarken"});
     graph.call_child("LeaveHarken", harken_exit, {"Entry"});
-    const auto return_harken = graph.define_child("ReturnHarken", navigation::auto_route("dungFlag"), {"BlockedExit"});
+    const auto return_harken = graph.define_child("ReturnHarken", navigation::auto_route("dungFlag"));
     graph.observe("Dungeon", C::all({C::image("dungFlag"), C::absent(map), C::absent(encounter)}), {"GoHarken"});
-    graph.call_child("GoHarken", return_harken, {"Entry"});
+    graph.call_child("GoHarken", return_harken, {"Entry"}, {{"blocked", {"Entry"}}, {"encounter", {"RecoveryRequired"}}, {"stopped", {"RecoveryRequired"}}});
     if (!guild)
         for (std::size_t i = 0; i < exits.size(); ++i) {
             const auto image = C::image(exits[i]);
@@ -52,10 +52,7 @@ CompiledWorkflow return_to_bounty_city(bool guild) {
             graph.hit_limit(name, 16);
         }
     graph.back("Back", C::all({guild ? C::any(known) : map, C::absent(target), C::absent(encounter)}), C::any(known), {"Entry"});
-    graph.hit_limit("Entry", 32);
     graph.hit_limit("Back", 16);
-    graph.hit_limit("Harken", 16);
-    graph.hit_limit("Dungeon", 16);
     return graph.finish();
 }
 }
@@ -128,8 +125,34 @@ CompiledWorkflow bounty_cycle(const WvdQuestDefinition &definition, const J &pro
         [](const J &) -> CompiledWorkflow { throw std::runtime_error("BOUNTY_PUBLIC_NATIVE_BINDING_FORBIDDEN"); },
         J{{"location", 0}}, locale);
     const auto inspect = graph.define_child("InspectBountyBoard", board_open.workflow);
-    graph.call_child("InspectBoard", inspect, {"CheckOldReports"});
-    graph.route("CheckOldReports", {"OldReportReady", "NoOldReport"});
+    // 新一轮需要先查看旧报告。断点可能留在荒屋，不能直接调用只接受城市/公会
+    // 的公共开页流程然后等待到超时；只在确证该菜单时退出，不改变跳轮账目。
+    auto ruins_menu = C::image("cursedWheel_zh_hant");
+    ruins_menu["roi"] = {450, 500, 450, 400};
+    const auto ruins_title = C::any({C::image("cursedWheelTitle"), C::image("cursedWheelTitle_zh_hant")});
+    const auto ruins_ready = C::all({ruins_menu, C::absent(ruins_title),
+        J{{"mode", "input_clear"}, {"phase", "navigation"}}});
+    const auto inspect_ready = C::any({vision::city_screen(), board_page,
+        library.resource_condition("guild.menu", locale, authoring::ResourceUse::Observation)});
+    graph.route("InspectBoard", locale == "zh-Hant" ? J{"CloseLateOldReveal", "InspectReady", "LeaveRuinsForInspection"}
+        : J{"InspectReady", "LeaveRuinsForInspection"});
+    if (locale == "zh-Hant") {
+        const auto reveal = library.resource_condition("guild.bounty.reveal.close", locale, authoring::ResourceUse::Position);
+        // 跳轮后的联网展示卡可以晚于开页回执到达；关卡后仍重新进入悬赏页查报告。
+        // 只确认关闭展示，不把它当作领取/提交，也不因此直接开始下一次跳轮。
+        graph.click("CloseLateOldReveal", reveal, reveal,
+            C::any({board_page, reveal, library.resource_condition("guild.menu", locale, authoring::ResourceUse::Observation)}),
+            {"InspectBoard"});
+        graph.delay_after("CloseLateOldReveal", 700);
+    }
+    graph.observe("InspectReady", inspect_ready, {"OpenInspectBoard"});
+    // 实机900x1600的“離開”是轮盘按钮下方约240像素，仍由菜单匹配给出横坐标。
+    graph.click("LeaveRuinsForInspection", ruins_ready, ruins_menu,
+        C::all({vision::city_screen(), C::absent(ruins_menu)}), {"InspectBoard"}, {0, 240});
+    graph.retry_menu_input("LeaveRuinsForInspection", vision::menu_retry_ready(ruins_ready));
+    graph.call_child("OpenInspectBoard", inspect, {"CheckOldReports"});
+    graph.route("CheckOldReports", locale == "zh-Hant" ? J{"CloseLateOldReveal", "OldReportReady", "EmptyOldReportCandidate"}
+        : J{"OldReportReady", "EmptyOldReportCandidate"});
     graph.observe("OldReportReady", C::all({board_page, ready_report}), {"CollectOldReports"});
     const auto old_report = graph.define_child("OldBountyReport",
         visit_bounty_board(BountyVisit::Report, library, board_root, locale));
@@ -137,15 +160,13 @@ CompiledWorkflow bounty_cycle(const WvdQuestDefinition &definition, const J &pro
     const auto old_rest = graph.define_child("OldBountyRest",
         supply::rest_at_inn(profile.at("ACTIVE_ROYALSUITE_REST").get<bool>(), true));
     graph.call_child("RestAfterOldReports", old_rest, {"Start"});
-    graph.observe("NoOldReport", C::all({board_page, C::absent(ready_report)}), {"LeaveBoard"});
-    const auto board_menu = C::any({board_page, vision::guild_button(),
-        library.resource_condition("guild.commissions.entry", locale, authoring::ResourceUse::Position),
-        library.resource_condition("guild.bounties.entry", locale, authoring::ResourceUse::Position)});
-    graph.back("LeaveBoard", board_menu, C::any({board_menu, edge}), {"BoardExit"});
-    graph.route("BoardExit", {"AtCityEdge", "LeaveBoard"});
-    graph.observe("AtCityEdge", edge, {"Start"});
-    graph.hit_limit("BoardExit", 16);
-    graph.hit_limit("LeaveBoard", 16);
+    const auto no_old_report = C::all({board_page, C::absent(ready_report)});
+    graph.observe("EmptyOldReportCandidate", no_old_report, {"RecheckOldReports"});
+    graph.wait("RecheckOldReports", 1000, locale == "zh-Hant" ? J{"CloseLateOldReveal", "OldReportReady", "NoOldReport"}
+        : J{"OldReportReady", "NoOldReport"});
+    graph.observe("NoOldReport", no_old_report, {"LeaveBoard"});
+    const auto leave_board = graph.define_child("LeaveInspectedBoard", leave_bounty_board(library, locale));
+    graph.call_child("LeaveBoard", leave_board, {"Start"});
     graph.confirm("Start", "bounty.cycle.start", jier ? "jier_started" : hands ? "scorpion_hands_started" : "scorpion_started", start_page, {"Stage"});
     graph.route("Stage", hands ? J{"LeapPhase", "TravelPhase", "RevealPhase", "FirstRoutePhase", "FirstReturnPhase",
             "SecondRoutePhase", "SecondReturnPhase", "ReportsPhase", "RestPhase"} :
@@ -187,7 +208,7 @@ CompiledWorkflow bounty_cycle(const WvdQuestDefinition &definition, const J &pro
         graph.observe(name + "Points", C::business("/task_step", 2), {jier ? "LeaveByHarken" : name + "RouteDone"});
         if (jier) {
             const auto exit = graph.define_child("HarkenExit", navigation::reach_map_target(first_plan.route().back()));
-            graph.call_child("LeaveByHarken", exit, {name + "RouteDone"});
+            graph.call_child("LeaveByHarken", exit, {name + "RouteDone"}, {{"encounter", {"RecoveryRequired"}}, {"blocked", {"RecoveryRequired"}}});
         }
         graph.confirm(name + "RouteDone", "bounty.route." + name, "bounty_route_completed",
             jier ? C::all({C::any({inn, guild, edge, C::image("returnText"), C::image("openworldmap")}), C::absent(map)})

@@ -68,9 +68,9 @@ export const stopRun = (id?: string | number, requestId?: string) => send<RunSta
   "POST", requestId ? { request_id: requestId } : {},
 );
 export const readCurrentRun = () => get<RunState>("/api/v1/runs/current");
-export const startTask = (taskId: string, requestId: string, profileRevision: string | undefined, resourceLocale: import("./types").ResourceLocale) =>
+export const startTask = (taskId: string, requestId: string, profileRevision: string | undefined, resourceLocale: import("./types").ResourceLocale, repeat = false) =>
   send<SubmissionReceipt>("/api/v1/runs/start", "POST", {
-    task_id: taskId, request_id: requestId, resource_locale: resourceLocale,
+    task_id: taskId, request_id: requestId, resource_locale: resourceLocale, repeat,
     ...(profileRevision ? { profile_revision: profileRevision } : {}),
   });
 export const readDevice = () => get<DeviceState>("/api/v1/device");

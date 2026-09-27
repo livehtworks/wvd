@@ -32,12 +32,20 @@ inline std::vector<ParameterSpec> parameter_specs(const Json &document) {
     const auto &api = document.at("interface");
     if (!api.is_object()) contract_error("FLOW_INTERFACE_INVALID");
     for (const auto &[key, _] : api.items())
-        if (key != "kind" && key != "category" && key != "parameters")
+        if (key != "kind" && key != "category" && key != "parameters" && key != "handoffs")
             contract_error("FLOW_INTERFACE_FIELD", key);
     const auto kind = api.value("kind", std::string("task"));
     if (kind != "step" && kind != "block" && kind != "task") contract_error("FLOW_KIND_INVALID");
     const auto category = api.value("category", std::string{});
     if (category.size() > 128) contract_error("FLOW_CATEGORY_INVALID");
+    const auto ports = api.value("handoffs", Json::array());
+    if (!ports.is_array() || ports.size() > 32) contract_error("FLOW_HANDOFFS_INVALID");
+    std::set<std::string> unique_ports;
+    for (const auto &port : ports) {
+        if (!port.is_string() || !public_id(port.get<std::string>()) ||
+            !unique_ports.insert(port.get<std::string>()).second)
+            contract_error("FLOW_HANDOFFS_INVALID");
+    }
     const auto rows = api.value("parameters", Json::array());
     if (!rows.is_array() || rows.size() > 64) contract_error("FLOW_PARAMETERS_INVALID");
     std::vector<ParameterSpec> result;
@@ -129,7 +137,8 @@ inline Json instantiate_document(Json document, const Json &provided = Json::obj
                 parameters.at(pointer) = value;
             }
         }
-        document.erase("interface");
+        // 参数已实例化；端口是定义契约，必须留给图校验和编译，不能随参数一起抹掉。
+        document["interface"].erase("parameters");
     }
     if (!extensions.is_object() || extensions.size() > 32) contract_error("FLOW_EXTENSIONS_INVALID");
     std::set<std::string> slots;

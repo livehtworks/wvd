@@ -82,6 +82,7 @@ Result NativeOperations::execute(const std::string &binding, const J &parameters
     (void)selected_observation;
     if (binding == "WvdUnknownLeap") {
         J unknown_parameters{{"mode", "unknown_exhausted"}, {"max_tries", 4}};
+        if (parameters.contains("classification")) unknown_parameters["classification"] = parameters.at("classification");
         if (parameters.contains("extra_known"))
             unknown_parameters["extra_known"] = parameters.at("extra_known");
         const auto unknown = observe(frame, unknown_parameters, "wvd.unknown_leap");

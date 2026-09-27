@@ -7,10 +7,10 @@ tasks::CompiledWorkflow choose_special_dialogue(DialoguePolicy policy) {
     using J = nlohmann::json;
     if (policy == DialoguePolicy::Default) throw std::runtime_error("SPECIAL_DIALOGUE_POLICY_REQUIRED");
     C graph("recovery.special_dialogue." + dialogue_policy_name(policy), std::chrono::seconds{90});
+    graph.check_policy("special", {"wvd-network-retry"}, 1000, 1000, false);
     graph.use_dialogue(policy);
     auto close = C::image("bondmate_close");
     close["roi"] = {277, 751, 330, 600};
-    const J after{{"mode", "special_dialogue_post"}};
     J entry{"Pending"};
     graph.observe("Pending", C::business("/special_dialogue_pending", true), {"Unconfirmed"});
     const auto stops = dialogue_task_stops(policy);
@@ -25,6 +25,8 @@ tasks::CompiledWorkflow choose_special_dialogue(DialoguePolicy policy) {
     for (const auto option : special_dialogue_options(policy)) {
         const auto suffix = std::to_string(option_index++);
         const auto marker = C::image(std::string(option));
+        // 只确认当前选项已离开；父任务继续检查原目标，不重新分类启动/城市目录。
+        const auto after = C::absent(marker);
         const J choice{{"mode", "special_dialogue"}, {"selected", option}};
         entry.push_back("Prepare" + suffix);
         graph.confirm("Prepare" + suffix, "dialogue.special.prepare", "special_dialogue_prepared", C::all({choice, marker}), {"Choose" + suffix});
@@ -44,7 +46,7 @@ tasks::CompiledWorkflow choose_special_dialogue(DialoguePolicy policy) {
             close_scene = C::all({close_scene, C::absent(J{{"mode", "task_stop"}})});
         }
         graph.route("AfterChoice" + suffix, after_choice);
-        graph.click("CloseBond" + suffix, close_scene, close, after, after_close);
+        graph.click("CloseBond" + suffix, close_scene, close, C::absent(close), after_close);
         graph.confirm("Completed" + suffix, "dialogue.special.done",
             option == "sandman/sandman_bondmate" ? "sandman_bondmate_completed" : "special_dialogue_completed",
             C::all({after, C::absent(close), C::absent(marker)}), {"Terminal"});
@@ -57,13 +59,15 @@ tasks::CompiledWorkflow choose_default_dialogue() {
     using C = tasks::PipelineCompiler;
     using J = nlohmann::json;
     C graph("recovery.default_dialogue", std::chrono::seconds{90});
-    const J known{{"mode", "dialogue_post"}};
+    graph.check_policy("special", {"wvd-network-retry"}, 1000, 1000, false);
     const J stop{{"mode", "task_stop"}};
     J candidates = J::array();
     for (std::size_t i = 0; i < vision::default_dialogue_names.size(); ++i) {
         const auto suffix = std::to_string(i);
         const auto name = std::string(vision::default_dialogue_names[i]);
         const auto marker = C::image("dialogueChoices/" + name);
+        // 只结清本选项已消失的输入事实；父调用仍须确认自己的业务终点。
+        const auto known = C::absent(marker);
         candidates.push_back("Candidate" + suffix);
         // 候选扫描只决定分支；输入前用新帧重查完整优先级，不能沿用扫描时的选项。
         graph.observe("Candidate" + suffix, C::all({marker, C::absent(stop)}), {"Choose" + suffix});

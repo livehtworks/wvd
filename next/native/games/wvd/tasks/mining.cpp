@@ -37,9 +37,10 @@ CompiledWorkflow mining_iteration(const WvdQuestDefinition &definition, const nl
     graph.observe("RefillPending", C::business("/mining/refill_pending", true), {"Exit"});
     const auto entry = graph.define_child("DungeonEntry", navigation::enter_dungeon(plan));
     graph.call_child("Enter", entry, {"Seek"});
-    const auto seek = graph.define_child("TravelToMark", navigation::auto_route("mark_auto"),
-        {"StoppedExit", "BlockedExit", "EncounterExit"});
-    graph.call_child("Seek", seek, {"Blocked", "Mine", "PositionMissing"});
+    const auto seek = graph.define_child("TravelToMark", navigation::auto_route("mark_auto"));
+    graph.call_child("Seek", seek, {"Blocked", "Mine", "PositionMissing"},
+        {{"stopped", {"Blocked", "Mine", "PositionMissing"}}, {"blocked", {"Blocked", "Mine", "PositionMissing"}},
+         {"encounter", {"Blocked", "Mine", "PositionMissing"}}});
     graph.recovery("PositionMissing", "quest.mining_position_not_confirmed");
     graph.observe("Mine", C::all({mine_page, C::absent(blocked)}), {"Dispatch"});
     graph.route("Dispatch", {"Blocked", "Reward", "NeedPickaxes", "NoOre", "Dismissed", "Unknown"});

@@ -272,7 +272,29 @@ bool ScrcpyControlClient::close() noexcept {
         } catch (...) { /* uploaded_ 保留；只处理本次明确拥有的远端文件。 */ }
     }
     if (winsock_) { WSACleanup(); winsock_ = false; }
-    return !cleanup_unconfirmed_ && !held_ && held_keys_.empty() && !child_ && !forward_ && !uploaded_;
+    // 远端jar是静态文件，不是活跃输入。离线时保留uploaded_供重连后清理，
+    // 不能因rm无法执行就永久占用任务租约；输入、子进程、转发仍须全部释放。
+    return !cleanup_unconfirmed_ && !held_ && held_keys_.empty() && !child_ && !forward_;
+}
+bool ScrcpyControlClient::retire_exited_instance() noexcept {
+    close();
+    // 客体进程已不存在，不可能仍持有按键；业务输入结果未知仍由执行器保留。
+    held_ = partial_frame_ = cleanup_unconfirmed_ = false;
+    held_keys_.clear();
+    if (forward_) {
+        try {
+            const auto result = adb_.run({L"forward", L"--list"}, 3000ms);
+            if (result.state == platform::ProcessState::Exited && result.exit_code == 0) {
+                std::istringstream lines(std::string(result.stdout_bytes.begin(), result.stdout_bytes.end()));
+                std::string serial, local, remote;
+                bool found = false;
+                while (lines >> serial >> local >> remote)
+                    if (local == "tcp:" + std::to_string(port_)) found = true;
+                if (!found) forward_ = false;
+            }
+        } catch (...) {}
+    }
+    return !child_ && !forward_ && socket_ == INVALID_SOCKET;
 }
 std::string ScrcpyControlClient::cleanup_status() const {
     std::ostringstream out;

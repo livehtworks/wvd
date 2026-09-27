@@ -9,6 +9,7 @@ tasks::CompiledWorkflow open_chest(int preferred_character, bool quick, std::uin
     // 实际受控识别链 33 次输入已耗时 240 秒；完整 quick + 普通重试不能
     // 继承旧短预算。总时间仍有界，父 Session 另持总预算，帧 TTL 不变。
     C graph("chest.open", std::chrono::seconds{quick ? 900 : 600});
+    graph.check_policy("chest", {"wvd-network-retry", "wvd-pause", "wvd-download"});
     const auto flag = C::image("chestFlag"), choose = C::image("whowillopenit"), opening = C::image("chestOpening");
     auto reward = C::image("chest_reward_advance");
     reward["roi"] = {750, 1400, 150, 150};
@@ -24,20 +25,16 @@ tasks::CompiledWorkflow open_chest(int preferred_character, bool quick, std::uin
     graph.confirm("Begin", "chest.begin", "chest_observed", chest, quick ? J{"QuickOpen", "Dispatch"} : J{"Dispatch"});
     graph.route("Dispatch", {"Reward", "Combat", "Revive", "Ambush", "Done", "Round0"});
     graph.observe("Reward", reward, {"RewardAdvance"});
-    graph.hit_limit("Reward", 20);
-    graph.fixed_click("RewardAdvance", reward, post, {832, 1491}, {"AfterReward"});
-    graph.hit_limit("RewardAdvance", 20);
-    graph.delay_after("RewardAdvance", 900);
+    graph.public_step("RewardAdvance", "chest-reward-continue", J::object(), {"AfterReward"}, J::object(), reward);
     // 奖励可能连续多页，也可能直接返回迷宫或自动走到下一个宝箱。
     graph.route("AfterReward", {"Reward", "Combat", "Revive", "Ambush", "Done", "DoneAtNextChest"});
-    graph.hit_limit("AfterReward", 20);
     graph.confirm("DoneAtNextChest", "chest.completed", "dungeon_resumed", flag, {"Terminal"});
     graph.observe("Combat", combat, {"CombatExit"});
-    graph.recovery("CombatExit", "chest.combat_requires_dispatch");
+    graph.handoff("CombatExit", "combat");
     graph.observe("Revive", revive, {"ReviveExit"});
-    graph.recovery("ReviveExit", "chest.resurrection_required");
+    graph.handoff("ReviveExit", "revive");
     graph.observe("Ambush", ambush, {"AmbushExit"});
-    graph.recovery("AmbushExit", "chest.ambush_requires_dispatch");
+    graph.handoff("AmbushExit", "ambush");
     graph.confirm("Done", "chest.completed", "dungeon_resumed", dungeon, {"Terminal"});
     const J exits{"Reward", "Combat", "Revive", "Ambush", "Done"};
     auto after = [&](const std::string &next) {
@@ -50,6 +47,7 @@ tasks::CompiledWorkflow open_chest(int preferred_character, bool quick, std::uin
         graph.hit_limit("QuickOpen", 1);
         graph.delay_after("QuickOpen", 1000);
         graph.postcondition_budget("QuickOpen", 60000);
+        graph.retry_menu_input("QuickOpen", C::all({chest, flag}), 3000);
         // 旧 quick 在 WHO=0 时以 -1 计算，最终位置为第六人；保留该实际坐标语义。
         const int role = preferred_character ? preferred_character - 1 : 5;
         const J position{258 + (role % 3) * 258, 1161 + (role / 3) * 184};
@@ -59,18 +57,14 @@ tasks::CompiledWorkflow open_chest(int preferred_character, bool quick, std::uin
             choices.push_back("QuickRole" + suffix);
             choices.push_back("QuickDisarm0");
             graph.route("QuickRoute" + suffix, choices);
-            graph.fixed_click("QuickRole" + suffix, C::all({chest, choose}), post, position,
-                after(i < 2 ? "QuickRoute" + std::to_string(i + 1) : "QuickDisarm0"));
+            graph.public_step("QuickRole" + suffix, "chest-choose-character", {{"x", position[0]}, {"y", position[1]}, {"delay_ms", i < 2 ? 200 : 1000}},
+                after(i < 2 ? "QuickRoute" + std::to_string(i + 1) : "QuickDisarm0"), J::object(), C::all({chest, choose}));
             graph.hit_limit("QuickRole" + suffix, 1);
-            graph.delay_after("QuickRole" + suffix, i < 2 ? 200 : 1000);
         }
         // 每次输入都是新帧意图，不把旧版的循环变成一串不可撤销的底层输入。
         auto disarm = [&](const std::string &name, const std::string &next) {
-            graph.fixed_click(name, C::all({chest, C::any({choose, opening})}), post,
-                {515, 934}, after(next));
+            graph.public_step(name, "chest-disarm", {{"delay_ms", 200}}, after(next), J::object(), C::all({chest, C::any({choose, opening})}));
             graph.hit_limit(name, 1);
-            graph.delay_after(name, 200);
-            graph.stop_if_interrupted_after(name, "chest.disarm_outcome_unconfirmed");
         };
         for (unsigned i = 0; i < 30; ++i)
             disarm("QuickDisarm" + std::to_string(i), i < 29 ? "QuickDisarm" + std::to_string(i + 1) : "QuickDismiss0");
@@ -82,7 +76,7 @@ tasks::CompiledWorkflow open_chest(int preferred_character, bool quick, std::uin
         }
     }
     graph.recovery("NoCharacter", "chest.no_available_character");
-    graph.recovery("RetryExit", "chest.retry_pending");
+    graph.handoff("RetryExit", "retry");
     // 旧 while 每轮重新识别选人/开启状态。一次子调用最多六轮，返回外层后
     // 候选池仍由 Run 持有；父 Session 的总预算不因正常返回而重置。
     for (unsigned round = 0; round < 6; ++round) {
@@ -95,6 +89,7 @@ tasks::CompiledWorkflow open_chest(int preferred_character, bool quick, std::uin
         graph.hit_limit(prefix + "Open", 3);
         graph.delay_after(prefix + "Open", 1000);
         graph.postcondition_budget(prefix + "Open", 60000);
+        graph.retry_menu_input(prefix + "Open", C::all({chest, flag}), 3000);
         J selected{prefix + "Unavailable"};
         for (unsigned role = 0; role < 6; ++role)
             selected.push_back(prefix + "Role" + std::to_string(role));
@@ -106,24 +101,20 @@ tasks::CompiledWorkflow open_chest(int preferred_character, bool quick, std::uin
             auto fear = C::image("chestfear");
             fear["roi"] = {x - 125, y - 82, 250, 164};
             graph.observe(name, C::business("/chest_character", role), {name + "Choose", name + "Fear"});
-            graph.fixed_click(name + "Choose", C::all({chest, choose, C::absent(fear)}), post,
-                              {x, y}, {prefix + "Attempted"});
-            graph.delay_after(name + "Choose", 1500);
+            graph.public_step(name + "Choose", "chest-choose-character", {{"x", x}, {"y", y}, {"delay_ms", 1500}}, {prefix + "Attempted"}, J::object(), C::all({chest, choose, C::absent(fear)}));
             graph.observe(name + "Fear", C::all({chest, choose, fear}), {next_round});
         }
         graph.confirm(prefix + "Attempted", "chest.character", "chest_character_attempted", post,
                       after(prefix + "Disarm0"));
         for (unsigned attempt = 0; attempt < 8; ++attempt) {
             const auto name = prefix + "Disarm" + std::to_string(attempt);
-            graph.fixed_click(name, C::all({chest, C::any({choose, opening})}), post, {515, 934},
-                after(attempt < 7 ? prefix + "Disarm" + std::to_string(attempt + 1) : next_round));
+            graph.public_step(name, "chest-disarm", {{"delay_ms", 300}},
+                after(attempt < 7 ? prefix + "Disarm" + std::to_string(attempt + 1) : next_round), J::object(), C::all({chest, C::any({choose, opening})}));
             graph.hit_limit(name, 1);
-            graph.delay_after(name, 300);
-            graph.stop_if_interrupted_after(name, "chest.disarm_outcome_unconfirmed");
         }
     }
-    graph.interrupt_on(C::all({J{{"mode", "blocking_screen"}}, C::absent(reward), C::absent(interrupted)}),
-                       "chest.common_screen_requires_dispatch");
+    graph.interrupt_on(C::all({C::absent(J{{"mode", "input_clear"}}), C::absent(reward), C::absent(interrupted)}),
+                       "chest.common_screen_requires_dispatch", "blocked");
     return graph.finish();
 }
 }

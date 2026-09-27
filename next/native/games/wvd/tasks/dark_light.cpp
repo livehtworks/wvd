@@ -34,26 +34,24 @@ CompiledWorkflow dark_light(const WvdQuestDefinition &definition, const nlohmann
     graph.confirm("Outside", "darklight.leave", "dark_light_completed", outside, {"Terminal"});
     graph.observe("UnknownFrozen", {{"mode", "unknown_frozen"}, {"extra_known", {lamp, light}}}, {"FrozenExit"});
     graph.recovery("FrozenExit", "dungeon.unknown_static_window");
-    graph.unknown_leap("UnknownLeap", {"UnknownLeapExit"}, {lamp, light});
+    graph.unknown_leap("UnknownLeap", {"UnknownLeapExit"}, {lamp, light}, false);
     graph.recovery("UnknownLeapExit", "leap.unknown");
     graph.observe("UnknownTimeout", C::business("/encounter_timed_out", true), {"TimeoutExit"});
     graph.recovery("TimeoutExit", "dungeon.encounter_timeout");
     graph.observe("UnknownLimit", {{"mode", "unknown_exhausted"}, {"max_tries", profile.at("MAX_TRY_LIMIT")},
         {"extra_known", {lamp, light}}}, {"LimitExit"});
     graph.recovery("LimitExit", "dungeon.unknown_try_limit");
-    graph.route("Wait", {"Entry"});
-    graph.delay_after("Wait", 1000);
+    graph.poll("Wait", 1000, {"Entry"});
 
     const auto common = graph.define_child("Common", recovery::clear_common_screens(allow_download));
     graph.observe("Blocked", blocked, {"ClearBlocking"});
     graph.call_child("ClearBlocking", common, {"Dispatch"});
-    const auto combat_flow = graph.define_child("Battle", combat::fight_encounter(profile, images, 16), {"BlockedExit", "ReviveExit"});
+    const auto combat_flow = graph.define_child("Battle", combat::fight_encounter(profile, images));
     graph.observe("Combat", battle, {"Fight"});
-    graph.call_child("Fight", combat_flow, {"Dispatch"});
-    const auto chest_entry = graph.define_child("Box", chest_flow,
-        {"CombatExit", "ReviveExit", "AmbushExit", "BlockedExit", "RetryExit"});
+    graph.call_child("Fight", combat_flow, {"Dispatch"}, {{"blocked", {"Dispatch"}}, {"revive", {"Dispatch"}}, {"chest", {"Dispatch"}}});
+    const auto chest_entry = graph.define_child("Box", chest_flow);
     graph.observe("Chest", box, {"OpenChest"});
-    graph.call_child("OpenChest", chest_entry, {"Dispatch"});
+    graph.call_child("OpenChest", chest_entry, {"Dispatch"}, {{"combat", {"Dispatch"}}, {"revive", {"Dispatch"}}, {"ambush", {"Dispatch"}}, {"retry", {"Dispatch"}}, {"blocked", {"Dispatch"}}});
     const auto resurrection = graph.define_child("Resurrection", recovery::revive_after_defeat(), {"BlockedExit"});
     graph.observe("Revive", revive, {"Resurrect"});
     graph.call_child("Resurrect", resurrection, {"Dispatch"});
@@ -61,12 +59,11 @@ CompiledWorkflow dark_light(const WvdQuestDefinition &definition, const nlohmann
     // 共用状态仍结算战斗/宝箱重叠时间与SKIP_*恢复决策，但不调用enter_dungeon。
     graph.confirm("Resume", "darklight.resume", "dungeon_resumed", dungeon, {"Dismiss"});
     graph.fixed_click("Dismiss", dungeon, known, {1, 1}, {"Blocked", "Combat", "Chest", "Revive", "Outside", "Heal"});
-    const auto healing = graph.define_child("Healing", supply::recover_in_dungeon(), {"EncounterExit", "BlockedExit"});
+    const auto healing = graph.define_child("Healing", supply::recover_in_dungeon());
     graph.observe("HealingPanel", C::all({panel, C::absent(encounter), C::business("/healing_required", true)}), {"Heal"});
-    graph.call_child("Heal", healing, {"LightDispatch"});
+    graph.call_child("Heal", healing, {"LightDispatch"}, {{"encounter", {"Dispatch"}}, {"blocked", {"Dispatch"}}});
     graph.route("LightDispatch", {"UnknownFrozen", "Blocked", "Combat", "Chest", "Revive", "Outside", "Light", "OpenLamp", "UnknownLeap", "UnknownTimeout", "UnknownLimit", "LightWait"});
-    graph.route("LightWait", {"LightDispatch"});
-    graph.delay_after("LightWait", 1000);
+    graph.poll("LightWait", 1000, {"LightDispatch"});
     const J clear_light{{"mode", "dark_light_clear"}, {"stage", "confirm"}};
     graph.click("Light", clear_light, light, C::all({known, C::absent(light)}), {"Dispatch"});
     graph.postcondition_budget("Light", 10000);

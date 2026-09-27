@@ -27,14 +27,14 @@ CompiledWorkflow battle_pair(const J &profile, const std::set<std::string> &imag
     graph.swipe("Seek", C::all({dung, C::absent(prompt)}), known, {400, 400, 400, 100}, {"Ready", "Dismiss"});
     graph.fixed_click("Dismiss", C::all({dung, C::absent(prompt)}), known, {1, 1}, {"Ready", "Seek"});
     graph.hit_limit("Seek", 16); graph.hit_limit("Dismiss", 16);
-    const auto encounter = graph.define_child("Encounter", wvd::games::combat::fight_encounter(profile, images, 16, 128, wvd::games::combat::EncounterEnd::RepelPrompt));
+    const auto encounter = graph.define_child("Encounter", wvd::games::combat::fight_encounter(profile, images, wvd::games::combat::EncounterEnd::RepelPrompt));
     for (int i = 0; i < 2; ++i) {
         const auto s = std::to_string(i);
         graph.confirm("Prepare" + s, "repel.prepare." + s, "repel_battle_prepared", C::any({prompt, combat}), {"AlreadyFighting" + s, "Continue" + s});
         graph.observe("AlreadyFighting" + s, combat, {"Fight" + s});
         graph.click("Continue" + s, C::all({prompt, C::absent(combat)}), prompt, combat, {"Fight" + s});
         graph.delay_after("Continue" + s, 1000);
-        graph.call_child("Fight" + s, encounter, {i == 0 ? "Prepare1" : "Withdraw"});
+        graph.call_child("Fight" + s, encounter, {i == 0 ? "Prepare1" : "Withdraw"}, {{"revive", {"RecoveryRequired"}}, {"blocked", {"RecoveryRequired"}}});
     }
     graph.click("Withdraw", C::all({prompt, withdraw, C::absent(combat), C::business("/repel_forces/battles_in_pair", 2)}), withdraw, dung, {"Confirmed"});
     graph.delay_after("Withdraw", 1000);

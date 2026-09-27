@@ -2,6 +2,7 @@
 #include "metadata_query.hpp"
 #include "path_utf8.hpp"
 #include <fstream>
+#include <windows.h>
 
 namespace wvd::platform {
 namespace {
@@ -10,6 +11,28 @@ void check(bool value, const char *code) {
         throw std::runtime_error(code);
 }
 } // namespace
+bool mumu_metadata_usable(const nlohmann::json &live) {
+    if (!live.contains("is_process_started") || !live.at("is_process_started").is_boolean() ||
+        !live.contains("is_android_started") || !live.at("is_android_started").is_boolean()) return false;
+    const auto code = live.value("error_code", -1);
+    // 重新启动期间旧崩溃码可能尚未清除，而进程已启动、Android仍在引导。
+    // 元数据可读不等于实例已退出；重开准入另外严格检查is_process_started=false。
+    return code == 0 || ((code == 900 || code == 901) && !live.at("is_android_started").get<bool>());
+}
+void launch_selected_instance(const std::filesystem::path &launcher, int index) {
+    check(launcher.filename() == "MuMuNxDevice.exe" &&
+        std::filesystem::is_regular_file(launcher) && index >= 0 && index <= 10000,
+        "MUMU_LAUNCHER_REQUIRED");
+    std::wstring command = L"\"" + launcher.wstring() + L"\" control -v " + std::to_wstring(index);
+    STARTUPINFOW startup{};
+    startup.cb = sizeof(startup);
+    PROCESS_INFORMATION process{};
+    // CREATE_NO_WINDOW只隐藏控制台，不设置SW_HIDE，MuMu自身窗口正常显示。
+    check(CreateProcessW(nullptr, command.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW,
+        nullptr, launcher.parent_path().c_str(), &startup, &process), "MUMU_START_FAILED");
+    CloseHandle(process.hThread);
+    CloseHandle(process.hProcess);
+}
 nlohmann::json create_mumu_binding(const std::filesystem::path &manager, int index,
                                    std::string serial, std::stop_token cancellation) {
     check(manager.is_absolute() && manager.filename() == "MuMuManager.exe" &&
@@ -25,7 +48,7 @@ nlohmann::json create_mumu_binding(const std::filesystem::path &manager, int ind
     if (!metadata.at("success").get<bool>())
         throw std::runtime_error(metadata.at("error").get<std::string>() + ":" + metadata.dump());
     const auto &live = metadata.at("data");
-    check(live.value("error_code", -1) == 0 &&
+    check(mumu_metadata_usable(live) &&
               live.at("index").get<std::string>() == std::to_string(index),
           "MUMU_INSTANCE_MISMATCH");
     if (live.value("is_android_started", false))

@@ -129,6 +129,20 @@ contracts::Observation Service::evaluate(const contracts::FrameEnvelope &frame,
     }
 }
 
+void Service::note_known_scene(const contracts::Observation &observation) {
+    std::lock_guard lock(mutex_);
+    require(!cancelled_.load() && observation.outcome == contracts::RecognitionOutcome::Hit,
+            "KNOWN_SCENE_EVIDENCE_INVALID");
+    const auto key = frame_key(observation.basis);
+    require(key == cache_.frame_key && key == frame_pixels_key_, "KNOWN_SCENE_FRAME_MISMATCH");
+    if (known_scene_frame_key_ == key) return;
+    known_scene_frame_key_ = key;
+    ++cache_.known_scene_epoch;
+    // 状态性复合缓存失效，纯模板叶子仍有效；不清空模板像素、运动样本或业务状态。
+    cache_.results.clear();
+    cache_.result_bytes = 0;
+}
+
 contracts::Observation Service::evaluate_locked(const FramePixels &pixels, const Request &request,
                                                  const contracts::BusinessRunState *business,
                                                  const contracts::FrameIdentity &basis) {

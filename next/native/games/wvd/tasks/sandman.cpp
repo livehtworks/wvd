@@ -57,7 +57,7 @@ CompiledWorkflow sandman_cycle(const WvdQuestDefinition &definition, const J &pr
     graph.recovery("Incomplete", "quest.sandman_route_incomplete");
     graph.observe("ExitPhase", phase(Phase::Exit), {"Exit"});
     const auto exit = graph.define_child("HarkenExit", navigation::reach_map_target(plan.route().back()));
-    graph.call_child("Exit", exit, {"Exited"});
+    graph.call_child("Exit", exit, {"Exited"}, {{"encounter", {"RecoveryRequired"}}, {"blocked", {"RecoveryRequired"}}});
     const auto outside = C::all({C::any({inn, C::image("EdgeOfTown"), C::image("returnText"), C::image("openworldmap")}), C::absent(map)});
     graph.confirm("Exited", "sandman.exit", "sandman_exited", outside, {"DecidePhase"});
     graph.observe("DecidePhase", phase(Phase::Decide), {"Decided"});

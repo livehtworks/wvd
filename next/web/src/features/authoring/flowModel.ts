@@ -5,7 +5,7 @@ export interface PublicParameter {
   default: Scalar; min?: number; max?: number; max_length?: number; choices?: Scalar[];
   bindings: ParameterBinding[];
 }
-export interface PublicInterface { kind?: 'step' | 'block' | 'task'; category?: string; parameters?: PublicParameter[] }
+export interface PublicInterface { kind?: 'step' | 'block' | 'task'; category?: string; parameters?: PublicParameter[]; handoffs?: string[] }
 export interface FlowCall {
   flow_id: string; arguments?: Record<string, Scalar>;
   extensions?: Record<string, FlowCall[]>; expected_revision?: string;
@@ -20,7 +20,7 @@ export interface GraphNode {
 }
 export interface GraphEdge {
   id: string; source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null;
-  label?: string; data?: { order?: number; kind?: 'sequence' | 'candidate' | 'failure'; [key: string]: unknown };
+  label?: string; data?: { order?: number; kind?: 'sequence' | 'candidate' | 'failure' | 'handoff'; [key: string]: unknown };
 }
 export interface FlowGraph {
   id: string; name: string; description?: string; revision?: string; entry_node_id?: string;
@@ -80,7 +80,7 @@ export function extractPublicBlock<T extends FlowGraph>(source: T, selected: str
   const entries = new Set(incoming.map(edge => edge.target));
   if (source.entry_node_id && chosen.has(source.entry_node_id)) entries.add(source.entry_node_id);
   if (entries.size !== 1 || !outgoing.length) throw new Error('EXTRACT_SINGLE_ENTRY_EXIT_REQUIRED');
-  if (outgoing.some(edge => edge.data?.kind === 'failure' || edge.sourceHandle === 'failure'))
+  if (outgoing.some(edge => edge.data?.kind === 'failure' || edge.sourceHandle === 'failure' || edge.sourceHandle?.startsWith('handoff:')))
     throw new Error('EXTRACT_FAILURE_BOUNDARY_REQUIRES_INCLUDE');
   const exits = [...new Set(outgoing.map(edge => edge.source))];
   const normalized = (from: string) => outgoing.filter(e => e.source === from)

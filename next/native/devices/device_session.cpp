@@ -112,8 +112,18 @@ void DeviceSession::disconnect() {
 }
 
 bool DeviceSession::release_owned_inputs() {
-    const bool control_released = !control_ || control_->close();
+    bool control_released = !control_ || control_->close();
     const bool capture_released = !capture_host_ || capture_host_->close();
+    if (!control_released) {
+        try {
+            const auto live = instance_metadata();
+            if (!live.at("is_process_started").get<bool>()) {
+                control_released = control_->retire_exited_instance();
+                record({{"event", "device.instance_exited"}, {"index", binding_.at("index")},
+                    {"input_channel_retired", control_released}});
+            }
+        } catch (...) { /* 无有效实例证据时继续保留清理未确认，绝不把查询失败当退出。 */ }
+    }
     record({{"event", "device.cleanup"}, {"control_released", control_released},
             {"capture_released", capture_released},
             {"control_status", control_ ? control_->cleanup_status() : "absent"},
@@ -217,16 +227,29 @@ bool DeviceSession::context_matches(const contracts::FrameIdentity &identity,
     platform::timing::Scope measure(platform::timing::Part::InputValidation);
     if (stop.stop_requested() || !connected_ || !identity.frame_id || identity.connection_generation != generation_ ||
         identity.device_id != adb_.serial() || identity.display_rotation < 0 ||
-        identity.foreground_application != application || application.empty())
+        identity.foreground_application != application || application.empty()) {
+        metadata_at_ = {};
+        record({{"event", "input.context_changed"}, {"reason", "FRAME_IDENTITY_CHANGED"},
+            {"frame_application", identity.foreground_application}, {"expected_application", application},
+            {"frame_generation", identity.connection_generation}, {"current_generation", generation_.load()}});
         return false;
+    }
     // 成功的带返回码事务本身证明 transport 可达；不再单独启动 adb get-state。
     // 保留前台 -> viewport -> 前台的原安全顺序，不把它冒充设备端原子快照。
     platform::timing::count(platform::timing::Counter::ContextTransactions);
     const auto answer = adb_.shell_fixed(std::string(android::context_probe_command),
         20000ms, stop, 8ULL * 1024 * 1024);
-    if (stop.stop_requested() || answer.exit_code != 0) return false;
+    if (stop.stop_requested() || answer.exit_code != 0) {
+        metadata_at_ = {};
+        record({{"event", "input.context_changed"}, {"reason", "CONTEXT_QUERY_FAILED"}, {"exit_code", answer.exit_code}});
+        return false;
+    }
     const auto sections = android::parse_context_dump(answer.output);
-    if (!sections) return false;
+    if (!sections) {
+        metadata_at_ = {};
+        record({{"event", "input.context_changed"}, {"reason", "CONTEXT_DUMP_INVALID"}});
+        return false;
+    }
     const auto before = android::focus(std::string(sections->before_focus));
     const auto viewport = android::input_viewport(std::string(sections->input));
     const auto after = android::focus(std::string(sections->after_focus));
@@ -240,6 +263,13 @@ bool DeviceSession::context_matches(const contracts::FrameIdentity &identity,
         latest_size_ = viewport->size;
         latest_rotation_ = viewport->rotation;
         metadata_at_ = std::chrono::steady_clock::now();
+    } else {
+        metadata_at_ = {};
+        record({{"event", "input.context_changed"}, {"before", before}, {"after", after},
+            {"expected_application", application}, {"expected_rotation", identity.display_rotation},
+            {"expected_size", {identity.raw_size.width, identity.raw_size.height}},
+            {"actual_rotation", viewport ? viewport->rotation : -1},
+            {"actual_size", viewport ? nlohmann::json{viewport->size.width, viewport->size.height} : nlohmann::json(nullptr)}});
     }
     return valid;
 }
@@ -304,13 +334,24 @@ bool DeviceSession::start_package(const std::string &package) {
         result.output.find("Exception") == std::string::npos;
 }
 
-std::optional<LifecycleObservation> DeviceSession::observe_lifecycle() {
-    const auto target = lifecycle_target();
+nlohmann::json DeviceSession::instance_metadata() {
     platform::MetadataQuery query_manager;
     const auto metadata = query_manager.run(platform::path_from_utf8(binding_.at("manager")),
                                             binding_.at("index").get<int>(), 3s);
-    if (!metadata.value("success", false)) return {};
+    require(metadata.value("success", false), "MUMU_METADATA_UNAVAILABLE");
     const auto &live = metadata.at("data");
+    require(platform::mumu_metadata_usable(live) &&
+        live.at("index").get<std::string>() == std::to_string(binding_.at("index").get<int>()) &&
+        live.at("created_timestamp") == binding_.at("created_timestamp") &&
+        live.at("is_process_started").is_boolean(), "MUMU_INSTANCE_MISMATCH");
+    if (live.value("is_android_started", false))
+        require("127.0.0.1:" + std::to_string(live.at("adb_port").get<int>()) ==
+            binding_.at("serial").get<std::string>(), "MUMU_ADB_BINDING_MISMATCH");
+    return live;
+}
+std::optional<LifecycleObservation> DeviceSession::observe_lifecycle() {
+    const auto target = lifecycle_target();
+    const auto live = instance_metadata();
     const bool instance = live.value("is_process_started", false) &&
                           live.value("is_android_started", false);
     const bool online = instance && connected_ && adb_.connected();
@@ -322,7 +363,8 @@ std::optional<LifecycleObservation> DeviceSession::observe_lifecycle() {
         if (target.vpn_required) vpn = vpn_connected();
     }
     return LifecycleObservation{target, instance, online, running, vpn, generation_,
-                                std::chrono::steady_clock::now(), focused};
+                                std::chrono::steady_clock::now(), focused,
+                                !live.at("is_process_started").get<bool>()};
 }
 
 bool DeviceSession::vpn_ui_step(const std::string &package, bool &start_clicked,
@@ -370,23 +412,34 @@ bool DeviceSession::execute_lifecycle(LifecycleOperation operation, const Lifecy
         target.application_id != selected.application_id ||
         target.vpn_application_id != selected.vpn_application_id || cancelled()) return false;
     if (operation == LifecycleOperation::Reconnect) {
-        disconnect(); return connect();
-    }
-    if (operation == LifecycleOperation::RestartInstance) {
-        // Instance restart remains a separately authorized recovery operation.
         disconnect();
-        const auto manager = platform::path_from_utf8(binding_.at("manager"));
-        const auto result = platform::run_process(manager,
-            {L"control", L"-v", std::to_wstring(binding_.at("index").get<int>()), L"restart"},
-            30000ms, {}, 1024 * 1024, false);
-        if (result.state != platform::ProcessState::Exited || result.exit_code || cancelled())
-            return false;
         const auto deadline = std::chrono::steady_clock::now() + 120s;
         while (!cancelled() && std::chrono::steady_clock::now() < deadline) {
-            platform::MetadataQuery metadata;
-            const auto live = metadata.run(manager, binding_.at("index").get<int>(), 3s);
-            if (live.value("success", false) &&
-                live.at("data").value("is_android_started", false)) return connect();
+            try { if (connect()) return true; }
+            catch (const std::exception &error) {
+                record({{"event", "recovery.adb_wait"}, {"reason", error.what()}});
+            }
+            std::this_thread::sleep_for(500ms);
+        }
+        return false;
+    }
+    if (operation == LifecycleOperation::RestartInstance) {
+        // 只恢复经管理器再次确认已退出的绑定实例，不把离线/黑帧升级为杀模拟器。
+        require(!instance_metadata().at("is_process_started").get<bool>(),
+            "MUMU_INSTANCE_EXIT_NOT_CONFIRMED");
+        disconnect();
+        if (cancelled()) return false;
+        platform::launch_selected_instance(platform::path_from_utf8(binding_.at("launcher")),
+            binding_.at("index").get<int>());
+        const auto deadline = std::chrono::steady_clock::now() + 120s;
+        while (!cancelled() && std::chrono::steady_clock::now() < deadline) {
+            const auto live = instance_metadata();
+            if (live.value("is_android_started", false)) {
+                try { if (connect()) return true; }
+                catch (const std::exception &error) {
+                    record({{"event", "recovery.adb_wait"}, {"reason", error.what()}});
+                }
+            }
             std::this_thread::sleep_for(500ms);
         }
         return false;

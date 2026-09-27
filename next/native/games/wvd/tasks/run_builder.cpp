@@ -74,7 +74,18 @@ std::function<std::optional<devices::LifecyclePlan>(const contracts::SessionResu
             facts.at("leap_wait").value("active", false);
         const bool frozen_pause = result.reason == "pause.physics_frozen" &&
             !leap.is_object() && !facts.at("leap_wait").value("active", false);
-        if (!deferred_leap && !frozen_pause) return std::nullopt;
+        // 已由局部等待/同页重试确认的无进展才允许重启游戏；
+        // 普通未识别、配置错误及未确认付款不因此扩大为重启理由。
+        const bool stalled_game = (result.reason == "navigation.automove_physics_frozen" ||
+            result.reason == "navigation.input_no_progress" ||
+            result.reason == "combat.auto_progress_timeout") &&
+            !leap.is_object() && !facts.at("leap_wait").value("active", false);
+        // 设备故障由协调器在失败后查询绑定实例证实，不靠图片NoHit或异常字符串猜测。
+        const bool instance_exited = result.reason == "device.instance_exited";
+        const bool disconnected = result.reason == "device.disconnected";
+        const bool application_exited = result.reason == "device.application_exited";
+        if (!deferred_leap && !frozen_pause && !stalled_game &&
+            !instance_exited && !disconnected && !application_exited) return std::nullopt;
         devices::LifecyclePlan plan;
         plan.target = target;
         plan.attempt = attempt;
@@ -82,8 +93,12 @@ std::function<std::optional<devices::LifecyclePlan>(const contracts::SessionResu
             const auto remaining = 7300000LL - facts.at("leap_wait").at("elapsed_ms").get<std::int64_t>();
             plan.defer_for = std::chrono::milliseconds{std::max(0LL, remaining)};
         }
+        if (instance_exited) plan.operations.push_back(devices::LifecycleOperation::RestartInstance);
+        if (disconnected) plan.operations.push_back(devices::LifecycleOperation::Reconnect);
         if (target.vpn_required) plan.operations.push_back(devices::LifecycleOperation::EnsureVpn);
-        plan.operations.push_back(devices::LifecycleOperation::StopApplication);
+        // 设备恢复或游戏已退出不再重复force-stop；保留仍在前台的正常游戏。
+        if (!instance_exited && !disconnected && !application_exited)
+            plan.operations.push_back(devices::LifecycleOperation::StopApplication);
         plan.operations.push_back(devices::LifecycleOperation::StartApplication);
         return plan;
     };

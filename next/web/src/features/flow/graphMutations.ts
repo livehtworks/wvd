@@ -1,9 +1,10 @@
 import type { WorkflowEdge, WorkflowNode } from "../../api/types";
 
-type Group = "success" | "failure";
-type EdgeKind = "sequence" | "candidate" | "failure";
+type Group = "success" | "failure" | `handoff:${string}`;
+type EdgeKind = "sequence" | "candidate" | "failure" | "handoff";
 
 function group(edge: WorkflowEdge): Group {
+  if (edge.sourceHandle?.startsWith("handoff:")) return edge.sourceHandle as Group;
   return edge.data?.kind === "failure" || edge.sourceHandle === "failure" ? "failure" : "success";
 }
 
@@ -54,6 +55,8 @@ export function changeEdgeKind(edges: WorkflowEdge[], id: string, kind: EdgeKind
   const edge = next.find((item) => item.id === id);
   if (!edge) return edges;
   const previous = group(edge);
+  // 交接端口属于被调用定义，不能被“连接语义”下拉框悄悄改为普通成功。
+  if (previous.startsWith("handoff:") || kind === "handoff") return edges;
   edge.data = { ...edge.data, kind };
   edge.sourceHandle = kind === "failure" ? "failure" : "success";
   const outcome = group(edge);

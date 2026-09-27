@@ -1,4 +1,5 @@
 #include "pipeline_compiler.hpp"
+#include "public_step_scope.hpp"
 #include "games/wvd/vision/boot_probes.hpp"
 #include "games/wvd/vision/navigation_probes.hpp"
 #include "games/wvd/vision/dialogue_probes.hpp"
@@ -31,7 +32,7 @@ void collect_images(const J &value, std::set<std::string> &images, std::set<std:
         const auto mode = value.value("mode", "");
         // 常量隐式依赖在本次收集内只展开一次；显式 image/动态参数仍逐项收集。
         // 不缓存整份图或跨编译共享结果，validate 仍独立重算完整资源集合。
-        const bool expand = expanded_modes.insert(mode).second;
+        const bool expand = expanded_modes.insert(mode + ":" + value.value("classification", "legacy") + ":" + value.value("phase", "")).second;
         if (expand && mode == "featured_request_accepted") images.insert("request_accepted.png");
         if (expand && mode == "fishing_bait_empty") {
             images.insert("fishing/nobait.png");
@@ -68,7 +69,8 @@ void collect_images(const J &value, std::set<std::string> &images, std::set<std:
             collect_images(J{{"mode", "boot_ready"}}, images, expanded_modes);
             collect_images(J{{"mode", "blocking_screen"}}, images, expanded_modes);
         }
-        if (expand && (mode == "unknown_frozen" || mode == "unknown_exhausted")) {
+        if (expand && (mode == "unknown_frozen" || mode == "unknown_exhausted") &&
+            value.value("classification", "legacy") != "scope_exhausted") {
             collect_images(J{{"mode", "boot_ready"}}, images, expanded_modes);
             collect_images(J{{"mode", "blocking_screen"}}, images, expanded_modes);
             collect_images(vision::harken_floor_menu(), images, expanded_modes);
@@ -80,6 +82,8 @@ void collect_images(const J &value, std::set<std::string> &images, std::set<std:
             collect_images(vision::boot_probes(mode == "boot_post"), images, expanded_modes);
         if (expand && mode == "blocking_screen")
             collect_images(vision::blocking_probes(), images, expanded_modes);
+        if (expand && mode == "input_clear")
+            collect_images(vision::input_blockers(value.value("phase", "")), images, expanded_modes);
         if (expand && mode == "exception_screen")
             collect_images(vision::exception_probes(), images, expanded_modes);
         if (expand && mode == "special_screen") {
@@ -215,18 +219,22 @@ void CompiledWorkflow::validate() const {
                 node.value("observation", "") == "Registered" &&
                 node.at("observation_args").value("mode", "") == "business",
                 "COMPILE_BUSINESS_GUARD_INVALID");
-        require(node.value("max_hit", 0) >= 1 && node.value("max_hit", 0) <= 256,
-                "COMPILE_UNBOUNDED_NODE");
         const auto action = node.value("operation", "Route");
+        const int hit_limit = node.value("max_hit", 0);
+        require((hit_limit >= 1 && hit_limit <= 256) ||
+                (hit_limit == 0 && node.value("binding", "") != "Input"),
+                "COMPILE_UNBOUNDED_NODE");
         require(action == "Route" ||
                     (action == "Registered" && (node.value("binding", "") == "Input" ||
                                             node.value("binding", "") == "Finish" ||
                                             node.value("binding", "") == "Call" ||
+                                            node.value("binding", "") == "Handoff" ||
                                             node.value("binding", "") == "WvdConfirm" ||
                                             node.value("binding", "") == "WvdCombat" ||
                                             node.value("binding", "") == "WvdChest" ||
                                             node.value("binding", "") == "WvdUnknownLeap" ||
                                             node.value("binding", "") == "CancelableWait" ||
+                                            node.value("binding", "") == "Poll" ||
                                             node.value("binding", "") == "BeginObservationPhase" ||
                                             node.value("binding", "") == "EndObservationPhase" ||
                                             node.value("binding", "") == "BusinessCheckpoint" ||
@@ -239,15 +247,30 @@ void CompiledWorkflow::validate() const {
                     (node.value("observation", "") == "Registered" &&
                      node.value("recognizer", "") == "WvdVision"),
                 "COMPILE_RECOGNITION_UNKNOWN");
+        if (node.value("binding", "") == "Poll") {
+            const auto &p = node.at("operation_args");
+            require(node.value("observation", "Always") == "Always" &&
+                !node.value("unexpected_only", false) && !node.value("pure_business_guard", false) &&
+                p.at("interval_ms").is_number_integer() && p.at("interval_ms") >= 1 &&
+                p.at("interval_ms") <= 10000 && node.value("post_delay", 0) == 0 &&
+                !node.value("next", J::array()).empty(), "COMPILE_POLL_INVALID");
+        }
+        if (node.value("marks_known_scene", false))
+            require(!node.value("unexpected_only", false) &&
+                node.value("observation", "Always") == "Registered" &&
+                node.at("observation_args").value("mode", "") != "business",
+                "COMPILE_KNOWN_SCENE_INVALID");
         if (node.value("binding", "") == "Finish")
             require(name == terminal && node.value("next", J::array()).empty(),
                     "COMPILE_TERMINAL_INVALID");
         if (node.value("binding", "") == "Call") {
             const auto &p = node.at("operation_args");
-            require(p.is_object() && p.size() == 3 && p.contains("entry") && p.at("entry").is_string() &&
+            require(p.is_object() && p.size() == 4 && p.contains("entry") && p.at("entry").is_string() &&
                         p.contains("clone") && p.at("clone") == false && p.contains("local_counters") &&
                         p.at("local_counters").is_array(), "COMPILE_CHILD_PARAMETERS_INVALID");
             visit(p.at("entry").get<std::string>());
+            for (const auto &targets : p.at("handoffs"))
+                for (const auto &target : targets) visit(target.get<std::string>());
         }
         if (event_scopes.contains(name))
             for (const auto &rule : scope_rules(event_scopes.at(name))) {
@@ -272,7 +295,7 @@ void CompiledWorkflow::validate() const {
     require(nodes.at(terminal).value("binding", "") == "Finish",
             "COMPILE_TERMINAL_INVALID");
     // next/on_error 不能越过子任务边界；只有 RunChild 可进入子任务，只有根图可到根终点。
-    // 每个作用域独立检查，普通图循环由 max_hit/Session 预算约束；调用递归则直接拒绝。
+    // 每个作用域独立检查，图循环由声明的业务循环上限/Session预算约束；递归直接拒绝。
     std::map<std::string, std::string> owners;
     std::map<std::string, unsigned> scope_heights;
     std::set<std::string> checked_scopes, active_scopes;
@@ -301,6 +324,8 @@ void CompiledWorkflow::validate() const {
                 const auto target = node.at("operation_args").at("entry").get<std::string>();
                 check_scope(target);
                 height = std::max(height, 1 + scope_heights.at(target));
+                for (const auto &targets : node.at("operation_args").at("handoffs"))
+                    for (const auto &target : targets) walk(target.get<std::string>());
             }
             if (event_scopes.contains(name))
                 for (const auto &rule : scope_rules(event_scopes.at(name)))
@@ -310,7 +335,7 @@ void CompiledWorkflow::validate() const {
                         height = std::max(height, 1 + scope_heights.at(target));
                     }
             const auto next = node.value("next", J::array());
-            if (next.empty() && (action == "Finish" || node.value("operation", "Route") == "Route"))
+            if (next.empty() && (action == "Finish" || action == "Handoff" || node.value("operation", "Route") == "Route"))
                 has_terminal = true;
             for (const auto *key : {"next", "on_error"})
                 for (const auto &edge : node.value(key, J::array()))
@@ -398,18 +423,16 @@ J PipelineCompiler::request(const J &condition) const {
 void PipelineCompiler::add(const std::string &name, J node) {
     require(!workflow_.nodes.contains(name), "COMPILE_NODE_DUPLICATE");
     // 子图 append 保留自己的组；只有本构建器创建的节点按业务职责归组。
-    node["check_group"] = workflow_.kind.starts_with("combat.") ? "combat"
-        : workflow_.kind.starts_with("chest.") ? "chest"
-        : workflow_.kind.starts_with("recovery.dialogue") || workflow_.kind.starts_with("recovery.special")
-            || workflow_.kind == "recovery.default_dialogue" || workflow_.kind == "recovery.karma_choice"
-            || workflow_.kind.starts_with("recovery.global_prompt.")
-            ? "special" : workflow_.kind.starts_with("recovery.") ? "exception" : "business";
+    node["check_group"] = workflow_.definition_checks.contains(workflow_.entry)
+        ? workflow_.definition_checks.at(workflow_.entry).at("phase") : J("business");
     node.update({{"pre_delay", 0},
                  {"post_delay", 0},
                  {"rate_limit", 50},
                  // 下一页面的等待属于该业务图预算，不是统一三秒页面跳转事务。
                  {"timeout", workflow_.time_limit.count()},
-                 {"max_hit", 5}});
+                 // 正常经过不等于失败重试。仅输入默认计连续尝试，其余节点无隐式次数。
+                 {"max_hit", node.value("binding", "") == "Input" ? 5 : 0},
+                 {"consecutive_input_limit", node.value("binding", "") == "Input"}});
     if (name != "Terminal" && name != "RecoveryRequired")
         node["on_error"] = {"RecoveryRequired"};
     workflow_.nodes[name] = std::move(node);
@@ -418,6 +441,18 @@ void PipelineCompiler::add(const std::string &name, J node) {
 void PipelineCompiler::route(const std::string &name, J next) {
     add(name, {{"operation", "Route"}, {"next", std::move(next)}});
 }
+void PipelineCompiler::check_policy(const std::string &phase, J inherit, int debounce_ms, int interval_ms, bool protect_input) {
+    require(!phase.empty() && inherit.is_array() && debounce_ms >= 0 && interval_ms > 0,
+            "COMPILE_CHECK_POLICY_INVALID");
+    workflow_.definition_checks[workflow_.entry] = {{"phase", phase}, {"inherit", inherit},
+        {"debounce_ms", debounce_ms}, {"interval_ms", interval_ms}, {"protect_input", protect_input}};
+}
+void PipelineCompiler::handoff(const std::string &name, const std::string &port) {
+    require(!port.empty() && port != "completed" && port != "failure", "COMPILE_HANDOFF_INVALID");
+    workflow_.handoffs.insert(port);
+    add(name, {{"operation", "Registered"}, {"binding", "Handoff"},
+        {"operation_args", {{"port", port}}}, {"next", J::array()}});
+}
 void PipelineCompiler::wait(const std::string &name, int milliseconds, J next) {
     require(milliseconds >= 1 && milliseconds <= 10000, "COMPILE_WAIT_INVALID");
     add(name, {{"operation", "Registered"}, {"binding", "CancelableWait"},
@@ -425,6 +460,39 @@ void PipelineCompiler::wait(const std::string &name, int milliseconds, J next) {
                {"next", std::move(next)}});
     // CancelableWait 的 duration 只控制延迟；后继识别等待继续使用业务图预算。
     workflow_.nodes.at(name)["timeout"] = workflow_.time_limit.count();
+}
+void PipelineCompiler::poll(const std::string &name, int milliseconds, J next, J ongoing, J progress) {
+    require(milliseconds >= 1 && milliseconds <= 10000 && next.is_array() && !next.empty(),
+            "COMPILE_POLL_INVALID");
+    require(ongoing.is_null() || ongoing.is_object(), "COMPILE_POLL_ONGOING_INVALID");
+    J parameters{{"interval_ms", milliseconds}};
+    require(progress.is_null() || (!ongoing.is_null() && progress.is_object()), "COMPILE_POLL_PROGRESS_INVALID");
+    if (!progress.is_null()) parameters["progress"] = request(progress);
+    if (!ongoing.is_null()) {
+        const bool guard = workflow_.definition_checks.contains(workflow_.entry) &&
+            workflow_.definition_checks.at(workflow_.entry).value("protect_input", true);
+        const auto phase = guard ? workflow_.definition_checks.at(workflow_.entry).value("phase", "") : "";
+        parameters["ongoing"] = request(guard ? all({ongoing, J{{"mode", "input_clear"}, {"phase", phase}}}) : ongoing);
+    }
+    add(name, {{"operation", "Registered"}, {"binding", "Poll"},
+               {"operation_args", std::move(parameters)}, {"next", std::move(next)}});
+}
+void PipelineCompiler::diagnostic_candidate(const std::string &name) {
+    require(workflow_.nodes.contains(name), "COMPILE_DIAGNOSTIC_NODE_MISSING");
+    auto &node = workflow_.nodes.at(name);
+    require(node.value("observation", "Always") == "Registered" &&
+        (node.value("operation", "Route") == "Route" ||
+         node.value("binding", "") == "WvdUnknownLeap"), "COMPILE_DIAGNOSTIC_NODE_INVALID");
+    node["unexpected_only"] = true;
+    node["check_group"] = "exception";
+}
+void PipelineCompiler::mark_known_scene(const std::string &name) {
+    require(workflow_.nodes.contains(name), "COMPILE_KNOWN_SCENE_NODE_MISSING");
+    auto &node = workflow_.nodes.at(name);
+    require(node.value("observation", "Always") == "Registered" &&
+        !node.value("unexpected_only", false) &&
+        node.at("observation_args").value("mode", "") != "business", "COMPILE_KNOWN_SCENE_INVALID");
+    node["marks_known_scene"] = true;
 }
 void PipelineCompiler::observe(const std::string &name, const J &condition, J next) {
     add(name, {{"observation", "Registered"},
@@ -450,8 +518,12 @@ void PipelineCompiler::observe_ocr(const std::string &name,
 }
 void PipelineCompiler::action(const std::string &name, const J &scene, const J &target,
                               const J &post, J command, J next, J offset) {
+    const auto &policy = workflow_.definition_checks;
+    const auto guarded_scene = policy.contains(workflow_.entry) &&
+        policy.at(workflow_.entry).value("protect_input", true)
+        ? all({scene, J{{"mode", "input_clear"}, {"phase", policy.at(workflow_.entry).value("phase", "")}}}) : scene;
     J params{{"scene", "wvd"},
-             {"scene_recognition", request(scene)},
+             {"scene_recognition", request(guarded_scene)},
              {"target_recognition", request(target)},
              {"postcondition", request(post)},
              {"command", std::move(command)},
@@ -463,7 +535,7 @@ void PipelineCompiler::action(const std::string &name, const J &scene, const J &
         params.update({{"target_offset", offset}, {"clip_target_to_area", true}});
     add(name, {{"observation", "Registered"},
                {"recognizer", "WvdVision"},
-               {"observation_args", all({scene, target})},
+               {"observation_args", all({guarded_scene, target})},
                {"roi", {0, 0, 900, 1600}},
                {"operation", "Registered"},
                {"binding", "Input"},
@@ -487,10 +559,12 @@ void PipelineCompiler::fixed_click(const std::string &name, const J &scene, cons
     action(name, scene, scene, post, {{"kind", "Click"}, {"x", position[0]}, {"y", position[1]}},
            std::move(next), nullptr);
 }
-void PipelineCompiler::hit_limit(const std::string &name, int limit) {
+void PipelineCompiler::hit_limit(const std::string &name, int limit, bool invocation_count) {
     require(workflow_.nodes.contains(name) && limit >= 1 && limit <= 256,
             "COMPILE_HIT_LIMIT_INVALID");
     workflow_.nodes[name]["max_hit"] = limit;
+    workflow_.nodes[name]["consecutive_input_limit"] =
+        !invocation_count && workflow_.nodes.at(name).value("binding", "") == "Input";
 }
 void PipelineCompiler::event_scope(const std::string &name, J rules) {
     require(workflow_.nodes.contains(name), "COMPILE_EVENT_SCOPE_INVALID");
@@ -522,10 +596,19 @@ void PipelineCompiler::allowed_area(const std::string &name, J area) {
                 area[1].get<int>() <= 1600 - area[3].get<int>(), "COMPILE_ACTION_AREA_INVALID");
     workflow_.nodes[name]["operation_args"]["allowed_area"] = std::move(area);
 }
-void PipelineCompiler::interrupt_on(J condition, std::string reason) {
+void PipelineCompiler::retry_menu_input(const std::string &name, const J &ready, int interval_ms) {
+    require(workflow_.nodes.contains(name) &&
+        workflow_.nodes.at(name).value("binding", "") == "Input" &&
+        workflow_.nodes.at(name).at("operation_args").at("command").at("kind") == "Click" &&
+        interval_ms >= 1000 && interval_ms <= 60000, "COMPILE_INPUT_RETRY_INVALID");
+    workflow_.nodes[name]["operation_args"]["retry"] = {
+        {"ready", request(ready)}, {"interval_ms", interval_ms}};
+}
+void PipelineCompiler::interrupt_on(J condition, std::string reason, std::string port) {
     require(interruption_.is_null() && condition.is_object() && !reason.empty(), "COMPILE_INTERRUPTION_INVALID");
     interruption_ = std::move(condition);
     interruption_reason_ = std::move(reason);
+    interruption_port_ = std::move(port);
 }
 void PipelineCompiler::stop_if_interrupted_after(const std::string &name, std::string reason) {
     require(workflow_.nodes.contains(name) &&
@@ -569,7 +652,8 @@ void PipelineCompiler::compile_interruption() {
     workflow_.nodes["Interrupt"]["unexpected_only"] = true;
     workflow_.nodes["Interrupt"]["check_group"] = "exception";
     hit_limit("Interrupt", 128);
-    recovery("BlockedExit", interruption_reason_);
+    if (interruption_port_.empty()) recovery("BlockedExit", interruption_reason_);
+    else handoff("BlockedExit", interruption_port_);
 }
 void PipelineCompiler::combat_step(const std::string &name, const J &condition, J parameters, J next) {
     require(parameters.is_object(), "COMPILE_COMBAT_PARAMETERS_INVALID");
@@ -628,6 +712,8 @@ std::string PipelineCompiler::append(const std::string &prefix, const CompiledWo
         workflow_.definition_budgets.insert_or_assign(prefix + "_" + child.entry, *child.declared_budget);
     for (const auto &[entry, budget] : child.definition_budgets)
         workflow_.definition_budgets.emplace(prefix + "_" + entry, budget);
+    for (const auto &[entry, checks] : child.definition_checks.items())
+        workflow_.definition_checks[prefix + "_" + entry] = checks;
     require(normal_exits.is_object(), "COMPILE_EXIT_BINDINGS_INVALID");
     for (const auto &[name, successors] : normal_exits.items())
         require(child.nodes.contains(name) && child.nodes.at(name).value("binding", "") == "RequireRecovery" &&
@@ -648,6 +734,8 @@ std::string PipelineCompiler::append(const std::string &prefix, const CompiledWo
             entry = prefix + "_" + entry.get<std::string>();
             for (auto &reset_name : node["operation_args"]["local_counters"])
                 reset_name = prefix + "_" + reset_name.get<std::string>();
+            for (auto &targets : node["operation_args"]["handoffs"])
+                for (auto &target : targets) target = prefix + "_" + target.get<std::string>();
         }
         for (const auto *key : {"next", "on_error"})
             if (node.contains(key))
@@ -684,6 +772,27 @@ std::string PipelineCompiler::append(const std::string &prefix, const CompiledWo
         }
         workflow_.event_scopes[prefix + "_" + name] = std::move(rules);
     }
+    if (child.authoring.contains("documents")) {
+        if (!workflow_.authoring.contains("documents")) workflow_.authoring["documents"] = J::object();
+        for (const auto &[id, document] : child.authoring.at("documents").items()) {
+            require(!workflow_.authoring["documents"].contains(id) ||
+                    workflow_.authoring["documents"].at(id) == document, "COMPILE_PUBLIC_SOURCE_CONFLICT");
+            workflow_.authoring["documents"][id] = document;
+        }
+    }
+    if (child.authoring.contains("resources")) {
+        if (!workflow_.authoring.contains("resources")) workflow_.authoring["resources"] = J::object();
+        for (const auto &[id, resource] : child.authoring.at("resources").items()) {
+            require(!workflow_.authoring["resources"].contains(id) ||
+                workflow_.authoring["resources"].at(id) == resource, "COMPILE_PUBLIC_RESOURCE_CONFLICT");
+            workflow_.authoring["resources"][id] = resource;
+        }
+    }
+    if (child.authoring.contains("source_paths")) {
+        if (!workflow_.authoring.contains("source_paths")) workflow_.authoring["source_paths"] = J::object();
+        for (const auto &[name, path] : child.authoring.at("source_paths").items())
+            workflow_.authoring["source_paths"][prefix + "_" + name] = path;
+    }
     return prefix + "_" + child.entry;
 }
 std::string PipelineCompiler::define_child(const std::string &prefix, const CompiledWorkflow &child,
@@ -698,7 +807,7 @@ std::string PipelineCompiler::define_child(const std::string &prefix, const Comp
     if (child.declared_budget) workflow_.definition_budgets.insert_or_assign(entry, *child.declared_budget);
     return entry;
 }
-void PipelineCompiler::call_child(const std::string &name, const std::string &entry, J next) {
+void PipelineCompiler::call_child(const std::string &name, const std::string &entry, J next, J handoffs) {
     require(!entry.empty(), "COMPILE_CHILD_ENTRY_INVALID");
     std::set<std::string> local;
     std::function<void(const std::string &)> collect = [&](const std::string &n) {
@@ -711,10 +820,13 @@ void PipelineCompiler::call_child(const std::string &name, const std::string &en
         for (const auto *key : {"next", "on_error"})
             for (const auto &edge : node.value(key, J::array()))
                 collect(edge.get<std::string>());
+        if (node.value("binding", "") == "Call")
+            for (const auto &targets : node.at("operation_args").at("handoffs"))
+                for (const auto &target : targets) collect(target.get<std::string>());
     };
     collect(entry);
     add(name, {{"operation", "Registered"}, {"binding", "Call"},
-               {"operation_args", {{"entry", entry}, {"clone", false}, {"local_counters", local}}},
+               {"operation_args", {{"entry", entry}, {"clone", false}, {"local_counters", local}, {"handoffs", handoffs}}},
                {"next", std::move(next)}});
 }
 void PipelineCompiler::recovery(const std::string &name, const std::string &reason) {
@@ -722,15 +834,37 @@ void PipelineCompiler::recovery(const std::string &name, const std::string &reas
     add(name, {{"operation", "Registered"}, {"binding", "RequireRecovery"},
                {"operation_args", {{"reason", reason}}}});
 }
+void PipelineCompiler::public_step(const std::string &name, const std::string &flow_id,
+                                  const J &arguments, J next, J handoffs, J condition) {
+    const auto key = J{{"flow_id", flow_id}, {"arguments", arguments}}.dump();
+    auto found = public_steps_.find(key);
+    if (found == public_steps_.end()) {
+        const auto entry = define_child("SharedStep" + std::to_string(public_steps_.size()),
+            PublicStepScope::compile(flow_id, arguments));
+        found = public_steps_.emplace(key, entry).first;
+    }
+    const auto &entry = found->second;
+    call_child(name, entry, std::move(next), std::move(handoffs));
+    if (!condition.is_null()) {
+        workflow_.nodes[name]["observation"] = "Registered";
+        workflow_.nodes[name]["recognizer"] = "WvdVision";
+        workflow_.nodes[name]["observation_args"] = std::move(condition);
+        workflow_.nodes[name]["roi"] = {0, 0, 900, 1600};
+    }
+}
 void PipelineCompiler::business_failure(const std::string &name, const std::string &reason) {
     require(!reason.empty(), "COMPILE_BUSINESS_FAILURE_REASON_EMPTY");
     add(name, {{"operation", "Registered"}, {"binding", "AuthorBusinessFailure"},
                {"operation_args", {{"reason", reason}}}});
 }
-void PipelineCompiler::unknown_leap(const std::string &name, J next, J extra_known) {
+void PipelineCompiler::unknown_leap(const std::string &name, J next, J extra_known, bool classified) {
     require(extra_known.is_array(), "COMPILE_UNKNOWN_KNOWN_INVALID");
     J unknown{{"mode", "unknown_exhausted"}, {"max_tries", 4}};
     J parameters = J::object();
+    if (classified) {
+        unknown["classification"] = "scope_exhausted";
+        parameters["classification"] = "scope_exhausted";
+    }
     if (!extra_known.empty()) {
         unknown["extra_known"] = extra_known;
         parameters["extra_known"] = std::move(extra_known);

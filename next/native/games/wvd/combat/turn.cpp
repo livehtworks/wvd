@@ -1,4 +1,5 @@
 #include "turn.hpp"
+#include "level_selection_steps.hpp"
 #include "auto_combat.hpp"
 #include <algorithm>
 #include <map>
@@ -35,6 +36,7 @@ J support_position(const std::string &name) {
 
 tasks::CompiledWorkflow take_turn(const J &profile, const std::set<std::string> &available_images) {
     C graph("combat.turn");
+    graph.check_policy("combat", {"wvd-network-retry", "wvd-pause", "wvd-download"});
     J catalog = J::array(), portraits = J::array();
     std::set<std::string> declared;
     for (const auto &group : profile.at("STRATEGY"))
@@ -80,10 +82,12 @@ tasks::CompiledWorkflow take_turn(const J &profile, const std::set<std::string> 
                 C::any({C::all({battle, speed_on_zh}), ended}),
                 {"Ended", "Automatic", "Prepare", "UnexpectedPopup"});
     graph.hit_limit("SpeedZh", 1);
+    graph.retry_menu_input("SpeedZh", C::all({clear, speed_off_zh}), 3000);
     for (const auto &[node, image] : {std::pair{"Speed", "combatSpd"}, std::pair{"SpeedAlt", "combatSpd_DHI"}}) {
         graph.click(node, clear, C::image(image), C::any({C::all({battle, C::absent(speed)}), ended}),
                     {"Ended", "Automatic", "Prepare", "UnexpectedPopup"});
         graph.hit_limit(node, 1);
+        graph.retry_menu_input(node, C::all({clear, C::image(image)}), 3000);
     }
     graph.observe("Ended", ended, {"Terminal"});
     graph.observe("Automatic", C::all({battle, C::business("/strategy/automatic", true)}), {full_auto});
@@ -113,7 +117,9 @@ tasks::CompiledWorkflow take_turn(const J &profile, const std::set<std::string> 
                           {850, 1100}, {prefix + "AutoConfirmed"});
         graph.combat_step(prefix + "AutoConfirmed", C::any({C::all({clear, disabled}), ended}),
                           {{"operation", "auto_confirmed"}, {"index", index}}, {"Terminal"});
-        graph.combat_step(prefix + "Success", finished, {{"operation", "success"}, {"index", index}}, {"Terminal"});
+        graph.public_step(prefix + "Success", "combat-confirm-result", J::object(), {prefix + "RecordSuccess"}, J::object(), finished);
+        graph.combat_step(prefix + "RecordSuccess", C::business("/prepared_skill_index", index),
+            {{"operation", "success"}, {"index", index}}, {"Terminal"});
         const auto position = slot(skill_name);
         const int level = skill.at("skill_lvl");
         if (level < 1 || level > 9)
@@ -125,28 +131,18 @@ tasks::CompiledWorkflow take_turn(const J &profile, const std::set<std::string> 
         for (int attempt = 0; attempt < attempts; ++attempt) {
             const auto s = prefix + "Try" + std::to_string(attempt);
             const int use_level = attempt ? 1 : level;
-            const auto lv1 = J{{"mode", "skill_level"}, {"level", 1}};
-            const auto wanted = J{{"mode", "skill_level"}, {"level", use_level}};
-            const auto selected = J{{"mode", "skill_level"}, {"level", use_level}, {"selected", true}};
-            const auto selected_one = J{{"mode", "skill_level"}, {"level", 1}, {"selected", true}};
             const J target_choices{s + "Support", s + "Confirm", s + "Enemy0", s + "Missing"};
             graph.route(prefix + "Open" + std::to_string(attempt), {s + "Open0"});
             for (int opening = 0; opening < 3; ++opening) {
                 const auto open = s + "Open" + std::to_string(opening);
-                graph.fixed_click(open, C::all({menu, actor}), C::any({casting, menu, errors, ended}), position,
-                                  {s + "Detail", s + "ResourceError", opening == 2 ? s + "OpenFailed" : s + "Open" + std::to_string(opening + 1)});
+                graph.public_step(open, "combat-open-detail", {{"x", position[0]}, {"y", position[1]}},
+                                  {s + "Detail", s + "ResourceError", opening == 2 ? s + "OpenFailed" : s + "Open" + std::to_string(opening + 1)}, J::object(), C::all({menu, actor}));
                 graph.hit_limit(open, 1);
-                graph.delay_after(open, 600);
             }
-            graph.observe(s + "Detail", casting, {s + "LevelSelected", s + "Level", s + "Level1", s + "DefaultLevel"});
+            const auto levels = append_level_selection_steps(graph, s, use_level, casting,
+                target_choices, J{automatic});
+            graph.observe(s + "Detail", casting, levels);
             graph.observe(s + "OpenFailed", C::all({menu, actor}), {automatic});
-            graph.observe(s + "LevelSelected", C::all({casting, selected}), target_choices);
-            graph.click(s + "Level", C::all({casting, lv1}), wanted, C::all({casting, selected}), target_choices);
-            graph.click(s + "Level1", C::all({casting, lv1, C::absent(wanted)}), lv1,
-                        C::all({casting, selected_one}), target_choices);
-            // 高等级配置不能在等级条未识别时直接放行默认等级。
-            graph.observe(s + "DefaultLevel", C::all({casting, C::absent(lv1)}),
-                          use_level == 1 ? target_choices : J{automatic});
             const auto recipient = support_position(skill.value("target_var", ""));
             if (!recipient.is_null()) {
                 graph.fixed_click(s + "Support", C::all({casting, support}), C::any({casting, finished, errors}), recipient,
@@ -154,8 +150,12 @@ tasks::CompiledWorkflow take_turn(const J &profile, const std::set<std::string> 
                 graph.stop_if_interrupted_after(s + "Support", "combat.skill_outcome_unconfirmed");
             } else
                 graph.observe(s + "Support", C::all({casting, support}), {s + "Confirm", automatic});
-            graph.click(s + "Confirm", casting, ok, C::any({casting, finished, errors}),
+            // 确认施放不是选目标：详情仍在不能结清输入，否则下一分支会立即取消技能。
+            // 等待原业务期限内的新帧结果，异常处理返回后也继续核对同一次输入。
+            graph.click(s + "Confirm", casting, ok, C::any({finished, errors}),
                         {prefix + "Success", s + "ResourceError", s + "StillDetail"});
+            graph.retry_menu_input(s + "Confirm", casting, 3000);
+            graph.failure_route(s + "Confirm", {s + "StillDetail"});
             graph.stop_if_interrupted_after(s + "Confirm", "combat.skill_outcome_unconfirmed");
             const auto target = J{{"mode", "skill_target"}, {"portraits", portraits}};
             const auto enemy = C::all({casting, C::absent(ok), C::absent(support)});
@@ -166,11 +166,8 @@ tasks::CompiledWorkflow take_turn(const J &profile, const std::set<std::string> 
                 J next{prefix + "Success", s + "ResourceError"};
                 next.push_back(point + 1 < offsets.size() ? s + "Enemy" + std::to_string(point + 1) : s + "StillDetail");
                 next.push_back(s + "Missing");
-                graph.click(name, enemy, target, C::any({casting, finished, errors}), next, offsets[point]);
-                graph.allowed_area(name, {1, 260, 898, 641});
+                graph.public_step(name, "combat-select-target", {{"dx", offsets[point][0]}, {"dy", offsets[point][1]}}, next, J::object(), C::all({enemy, target}));
                 graph.hit_limit(name, 1);
-                graph.stop_if_interrupted_after(name, "combat.skill_outcome_unconfirmed");
-                graph.delay_after(name, 200);
             }
             graph.observe(s + "Missing", C::all({enemy, C::absent(target)}), {automatic});
             graph.observe(s + "StillDetail", casting, {automatic});
@@ -182,7 +179,7 @@ tasks::CompiledWorkflow take_turn(const J &profile, const std::set<std::string> 
             }
         }
     }
-    graph.interrupt_on({{"mode", "blocking_screen"}}, "combat.common_screen_requires_dispatch");
+    graph.interrupt_on(C::absent(J{{"mode", "input_clear"}}), "combat.common_screen_requires_dispatch");
     return graph.finish();
 }
 }

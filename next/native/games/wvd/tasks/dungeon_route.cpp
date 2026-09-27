@@ -8,6 +8,7 @@
 #include "games/wvd/recovery/boot.hpp"
 #include "games/wvd/recovery/revival.hpp"
 #include "games/wvd/vision/harken_probes.hpp"
+#include "games/wvd/vision/boot_probes.hpp"
 
 namespace wvd::games::tasks {
 using J = nlohmann::json;
@@ -80,36 +81,43 @@ CompiledWorkflow traverse_dungeon(const WvdTaskPlan &plan, const J &profile,
     // 父段需容纳完整的一次有界开箱，再保留路线/遭遇的原预算；旧 400 秒
     // 是无进展窗口，不能直接拿它截断可达 900 秒的有限子链。不是放宽帧 TTL。
     C graph("tasks.dungeon_route." + plan.definition().id, std::chrono::seconds{400} + chest_workflow.time_limit);
+    graph.check_policy("navigation", {"wvd-network-retry", "wvd-pause", "wvd-download", "wvd-story", "wvd-blessing", "wvd-karma", "wvd-party-death", "wvd-party-defeat", "wvd-dialogue", "wvd-special-dialogue", "wvd-sandman"});
+    if (!allow_download) {
+        // 局部禁下载仍覆盖根策略；不因删除全量Common扫描而丢失原权限。
+        const auto deny = graph.define_child("DownloadPermission", recovery::handle_download_prompt(false));
+        graph.event_scope("Entry", J::array({J{{"id", "wvd-download"}, {"class", "exception"},
+            {"priority", 900}, {"source_node", "Entry"}, {"entry", deny},
+            {"detect", C::any({vision::download_button_zh_hant(), vision::download_button_en()})},
+            {"resume", {{"mode", "reobserve"}}}}}));
+    }
     const J combat{{"mode", "combat_active"}};
     auto reward = C::image("chest_reward_advance");
     reward["roi"] = {750, 1400, 150, 150};
     const auto chest = C::any({C::image("chestFlag"), C::image("whowillopenit"), C::image("chestOpening"), reward});
     const auto revive = C::image("RiseAgain");
     const auto encounter = C::any({combat, chest, revive});
-    const auto map = C::all({C::image("mapFlag"), C::absent(encounter)});
+    const J input_clear{{"mode", "input_clear"}, {"phase", "navigation"}};
+    const auto map = C::all({C::image("mapFlag"), C::absent(encounter), input_clear});
     const auto dungeon = C::all({C::image("dungFlag"), C::absent(C::image("mapFlag")),
-                                C::absent(encounter), C::absent(C::image("trait")), C::absent(C::image("recover"))});
+                                C::absent(encounter), C::absent(C::image("trait")), C::absent(C::image("recover")), input_clear});
     const auto outside = C::all({C::any({C::image("Inn"), C::image("EdgeOfTown"), C::image("returntoTown"), C::image("returnText"),
                                         C::image("openworldmap"), C::image("worldmapflag")}),
                                  C::absent(C::image("mapFlag")), C::absent(encounter)});
-    const auto inside = C::any({map, dungeon, encounter});
+    const auto inside = C::all({C::any({map, dungeon, encounter}), input_clear});
     graph.route("Entry", candidates({"UnknownFrozen", "Outside", "Entered", "UnknownLeap", "UnknownTimeout", "UnknownLimit", "UnknownWait"}));
     if (stopping) {
         graph.observe("TaskStop", stop, {"Terminal"});
-        graph.hit_limit("TaskStop", 128);
     }
-    graph.hit_limit("Entry", 128);
-    graph.observe("UnknownFrozen", {{"mode", "unknown_frozen"}}, {"UnknownFrozenExit"});
+    graph.observe("UnknownFrozen", {{"mode", "unknown_frozen"}, {"classification", "scope_exhausted"}}, {"UnknownFrozenExit"});
     graph.recovery("UnknownFrozenExit", "dungeon.unknown_static_window");
-    graph.unknown_leap("UnknownLeap", {"UnknownLeapExit"});
+    graph.unknown_leap("UnknownLeap", {"UnknownLeapExit"}, J::array(), true);
     graph.recovery("UnknownLeapExit", "leap.unknown");
     graph.observe("UnknownTimeout", C::business("/encounter_timed_out", true), {"UnknownTimeoutExit"});
     graph.recovery("UnknownTimeoutExit", "dungeon.encounter_timeout");
-    graph.observe("UnknownLimit", {{"mode", "unknown_exhausted"}, {"max_tries", profile.at("MAX_TRY_LIMIT")}}, {"UnknownLimitExit"});
+    graph.observe("UnknownLimit", {{"mode", "unknown_exhausted"}, {"classification", "scope_exhausted"}, {"max_tries", profile.at("MAX_TRY_LIMIT")}}, {"UnknownLimitExit"});
     graph.recovery("UnknownLimitExit", "dungeon.unknown_try_limit");
     // 所有已知候选均失败才等待；不在未知页点返回/1,1，也不让三秒候选超时替代十帧窗口。
-    graph.route("UnknownWait", {"Entry"});
-    graph.delay_after("UnknownWait", 1000);
+    graph.poll("UnknownWait", 1000, {"Entry"});
     graph.hit_limit("UnknownWait", 128);
     graph.confirm("Entered", "dungeon.enter", "dungeon_entered", inside, {"Dispatch"});
     J dispatch = {"UnknownFrozen"};
@@ -131,12 +139,12 @@ CompiledWorkflow traverse_dungeon(const WvdTaskPlan &plan, const J &profile,
             C::business("/task_step", plan.route().size() - 1)}),
             {"Confirm" + std::to_string(plan.route().size() - 1)});
     }
-    const auto common = graph.define_child("Common", recovery::clear_common_screens(allow_download, dialogue));
-    graph.observe("Blocked", {{"mode", "blocking_screen"}}, {"ClearBlocking"});
-    graph.call_child("ClearBlocking", common, {"Dispatch"});
+    graph.observe("Blocked", C::absent(input_clear), {"ClearBlocking"});
+    // 具体事件由已声明的处理器接管，没有对应处理器时保留明确失败。
+    graph.recovery("ClearBlocking", "dungeon.local_overlay_unhandled");
+    graph.diagnostic_candidate("Blocked");
     graph.hit_limit("Blocked", 32);
     graph.hit_limit("ClearBlocking", 32);
-    graph.hit_limit("Dispatch", 128);
     graph.observe("Outside", outside, {"Terminal"});
     const auto resurrection = graph.define_child("Resurrection", recovery::revive_after_defeat(), {"BlockedExit"});
     graph.observe("Revive", revive, {"Resurrect"});
@@ -144,76 +152,81 @@ CompiledWorkflow traverse_dungeon(const WvdTaskPlan &plan, const J &profile,
     graph.call_child("Resurrect", resurrection, {"Dispatch"});
     graph.hit_limit("Resurrect", 32);
 
-    const auto battle = graph.define_child("Battle", wvd::games::combat::fight_encounter(profile, available_images, 16), {"BlockedExit", "ReviveExit"});
+    const auto battle = graph.define_child("Battle", wvd::games::combat::fight_encounter(profile, available_images));
     graph.observe("Combat", combat, {"Fight"});
-    graph.call_child("Fight", battle, {"Dispatch"});
-    graph.hit_limit("Combat", 128);
-    graph.hit_limit("Fight", 128);
-    const auto box = graph.define_child("Box", chest_workflow, {"CombatExit", "ReviveExit", "AmbushExit", "BlockedExit", "RetryExit"});
+    graph.call_child("Fight", battle, {"Dispatch"}, {{"blocked", {"Dispatch"}}, {"revive", {"Dispatch"}}, {"chest", {"Dispatch"}}});
+    const auto box = graph.define_child("Box", chest_workflow);
     graph.observe("Chest", chest, {"OpenChest"});
-    graph.call_child("OpenChest", box, {"Dispatch"});
-    graph.hit_limit("Chest", 128);
-    graph.hit_limit("OpenChest", 128);
+    graph.call_child("OpenChest", box, {"Dispatch"}, {{"combat", {"Dispatch"}}, {"revive", {"Dispatch"}}, {"ambush", {"Dispatch"}}, {"blocked", {"Dispatch"}}, {"retry", {"Dispatch"}}});
 
-    const auto heal = graph.define_child("Heal", supply::recover_in_dungeon(), {"EncounterExit", "BlockedExit"});
+    const auto heal = graph.define_child("Heal", supply::recover_in_dungeon());
     graph.observe("HealingPanel", C::all({C::any({C::image("trait"), C::image("recover")}),
         C::absent(encounter), C::business("/healing_required", true)}), {"Heal"});
-    graph.hit_limit("HealingPanel", 128);
     graph.confirm("Resume", "dungeon.resume", "dungeon_resumed", dungeon, {"Heal"});
-    graph.hit_limit("Resume", 128);
     const bool bypass = profile.at("BYPASS_THE_WALL").get<bool>() && plan.definition().type == "dungeon";
-    graph.call_child("Heal", heal, candidates({bypass ? "BypassWall" : "SelectPoint"}));
-    graph.hit_limit("Heal", 128);
+    graph.call_child("Heal", heal, candidates({bypass ? "BypassWall" : "SelectPoint"}), {{"encounter", {"Dispatch"}}, {"blocked", {"Dispatch"}}});
     if (bypass) {
         const auto wall = graph.define_child("Wall", navigation::bypass_wall_after_restart(), {"InterruptedExit"});
         graph.call_child("BypassWall", wall, {"Blocked", "Combat", "Chest", "Revive", "Outside", "HealingPanel", "SelectPoint"});
-        graph.hit_limit("BypassWall", 128);
     }
     // 与旧 StateDungeon 一致，仅 Dungeon 分支调度角色恢复；已打开地图时不新增关闭地图动作。
     graph.observe("Map", map, {"SelectPoint"});
-    graph.hit_limit("Map", 128);
 
     J points = candidates({"Blocked", "Combat", "Chest", "Revive", "Outside", "Finished"});
     for (std::size_t i = 0; i < plan.route().size(); ++i)
         points.push_back("Point" + std::to_string(i));
     graph.route("SelectPoint", points);
-    graph.hit_limit("SelectPoint", 128);
-    graph.observe("Finished", C::business("/task_step", plan.route().size()), {"Terminal"});
+    graph.observe_business("Finished", C::business("/task_step", plan.route().size()), {"Terminal"});
     for (std::size_t i = 0; i < plan.route().size(); ++i) {
         const auto &target = plan.route()[i];
         const auto suffix = std::to_string(i);
         const bool automatic = automatic_target(target);
         auto child = automatic ? navigation::auto_route(target.target)
                                : navigation::reach_map_target(target, plan.floor());
-        J normal{{"EncounterExit", {"Dispatch"}}, {"BlockedExit", {"Dispatch"}}};
+        J normal{{"encounter", {"Dispatch"}}, {"blocked", {"Dispatch"}}};
         if (automatic) {
-            normal["StoppedExit"] = {"Dispatch"};
+            normal["stopped"] = {"Dispatch"};
             if (target.target == "mark_auto" || target.target == "chest_auto") {
                 // 旧 startAuto 在停止后仍会打开地图并执行 StateMapSearch。
                 // 不能只回 Dispatch 再点同一自动按钮，否则到达标记后永远不推进。
-                J exits{{"EncounterExit", {"Dispatch"}}, {"BlockedExit", {"Dispatch"}}};
+                J exits{{"encounter", {"Dispatch"}}, {"blocked", {"Dispatch"}}};
                 if (plan.floor())
-                    exits["FloorExit"] = {"Retreat"};
-                const auto map_entry = graph.append("AutoMap" + suffix,
-                    navigation::reach_map_target(target, plan.floor()), candidates({"Blocked", "Outside", "Confirm" + suffix}), exits);
-                normal["StoppedExit"] = {map_entry};
+                    exits["floor"] = {"Retreat"};
+                const auto map_definition = graph.define_child("AutoMap" + suffix, navigation::reach_map_target(target, plan.floor()));
+                const auto map_entry = "CallAutoMap" + suffix;
+                graph.call_child(map_entry, map_definition, candidates({"Outside", "Confirm" + suffix}), exits);
+                normal["stopped"] = {map_entry};
                 if (target.target == "chest_auto")
-                    normal["UnavailableExit"] = {map_entry};
+                    normal["unavailable"] = {map_entry};
             }
         } else if (plan.floor())
-            normal["FloorExit"] = {"Retreat"};
-        const auto route = graph.append("Route" + suffix, child, candidates({"Blocked", "Outside", "Confirm" + suffix}), normal);
-        graph.observe("Point" + suffix, C::business("/task_step", i), {route});
-        graph.hit_limit("Point" + suffix, 128);
+            normal["floor"] = {"Retreat"};
+        const auto route_definition = graph.define_child("Route" + suffix, child);
+        const auto route = "CallRoute" + suffix;
+        graph.call_child(route, route_definition, candidates({"Outside", "Confirm" + suffix}), normal);
+        graph.observe_business("Point" + suffix, C::business("/task_step", i), {route});
         graph.confirm("Confirm" + suffix, "point." + suffix, "target_completed",
             // 确认动作另取新帧。基础弹窗探针沿用已有并行实现，避免串行扫描耗尽
             // 观察有效期；仍检查全部原有弹窗，不复用子图的旧帧或放宽TTL。
-            C::all({C::absent(J{{"mode", "blocking_screen"}, {"parallel_basic", true}}), point_confirmation(target, map)}), {"Dispatch"}, i);
+            C::all({J{{"mode", "input_clear"}}, point_confirmation(target, map)}), {"Dispatch"}, i);
     }
     if (plan.floor()) {
-        const auto retreat = graph.append("WrongFloor", navigation::auto_route("dungFlag"), {"Outside", "Dispatch"},
-            {{"EncounterExit", {"Dispatch"}}, {"StoppedExit", {"Dispatch"}}, {"BlockedExit", {"Dispatch"}}});
-        graph.route("Retreat", {retreat});
+        const auto retreat = graph.define_child("WrongFloor", navigation::auto_route("dungFlag"));
+        graph.call_child("Retreat", retreat, {"Outside", "Dispatch"},
+            {{"encounter", {"Dispatch"}}, {"stopped", {"Dispatch"}}, {"blocked", {"Dispatch"}}});
+    }
+    // 正面业务先分类；未知窗口和重启/转交判据只能在当前业务及事件均不符后检查。
+    // 本次不削弱 UnknownWindow 的旧判据，只改变它被调用的位置。
+    for (const auto *name : {"UnknownFrozen", "UnknownLeap", "UnknownTimeout", "UnknownLimit"})
+        graph.diagnostic_candidate(name);
+    // 分类成功显式打断连续未知窗口，避免挪到末尾后遗留上一段未知历史。
+    for (const auto *name : {"Entered", "Outside", "Combat", "Chest", "Revive",
+                             "HealingPanel", "Resume", "Map"})
+        graph.mark_known_scene(name);
+    if (stopping) graph.mark_known_scene("TaskStop");
+    if (plan.route().back().harken_arrival) {
+        graph.mark_known_scene("HarkenCompleted");
+        graph.mark_known_scene("HarkenArrived");
     }
     return graph.finish();
 }

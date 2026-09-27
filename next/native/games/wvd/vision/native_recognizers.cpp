@@ -21,12 +21,31 @@
 namespace wvd::games::vision {
 using J = nlohmann::json;
 namespace {
+// 分类器只在“不符合当前业务”时运行；中间已确认正常场景必须打断未知窗口。
+// 不通过再次全局找图来清零，也不把运动/滚动等无关历史一起删除。
+struct UnknownObservationWindow {
+    UnknownWindow window;
+    std::uint64_t known_scene_epoch{};
+};
 struct MovementSample {
     cv::Mat gray;
     std::chrono::steady_clock::time_point at;
 };
 struct CausalityScrollSample {
     cv::Mat bgr;
+    std::string frame_key;
+};
+struct QuietRegionSample {
+    cv::Mat gray;
+    cv::Rect area;
+    std::chrono::steady_clock::time_point since;
+    std::string frame_key;
+    std::chrono::steady_clock::time_point observed_at;
+};
+struct ProgressRegionSample {
+    cv::Mat gray;
+    cv::Rect area;
+    std::chrono::steady_clock::time_point sampled_at, changed_at;
     std::string frame_key;
 };
 void check(bool ok, const char *error) {
@@ -717,16 +736,21 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
         auto found = cache.assets.find(key);
         if (found == cache.assets.end()) {
             check(cache.assets.size() < 2048, "WVD_SESSION_ASSET_CAPACITY");
-            found = cache.assets.emplace(key, UnknownWindow{}).first;
+            found = cache.assets.emplace(key, UnknownObservationWindow{}).first;
         }
-        auto &window = std::any_cast<UnknownWindow &>(found->second);
+        auto &history = std::any_cast<UnknownObservationWindow &>(found->second);
+        if (history.known_scene_epoch != cache.known_scene_epoch) {
+            history.window.clear();
+            history.known_scene_epoch = cache.known_scene_epoch;
+        }
+        auto &window = history.window;
         std::int64_t max_tries = 0;
         if (mode == "unknown_exhausted") {
             check(p.contains("max_tries") && p.at("max_tries").is_number_integer(), "WVD_UNKNOWN_LIMIT_INVALID");
             max_tries = p.at("max_tries").get<std::int64_t>();
         }
         // 先按已有分类识别正常页/覆盖层；已知静止页面不能成为“未知冻结”。
-        J probes = J::array({J{{"mode", "boot_ready"}, {"parallel_basic", true}}, J{{"mode", "blocking_screen"}, {"parallel_basic", true}},
+        J probes = p.value("classification", "legacy") == "scope_exhausted" ? J::array() : J::array({J{{"mode", "boot_ready"}, {"parallel_basic", true}}, J{{"mode", "blocking_screen"}, {"parallel_basic", true}},
             character_panel_probe(bound), recovery_panel_probe(bound), harken_floor_menu(),
             combat_detail_probe(bound)});
         if (p.contains("extra_known")) {
@@ -739,10 +763,10 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
         for (std::size_t i = 0; i < probes.size(); ++i) {
             // 两组正常页/覆盖层都未命中后，再按优先级检查面板反证；
             // 专属 extra_known 可能含时序状态，不能并行预先执行。
-            if (i == 2)
+            if (i == 2 && p.value("classification", "legacy") != "scope_exhausted")
                 panel_matches = evaluate_batch(bundle, pixels, J::array({probes[2], probes[3], probes[4]}),
                     bound, scope, cache, depth, memo, 3, BatchUse::OrderedFirst);
-            const auto known = i >= 2 && i < 5 ? panel_matches->at(i - 2) :
+            const auto known = panel_matches && i >= 2 && i < 5 ? panel_matches->at(i - 2) :
                 evaluate_impl(bundle, pixels, probes[i], bound, scope, cache, depth + 1, memo);
             check(known.at("outcome") != "Error", "WVD_UNKNOWN_RECOGNITION_ERROR");
             if (known.at("outcome") == "Hit") {
@@ -979,6 +1003,89 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
         auto result = matches.at(*selected);
         result["evidence"]["selected"] = name;
         return result;
+    }
+    if (mode == "region_changed" || mode == "region_stalled") {
+        const auto area = rect(p.at("roi"), image.size());
+        const auto channel = p.at("channel").get<std::string>();
+        check((channel == "navigation" || channel == "combat") && area.area() <= 180000,
+              "WVD_PROGRESS_REGION_INVALID");
+        cv::Mat gray;
+        cv::cvtColor(image(area), gray, cv::COLOR_BGR2GRAY);
+        const auto now = std::chrono::steady_clock::now();
+        // 每个会话最多两份业务区域样本；不看场景火焰、怪物呼吸等背景动画。
+        const auto key = "progress." + channel;
+        auto found = cache.assets.find(key);
+        const bool reset = p.value("reset", false);
+        if (found == cache.assets.end() || reset) {
+            cache.assets.insert_or_assign(key, ProgressRegionSample{gray, area, now, now, cache.frame_key});
+            return decision(reset, area, {{"reason", "progress_baseline_recorded"}}, false);
+        }
+        auto &sample = std::any_cast<ProgressRegionSample &>(found->second);
+        // 中途在处理网络/剧情或完整技能子流程时没有连续采样，不能把缺证据的
+        // 时间算成画面静止。局部输入本身仍受自己的无响应期限保护。
+        if (now - sample.sampled_at > std::chrono::seconds{15}) sample.changed_at = now;
+        if (sample.area != area) {
+            sample = ProgressRegionSample{gray, area, now, now, cache.frame_key};
+            return decision(false, {}, {{"reason", "progress_region_reset"}});
+        }
+        if (sample.frame_key == cache.frame_key || now - sample.sampled_at < std::chrono::seconds{1})
+            return decision(false, {}, {{"reason", "awaiting_progress_sample"}});
+        cv::Mat difference;
+        cv::absdiff(gray, sample.gray, difference);
+        const double changed = double(cv::countNonZero(difference > 20)) / difference.total();
+        if (changed > 0.02) sample.changed_at = now;
+        sample.gray = std::move(gray);
+        sample.sampled_at = now;
+        sample.frame_key = cache.frame_key;
+        const auto idle_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - sample.changed_at).count();
+        const bool hit = mode == "region_stalled" ? idle_ms >= 60000 : changed > 0.02;
+        return decision(hit, area, {{"changed_fraction", changed}, {"idle_ms", idle_ms}}, false);
+    }
+    if (mode == "region_quiet") {
+        const auto area = rect(p.at("roi"), image.size());
+        const auto settle_ms = p.value("settle_ms", 1000);
+        check(settle_ms >= 250 && settle_ms <= 10000 && area.area() <= 90000, "WVD_QUIET_REGION_INVALID");
+        cv::Mat gray;
+        cv::cvtColor(image(area), gray, cv::COLOR_BGR2GRAY);
+        const auto now = std::chrono::steady_clock::now();
+        // 会话只保留一个小ROI样本，不能随作者参数/ROI数量增长像素缓存。
+        const auto key = "retry.quiet";
+        auto found = cache.assets.find(key);
+        if (found == cache.assets.end()) {
+            found = cache.assets.emplace(key, QuietRegionSample{gray, area, now, cache.frame_key, now}).first;
+            return decision(false, {}, {{"reason", "collecting_region_sample"}});
+        }
+        auto &sample = std::any_cast<QuietRegionSample &>(found->second);
+        if (sample.area != area) {
+            sample = QuietRegionSample{gray, area, now, cache.frame_key, now};
+            return decision(false, {}, {{"reason", "region_changed"}});
+        }
+        // 同帧复核必须保持同一结论，不能把已通过的静止证据在输入前改成NoHit。
+        // 使用最后采样时刻而非当前时刻，避免仅重复读取旧帧就累积出静止时间。
+        if (sample.frame_key == cache.frame_key) {
+            const bool quiet = sample.observed_at - sample.since >= std::chrono::milliseconds{settle_ms};
+            return decision(quiet, area, {{"reason", "same_region_frame"}, {"settle_ms", settle_ms}});
+        }
+        cv::Mat difference;
+        cv::absdiff(gray, sample.gray, difference);
+        const auto changed = double(cv::countNonZero(difference > 12)) / difference.total();
+        // 只看调用者给的提示小区域，不拿人物、火把等全屏运动推断加载或死机。
+        // 静止仅授权菜单复核，不证明联网成功或业务完成。
+        if (changed > 0.002) sample.since = now;
+        sample.gray = std::move(gray);
+        sample.frame_key = cache.frame_key;
+        sample.observed_at = now;
+        const bool quiet = now - sample.since >= std::chrono::milliseconds{settle_ms};
+        return decision(quiet, area, {{"reason", quiet ? "region_quiet" : "region_changing"},
+            {"changed_fraction", changed}, {"settle_ms", settle_ms}});
+    }
+    if (mode == "input_clear") {
+        for (const auto &probe : input_blockers(p.value("phase", ""))) {
+            const auto result = evaluate_impl(bundle, pixels, probe, bound, scope, cache, depth + 1, memo);
+            check(result.at("outcome") != "Error", "WVD_INPUT_GUARD_ERROR");
+            if (result.at("outcome") == "Hit") return decision(false, {}, {{"reason", "local_overlay"}});
+        }
+        return decision(true, allowed_rect, {{"reason", "local_input_clear"}});
     }
     if (mode == "exception_screen" || mode == "special_screen") {
         check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");
@@ -1236,7 +1343,7 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
         if (!summary.at("has_prepared_skill").get<bool>())
             return decision(false, {}, {{"reason", "no_prepared_skill"}});
         const auto name = "spellskill/char/" + summary.at("prepared_portrait").get<std::string>();
-        const auto &portraits = p.at("portraits");
+        const auto portraits = p.value("portraits", J::array({J{{"image", name}}}));
         check(portraits.is_array() && portraits.size() <= 384, "COMBAT_PORTRAITS_INVALID");
         bool declared = false;
         for (const auto &entry : portraits)

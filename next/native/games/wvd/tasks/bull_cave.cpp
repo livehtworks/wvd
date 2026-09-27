@@ -76,7 +76,7 @@ CompiledWorkflow bull_cave_cycle(const WvdQuestDefinition &definition, const J &
         graph.observe(name + "Points", C::business("/task_step", second ? 2 : rest ? 1 : 3), {name + "Routed"});
         graph.confirm(name + "Routed", "bull.route." + name, second ? "bull_cave_second_routed" : "bull_cave_first_routed", map, {name + "ExitPhase"});
         graph.observe(name + "ExitPhase", phase(second ? Phase::SecondExit : Phase::FirstExit), {name + "Exit"});
-        graph.call_child(name + "Exit", exit, {name + "Exited"});
+        graph.call_child(name + "Exit", exit, {name + "Exited"}, {{"encounter", {"RecoveryRequired"}}, {"blocked", {"RecoveryRequired"}}});
         graph.confirm(name + "Exited", "bull.exit." + name, second ? "bull_cave_completed" : "bull_cave_first_exited", outside,
             !second && rest ? J{"RestPhase"} : J{"Terminal"});
     }

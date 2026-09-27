@@ -18,6 +18,8 @@ struct LifecycleObservation {
     std::uint64_t connection_generation{};
     std::chrono::steady_clock::time_point observed_at{};
     bool application_foreground{};
+    // 管理器明确确认绑定实例的进程已退出；Android未就绪/ADB离线不等于退出。
+    bool instance_exited{};
 };
 struct LifecyclePlan {
     LifecycleTarget target;

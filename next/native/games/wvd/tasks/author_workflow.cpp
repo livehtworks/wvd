@@ -3,6 +3,7 @@
 #include "authoring/event_policy.hpp"
 #include "authoring/resource_locale.hpp"
 #include "authoring/workflow_validator.hpp"
+#include "games/wvd/vision/location_probes.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -77,6 +78,12 @@ AuthorWorkflowCompilation compile_author_workflow(const J &source,
     const auto budget = std::chrono::milliseconds{
         document.at("execution").at("time_limit_ms").get<std::int64_t>()};
     PipelineCompiler compiler("author." + flow_id, budget);
+    if (document.at("execution").contains("checks")) {
+        const auto &checks = document.at("execution").at("checks");
+        compiler.check_policy(checks.at("phase").get<std::string>(),
+            checks.at("inherit").get<std::vector<std::string>>(), checks.value("debounce_ms", 1000),
+            checks.value("interval_ms", 1000), checks.value("protect_input", true));
+    }
     AuthorWorkflowCompilation result;
     compiler.route("Entry", {pipeline_name(entry, entry, graph.success_end)});
     if (!graph.failure.at(entry).empty())
@@ -95,6 +102,9 @@ AuthorWorkflowCompilation compile_author_workflow(const J &source,
         if (id == graph.success_end)
             continue;
         const auto next = successors(graph.success.at(id), entry, graph.success_end);
+        J bindings = J::object();
+        for (const auto &[port, edges] : graph.handoffs.at(id))
+            bindings[port] = successors(edges, entry, graph.success_end);
         const auto &parameters = node->at("parameters");
         const auto type = node->at("type").get<std::string>();
         try {
@@ -128,12 +138,24 @@ AuthorWorkflowCompilation compile_author_workflow(const J &source,
                                    static_cast<int>(parameters.at("duration_ms").get<std::int64_t>()));
                 else
                     fail("AUTHOR_ACTION_UNSUPPORTED", id + ":" + operation);
+                // 定义显式授权安全菜单重复，而不是按 flow_id 猜测动作含义。
+                // 复用唯一执行器的在途回执；结果已到或源页改变时不再点击。
+                if (parameters.contains("menu_retry_interval_ms"))
+                    compiler.retry_menu_input(runtime_name, vision::menu_retry_ready(
+                        PipelineCompiler::all({parameters.at("scene"),
+                            PipelineCompiler::absent(parameters.at("postcondition"))})),
+                        static_cast<int>(parameters.at("menu_retry_interval_ms").get<std::int64_t>()));
                 if (parameters.contains("allowed_area"))
                     compiler.allowed_area(runtime_name, parameters.at("allowed_area"));
                 if (parameters.contains("postcondition_timeout_ms"))
                     compiler.postcondition_budget(
                         runtime_name,
                         static_cast<int>(parameters.at("postcondition_timeout_ms").get<std::int64_t>()));
+                if (parameters.contains("interrupted_reason")) {
+                    compiler.interrupt_on(PipelineCompiler::absent(J{{"mode", "input_clear"}}),
+                        parameters.at("interrupted_reason").get<std::string>());
+                    compiler.stop_if_interrupted_after(runtime_name, parameters.at("interrupted_reason").get<std::string>());
+                }
             } else if (type == "wait") {
                 // 等待由可取消的原生步骤持有，不阻塞停止链。
                 compiler.wait(runtime_name,
@@ -148,7 +170,7 @@ AuthorWorkflowCompilation compile_author_workflow(const J &source,
                     const auto child = scoped_flow ? scoped_flow(call, scope, allowed_events) : public_flow(call);
                     const auto prefix = "Public" + std::to_string(public_ordinal++);
                     const auto child_entry = compiler.define_child(prefix, child.workflow);
-                    compiler.call_child(name, child_entry, std::move(successors));
+                    compiler.call_child(name, child_entry, std::move(successors), bindings);
                     for (const auto &[child_name, unused] : child.workflow.nodes.items()) {
                         (void)unused;
                         const auto compiled_name = prefix + "_" + child_name;
@@ -167,8 +189,8 @@ AuthorWorkflowCompilation compile_author_workflow(const J &source,
                         const auto name = runtime_name + "_Call" + std::to_string(i);
                         add_call(calls.at(i), name, i + 1 == calls.size() ? next
                             : J::array({runtime_name + "_Call" + std::to_string(i + 1)}));
-                        compiler.hit_limit(name, node->contains("repeat_limit")
-                            ? static_cast<int>(node->at("repeat_limit").get<std::int64_t>()) : 1);
+                        if (node->contains("repeat_limit"))
+                            compiler.hit_limit(name, static_cast<int>(node->at("repeat_limit").get<std::int64_t>()), true);
                         result.node_to_pipeline[id].push_back(name);
                         result.pipeline_to_node[name] = id;
                         result.source_paths[name] = J::array({J{{"flow_id", flow_id}, {"node_id", id}}});
@@ -187,12 +209,15 @@ AuthorWorkflowCompilation compile_author_workflow(const J &source,
                     const auto prefix = runtime_name + "_Business";
                     const auto child = resolver(parameters);
                     const auto child_entry = compiler.define_child(prefix, child);
-                    compiler.call_child(runtime_name, child_entry, next);
+                    compiler.call_child(runtime_name, child_entry, next, bindings);
                 }
                 else
                     fail("AUTHOR_BUSINESS_UNSUPPORTED", id + ":" + binding);
             } else if (type == "end") {
-                compiler.business_failure(runtime_name, parameters.at("reason").get<std::string>());
+                if (parameters.at("outcome") == "handoff")
+                    compiler.handoff(runtime_name, parameters.at("port").get<std::string>());
+                else
+                    compiler.business_failure(runtime_name, parameters.at("reason").get<std::string>());
             } else {
                 fail("AUTHOR_NODE_TYPE_INVALID", id + ":" + type);
             }
@@ -284,9 +309,7 @@ AuthorWorkflowCompilation compile_author_workflow(const J &source,
             }
             if (node->contains("repeat_limit"))
                 compiler.hit_limit(runtime_name,
-                                   static_cast<int>(node->at("repeat_limit").get<std::int64_t>()));
-            else
-                compiler.hit_limit(runtime_name, 1);
+                                   static_cast<int>(node->at("repeat_limit").get<std::int64_t>()), true);
             if (type != "wait" && parameters.contains("delay_after_ms"))
                 compiler.delay_after(runtime_name,
                                      static_cast<int>(parameters.at("delay_after_ms").get<std::int64_t>()));

@@ -34,12 +34,17 @@ class NativeFlowPorts final : public FlowPorts {
                             const std::optional<contracts::FrameEnvelope> &frame,
                             const std::optional<contracts::Observation> &observation,
                             const std::string &source_path) override;
+    void scene_observed(const contracts::Observation &observation) override {
+        recognizer_.note_known_scene(observation);
+    }
     bool cancelled() const override;
     bool reusable(const contracts::FrameIdentity &identity) const override { return gate_.reusable(identity); }
     void stop();
     bool cleanup();
     contracts::InputCounts input_counts() const;
     contracts::FrameIdentity current_identity() const;
+    nlohmann::json business_summary() const { return business_.summary(); }
+    std::uint64_t business_version() const { return business_.version(); }
 
   private:
     recognition::Service &recognizer_;

@@ -6,6 +6,7 @@ const emit=defineEmits<{'update:modelValue':[PublicInterface]}>();
 const rows=computed(()=>props.modelValue?.parameters??[]);
 const copy=<T,>(v:T):T=>JSON.parse(JSON.stringify(v)) as T;
 function header(key:'kind'|'category',event:Event){emit('update:modelValue',{...props.modelValue,[key]:(event.target as HTMLInputElement).value});}
+function ports(event:Event){emit('update:modelValue',{...props.modelValue,handoffs:(event.target as HTMLInputElement).value.split(',').map(v=>v.trim()).filter(Boolean)});}
 function update(index:number,key:string,value:unknown){const parameters=copy(rows.value);parameters[index]={...parameters[index],[key]:value};emit('update:modelValue',{...props.modelValue,parameters});}
 function add(){const parameters=copy(rows.value);let n=1;while(parameters.some(p=>p.name===`parameter${n}`))n++;
  parameters.push({name:`parameter${n}`,label:'新参数',type:'string',default:'',bindings:[]});emit('update:modelValue',{...props.modelValue,parameters});}
@@ -29,6 +30,7 @@ function changeType(index:number,event:Event){const parameters=copy(rows.value);
  <details class="inspector-group"><summary>公共定义接口</summary>
   <p>修改这里会改变公共定义；调用节点中的参数只影响本次调用。</p>
   <label class="field"><span>分类</span><input :value="modelValue?.category??''" @change="header('category',$event)" /></label>
+  <label class="field"><span>交接出口</span><input :value="modelValue?.handoffs?.join(', ')??''" @change="ports" /></label>
   <label class="field"><span>定义类型</span><select :value="modelValue?.kind??'task'" @change="header('kind',$event)"><option value="step">公共步骤</option><option value="block">流程块</option><option value="task">任务</option></select></label>
   <section v-for="(field,index) in rows" :key="index">
    <label class="field"><span>参数标识</span><input :value="field.name" @change="update(index,'name',($event.target as HTMLInputElement).value)" /></label>

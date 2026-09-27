@@ -240,7 +240,7 @@ J WorkflowRepository::read(const std::string &flow_id) const {
     return read_unlocked(flow_id);
 }
 
-J WorkflowRepository::snapshot_closure(const J &root) const {
+J WorkflowRepository::snapshot_closure(const J &root, const std::vector<std::string> &required) const {
     verify_plain_directory(root_);
     RepositoryLock lock(root_);
     const auto root_id = root.at("flow").at("id").get<std::string>();
@@ -262,6 +262,10 @@ J WorkflowRepository::snapshot_closure(const J &root) const {
         for (const auto &next : references) self(self, next, depth + 1);
     };
     load(load, root_id, 0);
+    for (const auto &id : required) {
+        load(load, id, 0);
+        authoring::validate_call_graph(graph, id);
+    }
     authoring::validate_call_graph(graph, root_id);
     return documents;
 }

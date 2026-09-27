@@ -2,18 +2,25 @@
 
 ## 当前产品
 
+- 本轮交接入口：[运行容错审查交接](reviews/runtime-handoff-20260927.md)。用户明确G为普通金币，既定流程中少量重复金币支出可接受，不得与绿色付费钻石同级处理；绿色钻石禁止自动消费，币种不明不能盲点。此规则已记录，现有pending/付款处理尚未按币种修复。本轮仅提交、推送已有源码和报告，循环保持停止，不打包、不操作游戏；历史阶段报告不代替本交接的当前结论。
+
+- 2026-09-27郊外停机复核：正式接口新截图确认当前在郊外，“初始的奈落”在生产默认0.8阈值下Hit。前述王城图仅为失败前15秒采样链的最后历史帧，不代表最终停留位置。已查明共享取帧异常直接结束Flow、pending阻挡设备恢复、入本后置条件包含旧页面且未接菜单重试、失败截图生产入口未接等缺口；尚未改代码或重启循环。具体超时命令未被历史日志记录，前台元数据查询仅为主要嫌疑。完整证据及新旧对照见[郊外停机与容错审查](reviews/managed-repeat-20260927.md#1344-郊外停机与容错审查)。
+
+- 当前操作入口为 `http://127.0.0.1:17654/`，candidate29，Application任务会话是唯一循环所有者，原外部脚本仅提交一次API；旧STOP文件保留但不参与控制。2026-09-27最新只读检查：已完成28轮，第29轮13:44:12落盘Failed，repeat.active=false、busy=false、quiescent=true；run28为三段Completed。run29第二段在`Task_FirstEntry_Step0Fallback1@await`发生`ADB_TIMEOUT`，此前已发送兜底点击`[1,1]`，因unresolved_input被汇总为`NATIVE_INPUT_RESULT_UNCONFIRMED`并在设备恢复观察前被拦截。最后历史帧13:44:04仍在王城；当前绑定实例2进程PID33512及Android仍运行、`127.0.0.1:16448`在线，没有证据把这次失败定为模拟器闪退，具体超时命令仍待定位。普通点击与不可重复业务输入的恢复边界仍有缺口。本次未改代码或重新启动循环。实例`76D3FFDB-E484-4ACE-91F1-F4E6390E4C7E`，请求`b597cbee-bcb9-4946-903c-7a51f82abe9a`，证据在该实例run29/result.json及recent-frames/20260927T054404349_r29_f2.jpg。此前candidate23的07:12:41显卡模块崩溃与此次ADB超时分开记录；再次实际崩溃后的自动断点续跑仍未验证。详见[循环控制与崩溃恢复](reviews/managed-repeat-20260927.md)。
+- 2026-09-27 最新现场：悬赏页加载确认、无报告跨帧复核、真实返回后置条件及可选展示卡交接已修复。candidate22通过无展示卡完整一轮；candidate23又实际通过迟到展示卡交接、报告提交、200G住宿并回王城，213.74秒、56输入/0拒绝。用户指定的 `F 柚奈壬姬` 原5级条目已通过配置API改为7级，现场技能确认页已显示Lv7；其它技能等级未动。记录见[悬赏页修复](reviews/bounty-board-readiness-20260927.md)、[循环控制](reviews/managed-repeat-20260927.md)。
+
 - 旧版 Python/Tkinter 程序、`config.json`、`mod`、日志和 `dist/wvd` 未修改；原有 `next/dist/wvd-next` 也未替换。
 - Windows Next 的活动服务由 `next/native/app/main.cpp` 启动，`Application` 装配唯一原生 `FlowExecutor`、MuMu/ADB/scrcpy 设备会话和 OpenCV/ORT 识别。Vue 通过同源 API 编辑配置、战斗方案和作者流程。
 - 独立候选在 `next/dist/wvd-next-native`，入口为 `启动WVD原生版.bat`；数据目录为 `%LOCALAPPDATA%/WvdNext`。候选不是生产切换。
 - Maa SDK 集成源码和旧阶段工具/测试已移至 `next/archive/`；当前 CMake、构建和有限验收不调用 Maa。
 - 当前关键修复工作包比较基线为 `c1666a0`，K01-K09、R01-R06 已按限定范围收口，见 [当前报告](reviews/key-repairs-review-20260926.md)与[证据索引](reviews/key-repairs-evidence-20260926.json)。原内存治理见 [内存交付](memory-work-package-661069f-result.md)，历史 R01-R10 见 [修复收口](repair-8f61540-closure.md)。本轮提交包含源码、报告和证据索引；候选身份仍以实际构建的 `next/dist/wvd-next-native/DELIVERY_STATUS.json` 为准，源码提交不冒充重新构建或全部任务实机通过。
-- 最新源码已拆开正常战斗/宝箱检查与结果不符后的异常/特殊分派，FlowProgram schema 5；已知异常处理后恢复原观察、不重发输入。受影响 Release 目标及有限接线检查通过，见 [分组说明及剩余边界](reviews/flow-check-dispatch-20260926.md)。本轮按用户要求提交后交 GPT 讨论，没有打包、替换候选或启动游戏；以下候选 EXE 与实机证据仍属于上轮构建。
+- `c11d1a1`之上的修复保持schema7/Poll业务进展、无角色总次数上限、正常分派不扣次数及同页安全重试。设备故障恢复现由同一协调器根据真实实例/ADB/应用观察生成生命周期计划，恢复沿原业务段保留账目；输入前上下文失效只重新观察、不发送旧坐标、不清除已提交pending。实例退出后的自有输入清理与静态远端文件清理分离，循环显示真实失败原因，但run29确认pending仍会挡住部分恢复入口。现场数据目录仍为`next/.local/c11-flow-product/data`，沿用法术+地裂、每轮200G住宿、7级指定角色技能与繁中素材。旧实例`A969ABB0-03E7-4110-8315-1442BFB31648`证据原样保留，不冒充新候选通过。历史帧在`recent-frames`，轮次结果在`runs`；旧独立作者战斗准备阶段JSON异常仍待另查。上述改动纳入本轮源码交接提交，不表示剩余缺口已修复。详见[恢复记录](reviews/managed-repeat-20260927.md)、[容错修复报告](reviews/runtime-tolerance-20260927.md)。
 - OpenCV 34 MB 分配异常的历史归因与本轮治理现状已分栏记录于 [内存复核报告](opencv-memory-review-20260925.md)；目前没有足够现场证据认定泄漏或宣布资源稳定。
 
-## 已有证据
+## 之前候选的已有证据
 
 - 当前候选 EXE SHA256 `69210c1440e843fa527db452e6e73e5b640a81b74ffc63af202b3f2845ddc123` 已通过同一正式 API 的停止和蝎女普通完整循环：3段 Completed、循环1、报告余量0、住宿已确认、61次底层输入/0拒绝，输入静止、明细完整、结果已落盘，最终在王城。自然启动/住宿普通剧情已经过继续节点；随机网络/维护未触发。真实技能 Lv5 确认33.68秒，完整一轮776.48秒，不宣称提速。
-- 当前 Application 封存共享不可变 FlowProgram，三段共享1个图、各自 Session/Call 状态独立；最新源码 schema5 的累计预算只取显式声明，默认节点60秒不冒充战斗总期限。有效观察周期在输入/等待/事件/身份失效时撤销；未提交的转场失效点击回原分支选择，已提交/送达未知不重发。输入前ADB夹持采用单客户端 window-input-window；最近帧JPEG在RunStore有界线程处理并在终态join。分类计时和details_complete已接入正式结果/API/历史，历史缺字段保持未知。
+- 当前 Application 封存共享不可变 FlowProgram，三段共享1个图、各自 Session/Call 状态独立；schema7 的累计预算只取显式声明，默认节点60秒不冒充战斗总期限，业务进展可刷新Poll无进展期限。有效观察周期在输入/等待/事件/身份失效时撤销；未提交的转场失效点击回原分支选择，已提交/送达未知不重发。输入前ADB夹持采用单客户端 window-input-window；最近帧JPEG在RunStore有界线程处理并在终态join。分类计时和details_complete已接入正式结果/API/历史，历史缺字段保持未知。
 - 锁定依赖通过哈希校验，独立目录 Windows Release 与 Vue 构建并打包。直接 OpenCV 模板、真实 ORT 英文 OCR、原生执行器、双事件退出、scrcpy/ADB 报文、公共 slot 六轮/两处调用及协调器的定向离线检查通过。
 - 正式 `Application` API 在隔离数据目录完成作者流程保存、应用重开、编译、执行、根业务终点及结果落盘；同一应用入口能带 `ACTIVE_BEG_MONEY` 装配蝎女原生任务并进入 `Task_` 步骤。协调器的延期恢复可响应停止。离线后端禁止游戏输入，不表示任务实机通过。
 - 候选在桌面及 390px 手机浏览器中完成工作台配置保存重开和页面切换；候选进程实际加载自身目录 OpenCV/ORT，PE 导入无 Maa。先前旧引擎的实操不能转记为新链结果。新链在隔离候选上已连接真实 MuMu，并通过同一 Application API 实跑一次王城→公会→委托→悬赏列表（2 次输入，终态 Completed）；从悬赏列表再次运行打开悬赏页，以 0 次输入完成。此次不是工作台 UI 点击验收，也不代表完整任务通过，见 [实机记录](../next/docs/native-real-device-validation-53718f1-20260924.md)。
@@ -26,7 +33,7 @@
 - 诅咒之轮原故障为固定左切与盲滚后卡在目标选择；四章标题定向导航和滚动后复查已接入，矿石跳轮和后续入本已在蝎女根链实跑。见 [轮盘定位记录](../next/docs/wheel-navigation-20260925.md)。
 - 早期 B2F 战斗曾依赖自动战斗保底，且被常驻 `resume` 图标误判为阻塞页；现已通过真实繁中技能节点并在根任务达到 `Completed`。特殊敌人双条件 OR 与 A/B 方案虽已接入，真实配置开关仍关闭，未实证分流。见 [实战记录](../next/docs/scorpion-combat-live-20260925.md)与[分流说明](../next/docs/special-combat-recognition-20260925.md)。
 - 2026-09-26，繁中 `Scorpionesses` 根任务从王城经正式 `/api/v1/runs/start` 连续实跑到 `Completed`：提交旧报告、200G 住宿、矿石跳轮、悬赏刷新、初始奈落 B2F 自动地图导航、蝎女战斗技能、战后整体恢复、哈肯返城、提交本轮报告和按间隔住宿。落盘 `completed_cycles=1`、`reports_remaining=0`、`completed_business_units=3`，62 次输入执行、0 次拒绝，最终画面为王城；记录见 [蝎女实机续段](../next/docs/scorpion-cycle-live-20260925.md)。之前直连失败、繁中技能弹窗、恢复面板和哈肯终点交接均在该任务的有限修复与重跑中定位，不能把这一轮成功外推到其它任务或异常分支。
-- 蝎女连续运行由 `next/tools/run_scorpion_loop.ps1` 通过正式 API 串联完整单轮；只有业务、结果和输入全部确认成功才开始下一轮。原生截帧复用现有识别帧，`%LOCALAPPDATA%/WvdNext/recent-frames` 最多保留 240 张、128 MiB，每 15 秒至多一张 JPEG；异常 PNG 仍在各轮 `diagnostics/` 中，不受滚动裁剪。守护日志在 `%LOCALAPPDATA%/WvdNext/overnight`。这只是连续运行保护和取证能力，长期稳定性须以后续现场结果判定。
+- 蝎女连续运行由Application会话在确认单轮业务、落盘、静止及无未决副作用后串联；界面停止取消当前轮与续轮。`next/tools/run_scorpion_loop.ps1`仅为同一API启动入口。原生截帧复用现有识别帧，数据目录下`recent-frames`最多240张、128 MiB，每15秒至多一张JPEG；异常PNG仍在各轮`diagnostics/`中，不受滚动裁剪。旧`overnight`仅保留历史外部脚本日志，长期稳定性以后续各轮结果判定。
 - 2026-09-26 普通蝎女 B2F 路线将战后第二个地图坐标改为 `dungFlag` 快捷返哈肯；原生路线图断言确认不再进入第二次地图搜索，且仅在识别到哈肯楼层菜单后确认该任务点。更新候选后的循环实际完成 5 轮；第 6 轮已返哈肯，在郊外归还王城后遇狮樱普通剧情，以 `NATIVE_INPUT_RESULT_UNCONFIRMED` 中断，循环正常停下，并非模拟器闪退。
 - 哈肯返城链已补普通剧情交接：归还后可进入剧情分支，仅点击识别到的继续箭头，建筑菜单恢复后才完成返城，不重放归还输入。第 6 轮失败帧由正式原生识别器得到剧情 Hit、城市就绪 NoHit、修正后返城后置条件 Hit；定向编译检查通过，新的实际返城剧情续段尚未验收。证据见 [返城剧情记录](scorpion-return-dialogue-20260926.md)。
 - 续跑在进入诅咒之轮时遇繁中网络重试框中断。网络正文/按钮素材和默认覆盖层事件已补入正式任务封装（包含 `@await`），沿用事件挂起与原后置条件确认，不重放业务输入、不自动重启模拟器；实机随机网络恢复待自然触发，记录合并在上述返城续修文档。

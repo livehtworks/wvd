@@ -99,7 +99,7 @@ CompiledWorkflow golden_chest_cycle(const WvdQuestDefinition &definition, const 
     graph.recovery("Incomplete", "quest.golden_route_incomplete");
     graph.observe("ExitPhase", phase(Phase::Exit), {"Exit"});
     const auto exit = graph.define_child("LeaveCave", navigation::reach_map_target(plan.route().back()));
-    graph.call_child("Exit", exit, {"Completed"});
+    graph.call_child("Exit", exit, {"Completed"}, {{"encounter", {"RecoveryRequired"}}, {"blocked", {"RecoveryRequired"}}});
     graph.confirm("Completed", "golden.done", "golden_completed", C::all({C::any({inn, C::image("openworldmap"), C::image("returnText"), C::image("EdgeOfTown")}), C::absent(map)}), {"Terminal"});
     graph.interrupt_on({{"mode", "blocking_screen"}, {"parallel_basic", true}}, "quest.golden_common_screen_requires_dispatch");
     return graph.finish();

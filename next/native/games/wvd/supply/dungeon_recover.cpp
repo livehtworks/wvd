@@ -7,6 +7,7 @@ tasks::CompiledWorkflow recover_in_dungeon() {
     // 旧 31 次开角色每次已等待 2 秒，尚未计入识别、寻恢复和返回，不能继承 60 秒默认。
     // 四分钟是本子图总预算，不延长输入帧 TTL；每个节点次数和取消门禁仍独立生效。
     C graph("supply.dungeon_recover", std::chrono::seconds{240});
+    graph.check_policy("supply", {"wvd-network-retry", "wvd-pause", "wvd-download"});
     const J combat{{"mode", "combat_active"}};
     const auto chest = C::any({C::image("chestFlag"), C::image("whowillopenit"), C::image("chestOpening")});
     const auto interrupted = C::any({combat, chest, C::image("RiseAgain")});
@@ -17,10 +18,12 @@ tasks::CompiledWorkflow recover_in_dungeon() {
     const auto context = C::any({dungeon, panel});
     const auto post = C::any({context, interrupted});
     const auto needed = C::business("/healing_required", true);
-    graph.route("Entry", {"Encounter", "Unneeded", "Requested"});
+    // 无补给需求是无副作用的正常返回；不能为“什么都不做”扫描战斗/宝箱。
+    // 真正开始补给时 Requested/Begin 仍必须取得可操作场景证据。
+    graph.route("Entry", {"Unneeded", "Encounter", "Requested"});
     graph.observe("Encounter", interrupted, {"EncounterExit"});
-    graph.recovery("EncounterExit", "supply.recover_interrupted");
-    graph.observe("Unneeded", C::all({dungeon, C::absent(needed)}), {"Terminal"});
+    graph.handoff("EncounterExit", "encounter");
+    graph.observe_business("Unneeded", C::business("/healing_required", false), {"Terminal"});
     // 业务条件只能选路，不提供视觉许可。确认动作重新截图证明场景，
     // confirm_event 在同一状态所有者中再次检查需求，不能跳过需求直接声明完成。
     graph.observe("Requested", C::all({context, needed}), {"Begin"});
@@ -61,7 +64,7 @@ tasks::CompiledWorkflow recover_in_dungeon() {
     }
     graph.recovery("ReturnFailed", "supply.recover_panel_not_closed");
     graph.confirm("Recovered", "heal.complete", "healing_completed", dungeon, {"Terminal"});
-    graph.interrupt_on({{"mode", "blocking_screen"}}, "supply.common_screen_requires_dispatch");
+    graph.interrupt_on(C::absent(J{{"mode", "input_clear"}}), "supply.common_screen_requires_dispatch", "blocked");
     return graph.finish();
 }
 }

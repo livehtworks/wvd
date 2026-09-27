@@ -24,9 +24,9 @@ tasks::CompiledWorkflow return_to_fortress() {
         graph.click(node, C::all({C::image(marker), C::absent(inn)}), C::image(marker), normal, {"Entry"});
         graph.delay_after(node, 2000); graph.hit_limit(node, 16);
     }
-    const auto return_harken = graph.define_child("ReturnHarken", auto_route("dungFlag"), {"BlockedExit"});
+    const auto return_harken = graph.define_child("ReturnHarken", auto_route("dungFlag"));
     graph.observe("Dungeon", C::all({C::image("dungFlag"), C::absent(C::image("mapFlag"))}), {"GoHarken"});
-    graph.call_child("GoHarken", return_harken, {"Entry"});
+    graph.call_child("GoHarken", return_harken, {"Entry"}, {{"blocked", {"Entry"}}, {"encounter", {"RecoveryRequired"}}, {"stopped", {"RecoveryRequired"}}});
     graph.fixed_click("Dismiss", C::all({C::image("EdgeOfTown"), C::absent(inn)}), normal, {1, 1}, {"Entry"});
     graph.delay_after("Dismiss", 2000); graph.hit_limit("Dismiss", 16); graph.hit_limit("Entry", 64);
     return graph.finish();

@@ -5,6 +5,7 @@ tasks::CompiledWorkflow choose_karma_prompt() {
     using C = tasks::PipelineCompiler;
     using J = nlohmann::json;
     C graph("recovery.karma_choice", std::chrono::seconds{45});
+    graph.check_policy("special", {"wvd-network-retry"}, 1000, 1000, false);
     const auto ambush = C::image("ambush"), ignore = C::image("ignore");
     const auto prompt = C::any({ambush, ignore});
     const J known{{"mode", "boot_post"}};

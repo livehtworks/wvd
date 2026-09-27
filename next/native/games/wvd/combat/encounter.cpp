@@ -3,15 +3,18 @@
 namespace wvd::games::combat {
 tasks::CompiledWorkflow fight_encounter(const nlohmann::json &profile,
                                          const std::set<std::string> &available_images,
-                                         unsigned max_turns, unsigned max_auto_polls, EncounterEnd end) {
+                                         EncounterEnd end) {
     using C = tasks::PipelineCompiler;
     using J = nlohmann::json;
-    if (max_turns < 1 || max_turns > 16)
-        throw std::runtime_error("COMBAT_TURN_BUDGET_INVALID");
-    if (max_auto_polls < 1 || max_auto_polls > 256)
-        throw std::runtime_error("COMBAT_AUTO_WAIT_BUDGET_INVALID");
     C graph("combat.encounter");
+    graph.check_policy("combat", {"wvd-network-retry", "wvd-pause", "wvd-download", "wvd-party-death"});
     const J battle{{"mode", "combat_active"}};
+    const J progress{{"mode", "region_changed"}, {"channel", "combat"}, {"roi", {15, 40, 145, 800}}};
+    auto baseline = progress, stalled = progress;
+    baseline["reset"] = true;
+    stalled["mode"] = "region_stalled";
+    graph.observe("StartProgress", baseline, {"Turn0"});
+    graph.observe("NoProgress", C::all({battle, stalled}), {"AutoTimeout"});
     const auto dungeon = C::all({C::image("dungFlag"), C::absent(battle)});
     const auto chest = C::all({C::image("chestFlag"), C::absent(battle)});
     const bool repel = end == EncounterEnd::RepelPrompt;
@@ -34,27 +37,29 @@ tasks::CompiledWorkflow fight_encounter(const nlohmann::json &profile,
             detectors.push_back(portrait);
         }
         const auto match = C::any(detectors);
-        graph.route("Entry", {"Special", "Ordinary", "WaitingForMenu", "Dungeon", "Chest", "Revive"});
+        graph.route("Entry", {"Special", "Ordinary", "Dungeon", "Chest", "Revive", "WaitingForMenu"});
         graph.confirm("Special", "combat.begin", "combat_special_observed",
-                      C::all({ready, match}), {"Turn0"});
+                      C::all({ready, match}), {"StartProgress"});
         graph.confirm("Ordinary", "combat.begin", "combat_observed",
-                      C::all({ready, C::absent(match)}), {"Turn0"});
-        graph.observe("WaitingForMenu", C::all({battle, C::absent(flee)}), {"Entry"});
-        graph.delay_after("WaitingForMenu", 500);
-        graph.hit_limit("WaitingForMenu", 120);
+                      C::all({ready, C::absent(match)}), {"StartProgress"});
+        graph.poll("WaitingForMenu", 500,
+            {"Special", "Ordinary", "Dungeon", "Chest", "Revive", "WaitingForMenu"},
+            C::all({battle, C::absent(flee)}),
+            J{{"mode", "region_changed"}, {"channel", "combat"}, {"roi", {15, 40, 145, 800}}});
+        graph.failure_route("WaitingForMenu", {"AutoTimeout"});
     } else {
         graph.route("Entry", {"Observed", "Dungeon", "Chest", "Revive"});
-        graph.confirm("Observed", "combat.begin", repel ? "repel_battle_observed" : "combat_observed", battle, {"Turn0"});
+        graph.confirm("Observed", "combat.begin", repel ? "repel_battle_observed" : "combat_observed", battle, {"StartProgress"});
     }
     // 击退敌势力在战后对话结束一场战斗；不扩大普通遭遇的成功条件。
     graph.confirm("Dungeon", "combat.resume", repel ? "repel_battle_completed" : "dungeon_resumed",
         repel ? C::all({C::image("icanstillgo"), C::absent(battle)}) : dungeon, {"Terminal"});
     // 宝箱/复活不是 Dungeon resumed；计时和待计数遭遇留给外层返回地下城时结算。
-    graph.observe("Chest", chest, repel ? J{"UnexpectedEnd"} : J{"Terminal"});
+    graph.observe("Chest", chest, repel ? J{"UnexpectedEnd"} : J{"ChestExit"});
+    if (!repel) graph.handoff("ChestExit", "chest");
     if (repel) graph.recovery("UnexpectedEnd", "quest.repel_unexpected_encounter_end");
     graph.observe("Revive", C::image("RiseAgain"), {"ReviveExit"});
-    graph.recovery("ReviveExit", "combat.revival_required");
-    graph.recovery("BudgetExit", "combat.turn_budget_exhausted");
+    graph.handoff("ReviveExit", "revive");
     graph.recovery("AutoTimeout", "combat.auto_progress_timeout");
     auto enabled = C::image("spellskill/CombatAutoEnable"), disabled = C::image("spellskill/CombatAutoDisable");
     enabled["roi"] = disabled["roi"] = {780, 1030, 120, 160};
@@ -62,23 +67,24 @@ tasks::CompiledWorkflow fight_encounter(const nlohmann::json &profile,
     const auto clear = C::all({battle, C::absent(popup)});
     const auto full_auto = C::all({clear, enabled, C::business("/strategy/automatic", true)});
     const auto turn = graph.define_child("Actor", take_turn(profile, available_images), {"BlockedExit"});
-    // 每次子调用独立计数；共享只读定义，不共享旧帧或动作许可。
-    // 返回后先重新观察遭遇终点，再允许下一角色。根回合预算仍是显式有限链。
-    for (unsigned index = 0; index < max_turns; ++index) {
-        const auto name = "Turn" + std::to_string(index);
-        const auto after = index + 1 < max_turns ? "Turn" + std::to_string(index + 1) : "BudgetExit";
+    // 子调用每次重新识别当前角色；回到真实终点检查后再处理下一角色。
+    // 自动战斗仅在行动条持续无变化时超时，不能以战斗总时长/角色数判失败。
+    {
+        const std::string name = "Turn0", after = "Turn0";
         graph.call_child(name + "Action", turn, {"Dungeon", "Chest", "Revive", name + "Auto", after});
         graph.observe(name + "Auto", full_auto, {name + "Poll"});
         // Auto 就绪不是又一个角色行动。等待可暂时缺图，但不能由此发送新输入；
         // 只有明确退出/关闭 Auto 才继续，独立等待预算耗尽给出可追溯原因。
-        graph.route(name + "Poll", {"Dungeon", "Chest", "Revive", name + "AutoOff", name + "Poll"});
-        graph.delay_after(name + "Poll", 250);
-        graph.hit_limit(name + "Poll", static_cast<int>(max_auto_polls));
+        // 明确是等待：没有结果时先允许当前作用域分派，再安排下一帧。
+        // full_auto 只证明正常自动执行，不能当作“战斗已结束”或输入许可。
+        graph.poll(name + "Poll", 250,
+            {"Dungeon", "Chest", "Revive", name + "AutoOff", name + "Poll"}, full_auto,
+            J{{"mode", "region_changed"}, {"channel", "combat"}, {"roi", {15, 40, 145, 800}}});
         graph.failure_route(name + "Poll", {"AutoTimeout"});
         graph.observe(name + "AutoOff", C::all({clear, disabled, C::absent(enabled)}), {after});
-        graph.route(name, {"Dungeon", "Chest", "Revive", name + "Action"});
+        graph.route(name, {"Dungeon", "Chest", "Revive", "NoProgress", name + "Action"});
     }
-    graph.interrupt_on({{"mode", "blocking_screen"}}, "combat.common_screen_requires_dispatch");
+    graph.interrupt_on(C::absent(J{{"mode", "input_clear"}}), "combat.common_screen_requires_dispatch", "blocked");
     return graph.finish();
 }
 }

@@ -18,6 +18,8 @@ class Service final {
                                     const contracts::FrameIdentity &current,
                                     const Request &request,
                                     const contracts::BusinessRunState *business = nullptr);
+    // 接收本服务同帧的有效 Hit；不是一个额外识别调用。
+    void note_known_scene(const contracts::Observation &observation);
     void cancel() noexcept;
     const Bundle &bundle() const { return bundle_; }
     ResourceStats resource_stats() const;
@@ -36,6 +38,7 @@ class Service final {
     Cache cache_;
     std::unique_ptr<FramePixels> frame_pixels_;
     std::string frame_pixels_key_;
+    std::string known_scene_frame_key_;
     std::mutex mutex_;
     std::atomic<std::shared_ptr<OcrEngine>> ocr_;
     // 粘性取消覆盖首次模型初始化：取消不能因引擎尚未发布而丢失。

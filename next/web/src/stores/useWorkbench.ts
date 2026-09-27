@@ -52,6 +52,7 @@ export function useWorkbench() {
   const device = ref<DeviceState>();
   const run = ref<RunState>();
   const starting = ref(false);
+  const continuous = ref(true);
   const linkError = ref("");
   let pendingRequest: { id: string; fingerprint: string } | undefined;
   let polling = false;
@@ -73,7 +74,8 @@ export function useWorkbench() {
   const dirty = computed(() => Boolean(draft.value) && signature(draft.value) !== savedSignature.value);
   const runActive = computed(() => starting.value || runBusy(run.value));
   const runLabel = computed(() => starting.value ? "提交启动请求" : displayRunState(run.value));
-  const runError = computed(() => run.value?.submission?.error ?? linkError.value);
+  const runError = computed(() => run.value?.repeat?.state === "failed"
+    ? run.value.repeat.reason : run.value?.submission?.error ?? linkError.value);
   const selectedTask = computed(() => catalog.value.tasks?.find((task) => task.id === draft.value?.FARM_TARGET));
 
   async function load() {
@@ -217,13 +219,14 @@ export function useWorkbench() {
       error.value = dirty.value ? "PROFILE_UNSAVED: 请先保存配置" : "TASK_NOT_SELECTED: 请选择任务";
       return;
     }
-    const fingerprint = JSON.stringify([draft.value.FARM_TARGET, envelope.value?.revision, resourceLocale.value]);
+    const repeat = continuous.value && draft.value.FARM_TARGET === "Scorpionesses";
+    const fingerprint = JSON.stringify([draft.value.FARM_TARGET, envelope.value?.revision, resourceLocale.value, repeat]);
     if (!pendingRequest || pendingRequest.fingerprint !== fingerprint)
       pendingRequest = { id: crypto.randomUUID(), fingerprint };
     starting.value = true;
     error.value = "";
     try {
-      await startTask(draft.value.FARM_TARGET, pendingRequest.id, envelope.value?.revision, resourceLocale.value);
+      await startTask(draft.value.FARM_TARGET, pendingRequest.id, envelope.value?.revision, resourceLocale.value, repeat);
       run.value = await readCurrentRun();
       notice.value = "启动请求已接收；正在执行正式装配和启动检查";
     } catch (reason) { error.value = formatApiError(reason); }
@@ -233,7 +236,8 @@ export function useWorkbench() {
   async function requestStop() {
     if (!run.value?.run_id && !pendingRequest && !run.value?.submission?.request_id) return;
     error.value = "";
-    try { run.value = await stopRun(run.value?.run_id,
+    // 连续运行可能已切到下一轮，停止会话不能拿旧轮ID拒绝用户停止。
+    try { run.value = await stopRun(run.value?.repeat?.active ? undefined : run.value?.run_id,
       run.value?.submission?.state === "preparing" ? run.value.submission.request_id :
         starting.value ? pendingRequest?.id : undefined); }
     catch (reason) { error.value = formatApiError(reason); }
@@ -267,7 +271,7 @@ export function useWorkbench() {
   onBeforeUnmount(() => window.clearInterval(pollHandle));
 
   return reactive({
-    envelope, draft, catalog, device, run, loading, saving, deviceBusy, error, notice, resourceLocale,
+    envelope, draft, catalog, device, run, loading, saving, deviceBusy, error, notice, resourceLocale, continuous,
     strategies, dirty, runActive, runLabel, runError, starting, selectedTask, load, save, clearTaskOverride, revert, selectTask,
     deviceAction, chooseEmulator, startSelectedTask, requestStop, noteRename,
   });

@@ -55,6 +55,8 @@ struct Cache {
     std::shared_ptr<platform::MemoryDiagnostics> diagnostics;
     const std::atomic<bool> *cancelled{};
     std::uint64_t source_id{};
+    // 已声明正面场景的序号，由 Service 单线程更新；供时序分类器切断未知区间。
+    std::uint64_t known_scene_epoch{};
     std::string frame_key;
     std::map<std::string, nlohmann::json> results;
     std::uint64_t result_bytes{};

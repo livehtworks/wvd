@@ -105,6 +105,35 @@ struct PendingEventPorts final : Ports {
             std::chrono::steady_clock::now(), {}};
     }
 };
+struct MenuRetryPorts final : Ports {
+    std::string mode;
+    std::uint64_t epoch{};
+    int ready_checks{};
+    contracts::FrameEnvelope capture() override {
+        auto frame = Ports::capture();
+        frame.identity.action_epoch = epoch;
+        frame.identity.raw_size = {900, 1600};
+        return frame;
+    }
+    contracts::Observation recognize(const contracts::FrameEnvelope &frame,
+                                      const recognition::Request &request) override {
+        auto hit = Ports::recognize(frame, request);
+        hit.box = contracts::Box{100, 100, 20, 20};
+        hit.center = contracts::Point{110, 110};
+        hit.action_eligible = true;
+        if (request.recognizer_id == "result" && (epoch < 2 || mode == "no_progress"))
+            hit.outcome = contracts::RecognitionOutcome::NoHit;
+        if (request.recognizer_id == "retry.ready" &&
+            (mode == "unknown_page" || (mode == "changing_hint" && ++ready_checks <= 2)))
+            hit.outcome = contracts::RecognitionOutcome::NoHit;
+        return hit;
+    }
+    runtime::Submission submit(const contracts::Command &, const contracts::Observation &,
+        const contracts::Observation &, contracts::Box, const std::string &) override {
+        return {mode == "delivery_unknown" ? runtime::SubmissionState::Unresolved : runtime::SubmissionState::Accepted,
+            ++epoch, std::chrono::steady_clock::now(), {}};
+    }
+};
 
 // 核心验收对象是生产 FlowExecutor 的分派/回执行为；识图与设备输入在此隔离。
 struct MismatchPorts final : Ports {
@@ -164,8 +193,97 @@ workflow::Step step(std::string id, workflow::StepData data,
 }
 } // namespace
 
-int main() {
+int main(int argc, char **argv) {
     try {
+        // 只隔离图像来源，实际执行生产 Poll/期限逻辑；不能以此替代实机完整一轮。
+        struct ProgressPorts final : Ports {
+            bool progressing{};
+            contracts::Observation recognize(const contracts::FrameEnvelope &frame,
+                                              const recognition::Request &request) override {
+                auto result = Ports::recognize(frame, request);
+                if ((request.recognizer_id == "done" && captures < 24) ||
+                    (request.recognizer_id == "changed" && !progressing))
+                    result.outcome = contracts::RecognitionOutcome::NoHit;
+                return result;
+            }
+        };
+        for (const bool changing : {true, false}) {
+            recognition::Request ongoing{"ongoing", "1", {0, 0, 900, 1600},
+                recognition::CustomParameters{"WvdVision", nlohmann::json::object()}};
+            auto changed = ongoing, done = ongoing;
+            changed.recognizer_id = "changed";
+            done.recognizer_id = "done";
+            workflow::FlowProgram p;
+            p.revision = "progress-deadline";
+            p.root_definition = "root";
+            workflow::Definition d;
+            d.id = "root"; d.entry = "wait";
+            auto poll = step("wait", workflow::Poll{10ms, ongoing, changed}, {"done", "wait"});
+            poll.max_hit = 0; poll.time_limit = 80ms;
+            d.steps.emplace("wait", std::move(poll));
+            auto finish = step("done", workflow::Finish{});
+            finish.guard = done;
+            d.steps.emplace("done", std::move(finish));
+            p.definitions.emplace("root", std::move(d));
+            ProgressPorts ports;
+            ports.progressing = changing;
+            runtime::FlowExecutor executor(p, ports, 2s);
+            runtime::TickResult end;
+            for (int i = 0; i < 200; ++i) {
+                end = executor.tick();
+                if (end.state == runtime::TickState::Waiting) std::this_thread::sleep_until(end.wake_at);
+                if (end.state != runtime::TickState::Waiting && end.state != runtime::TickState::Progress) break;
+            }
+            if (changing ? end.state != runtime::TickState::Completed :
+                (end.state != runtime::TickState::Failed || end.code != "FLOW_STAGE_TIMEOUT"))
+                throw std::runtime_error("PROGRESS_WAIT_CONTRACT_FAILED:" + end.code);
+        }
+        // 五个新契约先单独验证；后面的既有检查仍执行且保留原断言/失败。
+        for (const char *mode : {"retry", "changing_hint", "unknown_page", "non_repeatable", "delivery_unknown", "no_progress"}) {
+            workflow::FlowProgram menu;
+            menu.revision = std::string("menu-retry-") + mode;
+            menu.root_definition = "root";
+            recognition::Request scene{"scene", "1", {0, 0, 900, 1600},
+                recognition::CustomParameters{"WvdVision", nlohmann::json::object()}};
+            auto ready = scene;
+            ready.recognizer_id = "retry.ready";
+            auto result_probe = scene;
+            result_probe.recognizer_id = "result";
+            workflow::Definition menu_root;
+            menu_root.id = "root";
+            menu_root.entry = "input";
+            workflow::Input action{scene, scene, {{"kind", "Click"}}, {0, 0, 900, 1600}};
+            if (std::string(mode) != "non_repeatable") action.retry = workflow::InputRetry{ready, 1s};
+            menu_root.steps.emplace("input", step("input", action, {"await"}));
+            menu_root.steps.emplace("await", step("await", workflow::AwaitResult{result_probe, 2200ms, 0ms, 10ms}, {"finish"}));
+            menu_root.steps.emplace("finish", step("finish", workflow::Finish{}));
+            if (std::string(mode) == "no_progress") {
+                menu_root.steps.at("await").on_error = {"local_recovery"};
+                menu_root.steps.emplace("local_recovery", step("local_recovery", workflow::Fail{"local_recovery_reached"}));
+            }
+            menu.definitions.emplace("root", std::move(menu_root));
+            MenuRetryPorts menu_ports;
+            menu_ports.mode = mode;
+            runtime::FlowExecutor menu_executor(menu, menu_ports, 3s);
+            runtime::TickResult end;
+            for (int i = 0; i < 350; ++i) {
+                end = menu_executor.tick();
+                if (end.state == runtime::TickState::Waiting) std::this_thread::sleep_until(end.wake_at);
+                if (end.state != runtime::TickState::Progress && end.state != runtime::TickState::Waiting) break;
+            }
+            const bool repeats = std::string(mode) == "retry" || std::string(mode) == "changing_hint";
+            if (std::string(mode) == "no_progress") {
+                if (end.state != runtime::TickState::Failed || end.code != "local_recovery_reached" ||
+                    menu_ports.epoch < 2 || menu_executor.has_unresolved_input())
+                    throw std::runtime_error("RETRY_LOCAL_RECOVERY_FAILED:" + end.code);
+                continue;
+            }
+            if (repeats ? (end.state != runtime::TickState::Completed || menu_ports.epoch != 2 || menu_executor.has_unresolved_input())
+                        : (end.state != runtime::TickState::ExternalBlocked || menu_ports.epoch != 1 || !menu_executor.has_unresolved_input()))
+                throw std::runtime_error(std::string("MENU_RETRY_CONTRACT_FAILED:") + mode + ":" + end.code);
+        }
+        std::cout << "tolerance: progress/stall and six input retry contracts passed\n";
+        if (argc == 2 && std::string(argv[1]) == "--tolerance") return 0;
         workflow::FlowProgram program;
         program.revision = "test-1";
         program.root_definition = "root";
@@ -309,7 +427,8 @@ int main() {
             const auto actual = outcome.state == runtime::TickState::Completed ?
                 std::string("COMPLETED") : outcome.code;
             if (actual != expected || nested_ports.captures != captures)
-                throw std::runtime_error("EVENT_SCOPE_MISMATCH:" + actual + ":" + expected);
+                throw std::runtime_error("EVENT_SCOPE_MISMATCH:" + actual + ":" + expected +
+                    ":captures=" + std::to_string(nested_ports.captures) + ":expected=" + std::to_string(captures));
         }
         workflow::FlowProgram exit_program;
         exit_program.revision = "event-exit-budget";
@@ -519,7 +638,7 @@ int main() {
                 !dispatch.has_unresolved_input())
                 throw std::runtime_error("UNKNOWN_RESULT_WAS_REPLAYED_OR_SUCCEEDED:" + end.code);
         }
-        std::cout << "flow reobservation, event scope and exit budget passed\n";
+        std::cout << "flow reobservation, event scope, exit budget and menu retry passed\n";
     } catch (const std::exception &error) {
         std::cerr << error.what() << '\n';
         return 1;

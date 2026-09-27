@@ -44,6 +44,9 @@ Submission NativeFlowPorts::submit(const contracts::Command &command,
         try {
             input_sink_({{"sequence", sequence}, {"source_path", source_path},
                          {"command_kind", static_cast<int>(command.kind)},
+                         {"position", {command.x, command.y}},
+                         {"end_position", {command.x2, command.y2}}, {"key", command.key},
+                         {"target_center", target.center ? nlohmann::json::array({target.center->x, target.center->y}) : nlohmann::json(nullptr)},
                          {"state", state}, {"basis_frame", scene.basis.frame_id},
                          {"basis_epoch", scene.basis.action_epoch},
                          {"action_epoch", action_epoch}, {"detail", detail}});

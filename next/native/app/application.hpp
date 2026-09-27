@@ -53,7 +53,7 @@ class Application {
                    std::optional<J> frozen_values = std::nullopt,
                    J handoff_parent = nullptr,
                    std::optional<games::tasks::CompiledWorkflow> prepared = std::nullopt);
-    void watch_task_handoff(const J &stored, J source_values,
+    void watch_task_session(const J &request, const J &stored, J source_values,
                             std::shared_ptr<devices::DeviceConnection> backend,
                             std::string request_id);
     J prepare_workflow(const std::string &flow_id, const J &request, const J &stored,
@@ -118,6 +118,9 @@ class Application {
     std::jthread device_worker_;
     std::jthread handoff_worker_;
     J handoff_status_ = nullptr;
+    // 同一个会话线程负责交接或连续运行；轮间仍持有准入权，停止不依赖文件。
+    std::atomic<bool> task_session_active_{false};
+    J repeat_status_ = nullptr;
     std::atomic<bool> stopping_{false};
 };
 } // namespace wvd::app

@@ -38,8 +38,8 @@ CompiledWorkflow return_from_trial(const J &profile, const std::set<std::string>
     const auto clear = graph.define_child("Common", recovery::clear_common_screens(download, recovery::DialoguePolicy::SteelTrial));
     graph.call_child("Clear", clear, {"Entry"});
     graph.observe("Combat", combat, {"Fight"});
-    const auto fight = graph.define_child("Encounter", wvd::games::combat::fight_encounter(profile, images, 16));
-    graph.call_child("Fight", fight, {"Entry"});
+    const auto fight = graph.define_child("Encounter", wvd::games::combat::fight_encounter(profile, images));
+    graph.call_child("Fight", fight, {"Entry"}, {{"chest", {"RecoveryRequired"}}, {"revive", {"RecoveryRequired"}}, {"blocked", {"RecoveryRequired"}}});
     // 旧后续菜单/住宿助手会点1,1关闭地图。只在新帧证实地图时沿用，未知页不盲点。
     graph.fixed_click("CloseMap", C::all({map, C::absent(dialogue), C::absent(combat)}), known, {1, 1}, {"Entry"});
     graph.observe("Wait", C::all({C::image("dungFlag"), C::absent(map)}), {"Entry"});

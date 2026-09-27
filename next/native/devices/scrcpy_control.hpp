@@ -30,6 +30,8 @@ class ScrcpyControlClient final {
     void submit(const contracts::Command &command, int width, int height,
                 std::stop_token stop = {}, const Cancellation &cancelled = {});
     bool close() noexcept;
+    // 仅在DeviceSession已核实对应安卓实例退出后调用；不能用于普通ADB断线。
+    bool retire_exited_instance() noexcept;
     std::string cleanup_status() const;
     bool connected() const { return ready_ && socket_ != INVALID_SOCKET; }
     bool unresolved() const { return unresolved_; }

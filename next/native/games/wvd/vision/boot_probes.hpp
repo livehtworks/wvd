@@ -8,6 +8,19 @@
 #include <utility>
 
 namespace wvd::games::vision {
+// 透明覆盖层可能保留业务底图。这里只排除会遮住当前输入的已知提示，
+// 不做城市/公会/钓鱼/宝箱等全局分类；配方同时供资源冻结使用。
+inline nlohmann::json input_blockers(const std::string &phase = {}) {
+    using J = nlohmann::json;
+    auto probes = J::array({network_retry_prompt(), download_button_zh_hant(), download_button_en(),
+        J{{"mode", "pause"}}});
+    if (phase == "navigation") {
+        probes.push_back(harken_buff_menu());
+        for (const auto *image : {"blessing", "ambush", "ignore", "sandman_recover"})
+            probes.push_back({{"mode", "template"}, {"image", image}});
+    }
+    return probes;
+}
 // 结果不符后的异常诊断：网络/资源/启动/Pause/死亡。正常业务帧不调用此表。
 inline nlohmann::json exception_probes() {
     using J = nlohmann::json;
@@ -78,10 +91,19 @@ inline nlohmann::json boot_probes(bool transient) {
     // 公会页也属于已启动的稳定游戏画面；从工作台直接运行子流程时不能卡在启动门禁。
     probes.push_back(resource("guild.commissions.page", "zh-Hant"));
     probes.push_back(resource("guild.bounties.page", "zh-Hant"));
+    // 底部既有关闭锚点只证明在游戏内的详情页，不判断城市、悬赏刷新或任务完成。
+    // WANTED列表卡头与全屏“新的悬赏令”布局不同，不能强制复用列表卡头的ROI。
+    probes.push_back(resource("guild.bounty.reveal.close", "zh-Hant"));
     for (auto name : {"Inn", "dungFlag", "worldmapflag", "openworldmap", "returnText", "returntoTown",
                        "mapFlag", "fishing/cast", "fishing/striking", "fishing/CloseFishInfo",
                        "cursedWheelTitle", "cursedWheel", "ruins"})
         probes.push_back({{"mode", "template"}, {"image", name}, {"threshold", .8}});
+    // 失败后可停在繁中荒屋/轮盘页，不能只接受英文素材而卡在启动门禁。
+    // 与time_leap一致，只证明已在游戏内，不证明已跳轮或位于某个章节。
+    probes.push_back({{"mode", "template"}, {"image", "cursedWheel_zh_hant"},
+        {"threshold", .8}, {"roi", {450, 500, 450, 400}}});
+    probes.push_back({{"mode", "template"}, {"image", "cursedWheelTitle_zh_hant"},
+        {"threshold", .8}, {"roi", {250, 0, 400, 180}}});
     for (const auto &probe : chest_stage_probes()) probes.push_back(probe);
     probes.push_back({{"mode", "combat_active"}});
     return probes;

@@ -9,6 +9,8 @@ struct ValidatedGraph {
     std::map<std::string, const nlohmann::json *> nodes;
     std::map<std::string, std::vector<const nlohmann::json *>> success;
     std::map<std::string, std::vector<const nlohmann::json *>> failure;
+    std::map<std::string, std::map<std::string, std::vector<const nlohmann::json *>>> handoffs;
+    std::map<std::string, std::vector<const nlohmann::json *>> outgoing;
     std::string success_end;
 };
 

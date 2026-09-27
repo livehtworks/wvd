@@ -13,6 +13,7 @@ tasks::CompiledWorkflow reach_map_target(const MapTarget &target,
     if (target.target == "stay" || target.target == "dungFlag")
         throw std::runtime_error("MAP_TARGET_REQUIRES_AUTO_ROUTE");
     C graph("navigation.map_target");
+    graph.check_policy("navigation", {"wvd-network-retry", "wvd-pause", "wvd-download", "wvd-story", "wvd-blessing", "wvd-karma", "wvd-dialogue", "wvd-special-dialogue", "wvd-sandman"});
     const auto map = C::image("mapFlag"), dungeon = C::image("dungFlag");
     const J combat{{"mode", "combat_active"}};
     const auto chest = C::any({C::image("chestFlag"), C::image("whowillopenit"), C::image("chestOpening")});
@@ -64,13 +65,15 @@ tasks::CompiledWorkflow reach_map_target(const MapTarget &target,
     if (target.harken_arrival)
         graph.observe("HarkenArrived", vision::harken_floor_menu(), {"Terminal"});
     graph.observe("Encounter", encounter, {"EncounterExit"});
-    graph.recovery("EncounterExit", "navigation.encounter_requires_dispatch");
+    graph.handoff("EncounterExit", "encounter");
     if (floor) {
         graph.observe("WrongFloor", C::all({map_scene, C::absent(C::image(*floor))}), {"FloorExit"});
-        graph.recovery("FloorExit", "navigation.wrong_floor");
+        graph.handoff("FloorExit", "floor");
     }
     graph.observe("BeginSearch", correct_map, {"Search0"});
     graph.fixed_click("OpenMap", moving, C::any({map, encounter}), {777, 150}, {"Entry"});
+    graph.retry_menu_input("OpenMap", moving, 3000);
+    graph.failure_route("OpenMap", {"StalledExit"});
     const auto search_count = positional ? std::size_t{1} : target.swipes.size();
     for (std::size_t i = 0; i < search_count; ++i) {
         const auto n = std::to_string(i);
@@ -149,11 +152,18 @@ tasks::CompiledWorkflow reach_map_target(const MapTarget &target,
             }
         }
     }
-    if (!positional && target.target != "chest")
-        graph.recovery("MissingExit", "navigation.target_missing");
+    if (!positional && target.target != "chest") {
+        // 只累计同一目标连续完整搜索失败，不限制正常经过地图/遇怪次数。
+        graph.route("MissingExit", {"Search0"});
+        graph.delay_after("MissingExit", 2000);
+        graph.hit_limit("MissingExit", 3);
+        graph.failure_route("Miss" + std::to_string(search_count - 1), {"MissingTargetExit"});
+        // 找不到素材可能是配置/语言问题，不等同游戏无响应，不能据此重启游戏。
+        graph.recovery("MissingTargetExit", "navigation.target_missing");
+    }
     // 坐标和普通资源目标也可能跨越副本出口。退场由新画面证明，不按目标名称猜测；
     // 父路线先检查 Outside，不能把提前离开误计为当前坐标已到达。
-    J after_move = {"Exited", "Encounter", "Frozen", "CloseStaleMap", "Moving"};
+    J after_move = {"Exited", "Encounter", "CloseStaleMap", "Moving"};
     if (target.harken_arrival)
         after_move.insert(after_move.begin(), "HarkenArrived");
     graph.observe("Exited", outside, {"Terminal"});
@@ -171,21 +181,25 @@ tasks::CompiledWorkflow reach_map_target(const MapTarget &target,
     } else {
         hint.update({{"roi", {120, 250, 780, 950}}, {"threshold", 0.8}});
         graph.fixed_click("AutoMove", correct_map,
-                          {{"mode", "map_route_post"}},
+                          C::any({moving, encounter, outside, C::all({map_scene, C::absent(hint)})}),
                           {136, 1431}, {"WaitAfterMove"});
     }
     graph.route("WaitAfterMove", after_move);
     graph.delay_after("AutoMove", 3000);
-    graph.observe("Frozen", C::all({map_scene, hint}), {"FrozenExit"});
+    graph.retry_menu_input("AutoMove", C::all({correct_map, hint}), 3000);
+    graph.failure_route("AutoMove", {"FrozenExit"});
+    // 只有同页反复重试后仍无响应才走冻结恢复，不以第一次点击后3秒判死。
     graph.recovery("FrozenExit", "navigation.automove_physics_frozen");
+    graph.recovery("StalledExit", "navigation.input_no_progress");
     graph.back("CloseStaleMap", C::all({map_scene, C::absent(hint)}),
                C::any({moving, encounter}), {"Encounter", "Moving"});
     J during_move = {"Exited", "Encounter", "Stopped", "Moving"};
-    graph.observe("Moving", moving, during_move);
+    graph.poll("Moving", 250, during_move, moving,
+        J{{"mode", "region_changed"}, {"channel", "navigation"}, {"roi", {650, 25, 225, 225}}});
     graph.observe("Stopped", C::all({moving, J{{"mode", "movement_stopped"}}}), {"OpenMap"});
     // 多次采样不产生输入；时间和节点数均有界，预算耗尽交给恢复。
-    graph.hit_limit("Moving", 100);
-    graph.interrupt_on({{"mode", "blocking_screen"}, {"parallel_basic", true}}, "navigation.common_screen_requires_dispatch");
+    graph.failure_route("Moving", {"StalledExit"});
+    graph.interrupt_on(C::absent(J{{"mode", "input_clear"}}), "navigation.common_screen_requires_dispatch", "blocked");
     return graph.finish();
 }
 }

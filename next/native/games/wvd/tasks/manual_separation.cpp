@@ -54,7 +54,7 @@ CompiledWorkflow manual_separation(const WvdQuestDefinition &definition, const n
     // 哈肯的子图只有选择、自动移动后才接受离本终点；不能把路线中任意提前回城
     // 当作第二个点完成。单独承接这个离本目标，而不改普通地图点的确认规则。
     const auto harken = graph.define_child("HarkenExit", navigation::reach_map_target(first_plan.route().at(1), {}));
-    graph.call_child("Harken", harken, {"HarkenConfirmed"});
+    graph.call_child("Harken", harken, {"HarkenConfirmed"}, {{"encounter", {"RecoveryRequired"}}, {"blocked", {"RecoveryRequired"}}});
     graph.confirm("HarkenConfirmed", "manual.harken", "target_completed", exited, {"FirstConfirmed"}, 1);
     graph.confirm("FirstConfirmed", "manual.first.route", "manual_route_completed", exited, {"FirstBack"});
     graph.recovery("RouteIncomplete", "quest.manual_route_incomplete");

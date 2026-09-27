@@ -25,7 +25,8 @@
           "postcondition": {
             "mode": "semantic",
             "id": "guild.menu"
-          }
+          },
+          "menu_retry_interval_ms": 5000
         },
         "repeat_limit": 1
       },
@@ -132,9 +133,11 @@
             "mode": "any",
             "conditions": [
               {"mode": "semantic", "id": "guild.commissions.page"},
-              {"mode": "semantic", "id": "guild.bounties.page"}
+              {"mode": "semantic", "id": "guild.bounties.page"},
+              {"mode": "semantic", "id": "guild.bounty.reveal.close"}
             ]
-          }
+          },
+          "menu_retry_interval_ms": 5000
         },
         "repeat_limit": 1
       },
@@ -190,7 +193,7 @@
     "flow": {
       "id": "guild-open-bounties",
       "name": "切到赏金页面",
-      "description": "公共定义候选；来自 dcc11c18 源码及用户业务说明。编译验证不代表真实游戏验证。"
+      "description": "仅标题、选中的悬赏页签和已加载卡片共同确认才完成；刷新展示卡可连续关闭，不将展示卡当已加载列表。"
     },
     "entry": "Entry",
     "nodes": [
@@ -198,8 +201,7 @@
         "id": "Entry",
         "type": "route",
         "name": "按当前页签选择动作",
-        "parameters": {},
-        "repeat_limit": 4
+        "parameters": {}
       },
       {
         "id": "Ready",
@@ -216,7 +218,10 @@
         "name": "横移公会页签",
         "parameters": {
           "operation": "swipe",
-          "scene": {"mode": "semantic", "id": "guild.commissions.page"},
+          "scene": {"mode": "all", "conditions": [
+            {"mode": "semantic", "id": "guild.commissions.page"},
+            {"mode": "not", "conditions": [{"mode": "semantic", "id": "guild.bounties.entry"}]}
+          ]},
           "postcondition": {"mode": "semantic", "id": "guild.commissions.page"},
           "coordinates": [600, 1400, 300, 1400],
           "duration_ms": 400,
@@ -239,11 +244,29 @@
             "id": "guild.bounties.entry"
           },
           "postcondition": {
-            "mode": "semantic",
-            "id": "guild.bounties.page"
-          }
+            "mode": "any", "conditions": [
+              {"mode": "semantic", "id": "guild.bounties.page"},
+              {"mode": "semantic", "id": "guild.bounty.reveal.close"}
+            ]
+          },
+          "menu_retry_interval_ms": 5000
         },
         "repeat_limit": 1
+      },
+      {
+        "id": "CloseReveal",
+        "type": "action",
+        "name": "关闭新悬赏展示卡",
+        "parameters": {
+          "operation": "click",
+          "scene": {"mode": "semantic", "id": "guild.bounty.reveal.close"},
+          "target": {"mode": "semantic", "id": "guild.bounty.reveal.close"},
+          "postcondition": {"mode": "any", "conditions": [
+            {"mode": "semantic", "id": "guild.bounties.page"},
+            {"mode": "semantic", "id": "guild.bounty.reveal.close"}
+          ]},
+          "delay_after_ms": 700
+        }
       },
       {
         "id": "Done",
@@ -267,7 +290,7 @@
         "from": "Entry",
         "to": "SwipeTabs",
         "outcome": "success",
-        "order": 1
+        "order": 3
       },
       {
         "id": "e2",
@@ -286,10 +309,13 @@
       {
         "id": "e4",
         "from": "Open",
-        "to": "Done",
+        "to": "Entry",
         "outcome": "success",
         "order": 0
-      }
+      },
+      {"id":"entry_close_reveal","from":"Entry","to":"CloseReveal","outcome":"success","order":1},
+      {"id":"entry_open_visible_tab","from":"Entry","to":"Open","outcome":"success","order":2},
+      {"id":"reveal_recheck","from":"CloseReveal","to":"Entry","outcome":"success","order":0}
     ],
     "layout": {
       "nodes": [
@@ -312,6 +338,11 @@
           "node_id": "Open",
           "x": 480,
           "y": 180
+        },
+        {
+          "node_id": "CloseReveal",
+          "x": 480,
+          "y": 320
         },
         {
           "node_id": "Done",
@@ -2300,6 +2331,2181 @@
       "kind": "block",
       "category": "公会",
       "parameters": []
+    }
+  }
+,
+{
+    "schema": 1,
+    "flow": {
+      "id": "combat-open-detail",
+      "name": "打开当前角色技能详情",
+      "description": "只推进当前步骤，不消费外层路线目标；调用参数仅作用于本次实例。"
+    },
+    "entry": "open",
+    "nodes": [
+      {
+        "id": "open",
+        "type": "action",
+        "name": "打开技能详情",
+        "parameters": {
+          "operation": "fixed_click",
+          "scene": {
+            "mode": "all",
+            "conditions": [
+              {
+                "mode": "all",
+                "conditions": [
+                  {
+                    "mode": "combat_active"
+                  },
+                  {
+                    "mode": "semantic",
+                    "id": "combat.menu.flee"
+                  },
+                  {
+                    "mode": "not",
+                    "conditions": [
+                      {
+                        "mode": "any",
+                        "conditions": [
+                          {
+                            "mode": "semantic",
+                            "id": "combat.skill.detail"
+                          },
+                          {
+                            "mode": "semantic",
+                            "id": "combat.skill.confirm"
+                          },
+                          {
+                            "mode": "template",
+                            "image": "close",
+                            "threshold": 0.8,
+                            "roi": [
+                              250,
+                              1420,
+                              420,
+                              150
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "mode": "prepared_actor"
+              }
+            ]
+          },
+          "postcondition": {
+            "mode": "any",
+            "conditions": [
+              {
+                "mode": "all",
+                "conditions": [
+                  {
+                    "mode": "combat_active"
+                  },
+                  {
+                    "mode": "prepared_actor"
+                  },
+                  {
+                    "mode": "semantic",
+                    "id": "combat.skill.detail"
+                  }
+                ]
+              },
+              {
+                "mode": "all",
+                "conditions": [
+                  {
+                    "mode": "combat_active"
+                  },
+                  {
+                    "mode": "semantic",
+                    "id": "combat.menu.flee"
+                  },
+                  {
+                    "mode": "not",
+                    "conditions": [
+                      {
+                        "mode": "any",
+                        "conditions": [
+                          {
+                            "mode": "semantic",
+                            "id": "combat.skill.detail"
+                          },
+                          {
+                            "mode": "semantic",
+                            "id": "combat.skill.confirm"
+                          },
+                          {
+                            "mode": "template",
+                            "image": "close",
+                            "threshold": 0.8,
+                            "roi": [
+                              250,
+                              1420,
+                              420,
+                              150
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "mode": "any",
+                "conditions": [
+                  {
+                    "mode": "template",
+                    "image": "notenoughsp",
+                    "threshold": 0.8
+                  },
+                  {
+                    "mode": "template",
+                    "image": "notenoughmp",
+                    "threshold": 0.8
+                  }
+                ]
+              },
+              {
+                "mode": "any",
+                "conditions": [
+                  {
+                    "mode": "template",
+                    "image": "dungFlag",
+                    "threshold": 0.8
+                  },
+                  {
+                    "mode": "template",
+                    "image": "chestFlag",
+                    "threshold": 0.8
+                  },
+                  {
+                    "mode": "template",
+                    "image": "RiseAgain",
+                    "threshold": 0.8
+                  }
+                ]
+              }
+            ]
+          },
+          "position": [
+            266,
+            965
+          ],
+          "delay_after_ms": 600
+        }
+      },
+      {
+        "id": "done",
+        "type": "end",
+        "name": "步骤完成",
+        "parameters": {
+          "outcome": "success"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "edge_0",
+        "from": "open",
+        "to": "done",
+        "outcome": "success",
+        "order": 0
+      }
+    ],
+    "layout": {
+      "nodes": [
+        {
+          "node_id": "open",
+          "x": 0,
+          "y": 0
+        },
+        {
+          "node_id": "done",
+          "x": 260,
+          "y": 0
+        }
+      ],
+      "viewport": {
+        "x": 0,
+        "y": 0,
+        "zoom": 1
+      }
+    },
+    "execution": {
+      "time_limit_ms": 60000,
+      "checks": {
+        "phase": "combat",
+        "inherit": [
+          "wvd-network-retry",
+          "wvd-pause",
+          "wvd-download"
+        ],
+        "debounce_ms": 1000,
+        "interval_ms": 1000,
+        "protect_input": true
+      }
+    },
+    "interface": {
+      "kind": "step",
+      "category": "战斗",
+      "parameters": [
+        {
+          "name": "x",
+          "label": "技能横坐标",
+          "type": "integer",
+          "default": 266,
+          "min": 1,
+          "max": 898,
+          "bindings": [
+            {
+              "node": "open",
+              "path": "/position/0"
+            }
+          ]
+        },
+        {
+          "name": "y",
+          "label": "技能纵坐标",
+          "type": "integer",
+          "default": 965,
+          "min": 1,
+          "max": 1598,
+          "bindings": [
+            {
+              "node": "open",
+              "path": "/position/1"
+            }
+          ]
+        }
+      ],
+      "handoffs": []
+    }
+  },
+  {
+    "schema": 1,
+    "flow": {
+      "id": "combat-select-level",
+      "name": "选择技能等级",
+      "description": "只推进当前步骤，不消费外层路线目标；调用参数仅作用于本次实例。"
+    },
+    "entry": "entry",
+    "nodes": [
+      {
+        "id": "entry",
+        "type": "route",
+        "name": "选择当前等级分支",
+        "parameters": {}
+      },
+      {
+        "id": "selected",
+        "type": "recognition",
+        "name": "等级已选中",
+        "parameters": {
+          "condition": {
+            "mode": "all",
+            "conditions": [
+              {
+                "mode": "all",
+                "conditions": [
+                  {
+                    "mode": "combat_active"
+                  },
+                  {
+                    "mode": "prepared_actor"
+                  },
+                  {
+                    "mode": "semantic",
+                    "id": "combat.skill.detail"
+                  }
+                ]
+              },
+              {
+                "mode": "skill_level",
+                "level": 3,
+                "selected": true
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "select",
+        "type": "action",
+        "name": "选择请求等级",
+        "parameters": {
+          "menu_retry_interval_ms": 3000,
+          "postcondition_timeout_ms": 60000,
+          "operation": "click",
+          "scene": {
+            "mode": "all",
+            "conditions": [
+              {
+                "mode": "all",
+                "conditions": [
+                  {
+                    "mode": "combat_active"
+                  },
+                  {
+                    "mode": "prepared_actor"
+                  },
+                  {
+                    "mode": "semantic",
+                    "id": "combat.skill.detail"
+                  }
+                ]
+              },
+              {
+                "mode": "skill_level",
+                "level": 1
+              }
+            ]
+          },
+          "target": {
+            "mode": "skill_level",
+            "level": 3
+          },
+          "postcondition": {
+            "mode": "all",
+            "conditions": [
+              {
+                "mode": "all",
+                "conditions": [
+                  {
+                    "mode": "combat_active"
+                  },
+                  {
+                    "mode": "prepared_actor"
+                  },
+                  {
+                    "mode": "semantic",
+                    "id": "combat.skill.detail"
+                  }
+                ]
+              },
+              {
+                "mode": "skill_level",
+                "level": 3,
+                "selected": true
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "fallback",
+        "type": "action",
+        "name": "等级不可用退一级",
+        "parameters": {
+          "menu_retry_interval_ms": 3000,
+          "postcondition_timeout_ms": 60000,
+          "operation": "click",
+          "scene": {
+            "mode": "all",
+            "conditions": [
+              {
+                "mode": "all",
+                "conditions": [
+                  {
+                    "mode": "combat_active"
+                  },
+                  {
+                    "mode": "prepared_actor"
+                  },
+                  {
+                    "mode": "semantic",
+                    "id": "combat.skill.detail"
+                  }
+                ]
+              },
+              {
+                "mode": "skill_level",
+                "level": 1
+              },
+              {
+                "mode": "not",
+                "conditions": [
+                  {
+                    "mode": "skill_level",
+                    "level": 3
+                  }
+                ]
+              }
+            ]
+          },
+          "target": {
+            "mode": "skill_level",
+            "level": 1
+          },
+          "postcondition": {
+            "mode": "all",
+            "conditions": [
+              {
+                "mode": "all",
+                "conditions": [
+                  {
+                    "mode": "combat_active"
+                  },
+                  {
+                    "mode": "prepared_actor"
+                  },
+                  {
+                    "mode": "semantic",
+                    "id": "combat.skill.detail"
+                  }
+                ]
+              },
+              {
+                "mode": "skill_level",
+                "level": 1,
+                "selected": true
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "unavailable",
+        "type": "recognition",
+        "name": "当前详情没有等级选择条",
+        "parameters": {
+          "condition": {
+            "mode": "all",
+            "conditions": [
+              {
+                "mode": "all",
+                "conditions": [
+                  {
+                    "mode": "combat_active"
+                  },
+                  {
+                    "mode": "prepared_actor"
+                  },
+                  {
+                    "mode": "semantic",
+                    "id": "combat.skill.detail"
+                  }
+                ]
+              },
+              {
+                "mode": "not",
+                "conditions": [
+                  {
+                    "mode": "skill_level",
+                    "level": 1
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "return_unavailable",
+        "type": "end",
+        "name": "交接调用者决定默认等级或自动战斗",
+        "parameters": {
+          "outcome": "handoff",
+          "port": "unavailable"
+        }
+      },
+      {
+        "id": "done",
+        "type": "end",
+        "name": "步骤完成",
+        "parameters": {
+          "outcome": "success"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "edge_0",
+        "from": "entry",
+        "to": "selected",
+        "outcome": "success",
+        "order": 0
+      },
+      {
+        "id": "edge_1",
+        "from": "entry",
+        "to": "select",
+        "outcome": "success",
+        "order": 1
+      },
+      {
+        "id": "edge_2",
+        "from": "entry",
+        "to": "fallback",
+        "outcome": "success",
+        "order": 2
+      },
+      {
+        "id": "edge_3",
+        "from": "entry",
+        "to": "unavailable",
+        "outcome": "success",
+        "order": 3
+      },
+      {
+        "id": "edge_4",
+        "from": "selected",
+        "to": "done",
+        "outcome": "success",
+        "order": 0
+      },
+      {
+        "id": "edge_5",
+        "from": "select",
+        "to": "done",
+        "outcome": "success",
+        "order": 0
+      },
+      {
+        "id": "edge_6",
+        "from": "fallback",
+        "to": "done",
+        "outcome": "success",
+        "order": 0
+      },
+      {
+        "id": "edge_7",
+        "from": "unavailable",
+        "to": "return_unavailable",
+        "outcome": "success",
+        "order": 0
+      },
+      {
+        "id": "select_no_progress",
+        "from": "select",
+        "to": "return_unavailable",
+        "outcome": "failure",
+        "order": 0
+      },
+      {
+        "id": "fallback_no_progress",
+        "from": "fallback",
+        "to": "return_unavailable",
+        "outcome": "failure",
+        "order": 0
+      }
+    ],
+    "layout": {
+      "nodes": [
+        {
+          "node_id": "entry",
+          "x": 0,
+          "y": 0
+        },
+        {
+          "node_id": "selected",
+          "x": 260,
+          "y": 0
+        },
+        {
+          "node_id": "select",
+          "x": 520,
+          "y": 0
+        },
+        {
+          "node_id": "fallback",
+          "x": 780,
+          "y": 0
+        },
+        {
+          "node_id": "unavailable",
+          "x": 0,
+          "y": 150
+        },
+        {
+          "node_id": "return_unavailable",
+          "x": 260,
+          "y": 150
+        },
+        {
+          "node_id": "done",
+          "x": 520,
+          "y": 150
+        }
+      ],
+      "viewport": {
+        "x": 0,
+        "y": 0,
+        "zoom": 1
+      }
+    },
+    "execution": {
+      "time_limit_ms": 180000,
+      "checks": {
+        "phase": "combat",
+        "inherit": [
+          "wvd-network-retry",
+          "wvd-pause",
+          "wvd-download"
+        ],
+        "debounce_ms": 1000,
+        "interval_ms": 1000,
+        "protect_input": true
+      }
+    },
+    "interface": {
+      "kind": "step",
+      "category": "战斗",
+      "parameters": [
+        {
+          "name": "level",
+          "label": "请求等级",
+          "type": "integer",
+          "default": 3,
+          "min": 1,
+          "max": 9,
+          "bindings": [
+            {
+              "node": "selected",
+              "path": "/condition/conditions/1/level"
+            },
+            {
+              "node": "select",
+              "path": "/target/level"
+            },
+            {
+              "node": "select",
+              "path": "/postcondition/conditions/1/level"
+            },
+            {
+              "node": "fallback",
+              "path": "/scene/conditions/2/conditions/0/level"
+            }
+          ]
+        }
+      ],
+      "handoffs": [
+        "unavailable"
+      ]
+    }
+  },
+  {
+    "schema": 1,
+    "flow": {
+      "id": "combat-select-target",
+      "name": "点击当前单体技能目标",
+      "description": "只推进当前步骤，不消费外层路线目标；调用参数仅作用于本次实例。"
+    },
+    "entry": "target",
+    "nodes": [
+      {
+        "id": "target",
+        "type": "action",
+        "name": "点击目标下方可达区域",
+        "parameters": {
+          "operation": "click",
+          "scene": {
+            "mode": "all",
+            "conditions": [
+              {
+                "mode": "all",
+                "conditions": [
+                  {
+                    "mode": "combat_active"
+                  },
+                  {
+                    "mode": "prepared_actor"
+                  },
+                  {
+                    "mode": "semantic",
+                    "id": "combat.skill.detail"
+                  }
+                ]
+              },
+              {
+                "mode": "not",
+                "conditions": [
+                  {
+                    "mode": "semantic",
+                    "id": "combat.skill.confirm"
+                  }
+                ]
+              },
+              {
+                "mode": "not",
+                "conditions": [
+                  {
+                    "mode": "template",
+                    "image": "supportSkillCheck",
+                    "threshold": 0.8,
+                    "roi": [
+                      677,
+                      1475,
+                      189,
+                      80
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          "target": {
+            "mode": "skill_target"
+          },
+          "postcondition": {
+            "mode": "any",
+            "conditions": [
+              {
+                "mode": "all",
+                "conditions": [
+                  {
+                    "mode": "combat_active"
+                  },
+                  {
+                    "mode": "prepared_actor"
+                  },
+                  {
+                    "mode": "semantic",
+                    "id": "combat.skill.detail"
+                  }
+                ]
+              },
+              {
+                "mode": "all",
+                "conditions": [
+                  {
+                    "mode": "any",
+                    "conditions": [
+                      {
+                        "mode": "all",
+                        "conditions": [
+                          {
+                            "mode": "combat_active"
+                          },
+                          {
+                            "mode": "not",
+                            "conditions": [
+                              {
+                                "mode": "any",
+                                "conditions": [
+                                  {
+                                    "mode": "semantic",
+                                    "id": "combat.skill.detail"
+                                  },
+                                  {
+                                    "mode": "semantic",
+                                    "id": "combat.skill.confirm"
+                                  },
+                                  {
+                                    "mode": "template",
+                                    "image": "close",
+                                    "threshold": 0.8,
+                                    "roi": [
+                                      250,
+                                      1420,
+                                      420,
+                                      150
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "mode": "any",
+                        "conditions": [
+                          {
+                            "mode": "template",
+                            "image": "dungFlag",
+                            "threshold": 0.8
+                          },
+                          {
+                            "mode": "template",
+                            "image": "chestFlag",
+                            "threshold": 0.8
+                          },
+                          {
+                            "mode": "template",
+                            "image": "RiseAgain",
+                            "threshold": 0.8
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "mode": "not",
+                    "conditions": [
+                      {
+                        "mode": "any",
+                        "conditions": [
+                          {
+                            "mode": "template",
+                            "image": "notenoughsp",
+                            "threshold": 0.8
+                          },
+                          {
+                            "mode": "template",
+                            "image": "notenoughmp",
+                            "threshold": 0.8
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "mode": "not",
+                    "conditions": [
+                      {
+                        "mode": "any",
+                        "conditions": [
+                          {
+                            "mode": "semantic",
+                            "id": "combat.skill.detail"
+                          },
+                          {
+                            "mode": "semantic",
+                            "id": "combat.skill.confirm"
+                          },
+                          {
+                            "mode": "template",
+                            "image": "close",
+                            "threshold": 0.8,
+                            "roi": [
+                              250,
+                              1420,
+                              420,
+                              150
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "mode": "any",
+                "conditions": [
+                  {
+                    "mode": "template",
+                    "image": "notenoughsp",
+                    "threshold": 0.8
+                  },
+                  {
+                    "mode": "template",
+                    "image": "notenoughmp",
+                    "threshold": 0.8
+                  }
+                ]
+              }
+            ]
+          },
+          "offset": [
+            0,
+            80
+          ],
+          "allowed_area": [
+            1,
+            260,
+            898,
+            641
+          ],
+          "delay_after_ms": 200,
+          "interrupted_reason": "combat.skill_outcome_unconfirmed"
+        }
+      },
+      {
+        "id": "done",
+        "type": "end",
+        "name": "步骤完成",
+        "parameters": {
+          "outcome": "success"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "edge_0",
+        "from": "target",
+        "to": "done",
+        "outcome": "success",
+        "order": 0
+      }
+    ],
+    "layout": {
+      "nodes": [
+        {
+          "node_id": "target",
+          "x": 0,
+          "y": 0
+        },
+        {
+          "node_id": "done",
+          "x": 260,
+          "y": 0
+        }
+      ],
+      "viewport": {
+        "x": 0,
+        "y": 0,
+        "zoom": 1
+      }
+    },
+    "execution": {
+      "time_limit_ms": 60000,
+      "checks": {
+        "phase": "combat",
+        "inherit": [
+          "wvd-network-retry",
+          "wvd-pause",
+          "wvd-download"
+        ],
+        "debounce_ms": 1000,
+        "interval_ms": 1000,
+        "protect_input": true
+      }
+    },
+    "interface": {
+      "kind": "step",
+      "category": "战斗",
+      "parameters": [
+        {
+          "name": "dx",
+          "label": "相对横向偏移",
+          "type": "integer",
+          "default": 0,
+          "min": -900,
+          "max": 900,
+          "bindings": [
+            {
+              "node": "target",
+              "path": "/offset/0"
+            }
+          ]
+        },
+        {
+          "name": "dy",
+          "label": "相对纵向偏移",
+          "type": "integer",
+          "default": 80,
+          "min": -1600,
+          "max": 1600,
+          "bindings": [
+            {
+              "node": "target",
+              "path": "/offset/1"
+            }
+          ]
+        }
+      ],
+      "handoffs": []
+    }
+  },
+  {
+    "schema": 1,
+    "flow": {
+      "id": "combat-confirm-result",
+      "name": "确认当前技能结果",
+      "description": "只推进当前步骤，不消费外层路线目标；调用参数仅作用于本次实例。"
+    },
+    "entry": "result",
+    "nodes": [
+      {
+        "id": "result",
+        "type": "recognition",
+        "name": "详情已消失且没有资源不足提示",
+        "parameters": {
+          "condition": {
+            "mode": "all",
+            "conditions": [
+              {
+                "mode": "any",
+                "conditions": [
+                  {
+                    "mode": "all",
+                    "conditions": [
+                      {
+                        "mode": "combat_active"
+                      },
+                      {
+                        "mode": "not",
+                        "conditions": [
+                          {
+                            "mode": "any",
+                            "conditions": [
+                              {
+                                "mode": "semantic",
+                                "id": "combat.skill.detail"
+                              },
+                              {
+                                "mode": "semantic",
+                                "id": "combat.skill.confirm"
+                              },
+                              {
+                                "mode": "template",
+                                "image": "close",
+                                "threshold": 0.8,
+                                "roi": [
+                                  250,
+                                  1420,
+                                  420,
+                                  150
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "mode": "any",
+                    "conditions": [
+                      {
+                        "mode": "template",
+                        "image": "dungFlag",
+                        "threshold": 0.8
+                      },
+                      {
+                        "mode": "template",
+                        "image": "chestFlag",
+                        "threshold": 0.8
+                      },
+                      {
+                        "mode": "template",
+                        "image": "RiseAgain",
+                        "threshold": 0.8
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "mode": "not",
+                "conditions": [
+                  {
+                    "mode": "any",
+                    "conditions": [
+                      {
+                        "mode": "template",
+                        "image": "notenoughsp",
+                        "threshold": 0.8
+                      },
+                      {
+                        "mode": "template",
+                        "image": "notenoughmp",
+                        "threshold": 0.8
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "mode": "not",
+                "conditions": [
+                  {
+                    "mode": "any",
+                    "conditions": [
+                      {
+                        "mode": "semantic",
+                        "id": "combat.skill.detail"
+                      },
+                      {
+                        "mode": "semantic",
+                        "id": "combat.skill.confirm"
+                      },
+                      {
+                        "mode": "template",
+                        "image": "close",
+                        "threshold": 0.8,
+                        "roi": [
+                          250,
+                          1420,
+                          420,
+                          150
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "done",
+        "type": "end",
+        "name": "步骤完成",
+        "parameters": {
+          "outcome": "success"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "edge_0",
+        "from": "result",
+        "to": "done",
+        "outcome": "success",
+        "order": 0
+      }
+    ],
+    "layout": {
+      "nodes": [
+        {
+          "node_id": "result",
+          "x": 0,
+          "y": 0
+        },
+        {
+          "node_id": "done",
+          "x": 260,
+          "y": 0
+        }
+      ],
+      "viewport": {
+        "x": 0,
+        "y": 0,
+        "zoom": 1
+      }
+    },
+    "execution": {
+      "time_limit_ms": 60000,
+      "checks": {
+        "phase": "combat",
+        "inherit": [
+          "wvd-network-retry",
+          "wvd-pause",
+          "wvd-download"
+        ],
+        "debounce_ms": 1000,
+        "interval_ms": 1000,
+        "protect_input": true
+      }
+    },
+    "interface": {
+      "kind": "step",
+      "category": "战斗",
+      "parameters": [],
+      "handoffs": []
+    }
+  },
+  {
+    "schema": 1,
+    "flow": {
+      "id": "chest-choose-character",
+      "name": "点击已选开箱角色",
+      "description": "只推进当前步骤，不消费外层路线目标；调用参数仅作用于本次实例。"
+    },
+    "entry": "choose",
+    "nodes": [
+      {
+        "id": "choose",
+        "type": "action",
+        "name": "点击当前可开箱角色",
+        "parameters": {
+          "operation": "fixed_click",
+          "scene": {
+            "mode": "all",
+            "conditions": [
+              {
+                "mode": "all",
+                "conditions": [
+                  {
+                    "mode": "any",
+                    "conditions": [
+                      {
+                        "mode": "semantic",
+                        "id": "chest.open.option"
+                      },
+                      {
+                        "mode": "semantic",
+                        "id": "chest.choose.page"
+                      },
+                      {
+                        "mode": "template",
+                        "image": "chestOpening",
+                        "threshold": 0.8
+                      }
+                    ]
+                  },
+                  {
+                    "mode": "not",
+                    "conditions": [
+                      {
+                        "mode": "any",
+                        "conditions": [
+                          {
+                            "mode": "combat_active"
+                          },
+                          {
+                            "mode": "template",
+                            "image": "RiseAgain",
+                            "threshold": 0.8
+                          },
+                          {
+                            "mode": "template",
+                            "image": "ambush",
+                            "threshold": 0.8
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "mode": "semantic",
+                "id": "chest.choose.page"
+              }
+            ]
+          },
+          "postcondition": {
+            "mode": "any",
+            "conditions": [
+              {
+                "mode": "semantic",
+                "id": "chest.reward.page"
+              },
+              {
+                "mode": "all",
+                "conditions": [
+                  {
+                    "mode": "any",
+                    "conditions": [
+                      {
+                        "mode": "semantic",
+                        "id": "chest.open.option"
+                      },
+                      {
+                        "mode": "semantic",
+                        "id": "chest.choose.page"
+                      },
+                      {
+                        "mode": "template",
+                        "image": "chestOpening",
+                        "threshold": 0.8
+                      }
+                    ]
+                  },
+                  {
+                    "mode": "not",
+                    "conditions": [
+                      {
+                        "mode": "any",
+                        "conditions": [
+                          {
+                            "mode": "combat_active"
+                          },
+                          {
+                            "mode": "template",
+                            "image": "RiseAgain",
+                            "threshold": 0.8
+                          },
+                          {
+                            "mode": "template",
+                            "image": "ambush",
+                            "threshold": 0.8
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "mode": "all",
+                "conditions": [
+                  {
+                    "mode": "template",
+                    "image": "dungFlag",
+                    "threshold": 0.8
+                  },
+                  {
+                    "mode": "not",
+                    "conditions": [
+                      {
+                        "mode": "any",
+                        "conditions": [
+                          {
+                            "mode": "combat_active"
+                          },
+                          {
+                            "mode": "template",
+                            "image": "RiseAgain",
+                            "threshold": 0.8
+                          },
+                          {
+                            "mode": "template",
+                            "image": "ambush",
+                            "threshold": 0.8
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "mode": "not",
+                    "conditions": [
+                      {
+                        "mode": "all",
+                        "conditions": [
+                          {
+                            "mode": "any",
+                            "conditions": [
+                              {
+                                "mode": "semantic",
+                                "id": "chest.open.option"
+                              },
+                              {
+                                "mode": "semantic",
+                                "id": "chest.choose.page"
+                              },
+                              {
+                                "mode": "template",
+                                "image": "chestOpening",
+                                "threshold": 0.8
+                              }
+                            ]
+                          },
+                          {
+                            "mode": "not",
+                            "conditions": [
+                              {
+                                "mode": "any",
+                                "conditions": [
+                                  {
+                                    "mode": "combat_active"
+                                  },
+                                  {
+                                    "mode": "template",
+                                    "image": "RiseAgain",
+                                    "threshold": 0.8
+                                  },
+                                  {
+                                    "mode": "template",
+                                    "image": "ambush",
+                                    "threshold": 0.8
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "mode": "not",
+                    "conditions": [
+                      {
+                        "mode": "semantic",
+                        "id": "chest.reward.page"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "mode": "any",
+                "conditions": [
+                  {
+                    "mode": "combat_active"
+                  },
+                  {
+                    "mode": "template",
+                    "image": "RiseAgain",
+                    "threshold": 0.8
+                  },
+                  {
+                    "mode": "template",
+                    "image": "ambush",
+                    "threshold": 0.8
+                  }
+                ]
+              }
+            ]
+          },
+          "position": [
+            258,
+            1161
+          ],
+          "delay_after_ms": 1500
+        }
+      },
+      {
+        "id": "done",
+        "type": "end",
+        "name": "步骤完成",
+        "parameters": {
+          "outcome": "success"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "edge_0",
+        "from": "choose",
+        "to": "done",
+        "outcome": "success",
+        "order": 0
+      }
+    ],
+    "layout": {
+      "nodes": [
+        {
+          "node_id": "choose",
+          "x": 0,
+          "y": 0
+        },
+        {
+          "node_id": "done",
+          "x": 260,
+          "y": 0
+        }
+      ],
+      "viewport": {
+        "x": 0,
+        "y": 0,
+        "zoom": 1
+      }
+    },
+    "execution": {
+      "time_limit_ms": 60000,
+      "checks": {
+        "phase": "chest",
+        "inherit": [
+          "wvd-network-retry",
+          "wvd-pause",
+          "wvd-download"
+        ],
+        "debounce_ms": 1000,
+        "interval_ms": 1000,
+        "protect_input": true
+      }
+    },
+    "interface": {
+      "kind": "step",
+      "category": "宝箱",
+      "parameters": [
+        {
+          "name": "x",
+          "label": "角色横坐标",
+          "type": "integer",
+          "default": 258,
+          "min": 1,
+          "max": 898,
+          "bindings": [
+            {
+              "node": "choose",
+              "path": "/position/0"
+            }
+          ]
+        },
+        {
+          "name": "y",
+          "label": "角色纵坐标",
+          "type": "integer",
+          "default": 1161,
+          "min": 1,
+          "max": 1598,
+          "bindings": [
+            {
+              "node": "choose",
+              "path": "/position/1"
+            }
+          ]
+        },
+        {
+          "name": "delay_ms",
+          "label": "选择后等待",
+          "type": "integer",
+          "default": 1500,
+          "min": 0,
+          "max": 10000,
+          "bindings": [
+            {
+              "node": "choose",
+              "path": "/delay_after_ms"
+            }
+          ]
+        }
+      ],
+      "handoffs": []
+    }
+  },
+  {
+    "schema": 1,
+    "flow": {
+      "id": "chest-disarm",
+      "name": "尝试当前宝箱拆锁",
+      "description": "只推进当前步骤，不消费外层路线目标；调用参数仅作用于本次实例。"
+    },
+    "entry": "disarm",
+    "nodes": [
+      {
+        "id": "disarm",
+        "type": "action",
+        "name": "推进拆锁动作",
+        "parameters": {
+          "operation": "fixed_click",
+          "scene": {
+            "mode": "all",
+            "conditions": [
+              {
+                "mode": "all",
+                "conditions": [
+                  {
+                    "mode": "any",
+                    "conditions": [
+                      {
+                        "mode": "semantic",
+                        "id": "chest.open.option"
+                      },
+                      {
+                        "mode": "semantic",
+                        "id": "chest.choose.page"
+                      },
+                      {
+                        "mode": "template",
+                        "image": "chestOpening",
+                        "threshold": 0.8
+                      }
+                    ]
+                  },
+                  {
+                    "mode": "not",
+                    "conditions": [
+                      {
+                        "mode": "any",
+                        "conditions": [
+                          {
+                            "mode": "combat_active"
+                          },
+                          {
+                            "mode": "template",
+                            "image": "RiseAgain",
+                            "threshold": 0.8
+                          },
+                          {
+                            "mode": "template",
+                            "image": "ambush",
+                            "threshold": 0.8
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "mode": "any",
+                "conditions": [
+                  {
+                    "mode": "semantic",
+                    "id": "chest.choose.page"
+                  },
+                  {
+                    "mode": "template",
+                    "image": "chestOpening",
+                    "threshold": 0.8
+                  }
+                ]
+              }
+            ]
+          },
+          "postcondition": {
+            "mode": "any",
+            "conditions": [
+              {
+                "mode": "semantic",
+                "id": "chest.reward.page"
+              },
+              {
+                "mode": "all",
+                "conditions": [
+                  {
+                    "mode": "any",
+                    "conditions": [
+                      {
+                        "mode": "semantic",
+                        "id": "chest.open.option"
+                      },
+                      {
+                        "mode": "semantic",
+                        "id": "chest.choose.page"
+                      },
+                      {
+                        "mode": "template",
+                        "image": "chestOpening",
+                        "threshold": 0.8
+                      }
+                    ]
+                  },
+                  {
+                    "mode": "not",
+                    "conditions": [
+                      {
+                        "mode": "any",
+                        "conditions": [
+                          {
+                            "mode": "combat_active"
+                          },
+                          {
+                            "mode": "template",
+                            "image": "RiseAgain",
+                            "threshold": 0.8
+                          },
+                          {
+                            "mode": "template",
+                            "image": "ambush",
+                            "threshold": 0.8
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "mode": "all",
+                "conditions": [
+                  {
+                    "mode": "template",
+                    "image": "dungFlag",
+                    "threshold": 0.8
+                  },
+                  {
+                    "mode": "not",
+                    "conditions": [
+                      {
+                        "mode": "any",
+                        "conditions": [
+                          {
+                            "mode": "combat_active"
+                          },
+                          {
+                            "mode": "template",
+                            "image": "RiseAgain",
+                            "threshold": 0.8
+                          },
+                          {
+                            "mode": "template",
+                            "image": "ambush",
+                            "threshold": 0.8
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "mode": "not",
+                    "conditions": [
+                      {
+                        "mode": "all",
+                        "conditions": [
+                          {
+                            "mode": "any",
+                            "conditions": [
+                              {
+                                "mode": "semantic",
+                                "id": "chest.open.option"
+                              },
+                              {
+                                "mode": "semantic",
+                                "id": "chest.choose.page"
+                              },
+                              {
+                                "mode": "template",
+                                "image": "chestOpening",
+                                "threshold": 0.8
+                              }
+                            ]
+                          },
+                          {
+                            "mode": "not",
+                            "conditions": [
+                              {
+                                "mode": "any",
+                                "conditions": [
+                                  {
+                                    "mode": "combat_active"
+                                  },
+                                  {
+                                    "mode": "template",
+                                    "image": "RiseAgain",
+                                    "threshold": 0.8
+                                  },
+                                  {
+                                    "mode": "template",
+                                    "image": "ambush",
+                                    "threshold": 0.8
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "mode": "not",
+                    "conditions": [
+                      {
+                        "mode": "semantic",
+                        "id": "chest.reward.page"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "mode": "any",
+                "conditions": [
+                  {
+                    "mode": "combat_active"
+                  },
+                  {
+                    "mode": "template",
+                    "image": "RiseAgain",
+                    "threshold": 0.8
+                  },
+                  {
+                    "mode": "template",
+                    "image": "ambush",
+                    "threshold": 0.8
+                  }
+                ]
+              }
+            ]
+          },
+          "position": [
+            515,
+            934
+          ],
+          "delay_after_ms": 300,
+          "interrupted_reason": "chest.disarm_outcome_unconfirmed"
+        }
+      },
+      {
+        "id": "done",
+        "type": "end",
+        "name": "步骤完成",
+        "parameters": {
+          "outcome": "success"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "edge_0",
+        "from": "disarm",
+        "to": "done",
+        "outcome": "success",
+        "order": 0
+      }
+    ],
+    "layout": {
+      "nodes": [
+        {
+          "node_id": "disarm",
+          "x": 0,
+          "y": 0
+        },
+        {
+          "node_id": "done",
+          "x": 260,
+          "y": 0
+        }
+      ],
+      "viewport": {
+        "x": 0,
+        "y": 0,
+        "zoom": 1
+      }
+    },
+    "execution": {
+      "time_limit_ms": 60000,
+      "checks": {
+        "phase": "chest",
+        "inherit": [
+          "wvd-network-retry",
+          "wvd-pause",
+          "wvd-download"
+        ],
+        "debounce_ms": 1000,
+        "interval_ms": 1000,
+        "protect_input": true
+      }
+    },
+    "interface": {
+      "kind": "step",
+      "category": "宝箱",
+      "parameters": [
+        {
+          "name": "delay_ms",
+          "label": "拆锁后等待",
+          "type": "integer",
+          "default": 300,
+          "min": 0,
+          "max": 10000,
+          "bindings": [
+            {
+              "node": "disarm",
+              "path": "/delay_after_ms"
+            }
+          ]
+        }
+      ],
+      "handoffs": []
+    }
+  },
+  {
+    "schema": 1,
+    "flow": {
+      "id": "chest-reward-continue",
+      "name": "继续当前宝箱奖励页面",
+      "description": "只推进当前步骤，不消费外层路线目标；调用参数仅作用于本次实例。"
+    },
+    "entry": "continue",
+    "nodes": [
+      {
+        "id": "continue",
+        "type": "action",
+        "name": "点击奖励继续箭头",
+        "parameters": {
+          "operation": "fixed_click",
+          "scene": {
+            "mode": "semantic",
+            "id": "chest.reward.page"
+          },
+          "postcondition": {
+            "mode": "any",
+            "conditions": [
+              {
+                "mode": "semantic",
+                "id": "chest.reward.page"
+              },
+              {
+                "mode": "all",
+                "conditions": [
+                  {
+                    "mode": "any",
+                    "conditions": [
+                      {
+                        "mode": "semantic",
+                        "id": "chest.open.option"
+                      },
+                      {
+                        "mode": "semantic",
+                        "id": "chest.choose.page"
+                      },
+                      {
+                        "mode": "template",
+                        "image": "chestOpening",
+                        "threshold": 0.8
+                      }
+                    ]
+                  },
+                  {
+                    "mode": "not",
+                    "conditions": [
+                      {
+                        "mode": "any",
+                        "conditions": [
+                          {
+                            "mode": "combat_active"
+                          },
+                          {
+                            "mode": "template",
+                            "image": "RiseAgain",
+                            "threshold": 0.8
+                          },
+                          {
+                            "mode": "template",
+                            "image": "ambush",
+                            "threshold": 0.8
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "mode": "all",
+                "conditions": [
+                  {
+                    "mode": "template",
+                    "image": "dungFlag",
+                    "threshold": 0.8
+                  },
+                  {
+                    "mode": "not",
+                    "conditions": [
+                      {
+                        "mode": "any",
+                        "conditions": [
+                          {
+                            "mode": "combat_active"
+                          },
+                          {
+                            "mode": "template",
+                            "image": "RiseAgain",
+                            "threshold": 0.8
+                          },
+                          {
+                            "mode": "template",
+                            "image": "ambush",
+                            "threshold": 0.8
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "mode": "not",
+                    "conditions": [
+                      {
+                        "mode": "all",
+                        "conditions": [
+                          {
+                            "mode": "any",
+                            "conditions": [
+                              {
+                                "mode": "semantic",
+                                "id": "chest.open.option"
+                              },
+                              {
+                                "mode": "semantic",
+                                "id": "chest.choose.page"
+                              },
+                              {
+                                "mode": "template",
+                                "image": "chestOpening",
+                                "threshold": 0.8
+                              }
+                            ]
+                          },
+                          {
+                            "mode": "not",
+                            "conditions": [
+                              {
+                                "mode": "any",
+                                "conditions": [
+                                  {
+                                    "mode": "combat_active"
+                                  },
+                                  {
+                                    "mode": "template",
+                                    "image": "RiseAgain",
+                                    "threshold": 0.8
+                                  },
+                                  {
+                                    "mode": "template",
+                                    "image": "ambush",
+                                    "threshold": 0.8
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "mode": "not",
+                    "conditions": [
+                      {
+                        "mode": "semantic",
+                        "id": "chest.reward.page"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "mode": "any",
+                "conditions": [
+                  {
+                    "mode": "combat_active"
+                  },
+                  {
+                    "mode": "template",
+                    "image": "RiseAgain",
+                    "threshold": 0.8
+                  },
+                  {
+                    "mode": "template",
+                    "image": "ambush",
+                    "threshold": 0.8
+                  }
+                ]
+              }
+            ]
+          },
+          "position": [
+            832,
+            1491
+          ],
+          "delay_after_ms": 900
+        }
+      },
+      {
+        "id": "done",
+        "type": "end",
+        "name": "步骤完成",
+        "parameters": {
+          "outcome": "success"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "edge_0",
+        "from": "continue",
+        "to": "done",
+        "outcome": "success",
+        "order": 0
+      }
+    ],
+    "layout": {
+      "nodes": [
+        {
+          "node_id": "continue",
+          "x": 0,
+          "y": 0
+        },
+        {
+          "node_id": "done",
+          "x": 260,
+          "y": 0
+        }
+      ],
+      "viewport": {
+        "x": 0,
+        "y": 0,
+        "zoom": 1
+      }
+    },
+    "execution": {
+      "time_limit_ms": 60000,
+      "checks": {
+        "phase": "chest",
+        "inherit": [
+          "wvd-network-retry",
+          "wvd-pause",
+          "wvd-download"
+        ],
+        "debounce_ms": 1000,
+        "interval_ms": 1000,
+        "protect_input": true
+      }
+    },
+    "interface": {
+      "kind": "step",
+      "category": "宝箱",
+      "parameters": [],
+      "handoffs": []
+    }
+  },
+  {
+    "schema": 1,
+    "flow": {
+      "id": "navigation-resume",
+      "name": "继续当前导航目标",
+      "description": "只推进当前步骤，不消费外层路线目标；调用参数仅作用于本次实例。"
+    },
+    "entry": "resume",
+    "nodes": [
+      {
+        "id": "resume",
+        "type": "action",
+        "name": "点击继续导航",
+        "parameters": {
+          "operation": "click",
+          "scene": {
+            "mode": "auto_route_moving"
+          },
+          "target": {
+            "mode": "template",
+            "image": "resume",
+            "threshold": 0.8
+          },
+          "postcondition": {
+            "mode": "auto_route_post"
+          }
+        }
+      },
+      {
+        "id": "done",
+        "type": "end",
+        "name": "步骤完成",
+        "parameters": {
+          "outcome": "success"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "edge_0",
+        "from": "resume",
+        "to": "done",
+        "outcome": "success",
+        "order": 0
+      }
+    ],
+    "layout": {
+      "nodes": [
+        {
+          "node_id": "resume",
+          "x": 0,
+          "y": 0
+        },
+        {
+          "node_id": "done",
+          "x": 260,
+          "y": 0
+        }
+      ],
+      "viewport": {
+        "x": 0,
+        "y": 0,
+        "zoom": 1
+      }
+    },
+    "execution": {
+      "time_limit_ms": 60000,
+      "checks": {
+        "phase": "navigation",
+        "inherit": [
+          "wvd-network-retry",
+          "wvd-pause",
+          "wvd-download",
+          "wvd-story",
+          "wvd-blessing",
+          "wvd-karma",
+          "wvd-dialogue",
+          "wvd-special-dialogue",
+          "wvd-sandman"
+        ],
+        "debounce_ms": 1000,
+        "interval_ms": 1000,
+        "protect_input": true
+      }
+    },
+    "interface": {
+      "kind": "step",
+      "category": "导航",
+      "parameters": [],
+      "handoffs": []
     }
   }
 ]

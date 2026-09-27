@@ -51,6 +51,7 @@ class DeviceSession final : public DeviceConnection, public LifecyclePort {
     bool vpn_ui_step(const std::string &package, bool &start_clicked,
                      const std::function<bool()> &cancelled);
     void record(nlohmann::json item);
+    nlohmann::json instance_metadata();
     nlohmann::json binding_;
     std::filesystem::path helper_path_, server_path_;
     AdbCommandClient adb_;

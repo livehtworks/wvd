@@ -113,6 +113,12 @@ tasks::CompiledWorkflow compile_time_leap(const std::string &target_name,
                 opened_wheel, {"Entry"});
     graph.click("RuinsEn", C::all({ruins_en, C::absent(title)}), ruins_en, wheel, {"Entry"});
     graph.click("RuinsZhHant", C::all({ruins_icon, C::absent(title)}), ruins_icon, wheel, {"Entry"});
+    // 与旧版“看目标->重认原按钮->再点->等新帧”一致；只重试打开菜单，
+    // QuickLeap/Leap 的实际跳轮确认不在这里授权，避免重复执行业务副作用。
+    for (const auto *name : {"OpenFromRoyalCity", "RuinsEn", "RuinsZhHant"})
+        graph.retry_menu_input(name, vision::menu_retry_ready(city));
+    for (const auto *name : {"OpenWheelEn", "OpenWheelZhHant"})
+        graph.retry_menu_input(name, vision::menu_retry_ready(C::all({wheel, C::absent(opened_wheel)})));
     if (allow_download) {
         graph.click("DownloadEn", download_en, download_en, opening, {"Entry"});
         graph.click("DownloadZhHant", download_zh_hant, download_zh_hant,
@@ -126,11 +132,13 @@ tasks::CompiledWorkflow compile_time_leap(const std::string &target_name,
     if (!zh_only_target) {
         graph.click("QuickSelectEn", C::all({title, target_en}), target_en, leap, {"QuickLeapRoute"});
         graph.delay_after("QuickSelectEn", 2000);
+        graph.retry_menu_input("QuickSelectEn", vision::menu_retry_ready(C::all({title, target_en, C::absent(leap)})));
     }
     if (!translated_target_name.empty()) {
         graph.click("QuickSelectZhHant", C::all({title, target_zh_hant}), target_zh_hant,
                     leap, {"QuickLeapRoute"});
         graph.delay_after("QuickSelectZhHant", 2000);
+        graph.retry_menu_input("QuickSelectZhHant", vision::menu_retry_ready(C::all({title, target_zh_hant, C::absent(leap)})));
     }
     graph.route("QuickLeapRoute", {"QuickLeapEn", "QuickLeapZhHant"});
     graph.click("QuickLeapEn", leap_en, leap_en, after_leap, {"Done", "FindChapter"});
@@ -162,12 +170,15 @@ tasks::CompiledWorkflow compile_time_leap(const std::string &target_name,
         graph.click(name, C::all({title, chapter_at(i), arrow}), arrow, adjacent, {"FindChapter"});
         graph.delay_after(name, 500);
         graph.postcondition_budget(name, 20000);
+        graph.retry_menu_input(name, vision::menu_retry_ready(C::all({title, chapter_at(i), C::absent(adjacent)})));
         graph.hit_limit(name, 4);
     }
     graph.click("ReopenWheelEn", C::all({wheel_en, C::absent(chapter)}), wheel_en,
                 opened_wheel, {"FindChapter"});
     graph.click("ReopenWheelZhHant", C::all({wheel_zh_hant, C::absent(chapter)}), wheel_zh_hant,
                 opened_wheel, {"FindChapter"});
+    for (const auto *name : {"ReopenWheelEn", "ReopenWheelZhHant"})
+        graph.retry_menu_input(name, vision::menu_retry_ready(C::all({wheel, C::absent(opened_wheel)})));
     // 每次滚动后重新识别目标，不能继续盲滚到目标已经可见还错过。
     graph.swipe("Scroll0", C::all({title, C::absent(target)}), C::any({title, target}),
         {450, 1200, 450, 200}, {"FindTarget"});
@@ -182,11 +193,13 @@ tasks::CompiledWorkflow compile_time_leap(const std::string &target_name,
         graph.click("SelectTargetEn", C::all({title, target_en}), target_en, leap,
                     causality ? J{"Causality"} : J{"LeapRoute"});
         graph.delay_after("SelectTargetEn", 1000);
+        graph.retry_menu_input("SelectTargetEn", vision::menu_retry_ready(C::all({title, target_en, C::absent(leap)})));
     }
     if (!translated_target_name.empty()) {
         graph.click("SelectTargetZhHant", C::all({title, target_zh_hant}), target_zh_hant,
                     leap, causality ? J{"Causality"} : J{"LeapRoute"});
         graph.delay_after("SelectTargetZhHant", 1000);
+        graph.retry_menu_input("SelectTargetZhHant", vision::menu_retry_ready(C::all({title, target_zh_hant, C::absent(leap)})));
     }
     if (causality) {
         const auto child = graph.define_child("CausalitySettings", adjust_causality(*causality));

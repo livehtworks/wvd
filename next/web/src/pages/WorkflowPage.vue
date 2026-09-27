@@ -12,10 +12,12 @@ import type { EventResume, EventRule, JsonObject, RecognitionProbeResult, Workfl
 import { useWorkflowEditor } from "../stores/useWorkflowEditor";
 import FlowCallInspector from "../features/authoring/FlowCallInspector.vue";
 import DefinitionInterfaceEditor from "../features/authoring/DefinitionInterfaceEditor.vue";
+import CheckPolicyEditor from "../features/authoring/CheckPolicyEditor.vue";
 import SlotInspector from "../features/authoring/SlotInspector.vue";
 import ConditionEditor from "../features/authoring/ConditionEditor.vue";
 import EventPolicyPanel from "../features/authoring/EventPolicyPanel.vue";
 import ArgumentFields from "../features/authoring/ArgumentFields.vue";
+import ExecutionStatus from "../components/ExecutionStatus.vue";
 import type { FlowCall, PublicInterface } from "../features/authoring/flowModel";
 import { appendEdge, changeEdgeKind, moveEdge, removeSelection } from "../features/flow/graphMutations";
 
@@ -43,6 +45,16 @@ const recognitionAssets = computed(() => [
 ]);
 const flowNodes = computed(() => state.current?.nodes ?? []);
 const flowEdges = computed(() => state.current?.edges ?? []);
+function handoffPorts(nodeId:string):string[] {
+  const node=state.current?.nodes.find(n=>n.id===nodeId);
+  if(node?.data.node_type==='business') {
+    if(node.data.parameters?.binding==='combat') return ['chest','revive','blocked'];
+    if(node.data.parameters?.binding==='chest') return ['combat','revive','ambush','retry','blocked'];
+  }
+  if(node?.data.node_type!=='call')return [];
+  const flowId=node.data.parameters?.flow_id;
+  return state.workflows.find(f=>f.id===flowId)?.interface?.handoffs??[];
+}
 
 function uid(prefix: string) { return `${prefix}-${crypto.randomUUID()}`; }
 function addNode(type: string) {
@@ -86,11 +98,11 @@ function deleteSelection() {
 function connect(connection: Connection) {
   if (!state.current || !connection.source || !connection.target || connection.source === connection.target) return;
   if (state.current.edges.some((edge) => edge.source === connection.source && edge.target === connection.target && edge.sourceHandle === connection.sourceHandle)) return;
-  const outcome = connection.sourceHandle === "failure" ? "failure" : "success";
+  const outcome = connection.sourceHandle?.startsWith("handoff:") ? "handoff" : connection.sourceHandle === "failure" ? "failure" : "success";
   const edge: WorkflowEdge = {
     id: uid("edge"), source: connection.source, target: connection.target,
     sourceHandle: connection.sourceHandle, targetHandle: connection.targetHandle,
-    data: { kind: outcome === "failure" ? "failure" : "sequence" },
+    data: { kind: outcome === "handoff" ? "handoff" : outcome === "failure" ? "failure" : "sequence" },
   };
   const next = appendEdge(state.current.edges, edge);
   state.checkpoint();
@@ -111,7 +123,16 @@ function dragStop(event: NodeDragEvent) {
 }
 function setEntry() { if (state.current && state.selectedNodeId) { state.checkpoint(); state.current.entry_node_id = state.selectedNodeId; } }
 function param(name: string) { return selectedParameters.value[name]; }
-function textParam(name: string, event: Event) { setParam(name, (event.target as HTMLInputElement | HTMLSelectElement).value); }
+function textParam(name: string, event: Event) {
+  const value=(event.target as HTMLInputElement | HTMLSelectElement).value;
+  setParam(name,value);
+  if(name==='outcome'&&state.selectedNode){
+    if(value!=='failure')delete state.selectedNode.data.parameters.reason;
+    else state.selectedNode.data.parameters.reason??='workflow_failed';
+    if(value!=='handoff')delete state.selectedNode.data.parameters.port;
+    else state.selectedNode.data.parameters.port??=state.current?.interface?.handoffs?.[0]??'';
+  }
+}
 function numberParam(name: string, event: Event) { setParam(name, Number((event.target as HTMLInputElement).value)); }
 function boolParam(name: string, event: Event) { setParam(name, (event.target as HTMLInputElement).checked); }
 function setParam(name: string, value: unknown) {
@@ -266,6 +287,7 @@ function patchNodeEventResume(id:string,patch:Partial<EventResume>){
 <template>
   <main class="workflow-page">
     <section class="notice" aria-label="流程运行状态" role="status">{{ state.runLabel }}</section>
+    <ExecutionStatus :run="state.run" />
     <section v-if="state.run?.active_event" class="notice" role="status">{{ state.run.active_event.path?.map(item => item.event_id).join(' → ') ?? state.run.active_event.event_id }} · 原步骤 {{ state.run.suspended_step?.node_id ?? state.run.active_event.source_node }} · {{ state.run.active_event.resume.mode }}</section>
     <div v-if="state.runError" class="notice error" role="alert">{{ state.runError }}</div>
     <nav v-if="state.run?.node_path?.length" aria-label="运行调用路径"><button v-for="(part,i) in state.run.node_path" :key="i" type="button" @click="state.openDefinition(part.flow_id,part.node_id)">{{part.flow_id}} / {{part.node_id}}</button></nav>
@@ -319,6 +341,7 @@ function patchNodeEventResume(id:string,patch:Partial<EventResume>){
         <p v-else class="empty-state">目录未返回可编排节点</p>
         <label v-if="state.current" class="field"><span>本次根运行总预算（ms）</span><input type="number" min="1" max="1800000" :value="state.current.time_limit_ms??60000" @change="rootBudget" /></label>
         <DefinitionInterfaceEditor v-if="state.current" :model-value="state.current.interface" :nodes="state.current.nodes" @update:model-value="interfaceChanged" />
+        <CheckPolicyEditor v-if="state.current" :model-value="state.current.checks" @update:model-value="state.checkpoint(); state.current.checks=$event" />
         <EventPolicyPanel v-if="state.current" :model-value="state.current.events"
           :flows="state.workflows" :current-flow-id="state.current.id" :nodes="state.current.nodes"
           :templates="state.catalog.templates" :resources="publicResources" :recognizers="state.catalog.recognizers"
@@ -335,6 +358,7 @@ function patchNodeEventResume(id:string,patch:Partial<EventResume>){
           <template #node-editor="slotProps">
             <div :class="['editor-node', { entry: state.current?.entry_node_id === slotProps.id, active: state.activeNodeId === slotProps.id, failed: state.run?.failed_node_id === slotProps.id }]">
               <Handle type="target" :position="Position.Left" /><span class="node-kind">{{ slotProps.data.node_type }}</span><strong>{{ slotProps.data.label }}</strong><span v-if="state.current?.entry_node_id === slotProps.id" class="node-mark">入口</span><Handle id="success" type="source" :position="Position.Right" /><Handle id="failure" type="source" :position="Position.Bottom" />
+              <div v-for="(port,index) in handoffPorts(slotProps.id)" :key="port" class="handoff-port"><span>{{port}}</span><Handle :id="`handoff:${port}`" type="source" :position="Position.Right" :style="{top:`${48+index*20}px`}" /></div>
             </div>
           </template>
         </VueFlow>
@@ -377,7 +401,7 @@ function patchNodeEventResume(id:string,patch:Partial<EventResume>){
           </div>
           <div v-else-if="nodeKind === 'wait'" class="inspector-group"><h3>等待</h3><label class="field"><span>时长 (ms)</span><input :value="Number(param('duration_ms') ?? 500)" type="number" min="1" max="10000" @change="numberParam('duration_ms', $event)" /></label></div>
           <div v-else-if="nodeKind === 'business'" class="inspector-group"><h3>业务子流程</h3><label class="field"><span>类型</span><select :value="String(param('binding') ?? 'combat')" :disabled="param('binding') === 'task_stage'" @change="changeBusiness"><option value="combat">完整战斗</option><option value="chest">完整开箱</option><option value="confirm">业务确认</option><option value="task_stage">现有任务阶段</option></select></label><template v-if="param('binding') === 'task_stage'"><label class="field"><span>任务</span><input :value="String(param('task_id') ?? '')" readonly /></label><label class="field"><span>阶段</span><select :value="String(param('stage') ?? '')" @change="textParam('stage', $event)"><option value="prepare">入本准备与补给</option><option value="enter">进入地下城</option><option value="traverse">路线、战斗与开箱</option></select></label></template><template v-if="param('binding') === 'chest'"><label class="field"><span>开箱角色</span><input :value="Number(param('preferred') ?? 0)" type="number" min="0" max="6" @change="numberParam('preferred', $event)" /></label><label class="check-row"><input :checked="Boolean(param('quick'))" type="checkbox" @change="boolParam('quick', $event)" /><span>快速解除陷阱</span></label></template><label v-if="param('binding') === 'confirm'" class="field"><span>确认事件</span><input :value="String(param('event') ?? '')" @change="textParam('event', $event)" /></label></div>
-          <div v-else-if="nodeKind === 'end'" class="inspector-group"><h3>结束</h3><label class="field"><span>结果</span><select :value="String(param('outcome') ?? 'success')" @change="textParam('outcome', $event)"><option value="success">成功</option><option value="failure">失败</option></select></label><label v-if="param('outcome') === 'failure'" class="field"><span>原因</span><input :value="String(param('reason') ?? 'workflow_failed')" @change="textParam('reason', $event)" /></label></div>
+          <div v-else-if="nodeKind === 'end'" class="inspector-group"><h3>结束</h3><label class="field"><span>结果</span><select :value="String(param('outcome') ?? 'success')" @change="textParam('outcome', $event)"><option value="success">成功</option><option value="failure">失败</option><option value="handoff">交接调用者</option></select></label><label v-if="param('outcome') === 'failure'" class="field"><span>原因</span><input :value="String(param('reason') ?? 'workflow_failed')" @change="textParam('reason', $event)" /></label><label v-if="param('outcome') === 'handoff'" class="field"><span>交接出口</span><select :value="String(param('port')??'')" @change="textParam('port',$event)"><option value="" disabled>选择出口</option><option v-for="port in state.current?.interface?.handoffs??[]" :key="port" :value="port">{{port}}</option></select></label></div>
           <div v-if="nodeKind==='action'" class="inspector-group"><label class="field"><span>输入后等待（ms，可留空）</span><input type="number" min="0" max="10000" :value="param('delay_after_ms')??''" @change="optionalBudget('delay_after_ms',$event)" /></label><label class="field"><span>独立转场观察预算（ms，可留空沿用）</span><input type="number" min="1" max="60000" :value="param('postcondition_timeout_ms')??''" @change="optionalBudget('postcondition_timeout_ms',$event)" /></label></div>
           <div v-if="nodeKind !== 'end'" class="inspector-group"><h3>控制</h3><label class="field"><span>有限重复次数</span><input :value="state.selectedNode.repeat_limit ?? 1" type="number" min="1" max="256" @change="setRepeat" /></label></div>
           <div v-if="nodeKind !== 'end' && Object.keys(state.current?.events ?? {}).length" class="inspector-group"><h3>当前节点事件</h3>
@@ -418,7 +442,7 @@ function patchNodeEventResume(id:string,patch:Partial<EventResume>){
         </template>
         <template v-else-if="state.selectedEdge">
           <header><div><span>连接</span><small class="mono">{{ state.selectedEdge.id }}</small></div><button class="icon-button danger" title="断开连接" aria-label="断开连接" @click="deleteSelection"><Trash2 :size="15" /></button></header>
-          <label class="field"><span>连接语义</span><select :value="state.selectedEdge.data?.kind ?? 'sequence'" @change="edgeKind"><option value="sequence">顺序</option><option value="candidate">有序候选</option><option value="failure">失败出口</option></select></label>
+          <label class="field"><span>连接语义</span><select :value="state.selectedEdge.data?.kind ?? 'sequence'" :disabled="state.selectedEdge.sourceHandle?.startsWith('handoff:')" @change="edgeKind"><option value="sequence">顺序</option><option value="candidate">有序候选</option><option value="failure">失败出口</option><option v-if="state.selectedEdge.sourceHandle?.startsWith('handoff:')" value="handoff">{{state.selectedEdge.sourceHandle}}</option></select></label>
           <label class="field"><span>顺序</span><input :value="state.selectedEdge.data?.order ?? 0" type="number" min="0" @input="edgeOrder" /></label>
           <p class="field-help">{{ state.selectedEdge.source }} → {{ state.selectedEdge.target }}</p>
         </template>
@@ -429,6 +453,7 @@ function patchNodeEventResume(id:string,patch:Partial<EventResume>){
 </template>
 <style scoped>
 .builtin-diff { padding: 12px 20px; border-block: 1px solid #cbd5d2; background: #f7faf9; }
+.handoff-port { min-height: 20px; font-size: 10px; padding-right: 8px; overflow-wrap: anywhere; }
 .builtin-diff header { display: flex; align-items: center; gap: 16px; }
 .builtin-diff header .icon-button { margin-left: auto; }
 .builtin-diff-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }

@@ -1,14 +1,17 @@
 #include "party_death.hpp"
+#include "games/wvd/vision/location_probes.hpp"
 
 namespace wvd::games::recovery {
 tasks::CompiledWorkflow dismiss_party_death() {
     using C = tasks::PipelineCompiler;
     using J = nlohmann::json;
     C graph("recovery.party_death", std::chrono::seconds{90});
+    graph.check_policy("exception", {"wvd-network-retry"}, 1000, 1000, false);
     const J dead{{"mode", "party_death"}};
-    const auto ready = C::any({J{{"mode", "boot_ready"}}, C::image("RiseAgain")});
-    const auto cleared = C::all({ready, C::absent(dead), C::absent(J{{"mode", "blocking_screen"}})});
-    const J known{{"mode", "party_death_post"}};
+    const auto ready = C::any({J{{"mode", "combat_active"}}, C::image("dungFlag"),
+        C::image("mapFlag"), C::image("RiseAgain"), vision::city_screen()});
+    const auto cleared = C::all({ready, C::absent(dead), J{{"mode", "input_clear"}}});
+    const auto known = C::any({dead, J{{"mode", "party_defeat"}}, ready});
     graph.route("Entry", {"Observed"});
     graph.confirm("Observed", "party.death", "party_death_observed", dead, {"Dismiss0"});
     graph.delay_after("Observed", 1000);
@@ -22,7 +25,7 @@ tasks::CompiledWorkflow dismiss_party_death() {
         graph.postcondition_budget(name, 10000);
     }
     graph.confirm("Cleared", "party.death.clear", "party_death_cleared", cleared, {"Terminal"});
-    graph.observe("OtherBlocking", C::all({J{{"mode", "blocking_screen"}}, C::absent(dead)}), {"BlockedExit"});
+    graph.observe("OtherBlocking", C::all({C::absent(J{{"mode", "input_clear"}}), C::absent(dead)}), {"BlockedExit"});
     graph.recovery("BlockedExit", "party.death_interrupted");
     graph.observe("Unchanged", dead, {"UnchangedExit"});
     graph.recovery("UnchangedExit", "party.death_prompt_unchanged");
@@ -32,7 +35,10 @@ tasks::CompiledWorkflow acknowledge_party_defeat() {
     using C = tasks::PipelineCompiler;
     using J = nlohmann::json;
     C graph("recovery.party_defeat", std::chrono::seconds{90});
-    const J defeat{{"mode", "party_defeat"}}, known{{"mode", "party_death_post"}};
+    graph.check_policy("exception", {"wvd-network-retry"}, 1000, 1000, false);
+    const J defeat{{"mode", "party_defeat"}};
+    const auto known = C::any({defeat, J{{"mode", "party_death"}}, J{{"mode", "combat_active"}},
+        C::image("dungFlag"), C::image("mapFlag"), C::image("RiseAgain"), vision::city_screen()});
     graph.route("Entry", {"Observed"});
     // 旧 _SUICIDE 只有观察置位与 RiseAgainReset 复位，没有战斗消费者。
     // 保存该事实即可，不能凭变量名擅自新增战斗/死亡操作。

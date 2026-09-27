@@ -8,8 +8,10 @@ tasks::CompiledWorkflow dismiss_global_prompt(GlobalPrompt prompt) {
     const bool blessing = prompt == GlobalPrompt::Blessing;
     const std::string name = blessing ? "blessing" : "sandman_recover";
     C graph("recovery.global_prompt." + name, std::chrono::seconds{90});
+    graph.check_policy("special", {"wvd-network-retry"}, 1000, 1000, false);
     const auto marker = C::image(name);
-    const J known{{"mode", "boot_post"}};
+    const auto known = C::any({marker, vision::harken_floor_menu(),
+        C::image("dungFlag"), C::image("mapFlag")});
     const auto changed = C::all({known, C::absent(marker)});
     graph.route("Entry", blessing ? J{"HarkenChoice", "Choose0"} : J{"Choose0"});
     if (blessing) {

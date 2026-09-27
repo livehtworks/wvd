@@ -10,7 +10,7 @@ import type { BuiltinInspection, Catalog, RunState, WorkflowDefinition } from ".
 // 作者数据是纯 JSON。先序列化可避免把 Vue Proxy 传给 structuredClone。
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 const signature = (value: unknown) => JSON.stringify(value);
-interface Snapshot { nodes: WorkflowDefinition["nodes"]; edges: WorkflowDefinition["edges"]; entry_node_id?: string; name: string; description?: string; time_limit_ms?: number; interface?: PublicInterface; resource_locale?: WorkflowDefinition["resource_locale"]; events?: WorkflowDefinition["events"] }
+interface Snapshot { nodes: WorkflowDefinition["nodes"]; edges: WorkflowDefinition["edges"]; entry_node_id?: string; name: string; description?: string; time_limit_ms?: number; interface?: PublicInterface; resource_locale?: WorkflowDefinition["resource_locale"]; events?: WorkflowDefinition["events"]; checks?: WorkflowDefinition["checks"] }
 interface DefinitionTrailEntry { flowId: string; nodeId: string }
 
 function cleanWorkflow(workflow: WorkflowDefinition): WorkflowDefinition {
@@ -60,7 +60,7 @@ export function useWorkflowEditor() {
 
   function snapshot(): Snapshot | undefined {
     if (!current.value) return;
-    return clone({ nodes: current.value.nodes, edges: current.value.edges, entry_node_id: current.value.entry_node_id, name: current.value.name, description: current.value.description, time_limit_ms: current.value.time_limit_ms as number | undefined, interface:current.value.interface, resource_locale:current.value.resource_locale, events:current.value.events });
+    return clone({ nodes: current.value.nodes, edges: current.value.edges, entry_node_id: current.value.entry_node_id, name: current.value.name, description: current.value.description, time_limit_ms: current.value.time_limit_ms as number | undefined, interface:current.value.interface, resource_locale:current.value.resource_locale, events:current.value.events, checks:current.value.checks });
   }
   function checkpoint() {
     const value = snapshot();
@@ -71,7 +71,7 @@ export function useWorkflowEditor() {
   }
   function applySnapshot(value: Snapshot) {
     if (!current.value) return;
-    for (const key of ["entry_node_id", "description", "time_limit_ms", "interface", "resource_locale", "events"] as const) {
+    for (const key of ["entry_node_id", "description", "time_limit_ms", "interface", "resource_locale", "events", "checks"] as const) {
       if (!(key in value)) delete current.value[key];
     }
     Object.assign(current.value, clone(value));

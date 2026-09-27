@@ -96,7 +96,9 @@ Step translate(const std::string &id, const J &node, const J &paths,
     step.handles_business_failure = node.value("business_failure_route", false);
     step.check_group = node.value("check_group", "business");
     step.unexpected_only = node.value("unexpected_only", false);
+    step.marks_known_scene = node.value("marks_known_scene", false);
     step.max_hit = node.value("max_hit", 1);
+    step.consecutive_input_limit = node.value("consecutive_input_limit", false);
     step.time_limit = std::chrono::milliseconds{node.value("timeout", 60000LL)};
     step.delay_after = std::chrono::milliseconds{node.value("post_delay", 0LL)};
     if (event_scopes.contains(id)) {
@@ -127,9 +129,23 @@ Step translate(const std::string &id, const J &node, const J &paths,
             if (offset.size() != 2) throw std::runtime_error("NATIVE_ACTION_OFFSET_INVALID");
             input.target_offset = contracts::Point{offset[0], offset[1]};
         }
+        if (p.contains("retry")) {
+            const auto &retry = p.at("retry");
+            input.retry = workflow::InputRetry{request(retry.at("ready")),
+                std::chrono::milliseconds{retry.at("interval_ms").get<int>()}};
+        }
         step.data = std::move(input);
     } else if (action == "Registered" && binding == "Call") {
-        step.data = workflow::Call{node.at("operation_args").at("entry")};
+        step.data = workflow::Call{node.at("operation_args").at("entry"),
+            node.at("operation_args").at("handoffs").get<std::map<std::string, std::vector<std::string>>>()};
+    } else if (action == "Registered" && binding == "Handoff") {
+        step.data = workflow::Return{"handoff", "", node.at("operation_args").at("port")};
+    } else if (action == "Registered" && binding == "Poll") {
+        const auto &p = node.at("operation_args");
+        workflow::Poll poll{std::chrono::milliseconds{p.at("interval_ms").get<std::int64_t>()}, std::nullopt};
+        if (p.contains("ongoing")) poll.ongoing = request(p.at("ongoing"));
+        if (p.contains("progress")) poll.progress = request(p.at("progress"));
+        step.data = std::move(poll);
     } else if (action == "Registered" && binding == "CancelableWait") {
         step.data = workflow::Wait{std::chrono::milliseconds{
             node.at("operation_args").at("duration_ms").get<std::int64_t>()}};
@@ -185,6 +201,13 @@ workflow::FlowProgram compile_native_program(const CompiledWorkflow &source,
         workflow::Definition definition;
         definition.id = root;
         definition.entry = root;
+        if (source.definition_checks.contains(root)) {
+            const auto &p = source.definition_checks.at(root);
+            definition.checks = workflow::Definition::CheckPolicy{p.at("phase"),
+                p.at("inherit").get<std::set<std::string>>(),
+                std::chrono::milliseconds{p.at("debounce_ms").get<int>()},
+                std::chrono::milliseconds{p.at("interval_ms").get<int>()}};
+        }
         if (root == source.entry) definition.cumulative_budget = source.declared_budget;
         else if (const auto budget = source.definition_budgets.find(root);
                  budget != source.definition_budgets.end())
@@ -200,6 +223,9 @@ workflow::FlowProgram compile_native_program(const CompiledWorkflow &source,
             }
             for (const auto *field : {"next", "on_error"})
                 for (const auto &next : edges(node, field)) visit(next);
+            if (node.value("binding", "") == "Call")
+                for (const auto &targets : node.at("operation_args").at("handoffs"))
+                    for (const auto &target : targets) visit(target.get<std::string>());
         };
         visit(root);
         for (const auto &id : seen) {
@@ -211,6 +237,12 @@ workflow::FlowProgram compile_native_program(const CompiledWorkflow &source,
                 translated.data = workflow::Route{};
             }
             definition.steps.emplace(id, std::move(translated));
+            if (source.nodes.at(id).value("binding", "") == "Handoff")
+                definition.handoffs.insert(source.nodes.at(id).at("operation_args").at("port"));
+        }
+        if (definition.checks) {
+            definition.events = std::move(definition.steps.at(root).event_policy);
+            definition.steps.at(root).event_policy.clear();
         }
         program.definitions.emplace(root, std::move(definition));
     }

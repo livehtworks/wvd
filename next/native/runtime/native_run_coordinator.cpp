@@ -359,18 +359,39 @@ void NativeRunCoordinator::drive(const NativeRunDefinition &definition,
                     result.flow.state == TickState::BusinessFailed ||
                     result.flow.state == TickState::ExternalBlocked || !definition.recovery ||
                     recovery_attempt >= 3) break;
-                auto plan = definition.recovery(last, *business, recovery_attempt + 1);
+                auto *lifecycle = backend->lifecycle_port();
+                auto recovery_result = last;
+                // 业务判定与基础设施故障分开：只有实际设备观察能选中重连/实例恢复。
+                // 原始flow_code与session.ended保留，不能用恢复理由覆盖事故证据。
+                if (lifecycle && !backend->offline()) {
+                    const auto observed = lifecycle->observe_lifecycle();
+                    if (observed) {
+                        require(observed->target.device_id == definition.policy.device_id,
+                            "NATIVE_RECOVERY_DEVICE_MISMATCH");
+                        if (observed->instance_exited) recovery_result.reason = "device.instance_exited";
+                        else if (observed->instance_running && !observed->connected)
+                            recovery_result.reason = "device.disconnected";
+                        else if (observed->connected && !observed->application_running)
+                            recovery_result.reason = "device.application_exited";
+                        event("recovery.device_observed", {{"reason", recovery_result.reason},
+                            {"original_reason", last.reason}, {"instance_exited", observed->instance_exited},
+                            {"connected", observed->connected}, {"application_running", observed->application_running}});
+                    }
+                }
+                auto plan = definition.recovery(recovery_result, *business, recovery_attempt + 1);
                 if (!plan) break;
                 devices::validate_lifecycle_plan(*plan);
                 const auto expected = plan->target;
-                require(expected.device_id == definition.policy.device_id &&
-                    plan->operations == (expected.vpn_required
-                        ? std::vector{devices::LifecycleOperation::EnsureVpn,
-                            devices::LifecycleOperation::StopApplication,
-                            devices::LifecycleOperation::StartApplication}
-                        : std::vector{devices::LifecycleOperation::StopApplication,
-                            devices::LifecycleOperation::StartApplication}),
+                using O = devices::LifecycleOperation;
+                std::vector<O> allowed;
+                if (recovery_result.reason == "device.instance_exited") allowed.push_back(O::RestartInstance);
+                if (recovery_result.reason == "device.disconnected") allowed.push_back(O::Reconnect);
+                if (expected.vpn_required) allowed.push_back(O::EnsureVpn);
+                if (!recovery_result.reason.starts_with("device.")) allowed.push_back(O::StopApplication);
+                allowed.push_back(O::StartApplication);
+                require(expected.device_id == definition.policy.device_id && plan->operations == allowed,
                     "NATIVE_RECOVERY_PLAN_UNSAFE");
+                event("recovery.plan", devices::lifecycle_plan_json(*plan));
                 if (plan->defer_for > 0ms) {
                     const auto wake_at = std::chrono::steady_clock::now() + plan->defer_for;
                     require(wake_at <= total_deadline, "NATIVE_RECOVERY_EXCEEDS_RUN_DEADLINE");
@@ -379,7 +400,6 @@ void NativeRunCoordinator::drive(const NativeRunDefinition &definition,
                     complete_.wait_until(lock, wake_at, [this] { return stop_.load(); });
                     if (stop_) break;
                 }
-                auto *lifecycle = backend->lifecycle_port();
                 require(lifecycle, "NATIVE_RECOVERY_PORT_MISSING");
                 auto executable_plan = *plan;
                 executable_plan.defer_for = 0ms;

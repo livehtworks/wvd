@@ -196,14 +196,20 @@ void validate_condition(const J &condition, const std::string &node_id,
             validate_condition(child, node_id, depth + 1, count);
         return;
     }
+    if (mode == "skill_level") {
+        exact_object(condition, {"mode", "level"}, {"selected"}, "AUTHOR_CONDITION_INVALID", node_id);
+        integer(condition.at("level"), 1, 9, "AUTHOR_SKILL_LEVEL_INVALID", node_id);
+        if (condition.contains("selected") && !condition.at("selected").is_boolean()) fail("AUTHOR_CONDITION_INVALID", node_id);
+        return;
+    }
     static const std::set<std::string> builtins{
-        "auto_route_moving", "auto_route_post", "blocking_screen", "boot_post",
+        "auto_route_moving", "auto_route_post", "blocking_screen", "boot_post", "input_clear",
         "boot_ready", "combat_active", "dark_light_clear", "dark_light_post",
         "default_dialogue", "dialogue_post", "fast_forward_off", "fishing_bait_empty",
         "fishing_reward", "fishing_unknown", "map_route_post", "mining_reward",
         "movement_stopped", "next_low_confidence", "party_death", "party_defeat",
         "pause", "pause_negative", "special_dialogue", "special_dialogue_post",
-        "target_marker", "task_stop"};
+        "target_marker", "task_stop", "prepared_actor", "skill_target"};
     if (!builtins.contains(mode) || condition.size() != 1)
         fail("AUTHOR_CONDITION_UNSUPPORTED", node_id + ":" + mode);
 }
@@ -214,8 +220,10 @@ void validate_action_parameters(const J &parameters, const std::string &node_id)
         fail("AUTHOR_ACTION_PARAMETERS_INVALID", node_id);
     const auto operation = parameters.at("operation").get<std::string>();
     const std::set<std::string> common_optional{
-        "allowed_area", "postcondition_timeout_ms", "delay_after_ms"};
+        "allowed_area", "postcondition_timeout_ms", "delay_after_ms", "interrupted_reason"};
     auto validate_common = [&] {
+        if (parameters.contains("interrupted_reason"))
+            bounded_text(parameters.at("interrupted_reason"), 1, 256, "AUTHOR_ACTION_INTERRUPTION_INVALID", node_id);
         if (parameters.contains("allowed_area"))
             validate_roi(parameters.at("allowed_area"), node_id);
         if (parameters.contains("postcondition_timeout_ms"))
@@ -227,11 +235,14 @@ void validate_action_parameters(const J &parameters, const std::string &node_id)
     };
     if (operation == "click") {
         exact_object(parameters, {"operation", "scene", "target", "postcondition"},
-                     {"offset", "allowed_area", "postcondition_timeout_ms", "delay_after_ms"},
+                     {"offset", "allowed_area", "postcondition_timeout_ms", "delay_after_ms", "interrupted_reason", "menu_retry_interval_ms"},
                      "AUTHOR_ACTION_PARAMETERS_INVALID", node_id);
         validate_condition(parameters.at("scene"), node_id);
         validate_condition(parameters.at("target"), node_id);
         validate_condition(parameters.at("postcondition"), node_id);
+        if (parameters.contains("menu_retry_interval_ms"))
+            integer(parameters.at("menu_retry_interval_ms"), 1000, 60000,
+                    "AUTHOR_MENU_RETRY_INTERVAL_INVALID", node_id);
         if (parameters.contains("offset")) {
             const auto &offset = parameters.at("offset");
             if (!offset.is_array() || offset.size() != 2)
@@ -324,7 +335,8 @@ void validate_business_parameters(const J &parameters, const std::string &node_i
 
 ValidatedGraph validate_graph(const J &document) {
     exact_object(document, {"schema", "flow", "entry", "nodes", "edges", "layout", "execution"},
-                 {"revision"}, "AUTHOR_DOCUMENT_FIELDS_INVALID");
+                 {"revision", "interface"}, "AUTHOR_DOCUMENT_FIELDS_INVALID");
+    (void)parameter_specs(document);
     if (document.at("schema") != 1)
         fail("AUTHOR_SCHEMA_INVALID");
     exact_object(document.at("flow"), {"id", "name", "description"}, {},
@@ -401,20 +413,26 @@ ValidatedGraph validate_graph(const J &document) {
                     fail("AUTHOR_BUSINESS_OPERATION_DUPLICATE", id + ":" + operation);
             }
         } else if (type == "end") {
-            exact_object(node.at("parameters"), {"outcome"}, {"reason"},
+            exact_object(node.at("parameters"), {"outcome"}, {"reason", "port"},
                          "AUTHOR_END_PARAMETERS_INVALID", id);
             if (!node.at("parameters").at("outcome").is_string())
                 fail("AUTHOR_END_OUTCOME_INVALID", id);
             const auto outcome = node.at("parameters").at("outcome").get<std::string>();
             if (outcome == "success") {
-                if (node.at("parameters").contains("reason") || !graph.success_end.empty())
+                if (node.at("parameters").contains("reason") || node.at("parameters").contains("port") || !graph.success_end.empty())
                     fail("AUTHOR_SUCCESS_END_INVALID", id);
                 graph.success_end = id;
             } else if (outcome == "failure") {
-                if (!node.at("parameters").contains("reason"))
+                if (!node.at("parameters").contains("reason") || node.at("parameters").contains("port"))
                     fail("AUTHOR_FAILURE_END_INVALID", id);
                 bounded_text(node.at("parameters").at("reason"), 1, 256,
                              "AUTHOR_FAILURE_END_INVALID", id);
+            } else if (outcome == "handoff") {
+                const auto ports = document.value("interface", J::object()).value("handoffs", J::array());
+                const auto port = node.at("parameters").value("port", std::string{});
+                if (node.at("parameters").contains("reason") ||
+                    std::find(ports.begin(), ports.end(), J(port)) == ports.end())
+                    fail("AUTHOR_HANDOFF_UNDECLARED", id + ":" + port);
             } else {
                 fail("AUTHOR_END_OUTCOME_INVALID", id);
             }
@@ -454,8 +472,13 @@ ValidatedGraph validate_graph(const J &document) {
         if (graph.nodes.at(from)->at("type") == "end")
             fail("AUTHOR_EDGE_FROM_END", edge_id + ":" + from);
         const auto outcome = edge.at("outcome").get<std::string>();
-        if (outcome != "success" && outcome != "failure")
+        const bool handoff = outcome.starts_with("handoff:") &&
+            authoring::public_id(outcome.substr(8));
+        if (outcome != "success" && outcome != "failure" && !handoff)
             fail("AUTHOR_EDGE_OUTCOME_INVALID", edge_id);
+        if (handoff && graph.nodes.at(from)->at("type") != "call" &&
+            graph.nodes.at(from)->at("type") != "business")
+            fail("AUTHOR_HANDOFF_EDGE_SOURCE_INVALID", edge_id);
         const auto order = static_cast<int>(integer(edge.at("order"), 0, 4095,
                                                     "AUTHOR_EDGE_ORDER_INVALID", edge_id));
         const auto [position, inserted] = ordered[{from, outcome}].emplace(order, &edge);
@@ -469,8 +492,11 @@ ValidatedGraph validate_graph(const J &document) {
         for (const auto &[order, edge] : sequence) {
             if (order != expected++)
                 fail("AUTHOR_EDGE_ORDER_GAP", edge->at("id").get<std::string>() + ":" + group.first);
-            (group.second == "success" ? graph.success[group.first] : graph.failure[group.first])
-                .push_back(edge);
+            if (group.second.starts_with("handoff:"))
+                graph.handoffs[group.first][group.second.substr(8)].push_back(edge);
+            else
+                (group.second == "success" ? graph.success[group.first] : graph.failure[group.first]).push_back(edge);
+            graph.outgoing[group.first].push_back(edge);
         }
     }
     for (const auto &[id, node] : graph.nodes) {
@@ -478,6 +504,8 @@ ValidatedGraph validate_graph(const J &document) {
         // 即使作者没有配置失败边，也必须保留一个空集合，不能让 map::at 抛异常。
         (void)graph.success[id];
         (void)graph.failure[id];
+        (void)graph.handoffs[id];
+        (void)graph.outgoing[id];
         const auto type = node->at("type").get<std::string>();
         if (type != "end" && graph.success[id].empty())
             fail("AUTHOR_NODE_SUCCESS_EDGE_MISSING", id);
@@ -492,8 +520,7 @@ ValidatedGraph validate_graph(const J &document) {
     std::function<void(const std::string &)> visit = [&](const std::string &id) {
         if (!reached.insert(id).second)
             return;
-        for (const auto *outcome : {&graph.success, &graph.failure})
-            for (const auto *edge : outcome->at(id))
+            for (const auto *edge : graph.outgoing.at(id))
                 visit(edge->at("to").get<std::string>());
     };
     visit(entry);
@@ -503,28 +530,9 @@ ValidatedGraph validate_graph(const J &document) {
             fail("AUTHOR_NODE_UNREACHABLE", id);
     }
 
-    std::map<std::string, int> state;
-    std::vector<std::string> stack;
-    std::function<void(const std::string &)> cycle = [&](const std::string &id) {
-        state[id] = 1;
-        stack.push_back(id);
-        for (const auto *outcome : {&graph.success, &graph.failure})
-            for (const auto *edge : outcome->at(id)) {
-                const auto target = edge->at("to").get<std::string>();
-                if (state[target] == 0)
-                    cycle(target);
-                else if (state[target] == 1) {
-                    const auto first = std::find(stack.begin(), stack.end(), target);
-                    for (auto current = first; current != stack.end(); ++current)
-                        if (!graph.nodes.at(*current)->contains("repeat_limit"))
-                            fail("AUTHOR_LOOP_UNBOUNDED", *current + ":" +
-                                 edge->at("id").get<std::string>());
-                }
-            }
-        stack.pop_back();
-        state[id] = 2;
-    };
-    cycle(entry);
+    // 下方强制校验正数 execution.time_limit_ms，编译器将它作为调用累计预算。
+    // 有限时间内重新观察/关闭连续展示卡不是无限执行，不能再强迫每个回边
+    // 填写“经过N次就失败”。作者主动声明的 repeat_limit 仍按原语义保留。
 
     exact_object(document.at("layout"), {"nodes", "viewport"}, {},
                  "AUTHOR_LAYOUT_FIELDS_INVALID");
@@ -557,8 +565,24 @@ ValidatedGraph validate_graph(const J &document) {
         viewport.at("zoom").get<double>() < .05 || viewport.at("zoom").get<double>() > 8)
         fail("AUTHOR_VIEWPORT_INVALID");
 
-    exact_object(document.at("execution"), {"time_limit_ms"}, {"resource_locale", "events"},
+    exact_object(document.at("execution"), {"time_limit_ms"}, {"resource_locale", "events", "checks"},
                  "AUTHOR_EXECUTION_FIELDS_INVALID");
+    if (document.at("execution").contains("checks")) {
+        const auto &checks = document.at("execution").at("checks");
+        exact_object(checks, {"phase", "inherit"}, {"debounce_ms", "interval_ms", "protect_input"},
+                     "AUTHOR_CHECK_POLICY_INVALID");
+        const std::set<std::string> phases{"business", "navigation", "combat", "chest", "supply", "special", "exception"};
+        if (!checks.at("phase").is_string() || !phases.contains(checks.at("phase").get<std::string>()) ||
+            !checks.at("inherit").is_array() || checks.at("inherit").size() > 32)
+            fail("AUTHOR_CHECK_POLICY_INVALID");
+        std::set<std::string> inherited;
+        for (const auto &rule : checks.at("inherit"))
+            if (!rule.is_string() || !authoring::public_id(rule.get<std::string>()) ||
+                !inherited.insert(rule.get<std::string>()).second) fail("AUTHOR_CHECK_POLICY_INVALID");
+        if (checks.contains("debounce_ms")) integer(checks.at("debounce_ms"), 0, 60000, "AUTHOR_CHECK_POLICY_INVALID", "debounce_ms");
+        if (checks.contains("interval_ms")) integer(checks.at("interval_ms"), 1, 60000, "AUTHOR_CHECK_POLICY_INVALID", "interval_ms");
+        if (checks.contains("protect_input") && !checks.at("protect_input").is_boolean()) fail("AUTHOR_CHECK_POLICY_INVALID");
+    }
     try {
     authoring::validate_event_policy(document);
     } catch (const nlohmann::json::exception &error) {

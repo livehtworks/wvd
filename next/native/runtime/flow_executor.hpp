@@ -40,6 +40,8 @@ class FlowPorts {
                                     const std::optional<contracts::FrameEnvelope> &frame,
                                     const std::optional<contracts::Observation> &observation,
                                     const std::string &source_path) = 0;
+    // 仅通知已声明正面场景命中；不取帧、不发输入、不推进游戏业务账目。
+    virtual void scene_observed(const contracts::Observation &) {}
     virtual bool cancelled() const = 0;
     // 未实现复用能力的端口始终重新观察；正式端口还检查输入门禁的身份和 TTL。
     virtual bool reusable(const contracts::FrameIdentity &) const { return false; }
@@ -79,6 +81,10 @@ class FlowExecutor final {
         std::chrono::milliseconds result_budget{0};
         // Unresolved 不是未发送：传输是否送达未知也必须阻止重发/恢复。
         bool delivery_unknown{};
+        std::string submitted_step;
+        Clock::time_point result_started_at;
+        Clock::duration delay_pause_base{};
+        unsigned attempts{1};
     };
     struct EventExit {
         std::string id;
@@ -110,10 +116,14 @@ class FlowExecutor final {
         std::optional<Clock::time_point> no_progress_since;
         Clock::time_point next_diagnostic_poll{};
         bool diagnostic_checked{};
+        bool known_wait{};
         std::optional<Clock::time_point> delay_until;
+        // 轮询自身的唤醒时间；不覆盖 entered_at、调用累计期限或父输入回执。
+        std::optional<Clock::time_point> poll_until;
         Clock::duration paused_event_time{};
         bool next_pending{};
         bool error_pending{};
+        std::optional<std::vector<std::string>> returned_targets;
         std::optional<contracts::FrameEnvelope> selected_frame;
         std::optional<contracts::Observation> selected_observation;
         std::optional<InputSelection> input_selection;
@@ -150,7 +160,10 @@ class FlowExecutor final {
     TickResult blocked(std::string code);
     TickResult route_error(Frame &frame, const workflow::Step &current, std::string code);
     TickResult select_next(Frame &frame, const workflow::Step &current);
+    void record_known_scene(Frame &frame, const contracts::Observation &observed);
     TickResult execute_step(Frame &frame, const workflow::Step &current);
+    std::optional<TickResult> retry_pending_input(Frame &frame, const workflow::Step &current,
+        const contracts::FrameEnvelope &image);
     TickResult resume_event(Frame &frame, const workflow::Step &current);
     std::optional<TickResult> check_events(Frame &frame, const workflow::Step &current,
         const contracts::FrameEnvelope &image, workflow::EventClass category);
@@ -161,7 +174,9 @@ class FlowExecutor final {
     std::vector<ScopedEvent> effective_events(const workflow::Step &current) const;
     // 按暂停区间并集记账，嵌套事件不得重复延长期限；覆盖所有祖先帧。
     void account_event_time();
-    void advance(Frame &frame);
+    // observed_progress=false 用于纯控制、等待及阶段标记，不能清除未知现场历史。
+    void advance(Frame &frame, bool observed_progress = true);
+    void clear_unexpected(Frame &frame);
     contracts::Command command(const workflow::Input &input,
                                 const contracts::Observation &target) const;
 };

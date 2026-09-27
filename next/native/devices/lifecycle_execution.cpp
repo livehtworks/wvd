@@ -22,14 +22,14 @@ bool same_target(const LifecycleTarget &a, const LifecycleTarget &b) {
            a.vpn_required == b.vpn_required;
 }
 J state_json(const LifecycleObservation &state) {
-    return {{"instance_running", state.instance_running}, {"connected", state.connected},
+    return {{"instance_running", state.instance_running}, {"instance_exited", state.instance_exited}, {"connected", state.connected},
              {"application_running", state.application_running}, {"vpn_ready", state.vpn_ready},
              {"application_foreground", state.application_foreground},
              {"connection_generation", state.connection_generation}};
 }
 bool precondition(O operation, const LifecycleObservation &s) {
     if (operation == O::RestartInstance)
-        return false; // 实例重启不属于本次自动恢复；无独立故障证据和人工授权一律拒绝。
+        return s.instance_exited && !s.instance_running && !s.connected;
     if (operation == O::Reconnect)
         return s.instance_running;
     if (!s.instance_running || !s.connected)
@@ -92,7 +92,8 @@ LifecycleEnd execute_lifecycle_plan(const LifecyclePlan &plan, LifecyclePort &po
         if (!value || !same_target(value->target, plan.target) || value->observed_at > now ||
             now - value->observed_at > std::chrono::seconds(2) ||
             (value->application_foreground && !value->application_running) ||
-            (value->connected && (!value->instance_running || !value->connection_generation)))
+            (value->connected && (!value->instance_running || !value->connection_generation)) ||
+            (value->instance_exited && (value->instance_running || value->connected)))
             throw std::runtime_error("LIFECYCLE_OBSERVATION_INVALID");
         return *value;
     };

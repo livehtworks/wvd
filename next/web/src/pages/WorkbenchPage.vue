@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ExecutionStatus from "../components/ExecutionStatus.vue";
 import { computed, ref, watch } from "vue";
 import {
   Camera, ChevronDown, CircleStop, FolderOpen, Link, Link2Off, Play, Plus, RefreshCw, Save, Trash2, Undo2,
@@ -264,11 +265,14 @@ function updateSkill(skill: SkillSetting, key: keyof SkillSetting, event: Event)
       </details>
 
       <section class="run-section" aria-label="运行结果">
+        <label v-if="state.draft?.FARM_TARGET === 'Scorpionesses'" class="check"><input v-model="state.continuous" type="checkbox" :disabled="state.runActive" />连续循环</label>
+        <div v-if="state.run?.repeat && state.run.repeat.state !== 'disabled'" class="notice" role="status">循环已完成 {{ state.run.repeat.completed_cycles }} 轮<span v-if="!state.run.repeat.active"> · 已停止</span></div>
         <div v-if="state.runError" class="notice error" role="alert">{{ state.runError }}</div>
         <header><div><h2>运行结果</h2><span>{{ state.run?.run_id ?? '当前没有运行' }}</span></div><div class="command-row"><label class="field run-locale"><span>游戏素材语言</span><select v-model="state.resourceLocale" :disabled="state.runActive"><option v-for="option in resourceLocaleOptions" :key="option.value" :value="option.value">{{ option.label }}</option></select></label><button class="button run" :disabled="state.runActive || state.deviceBusy || state.dirty || !state.draft?.FARM_TARGET" @click="state.startSelectedTask"><Play :size="16" />开始任务</button><button class="button danger" :disabled="!state.runActive" @click="state.requestStop"><CircleStop :size="16" />停止</button></div></header>
         <div v-if="state.error" class="notice error" role="alert">{{ state.error }}</div>
         <div class="run-grid"><div><span>状态</span><strong>{{ state.runLabel }}</strong></div><div><span>任务 / 步骤</span><strong>{{ state.run?.task_name ?? '—' }} / {{ state.run?.step_name ?? '—' }}</strong></div><div><span>耗时</span><strong>{{ state.run?.elapsed_seconds ?? 0 }} 秒</strong></div><div><span>结果</span><strong>{{ state.run?.result ?? '—' }}</strong></div></div>
         <div v-if="state.run?.active_event" class="notice" role="status">正在处理 {{ state.run.active_event.event_id }} · {{ state.run.active_event.phase ?? state.run.active_event.class }} · 第 {{ state.run.active_event.depth }} 层；原步骤 {{ state.run.suspended_step?.node_id ?? state.run.active_event.source_node }}，返回方式 {{ state.run.active_event.resume.mode }}</div>
+        <ExecutionStatus :run="state.run" />
         <div v-if="state.run?.call_stack?.length" class="notice" role="status">调用层次：{{ state.run.call_stack.map(frame => frame.node_id).join(' → ') }}</div>
         <div v-if="state.run?.unresolved_inputs?.length" class="notice error" role="alert">有 {{ state.run.unresolved_inputs.length }} 次输入结果未确认，流程不会自动重发</div>
         <div v-if="state.run?.outcome_category === 'external_blocked'" class="notice warning" role="status">外部阻断：{{ state.run?.message ?? state.run?.error_code }}</div>

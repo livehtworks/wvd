@@ -30,6 +30,7 @@
 #include "games/wvd/native_operations.hpp"
 #include "games/wvd/tasks/author_workflow.hpp"
 #include "games/wvd/tasks/public_flow_library.hpp"
+#include "games/wvd/tasks/public_step_scope.hpp"
 #include "games/wvd/tasks/run_builder.hpp"
 #include "games/wvd/vision/native_recognizers.hpp"
 #include "games/wvd/vision/native_asset_resolver.hpp"
@@ -209,21 +210,6 @@ std::filesystem::path manager_from_path(const std::filesystem::path &input) {
     }
     throw std::runtime_error("MUMU_MANAGER_NOT_FOUND");
 }
-void launch_selected_instance(const std::filesystem::path &launcher, int index) {
-    require(launcher.filename() != "MuMuManager.exe" &&
-                std::filesystem::is_regular_file(launcher),
-            "MUMU_LAUNCHER_REQUIRED");
-    std::wstring command = L"\"" + launcher.wstring() + L"\" control -v " +
-                           std::to_wstring(index);
-    STARTUPINFOW startup{};
-    startup.cb = sizeof(startup);
-    PROCESS_INFORMATION process{};
-    require(CreateProcessW(nullptr, command.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW,
-                           nullptr, launcher.parent_path().c_str(), &startup, &process),
-            "MUMU_START_FAILED");
-    CloseHandle(process.hThread);
-    CloseHandle(process.hProcess);
-}
 J observation_json(const contracts::Observation &value) {
     const auto outcome = value.outcome == contracts::RecognitionOutcome::Hit
                              ? "Hit"
@@ -263,6 +249,7 @@ J author_document_from_ui(const J &ui) {
     if (ui.contains("interface")) document["interface"] = ui.at("interface");
     if (ui.contains("resource_locale")) document["execution"]["resource_locale"] = ui.at("resource_locale");
     if (ui.contains("events")) document["execution"]["events"] = ui.at("events");
+    if (ui.contains("checks")) document["execution"]["checks"] = ui.at("checks");
     for (const auto &source : ui.at("nodes")) {
         const auto &data = source.at("data");
         J parameters = data.value("parameters", J::object());
@@ -284,7 +271,10 @@ J author_document_from_ui(const J &ui) {
         document["edges"].push_back(
             {{"id", source.at("id")}, {"from", source.at("source")},
              {"to", source.at("target")},
-             {"outcome", data.value("kind", "sequence") == "failure" ? "failure" : "success"},
+             {"outcome", source.value("sourceHandle", J("success")).is_string() &&
+                 source.value("sourceHandle", J("success")).get<std::string>().starts_with("handoff:")
+                 ? source.at("sourceHandle").get<std::string>()
+                 : data.value("kind", "sequence") == "failure" ? "failure" : "success"},
              {"order", data.value("order", 0)}});
     }
     return document;
@@ -302,6 +292,7 @@ J ui_document_from_author(const J &document) {
     ui["interface"] = document.value("interface", J::object());
     ui["resource_locale"] = document.at("execution").value("resource_locale", std::string{});
     if (document.at("execution").contains("events")) ui["events"] = document.at("execution").at("events");
+    if (document.at("execution").contains("checks")) ui["checks"] = document.at("execution").at("checks");
     std::map<std::string, J> positions;
     for (const auto &position : document.at("layout").at("nodes"))
         positions[position.at("node_id").get<std::string>()] =
@@ -323,7 +314,7 @@ J ui_document_from_author(const J &document) {
     for (const auto &source : document.at("edges")) {
         const auto from = source.at("from").get<std::string>();
         const auto outcome = source.at("outcome").get<std::string>();
-        const auto kind = outcome == "failure" ? "failure"
+        const auto kind = outcome.starts_with("handoff:") ? "handoff" : outcome == "failure" ? "failure"
                           : outcome_counts[{from, outcome}] > 1 ? "candidate" : "sequence";
         ui["edges"].push_back(
             {{"id", source.at("id")}, {"source", from}, {"target", source.at("to")},
@@ -588,6 +579,10 @@ Application::J Application::catalog() const {
             })},
             {"templates", templates}, {"recognizers", options({
                 J{{"value", "combat_active"}, {"label", "战斗中"}},
+                J{{"value", "skill_level"}, {"label", "技能等级"}},
+                J{{"value", "prepared_actor"}, {"label", "本次行动角色"}},
+                J{{"value", "skill_target"}, {"label", "本次技能目标"}},
+                J{{"value", "input_clear"}, {"label", "局部输入可操作"}},
                 J{{"value", "pause"}, {"label", "Pause"}},
                 J{{"value", "target_marker"}, {"label", "目标标记"}},
                 J{{"value", "next_low_confidence"}, {"label", "NEXT 低阈值"}}
@@ -761,6 +756,7 @@ void Application::start_device_job(std::string name, std::function<void()> job) 
         std::lock_guard lock(mutex_);
         require(!stopping_, "APPLICATION_STOPPING");
         require(!run_active(), "RUN_ACTIVE");
+        require(!task_session_active_, "TASK_SESSION_ACTIVE");
         require(!handoff_status_.is_object() ||
             (handoff_status_.value("state", "") != "watching" &&
              handoff_status_.value("state", "") != "starting"),
@@ -819,6 +815,7 @@ Application::J Application::queue_run(const std::string &kind, const J &request,
         require(!stopping_, "APPLICATION_STOPPING");
         require(!run_active(), "RUN_ACTIVE");
         require(operation_.value("state", "idle") != "running", "DEVICE_OPERATION_BUSY");
+        require(!task_session_active_, "TASK_SESSION_ACTIVE");
         require(submissions_.size() < 256, "REQUEST_HISTORY_CAPACITY_EXCEEDED");
         submission_ = {{"request_id", id}, {"kind", kind}, {"state", "preparing"},
                        {"error", nullptr}, {"accepted", true}};
@@ -846,6 +843,11 @@ Application::J Application::start_task(const J &request) {
     frozen["request_id"] = checked_request_id(request);
     const auto stored = profile_store_->load();
     frozen["resource_locale"] = authoring::effective_resource_locale(frozen, J::object());
+    require(!request.contains("repeat") || request.at("repeat").is_boolean(), "REPEAT_INVALID");
+    // 连续运行目前只开放已有完整单轮与结算契约的蝎女任务。
+    if (request.value("repeat", false))
+        require(request.value("task_id", stored.at("values").value("FARM_TARGET", "")) == "Scorpionesses",
+                "REPEAT_TASK_UNSUPPORTED");
     if (request.contains("profile_revision"))
         require(request.at("profile_revision") == stored.at("revision"), "PROFILE_REVISION_MISMATCH");
     return queue_run("start_task", frozen,
@@ -866,8 +868,7 @@ Application::J Application::start_task(const J &request) {
             const auto backend = ensure_connected_for_run(stored);
             auto result = prepare_task(frozen, stored, backend, source_values, nullptr,
                 std::move(prepared));
-            if (task_id != "7000G" && source_values.at("ACTIVE_BEG_MONEY").get<bool>())
-                watch_task_handoff(stored, source_values, backend, frozen.at("request_id"));
+            watch_task_session(frozen, stored, source_values, backend, frozen.at("request_id"));
             return result;
         });
 }
@@ -882,7 +883,7 @@ Application::J Application::start_workflow(const std::string &flow_id, const J &
     require(frozen.value("revision", std::string{}) == document.at("revision").get<std::string>(),
             "WORKFLOW_REVISION_MISMATCH");
     frozen["resource_locale"] = authoring::effective_resource_locale(frozen, document.at("execution"));
-    const auto library = workflow_store_->snapshot_closure(document);
+    const auto library = workflow_store_->snapshot_closure(document, games::tasks::native_public_steps);
     return queue_run("start_workflow", frozen,
         {{"kind", "workflow"}, {"flow_id", flow_id}, {"request", frozen},
          {"profile_revision", stored.at("revision")}, {"library", library}},
@@ -929,7 +930,7 @@ void Application::connect_selected_device(const J &request) {
     auto binding = platform::create_mumu_binding(manager, index, serial);
     if (!binding.at("initial_manager").value("is_android_started", false)) {
         require(!stopping_ && !cancel_operation_, "PREPARATION_CANCELLED");
-        launch_selected_instance(path, index);
+        platform::launch_selected_instance(path, index);
         const auto deadline = std::chrono::steady_clock::now() + 120s;
         do {
             // 准备期停止不必等一整秒才被本层察觉；不伪称可以撤回已启动的进程。
@@ -1115,9 +1116,11 @@ Application::J Application::run_status() const {
         mapping = active_pipeline_to_node_;
         source_paths = active_source_paths_;
         value["submission"] = submission_;
-        value["busy"] = run_active() || operation_.value("state", "idle") == "running";
+        value["busy"] = run_active() || task_session_active_ || operation_.value("state", "idle") == "running";
+        value["repeat"] = repeat_status_;
         value["task_name"] = active_task_name_.empty() ? J(nullptr) : J(active_task_name_);
-        value["elapsed_seconds"] = active_started_
+        value["elapsed_seconds"] = snapshot.quiescent && snapshot.business.is_object()
+            ? snapshot.business.value("elapsed_seconds", 0.0) : active_started_
             ? std::chrono::duration_cast<std::chrono::seconds>(
                   std::chrono::steady_clock::now() - *active_started_).count()
             : 0;
@@ -1184,18 +1187,22 @@ Application::J Application::run_status() const {
 
 games::tasks::CompiledWorkflow Application::compile_task_graph(const J &request,
     const games::WvdQuestDefinition &task, const J &values) const {
+    const auto board = workflow_store_->read("guild-open-bounty-page");
+    const auto locale = authoring::effective_resource_locale(request, J::object());
+    const auto closure = workflow_store_->snapshot_closure(board, games::tasks::native_public_steps);
+    const games::tasks::PublicFlowLibrary library(closure, semantic_catalogue_);
+    const games::tasks::PublicStepScope steps([&](const std::string &id, const J &arguments) {
+        return library.compile_step(id, arguments, locale);
+    });
     auto workflow = games::tasks::build_task_workflow(task, values, available_images_,
-        [this, &request](const games::WvdQuestDefinition &selected, const J &profile,
+        [this, &board, &library, &locale](const games::WvdQuestDefinition &selected, const J &profile,
                          const std::set<std::string> &images) {
-            const auto board = workflow_store_->read("guild-open-bounty-page");
             const auto status = workflow_store_->inspect_builtin(
                 builtin_documents_.at("guild-open-bounty-page")).at("status").get<std::string>();
             require(status != "update_available" && status != "source_unknown",
                 "BOUNTY_PUBLIC_BOARD_REQUIRES_REVIEW");
-            const auto closure = workflow_store_->snapshot_closure(board);
-            const games::tasks::PublicFlowLibrary library(closure, semantic_catalogue_);
             return games::tasks::bounty_cycle(selected, profile, images, library, board,
-                authoring::effective_resource_locale(request, J::object()));
+                locale);
         });
     workflow = games::recovery::with_boot_recovery(workflow, true);
     require(workflow.nodes.contains("Boot_Entry"), "PRODUCTION_BOOT_ENTRY_MISSING");
@@ -1318,25 +1325,38 @@ Application::J Application::prepare_task(const J &request, const J &stored,
     return result;
 }
 
-void Application::watch_task_handoff(const J &stored, J source_values,
+void Application::watch_task_session(const J &request, const J &stored, J source_values,
     std::shared_ptr<devices::DeviceConnection> backend, std::string request_id) {
     if (handoff_worker_.joinable()) handoff_worker_.join();
     require(!stopping_ && !cancel_operation_, "PREPARATION_CANCELLED");
     {
         std::lock_guard lock(mutex_);
         handoff_status_ = {{"state", "watching"}, {"source_request_id", request_id}};
+        repeat_status_ = {{"active", request.value("repeat", false)},
+            {"state", request.value("repeat", false) ? "running" : "disabled"},
+            {"completed_cycles", 0}, {"reason", ""}, {"request_id", request_id}};
+        task_session_active_ = true;
     }
-    handoff_worker_ = std::jthread([this, stored, source_values = std::move(source_values),
+    try {
+    handoff_worker_ = std::jthread([this, request, stored, source_values = std::move(source_values),
         backend = std::move(backend), request_id = std::move(request_id)](std::stop_token stop) mutable {
         const auto update = [this](const std::string &state, const J &detail) {
             std::lock_guard lock(mutex_);
             handoff_status_ = {{"state", state}, {"detail", detail}};
         };
+        // 所有正常/异常退出都统一释放会话准入，不能留下界面无法停止的轮间窗口。
+        const auto work = [&] {
         try {
+          std::uint64_t completed = 0;
+          const auto session_request_id = request_id;
+          while (!stop.stop_requested() && !stopping_ && !cancel_operation_) {
             while (!stop.stop_requested() && !stopping_ && !cancel_operation_) {
                 if (coordinator_->wait_for(250ms)) break;
                 if (coordinator_->wait_for_worker(0ms) && !coordinator_->snapshot().quiescent) {
                     update("blocked", "SOURCE_CLEANUP_PENDING");
+                    std::lock_guard lock(mutex_);
+                    repeat_status_["state"] = "failed";
+                    repeat_status_["reason"] = coordinator_->snapshot().reason;
                     return;
                 }
             }
@@ -1345,6 +1365,44 @@ void Application::watch_task_handoff(const J &stored, J source_values,
             require(snapshot && snapshot->quiescent && snapshot->result_saved &&
                 snapshot->storage_error.empty(), "HANDOFF_SOURCE_NOT_COMMITTED");
             if (snapshot->outcome_category != "handoff_ready") {
+                if (request.value("repeat", false)) {
+                    const auto &business = snapshot->business;
+                    const auto cycle = business.value("bounty_cycle", J::object());
+                    if (snapshot->state != contracts::RunState::Completed)
+                        throw std::runtime_error(snapshot->reason.empty() ? "REPEAT_CYCLE_NOT_COMPLETED" : snapshot->reason);
+                    // 点击前上下文失效会被记录为拒绝，但没有发送输入，执行器可重新观察。
+                    // 是否续轮由最终业务/清理回执决定，不能因这种已恢复的拒绝再终止成功轮。
+                    require(snapshot->state == contracts::RunState::Completed &&
+                        snapshot->completed_business_units == 3 &&
+                        snapshot->secondary_errors.empty() && snapshot->details_complete &&
+                        cycle.value("completed_cycles", 0) == 1 && cycle.value("reports_remaining", -1) == 0 &&
+                        !business.value("bounty_report_pending", true) &&
+                        !business.value("inn_payment_pending", true), "REPEAT_CYCLE_NOT_CLEAN");
+                    ++completed;
+                    {
+                        std::lock_guard lock(mutex_);
+                        repeat_status_["completed_cycles"] = completed;
+                        repeat_status_["state"] = "waiting";
+                    }
+                    // 轮间等待可取消，不持有命令锁；停止在下一次 prepare_task 的提交锁内再次核验。
+                    for (int i = 0; i < 100 && !stop.stop_requested() && !stopping_ && !cancel_operation_; ++i)
+                        std::this_thread::sleep_for(100ms);
+                    if (stop.stop_requested() || stopping_ || cancel_operation_) return;
+                    auto next_request = request;
+                    request_id = "repeat-" + games::tasks::digest_handoff_json(
+                        {{"session", session_request_id}, {"cycle", completed + 1}});
+                    next_request["request_id"] = request_id;
+                    {
+                        std::lock_guard lock(mutex_);
+                        repeat_status_["state"] = "starting";
+                    }
+                    prepare_task(next_request, stored, backend, source_values);
+                    {
+                        std::lock_guard lock(mutex_);
+                        repeat_status_["state"] = "running";
+                    }
+                    continue;
+                }
                 update("not_requested", snapshot->reason);
                 return;
             }
@@ -1385,12 +1443,50 @@ void Application::watch_task_handoff(const J &stored, J source_values,
                 stored, backend, next_values, lineage);
             update("started", {{"run_id", started.at("run_id")},
                 {"request_id", next_id}, {"source_run_id", snapshot->run_id}});
+            // 既有转金币交接完整保留，但它不是蝎女一轮成功，不能交接后自动重刷蝎女。
+            {
+                std::lock_guard lock(mutex_);
+                if (request.value("repeat", false)) {
+                    repeat_status_["state"] = "stopped";
+                    repeat_status_["reason"] = "TASK_HANDED_OFF";
+                }
+            }
+            return;
+          }
         } catch (const std::exception &error) {
             update("blocked", error.what());
+            std::lock_guard lock(mutex_);
+            if (request.value("repeat", false)) {
+                repeat_status_["state"] = cancel_operation_ || stopping_ ? "stopped" : "failed";
+                repeat_status_["reason"] = error.what();
+            }
         } catch (...) {
             update("blocked", "HANDOFF_UNEXPECTED_EXCEPTION");
+            std::lock_guard lock(mutex_);
+            if (request.value("repeat", false)) {
+                repeat_status_["state"] = "failed";
+                repeat_status_["reason"] = "TASK_SESSION_UNEXPECTED_EXCEPTION";
+            }
         }
+        };
+        work();
+        std::lock_guard lock(mutex_);
+        repeat_status_["active"] = false;
+        if (request.value("repeat", false) && repeat_status_.at("state") != "failed" &&
+            repeat_status_.at("state") != "stopped") repeat_status_["state"] = "stopped";
+        if (handoff_status_.value("state", "") == "watching")
+            handoff_status_["state"] = "not_requested";
+        task_session_active_ = false;
     });
+    } catch (...) {
+        std::lock_guard lock(mutex_);
+        task_session_active_ = false;
+        repeat_status_["active"] = false;
+        repeat_status_["state"] = "failed";
+        repeat_status_["reason"] = "TASK_SESSION_WORKER_START_FAILED";
+        handoff_status_["state"] = "blocked";
+        throw;
+    }
 }
 
 Application::J Application::list_workflows() const {
@@ -1531,6 +1627,9 @@ runtime::NativeRunDefinition Application::assemble_workflow(
     }
     const games::tasks::PublicFlowLibrary library(library_snapshot, semantic_catalogue_);
     const auto locale = authoring::effective_resource_locale(request, document.at("execution"));
+    const games::tasks::PublicStepScope steps([&](const std::string &id, const J &arguments) {
+        return library.compile_step(id, arguments, locale);
+    });
     auto supplied = request.value("arguments", J::object());
     if (request.value("mode", "workflow") == "selected_node") supplied = J::object();
     const auto task_ids = library.task_profiles(document, supplied, locale);
@@ -1541,7 +1640,7 @@ runtime::NativeRunDefinition Application::assemble_workflow(
         document, [this, &values](const J &parameters) {
             const auto binding = parameters.at("binding").get<std::string>();
             if (binding == "combat")
-                return games::combat::fight_encounter(values, available_images_, 16);
+                return games::combat::fight_encounter(values, available_images_);
             if (binding == "chest")
                 return games::chest::open_chest(
                     static_cast<int>(parameters.at("preferred").get<std::int64_t>()),
@@ -1623,6 +1722,8 @@ Application::J Application::stop_run(std::optional<std::uint64_t> requested_run_
     handoff_worker_.request_stop();
     {
         std::lock_guard lock(mutex_);
+        if (repeat_status_.is_object() && repeat_status_.value("active", false))
+            repeat_status_["state"] = "stopping";
         if (handoff_status_.is_object() &&
             (handoff_status_.value("state", "") == "watching" ||
              handoff_status_.value("state", "") == "starting"))

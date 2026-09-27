@@ -338,15 +338,40 @@
       "variants": {
         "zh-Hant": {
           "condition": {
-            "mode": "template",
-            "image": "guild_bounties_page_zh_hant",
-            "threshold": 0.8,
-            "roi": [270, 20, 360, 125]
+            "mode": "all",
+            "conditions": [
+              {"mode": "template", "image": "guild_bounties_page_zh_hant", "threshold": 0.8, "roi": [270, 20, 360, 125]},
+              {"mode": "template", "image": "guild_bounty_selected_zh_hant", "threshold": 0.88, "roi": [590, 1370, 210, 90]},
+              {"mode": "template", "image": "guild_bounty_card_header", "threshold": 0.85, "roi": [80, 230, 330, 100]},
+              {"mode": "not", "conditions": [
+                {"mode": "template", "image": "guild_commissions_page_zh_hant", "threshold": 0.8, "roi": [270, 20, 360, 125]}
+              ]}
+            ]
           },
           "validation": "REAL_FRAME_REPORTED",
-          "source": "2026-09-24 MuMu 900x1600 guild-bounties-live.png"
+          "source": "2026-09-27 MuMu 900x1600: 标题、选中页签与已加载WANTED卡片共同确认；不得只凭标题放行"
         }
       }
+    },
+    "guild.list.back": {
+      "label": "返回公会菜单",
+      "category": "公会/导航",
+      "role": "position",
+      "variants": {"zh-Hant": {
+        "condition": {"mode": "template", "image": "guild_list_back_zh_hant", "threshold": 0.8, "roi": [80, 1470, 190, 100]},
+        "validation": "REAL_FRAME_REPORTED",
+        "source": "2026-09-27 MuMu 900x1600 bounty-open-result.png"
+      }}
+    },
+    "guild.leave": {
+      "label": "离开公会",
+      "category": "公会/导航",
+      "role": "position",
+      "variants": {"zh-Hant": {
+        "condition": {"mode": "template", "image": "guild_leave_zh_hant", "threshold": 0.8, "roi": [610, 940, 230, 115]},
+        "validation": "REAL_FRAME_REPORTED",
+        "source": "2026-09-27 MuMu 900x1600 bounty-exit-step.png"
+      }}
     },
     "guild.bounty.first_item": {
       "label": "赏金列表第一项（待采集）",
@@ -1235,6 +1260,21 @@
           },
           "validation": "REAL_FRAME_REPORTED",
           "source": "2026-09-25 MuMu scorpion-preflight-inn.png"
+        }
+      }
+    },
+    "inn.leave.option": {
+      "label": "离开旅店",
+      "category": "旅店/住宿",
+      "role": "position",
+      "variants": {
+        "zh-Hant": {
+          "condition": {
+            "mode": "template", "image": "inn_leave_zh_hant",
+            "threshold": 0.86, "roi": [620, 890, 280, 140]
+          },
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "2026-09-27 MuMu 900x1600 inn menu; name crop only"
         }
       }
     },
