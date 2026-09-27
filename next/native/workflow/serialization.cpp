@@ -28,7 +28,7 @@ J event(const EventRule &value) {
     const auto category = value.category == EventClass::Overlay ? "overlay"
         : value.category == EventClass::Encounter ? "encounter"
         : value.category == EventClass::Exception ? "exception" : "special";
-    return {{"id", value.id},
+    return {{"id", value.id}, {"on_device_restart", value.on_device_restart},
             {"class", category},
             {"priority", value.priority}, {"detect", request(value.detect)},
             {"disposition", value.disposition == EventDisposition::Handle ? "handle" : "external_blocked"},
@@ -54,7 +54,9 @@ J data(const StepData &value) {
             result["target_offset"] = J::array({input->target_offset->x, input->target_offset->y});
         if (input->retry)
             result["retry"] = {{"ready", request(input->retry->ready)},
-                               {"interval_ms", input->retry->interval.count()}};
+                               {"interval_ms", input->retry->interval.count()},
+                               {"max_submissions", input->retry->max_submissions}};
+        if (!input->effect_binding.empty()) result["effect_binding"] = input->effect_binding;
         return result;
     }
     if (const auto *await = std::get_if<AwaitResult>(&value))

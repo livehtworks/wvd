@@ -12,6 +12,19 @@
     }
   },
   "resources": {
+    "inn.standard.gold.confirmation": {
+      "label": "标准房200金币完整确认句",
+      "category": "旅店/付款证据",
+      "role": "observation",
+      "variants": {
+        "zh-Hant": {
+          "condition": {"mode": "template", "image": "inn_standard_200g_confirmation_zh_hant",
+            "threshold": 0.9, "roi": [180, 690, 550, 140]},
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "2026-09-25 900x1600 标准房完整200金币确认句，排除动态余额"
+        }
+      }
+    },
     "city.royal.identity": {
       "label": "王城塔楼背景",
       "category": "地点/王城",
@@ -2195,6 +2208,30 @@
           },
           "validation": "REAL_FRAME_REPORTED",
           "source": "2026-09-24 MuMu 900x1600: temple-harken-buff-first-after-20260924.png"
+        }
+      }
+    },
+    "purchase.premium.button": {
+      "label": "購買與綠色或紫色寶石",
+      "category": "消费保护",
+      "role": "observation",
+      "variants": {
+        "zh-Hant": {
+          "condition": {
+            "mode": "any",
+            "conditions": [
+              {"mode": "all", "conditions": [
+                {"mode": "template", "image": "premium_purchase_text_zh_hant", "threshold": 0.85, "roi": [460, 1140, 320, 95]},
+                {"mode": "template", "image": "premium_purchase_green", "threshold": 0.85, "roi": [460, 1230, 320, 65]}
+              ]},
+              {"mode": "all", "conditions": [
+                {"mode": "template", "image": "premium_purchase_text_zh_hant", "threshold": 0.85, "roi": [115, 1140, 320, 95]},
+                {"mode": "template", "image": "premium_purchase_purple", "threshold": 0.85, "roi": [115, 1230, 320, 65]}
+              ]}
+            ]
+          },
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "2026-09-27 MuMu 900x1600 purchase buttons; excludes product, price and balance"
         }
       }
     },

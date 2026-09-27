@@ -99,11 +99,14 @@ export interface SubmissionReceipt extends JsonObject {
   run_id?: string | number;
 }
 export interface RunState extends JsonObject {
-  repeat?: { active: boolean; state: string; completed_cycles: number; reason: string; request_id: string } | null;
+  repeat?: { active: boolean; state: string; completed_cycles: number; target_cycles?: number | null; reason: string; request_id: string } | null;
   busy?: boolean; quiescent?: boolean;
   call_stack?: Array<{ definition: string; node_id: string; source_path: Array<{flow_id?:string;node_id?:string;native_node?:string}> }>;
   unresolved_inputs?: Array<{ source_path:string; basis_frame:number; basis_epoch:number; action_epoch:number; delivery_unknown:boolean }>;
   execution?: {step_id?:string;current_block?:string;phase?:string;wait_state?:string;return_targets?:string[];
+    observation_recovery?:{active:boolean;state:string;failures:number;code:string;operation:string;
+      outage_limit_ms:number;duration_ms?:number;source_path:string;command_elapsed_ms:number;
+      command_timeout_ms:number;command_details?:{command?:string;exit_code?:number;stderr?:string}};
     main_objective?:{farm_target_text?:string;task_step?:number};[key:string]:unknown};
   node_path?: Array<{flow_id:string;node_id:string}>;
   active_event?: {event_id:string;class?:string;source_node:string;handler_entry?:string;phase?:string;

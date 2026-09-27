@@ -38,8 +38,9 @@ tasks::CompiledWorkflow travel_world(const WorldDestination &destination, WorldA
     const auto story = vision::ordinary_story_page();
     const auto advance = vision::story_advance_arrow();
     const auto expected = arrival == WorldArrival::City ? city_arrival(destination) : C::any({open, C::image("dungFlag")});
-    const auto arrived = C::all({expected, C::absent(world)});
-    const auto searching = C::all({world, C::absent(expected)});
+    // 城市底图可能透过剧情/下载框显示；底图出现不等于已经能进行下一步。
+    const auto arrived = C::all({expected, C::absent(world), C::absent(story), C::absent(download)});
+    const auto searching = C::all({world, C::absent(expected), C::absent(story), C::absent(download)});
     const auto located = C::all({searching, target});
     const auto missing = C::all({searching, C::absent(target)});
     graph.route("Entry", {"DownloadEn", "DownloadZhHant", "Arrived", "Story", "OpenWorld", "Locate", "Poll"});
@@ -54,27 +55,28 @@ tasks::CompiledWorkflow travel_world(const WorldDestination &destination, WorldA
     graph.hit_limit("Story", 50);
     if (arrival == WorldArrival::City)
         graph.click("OpenWorld", C::all({into, C::absent(world)}), into,
-                    C::any({world, arrived}), {"Arrived", "Locate"});
+                    C::any({world, arrived, story, download}), {"Entry"});
     else
         graph.click("OpenWorld", C::all({inn, into, C::absent(world)}), into,
-                    C::any({world, arrived}), {"Arrived", "Locate"});
-    graph.route("Locate", {"DownloadEn", "DownloadZhHant", "Arrived", "Click0", "Relocate"});
+                    C::any({world, arrived, story, download}), {"Entry"});
+    graph.route("Locate", {"DownloadEn", "DownloadZhHant", "Story", "Arrived", "Click0", "Relocate"});
     graph.hit_limit("Locate", 128);
     if (destination.swipe) {
         const auto &s = *destination.swipe;
-        graph.swipe("Relocate", missing, C::any({world, arrived}),
-                    {s.from[0], s.from[1], s.to[0], s.to[1]}, {"Arrived", "Click0", "Dismiss"});
+        graph.swipe("Relocate", missing, C::any({world, arrived, story, download}),
+                    {s.from[0], s.from[1], s.to[0], s.to[1]},
+                    {"DownloadEn", "DownloadZhHant", "Story", "Arrived", "Click0", "Dismiss"});
         graph.delay_after("Relocate", 1000);
-        graph.fixed_click("Dismiss", missing, C::any({world, arrived}), destination.dismiss, {"Locate"});
+        graph.fixed_click("Dismiss", missing, C::any({world, arrived, story, download}), destination.dismiss, {"Locate"});
     } else
-        graph.fixed_click("Relocate", missing, C::any({world, arrived}), destination.dismiss, {"Locate"});
+        graph.fixed_click("Relocate", missing, C::any({world, arrived, story, download}), destination.dismiss, {"Locate"});
     const std::array<std::array<int, 2>, 5> offsets{
         {{0, 0}, {0, -55}, {-35, -35}, {35, -35}, {0, 35}}};
     for (std::size_t i = 0; i < offsets.size(); ++i) {
         const auto next = "Click" + std::to_string((i + 1) % offsets.size());
         graph.click("Click" + std::to_string(i), located, target,
                     C::any({arrived, download, C::absent(world)}),
-                    {"DownloadEn", "DownloadZhHant", "Arrived", next, "Relocate"}, offsets[i]);
+                    {"DownloadEn", "DownloadZhHant", "Story", "Arrived", next, "Relocate"}, offsets[i]);
         graph.delay_after("Click" + std::to_string(i), 1500);
         graph.postcondition_budget("Click" + std::to_string(i), 22000);
     }

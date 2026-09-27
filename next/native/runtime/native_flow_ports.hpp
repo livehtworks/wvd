@@ -21,7 +21,15 @@ class NativeFlowPorts final : public FlowPorts {
     void set_operation_handler(OperationHandler handler);
     void set_input_sink(InputSink sink) { input_sink_ = std::move(sink); }
     void set_capture_sink(CaptureSink sink) { capture_sink_ = std::move(sink); }
+    void input_result(const nlohmann::json &value) noexcept override;
     contracts::FrameEnvelope capture() override;
+    bool prepare_input() override { return gate_.prepare_for_input(); }
+    void observation_window(std::chrono::steady_clock::time_point deadline) override { gate_.observation_window(deadline); }
+    std::optional<contracts::ObservationReconnect> recover_observation() override { return backend_.recover_observation(); }
+    bool settle_observed_input() override { return backend_.settle_observed_input(); }
+    const std::optional<contracts::DiagnosticPixels> &failed_pixels() const { return failed_pixels_; }
+    // 只在 Session 工作线程、run() 返回后由协调器读取；不是实时共享可写帧。
+    const std::optional<contracts::FrameEnvelope> &last_valid_frame() const { return last_valid_frame_; }
     contracts::Observation recognize(const contracts::FrameEnvelope &frame,
                                       const recognition::Request &request) override;
     Submission submit(const contracts::Command &command,
@@ -47,6 +55,7 @@ class NativeFlowPorts final : public FlowPorts {
     std::uint64_t business_version() const { return business_.version(); }
 
   private:
+    devices::DeviceBackend &backend_;
     recognition::Service &recognizer_;
     contracts::BusinessRunState &business_;
     devices::NativeInputGate gate_;
@@ -55,5 +64,7 @@ class NativeFlowPorts final : public FlowPorts {
     InputSink input_sink_;
     CaptureSink capture_sink_;
     std::uint64_t input_sequence_{};
+    std::optional<contracts::FrameEnvelope> last_valid_frame_;
+    std::optional<contracts::DiagnosticPixels> failed_pixels_;
 };
 } // namespace wvd::runtime

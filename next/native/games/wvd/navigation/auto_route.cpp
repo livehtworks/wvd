@@ -18,6 +18,7 @@ tasks::CompiledWorkflow auto_route(const std::string &target) {
                                  C::absent(map), C::absent(encounter)});
     const auto harken = C::any({vision::harken_buff_menu(), vision::harken_floor_menu(),
                                 vision::outskirts_return_button()});
+    const auto retreated = target == "dungFlag" ? C::any({outside, harken}) : outside;
     const J moving{{"mode", "auto_route_moving"}};
     const auto no_target = C::any({C::image("NoChestCanBeFound"), C::image("theRouteToTheDestinationCannotBeFound")});
     const J post = target == "dungFlag" ? C::any({J{{"mode", "auto_route_post"}}, harken})
@@ -42,12 +43,12 @@ tasks::CompiledWorkflow auto_route(const std::string &target) {
             available = C::all({button, minus});
         }
         graph.route("Entry", {"Encounter", "Retreated", "Done", "CloseMap", "Ready", "Expand"});
-        graph.observe("Retreated", target == "dungFlag" ? C::any({outside, harken}) : outside, {"Terminal"});
+        graph.observe("Retreated", retreated, {"Terminal"});
         graph.observe("Done", C::all({no_target, C::absent(encounter)}), {"Terminal"});
         graph.back("CloseMap", C::all({map, C::absent(encounter)}), post, {"Entry"});
         graph.observe("Ready", C::all({moving, button}), {"Choose", "Unavailable"});
         graph.fixed_click("Expand", C::all({moving, C::absent(button)}),
-            C::any({encounter, outside, C::all({moving, button})}), {762, 346}, {"Encounter", "Retreated", "Ready"});
+            C::any({encounter, retreated, no_target, C::all({moving, button})}), {762, 346}, {"Encounter", "Retreated", "Done", "Ready"});
         graph.retry_menu_input("Expand", C::all({moving, C::absent(button)}), 3000);
         graph.hit_limit("Expand", 1);
         graph.click("Choose", C::all({moving, available}), button, post,

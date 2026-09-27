@@ -987,16 +987,8 @@
             "id": "boot.download.action"
           },
           "postcondition": {
-            "mode": "any",
+            "mode": "not",
             "conditions": [
-              {
-                "mode": "semantic",
-                "id": "wheel.title"
-              },
-              {
-                "mode": "semantic",
-                "id": "wheel.entry"
-              },
               {
                 "mode": "semantic",
                 "id": "boot.download.action"

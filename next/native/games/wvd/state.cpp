@@ -22,6 +22,23 @@ WvdRunState::WvdRunState(J profile, const contracts::StateCreationContext &creat
         tasks::validate_handoff_source(handoff_source_, profile_);
     strategy_.reload(task_step_);
 }
+bool WvdRunState::inn_payment_ready() const {
+    if (!inn_payment_pending_ || inn_rest_completed_ || inn_payment_cycle_ != supply_cycle_)
+        throw std::runtime_error("INN_PAYMENT_NOT_PREPARED");
+    if (inn_payment_delivery_unknown_)
+        throw std::runtime_error("INN_PAYMENT_DELIVERY_UNKNOWN");
+    if (inn_payment_submissions_ >= 3)
+        throw std::runtime_error("INN_GOLD_SUBMISSIONS_EXHAUSTED");
+    return !inn_payment_last_submit_ ||
+        clock_->now() - *inn_payment_last_submit_ >= std::chrono::milliseconds{5000};
+}
+void WvdRunState::inn_payment_submitted(bool delivery_unknown) {
+    if (!inn_payment_pending_ || inn_payment_cycle_ != supply_cycle_)
+        throw std::runtime_error("INN_PAYMENT_RECEIPT_WITHOUT_OPERATION");
+    ++inn_payment_submissions_;
+    inn_payment_last_submit_ = clock_->now();
+    inn_payment_delivery_unknown_ = delivery_unknown;
+}
 bool WvdRunState::observe_unknown_leap(std::uint64_t samples, std::uint64_t generation,
                                       std::uint64_t frame_id) {
     if (!generation || generation != generation_ || !frame_id)
@@ -847,13 +864,19 @@ bool WvdRunState::confirm_event(const std::string &operation, const std::string 
         ++wall_bypass_step_;
     }
     else if (event == "inn_payment_prepared") {
-        if (inn_rest_completed_ || inn_payment_pending_)
+        if (inn_rest_completed_)
             throw std::runtime_error("INN_PAYMENT_ALREADY_PREPARED_OR_COMPLETED");
+        if (inn_payment_cycle_ != supply_cycle_) {
+            inn_payment_cycle_ = supply_cycle_;
+            inn_payment_submissions_ = 0;
+            inn_payment_delivery_unknown_ = false;
+            inn_payment_last_submit_.reset();
+        }
         // 在可能消费的输入之前留下事实。后置观察失败不证明“没付款”，不能自动清掉。
         inn_payment_pending_ = true;
     }
     else if (event == "inn_rest_completed") {
-        if (!inn_payment_pending_)
+        if (!inn_payment_pending_ || inn_payment_submissions_ == 0)
             throw std::runtime_error("INN_PAYMENT_NOT_PREPARED");
         // 换 generation 或换普通段均保留已住宿事实；真正再次入本才开始新补给周期。
         if (!inn_rest_completed_)
@@ -972,6 +995,12 @@ J WvdRunState::summarize() const {
             {"city_supply_due", ordinary || party},
             {"inn_rest_completed", inn_rest_completed_},
             {"inn_payment_pending", inn_payment_pending_},
+            {"inn_payment", {{"currency", "G"}, {"submitted", inn_payment_submissions_ > 0},
+                {"amount_per_submission", profile_.value("ACTIVE_ROYALSUITE_REST", false) ? J(nullptr) : J(200)},
+                {"submissions", inn_payment_submissions_}, {"max_submissions", 3},
+                {"delivery_unknown", inn_payment_delivery_unknown_},
+                {"possible_cost_g", profile_.value("ACTIVE_ROYALSUITE_REST", false) ? J(nullptr) : J(inn_payment_submissions_ * 200)},
+                {"cycle", inn_payment_cycle_ ? J(*inn_payment_cycle_) : J(nullptr)}}},
             {"inn_rests", inn_rests_},
             {"supply_cycle", supply_cycle_},
             {"confirmed_operations", confirmations_.size()},

@@ -45,6 +45,7 @@ struct EventRule {
     std::chrono::milliseconds exit_budget{5000};
     std::chrono::milliseconds ambiguity_budget{5000};
     std::optional<recognition::Request> resume_guard;
+    bool on_device_restart{}; // 仅经生命周期退出/重开证据触发，不参与逐帧事件扫描。
 };
 
 struct Observe {
@@ -58,6 +59,7 @@ struct Route {
 struct InputRetry {
     recognition::Request ready;
     std::chrono::milliseconds interval{5000};
+    unsigned max_submissions{}; // 0沿用无次数上限的安全菜单；付款必须显式限定。
 };
 struct Input {
     recognition::Request scene;
@@ -68,6 +70,7 @@ struct Input {
     bool use_target_center{true};
     bool clip_target_to_area{};
     std::optional<InputRetry> retry;
+    std::string effect_binding; // 业务层准入/实际提交记账；运行层不解释币种。
 };
 struct AwaitResult {
     recognition::Request condition;

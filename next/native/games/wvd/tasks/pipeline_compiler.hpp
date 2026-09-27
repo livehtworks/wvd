@@ -93,7 +93,9 @@ class PipelineCompiler {
     void postcondition_budget(const std::string &name, int milliseconds);
     // 菜单操作的显式重试授权；ready 必须证实原页/按钮仍在且无阻塞。
     // 不可用于付款、领奖、跳轮确认或消耗资源的动作。
-    void retry_menu_input(const std::string &name, const nlohmann::json &ready, int interval_ms = 5000);
+    void retry_menu_input(const std::string &name, const nlohmann::json &ready, int interval_ms = 5000,
+                          unsigned max_submissions = 0);
+    void input_effect(const std::string &name, const std::string &binding);
     void allowed_area(const std::string &name, nlohmann::json area);
     // 仅在正常候选全未命中、且异常处理器未接住时检查本作用域的插入出口。
     // 调用者必须把 BlockedExit 绑定到重新观察入口；独立运行则报告需要外层处理。

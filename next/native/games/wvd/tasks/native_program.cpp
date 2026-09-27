@@ -47,6 +47,7 @@ std::vector<workflow::EventRule> events(const J &rules, const std::string &sourc
             throw std::runtime_error("NATIVE_EVENT_SOURCE_INVALID");
         workflow::EventRule event;
         event.id = rule.at("id");
+        event.on_device_restart = rule.value("on_device_restart", false);
         const auto category = rule.at("class").get<std::string>();
         if (category == "overlay") event.category = workflow::EventClass::Overlay;
         else if (category == "encounter") event.category = workflow::EventClass::Encounter;
@@ -132,8 +133,10 @@ Step translate(const std::string &id, const J &node, const J &paths,
         if (p.contains("retry")) {
             const auto &retry = p.at("retry");
             input.retry = workflow::InputRetry{request(retry.at("ready")),
-                std::chrono::milliseconds{retry.at("interval_ms").get<int>()}};
+                std::chrono::milliseconds{retry.at("interval_ms").get<int>()},
+                retry.value("max_submissions", 0U)};
         }
+        input.effect_binding = p.value("effect_binding", "");
         step.data = std::move(input);
     } else if (action == "Registered" && binding == "Call") {
         step.data = workflow::Call{node.at("operation_args").at("entry"),

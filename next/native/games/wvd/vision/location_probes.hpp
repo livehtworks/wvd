@@ -16,7 +16,7 @@ inline nlohmann::json resource(const char *id, const char *locale = "") {
             "city.ore_merchant.entry", "city.item_shop.entry", "city.edge.entry", "city.any"})
             values.emplace(name, assets.condition(name, ""));
         for (const char *name : {"guild.commissions.page", "guild.bounties.page", "guild.bounty.reveal.close",
-            "chest.open.option", "chest.choose.page", "inn.stay.option"})
+            "chest.open.option", "chest.choose.page", "inn.stay.option", "inn.standard.gold.confirmation", "purchase.premium.button"})
             values.emplace(std::string(name) + "|zh-Hant", assets.condition(name, "zh-Hant"));
         for (const char *name : {"chest.open.option", "chest.choose.page", "inn.stay.option"})
             values.emplace(std::string(name) + "|en", assets.condition(name, "en"));

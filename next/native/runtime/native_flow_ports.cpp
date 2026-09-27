@@ -6,7 +6,7 @@ NativeFlowPorts::NativeFlowPorts(devices::DeviceBackend &backend,
     recognition::Service &recognizer, contracts::BusinessRunState &business,
     contracts::InputPolicy policy, std::uint64_t generation,
     std::stop_token stop)
-    : recognizer_(recognizer), business_(business),
+    : backend_(backend), recognizer_(recognizer), business_(business),
       gate_(backend, std::move(policy), generation), stop_token_(stop) {}
 
 void NativeFlowPorts::set_operation_handler(OperationHandler handler) {
@@ -17,7 +17,14 @@ void NativeFlowPorts::set_operation_handler(OperationHandler handler) {
 
 contracts::FrameEnvelope NativeFlowPorts::capture() {
     if (cancelled()) throw std::runtime_error("CAPTURE_CANCELLED");
-    auto frame = gate_.capture();
+    contracts::FrameEnvelope frame;
+    try { frame = gate_.capture(); }
+    catch (...) {
+        failed_pixels_ = backend_.failed_pixels();
+        throw;
+    }
+    // 原生 BGR 共享像素所有权；只保留一张，不作15秒抽样，也不参与输入授权。
+    last_valid_frame_ = frame;
     platform::timing::count(platform::timing::Counter::Captures);
     if (capture_sink_) {
         platform::timing::Scope measure(platform::timing::Part::ArchiveSubmit);
@@ -37,19 +44,26 @@ Submission NativeFlowPorts::submit(const contracts::Command &command,
     const contracts::Observation &scene, const contracts::Observation &target,
     contracts::Box allowed_area, const std::string &source_path) {
     const auto sequence = ++input_sequence_;
+    const auto started = std::chrono::steady_clock::now();
+    const auto before = platform::timing::active ? platform::timing::active->sample() : platform::timing::Sample{};
     const auto record = [&](const char *state, std::uint64_t action_epoch,
                             const std::string &detail) {
         if (!input_sink_) return;
         platform::timing::Scope measure(platform::timing::Part::JsonEvents);
         try {
-            input_sink_({{"sequence", sequence}, {"source_path", source_path},
+            auto event = nlohmann::json{{"sequence", sequence}, {"source_path", source_path},
                          {"command_kind", static_cast<int>(command.kind)},
                          {"position", {command.x, command.y}},
                          {"end_position", {command.x2, command.y2}}, {"key", command.key},
                          {"target_center", target.center ? nlohmann::json::array({target.center->x, target.center->y}) : nlohmann::json(nullptr)},
                          {"state", state}, {"basis_frame", scene.basis.frame_id},
                          {"basis_epoch", scene.basis.action_epoch},
-                         {"action_epoch", action_epoch}, {"detail", detail}});
+                         {"action_epoch", action_epoch}, {"detail", detail}};
+            if (std::string_view(state) != "attempted")
+                event["timing"] = platform::timing::report(
+                    platform::timing::active ? platform::timing::active->sample() : before,
+                    std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - started).count(), before);
+            input_sink_(event);
         } catch (...) { /* Diagnostics cannot alter or repeat an input. */ }
     };
     record("attempted", 0, "");
@@ -71,7 +85,17 @@ Submission NativeFlowPorts::submit(const contracts::Command &command,
     record(state == SubmissionState::Accepted ? "accepted" :
            state == SubmissionState::Unresolved ? "unresolved" : "rejected",
            receipt.action_epoch, receipt.detail);
-    return {state, receipt.action_epoch, receipt.submitted_at, receipt.detail};
+    return {state, receipt.action_epoch, receipt.submitted_at, receipt.detail, receipt.read_fault};
+}
+
+void NativeFlowPorts::input_result(const nlohmann::json &value) noexcept {
+    if (!input_sink_) return;
+    try {
+        platform::timing::Scope measure(platform::timing::Part::JsonEvents);
+        auto event = value;
+        event["state"] = "result";
+        input_sink_(event);
+    } catch (...) {}
 }
 
 OperationResult NativeFlowPorts::operate(const std::string &binding,
@@ -94,7 +118,11 @@ void NativeFlowPorts::stop() {
     recognizer_.cancel();
 }
 
-bool NativeFlowPorts::cleanup() { return gate_.cleanup(); }
+bool NativeFlowPorts::cleanup() {
+    // 只由工作线程收尾，不能由stop线程改动设备读取窗口。
+    backend_.observation_window({}, {});
+    return gate_.cleanup();
+}
 contracts::InputCounts NativeFlowPorts::input_counts() const { return gate_.counts(); }
 contracts::FrameIdentity NativeFlowPorts::current_identity() const {
     return gate_.current_identity();

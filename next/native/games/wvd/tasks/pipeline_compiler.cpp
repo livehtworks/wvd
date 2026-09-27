@@ -596,13 +596,18 @@ void PipelineCompiler::allowed_area(const std::string &name, J area) {
                 area[1].get<int>() <= 1600 - area[3].get<int>(), "COMPILE_ACTION_AREA_INVALID");
     workflow_.nodes[name]["operation_args"]["allowed_area"] = std::move(area);
 }
-void PipelineCompiler::retry_menu_input(const std::string &name, const J &ready, int interval_ms) {
+void PipelineCompiler::retry_menu_input(const std::string &name, const J &ready, int interval_ms, unsigned max_submissions) {
     require(workflow_.nodes.contains(name) &&
         workflow_.nodes.at(name).value("binding", "") == "Input" &&
         workflow_.nodes.at(name).at("operation_args").at("command").at("kind") == "Click" &&
         interval_ms >= 1000 && interval_ms <= 60000, "COMPILE_INPUT_RETRY_INVALID");
     workflow_.nodes[name]["operation_args"]["retry"] = {
-        {"ready", request(ready)}, {"interval_ms", interval_ms}};
+        {"ready", request(ready)}, {"interval_ms", interval_ms}, {"max_submissions", max_submissions}};
+}
+void PipelineCompiler::input_effect(const std::string &name, const std::string &binding) {
+    require(workflow_.nodes.at(name).value("binding", "") == "Input" && !binding.empty(),
+        "COMPILE_INPUT_EFFECT_INVALID");
+    workflow_.nodes[name]["operation_args"]["effect_binding"] = binding;
 }
 void PipelineCompiler::interrupt_on(J condition, std::string reason, std::string port) {
     require(interruption_.is_null() && condition.is_object() && !reason.empty(), "COMPILE_INTERRUPTION_INVALID");

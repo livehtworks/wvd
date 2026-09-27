@@ -71,7 +71,9 @@ tasks::CompiledWorkflow reach_map_target(const MapTarget &target,
         graph.handoff("FloorExit", "floor");
     }
     graph.observe("BeginSearch", correct_map, {"Search0"});
-    graph.fixed_click("OpenMap", moving, C::any({map, encounter}), {777, 150}, {"Entry"});
+    J map_opened{map, encounter};
+    if (target.harken_arrival) map_opened.push_back(vision::harken_floor_menu());
+    graph.fixed_click("OpenMap", moving, C::any(map_opened), {777, 150}, {"Entry"});
     graph.retry_menu_input("OpenMap", moving, 3000);
     graph.failure_route("OpenMap", {"StalledExit"});
     const auto search_count = positional ? std::size_t{1} : target.swipes.size();
@@ -191,9 +193,13 @@ tasks::CompiledWorkflow reach_map_target(const MapTarget &target,
     // 只有同页反复重试后仍无响应才走冻结恢复，不以第一次点击后3秒判死。
     graph.recovery("FrozenExit", "navigation.automove_physics_frozen");
     graph.recovery("StalledExit", "navigation.input_no_progress");
+    J after_close{moving, encounter, outside};
+    if (target.harken_arrival) after_close.push_back(vision::harken_floor_menu());
     graph.back("CloseStaleMap", C::all({map_scene, C::absent(hint)}),
-               C::any({moving, encounter}), {"Encounter", "Moving"});
+               C::any(after_close), after_move);
     J during_move = {"Exited", "Encounter", "Stopped", "Moving"};
+    // 哈肯可能在导航途中到达，不只是在点自动移动的下一帧出现。
+    if (target.harken_arrival) during_move.insert(during_move.begin(), "HarkenArrived");
     graph.poll("Moving", 250, during_move, moving,
         J{{"mode", "region_changed"}, {"channel", "navigation"}, {"roi", {650, 25, 225, 225}}});
     graph.observe("Stopped", C::all({moving, J{{"mode", "movement_stopped"}}}), {"OpenMap"});

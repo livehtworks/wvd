@@ -14,6 +14,7 @@ struct NativeExecutionResult {
     bool details_complete{true}; // 富诊断失败不能被解释为没有未决输入。
     nlohmann::json unresolved_inputs = nlohmann::json::array();
     nlohmann::json performance = nullptr;
+    nlohmann::json observation_recovery = nullptr;
     std::string cleanup_error;
 };
 
@@ -29,9 +30,14 @@ class NativeExecutionSession final {
         std::uint64_t generation, std::chrono::milliseconds total_budget,
         OperationFactory operations, ProgressSink progress = {},
         NativeFlowPorts::InputSink input_sink = {},
-        NativeFlowPorts::CaptureSink capture_sink = {});
+        NativeFlowPorts::CaptureSink capture_sink = {}, ProgressSink timing_sink = {});
     NativeExecutionResult run();
     void request_stop();
+    // 只允许协调工作线程在 run() 返回后读；不从 HTTP/停止线程读执行器私有状态。
+    const std::optional<contracts::FrameEnvelope> &last_valid_frame() const { return ports_.last_valid_frame(); }
+    const std::optional<contracts::DiagnosticPixels> &failed_pixels() const { return ports_.failed_pixels(); }
+    std::string diagnostic_node() const { return executor_.current_step_id(); }
+    int diagnostic_depth() const { return static_cast<int>(executor_.invocation_depth()) - 1; }
 
   private:
     std::stop_source stop_source_;
@@ -41,6 +47,7 @@ class NativeExecutionSession final {
     NativeFlowPorts ports_;
     FlowExecutor executor_;
     ProgressSink progress_;
+    ProgressSink timing_sink_;
     mutable std::mutex wait_mutex_;
     std::condition_variable_any wake_;
 };

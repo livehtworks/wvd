@@ -41,6 +41,13 @@ struct FrameEnvelope {
     // 截图后端可直接交付 BGR 像素；持有者不可修改发布后的帧。
     std::shared_ptr<const std::vector<std::uint8_t>> raw_bgr;
 };
+// 缺元数据的像素永远不进入识别/输入接口；只供有界取证保存。
+struct DiagnosticPixels {
+    Size size;
+    std::shared_ptr<const std::vector<std::uint8_t>> bgr;
+    std::chrono::steady_clock::time_point captured_at{};
+    std::string device_id, backend;
+};
 struct RecognitionMatch {
     Box box;
     double score{};

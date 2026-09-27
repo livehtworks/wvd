@@ -265,8 +265,11 @@ function updateSkill(skill: SkillSetting, key: keyof SkillSetting, event: Event)
       </details>
 
       <section class="run-section" aria-label="运行结果">
-        <label v-if="state.draft?.FARM_TARGET === 'Scorpionesses'" class="check"><input v-model="state.continuous" type="checkbox" :disabled="state.runActive" />连续循环</label>
-        <div v-if="state.run?.repeat && state.run.repeat.state !== 'disabled'" class="notice" role="status">循环已完成 {{ state.run.repeat.completed_cycles }} 轮<span v-if="!state.run.repeat.active"> · 已停止</span></div>
+        <div v-if="state.draft?.FARM_TARGET === 'Scorpionesses'" class="command-row">
+          <label class="field"><span>循环模式</span><select v-model="state.repeatMode" :disabled="state.runActive"><option value="forever">一直循环</option><option value="count">指定次数</option></select></label>
+          <label v-if="state.repeatMode === 'count'" class="field"><span>循环次数</span><input v-model.number="state.repeatCount" type="number" min="1" max="1000000" :disabled="state.runActive" /></label>
+        </div>
+        <div v-if="state.run?.repeat && state.run.repeat.state !== 'disabled'" class="notice" role="status">循环已完成 {{ state.run.repeat.completed_cycles }}<template v-if="state.run.repeat.target_cycles"> / {{ state.run.repeat.target_cycles }}</template> 轮<span v-if="state.run.repeat.state === 'completed'"> · 已达到设定次数</span><span v-else-if="!state.run.repeat.active"> · 已停止</span></div>
         <div v-if="state.runError" class="notice error" role="alert">{{ state.runError }}</div>
         <header><div><h2>运行结果</h2><span>{{ state.run?.run_id ?? '当前没有运行' }}</span></div><div class="command-row"><label class="field run-locale"><span>游戏素材语言</span><select v-model="state.resourceLocale" :disabled="state.runActive"><option v-for="option in resourceLocaleOptions" :key="option.value" :value="option.value">{{ option.label }}</option></select></label><button class="button run" :disabled="state.runActive || state.deviceBusy || state.dirty || !state.draft?.FARM_TARGET" @click="state.startSelectedTask"><Play :size="16" />开始任务</button><button class="button danger" :disabled="!state.runActive" @click="state.requestStop"><CircleStop :size="16" />停止</button></div></header>
         <div v-if="state.error" class="notice error" role="alert">{{ state.error }}</div>

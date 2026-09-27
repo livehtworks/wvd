@@ -88,6 +88,9 @@ inline nlohmann::json boot_probes(bool transient) {
     // 各城市的建筑按钮图标相同，不能用来区分地点。王城身份只由其固定塔楼
     // 背景确认；该锚点只读，不用于点击或推断其他城市业务状态。
     probes.push_back(royal_city());
+    // 郊外和哈肯楼层菜单也是可交给任务继续收敛的稳定场景；它们不是城市完成证据。
+    probes.push_back(outskirts_return_button());
+    probes.push_back(harken_floor_menu());
     // 公会页也属于已启动的稳定游戏画面；从工作台直接运行子流程时不能卡在启动门禁。
     probes.push_back(resource("guild.commissions.page", "zh-Hant"));
     probes.push_back(resource("guild.bounties.page", "zh-Hant"));

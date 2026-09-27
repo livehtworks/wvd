@@ -9,6 +9,7 @@
 #include <atomic>
 
 namespace wvd::devices {
+struct AdbFailureInfo;
 class DeviceSession final : public DeviceConnection, public LifecyclePort {
   public:
     DeviceSession(nlohmann::json binding, std::filesystem::path capture_host,
@@ -18,9 +19,14 @@ class DeviceSession final : public DeviceConnection, public LifecyclePort {
     bool offline() const override { return false; }
     bool verified_access() const override { return verified_; }
     bool connect() override;
+    bool input_channel_ready() const override;
     void prepare_input_channel(std::stop_token stop) override;
     void disconnect() override;
     bool release_owned_inputs() override;
+    void observation_window(std::chrono::steady_clock::time_point deadline, std::stop_token stop) override;
+    std::optional<contracts::ObservationReconnect> recover_observation() override;
+    std::optional<contracts::DiagnosticPixels> failed_pixels() const override { return failed_pixels_; }
+    bool settle_observed_input() override;
     RawFrame capture() override;
     RawFrame capture(std::stop_token stop) override;
     RawFrame capture_preview() override;
@@ -51,6 +57,8 @@ class DeviceSession final : public DeviceConnection, public LifecyclePort {
     bool vpn_ui_step(const std::string &package, bool &start_clicked,
                      const std::function<bool()> &cancelled);
     void record(nlohmann::json item);
+    void record_adb_failure(const AdbFailureInfo &info,
+                            const char *operation) noexcept;
     nlohmann::json instance_metadata();
     nlohmann::json binding_;
     std::filesystem::path helper_path_, server_path_;
@@ -67,5 +75,11 @@ class DeviceSession final : public DeviceConnection, public LifecyclePort {
     int latest_rotation_{-1};
     std::string latest_foreground_;
     std::chrono::steady_clock::time_point metadata_at_{};
+    std::chrono::steady_clock::time_point read_deadline_{};
+    std::stop_token read_stop_;
+    std::optional<contracts::DiagnosticPixels> failed_pixels_;
+    std::optional<std::uint64_t> recovery_origin_;
+    bool recovery_launched_{};
+    std::chrono::milliseconds read_budget(std::chrono::milliseconds ceiling) const;
 };
 } // namespace wvd::devices

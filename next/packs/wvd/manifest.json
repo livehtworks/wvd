@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "source_commit": "6585f4075f5714ab522aa582993860c09af912c1",
-  "revision": "6177e106d085472ebed5c582eafad1310493eacc81cc91f21eb0bd01bfe6a8d4",
+  "revision": "c672070b309b8be3674e1444dcf81ed7ffa05c8c36c03cdc5e1c76c7818fb57b",
   "files": [
     {
       "path": "image/7000G/icantagreewithU.png",
@@ -2914,6 +2914,12 @@
       ]
     },
     {
+      "path": "image/inn_standard_200g_confirmation_zh_hant.png",
+      "source": "next/resources/images/inn_standard_200g_confirmation_zh_hant.png",
+      "sha256": "3fc1036001127dd19fcb66b6ff2bbf17eae4dea850a22a20ced81f310cf3eadb",
+      "bytes": 32657
+    },
+    {
       "path": "image/inn_standard_zh_hant.png",
       "source": "next/resources/images/inn_standard_zh_hant.png",
       "sha256": "9a70a6ff30b11d9385a082de0aaf36e71059ed4d9ed1283889b1b946f552dd18",
@@ -3445,6 +3451,24 @@
       "source_refs": [
         "semantic:outskirts.wind"
       ]
+    },
+    {
+      "path": "image/premium_purchase_green.png",
+      "source": "next/resources/images/premium_purchase_green.png",
+      "sha256": "3494a7b75544c41ed661d39697f463b55c219c2aa431efaf852f42923a83b3b3",
+      "bytes": 3892
+    },
+    {
+      "path": "image/premium_purchase_purple.png",
+      "source": "next/resources/images/premium_purchase_purple.png",
+      "sha256": "5ff8a42f0dd892b4bc54550affdf243219dad1f3716d3f1198eb7d2abc97688c",
+      "bytes": 4498
+    },
+    {
+      "path": "image/premium_purchase_text_zh_hant.png",
+      "source": "next/resources/images/premium_purchase_text_zh_hant.png",
+      "sha256": "415d53c2119154b541412061f0385ad5c32af8435b92eac0b7a95ebcf71d3d10",
+      "bytes": 12306
     },
     {
       "path": "image/press!!!.png",
@@ -4796,8 +4820,8 @@
     {
       "path": "parameters/semantic-assets.json",
       "source": "next/resources/authoring/semantic-assets.json",
-      "sha256": "b8ad01aba73f61aa3c750a6bdf6ec85d3b975560d51bc3097ecda01af3bdeabc",
-      "bytes": 73323,
+      "sha256": "49399a4ec3802c586154f23e3a70350099bb38c3d2710958c741682de7335a77",
+      "bytes": 74977,
       "source_refs": [
         "authoring:public-flow-1"
       ]

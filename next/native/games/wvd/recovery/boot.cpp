@@ -353,12 +353,16 @@ tasks::CompiledWorkflow with_boot_recovery(const tasks::CompiledWorkflow &task, 
     // 非恢复首段不执行 game_restarted，避免把首次进入误记成崩溃/重置策略。
     graph.route("Entry", {boot});
     const auto network_entry = graph.define_child("NetworkOverlay", retry_network_prompt());
+    const auto reconnect_boot = graph.define_child("ReconnectBoot", boot_workflow(allow_download, false, task.dialogue_policy));
     // finish 会验证完整调用闭包，处理器必须从声明入口可达，而非封存后才补孤立引用。
     J rules = J::array({
         J{{"id", "wvd-network-retry"}, {"class", "exception"}, {"priority", 1000},
           {"detect", vision::network_retry_prompt()}, {"source_node", "Entry"}, {"entry", network_entry},
           {"resume", {{"mode", "reobserve"}}}}
     });
+    rules.push_back({{"id", "wvd-bound-device-restarted"}, {"class", "exception"},
+        {"priority", 1000}, {"detect", J{{"mode", "boot_ready"}}}, {"source_node", "Entry"},
+        {"entry", reconnect_boot}, {"on_device_restart", true}, {"resume", {{"mode", "reobserve"}}}});
     const auto add = [&](const std::string &id, const std::string &category, int priority,
                          const J &detect, const tasks::CompiledWorkflow &handler) {
         // 公共规则 ID 不参与内部节点命名；运行权限仍只由显式策略决定。

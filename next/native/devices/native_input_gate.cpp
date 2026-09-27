@@ -31,8 +31,9 @@ NativeInputGate::NativeInputGate(DeviceBackend &backend, contracts::InputPolicy 
 contracts::FrameEnvelope NativeInputGate::capture() {
     std::lock_guard dispatch(dispatch_mutex_);
     if (stopped()) throw std::runtime_error("CAPTURE_CANCELLED");
-    if (!policy_.observed_read_only_viewport && !policy_.permissions.empty())
-        backend_.prepare_input_channel(stop_source_.get_token());
+    // 读取当前现场不需要 scrcpy 能够发送输入。先撤销旧证据；采集失败也不能
+    // 继续把上一帧作为有效许可。pending 和游戏目标归执行器，不在这里清除。
+    { std::lock_guard lock(mutex_); last_frame_ = {}; }
     const auto raw = backend_.capture(stop_source_.get_token());
     if (stopped()) throw std::runtime_error("CAPTURE_CANCELLED");
     require(raw.device_id == policy_.device_id && raw.size.width > 0 && raw.size.height > 0 &&
@@ -90,6 +91,19 @@ contracts::FrameEnvelope NativeInputGate::capture() {
     return result;
 }
 
+bool NativeInputGate::prepare_for_input() {
+    std::lock_guard dispatch(dispatch_mutex_);
+    if (stopped()) throw std::runtime_error("INPUT_PREPARATION_CANCELLED");
+    require(!policy_.observed_read_only_viewport && !policy_.permissions.empty(),
+            "INPUT_PREPARATION_FORBIDDEN");
+    if (backend_.input_channel_ready()) return false;
+    { std::lock_guard lock(mutex_); last_frame_ = {}; }
+    backend_.prepare_input_channel(stop_source_.get_token());
+    if (stopped()) throw std::runtime_error("INPUT_PREPARATION_CANCELLED");
+    require(backend_.input_channel_ready(), "INPUT_CHANNEL_NOT_READY");
+    return true;
+}
+
 contracts::Command NativeInputGate::map_command(const contracts::Command &input,
                                                  const contracts::FrameIdentity &basis) const {
     auto result = input;
@@ -127,6 +141,11 @@ InputReceipt NativeInputGate::submit(const contracts::Command &command,
     {
         std::lock_guard lock(mutex_);
         ++counts_.attempted;
+        if (!backend_.input_channel_ready()) {
+            ++counts_.rejected;
+            last_frame_ = {};
+            return {InputDisposition::Rejected, 0, {}, "INPUT_CHANNEL_CHANGED_REOBSERVE_REQUIRED"};
+        }
         frame = last_frame_;
         if (stopped() || !frame.frame_id || frame.action_epoch != epoch_ ||
             !same(scene.basis, frame) || !same(target.basis, frame) ||
@@ -182,6 +201,12 @@ InputReceipt NativeInputGate::submit(const contracts::Command &command,
         if (!sent) return {InputDisposition::Rejected, next_epoch, {}, "INPUT_NOT_SENT"};
         return {InputDisposition::Submitted, next_epoch,
                 std::chrono::steady_clock::now(), {}};
+    } catch (const contracts::ObservationUnavailable &error) {
+        // 已知只读查询发生在 execute 之前。未发送这一事实与错误种类一起传上去。
+        // 防御性保留 backend_started：未来改动也不能把已发送输入降级成可重试读取。
+        return {backend_started ? InputDisposition::Unresolved : InputDisposition::Rejected,
+                next_epoch, std::chrono::steady_clock::now(), error.what(),
+                backend_started ? std::nullopt : std::optional{error.fault()}};
     } catch (const std::exception &error) {
         // 设备上下文查询失败时尚未调用输入；只有进入输入通道后才可能送达未知。
         return {backend_started ? InputDisposition::Unresolved : InputDisposition::Rejected,
@@ -198,6 +223,9 @@ bool NativeInputGate::cleanup() {
         std::lock_guard lock(mutex_);
         ++counts_.cleanup_called;
     }
+    // Session结束后撤销其读取期限与停止令牌；后续人工截图/生命周期观察
+    // 不能继承已取消会话的令牌。输入门禁本身仍保持stopped。
+    backend_.observation_window({}, {});
     return backend_.release_owned_inputs();
 }
 bool NativeInputGate::current(const contracts::FrameIdentity &identity) const {

@@ -30,11 +30,12 @@ NativeExecutionSession::NativeExecutionSession(std::shared_ptr<const workflow::F
     contracts::BusinessRunState &business, contracts::InputPolicy policy,
     std::uint64_t generation, std::chrono::milliseconds total_budget,
     OperationFactory operations, ProgressSink progress, NativeFlowPorts::InputSink input_sink,
-    NativeFlowPorts::CaptureSink capture_sink)
+    NativeFlowPorts::CaptureSink capture_sink, ProgressSink timing_sink)
     : program_owner_(std::move(program)), recognizer_owner_(std::move(recognizer)),
       ports_(backend, required_service(recognizer_owner_), business, std::move(policy), generation,
              stop_source_.get_token()),
-      executor_(required_program(program_owner_), ports_, total_budget), progress_(std::move(progress)) {
+      executor_(required_program(program_owner_), ports_, total_budget), progress_(std::move(progress)),
+      timing_sink_(std::move(timing_sink)) {
     if (!operations) throw std::runtime_error("NATIVE_OPERATION_FACTORY_MISSING");
     ports_.set_operation_handler(operations(ports_));
     ports_.set_input_sink(std::move(input_sink));
@@ -55,8 +56,40 @@ NativeExecutionResult NativeExecutionSession::run() {
     nlohmann::json reported_progress;
     nlohmann::json objective;
     std::optional<std::uint64_t> business_version;
+    auto segment_at = started;
+    auto segment_sample = totals.sample();
+    auto segment_node = executor_.current_step_id();
+    auto segment_source = executor_.current_source_path();
+    auto segment_depth = executor_.invocation_depth();
+    std::uint64_t segment_sequence{}, segment_ticks{}, timing_errors{};
+    // 同节点轮询合为一段；事件/子流程切换即结段，避免逐帧日志放大。
+    // segment_end 只说明离开这一段，不等于动作成功，成功由 input.result 正向证据记录。
+    const auto finish_segment = [&](const char *ending) {
+        if (!segment_ticks || !timing_sink_) return;
+        try {
+            const auto now = std::chrono::steady_clock::now();
+            auto data = timing::report(totals.sample(),
+                std::chrono::duration_cast<std::chrono::nanoseconds>(now - segment_at).count(), segment_sample);
+            data["sequence"] = ++segment_sequence;
+            data["node_id"] = segment_node; data["source_path"] = segment_source;
+            data["depth"] = segment_depth; data["ticks"] = segment_ticks;
+            data["session_offset_ns"] = std::chrono::duration_cast<std::chrono::nanoseconds>(segment_at - started).count();
+            data["ending"] = ending; data["reason"] = result.flow.code;
+            timing::Scope measure(timing::Part::JsonEvents);
+            timing_sink_(data);
+        } catch (...) { ++timing_errors; }
+    };
     try {
         for (;;) {
+            const auto node = executor_.current_step_id();
+            const auto source = executor_.current_source_path();
+            const auto depth = executor_.invocation_depth();
+            if (node != segment_node || source != segment_source || depth != segment_depth) {
+                finish_segment("segment_end");
+                segment_node = node; segment_source = source; segment_depth = depth;
+                segment_at = std::chrono::steady_clock::now(); segment_sample = totals.sample(); segment_ticks = 0;
+            }
+            ++segment_ticks;
             if (!skill_start && executor_.is_operation("WvdCombat", "prepare")) {
                 skill_at = std::chrono::steady_clock::now(); skill_start = totals.sample();
                 skill_entry = executor_.current_step_id();
@@ -109,6 +142,9 @@ NativeExecutionResult NativeExecutionSession::run() {
         result.flow = {TickState::Failed, {}, "NATIVE_SESSION_EXCEPTION",
                        executor_.current_source_path()};
     }
+    constexpr const char *endings[]{"progress", "waiting", "completed", "business_failed", "failed", "external_blocked", "cancelled"};
+    finish_segment(endings[static_cast<unsigned>(result.flow.state)]);
+    executor_.report_unconfirmed_inputs(result.flow.code);
     // 先保存无需分配的安全事实，并完成回收，再做可以失败的富诊断。
     result.unresolved_input = executor_.has_unresolved_input();
     ports_.stop();
@@ -126,11 +162,14 @@ NativeExecutionResult NativeExecutionSession::run() {
         result.flow = {TickState::Cancelled, {}, "STOP_REQUESTED",
                        executor_.current_source_path()};
     try {
+        result.observation_recovery = executor_.progress_snapshot().value("observation_recovery", nlohmann::json(nullptr));
         result.unresolved_inputs = executor_.progress_snapshot().value(
             "pending_inputs", nlohmann::json::array());
         result.performance = timing::report(totals.sample(), std::chrono::duration_cast<std::chrono::nanoseconds>(
             std::chrono::steady_clock::now() - started).count());
         result.performance["skills"] = std::move(skills);
+        result.performance["timing_segments"] = segment_sequence;
+        result.performance["timing_errors"] = timing_errors;
     } catch (...) {
         result.details_complete = false;
         // 不清除 unresolved_input，不把空明细当作可以恢复/再次输入的依据。

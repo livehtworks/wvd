@@ -235,7 +235,7 @@ void validate_action_parameters(const J &parameters, const std::string &node_id)
     };
     if (operation == "click") {
         exact_object(parameters, {"operation", "scene", "target", "postcondition"},
-                     {"offset", "allowed_area", "postcondition_timeout_ms", "delay_after_ms", "interrupted_reason", "menu_retry_interval_ms"},
+                     {"offset", "allowed_area", "postcondition_timeout_ms", "delay_after_ms", "interrupted_reason", "menu_retry_interval_ms", "menu_retry_max_submissions"},
                      "AUTHOR_ACTION_PARAMETERS_INVALID", node_id);
         validate_condition(parameters.at("scene"), node_id);
         validate_condition(parameters.at("target"), node_id);
@@ -243,6 +243,12 @@ void validate_action_parameters(const J &parameters, const std::string &node_id)
         if (parameters.contains("menu_retry_interval_ms"))
             integer(parameters.at("menu_retry_interval_ms"), 1000, 60000,
                     "AUTHOR_MENU_RETRY_INTERVAL_INVALID", node_id);
+        if (parameters.contains("menu_retry_max_submissions")) {
+            if (!parameters.contains("menu_retry_interval_ms"))
+                fail("AUTHOR_MENU_RETRY_INTERVAL_REQUIRED", node_id);
+            integer(parameters.at("menu_retry_max_submissions"), 1, 1000,
+                "AUTHOR_MENU_RETRY_MAX_SUBMISSIONS_INVALID", node_id);
+        }
         if (parameters.contains("offset")) {
             const auto &offset = parameters.at("offset");
             if (!offset.is_array() || offset.size() != 2)

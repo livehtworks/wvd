@@ -1,6 +1,7 @@
 #pragma once
 
 #include "contracts/action.hpp"
+#include "contracts/observation_fault.hpp"
 #include "workflow/program.hpp"
 #include <chrono>
 #include <map>
@@ -15,6 +16,7 @@ struct Submission {
     std::uint64_t action_epoch{};
     std::chrono::steady_clock::time_point submitted_at{};
     std::string detail;
+    std::optional<contracts::ReadFault> read_fault;
 };
 enum class OperationState { Done, Waiting, Failed, ExternalBlocked };
 struct OperationResult {
@@ -28,6 +30,11 @@ class FlowPorts {
   public:
     virtual ~FlowPorts() = default;
     virtual contracts::FrameEnvelope capture() = 0;
+    // 只准备本工具的输入通道，不发送游戏操作。通道改变时必须重新观察。
+    virtual bool prepare_input() { return false; }
+    virtual void observation_window(std::chrono::steady_clock::time_point) {}
+    virtual std::optional<contracts::ObservationReconnect> recover_observation() { return {}; }
+    virtual bool settle_observed_input() { return true; }
     virtual contracts::Observation recognize(const contracts::FrameEnvelope &frame,
                                               const recognition::Request &request) = 0;
     virtual Submission submit(const contracts::Command &command,
@@ -42,6 +49,8 @@ class FlowPorts {
                                     const std::string &source_path) = 0;
     // 仅通知已声明正面场景命中；不取帧、不发输入、不推进游戏业务账目。
     virtual void scene_observed(const contracts::Observation &) {}
+    // 诊断旁路只记录事实，不参与门禁、重试或业务成功判定。
+    virtual void input_result(const nlohmann::json &) noexcept {}
     virtual bool cancelled() const = 0;
     // 未实现复用能力的端口始终重新观察；正式端口还检查输入门禁的身份和 TTL。
     virtual bool reusable(const contracts::FrameIdentity &) const { return false; }
@@ -59,7 +68,8 @@ struct TickResult {
 class FlowExecutor final {
   public:
     FlowExecutor(const workflow::FlowProgram &program, FlowPorts &ports,
-                 std::chrono::milliseconds total_budget);
+                 std::chrono::milliseconds total_budget,
+                 contracts::ObservationRecoveryPolicy observation_policy = {});
     TickResult tick();
     const std::string &current_source_path() const;
     std::string current_step_id() const;
@@ -68,6 +78,7 @@ class FlowExecutor final {
     bool has_unresolved_input() const;
     bool is_operation(const std::string &binding, const std::string &operation) const;
     bool operation_advanced() const { return !stack_.empty() && stack_.back().next_pending && !stack_.back().error_pending; }
+    void report_unconfirmed_inputs(const std::string &reason) noexcept;
 
   private:
     using Clock = std::chrono::steady_clock;
@@ -76,6 +87,7 @@ class FlowExecutor final {
         contracts::FrameIdentity before;
         std::uint64_t action_epoch{};
         Clock::time_point submitted_at;
+        // 事件与只读故障暂停区间的并集；原提交时间保持不变。
         Clock::duration event_pause{};
         std::optional<recognition::Request> expected_result;
         std::chrono::milliseconds result_budget{0};
@@ -85,12 +97,15 @@ class FlowExecutor final {
         Clock::time_point result_started_at;
         Clock::duration delay_pause_base{};
         unsigned attempts{1};
+        Clock::duration animation_pause{};
     };
     struct EventExit {
         std::string id;
         recognition::Request detect;
         Clock::time_point deadline;
     };
+    void report_input_result(const PendingInput &, const char *outcome,
+                             std::uint64_t observed_frame = 0, const std::string &reason = {}) noexcept;
     struct ScopedEvent {
         workflow::EventRule rule;
         std::size_t owner{}; // 声明规则的实际调用帧，不是一个裸节点名。
@@ -147,6 +162,28 @@ class FlowExecutor final {
     };
     std::optional<ObservationCycle> observation_cycle_;
     nlohmann::json last_diagnostic_ = nullptr;
+    struct ReadRecovery {
+        Clock::time_point started, next_attempt;
+        unsigned failures{};
+        contracts::ReadFault last;
+        bool suspended{true};
+        // 输入前查询失败后，成功截一张图还不足以宣称该查询已恢复。
+        bool awaiting_input_validation{};
+        bool device_checked{};
+        std::string source_path;
+        std::size_t stack_depth{};
+    };
+    contracts::ObservationRecoveryPolicy observation_policy_;
+    std::optional<ReadRecovery> read_recovery_;
+    nlohmann::json last_read_recovery_ = nullptr;
+    std::vector<contracts::ObservationReconnect> reconnects_;
+    bool restart_handler_pending_{};
+    bool result_identity_matches(const contracts::FrameIdentity &, const contracts::FrameIdentity &) const;
+    void begin_observation_recovery(const contracts::ReadFault &fault);
+    void finish_observation_recovery(const char *outcome);
+    TickResult observation_retry_wait();
+    TickResult retry_observation();
+    nlohmann::json observation_recovery_snapshot() const;
     contracts::FrameEnvelope observation_frame();
     void invalidate_observation();
 

@@ -31,6 +31,8 @@ class WvdRunState final : public contracts::BusinessRunState {
     bool observe_unknown_leap(std::uint64_t unknown_samples, std::uint64_t generation,
                               std::uint64_t frame_id);
     bool poll_leap_wait();
+    bool inn_payment_ready() const;
+    void inn_payment_submitted(bool delivery_unknown);
     void enter_dungeon();
     void target_point_completed();
     void observe_combat(bool special = false);
@@ -118,6 +120,10 @@ class WvdRunState final : public contracts::BusinessRunState {
     std::size_t healing_sequence_{};
     bool inn_rest_completed_{}, inn_payment_pending_{};
     std::size_t supply_cycle_{}, inn_rests_{};
+    std::optional<std::size_t> inn_payment_cycle_;
+    unsigned inn_payment_submissions_{};
+    bool inn_payment_delivery_unknown_{};
+    std::optional<TimePoint> inn_payment_last_submit_;
     enum class Encounter { None, Combat, Chest } last_encounter_{Encounter::None};
     // 遭遇编号不等于成功次数：复活取消一次待计数事件后仍不能重用其幂等 ID。
     std::size_t combat_sequence_{}, chest_sequence_{}, revival_sequence_{}, revivals_{};

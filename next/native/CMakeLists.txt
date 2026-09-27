@@ -14,7 +14,7 @@ foreach(ID IN ITEMS city.royal.identity city.inn.entry city.temple.entry
   city.blacksmith.entry city.ruins.entry city.guild.entry city.ore_merchant.entry
   city.item_shop.entry city.edge.entry city.any
   guild.commissions.page guild.bounties.page guild.bounty.reveal.close chest.open.option chest.choose.page
-  chest.reward.page inn.stay.option)
+  chest.reward.page inn.stay.option inn.standard.gold.confirmation purchase.premium.button)
   string(JSON ENTRY GET "${WVD_SEMANTIC_CATALOGUE}" resources "${ID}")
   if(NOT WVD_PROBE_RESOURCES STREQUAL "")
     string(APPEND WVD_PROBE_RESOURCES ",")

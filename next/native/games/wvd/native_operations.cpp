@@ -67,6 +67,21 @@ Result NativeOperations::execute(const std::string &binding, const J &parameters
     const std::optional<contracts::FrameEnvelope> &selected_frame,
     const std::optional<contracts::Observation> &selected_observation,
     const std::string &source_path) {
+    if (binding == "WvdInnGoldEffect") {
+        // 只由已冻结的金币确认输入调用。实际送达计数独立于“住宿成功”，
+        // 停止与提交竞态也必须保留刚刚发生的副作用事实。
+        if (parameters.at("phase") == "submitted") {
+            state_.apply([&](contracts::BusinessRunState &base) {
+                dynamic_cast<WvdRunState &>(base).inn_payment_submitted(parameters.at("delivery_unknown"));
+                return true;
+            });
+            context_.business_event("inn.gold_submitted", state_.summary().at("inn_payment"));
+            return done();
+        }
+        if (parameters.at("phase") != "authorize") throw std::runtime_error("INPUT_EFFECT_PHASE_INVALID");
+        if (context_.cancelled()) return {State::ExternalBlocked, "CANCELLED"};
+        return state_.inn_payment_ready() ? done() : waiting();
+    }
     if (context_.cancelled()) return {State::ExternalBlocked, "CANCELLED"};
     if (binding == "BusinessPredicate")
         return business_condition(state_.summary(), parameters) ? done() : waiting();

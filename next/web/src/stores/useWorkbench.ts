@@ -52,7 +52,8 @@ export function useWorkbench() {
   const device = ref<DeviceState>();
   const run = ref<RunState>();
   const starting = ref(false);
-  const continuous = ref(true);
+  const repeatMode = ref<'forever' | 'count'>('count');
+  const repeatCount = ref(1);
   const linkError = ref("");
   let pendingRequest: { id: string; fingerprint: string } | undefined;
   let polling = false;
@@ -219,14 +220,19 @@ export function useWorkbench() {
       error.value = dirty.value ? "PROFILE_UNSAVED: 请先保存配置" : "TASK_NOT_SELECTED: 请选择任务";
       return;
     }
-    const repeat = continuous.value && draft.value.FARM_TARGET === "Scorpionesses";
-    const fingerprint = JSON.stringify([draft.value.FARM_TARGET, envelope.value?.revision, resourceLocale.value, repeat]);
+    const repeat = draft.value.FARM_TARGET === "Scorpionesses";
+    const count = repeat && repeatMode.value === 'count' ? repeatCount.value : undefined;
+    if (count !== undefined && (!Number.isInteger(count) || count < 1 || count > 1000000)) {
+      error.value = '循环次数必须是1到1000000之间的整数';
+      return;
+    }
+    const fingerprint = JSON.stringify([draft.value.FARM_TARGET, envelope.value?.revision, resourceLocale.value, repeat, count]);
     if (!pendingRequest || pendingRequest.fingerprint !== fingerprint)
       pendingRequest = { id: crypto.randomUUID(), fingerprint };
     starting.value = true;
     error.value = "";
     try {
-      await startTask(draft.value.FARM_TARGET, pendingRequest.id, envelope.value?.revision, resourceLocale.value, repeat);
+      await startTask(draft.value.FARM_TARGET, pendingRequest.id, envelope.value?.revision, resourceLocale.value, repeat, count);
       run.value = await readCurrentRun();
       notice.value = "启动请求已接收；正在执行正式装配和启动检查";
     } catch (reason) { error.value = formatApiError(reason); }
@@ -271,7 +277,7 @@ export function useWorkbench() {
   onBeforeUnmount(() => window.clearInterval(pollHandle));
 
   return reactive({
-    envelope, draft, catalog, device, run, loading, saving, deviceBusy, error, notice, resourceLocale, continuous,
+    envelope, draft, catalog, device, run, loading, saving, deviceBusy, error, notice, resourceLocale, repeatMode, repeatCount,
     strategies, dirty, runActive, runLabel, runError, starting, selectedTask, load, save, clearTaskOverride, revert, selectTask,
     deviceAction, chooseEmulator, startSelectedTask, requestStop, noteRename,
   });

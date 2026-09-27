@@ -1,5 +1,6 @@
 #pragma once
 #include "contracts/action.hpp"
+#include "contracts/observation_fault.hpp"
 #include "lifecycle.hpp"
 #include <filesystem>
 #include <json.hpp>
@@ -28,6 +29,10 @@ class DeviceBackend {
     }
     virtual void disconnect() {}
     virtual bool release_owned_inputs() { return true; }
+    virtual void observation_window(std::chrono::steady_clock::time_point, std::stop_token) {}
+    virtual std::optional<contracts::ObservationReconnect> recover_observation() { return {}; }
+    virtual std::optional<contracts::DiagnosticPixels> failed_pixels() const { return {}; }
+    virtual bool settle_observed_input() { return true; }
     virtual LifecyclePort *lifecycle_port() { return nullptr; }
     virtual bool context_matches(const contracts::FrameIdentity &, const std::string &) {
         return offline();
@@ -36,7 +41,9 @@ class DeviceBackend {
                                  const std::string &application, std::stop_token stop) {
         return !stop.stop_requested() && context_matches(identity, application);
     }
-    // 控制握手必须早于用于点击的截图；execute 不允许透明重连后使用旧坐标。
+    // 只读采集不依赖输入通道。该探针只读本对象状态，不触发连接或 shell。
+    virtual bool input_channel_ready() const { return offline(); }
+    // 控制握手必须早于最终用于点击的截图；execute 不允许透明重连后使用旧坐标。
     virtual void prepare_input_channel(std::stop_token stop) {
         if (stop.stop_requested()) throw std::runtime_error("INPUT_PREPARATION_CANCELLED");
         if (!offline()) throw std::runtime_error("INPUT_PREPARATION_UNIMPLEMENTED");

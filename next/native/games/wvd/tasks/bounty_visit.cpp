@@ -1,6 +1,7 @@
 #include "bounty_visit.hpp"
 #include "authoring/semantic_assets.hpp"
 #include "games/wvd/vision/location_probes.hpp"
+#include "games/wvd/vision/dialogue_probes.hpp"
 
 namespace wvd::games::tasks {
 CompiledWorkflow leave_bounty_board(const PublicFlowLibrary &library, const std::string &locale) {
@@ -8,6 +9,8 @@ CompiledWorkflow leave_bounty_board(const PublicFlowLibrary &library, const std:
     using J = nlohmann::json;
     C graph("quest.bounty.leave_board", std::chrono::seconds{180});
     const auto edge = vision::edge_of_town_button();
+    const auto story = vision::ordinary_story_page();
+    auto city = C::all({edge, C::absent(story)});
     if (locale == "zh-Hant") {
         const auto menu = library.resource_condition("guild.menu", locale, authoring::ResourceUse::Observation);
         const auto lists = C::any({
@@ -18,23 +21,27 @@ CompiledWorkflow leave_bounty_board(const PublicFlowLibrary &library, const std:
         const auto reveal = library.resource_condition("guild.bounty.reveal.close", locale, authoring::ResourceUse::Position);
         const auto in_list = C::all({lists, back});
         const auto in_guild = C::all({menu, leave, C::absent(lists)});
-        graph.route("Entry", {"CloseReveal", "AtCity", "ListBack", "GuildLeave"});
+        city = C::all({edge, C::absent(C::any({story, menu, lists, reveal}))});
+        graph.route("Entry", {"CloseReveal", "Story", "AtCity", "ListBack", "GuildLeave"});
         // 联网刷新可以在列表已出现、甚至返回已提交之后才弹展示卡。
         // 它不是返回成功；先消化已识别的卡片，再重新定位当前页面。
-        graph.click("CloseReveal", reveal, reveal, C::any({lists, reveal, in_guild}), {"Entry"});
+        graph.click("CloseReveal", reveal, reveal, C::any({lists, reveal, in_guild, city, story}), {"Entry"});
         graph.delay_after("CloseReveal", 700);
         // 必须观察到不同页面，不能把来源菜单仍在当作返回成功而连续发送BACK。
-        graph.click("ListBack", in_list, back, C::any({in_guild, reveal}), {"Entry"});
-        graph.click("GuildLeave", in_guild, leave, C::all({edge, C::absent(menu)}), {"Entry"});
+        graph.click("ListBack", in_list, back, C::any({in_guild, reveal, city, story}), {"Entry"});
+        graph.click("GuildLeave", in_guild, leave, C::any({city, story, reveal}), {"Entry"});
         graph.retry_menu_input("ListBack", vision::menu_retry_ready(in_list));
         graph.retry_menu_input("GuildLeave", vision::menu_retry_ready(in_guild));
     } else {
         const auto menu = C::any({C::image("guildRequest"), C::image("Bounties"), C::image("guildFeatured")});
-        graph.route("Entry", {"AtCity", "Back"});
-        graph.back("Back", menu, C::any({menu, edge}), {"Entry"});
+        city = C::all({edge, C::absent(story), C::absent(menu)});
+        graph.route("Entry", {"Story", "AtCity", "Back"});
+        graph.back("Back", menu, C::any({menu, city, story}), {"Entry"});
         graph.delay_after("Back", 1000);
     }
-    graph.observe("AtCity", edge, {"Terminal"});
+    graph.click("Story", story, vision::story_advance_arrow(), C::any({story, city}), {"Entry"});
+    graph.delay_after("Story", 700);
+    graph.observe("AtCity", city, {"Terminal"});
     graph.interrupt_on({{"mode", "blocking_screen"}, {"parallel_basic", true}},
                        "quest.bounty_common_screen_requires_dispatch");
     return graph.finish();
@@ -109,8 +116,12 @@ CompiledWorkflow visit_bounty_board(BountyVisit operation, const PublicFlowLibra
         graph.observe("Pending", C::business("/bounty_report_pending", true), {"Uncertain"});
         graph.recovery("Uncertain", "quest.bounty_report_unconfirmed");
         graph.route("Find", find);
-        graph.click("Guild", guild, guild, menu, find);
-        graph.click("Request", request, request, menu, {"PrepareReport", "Bounties", "Swipe"});
+        // 输入来源也是menu的一部分；不能用menu确认已开页，否则仍在城里就开始找列表。
+        graph.click("Guild", guild, guild, C::all({C::any({request, bounty, completed}), C::absent(guild)}), find);
+        graph.retry_menu_input("Guild", vision::menu_retry_ready(guild));
+        graph.click("Request", request, request, C::any({bounty, completed}),
+            {"PrepareReport", "Bounties", "Swipe"});
+        graph.retry_menu_input("Request", vision::menu_retry_ready(C::all({request, C::absent(completed)})));
         graph.click("Bounties", bounty, bounty, bounty_page, {"PrepareReport", "Swipe"});
         graph.swipe("Swipe", C::all({menu, C::absent(completed)}), menu,
             {600, 1400, 300, 1400}, {"PrepareReport", "Bounties", "Request", "Swipe"});

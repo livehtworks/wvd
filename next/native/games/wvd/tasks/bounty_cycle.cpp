@@ -110,7 +110,6 @@ CompiledWorkflow bounty_cycle(const WvdQuestDefinition &definition, const J &pro
     graph.observe("PendingTransfer", C::business("/bounty_cycle/transfer_pending", true), {"TransferUncertain"});
     graph.recovery("TransferUncertain", "quest.bounty_transfer_unconfirmed");
     graph.observe("PendingPayment", C::business("/inn_payment_pending", true), {"PaymentUncertain"});
-    graph.recovery("PaymentUncertain", "departure.inn_payment_unconfirmed");
     graph.observe("PendingReport", C::business("/bounty_report_pending", true), {"ReportUncertain"});
     graph.recovery("ReportUncertain", "quest.bounty_report_unconfirmed");
     graph.observe("Resume", C::business("/bounty_cycle/active", true), {"Stage"});
@@ -134,8 +133,11 @@ CompiledWorkflow bounty_cycle(const WvdQuestDefinition &definition, const J &pro
         J{{"mode", "input_clear"}, {"phase", "navigation"}}});
     const auto inspect_ready = C::any({vision::city_screen(), board_page,
         library.resource_condition("guild.menu", locale, authoring::ResourceUse::Observation)});
-    graph.route("InspectBoard", locale == "zh-Hant" ? J{"CloseLateOldReveal", "InspectReady", "LeaveRuinsForInspection"}
-        : J{"InspectReady", "LeaveRuinsForInspection"});
+    graph.route("InspectBoard", locale == "zh-Hant" ? J{"CloseLateOldReveal", "InspectReady", "InspectOutside", "LeaveRuinsForInspection"}
+        : J{"InspectReady", "InspectOutside", "LeaveRuinsForInspection"});
+    const auto inspect_return = graph.define_child("InspectReturnCity", return_to_bounty_city(true));
+    graph.observe("InspectOutside", vision::outskirts_return_button(), {"ReturnForInspection"});
+    graph.call_child("ReturnForInspection", inspect_return, {"InspectBoard"});
     if (locale == "zh-Hant") {
         const auto reveal = library.resource_condition("guild.bounty.reveal.close", locale, authoring::ResourceUse::Position);
         // 跳轮后的联网展示卡可以晚于开页回执到达；关卡后仍重新进入悬赏页查报告。
@@ -160,6 +162,7 @@ CompiledWorkflow bounty_cycle(const WvdQuestDefinition &definition, const J &pro
     const auto old_rest = graph.define_child("OldBountyRest",
         supply::rest_at_inn(profile.at("ACTIVE_ROYALSUITE_REST").get<bool>(), true));
     graph.call_child("RestAfterOldReports", old_rest, {"Start"});
+    graph.call_child("PaymentUncertain", old_rest, {"Resume", "InspectBoard"});
     const auto no_old_report = C::all({board_page, C::absent(ready_report)});
     graph.observe("EmptyOldReportCandidate", no_old_report, {"RecheckOldReports"});
     graph.wait("RecheckOldReports", 1000, locale == "zh-Hant" ? J{"CloseLateOldReveal", "OldReportReady", "NoOldReport"}

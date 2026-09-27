@@ -844,6 +844,11 @@ Application::J Application::start_task(const J &request) {
     const auto stored = profile_store_->load();
     frozen["resource_locale"] = authoring::effective_resource_locale(frozen, J::object());
     require(!request.contains("repeat") || request.at("repeat").is_boolean(), "REPEAT_INVALID");
+    if (request.contains("repeat_count")) {
+        require(request.value("repeat", false) && request.at("repeat_count").is_number_integer(), "REPEAT_COUNT_INVALID");
+        const auto count = request.at("repeat_count").get<std::int64_t>();
+        require(count >= 1 && count <= 1000000, "REPEAT_COUNT_INVALID");
+    }
     // 连续运行目前只开放已有完整单轮与结算契约的蝎女任务。
     if (request.value("repeat", false))
         require(request.value("task_id", stored.at("values").value("FARM_TARGET", "")) == "Scorpionesses",
@@ -1334,7 +1339,8 @@ void Application::watch_task_session(const J &request, const J &stored, J source
         handoff_status_ = {{"state", "watching"}, {"source_request_id", request_id}};
         repeat_status_ = {{"active", request.value("repeat", false)},
             {"state", request.value("repeat", false) ? "running" : "disabled"},
-            {"completed_cycles", 0}, {"reason", ""}, {"request_id", request_id}};
+            {"completed_cycles", 0}, {"target_cycles", request.value("repeat_count", J(nullptr))},
+            {"reason", ""}, {"request_id", request_id}};
         task_session_active_ = true;
     }
     try {
@@ -1383,6 +1389,11 @@ void Application::watch_task_session(const J &request, const J &stored, J source
                         std::lock_guard lock(mutex_);
                         repeat_status_["completed_cycles"] = completed;
                         repeat_status_["state"] = "waiting";
+                        // 一轮只有三段结算及静止回执全部通过才计数，失败尝试不消费目标轮数。
+                        if (request.contains("repeat_count") && completed >= request.at("repeat_count").get<std::uint64_t>()) {
+                            repeat_status_["state"] = "completed";
+                            return;
+                        }
                     }
                     // 轮间等待可取消，不持有命令锁；停止在下一次 prepare_task 的提交锁内再次核验。
                     for (int i = 0; i < 100 && !stop.stop_requested() && !stopping_ && !cancel_operation_; ++i)
@@ -1473,7 +1484,7 @@ void Application::watch_task_session(const J &request, const J &stored, J source
         std::lock_guard lock(mutex_);
         repeat_status_["active"] = false;
         if (request.value("repeat", false) && repeat_status_.at("state") != "failed" &&
-            repeat_status_.at("state") != "stopped") repeat_status_["state"] = "stopped";
+            repeat_status_.at("state") != "stopped" && repeat_status_.at("state") != "completed") repeat_status_["state"] = "stopped";
         if (handoff_status_.value("state", "") == "watching")
             handoff_status_["state"] = "not_requested";
         task_session_active_ = false;

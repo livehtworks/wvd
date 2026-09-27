@@ -27,20 +27,28 @@ void FlowExecutor::account_event_time() {
         auto &frame = stack_[i];
         const bool descendant_event = std::any_of(stack_.begin() + i + 1, stack_.end(),
             [](const Frame &child) { return child.event.has_value() || !child.event_exits.empty(); });
-        if (!descendant_event && frame.event_exits.empty()) continue;
-        // 使用布尔“处于暂停区间”，不按事件深度乘 elapsed。
-        frame.entered_at += elapsed;
+        const bool read_suspended = read_recovery_ && read_recovery_->suspended;
+        if (!descendant_event && frame.event_exits.empty() && !read_suspended) continue;
+        // 使用事件/观察故障暂停区间的并集，不按嵌套深度或原因数乘 elapsed。
+        const bool event_suspended = descendant_event || !frame.event_exits.empty();
+        const auto &current = program_.definitions.at(frame.definition).steps.at(frame.current);
+        // 动画/纯Sleep的现实时间继续流逝；只有有效观察预算扣除读故障区间。
+        if (event_suspended || !std::holds_alternative<workflow::Wait>(current.data)) frame.entered_at += elapsed;
         if (frame.input_selection) frame.input_selection->entered_at += elapsed;
         frame.paused_event_time += elapsed;
         if (frame.invocation_deadline) *frame.invocation_deadline += elapsed;
-        if (frame.pending) frame.pending->event_pause += elapsed;
-        if (frame.delay_until) *frame.delay_until += elapsed;
-        if (frame.poll_until) *frame.poll_until += elapsed;
+        if (frame.pending) {
+            frame.pending->event_pause += elapsed;
+            if (event_suspended) frame.pending->animation_pause += elapsed;
+        }
+        if (event_suspended && frame.delay_until) *frame.delay_until += elapsed;
+        if (event_suspended && frame.poll_until) *frame.poll_until += elapsed;
         if (frame.no_progress_since) *frame.no_progress_since += elapsed;
         if (frame.next_diagnostic_poll != Clock::time_point{}) frame.next_diagnostic_poll += elapsed;
         for (auto &[name, deadline] : frame.phase_deadlines) { (void)name; deadline += elapsed; }
-        if (descendant_event)
+        if (descendant_event || read_suspended)
             for (auto &exit : frame.event_exits) exit.deadline += elapsed;
+        if (read_suspended && frame.ambiguity_since) *frame.ambiguity_since += elapsed;
     }
 }
 std::vector<FlowExecutor::ScopedEvent> FlowExecutor::effective_events(const workflow::Step &current) const {
@@ -121,6 +129,8 @@ std::optional<TickResult> FlowExecutor::poll_wait_events(Frame &frame, const wor
 }
 std::optional<TickResult> FlowExecutor::check_events(Frame &frame, const workflow::Step &current,
     const contracts::FrameEnvelope &image, workflow::EventClass category) {
+    // 未确认旧输入已静止前，只核对原结果，不能让普通事件发送第二个输入。
+    if (frame.pending && frame.pending->delivery_unknown) return std::nullopt;
     const auto rules = effective_events(current);
     std::string scope_key;
     if (category == workflow::EventClass::Overlay && frame.event_exits.empty() && observation_cycle_) {
@@ -161,7 +171,7 @@ std::optional<TickResult> FlowExecutor::check_events(Frame &frame, const workflo
     int priority = std::numeric_limits<int>::min();
     for (const auto &scoped : rules) {
         const auto &rule = scoped.rule;
-        if (rule.category != category) continue;
+        if (rule.on_device_restart || rule.category != category) continue;
         // 同优先级仍检查歧义；已命中高优先级时不再计算任何低优先级候选。
         if (!hits.empty() && rule.priority < priority) break;
         if (std::any_of(frame.event_exits.begin(), frame.event_exits.end(),
@@ -246,7 +256,7 @@ TickResult FlowExecutor::resume_event(Frame &frame, const workflow::Step &curren
         if (i > resume.owner && item.event) return blocked("EVENT_REPLAN_CROSSES_ACTIVE_HANDLER");
         if (!item.pending) continue;
         const auto &pending = *item.pending;
-        if (pending.delivery_unknown || !pending.expected_result) return blocked("EVENT_REPLAN_INPUT_UNKNOWN");
+        if (!pending.expected_result) return blocked("EVENT_REPLAN_INPUT_UNKNOWN");
         const auto result = ports_.recognize(image, *pending.expected_result);
         if (result.outcome == contracts::RecognitionOutcome::Error)
             return fail(result.error_code.empty() ? "EVENT_PARENT_RESULT_ERROR" : result.error_code);
@@ -255,11 +265,10 @@ TickResult FlowExecutor::resume_event(Frame &frame, const workflow::Step &curren
             return waiting(50ms);
         }
         const auto &a = result.basis; const auto &b = pending.before;
-        if (a.device_id != b.device_id || a.game_id != b.game_id || a.pack_revision != b.pack_revision ||
-            a.generation != b.generation || a.connection_generation != b.connection_generation ||
-            a.viewport_id != b.viewport_id || a.raw_size != b.raw_size || a.recognition_size != b.recognition_size ||
-            a.display_rotation != b.display_rotation || a.frame_id <= b.frame_id || a.action_epoch < pending.action_epoch)
+        if (!result_identity_matches(a, b) || a.frame_id <= b.frame_id || a.action_epoch < pending.action_epoch)
             return fail("EVENT_PARENT_RESULT_STALE");
+        if (pending.delivery_unknown && !ports_.settle_observed_input())
+            return blocked("OBSERVED_RESULT_INPUT_CLEANUP_UNCONFIRMED");
     }
     auto &owner = stack_[resume.owner];
     const auto &definition = program_.definitions.at(owner.definition);
@@ -268,7 +277,10 @@ TickResult FlowExecutor::resume_event(Frame &frame, const workflow::Step &curren
     if (found->second.max_hit > 0 && owner.hits[found->first] >= found->second.max_hit)
         return fail("EVENT_REPLAN_HIT_LIMIT");
     account_event_time();
-    for (std::size_t i = resume.owner; i < stack_.size(); ++i) stack_[i].pending.reset();
+    for (std::size_t i = resume.owner; i < stack_.size(); ++i) {
+        if (stack_[i].pending) report_input_result(*stack_[i].pending, "confirmed", image.identity.frame_id);
+        stack_[i].pending.reset();
+    }
     // 索引指向实际调用帧；同名节点不会误跳入触发事件的内层定义。
     stack_.resize(resume.owner + 1);
     auto &target = stack_.back();

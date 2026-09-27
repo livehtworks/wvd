@@ -1,0 +1,1061 @@
+{
+  "source": "next/packs/wvd/parameters/legacy-quests.json",
+  "scope": "Static data inventory only; no task execution or test matrix",
+  "entries": [
+    {
+      "id": "Dist",
+      "pre_entry": null,
+      "steps": [
+        {
+          "kind": "FindAndPress",
+          "target": "TradeWaterway",
+          "fallback": [
+            "EdgeOfTown",
+            [
+              1,
+              1
+            ]
+          ]
+        },
+        {
+          "kind": "FindAndPress",
+          "target": "Dist",
+          "fallback": "input swipe 650 250 650 900"
+        }
+      ],
+      "adjacent_same_target": false,
+      "real_device": "NOT_OBSERVED"
+    },
+    {
+      "id": "lounge",
+      "pre_entry": null,
+      "steps": [
+        {
+          "kind": "FindAndPress",
+          "target": "TradeWaterway",
+          "fallback": [
+            "EdgeOfTown",
+            [
+              1,
+              1
+            ]
+          ]
+        },
+        {
+          "kind": "FindAndPress",
+          "target": "shiphold",
+          "fallback": [
+            1,
+            1
+          ]
+        }
+      ],
+      "adjacent_same_target": false,
+      "real_device": "NOT_OBSERVED"
+    },
+    {
+      "id": "fortress-B1F",
+      "pre_entry": null,
+      "steps": [
+        {
+          "kind": "FindAndPress",
+          "target": "impregnableFortress",
+          "fallback": [
+            "EdgeOfTown",
+            [
+              1,
+              1
+            ]
+          ]
+        },
+        {
+          "kind": "FindAndPress",
+          "target": "fortressb1f",
+          "fallback": "input swipe 650 250 650 900"
+        }
+      ],
+      "adjacent_same_target": false,
+      "real_device": "NOT_OBSERVED"
+    },
+    {
+      "id": "fortress-B8F_entrance",
+      "pre_entry": null,
+      "steps": [
+        {
+          "kind": "FindAndPress",
+          "target": "impregnableFortress",
+          "fallback": [
+            "EdgeOfTown",
+            [
+              1,
+              1
+            ]
+          ]
+        },
+        {
+          "kind": "FindAndPress",
+          "target": "fortressEntrance",
+          "fallback": "input swipe 650 250 650 900"
+        }
+      ],
+      "adjacent_same_target": false,
+      "real_device": "NOT_OBSERVED"
+    },
+    {
+      "id": "fortress-10F",
+      "pre_entry": null,
+      "steps": [
+        {
+          "kind": "FindAndPress",
+          "target": "impregnableFortress",
+          "fallback": [
+            "EdgeOfTown",
+            [
+              1,
+              1
+            ]
+          ]
+        },
+        {
+          "kind": "FindAndPress",
+          "target": "fortressb10f",
+          "fallback": "input swipe 650 900 650 250"
+        }
+      ],
+      "adjacent_same_target": false,
+      "real_device": "NOT_OBSERVED"
+    },
+    {
+      "id": "DH-4f",
+      "pre_entry": null,
+      "steps": [
+        {
+          "kind": "FindAndPress",
+          "target": "DH",
+          "fallback": [
+            "EdgeOfTown",
+            [
+              1,
+              1
+            ]
+          ]
+        },
+        {
+          "kind": "FindAndPress",
+          "target": "DH-R4",
+          "fallback": "input swipe 650 250 650 900"
+        }
+      ],
+      "adjacent_same_target": false,
+      "real_device": "NOT_OBSERVED"
+    },
+    {
+      "id": "DH-6f",
+      "pre_entry": null,
+      "steps": [
+        {
+          "kind": "FindAndPress",
+          "target": "DH",
+          "fallback": [
+            "EdgeOfTown",
+            [
+              1,
+              1
+            ]
+          ]
+        },
+        {
+          "kind": "FindAndPress",
+          "target": "DH-R6",
+          "fallback": "input swipe 650 250 650 900"
+        }
+      ],
+      "adjacent_same_target": false,
+      "real_device": "NOT_OBSERVED"
+    },
+    {
+      "id": "DH-7f-right",
+      "pre_entry": null,
+      "steps": [
+        {
+          "kind": "FindAndPress",
+          "target": "DH",
+          "fallback": [
+            "EdgeOfTown",
+            [
+              1,
+              1
+            ]
+          ]
+        },
+        {
+          "kind": "FindAndPress",
+          "target": "DH-R7",
+          "fallback": "input swipe 650 900 650 250"
+        }
+      ],
+      "adjacent_same_target": false,
+      "real_device": "NOT_OBSERVED"
+    },
+    {
+      "id": "DH-7f-auto",
+      "pre_entry": null,
+      "steps": [
+        {
+          "kind": "FindAndPress",
+          "target": "DH",
+          "fallback": [
+            "EdgeOfTown",
+            [
+              1,
+              1
+            ]
+          ]
+        },
+        {
+          "kind": "FindAndPress",
+          "target": "DH-R7",
+          "fallback": "input swipe 650 900 650 250"
+        }
+      ],
+      "adjacent_same_target": false,
+      "real_device": "NOT_OBSERVED"
+    },
+    {
+      "id": "DH-10f-test",
+      "pre_entry": null,
+      "steps": [
+        {
+          "kind": "FindAndPress",
+          "target": "DH",
+          "fallback": [
+            "EdgeOfTown",
+            [
+              1,
+              1
+            ]
+          ]
+        },
+        {
+          "kind": "FindAndPress",
+          "target": "DH-R9",
+          "fallback": "input swipe 650 900 650 250"
+        }
+      ],
+      "adjacent_same_target": false,
+      "real_device": "NOT_OBSERVED"
+    },
+    {
+      "id": "DH-10f-JR",
+      "pre_entry": null,
+      "steps": [
+        {
+          "kind": "FindAndPress",
+          "target": "DH",
+          "fallback": [
+            "EdgeOfTown",
+            [
+              1,
+              1
+            ]
+          ]
+        },
+        {
+          "kind": "FindAndPress",
+          "target": "DH-R9",
+          "fallback": "input swipe 650 900 650 250"
+        }
+      ],
+      "adjacent_same_target": false,
+      "real_device": "NOT_OBSERVED"
+    },
+    {
+      "id": "DH-Church-upper",
+      "pre_entry": null,
+      "steps": [
+        {
+          "kind": "FindAndPress",
+          "target": "DH",
+          "fallback": [
+            "EdgeOfTown",
+            [
+              1,
+              1
+            ]
+          ]
+        },
+        {
+          "kind": "FindAndPress",
+          "target": "DH-Church",
+          "fallback": "input swipe 650 900 650 250"
+        }
+      ],
+      "adjacent_same_target": false,
+      "real_device": "NOT_OBSERVED"
+    },
+    {
+      "id": "DH-Church-auto",
+      "pre_entry": null,
+      "steps": [
+        {
+          "kind": "FindAndPress",
+          "target": "DH",
+          "fallback": [
+            "EdgeOfTown",
+            [
+              1,
+              1
+            ]
+          ]
+        },
+        {
+          "kind": "FindAndPress",
+          "target": "DH-Church",
+          "fallback": "input swipe 650 900 650 250"
+        }
+      ],
+      "adjacent_same_target": false,
+      "real_device": "NOT_OBSERVED"
+    },
+    {
+      "id": "White-G-v2",
+      "pre_entry": null,
+      "steps": [
+        {
+          "kind": "FindAndPress",
+          "target": "DH",
+          "fallback": [
+            "EdgeOfTown",
+            [
+              1,
+              1
+            ]
+          ]
+        },
+        {
+          "kind": "FindAndPress",
+          "target": "DH-Church",
+          "fallback": "input swipe 650 900 650 250"
+        }
+      ],
+      "adjacent_same_target": false,
+      "real_device": "NOT_OBSERVED"
+    },
+    {
+      "id": "FFXI-2F",
+      "pre_entry": "FFXI/GCN",
+      "steps": [
+        {
+          "kind": "Event",
+          "target": "EVENT",
+          "fallback": "FFXI/EVENT_GCN"
+        },
+        {
+          "kind": "FindAndPress",
+          "target": "FFXI/ZONE2",
+          "fallback": [
+            1,
+            1
+          ]
+        }
+      ],
+      "adjacent_same_target": false,
+      "real_device": "NOT_OBSERVED"
+    },
+    {
+      "id": "FFXI-2F-elite",
+      "pre_entry": "FFXI/GCN",
+      "steps": [
+        {
+          "kind": "Event",
+          "target": "EVENT",
+          "fallback": "FFXI/EVENT_GCN"
+        },
+        {
+          "kind": "FindAndPress",
+          "target": "FFXI/ZONE2",
+          "fallback": [
+            1,
+            1
+          ]
+        }
+      ],
+      "adjacent_same_target": false,
+      "real_device": "NOT_OBSERVED"
+    },
+    {
+      "id": "FFXI-5F-4Elite",
+      "pre_entry": null,
+      "steps": [
+        {
+          "kind": "Event",
+          "target": "EVENT",
+          "fallback": "FFXI/EVENT_GCN"
+        },
+        {
+          "kind": "FindAndPress",
+          "target": "FFXI/zone5",
+          "fallback": [
+            1,
+            1
+          ]
+        }
+      ],
+      "adjacent_same_target": false,
+      "real_device": "NOT_OBSERVED"
+    },
+    {
+      "id": "FFXI-5F-2Elite-mid",
+      "pre_entry": null,
+      "steps": [
+        {
+          "kind": "Event",
+          "target": "EVENT",
+          "fallback": "FFXI/EVENT_GCN"
+        },
+        {
+          "kind": "FindAndPress",
+          "target": "FFXI/zone5",
+          "fallback": [
+            1,
+            1
+          ]
+        }
+      ],
+      "adjacent_same_target": false,
+      "real_device": "NOT_OBSERVED"
+    },
+    {
+      "id": "FFXI-5F-2Elite-bottom",
+      "pre_entry": null,
+      "steps": [
+        {
+          "kind": "Event",
+          "target": "EVENT",
+          "fallback": "FFXI/EVENT_GCN"
+        },
+        {
+          "kind": "FindAndPress",
+          "target": "FFXI/zone5",
+          "fallback": [
+            1,
+            1
+          ]
+        }
+      ],
+      "adjacent_same_target": false,
+      "real_device": "NOT_OBSERVED"
+    },
+    {
+      "id": "FFXI-5F-2Elite-left",
+      "pre_entry": null,
+      "steps": [
+        {
+          "kind": "Event",
+          "target": "EVENT",
+          "fallback": "FFXI/EVENT_GCN"
+        },
+        {
+          "kind": "FindAndPress",
+          "target": "FFXI/zone5",
+          "fallback": [
+            1,
+            1
+          ]
+        }
+      ],
+      "adjacent_same_target": false,
+      "real_device": "NOT_OBSERVED"
+    },
+    {
+      "id": "FFXI-5F-Elite",
+      "pre_entry": null,
+      "steps": [
+        {
+          "kind": "Event",
+          "target": "EVENT",
+          "fallback": "FFXI/EVENT_GCN"
+        },
+        {
+          "kind": "FindAndPress",
+          "target": "FFXI/zone5",
+          "fallback": [
+            1,
+            1
+          ]
+        }
+      ],
+      "adjacent_same_target": false,
+      "real_device": "NOT_OBSERVED"
+    },
+    {
+      "id": "HSR-1F",
+      "pre_entry": "HSR/HSR",
+      "steps": [
+        {
+          "kind": "WorldMap",
+          "target": "intoWorldMap",
+          "fallback": [
+            "HSR/HSR",
+            "input swipe 400 400 500 500"
+          ]
+        },
+        {
+          "kind": "FindAndPress",
+          "target": "HSR/AGMM1F",
+          "fallback": [
+            1,
+            1
+          ]
+        }
+      ],
+      "adjacent_same_target": false,
+      "real_device": "NOT_OBSERVED"
+    },
+    {
+      "id": "IWO",
+      "pre_entry": "IWO/IWO",
+      "steps": [
+        {
+          "kind": "WorldMap",
+          "target": "intoWorldMap",
+          "fallback": [
+            "IWO/IWO",
+            "input swipe 700 1100 500 1100",
+            [
+              500,
+              1100
+            ]
+          ]
+        },
+        {
+          "kind": "FindAndPress",
+          "target": "IWO/IWOB1F",
+          "fallback": [
+            "IWO/IWO",
+            [
+              1,
+              1
+            ]
+          ]
+        }
+      ],
+      "adjacent_same_target": false,
+      "real_device": "NOT_OBSERVED"
+    },
+    {
+      "id": "IWO_2",
+      "pre_entry": "IWO/IWO",
+      "steps": [
+        {
+          "kind": "WorldMap",
+          "target": "intoWorldMap",
+          "fallback": [
+            "IWO/IWO",
+            "input swipe 700 1100 500 1100",
+            [
+              500,
+              1100
+            ]
+          ]
+        },
+        {
+          "kind": "FindAndPress",
+          "target": "IWO/IWOB2F",
+          "fallback": [
+            "IWO/IWO",
+            [
+              1,
+              1
+            ]
+          ]
+        }
+      ],
+      "adjacent_same_target": false,
+      "real_device": "NOT_OBSERVED"
+    },
+    {
+      "id": "malice-B3F",
+      "pre_entry": null,
+      "steps": [
+        {
+          "kind": "FindAndPress",
+          "target": "malice_malice",
+          "fallback": [
+            "EdgeOfTown",
+            [
+              1,
+              1
+            ]
+          ]
+        },
+        {
+          "kind": "FindAndPress",
+          "target": "malice_B3F",
+          "fallback": [
+            1,
+            1
+          ]
+        }
+      ],
+      "adjacent_same_target": false,
+      "real_device": "NOT_OBSERVED"
+    },
+    {
+      "id": "fordraig-B3F",
+      "pre_entry": "fordraig/B3F",
+      "steps": [
+        {
+          "kind": "WorldMap",
+          "target": "intoWorldMap",
+          "fallback": [
+            "fordraig/labyrinthOfFordraig",
+            "input swipe 450 150 500 150"
+          ]
+        },
+        {
+          "kind": "FindAndPress",
+          "target": "fordraig/B3F",
+          "fallback": [
+            "fordraig/labyrinthOfFordraig",
+            [
+              1,
+              1
+            ]
+          ]
+        }
+      ],
+      "adjacent_same_target": false,
+      "real_device": "NOT_OBSERVED"
+    },
+    {
+      "id": "SSC_chest",
+      "pre_entry": "SSC/SSC",
+      "steps": [
+        {
+          "kind": "WorldMap",
+          "target": "intoWorldMap",
+          "fallback": [
+            "SSC/SSC",
+            "input swipe 700 500 600 600"
+          ]
+        }
+      ],
+      "adjacent_same_target": false,
+      "real_device": "NOT_OBSERVED"
+    },
+    {
+      "id": "LBC",
+      "pre_entry": "LBC/LBC",
+      "steps": [
+        {
+          "kind": "WorldMap",
+          "target": "intoWorldMap",
+          "fallback": [
+            "LBC/LBC",
+            "input swipe 400 400 400 500"
+          ]
+        }
+      ],
+      "adjacent_same_target": false,
+      "real_device": "NOT_OBSERVED"
+    },
+    {
+      "id": "AWD",
+      "pre_entry": "AWD/AWD",
+      "steps": [
+        {
+          "kind": "WorldMap",
+          "target": "intoWorldMap",
+          "fallback": [
+            "AWD/AWD",
+            "input swipe 400 400 500 500"
+          ]
+        },
+        {
+          "kind": "FindAndPress",
+          "target": "AWD/AWD2F",
+          "fallback": [
+            1,
+            1
+          ]
+        }
+      ],
+      "adjacent_same_target": false,
+      "real_device": "NOT_OBSERVED"
+    },
+    {
+      "id": "AWD-noGorgon",
+      "pre_entry": "AWD/AWD",
+      "steps": [
+        {
+          "kind": "WorldMap",
+          "target": "intoWorldMap",
+          "fallback": [
+            "AWD/AWD",
+            "input swipe 400 400 500 500"
+          ]
+        },
+        {
+          "kind": "FindAndPress",
+          "target": "AWD/AWD1F",
+          "fallback": [
+            1,
+            1
+          ]
+        }
+      ],
+      "adjacent_same_target": false,
+      "real_device": "NOT_OBSERVED"
+    },
+    {
+      "id": "GHB",
+      "pre_entry": "GHB/GHB",
+      "steps": [
+        {
+          "kind": "WorldMap",
+          "target": "intoWorldMap",
+          "fallback": [
+            "GHB/GHB",
+            "input swipe 400 500 450 550"
+          ]
+        }
+      ],
+      "adjacent_same_target": false,
+      "real_device": "NOT_OBSERVED"
+    },
+    {
+      "id": "COS_chest",
+      "pre_entry": null,
+      "steps": [
+        {
+          "kind": "FindAndPress",
+          "target": "COS/COS",
+          "fallback": [
+            "EdgeOfTown",
+            [
+              1,
+              1
+            ]
+          ]
+        },
+        {
+          "kind": "FindAndPress",
+          "target": "COS/COSB2F",
+          "fallback": [
+            1,
+            1
+          ]
+        }
+      ],
+      "adjacent_same_target": false,
+      "real_device": "NOT_OBSERVED"
+    },
+    {
+      "id": "COS_chest_short",
+      "pre_entry": null,
+      "steps": [
+        {
+          "kind": "FindAndPress",
+          "target": "COS/COS",
+          "fallback": [
+            "EdgeOfTown",
+            [
+              1,
+              1
+            ]
+          ]
+        },
+        {
+          "kind": "FindAndPress",
+          "target": "COS/COSB2F",
+          "fallback": [
+            1,
+            1
+          ]
+        }
+      ],
+      "adjacent_same_target": false,
+      "real_device": "NOT_OBSERVED"
+    },
+    {
+      "id": "DOE",
+      "pre_entry": null,
+      "steps": [
+        {
+          "kind": "FindAndPress",
+          "target": "DOE",
+          "fallback": [
+            "EdgeOfTown",
+            [
+              1,
+              1
+            ]
+          ]
+        },
+        {
+          "kind": "FindAndPress",
+          "target": "DOEB1F",
+          "fallback": [
+            1,
+            1
+          ]
+        }
+      ],
+      "adjacent_same_target": false,
+      "real_device": "NOT_OBSERVED"
+    },
+    {
+      "id": "DOF",
+      "pre_entry": null,
+      "steps": [
+        {
+          "kind": "FindAndPress",
+          "target": "DOF",
+          "fallback": [
+            "EdgeOfTown",
+            "input swipe 650 250 650 900"
+          ]
+        },
+        {
+          "kind": "FindAndPress",
+          "target": "DOFB1F",
+          "fallback": [
+            1,
+            1
+          ]
+        }
+      ],
+      "adjacent_same_target": false,
+      "real_device": "NOT_OBSERVED"
+    },
+    {
+      "id": "DOF_Plus",
+      "pre_entry": null,
+      "steps": [
+        {
+          "kind": "FindAndPress",
+          "target": "DOF",
+          "fallback": [
+            "EdgeOfTown",
+            "input swipe 650 250 650 900"
+          ]
+        },
+        {
+          "kind": "FindAndPress",
+          "target": "DOFB1F",
+          "fallback": [
+            1,
+            1
+          ]
+        }
+      ],
+      "adjacent_same_target": false,
+      "real_device": "NOT_OBSERVED"
+    },
+    {
+      "id": "DOW",
+      "pre_entry": null,
+      "steps": [
+        {
+          "kind": "FindAndPress",
+          "target": "DOW",
+          "fallback": [
+            "EdgeOfTown",
+            [
+              1,
+              1
+            ]
+          ]
+        },
+        {
+          "kind": "FindAndPress",
+          "target": "DOWB1F",
+          "fallback": [
+            1,
+            1
+          ]
+        }
+      ],
+      "adjacent_same_target": false,
+      "real_device": "NOT_OBSERVED"
+    },
+    {
+      "id": "DOW_Plus",
+      "pre_entry": null,
+      "steps": [
+        {
+          "kind": "FindAndPress",
+          "target": "DOW",
+          "fallback": [
+            "EdgeOfTown",
+            [
+              1,
+              1
+            ]
+          ]
+        },
+        {
+          "kind": "FindAndPress",
+          "target": "DOWB1F",
+          "fallback": [
+            1,
+            1
+          ]
+        }
+      ],
+      "adjacent_same_target": false,
+      "real_device": "NOT_OBSERVED"
+    },
+    {
+      "id": "DOL",
+      "pre_entry": null,
+      "steps": [
+        {
+          "kind": "FindAndPress",
+          "target": "DOL",
+          "fallback": [
+            "EdgeOfTown",
+            [
+              1,
+              1
+            ]
+          ]
+        },
+        {
+          "kind": "FindAndPress",
+          "target": "DOLB1F",
+          "fallback": [
+            1,
+            1
+          ]
+        }
+      ],
+      "adjacent_same_target": false,
+      "real_device": "NOT_OBSERVED"
+    },
+    {
+      "id": "DOL_PLUS",
+      "pre_entry": null,
+      "steps": [
+        {
+          "kind": "FindAndPress",
+          "target": "DOL",
+          "fallback": [
+            "EdgeOfTown",
+            [
+              1,
+              1
+            ]
+          ]
+        },
+        {
+          "kind": "FindAndPress",
+          "target": "DOLB1F",
+          "fallback": [
+            1,
+            1
+          ]
+        }
+      ],
+      "adjacent_same_target": false,
+      "real_device": "NOT_OBSERVED"
+    },
+    {
+      "id": "DOS",
+      "pre_entry": null,
+      "steps": [
+        {
+          "kind": "FindAndPress",
+          "target": "DOS",
+          "fallback": [
+            "EdgeOfTown",
+            [
+              1,
+              1
+            ]
+          ]
+        },
+        {
+          "kind": "FindAndPress",
+          "target": "DOSB1F",
+          "fallback": [
+            1,
+            1
+          ]
+        }
+      ],
+      "adjacent_same_target": false,
+      "real_device": "NOT_OBSERVED"
+    },
+    {
+      "id": "LMG-GT",
+      "pre_entry": "LMG/LMG",
+      "steps": [
+        {
+          "kind": "WorldMap",
+          "target": "intoWorldMap",
+          "fallback": [
+            "LMG/LMG",
+            "input swipe 690 590 690 690"
+          ]
+        },
+        {
+          "kind": "FindAndPress",
+          "target": "LMG/LMG1F",
+          "fallback": [
+            1,
+            1
+          ]
+        }
+      ],
+      "adjacent_same_target": false,
+      "real_device": "NOT_OBSERVED"
+    },
+    {
+      "id": "LMG-FT",
+      "pre_entry": "LMG/LMG",
+      "steps": [
+        {
+          "kind": "WorldMap",
+          "target": "intoWorldMap",
+          "fallback": [
+            "LMG/LMG",
+            "input swipe 690 590 690 690"
+          ]
+        },
+        {
+          "kind": "FindAndPress",
+          "target": "LMG/FTB1F",
+          "fallback": [
+            1,
+            1
+          ]
+        }
+      ],
+      "adjacent_same_target": false,
+      "real_device": "NOT_OBSERVED"
+    },
+    {
+      "id": "FFXI-Org",
+      "pre_entry": "FFXI/GCN",
+      "steps": [
+        {
+          "kind": "Event",
+          "target": "EVENT",
+          "fallback": "FFXI/EVENT_GCN"
+        },
+        {
+          "kind": "FindAndPress",
+          "target": "FFXI/ZONE2",
+          "fallback": [
+            1,
+            1
+          ]
+        }
+      ],
+      "adjacent_same_target": false,
+      "real_device": "NOT_OBSERVED"
+    }
+  ]
+}

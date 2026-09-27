@@ -1,4 +1,5 @@
 #include "device_session.hpp"
+#include "adb_failure.hpp"
 #include "platform/execution_timing.hpp"
 #include "android_viewport.hpp"
 #include "android_context_query.hpp"
@@ -38,6 +39,32 @@ DeviceSession::DeviceSession(nlohmann::json binding, std::filesystem::path captu
 DeviceSession::~DeviceSession() noexcept {
     try { disconnect(); }
     catch (...) { OutputDebugStringW(L"WVD DeviceSession destroyed with cleanup unconfirmed\n"); }
+}
+bool DeviceSession::input_channel_ready() const {
+    // 仅由会话工作线程在门禁的 dispatch_mutex 下读取；控制面不借此操作设备。
+    return connected_ && control_ && control_->connected() && !control_->unresolved();
+}
+void DeviceSession::observation_window(std::chrono::steady_clock::time_point deadline, std::stop_token stop) {
+    read_deadline_ = deadline;
+    read_stop_ = stop;
+}
+std::chrono::milliseconds DeviceSession::read_budget(std::chrono::milliseconds ceiling) const {
+    if (read_stop_.stop_requested()) throw std::runtime_error("CAPTURE_CANCELLED");
+    if (read_deadline_ == std::chrono::steady_clock::time_point{}) return ceiling;
+    const auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(read_deadline_ - std::chrono::steady_clock::now());
+    if (remaining <= 0ms) throw contracts::ObservationUnavailable({contracts::ReadFaultKind::Timeout,
+        contracts::ReadFaultStage::Capture, "OBSERVATION_WINDOW_EXHAUSTED", "read.window", {}, {}});
+    return std::min(remaining, ceiling);
+}
+void DeviceSession::record_adb_failure(const AdbFailureInfo &info,
+                                      const char *operation) noexcept {
+    try {
+        record({{"event", "adb.command_failed"}, {"operation", operation},
+            {"command", info.command}, {"serial", info.serial}, {"code", info.code},
+            {"timeout_ms", info.timeout.count()}, {"elapsed_ms", info.elapsed.count()},
+            {"exit_code", info.exit_code}, {"retryable_transport", info.retryable_transport},
+            {"stdout_excerpt", info.stdout_excerpt}, {"stderr_excerpt", info.stderr_excerpt}});
+    } catch (...) { /* 诊断分配失败不能改变原始读取故障的类型。 */ }
 }
 void DeviceSession::prepare_input_channel(std::stop_token stop) {
     require(!stop.stop_requested(), "INPUT_PREPARATION_CANCELLED");
@@ -80,8 +107,8 @@ LifecycleTarget DeviceSession::lifecycle_target() const {
 bool DeviceSession::connect() {
     require(!capture_host_ || !capture_host_->cleanup_pending(), "DEVICE_CLEANUP_PENDING");
     require(!control_ || !control_->unresolved(), "DEVICE_INPUT_RESULT_UNCONFIRMED");
-    if (connected_ && adb_.connected()) return true;
-    if (!adb_.connect()) return false;
+    if (connected_ && adb_.connected(read_stop_, read_budget(5000ms))) return true;
+    if (!adb_.connect(read_stop_, read_budget(20000ms))) return false;
     connected_ = true;
     ++generation_;
     fast_failed_ = false;
@@ -133,7 +160,12 @@ bool DeviceSession::release_owned_inputs() {
 
 android::ShellReply DeviceSession::query(const std::string &command, int timeout,
                                           std::stop_token stop) {
-    return adb_.shell_fixed(command, std::chrono::milliseconds{timeout}, stop);
+    try { return adb_.shell_fixed(command, read_budget(std::chrono::milliseconds{timeout}),
+        stop.stop_possible() ? stop : read_stop_); }
+    catch (const AdbCommandFailure &error) {
+        record_adb_failure(error.info(), "device.query");
+        throw;
+    }
 }
 std::string DeviceSession::foreground(std::stop_token stop) {
     const auto answer = query("dumpsys window", 5000, stop);
@@ -147,17 +179,20 @@ RawFrame DeviceSession::capture_impl(bool preview, std::stop_token stop) {
     if (stop.stop_requested()) throw std::runtime_error("CAPTURE_CANCELLED");
     require(connected_, "DEVICE_NOT_CONNECTED");
     const auto started = std::chrono::steady_clock::now();
+    failed_pixels_.reset();
     cv::Mat bgr;
     std::string backend;
     if (!fast_failed_ && capture_host_) {
         try {
-            const auto raw = capture_host_->capture(3000ms, stop);
+            const auto raw = capture_host_->capture(read_budget(3000ms), stop);
             timing::Scope convert_time(timing::Part::Convert);
             const cv::Mat rgba(raw.height, raw.width, CV_8UC4,
                                const_cast<std::uint8_t *>(raw.rgba_bottom_up.data()));
             cv::cvtColor(rgba, bgr, cv::COLOR_RGBA2BGR);
             cv::flip(bgr, bgr, 0);
             backend = "MUMU_IPC";
+        } catch (const contracts::ObservationUnavailable &) {
+            throw; // 读取总窗口耗尽不是IPC故障，不修改后端选择。
         } catch (const MumuCaptureNotReady &error) {
             // 游戏显示尚未创建时本次用 ADB 取帧；保持 IPC helper 等待下一帧。
             record({{"event", "capture.not_ready"}, {"reason", error.what()}});
@@ -168,7 +203,7 @@ RawFrame DeviceSession::capture_impl(bool preview, std::stop_token stop) {
         }
     }
     if (bgr.empty()) {
-        auto png = adb_.screenshot_png(8000ms, stop);
+        auto png = adb_.screenshot_png(read_budget(8000ms), stop);
         timing::Scope convert_time(timing::Part::Convert);
         bgr = cv::imdecode(png, cv::IMREAD_COLOR);
         require(!bgr.empty(), "ADB_CAPTURE_DECODE_FAILED");
@@ -179,24 +214,30 @@ RawFrame DeviceSession::capture_impl(bool preview, std::stop_token stop) {
     const auto finished = std::chrono::steady_clock::now();
     capture_time.finish();
     const contracts::Size size{bgr.cols, bgr.rows};
+    auto payload = std::make_shared<std::vector<std::uint8_t>>(
+        bgr.data, bgr.data + bgr.total() * bgr.elemSize());
+    // 元数据失败仍保留本次像素，正常返回立即清除。没有伪造FrameIdentity。
+    failed_pixels_ = contracts::DiagnosticPixels{size, payload, finished, adb_.serial(), backend};
     if (metadata_at_ == std::chrono::steady_clock::time_point{} ||
         finished - metadata_at_ > 1000ms || latest_size_ != size) {
         timing::Scope metadata_time(timing::Part::Metadata);
-        latest_foreground_ = foreground(stop);
-        latest_rotation_ = -1;
-        try {
-            const auto input = query("dumpsys input", 5000, stop);
-            const auto viewport = input.exit_code == 0
-                ? android::input_viewport(input.output) : std::nullopt;
-            if (viewport && viewport->size == size) latest_rotation_ = viewport->rotation;
-        } catch (...) { latest_rotation_ = -1; }
+        metadata_at_ = {}; // 查询失败不得留下“刚刷新过”的半套元数据。
+        const auto focused = foreground(stop);
+        const auto input = query("dumpsys input", 5000, stop);
+        require(input.exit_code == 0, "VIEWPORT_QUERY_FAILED");
+        const auto viewport = android::input_viewport(input.output);
+        if (stop.stop_requested()) throw std::runtime_error("CAPTURE_CANCELLED");
+        if (focused.empty() || !viewport || viewport->size != size)
+            throw contracts::ObservationUnavailable({contracts::ReadFaultKind::MetadataUnavailable,
+                contracts::ReadFaultStage::Capture, "CAPTURE_METADATA_NOT_READY",
+                "capture.metadata", 5000ms, {}});
+        // 全套读取成功才发布；缺元数据的像素不能变成可点击观察。
+        latest_foreground_ = focused;
+        latest_rotation_ = viewport->rotation;
         latest_size_ = size;
-        // finished 是像素就绪时刻，不是元数据完成时刻；不能把慢查询本身算成缓存年龄。
         metadata_at_ = std::chrono::steady_clock::now();
     }
     timing::Scope payload_time(timing::Part::Convert);
-    auto payload = std::make_shared<std::vector<std::uint8_t>>(
-        bgr.data, bgr.data + bgr.total() * bgr.elemSize());
     RawFrame frame;
     frame.raw_bgr = std::move(payload);
     if (preview) {
@@ -212,10 +253,20 @@ RawFrame DeviceSession::capture_impl(bool preview, std::stop_token stop) {
     frame.backend = backend;
     frame.connection_generation = generation_;
     frame.display_rotation = latest_rotation_;
+    failed_pixels_.reset();
     return frame;
 }
-RawFrame DeviceSession::capture() { return capture_impl(false); }
-RawFrame DeviceSession::capture(std::stop_token stop) { return capture_impl(false, stop); }
+RawFrame DeviceSession::capture() { return capture({}); }
+RawFrame DeviceSession::capture(std::stop_token stop) {
+    try { return capture_impl(false, stop); }
+    catch (const AdbCommandFailure &error) {
+        metadata_at_ = {};
+        record_adb_failure(error.info(), "capture");
+        if (!stop.stop_requested() && error.info().retryable_transport)
+            throw error.as_read_fault(contracts::ReadFaultStage::Capture, "capture:" + error.info().command);
+        throw;
+    }
+}
 RawFrame DeviceSession::capture_preview() { return capture_impl(true); }
 
 bool DeviceSession::context_matches(const contracts::FrameIdentity &identity,
@@ -237,8 +288,17 @@ bool DeviceSession::context_matches(const contracts::FrameIdentity &identity,
     // 成功的带返回码事务本身证明 transport 可达；不再单独启动 adb get-state。
     // 保留前台 -> viewport -> 前台的原安全顺序，不把它冒充设备端原子快照。
     platform::timing::count(platform::timing::Counter::ContextTransactions);
-    const auto answer = adb_.shell_fixed(std::string(android::context_probe_command),
-        20000ms, stop, 8ULL * 1024 * 1024);
+    android::ShellReply answer;
+    try {
+        answer = adb_.shell_fixed(std::string(android::context_probe_command),
+            read_budget(20000ms), stop, 8ULL * 1024 * 1024);
+    } catch (const AdbCommandFailure &error) {
+        metadata_at_ = {};
+        record_adb_failure(error.info(), "input.context");
+        if (!stop.stop_requested() && error.info().retryable_transport)
+            throw error.as_read_fault(contracts::ReadFaultStage::InputContext, "input.context");
+        throw;
+    }
     if (stop.stop_requested() || answer.exit_code != 0) {
         metadata_at_ = {};
         record({{"event", "input.context_changed"}, {"reason", "CONTEXT_QUERY_FAILED"}, {"exit_code", answer.exit_code}});
@@ -283,7 +343,7 @@ bool DeviceSession::execute(const contracts::Command &command, std::stop_token s
     require(connected_ && latest_size_.width > 0 && latest_size_.height > 0,
             "DEVICE_INPUT_NOT_READY");
     require(control_ != nullptr, "SCRCPY_CONTROL_MISSING");
-    // 取帧前已经准备控制通道；此处不可在握手后提交旧观察的坐标。
+    // 输入前已准备控制通道并重新取帧；此处不可握手后提交旧坐标。
     require(control_->connected(), "INPUT_CHANNEL_CHANGED_REOBSERVE_REQUIRED");
     if (stop.stop_requested()) return false;
     control_->submit(command, latest_size_.width, latest_size_.height, stop);
@@ -336,8 +396,9 @@ bool DeviceSession::start_package(const std::string &package) {
 
 nlohmann::json DeviceSession::instance_metadata() {
     platform::MetadataQuery query_manager;
+    std::stop_callback cancel(read_stop_, [&] { query_manager.cancel(); });
     const auto metadata = query_manager.run(platform::path_from_utf8(binding_.at("manager")),
-                                            binding_.at("index").get<int>(), 3s);
+                                            binding_.at("index").get<int>(), read_budget(3s));
     require(metadata.value("success", false), "MUMU_METADATA_UNAVAILABLE");
     const auto &live = metadata.at("data");
     require(platform::mumu_metadata_usable(live) &&
@@ -348,6 +409,64 @@ nlohmann::json DeviceSession::instance_metadata() {
         require("127.0.0.1:" + std::to_string(live.at("adb_port").get<int>()) ==
             binding_.at("serial").get<std::string>(), "MUMU_ADB_BINDING_MISMATCH");
     return live;
+}
+std::optional<contracts::ObservationReconnect> DeviceSession::recover_observation() try {
+    // 只由当前Session工作线程调用。每次只推进一次连接/启动检查，退避归执行器。
+    const auto live = instance_metadata(); // 包括创建标识、端口、实例核对，失败不得换设备。
+    const auto pending = [&]() -> void {
+        throw contracts::ObservationUnavailable({contracts::ReadFaultKind::TransportUnavailable,
+            contracts::ReadFaultStage::Capture, "DEVICE_RECONNECT_WAIT", "bound_device.reconnect", {}, {}});
+    };
+    const auto cancelled = [&] { return read_stop_.stop_requested() ||
+        std::chrono::steady_clock::now() >= read_deadline_; };
+    if (cancelled()) throw std::runtime_error("CAPTURE_CANCELLED");
+    const auto target = lifecycle_target();
+    if (!live.at("is_process_started").get<bool>()) {
+        if (recovery_launched_) pending();
+        if (!recovery_origin_) recovery_origin_ = generation_.load();
+        LifecyclePlan plan{target, {LifecycleOperation::RestartInstance}, 1};
+        if (!execute_lifecycle(plan.operations.front(), target, cancelled)) pending();
+        recovery_launched_ = true;
+        pending();
+    }
+    if (!live.value("is_android_started", false)) pending();
+    const bool online = adb_.connected(read_stop_, read_budget(5000ms));
+    if (!online || !connected_) {
+        if (!recovery_origin_) recovery_origin_ = generation_.load();
+        // 先恢复ADB可达性再释放旧控制资源。未释放不建立新输入通道。
+        if (!adb_.connect(read_stop_, read_budget(20000ms))) pending();
+        LifecyclePlan plan{target, {LifecycleOperation::Reconnect}, 1};
+        if (!execute_lifecycle(plan.operations.front(), target, cancelled)) pending();
+    }
+    if (!recovery_origin_) return {};
+    if (recovery_launched_) {
+        LifecyclePlan plan{target, {}, 1};
+        if (target.vpn_required) plan.operations.push_back(LifecycleOperation::EnsureVpn);
+        plan.operations.push_back(LifecycleOperation::StartApplication);
+        for (const auto operation : plan.operations)
+            if (!execute_lifecycle(operation, target, cancelled)) pending();
+    }
+    (void)instance_metadata();
+    const contracts::ObservationReconnect proof{target.device_id, target.instance_id,
+        binding_.at("created_timestamp").dump(), *recovery_origin_, generation_, recovery_launched_};
+    require(proof.after > proof.before, "RECONNECT_GENERATION_NOT_ADVANCED");
+    recovery_origin_.reset(); recovery_launched_ = false;
+    record({{"event", "observation.reconnected"}, {"device", proof.device_id},
+        {"instance", proof.instance_id}, {"created_identity", proof.created_identity},
+        {"before", proof.before}, {"after", proof.after}, {"application_restarted", proof.application_restarted}});
+    return proof;
+} catch (const AdbCommandFailure &error) {
+    record_adb_failure(error.info(), "observation.reconnect");
+    if (!read_stop_.stop_requested() && error.info().retryable_transport)
+        throw error.as_read_fault(contracts::ReadFaultStage::Capture, "bound_device.reconnect");
+    throw;
+}
+bool DeviceSession::settle_observed_input() {
+    if (!control_ || !control_->unresolved()) return true;
+    // 业务后置条件已由新帧证实，但必须先确认旧通道静止，才允许下一次输入。
+    if (!control_->close()) return false;
+    control_ = std::make_unique<ScrcpyControlClient>(adb_, server_path_);
+    return true;
 }
 std::optional<LifecycleObservation> DeviceSession::observe_lifecycle() {
     const auto target = lifecycle_target();
@@ -413,6 +532,8 @@ bool DeviceSession::execute_lifecycle(LifecycleOperation operation, const Lifecy
         target.vpn_application_id != selected.vpn_application_id || cancelled()) return false;
     if (operation == LifecycleOperation::Reconnect) {
         disconnect();
+        if (read_deadline_ != std::chrono::steady_clock::time_point{})
+            return !cancelled() && connect();
         const auto deadline = std::chrono::steady_clock::now() + 120s;
         while (!cancelled() && std::chrono::steady_clock::now() < deadline) {
             try { if (connect()) return true; }
@@ -431,6 +552,7 @@ bool DeviceSession::execute_lifecycle(LifecycleOperation operation, const Lifecy
         if (cancelled()) return false;
         platform::launch_selected_instance(platform::path_from_utf8(binding_.at("launcher")),
             binding_.at("index").get<int>());
+        if (read_deadline_ != std::chrono::steady_clock::time_point{}) return true;
         const auto deadline = std::chrono::steady_clock::now() + 120s;
         while (!cancelled() && std::chrono::steady_clock::now() < deadline) {
             const auto live = instance_metadata();

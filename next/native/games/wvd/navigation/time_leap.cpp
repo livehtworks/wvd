@@ -86,9 +86,10 @@ tasks::CompiledWorkflow compile_time_leap(const std::string &target_name,
     const auto outside = C::all({C::any({vision::royal_city(), vision::city_screen(), C::image("dungFlag"),
         C::image("mapFlag"), C::image("returnText"), C::image("returntotown"), C::image("openworldmap")}),
         C::absent(C::any({title, leap}))});
-    const auto opening = C::any({chooser, wheel, download});
     const auto opened_wheel = C::any({chooser, download});
-    const auto after_leap = C::any({chooser, outside});
+    // 跳轮已提交后只等待游戏场景，轮盘残帧/黑帧不代表完成，更不能重新选章或跳轮。
+    // 网络、下载和剧情由既有事件处理器处理，回来继续核对同一次提交。
+    const auto after_leap = outside;
     // 当前就在王城时优先使用稳定塔楼背景完成输入前复核；公共建筑图标只说明
     // “某个城市界面”，不能把它们当成王城身份。
     const auto city = C::all({C::any({vision::royal_city(), vision::city_screen(), C::image("openworldmap")}),
@@ -120,9 +121,9 @@ tasks::CompiledWorkflow compile_time_leap(const std::string &target_name,
     for (const auto *name : {"OpenWheelEn", "OpenWheelZhHant"})
         graph.retry_menu_input(name, vision::menu_retry_ready(C::all({wheel, C::absent(opened_wheel)})));
     if (allow_download) {
-        graph.click("DownloadEn", download_en, download_en, opening, {"Entry"});
+        graph.click("DownloadEn", download_en, download_en, C::absent(download), {"Entry"});
         graph.click("DownloadZhHant", download_zh_hant, download_zh_hant,
-                    opening, {"Entry"});
+                    C::absent(download), {"Entry"});
     } else {
         graph.observe("DownloadEn", download_en, {"DownloadDenied"});
         graph.observe("DownloadZhHant", download_zh_hant, {"DownloadDenied"});
@@ -141,8 +142,8 @@ tasks::CompiledWorkflow compile_time_leap(const std::string &target_name,
         graph.retry_menu_input("QuickSelectZhHant", vision::menu_retry_ready(C::all({title, target_zh_hant, C::absent(leap)})));
     }
     graph.route("QuickLeapRoute", {"QuickLeapEn", "QuickLeapZhHant"});
-    graph.click("QuickLeapEn", leap_en, leap_en, after_leap, {"Done", "FindChapter"});
-    graph.click("QuickLeapZhHant", leap_zh_hant, leap_zh_hant, after_leap, {"Done", "FindChapter"});
+    graph.click("QuickLeapEn", leap_en, leap_en, after_leap, {"Done"});
+    graph.click("QuickLeapZhHant", leap_zh_hant, leap_zh_hant, after_leap, {"Done"});
     graph.delay_after("QuickLeapEn", 2000);
     graph.delay_after("QuickLeapZhHant", 2000);
     J find_chapter = J::array({"ChapterEn"});
@@ -205,22 +206,11 @@ tasks::CompiledWorkflow compile_time_leap(const std::string &target_name,
         const auto child = graph.define_child("CausalitySettings", adjust_causality(*causality));
         graph.call_child("Causality", child, {"LeapRoute"});
     }
-    // 跳轮点击后的过渡帧可能仍像轮盘；再次进入此节点时先接受已返回的游戏画面。
-    graph.route("LeapRoute", {"Done", "LeapEn", "LeapZhHant"});
-    J leap_next = J::array({"Done"});
-    if (!zh_only_target) leap_next.push_back("ReselectEn");
-    if (!translated_target_name.empty()) leap_next.push_back("ReselectZhHant");
-    leap_next.push_back(causality ? "Causality" : "LeapRoute");
-    graph.click("LeapEn", leap_en, leap_en, after_leap, leap_next);
-    graph.click("LeapZhHant", leap_zh_hant, leap_zh_hant, after_leap, leap_next);
+    graph.route("LeapRoute", {"LeapEn", "LeapZhHant"});
+    graph.click("LeapEn", leap_en, leap_en, after_leap, {"Done"});
+    graph.click("LeapZhHant", leap_zh_hant, leap_zh_hant, after_leap, {"Done"});
     graph.delay_after("LeapEn", 2000);
     graph.delay_after("LeapZhHant", 2000);
-    if (!zh_only_target)
-        graph.click("ReselectEn", C::all({title, target_en}), target_en, leap,
-                    causality ? J{"Causality"} : J{"LeapRoute"});
-    if (!translated_target_name.empty())
-        graph.click("ReselectZhHant", C::all({title, target_zh_hant}), target_zh_hant,
-                    leap, causality ? J{"Causality"} : J{"LeapRoute"});
     // 离开按钮不是充分条件。只有已执行跳跃路径之后的新帧正常游戏锚点才是终点。
     // 启动时的城市画面不能直达这里，未知加载帧也不能算业务完成。
     graph.observe("Done", outside, {"Terminal"});
@@ -229,8 +219,6 @@ tasks::CompiledWorkflow compile_time_leap(const std::string &target_name,
         "ReopenWheelEn", "ReopenWheelZhHant", "FindTarget",
         "LeapRoute", "LeapEn", "LeapZhHant"})
         graph.hit_limit(name, 32);
-    if (!zh_only_target) graph.hit_limit("ReselectEn", 32);
-    if (!translated_target_name.empty()) graph.hit_limit("ReselectZhHant", 32);
     return graph.finish();
 }
 }

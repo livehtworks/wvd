@@ -329,12 +329,15 @@ bool RunStore::write_recent_frame(const contracts::FrameEnvelope &frame) {
     }
     return true;
 }
-J RunStore::save_diagnostic(const contracts::FrameEnvelope *frame, const DiagnosticRequest &request) {
+J RunStore::save_diagnostic(const contracts::FrameEnvelope *frame, const DiagnosticRequest &request,
+                           const contracts::DiagnosticPixels *pixels) {
     std::lock_guard lock(diagnostic_mutex_);
     const auto skipped = [](const char *status) { return J{{"status", status}}; };
     if (diagnostic_closed_) return skipped("closed");
     const bool reward = request.stage == "reward";
-    if (request.run_id != run_ || !request.generation || request.task_id <= 0 || request.depth < 0 ||
+    const bool native = definition_.value("engine_kind", "") == "wvd_native";
+    if (request.run_id != run_ || !request.generation || request.task_id < 0 ||
+        (request.task_id == 0 && !native) || request.depth < 0 ||
         request.node.empty() || request.node.size() > 256 || request.reason.empty() ||
         request.reason.size() > 256 || request.operation_id.size() > 512 || request.error.size() > 256 ||
         (reward && request.operation_id.empty()) ||
@@ -351,7 +354,7 @@ J RunStore::save_diagnostic(const contracts::FrameEnvelope *frame, const Diagnos
     const auto interval = std::chrono::seconds(request.reason.find("pause") != std::string::npos ? 120 : 60);
     bool clock_backwards = false;
     if (!reward) {
-        const auto found = diagnostic_times_.find(request.reason);
+        const auto found = diagnostic_times_.find(request.reason + ":" + request.evidence_kind);
         clock_backwards = found != diagnostic_times_.end() && now < found->second;
         if (found != diagnostic_times_.end() && now >= found->second && now - found->second < interval) {
             ++diagnostic_throttled_;
@@ -366,15 +369,36 @@ J RunStore::save_diagnostic(const contracts::FrameEnvelope *frame, const Diagnos
     // 失败/tmp也占一次完整单帧预算，不自动重试，不让失败绕过数量/字节上限。
     ++attempts;
     if (reward) diagnostic_operations_.insert(request.operation_id);
-    else diagnostic_times_[request.reason] = now;
+    else diagnostic_times_[request.reason + ":" + request.evidence_kind] = now;
     J entry{{"id", diagnostic_rewards_ + diagnostic_failures_}, {"status", "failed"},
         {"instance", instance_}, {"run_id", run_}, {"generation", request.generation},
         {"unit_index", request.unit_index}, {"task_id", request.task_id}, {"depth", request.depth},
         {"node", request.node}, {"reason", request.reason}, {"stage", request.stage},
-        {"operation_id", request.operation_id}};
+        {"operation_id", request.operation_id}, {"evidence_kind", request.evidence_kind}};
     try {
         diagnostic_require(!clock_backwards, "DIAGNOSTIC_CLOCK_MOVED_BACKWARD");
         diagnostic_require(request.error.empty(), request.error.c_str());
+        std::vector<std::uint8_t> image_bytes;
+        if (pixels) {
+            diagnostic_require(!frame && native && request.evidence_kind == "metadata_invalid_pixels" &&
+                pixels->device_id == definition_.at("device_id").get<std::string>() && pixels->bgr &&
+                pixels->size.width > 0 && pixels->size.height > 0 &&
+                pixels->size.width <= 16384 && pixels->size.height <= 16384 &&
+                pixels->bgr->size() == std::uint64_t(pixels->size.width) * pixels->size.height * 3 &&
+                pixels->bgr->size() <= 64ULL * 1024 * 1024 &&
+                pixels->captured_at.time_since_epoch().count() > 0,
+                "DIAGNOSTIC_PIXELS_INVALID");
+            const cv::Mat image(pixels->size.height, pixels->size.width, CV_8UC3,
+                const_cast<std::uint8_t *>(pixels->bgr->data()));
+            diagnostic_require(cv::imencode(".png", image, image_bytes) &&
+                image_bytes.size() <= diagnostic_limits_.frame_bytes, "DIAGNOSTIC_ENCODE_FAILED");
+            entry["diagnostic_only"] = true;
+            entry["metadata_valid"] = false;
+            entry["pixels"] = {{"device_id", pixels->device_id}, {"backend", pixels->backend},
+                {"size", {pixels->size.width, pixels->size.height}}, {"input_authorization", false},
+                {"captured_at_ns", std::chrono::duration_cast<std::chrono::nanoseconds>(pixels->captured_at.time_since_epoch()).count()},
+                {"age_at_submit_ms", std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - pixels->captured_at).count()}};
+        } else {
         diagnostic_require(frame != nullptr, "DIAGNOSTIC_FRAME_UNAVAILABLE");
         const auto &id = frame->identity;
         diagnostic_require(id.generation == request.generation && id.frame_id > 0 &&
@@ -397,7 +421,8 @@ J RunStore::save_diagnostic(const contracts::FrameEnvelope *frame, const Diagnos
             {"captured_at_ns", std::chrono::duration_cast<std::chrono::nanoseconds>(id.captured_at.time_since_epoch()).count()},
             {"age_at_submit_ms", std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - id.captured_at).count()},
             {"input_authorization", false}};
-        const auto image_bytes = diagnostic_png(*frame, diagnostic_limits_.frame_bytes);
+        image_bytes = diagnostic_png(*frame, diagnostic_limits_.frame_bytes);
+        }
         DiagnosticDirectories directories;
         directories.ancestors(directory_);
         const auto folder = directory_ / "diagnostics";
@@ -425,7 +450,7 @@ J RunStore::save_diagnostic(const contracts::FrameEnvelope *frame, const Diagnos
     } catch (const std::exception &error) {
         entry["error"] = diagnostic_error(error.what());
         ++diagnostic_failed_;
-        if (!frame) ++diagnostic_unavailable_;
+        if (!frame && !pixels) ++diagnostic_unavailable_;
     } catch (...) {
         entry["error"] = "DIAGNOSTIC_SAVE_EXCEPTION";
         ++diagnostic_failed_;
@@ -436,6 +461,10 @@ J RunStore::save_diagnostic(const contracts::FrameEnvelope *frame, const Diagnos
 J RunStore::diagnostic_summary() const {
     std::lock_guard lock(diagnostic_mutex_);
     return {{"schema", 1}, {"entries", diagnostic_entries_}, {"bytes_saved", diagnostic_bytes_},
+        {"action_timing", {{"path", "action-timing.jsonl"}, {"rows", timing_rows_},
+            {"bytes", timing_bytes_}, {"limit_bytes", 64ULL * 1024 * 1024},
+            {"dropped", timing_dropped_}, {"failed", timing_failed_}, {"write_ns", timing_write_ns_},
+            {"complete", timing_failed_ == 0 && timing_dropped_ == 0}}},
         {"recent_frames", {{"saved", recent_saved_.load()}, {"dropped", recent_dropped_.load()},
             {"failed", recent_failed_.load()}, {"worker_ns", recent_work_ns_.load()},
             {"pending_limit", 1}, {"inflight_limit", 1}}},
@@ -444,7 +473,8 @@ J RunStore::diagnostic_summary() const {
         {"failed", diagnostic_failed_}, {"unavailable", diagnostic_unavailable_},
         {"throttled", diagnostic_throttled_}, {"duplicates", diagnostic_duplicates_},
         {"quota_exceeded", diagnostic_quota_}, {"unrecorded", diagnostic_unrecorded_},
-        {"complete", diagnostic_failed_ == 0 && diagnostic_quota_ == 0 && diagnostic_unrecorded_ == 0}};
+        {"complete", diagnostic_failed_ == 0 && diagnostic_quota_ == 0 && diagnostic_unrecorded_ == 0 &&
+            timing_failed_ == 0 && timing_dropped_ == 0}};
 }
 void RunStore::note_diagnostic_hook_failure() noexcept {
     try {
@@ -454,6 +484,31 @@ void RunStore::note_diagnostic_hook_failure() noexcept {
 }
 void RunStore::save_events(const EventJournal &events) {
     platform::atomic_write(directory_ / "events.json", events.read().dump(2), true);
+}
+void RunStore::append_timing(std::uint64_t generation, const std::string &type, const J &payload) noexcept {
+    const auto started = std::chrono::steady_clock::now();
+    std::lock_guard lock(diagnostic_mutex_);
+    try {
+        constexpr std::uint64_t limit = 64ULL * 1024 * 1024;
+        if (timing_closed_) { ++timing_dropped_; return; }
+        auto row = J{{"schema", 1}, {"instance_id", instance_}, {"run_id", run_},
+            {"generation", generation}, {"type", type}, {"payload", payload},
+            {"utc_ms", std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::system_clock::now().time_since_epoch()).count()}}.dump();
+        if (timing_bytes_ + row.size() + 1 > limit) {
+            timing_closed_ = true; ++timing_dropped_; return;
+        }
+        if (!timing_stream_.is_open()) {
+            timing_stream_.exceptions(std::ios::failbit | std::ios::badbit);
+            timing_stream_.open(directory_ / "action-timing.jsonl", std::ios::binary | std::ios::app);
+        }
+        timing_stream_ << row << '\n';
+        // 每动作/节点边界刷新，不在截图轮询中写盘；崩溃也尽量保留最后已结束的动作。
+        timing_stream_.flush();
+        timing_bytes_ += row.size() + 1; ++timing_rows_;
+    } catch (...) { ++timing_failed_; timing_closed_ = true; }
+    timing_write_ns_ += std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::steady_clock::now() - started).count();
 }
 void RunStore::save_terminal(const contracts::RunSnapshot &snapshot,
                              const contracts::SessionResult &session, const J &events) {

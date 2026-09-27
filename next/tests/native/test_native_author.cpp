@@ -1,6 +1,7 @@
 #include "games/wvd/tasks/author_workflow.hpp"
 #include "games/wvd/tasks/native_program.hpp"
 #include "games/wvd/tasks/public_flow_library.hpp"
+#include "games/wvd/tasks/public_step_scope.hpp"
 #include "games/wvd/tasks/bounty_visit.hpp"
 #include "games/wvd/tasks/bounty_cycle.hpp"
 #include "games/wvd/tasks/locale_assets.hpp"
@@ -8,6 +9,9 @@
 #include "games/wvd/navigation/time_leap.hpp"
 #include "games/wvd/navigation/map_route.hpp"
 #include "games/wvd/navigation/harken_exit.hpp"
+#include "games/wvd/navigation/world_travel.hpp"
+#include "games/wvd/navigation/auto_route.hpp"
+#include "games/wvd/combat/auto_combat.hpp"
 #include "games/wvd/combat/encounter.hpp"
 #include "games/wvd/combat/strategy.hpp"
 #include "games/wvd/supply/inn.hpp"
@@ -18,6 +22,7 @@
 #include "recognition/service.hpp"
 #include <opencv2/imgcodecs.hpp>
 #include "platform/windows/file_digest.hpp"
+#include <algorithm>
 #include <chrono>
 #include <fstream>
 #include <iostream>
@@ -27,6 +32,75 @@
 int main(int argc, char **argv) {
     try {
         using J = nlohmann::json;
+        if (argc == 2 && std::string(argv[1]) == "--transition-contracts") {
+            // 本轮只核对正式工厂的结果条件及可达分支，不连接设备、不执行旧全量矩阵。
+            const auto require = [](bool ok, const char *message) {
+                if (!ok) throw std::runtime_error(message);
+            };
+            const auto has = [](const J &values, const std::string &value) {
+                return std::find(values.begin(), values.end(), J(value)) != values.end();
+            };
+            const auto validate = [](const wvd::games::tasks::CompiledWorkflow &flow) {
+                wvd::games::tasks::compile_native_program(flow, J::object(), "transition-contracts").validate();
+            };
+            const auto leap = wvd::games::navigation::time_leap_without_causality("BeautifulOre", "cursedwheel_dhi", true);
+            validate(leap);
+            for (const auto *name : {"QuickLeapEn", "QuickLeapZhHant", "LeapEn", "LeapZhHant"}) {
+                const auto &node = leap.nodes.at(name);
+                require(node.at("next") == J{"Done"} &&
+                    node.at("operation_args").at("postcondition").at("parameters") == leap.nodes.at("Done").at("observation_args") &&
+                    !node.at("operation_args").contains("retry"), "LEAP_MUST_WAIT_FOR_RETURN_WITHOUT_REPLAY");
+            }
+            require(!has(leap.nodes.at("LeapRoute").at("next"), "Done"), "LEAP_PRE_SUBMIT_MUST_NOT_COMPLETE");
+            const auto inn = wvd::games::supply::rest_at_inn(false, true);
+            validate(inn);
+            validate(wvd::games::supply::rest_at_inn(true, false));
+            require(inn.nodes.at("SelectConfirm").at("next").front() == "PendingPaid", "INN_PENDING_RESULT_MUST_REMAIN_REACHABLE");
+            require(inn.nodes.at("PendingPaid").at("observation_args").dump().find("/inn_payment/submitted") != std::string::npos,
+                "INN_PENDING_MUST_REQUIRE_ACTUAL_SUBMISSION");
+            const auto combat = wvd::games::combat::enable_auto();
+            validate(combat);
+            require(combat.nodes.at("BackPopup").at("next") == combat.nodes.at("Entry").at("next") &&
+                has(combat.nodes.at("Unknown0").at("next"), "BattleEnded") &&
+                has(combat.nodes.at("Unknown1").at("next"), "BattleEnded"), "AUTO_COMBAT_TRANSITION_EXIT_MISSING");
+            wvd::games::WorldDestination destination{"City_RoyalCityLuknalia", std::nullopt};
+            const auto world = wvd::games::navigation::travel_world(destination, wvd::games::navigation::WorldArrival::City);
+            validate(world);
+            require(has(world.nodes.at("Locate").at("next"), "Story"), "WORLD_LOCATE_STORY_EXIT_MISSING");
+            for (int i = 0; i < 5; ++i)
+                require(has(world.nodes.at("Click" + std::to_string(i)).at("next"), "Story"), "WORLD_CLICK_STORY_EXIT_MISSING");
+            wvd::games::MapTarget target{};
+            target.target = "position";
+            target.position = wvd::games::TaskPoint{505, 760};
+            target.swipes.push_back(std::nullopt);
+            target.harken_arrival = true;
+            const auto map = wvd::games::navigation::reach_map_target(target, std::nullopt);
+            validate(map);
+            require(has(map.nodes.at("Moving").at("next"), "HarkenArrived") &&
+                has(map.nodes.at("CloseStaleMap").at("next"), "HarkenArrived"), "MAP_LATE_HARKEN_EXIT_MISSING");
+            const auto boot = wvd::games::vision::boot_probes(false);
+            require(std::find(boot.begin(), boot.end(), wvd::games::vision::outskirts_return_button()) != boot.end(),
+                "BOOT_OUTSKIRTS_HANDOFF_MISSING");
+            std::ifstream assets_file("resources/authoring/semantic-assets.json"), flows_file("resources/authoring/public-flows.json");
+            const auto assets = J::parse(assets_file), flows = J::parse(flows_file);
+            J documents = J::object();
+            for (const auto &doc : flows) documents[doc.at("flow").at("id").get<std::string>()] = doc;
+            const wvd::games::tasks::PublicFlowLibrary library(documents, assets);
+            const wvd::games::tasks::PublicStepScope public_steps([&](const std::string &id, const J &arguments) {
+                return library.compile_step(id, arguments, "zh-Hant");
+            });
+            validate(wvd::games::navigation::auto_route("dungFlag"));
+            for (const auto *locale : {"zh-Hant", "en"}) {
+                validate(wvd::games::tasks::leave_bounty_board(library, locale));
+                validate(wvd::games::tasks::visit_bounty_board(wvd::games::tasks::BountyVisit::Report,
+                    library, documents.at("guild-open-bounty-page"), locale));
+            }
+            for (const auto &node : documents.at("wheel-open").at("nodes"))
+                if (node.at("id") == "Download")
+                    require(node.at("parameters").at("postcondition").at("mode") == "not", "DOWNLOAD_SOURCE_IS_NOT_COMPLETION");
+            std::cout << "transition contracts: leap, world, map, auto-combat, inn, bounty, boot; no device input\n";
+            return 0;
+        }
         if (argc == 4 && std::string(argv[1]) == "--bounty") {
             // 只检查本次真实悬赏/委托帧和当前公会编译链，不执行旧全量矩阵。
             const auto read_json = [](const char *path) { std::ifstream in(path); return J::parse(in); };
@@ -389,8 +463,8 @@ int main(int argc, char **argv) {
         const auto boot = wvd::games::vision::boot_probes(false);
         if (open.at(1) != semantic.condition("chest.open.option", "zh-Hant") ||
             stages.back() != semantic.condition("chest.reward.page", "") ||
-            boot.at(1) != semantic.condition("guild.commissions.page", "zh-Hant") ||
-            boot.at(2) != semantic.condition("guild.bounties.page", "zh-Hant"))
+            std::find(boot.begin(), boot.end(), semantic.condition("guild.commissions.page", "zh-Hant")) == boot.end() ||
+            std::find(boot.begin(), boot.end(), semantic.condition("guild.bounties.page", "zh-Hant")) == boot.end())
             throw std::runtime_error("NATIVE_SEMANTIC_PROBES_DIVERGED");
         for (const auto &entry : entries)
             documents[entry.at("flow").at("id").get<std::string>()] = entry;
@@ -420,7 +494,8 @@ int main(int argc, char **argv) {
         if (ore_leap.nodes.contains("Reset0") || ore_leap.nodes.contains("Scroll1") ||
             ore_leap.nodes.at("MoveFrom0").at("operation_args").at("target_recognition").dump().find("cursedWheelTapRight") == std::string::npos ||
             fortress_leap.nodes.at("MoveFrom3").at("operation_args").at("target_recognition").dump().find("cursedWheelTapLeft") == std::string::npos ||
-            ore_leap.nodes.at("LeapRoute").at("next").at(0) != "Done" ||
+            ore_leap.nodes.at("QuickLeapZhHant").at("next") != J{"Done"} ||
+            ore_leap.nodes.at("LeapZhHant").at("next") != J{"Done"} ||
             ore_leap.nodes.at("Scroll0").at("next").at(0) != "FindTarget" ||
             ore_leap.nodes.at("Scroll0").at("max_hit") != 6)
             throw std::runtime_error("WHEEL_NATIVE_DIRECTION_OR_TARGET_RECHECK_INVALID");
@@ -554,7 +629,7 @@ int main(int argc, char **argv) {
         const auto inn = wvd::games::supply::rest_at_inn(false, true);
         const auto inn_program = wvd::games::tasks::compile_native_program(inn, J::object(), "inn-zh-Hant");
         inn_program.validate();
-        if (!inn.nodes.contains("ConfirmZh") || !inn.nodes.contains("Confirm") ||
+        if (!inn.nodes.contains("ConfirmZh") || !inn.nodes.contains("ConfirmEn") ||
             inn.nodes.at("ConfirmZh").at("operation_args").at("target_recognition")
                 .at("parameters").at("image") != "inn_confirm_zh_hant" ||
             inn.nodes.at("PreparePayment").at("next").at(0) != "SelectConfirm")

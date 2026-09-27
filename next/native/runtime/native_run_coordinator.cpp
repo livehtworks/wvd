@@ -229,6 +229,7 @@ void NativeRunCoordinator::drive(const NativeRunDefinition &definition,
                     std::min(unit.time_limit, remaining), std::move(factory),
                     [this, generation](const nlohmann::json &progress) {
                         bool step_changed = false;
+                        bool recovery_changed = false;
                         nlohmann::json previous_pending = nlohmann::json::array();
                         nlohmann::json current_pending = progress.value("pending_inputs", nlohmann::json::array());
                         {
@@ -237,10 +238,15 @@ void NativeRunCoordinator::drive(const NativeRunDefinition &definition,
                             step_changed = snapshot_.execution.is_null() ||
                                 snapshot_.execution.value("step_id", "") != progress.value("step_id", "");
                             previous_pending = snapshot_.unresolved_inputs;
+                            recovery_changed = snapshot_.execution.is_null() ||
+                                snapshot_.execution.value("observation_recovery", nlohmann::json(nullptr)) !=
+                                progress.value("observation_recovery", nlohmann::json(nullptr));
                             snapshot_.execution = progress;
                             snapshot_.active_event = progress.value("active_event", nlohmann::json(nullptr));
                             snapshot_.unresolved_inputs = current_pending;
                         }
+                        if (recovery_changed && !progress.value("observation_recovery", nlohmann::json(nullptr)).is_null())
+                            journal_->emit(generation, "observation.recovery", progress.at("observation_recovery"));
                         if (step_changed) {
                             auto source = nlohmann::json::parse(progress.value("source_path", ""), nullptr, false);
                             if (source.is_discarded()) source = progress.value("source_path", "");
@@ -253,7 +259,7 @@ void NativeRunCoordinator::drive(const NativeRunDefinition &definition,
                                 if (after.value("source_path", "") == before.value("source_path", "") &&
                                     after.value("action_epoch", 0ULL) == before.value("action_epoch", 0ULL))
                                     remains = true;
-                            if (!remains) journal_->emit(generation, "input.observed",
+                            if (!remains) journal_->emit(generation, "input.pending_removed",
                                 {{"source_path", before.value("source_path", "")},
                                  {"action_epoch", before.value("action_epoch", 0ULL)}});
                         }
@@ -261,7 +267,9 @@ void NativeRunCoordinator::drive(const NativeRunDefinition &definition,
                         if (!step_changed) journal_->emit(generation, "execution.changed", progress);
                     },
                     [this, generation](const nlohmann::json &input) {
-                        journal_->emit(generation, "input.attempt", input);
+                        const auto type = input.value("state", "") == "result" ? "input.result" : "input.attempt";
+                        store_->append_timing(generation, type, input);
+                        journal_->emit(generation, type, input);
                     },
                     [this, generation, warned = false](const contracts::FrameEnvelope &frame) mutable {
                         try { store_->save_recent_frame(frame); }
@@ -272,6 +280,9 @@ void NativeRunCoordinator::drive(const NativeRunDefinition &definition,
                                     {{"error", error.what()}});
                             }
                         }
+                    },
+                    [this, generation](const nlohmann::json &timing) {
+                        store_->append_timing(generation, "timing.segment", timing);
                     });
                 {
                     std::lock_guard lock(mutex_);
@@ -283,6 +294,37 @@ void NativeRunCoordinator::drive(const NativeRunDefinition &definition,
                 }
                 if (stop_) session->request_stop();
                 const auto result = session->run();
+                if (const auto &pixels = session->failed_pixels(); pixels) {
+                    try {
+                        storage::DiagnosticRequest request;
+                        { std::lock_guard lock(mutex_); request.run_id = snapshot_.run_id; }
+                        request.generation = generation; request.unit_index = index;
+                        request.node = session->diagnostic_node().substr(0, 256);
+                        request.reason = "CAPTURE_METADATA_FAILURE";
+                        request.stage = "recovery_entry";
+                        request.evidence_kind = "metadata_invalid_pixels";
+                        event("diagnostic.read_failure_pixels", store_->save_diagnostic(nullptr, request, &*pixels));
+                    } catch (...) { store_->note_diagnostic_hook_failure(); }
+                }
+                // Session 已先停止输入并清理。诊断失败不能触发重放，也不能掩盖原 flow_code。
+                // 这里保存的是“失败前最后有效帧”，不是故障瞬间画面，更不是当前现场。
+                if (result.flow.state != TickState::Completed && result.flow.state != TickState::Cancelled) {
+                    try {
+                        storage::DiagnosticRequest request;
+                        { std::lock_guard lock(mutex_); request.run_id = snapshot_.run_id; }
+                        request.generation = generation;
+                        request.unit_index = index;
+                        request.task_id = 0; // 原生内核没有 Maa task_id，不能伪造编号。
+                        request.depth = std::max(0, session->diagnostic_depth());
+                        request.node = session->diagnostic_node().substr(0, 256);
+                        request.reason = (result.flow.code.empty() ? std::string("NATIVE_SESSION_INCOMPLETE") : result.flow.code).substr(0, 256);
+                        request.stage = result.unresolved_input ? "postcondition" : "pre_action";
+                        request.evidence_kind = "last_valid_before_failure";
+                        const auto &frame = session->last_valid_frame();
+                        const auto saved = store_->save_diagnostic(frame ? &*frame : nullptr, request);
+                        event("diagnostic.failure_frame", saved);
+                    } catch (...) { store_->note_diagnostic_hook_failure(); }
+                }
                 const auto resources = recognizer->resource_stats();
                 const auto memory = platform::sample_memory();
                 event("recognition.resources", {{"cache_retained_bytes", resources.retained_bytes},
@@ -344,6 +386,7 @@ void NativeRunCoordinator::drive(const NativeRunDefinition &definition,
                 failure = !result.details_complete ? "NATIVE_RESULT_DETAILS_INCOMPLETE"
                     : result.flow.state == TickState::Completed && !checkpoint_seen
                     ? "NATIVE_BUSINESS_CHECKPOINT_MISSING"
+                    : !result.flow.code.empty() ? result.flow.code
                     : result.unresolved_input ? "NATIVE_INPUT_RESULT_UNCONFIRMED"
                     : !result.inputs_released ? "NATIVE_INPUT_CLEANUP_PENDING"
                     : result.flow.code;
@@ -352,7 +395,8 @@ void NativeRunCoordinator::drive(const NativeRunDefinition &definition,
                     snapshot_.sessions.push_back({{"generation", generation}, {"engine_kind", "wvd_native"},
                         {"outcome", "NotCompleted"}, {"flow_state", static_cast<int>(result.flow.state)},
                         {"flow_code", result.flow.code}, {"details_complete", result.details_complete},
-                        {"unresolved_input", result.unresolved_input}, {"performance", result.performance}});
+                        {"unresolved_input", result.unresolved_input}, {"observation_recovery", result.observation_recovery},
+                        {"cleanup_error", result.cleanup_error}, {"performance", result.performance}});
                 }
                 // 外部维护/输入结果未知不是重启理由，禁止进入自动生命周期恢复。
                 if (stop_ || !quiescent || result.unresolved_input || !result.details_complete ||

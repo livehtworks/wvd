@@ -12,6 +12,7 @@
 #include <condition_variable>
 #include <optional>
 #include <thread>
+#include <fstream>
 
 namespace wvd::storage {
 // 只有Context/Session填写归属；原因和业务ID永不参与路径拼接。
@@ -20,6 +21,7 @@ struct DiagnosticRequest {
     std::int64_t task_id{};
     int depth{};
     std::string node, reason, stage, operation_id, error;
+    std::string evidence_kind{"captured_frame"};
 };
 struct DiagnosticLimits {
     std::size_t rewards{128}, failures{32}, frame_bytes{8 * 1024 * 1024};
@@ -55,12 +57,15 @@ class RunStore {
                  std::make_shared<contracts::SteadyClock>(), DiagnosticLimits limits = {});
     ~RunStore();
     nlohmann::json save_diagnostic(const contracts::FrameEnvelope *frame,
-                                  const DiagnosticRequest &request);
+                                  const DiagnosticRequest &request,
+                                  const contracts::DiagnosticPixels *pixels = nullptr);
     bool save_recent_frame(const contracts::FrameEnvelope &frame) noexcept;
     void finish_recent_frames() noexcept;
     nlohmann::json diagnostic_summary() const;
     void note_diagnostic_hook_failure() noexcept;
     void save_events(const EventJournal &events);
+    void append_timing(std::uint64_t generation, const std::string &type,
+                       const nlohmann::json &payload) noexcept;
     void save_terminal(const contracts::RunSnapshot &snapshot,
                        const contracts::SessionResult &session,
                        const nlohmann::json &events = nlohmann::json::object());
@@ -88,6 +93,11 @@ class RunStore {
         diagnostic_unavailable_{}, diagnostic_unrecorded_{};
     bool diagnostic_closed_{}, diagnostic_directory_created_{};
     std::uint64_t diagnostic_directory_id_{};
+    // 与结果同一RunStore持有，只由协调工作线程写入；不新增日志线程或全局缓存。
+    std::ofstream timing_stream_;
+    std::uint64_t timing_bytes_{}, timing_rows_{}, timing_dropped_{}, timing_failed_{};
+    std::uint64_t timing_write_ns_{};
+    bool timing_closed_{};
     unsigned long diagnostic_volume_{};
     // RunStore 唯一所有者：最多一个待处理帧和一个在途帧，丢弃仅影响辅助历史图。
     std::mutex recent_mutex_;
