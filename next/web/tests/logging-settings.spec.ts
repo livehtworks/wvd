@@ -1,0 +1,31 @@
+import { test, expect } from "@playwright/test";
+
+test("日志设置通过正式配置保存并在刷新后保持", async ({ page }, info) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "设备与高级", exact: true }).click();
+  const level = page.getByLabel("日志级别");
+  await expect(level).toBeVisible();
+  const nextLevel = await level.inputValue() === "debug" ? "trace" : "debug";
+  const recognition = page.getByLabel("识别统计");
+  const nextRecognition = !(await recognition.isChecked());
+  const interval = page.getByLabel("内存细采样间隔（调试级，毫秒）");
+  const nextInterval = await interval.inputValue() === "5000" ? "3000" : "5000";
+  await level.selectOption(nextLevel);
+  if (nextRecognition) await recognition.check();
+  else await recognition.uncheck();
+  await interval.fill(nextInterval);
+  await page.getByRole("button", { name: "保存配置" }).click();
+  await expect(page.getByText("配置已由服务端保存")).toBeVisible();
+  await page.reload();
+  await page.getByRole("button", { name: "设备与高级", exact: true }).click();
+  await expect(page.getByLabel("日志级别")).toHaveValue(nextLevel);
+  if (nextRecognition) await expect(page.getByLabel("识别统计")).toBeChecked();
+  else await expect(page.getByLabel("识别统计")).not.toBeChecked();
+  await expect(page.getByLabel("内存细采样间隔（调试级，毫秒）")).toHaveValue(nextInterval);
+  await page.screenshot({ path: info.outputPath("logging-settings.png"), fullPage: true });
+  await page.getByLabel("日志级别").selectOption("off");
+  await page.getByRole("button", { name: "保存配置" }).click();
+  await page.reload();
+  await page.getByRole("button", { name: "设备与高级", exact: true }).click();
+  await expect(page.getByLabel("日志级别")).toHaveValue("off");
+});

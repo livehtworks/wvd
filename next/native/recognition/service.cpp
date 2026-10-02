@@ -47,13 +47,15 @@ bool bounded_json(const nlohmann::json &value, std::size_t &remaining) {
 
 Service::Service(Bundle bundle, Handlers handlers, std::shared_ptr<MatchBudget> budget,
                  std::filesystem::path diagnostics_path,
-                 std::uint64_t run_id, std::uint64_t generation)
+                 std::uint64_t run_id, std::uint64_t generation,
+                 storage::LoggingPolicy logging)
     : bundle_(std::move(bundle)), handlers_(std::move(handlers)) {
     cache_.decoded = std::make_shared<DecodedAssetCache>();
     cache_.match_budget = budget ? std::move(budget) : std::make_shared<MatchBudget>();
     cache_.cancelled = &cancelled_;
     cache_.diagnostics = std::make_shared<platform::MemoryDiagnostics>(
-        diagnostics_path, run_id, generation);
+        diagnostics_path, run_id, generation,
+        logging.memory && logging.accepts(storage::LogLevel::Debug), logging.memory_interval_ms);
     require(bundle_.root.is_absolute() && !bundle_.revision.empty(), "BUNDLE_IDENTITY_INVALID");
     platform::BundleLease::Manifest manifest;
     for (const auto &file : bundle_.files)

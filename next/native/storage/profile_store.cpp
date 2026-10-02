@@ -1,4 +1,5 @@
 #include "profile_store.hpp"
+#include "logging_policy.hpp"
 #include "legacy_import.hpp"
 #include "platform/windows/runtime_files.hpp"
 #include "platform/windows/file_digest.hpp"
@@ -32,6 +33,7 @@ void validate(const J &document) {
         !document.at("selected_section").is_string())
         throw std::runtime_error("PROFILE_SCHEMA_INVALID");
     games::validate_strategy(document.at("values").at("STRATEGY"));
+    (void)LoggingPolicy::from_profile(document);
     if (document.contains("last_business_update")) {
         const auto &effect = document.at("last_business_update");
         if (!effect.is_object() || effect.size() != 6 || !effect.at("operation_id").is_string() ||

@@ -6,6 +6,13 @@
 namespace wvd::platform {
 MemorySample sample_memory() noexcept {
     MemorySample result;
+    result.process_id = GetCurrentProcessId();
+    DWORD handles{};
+    if (GetProcessHandleCount(GetCurrentProcess(), &handles)) result.handle_count = handles;
+    FILETIME created{}, exited{}, kernel{}, user{};
+    if (GetProcessTimes(GetCurrentProcess(), &created, &exited, &kernel, &user))
+        result.process_created_100ns =
+            (static_cast<std::uint64_t>(created.dwHighDateTime) << 32) | created.dwLowDateTime;
     PROCESS_MEMORY_COUNTERS_EX process{};
     if (GetProcessMemoryInfo(GetCurrentProcess(),
             reinterpret_cast<PROCESS_MEMORY_COUNTERS *>(&process), sizeof(process))) {
@@ -28,8 +35,10 @@ MemorySample sample_memory() noexcept {
 }
 MemoryDiagnostics::MemoryDiagnostics(const std::filesystem::path &path,
                                      std::uint64_t run_id,
-                                     std::uint64_t generation) noexcept
-    : run_id_(run_id), generation_(generation) {
+                                     std::uint64_t generation, bool periodic_enabled,
+                                     std::uint32_t interval_ms) noexcept
+    : run_id_(run_id), generation_(generation), periodic_enabled_(periodic_enabled),
+      interval_ms_(interval_ms) {
     if (!path.empty())
         file_ = CreateFileW(path.c_str(), FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE,
                             nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
@@ -68,7 +77,8 @@ MemoryDiagnostics::Slot MemoryDiagnostics::begin(const Context &context) noexcep
         const auto now = static_cast<std::uint64_t>(GetTickCount64());
         auto due = next_sample_ms_.load();
         // 采样限频仅控制诊断开销，不参与识别、输入许可和页面等待判定。
-        if (now >= due && next_sample_ms_.compare_exchange_strong(due, now + 1000)) {
+        if (periodic_enabled_ && now >= due &&
+            next_sample_ms_.compare_exchange_strong(due, now + interval_ms_)) {
             records_[i].memory = sample_memory();
             if (records_[i].memory.process_ok) {
                 auto previous = sampled_peak_private_.load();
@@ -89,13 +99,13 @@ void MemoryDiagnostics::write(unsigned index, const char *event, int code) noexc
     const auto &record = records_[index];
     const auto &c = record.context;
     const auto &m = record.memory;
-    char line[640];
+    char line[768];
     const int length = std::snprintf(line, sizeof(line),
-        "%s run=%llu generation=%llu tick_ms=%llu src=%llu asset=%llu alg=%d frame=%dx%d roi=%dx%d templ=%dx%dx%d mask=%d gray=%d exclude=%d "
+        "level=%s category=memory event=%s run=%llu generation=%llu tick_ms=%llu src=%llu asset=%llu alg=%d frame=%dx%d roi=%dx%d templ=%dx%dx%d mask=%d gray=%d exclude=%d "
         "estimated_workspace_bytes=%llu active=%llu retained=%llu in_use=%llu process_ok=%d private=%llu sampled_peak_private=%llu "
         "working=%llu peak_working=%llu system_ok=%d commit=%llu limit=%llu peak_commit=%llu "
         "physical_available=%llu page_size=%llu opencv_code=%d\r\n",
-        event, static_cast<unsigned long long>(run_id_),
+        code ? "error" : "debug", event, static_cast<unsigned long long>(run_id_),
         static_cast<unsigned long long>(generation_),
         static_cast<unsigned long long>(GetTickCount64()),
         static_cast<unsigned long long>(c.source_id),

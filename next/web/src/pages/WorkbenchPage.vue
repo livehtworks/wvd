@@ -201,6 +201,22 @@ function updateSkill(skill: SkillSetting, key: keyof SkillSetting, event: Event)
 
 
 
+      <details v-show="tab === 'advanced'" class="config-section" open>
+        <summary><span>日志与诊断</span><ChevronDown :size="17" /></summary>
+        <div class="section-body form-grid">
+          <label class="field"><span>日志级别</span><select v-model="state.logging.level">
+            <option value="trace">追踪</option><option value="debug">调试</option>
+            <option value="info">信息</option><option value="warn">警告</option><option value="error">错误</option>
+            <option value="off">关闭明细</option>
+          </select></label>
+          <label class="field"><span>内存细采样间隔（调试级，毫秒）</span><input v-model.number="state.logging.memory_interval_ms" type="number" min="1000" max="60000" step="1000" :disabled="!state.logging.memory || !['debug', 'trace'].includes(state.logging.level)" /></label>
+          <label class="check-field"><input v-model="state.logging.performance" type="checkbox" />动作耗时明细</label>
+          <label class="check-field"><input v-model="state.logging.memory" type="checkbox" />内存诊断</label>
+          <label class="check-field"><input v-model="state.logging.recognition" type="checkbox" />识别统计</label>
+          <span class="source-line span-2">输入回执与异常证据始终保存</span>
+        </div>
+      </details>
+
       <details v-show="tab === 'common'" class="config-section" open>
         <summary><span>探索</span><ChevronDown :size="17" /></summary>
         <div class="section-body form-grid">

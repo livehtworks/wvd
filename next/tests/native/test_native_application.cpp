@@ -230,6 +230,41 @@ int closure_application(const std::filesystem::path &pack, const std::filesystem
 
 int main(int argc, char **argv) {
     try {
+        if (argc == 4 && std::string(argv[1]) == "--logging-profile") {
+            const auto root = std::filesystem::temp_directory_path() /
+                ("wvd-logging-profile-" + wvd::platform::unique_id());
+            auto backend = std::make_shared<OfflineConnection>(std::filesystem::absolute(argv[2]));
+            wvd::app::Application application({root, std::filesystem::absolute(argv[2]), {},
+                std::filesystem::absolute(argv[3])}, backend);
+            const auto original = call(application, wvd::api::http::verb::get, "/api/v1/profile");
+            auto logging = original.at("logging");
+            if (logging.at("level") != "info" || logging.at("memory_interval_ms") != 1000)
+                throw std::runtime_error("LOGGING_PROFILE_DEFAULT");
+            logging["level"] = "debug";
+            logging["memory_interval_ms"] = 5000;
+            logging["recognition"] = true;
+            const auto saved = call(application, wvd::api::http::verb::put, "/api/v1/profile",
+                {{"revision", original.at("revision")}, {"profile", original.at("profile")},
+                 {"logging", logging}});
+            const auto loaded = call(application, wvd::api::http::verb::get, "/api/v1/profile");
+            if (saved.at("revision") == original.at("revision") ||
+                loaded.at("revision") != saved.at("revision") ||
+                loaded.at("logging") != logging || loaded.at("profile") != original.at("profile"))
+                throw std::runtime_error("LOGGING_PROFILE_NOT_PERSISTED");
+            logging["memory_interval_ms"] = 5;
+            bool rejected = false;
+            try {
+                (void)call(application, wvd::api::http::verb::put, "/api/v1/profile",
+                    {{"revision", saved.at("revision")}, {"profile", saved.at("profile")},
+                     {"logging", logging}});
+            } catch (const std::runtime_error &) { rejected = true; }
+            if (!rejected || call(application, wvd::api::http::verb::get,
+                "/api/v1/profile").at("revision") != saved.at("revision"))
+                throw std::runtime_error("LOGGING_PROFILE_INVALID_CHANGED_STORE");
+            application.stop();
+            std::cout << "Logging profile API, CAS and validation passed\n";
+            return 0;
+        }
         if (argc == 6 && std::string(argv[1]) == "--critical-author-entry") {
             // 输入为原保存文档/配置的只读副本；仅运行真实装配/发布准备，不 start Session。
             const auto root = std::filesystem::temp_directory_path() / ("wvd-author-entry-" + wvd::platform::unique_id());

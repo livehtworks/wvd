@@ -17,9 +17,18 @@ export const resourceLocaleOptions: ReadonlyArray<{ value: ResourceLocale; label
 
 export interface ProfileEnvelope {
   profile: WvdProfile;
+  logging?: LoggingSettings;
   revision?: string;
   effective_source?: string;
   task_override_active?: boolean;
+}
+export interface LoggingSettings {
+  schema: 1;
+  level: "trace" | "debug" | "info" | "warn" | "error" | "off";
+  performance: boolean;
+  memory: boolean;
+  recognition: boolean;
+  memory_interval_ms: number;
 }
 export interface SkillSetting extends JsonObject {
   role_var?: string; skill_var?: string; target_var?: string; skill_lvl?: number; freq_var?: string | number;

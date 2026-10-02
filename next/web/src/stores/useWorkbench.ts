@@ -5,12 +5,16 @@ import {
   readProfile, readTaskProfile, saveProfile,
   startTask, selectEmulator,
 } from "../api/client";
-import type { Catalog, ProfileEnvelope, ResourceLocale, StrategyGroup, WvdProfile } from "../api/types";
+import type { Catalog, LoggingSettings, ProfileEnvelope, ResourceLocale, StrategyGroup, WvdProfile } from "../api/types";
 
 // 配置全部是 JSON 数据。JSON 往返可安全解开 Vue 的响应式 Proxy；
 // structuredClone 直接接收 Proxy 会在真实浏览器中抛 DataCloneError。
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 const signature = (value: unknown) => JSON.stringify(value);
+const defaultLogging = (): LoggingSettings => ({
+  schema: 1, level: "info", performance: true, memory: true,
+  recognition: false, memory_interval_ms: 1000,
+});
 
 function normalizeEnvelope(value: ProfileEnvelope | WvdProfile): ProfileEnvelope {
   if ("profile" in value && typeof value.profile === "object") return value as ProfileEnvelope;
@@ -57,6 +61,7 @@ export function useWorkbench() {
   watch(resourceLocale, (value) => window.localStorage.setItem("wvd.gameResourceLocale", value));
   const envelope = ref<ProfileEnvelope>();
   const draft = ref<WvdProfile>();
+  const logging = ref<LoggingSettings>(defaultLogging());
   const savedSignature = ref("");
   const catalog = ref<Catalog>({});
   const device = computed(() => session.device);
@@ -87,7 +92,8 @@ export function useWorkbench() {
   function acceptSaved(value: ProfileEnvelope) {
     persisted.value = clone(value); envelope.value = clone(value);
     setDraft(value.profile);
-    savedSignature.value = signature(normalized(value.profile));
+    logging.value = clone(value.logging ?? defaultLogging());
+    savedSignature.value = signature({ profile: normalized(value.profile), logging: logging.value });
   }
   function beginWrite() {
     if (editLocked.value) return;
@@ -106,7 +112,8 @@ export function useWorkbench() {
       strategyRenames.value[oldName] = newName;
   }
 
-  const dirty = computed(() => Boolean(draft.value) && signature(draft.value) !== savedSignature.value);
+  const dirty = computed(() => Boolean(draft.value) &&
+    signature({ profile: draft.value, logging: logging.value }) !== savedSignature.value);
   const runActive = computed(() => !session.canStart);
   const runLabel = computed(() => session.label);
   const runError = computed(() => session.error);
@@ -133,7 +140,8 @@ export function useWorkbench() {
   async function save() {
     if (!draft.value || !persisted.value) return;
     const id = beginWrite(); if (id === undefined) return;
-    const payload = clone({ ...persisted.value, profile: draft.value, strategy_renames: strategyRenames.value });
+    const payload = clone({ ...persisted.value, profile: draft.value, logging: logging.value,
+      strategy_renames: strategyRenames.value });
     error.value = "";
     notice.value = "";
     try {
@@ -191,6 +199,7 @@ export function useWorkbench() {
       if (!valid()) return;
       if (selected.revision !== persisted.value?.revision) throw new Error("PROFILE_REVISION_CONFLICT: 服务端配置已变化，请重载后再选择任务");
       setDraft({ ...selected.profile, ...patch, FARM_TARGET: taskId });
+      logging.value = clone(selected.logging ?? defaultLogging());
       envelope.value = selected;
       notice.value = selected.task_override_active ? "已载入该任务的专用配置" : "已载入默认配置；保存后切换任务";
     } catch (reason) {
@@ -258,7 +267,7 @@ export function useWorkbench() {
   onBeforeUnmount(() => { alive = false; ++selectionSequence; ++writeGeneration; session.writing.workbench = false; });
 
   return reactive({
-    envelope, draft, catalog, device, run, loading, saving, deviceBusy, error, notice, resourceLocale, repeatMode, repeatCount,
+    envelope, draft, logging, catalog, device, run, loading, saving, deviceBusy, error, notice, resourceLocale, repeatMode, repeatCount,
     strategies, dirty, runActive, runLabel, runError, starting, selectedTask, load, save, clearTaskOverride, revert, selectTask,
     deviceAction, chooseEmulator, startSelectedTask, requestStop: session.requestStop, noteRename,
     editLocked, taskLoading, selectionId,

@@ -27,28 +27,61 @@ def analyze(root):
     for directory in directories:
         run = int(directory.name)
         data = {}
-        for name in ("run.json", "result.json", "action-timing.jsonl", "recognition-memory.log"):
+        def read_log(name):
             path = directory / name
             if not path.is_file():
                 raise ValueError(f"MISSING_LOG:{run}/{name}")
             raw = path.read_bytes()
             sources.append({"run": run, "file": name, "sha256": hashlib.sha256(raw).hexdigest(), "bytes": len(raw)})
             data[name] = raw.decode("utf-8-sig")
+        for name in ("run.json", "result.json"):
+            read_log(name)
         run_info = json.loads(data["run.json"])
         result = json.loads(data["result.json"])
         if run_info["run_id"] != run or result["run_id"] != run:
             raise ValueError(f"RUN_ID_MISMATCH:{run}")
         definition = run_info["definition"]
-        identities.add((run_info["instance"], definition["program_revision"], definition["pack_revision"]))
-        # 原日志不记录 EXE hash；只证明请求/资源/程序身份相同，不冒充候选二进制证明。
+        identity = (run_info["instance"], definition["program_revision"], definition["pack_revision"])
+        if "executable_sha256" in definition:
+            identity += (definition["executable_sha256"],)
+        identities.add(identity)
         if len(identities) != 1:
             raise ValueError("MIXED_RUN_IDENTITIES")
-        memory_rows = [int(m.group(1)) / 1024 / 1024 for line in data["recognition-memory.log"].splitlines()
-                       if (m := re.search(r"\bprivate=(\d+)\b", line))]
-        if memory_rows:
-            memory.append({"run": run, "first_mib": round(memory_rows[0], 3),
-                           "last_mib": round(memory_rows[-1], 3), "peak_sample_mib": round(max(memory_rows), 3)})
+        timing = result["diagnostics"]["action_timing"]
+        if not timing.get("collected", True):
+            raise ValueError(f"TIMING_COLLECTION_DISABLED:{run}")
+        read_log("action-timing.jsonl")
+        diagnostic_logs = result["diagnostics"].get("logs")
+        if diagnostic_logs:
+            memory_rows = []
+            if diagnostic_logs.get("memory_collected"):
+                read_log("diagnostics.jsonl")
+                if not data["diagnostics.jsonl"].endswith("\n") or not diagnostic_logs["complete"]:
+                    raise ValueError(f"INCOMPLETE_DIAGNOSTIC_LOG:{run}")
+                diagnostic_lines = data["diagnostics.jsonl"].splitlines()
+                if len(diagnostic_lines) != diagnostic_logs["rows"]:
+                    raise ValueError(f"INCOMPLETE_DIAGNOSTIC_LOG:{run}")
+                for line in diagnostic_lines:
+                    row = json.loads(line)
+                    if row.get("run_id") != run or row.get("instance_id") != run_info["instance"]:
+                        raise ValueError(f"DIAGNOSTIC_IDENTITY_MISMATCH:{run}")
+                    if row.get("type") == "session_owners_released" and row["payload"].get("process_memory_available"):
+                        memory_rows.append(row["payload"]["private_bytes"] / 1024 / 1024)
+            else:
+                faults.append({"run": run, "type": "memory_collection_disabled"})
+            basis = "session_owners_released"
         else:
+            read_log("recognition-memory.log")
+            memory_rows = [int(m.group(1)) / 1024 / 1024 for line in data["recognition-memory.log"].splitlines()
+                           if (m := re.search(r"\bprivate=(\d+)\b", line))]
+            basis = "legacy_recognition_sample"
+        if memory_rows:
+            sample = {"run": run, "first_mib": round(memory_rows[0], 3),
+                      "last_mib": round(memory_rows[-1], 3), "peak_sample_mib": round(max(memory_rows), 3)}
+            if diagnostic_logs:
+                sample["basis"] = basis
+            memory.append(sample)
+        elif not diagnostic_logs or diagnostic_logs.get("memory_collected"):
             faults.append({"run": run, "type": "memory_samples_missing"})
         durations.append(result["business"]["elapsed_seconds"])
         if result["state"] != "Completed" or result.get("secondary_errors"):
@@ -119,7 +152,9 @@ def analyze(root):
             "retry_groups": [{"node": k, "cases": len(v), "max_attempts": max(p["attempts"] for p in v),
                               "max_seconds": max(p["seconds"] for p in v), "runs": [p["run"] for p in v]} for k, v in groups.items()],
             "faults": faults, "diagnostic_reasons": dict(diagnostic_reasons), "memory_samples": memory,
-            "provenance": {"inputs": sources, "run_identity": list(next(iter(identities))), "binary_identity": "NOT_RECORDED_IN_RUN_LOGS"}}
+            "provenance": {"inputs": sources, "run_identity": list(next(iter(identities))),
+                           "binary_identity": (next(iter(identities))[3] if len(next(iter(identities))) > 3
+                                               else None) or "NOT_RECORDED_IN_RUN_LOGS"}}
 
 
 def main():

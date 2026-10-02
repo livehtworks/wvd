@@ -1,11 +1,43 @@
 #include "native_run_coordinator.hpp"
 #include "devices/lifecycle_execution.hpp"
+#include "platform/windows/memory_diagnostics.hpp"
+#include "platform/windows/file_digest.hpp"
 #include <algorithm>
+#include <functional>
+#include <iterator>
 
 namespace wvd::runtime {
 namespace {
 using namespace std::chrono_literals;
 std::atomic<std::uint64_t> next_run_id{1};
+
+nlohmann::json executable_digest() {
+    static std::once_flag once;
+    static std::string digest;
+    std::call_once(once, [] {
+        try {
+            wchar_t path[32768]{};
+            const auto length = GetModuleFileNameW(nullptr, path, static_cast<DWORD>(std::size(path)));
+            if (length && length < std::size(path))
+                digest = platform::file_sha256(std::filesystem::path(path));
+        } catch (...) {}
+    });
+    return digest.empty() ? nlohmann::json(nullptr) : nlohmann::json(digest);
+}
+
+struct ScopeExit {
+    std::function<void()> action;
+    ~ScopeExit() noexcept { try { if (action) action(); } catch (...) {} }
+};
+
+nlohmann::json memory_record(const platform::MemorySample &memory) {
+    return {{"process_id", memory.process_id},
+            {"process_created_100ns", memory.process_created_100ns},
+            {"process_memory_available", memory.process_ok},
+            {"private_bytes", memory.process_ok ? nlohmann::json(memory.private_bytes) : nullptr},
+            {"working_set_bytes", memory.process_ok ? nlohmann::json(memory.working_set_bytes) : nullptr},
+            {"handle_count", memory.handle_count}};
+}
 
 void require(bool value, const char *code) {
     if (!value) throw std::runtime_error(code);
@@ -98,13 +130,16 @@ contracts::RunSnapshot NativeRunCoordinator::start(
                                 {"unit_program_owners", program_owners},
                                 {"handoff_parent", definition.handoff_parent},
                                 {"program_revision", definition.units.front().program->revision},
+                                {"executable_sha256", executable_digest()},
                                 {"device_id", definition.policy.device_id},
                                 {"game_id", definition.policy.game_id},
                                 {"pack_revision", definition.policy.pack_revision},
+                                {"logging", definition.logging.json()},
                                 {"viewport", definition.policy.viewport_id},
                                 {"observed_read_only_viewport", definition.policy.observed_read_only_viewport}};
     auto journal = std::make_shared<storage::EventJournal>(instance_id_, id, event_capacity_);
-    auto store = std::make_unique<storage::RunStore>(data_root_, instance_id_, id, frozen);
+    auto store = std::make_unique<storage::RunStore>(data_root_, instance_id_, id, frozen,
+        std::make_shared<contracts::SteadyClock>(), storage::DiagnosticLimits{}, definition.logging);
     {
         std::lock_guard lock(mutex_);
         require(!active_, "NATIVE_RUN_ACTIVE_OR_CLEANUP_PENDING");
@@ -207,12 +242,32 @@ void NativeRunCoordinator::drive(const NativeRunDefinition &definition,
                 contracts::SegmentBoundary::Initial, generation + 1, index);
             for (unsigned recovery_attempt = 0; !stop_; ++recovery_attempt) {
                 ++generation;
+                if (definition.logging.memory && definition.logging.accepts(storage::LogLevel::Info)) {
+                    auto before = memory_record(platform::sample_memory());
+                    before["unit_index"] = index;
+                    before["recovery_attempt"] = recovery_attempt;
+                    store_->append_log(generation, storage::LogLevel::Info, "memory", "before_session", before);
+                }
+                std::weak_ptr<recognition::Service> weak_recognizer;
+                std::weak_ptr<NativeExecutionSession> weak_session;
+                ScopeExit after_release{[this, generation, index, &definition,
+                                         &weak_recognizer, &weak_session] {
+                    if (!definition.logging.memory || !definition.logging.accepts(storage::LogLevel::Info)) return;
+                    auto after = memory_record(platform::sample_memory());
+                    after["unit_index"] = index;
+                    after["recognizer_released"] = weak_recognizer.expired();
+                    after["session_released"] = weak_session.expired();
+                    store_->append_log(generation, storage::LogLevel::Info, "memory",
+                                       "session_owners_released", after);
+                }};
                 const auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(
                     total_deadline - std::chrono::steady_clock::now());
                 require(remaining > 0ms, "NATIVE_RUN_TOTAL_DEADLINE");
                 auto recognizer = std::make_shared<recognition::Service>(
                     unit.bundle, unit.recognizers, definition.match_budget,
-                    store_->directory() / "recognition-memory.log", run_id, generation);
+                    store_->directory() / "recognition-memory.log", run_id, generation,
+                    definition.logging);
+                weak_recognizer = recognizer;
                 bool checkpoint_seen = false;
                 auto event = [this, generation](const std::string &type, const nlohmann::json &data) {
                     journal_->emit(generation, type, data);
@@ -282,9 +337,19 @@ void NativeRunCoordinator::drive(const NativeRunDefinition &definition,
                         store_->append_timing(generation, type, input);
                         journal_->emit(generation, type, input);
                     },
-                    [this, generation, index, event, recovery_frame, application = definition.policy.application_id, warned = false]
+                    [this, generation, index, event, recovery_frame, application = definition.policy.application_id,
+                     logging = definition.logging, warned = false]
                     (const contracts::FrameEnvelope &frame) mutable {
                         *recovery_frame = frame;
+                        if (logging.performance && logging.accepts(storage::LogLevel::Trace)) {
+                            const auto capture_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                frame.identity.capture_finished_at - frame.identity.captured_at).count();
+                            store_->append_log(generation, storage::LogLevel::Trace, "performance",
+                                "capture.frame", {{"frame_id", frame.identity.frame_id},
+                                    {"backend", frame.identity.backend}, {"capture_ns", capture_ns},
+                                    {"raw_bytes", frame.raw_bgr ? frame.raw_bgr->size() : 0},
+                                    {"encoded_bytes", frame.encoded_image.size()}});
+                        }
                         try {
                             if (frame.identity.foreground_application != application && frame.raw_bgr) {
                                 storage::DiagnosticRequest request;
@@ -308,6 +373,7 @@ void NativeRunCoordinator::drive(const NativeRunDefinition &definition,
                     [this, generation](const nlohmann::json &timing) {
                         store_->append_timing(generation, "timing.segment", timing);
                     });
+                weak_session = session;
                 {
                     std::lock_guard lock(mutex_);
                     session_ = session;
@@ -350,8 +416,29 @@ void NativeRunCoordinator::drive(const NativeRunDefinition &definition,
                     } catch (...) { store_->note_diagnostic_hook_failure(); }
                 }
                 const auto resources = recognizer->resource_stats();
-                const auto memory = platform::sample_memory();
-                event("recognition.resources", {{"cache_retained_bytes", resources.retained_bytes},
+                const bool memory_enabled = definition.logging.memory &&
+                    definition.logging.accepts(storage::LogLevel::Info);
+                const auto memory = memory_enabled ? platform::sample_memory() : platform::MemorySample{};
+                if (definition.logging.memory && definition.logging.accepts(storage::LogLevel::Info)) {
+                    auto held = memory_record(memory);
+                    held["unit_index"] = index;
+                    held["cache_retained_bytes"] = resources.retained_bytes;
+                    held["cache_in_use_bytes"] = resources.in_use_bytes;
+                    held["result_cache_estimated_bytes"] = resources.result_cache_estimated_bytes;
+                    held["active_matches"] = resources.active_matches;
+                    held["peak_estimated_workspace_bytes"] = resources.peak_estimated_workspace_bytes;
+                    held["frame_bytes_scope"] = "session_and_recovery_frame_only";
+                    std::uint64_t known_frame_bytes = 0;
+                    const auto &last_frame = session->last_valid_frame();
+                    const auto first = last_frame && last_frame->raw_bgr ? last_frame->raw_bgr.get() : nullptr;
+                    if (first) known_frame_bytes += last_frame->raw_bgr->size();
+                    if (recovery_frame->has_value() && (*recovery_frame)->raw_bgr &&
+                        (*recovery_frame)->raw_bgr.get() != first)
+                        known_frame_bytes += (*recovery_frame)->raw_bgr->size();
+                    held["known_frame_unique_buffer_bytes"] = known_frame_bytes;
+                    store_->append_log(generation, storage::LogLevel::Info, "memory", "session_owners_alive", held);
+                }
+                if (memory_enabled) event("recognition.resources", {{"cache_retained_bytes", resources.retained_bytes},
                     {"cache_in_use_bytes", resources.in_use_bytes},
                     {"cache_evictable_bytes", resources.evictable_bytes},
                     {"cache_live_bytes", resources.live_bytes},
@@ -374,6 +461,20 @@ void NativeRunCoordinator::drive(const NativeRunDefinition &definition,
                     {"commit_peak_pages", memory.system_ok ? memory.commit_peak_pages : 0},
                     {"physical_available_pages", memory.system_ok ? memory.physical_available_pages : 0},
                     {"page_size", memory.system_ok ? memory.page_size : 0}});
+                if (recognizer->diagnostic_write_failed()) {
+                    event("diagnostic.memory_write_failed", {{"generation", generation}});
+                    store_->append_log(generation, storage::LogLevel::Error, "runtime",
+                        "memory_diagnostic_write_failed", {{"generation", generation}});
+                }
+                store_->append_log(generation, storage::LogLevel::Info, "recognition",
+                    "session_statistics", {{"decode_count", resources.decode_count},
+                        {"mask_build_count", resources.mask_build_count},
+                        {"cache_entries", resources.entries},
+                        {"cache_retained_bytes", resources.retained_bytes},
+                        {"result_cache_entries", resources.result_cache_entries},
+                        {"result_cache_estimated_bytes", resources.result_cache_estimated_bytes},
+                        {"peak_matches", resources.peak_matches},
+                        {"peak_estimated_workspace_bytes", resources.peak_estimated_workspace_bytes}});
                 {
                     std::lock_guard lock(mutex_);
                     session_.reset();
@@ -396,6 +497,11 @@ void NativeRunCoordinator::drive(const NativeRunDefinition &definition,
                     {"unresolved_input", result.unresolved_input},
                     {"performance", result.performance},
                     {"details_complete", result.details_complete}});
+                if (result.flow.state != TickState::Completed)
+                    store_->append_log(generation, storage::LogLevel::Warn, "runtime",
+                        "session_incomplete", {{"flow_code", result.flow.code},
+                            {"unresolved_input", result.unresolved_input},
+                            {"inputs_released", result.inputs_released}});
                 if (result.flow.state == TickState::Completed && checkpoint_seen &&
                     !result.unresolved_input && result.inputs_released && result.details_complete) {
                     std::lock_guard lock(mutex_);
@@ -548,6 +654,9 @@ void NativeRunCoordinator::drive(const NativeRunDefinition &definition,
     if (!quiescent && terminal.reason.empty()) terminal.reason = "NATIVE_CLEANUP_PENDING";
     terminal.result_saved = true;
     store_->finish_recent_frames();
+    if (definition.logging.memory && definition.logging.accepts(storage::LogLevel::Info))
+        store_->append_log(terminal.generation, storage::LogLevel::Info, "memory",
+            "worker_finishing", memory_record(platform::sample_memory()));
     try {
         const auto diagnostics = store_->diagnostic_summary();
         if (!diagnostics.at("action_timing").value("complete", false))

@@ -1,4 +1,5 @@
 #include "run_store.hpp"
+#include <string_view>
 #include "platform/windows/runtime_files.hpp"
 #include "platform/windows/file_digest.hpp"
 #include <opencv2/imgcodecs.hpp>
@@ -86,6 +87,16 @@ std::vector<std::uint8_t> diagnostic_png(const contracts::FrameEnvelope &frame,
 }
 J event_record(const std::string &instance, std::uint64_t run, std::uint64_t generation,
                std::uint64_t seq, std::string type, J payload) {
+    const char *category = type.starts_with("input.") ? "input_audit"
+        : type.starts_with("recognition.") ? "recognition"
+        : type.starts_with("diagnostic.") ? "diagnostic"
+        : type.starts_with("recovery.") || type.starts_with("observation.") ? "recovery"
+        : type.starts_with("business_") || type.starts_with("subflow_") ? "business"
+        : "runtime";
+    const char *level = type == "run.terminal" && payload.is_object() &&
+        payload.value("state", "") == "Failed" ? "error"
+        : type.ends_with(".write_failed") || type.ends_with(".observation_failed") ? "warn"
+        : "info";
     auto node = payload.is_object() ? payload.value("node_id", payload.value("node", J(nullptr))) : J(nullptr);
     if (!node.is_string() && payload.is_object() && payload.contains("name") &&
         payload.at("name").is_string())
@@ -101,6 +112,7 @@ J event_record(const std::string &instance, std::uint64_t run, std::uint64_t gen
                                    std::chrono::steady_clock::now().time_since_epoch())
                                    .count()},
             {"type", std::move(type)},
+            {"level", level}, {"category", category},
             {"node_id", std::move(node)},
             {"source_path", payload.is_object() ? payload.value("source_path", J(nullptr)) : J(nullptr)},
             {"outcome", std::move(outcome)},
@@ -210,9 +222,9 @@ J snapshot_json(const contracts::RunSnapshot &s) {
 RunStore::RunStore(const std::filesystem::path &root, const std::string &instance,
                    std::uint64_t run, const J &definition,
                    std::shared_ptr<const contracts::MonotonicClock> diagnostic_clock,
-                   DiagnosticLimits limits)
+                   DiagnosticLimits limits, LoggingPolicy logging)
     : instance_(instance), run_(run), definition_(definition),
-      diagnostic_clock_(std::move(diagnostic_clock)), diagnostic_limits_(limits) {
+      diagnostic_clock_(std::move(diagnostic_clock)), diagnostic_limits_(limits), logging_(logging) {
     diagnostic_require(diagnostic_clock_ && limits.rewards > 0 && limits.rewards <= 128 &&
         limits.failures > 0 && limits.failures <= 32 && limits.frame_bytes > 0 &&
         limits.frame_bytes <= 8 * 1024 * 1024, "DIAGNOSTIC_LIMITS_INVALID");
@@ -226,6 +238,7 @@ RunStore::RunStore(const std::filesystem::path &root, const std::string &instanc
     platform::atomic_write(
         directory_ / "run.json",
         J{{"schema", 1}, {"instance", instance}, {"run_id", run}, {"definition", definition},
+          {"logging", logging_.json()},
           {"diagnostic_policy", {{"schema", 1}, {"reward_limit", limits.rewards},
               {"failure_limit", limits.failures}, {"frame_bytes_limit", limits.frame_bytes},
               {"reserved_bytes_limit", std::uint64_t(limits.rewards + limits.failures) * limits.frame_bytes},
@@ -461,9 +474,16 @@ J RunStore::save_diagnostic(const contracts::FrameEnvelope *frame, const Diagnos
 J RunStore::diagnostic_summary() const {
     std::lock_guard lock(diagnostic_mutex_);
     return {{"schema", 1}, {"entries", diagnostic_entries_}, {"bytes_saved", diagnostic_bytes_},
+        {"logs", {{"path", "diagnostics.jsonl"}, {"rows", log_rows_},
+            {"bytes", log_bytes_}, {"limit_bytes", 16ULL * 1024 * 1024},
+            {"dropped", log_dropped_}, {"failed", log_failed_},
+            {"complete", log_failed_ == 0 && log_dropped_ == 0},
+            {"memory_collected", logging_.memory && logging_.accepts(LogLevel::Info)},
+            {"recognition_collected", logging_.recognition && logging_.accepts(LogLevel::Info)}}},
         {"action_timing", {{"path", "action-timing.jsonl"}, {"rows", timing_rows_},
             {"bytes", timing_bytes_}, {"limit_bytes", 64ULL * 1024 * 1024},
             {"dropped", timing_dropped_}, {"failed", timing_failed_}, {"write_ns", timing_write_ns_},
+            {"collected", logging_.performance && logging_.accepts(LogLevel::Info)},
             {"complete", timing_failed_ == 0 && timing_dropped_ == 0}}},
         {"recent_frames", {{"saved", recent_saved_.load()}, {"dropped", recent_dropped_.load()},
             {"failed", recent_failed_.load()}, {"worker_ns", recent_work_ns_.load()},
@@ -474,7 +494,7 @@ J RunStore::diagnostic_summary() const {
         {"throttled", diagnostic_throttled_}, {"duplicates", diagnostic_duplicates_},
         {"quota_exceeded", diagnostic_quota_}, {"unrecorded", diagnostic_unrecorded_},
         {"complete", diagnostic_failed_ == 0 && diagnostic_quota_ == 0 && diagnostic_unrecorded_ == 0 &&
-            timing_failed_ == 0 && timing_dropped_ == 0}};
+            timing_failed_ == 0 && timing_dropped_ == 0 && log_failed_ == 0 && log_dropped_ == 0}};
 }
 void RunStore::note_diagnostic_hook_failure() noexcept {
     try {
@@ -486,6 +506,8 @@ void RunStore::save_events(const EventJournal &events) {
     platform::atomic_write(directory_ / "events.json", events.read().dump(2), true);
 }
 void RunStore::append_timing(std::uint64_t generation, const std::string &type, const J &payload) noexcept {
+    if (type == "timing.segment" &&
+        (!logging_.performance || !logging_.accepts(LogLevel::Info))) return;
     const auto started = std::chrono::steady_clock::now();
     std::lock_guard lock(diagnostic_mutex_);
     try {
@@ -493,6 +515,8 @@ void RunStore::append_timing(std::uint64_t generation, const std::string &type, 
         if (timing_closed_) { ++timing_dropped_; return; }
         auto row = J{{"schema", 1}, {"instance_id", instance_}, {"run_id", run_},
             {"generation", generation}, {"type", type}, {"payload", payload},
+            {"level", "info"},
+            {"category", type == "timing.segment" ? "performance" : "input_audit"},
             {"utc_ms", std::chrono::duration_cast<std::chrono::milliseconds>(
                 std::chrono::system_clock::now().time_since_epoch()).count()}}.dump();
         if (timing_bytes_ + row.size() + 1 > limit) {
@@ -509,6 +533,34 @@ void RunStore::append_timing(std::uint64_t generation, const std::string &type, 
     } catch (...) { ++timing_failed_; timing_closed_ = true; }
     timing_write_ns_ += std::chrono::duration_cast<std::chrono::nanoseconds>(
         std::chrono::steady_clock::now() - started).count();
+}
+void RunStore::append_log(std::uint64_t generation, LogLevel level, const char *category,
+                          const char *type, const J &payload) noexcept {
+    if (!logging_.accepts(level) ||
+        (std::string_view(category) == "memory" && !logging_.memory) ||
+        (std::string_view(category) == "recognition" && !logging_.recognition) ||
+        (std::string_view(category) == "performance" && !logging_.performance)) return;
+    try {
+        std::lock_guard lock(diagnostic_mutex_);
+        if (log_closed_) { ++log_dropped_; return; }
+        constexpr std::uint64_t limit = 16ULL * 1024 * 1024;
+        const char *names[] = {"trace", "debug", "info", "warn", "error"};
+        auto row = J{{"schema", 1}, {"instance_id", instance_}, {"run_id", run_},
+            {"generation", generation}, {"level", names[static_cast<int>(level)]},
+            {"category", category}, {"type", type}, {"payload", payload},
+            {"utc_ms", std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::system_clock::now().time_since_epoch()).count()}}.dump();
+        if (log_bytes_ + row.size() + 1 > limit) {
+            log_closed_ = true; ++log_dropped_; return;
+        }
+        if (!log_stream_.is_open()) {
+            log_stream_.exceptions(std::ios::failbit | std::ios::badbit);
+            log_stream_.open(directory_ / "diagnostics.jsonl", std::ios::binary | std::ios::app);
+        }
+        log_stream_ << row << '\n';
+        log_stream_.flush();
+        log_bytes_ += row.size() + 1; ++log_rows_;
+    } catch (...) { ++log_failed_; log_closed_ = true; }
 }
 void RunStore::save_terminal(const contracts::RunSnapshot &snapshot,
                              const contracts::SessionResult &session, const J &events) {

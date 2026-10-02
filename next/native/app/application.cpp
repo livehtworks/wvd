@@ -478,7 +478,8 @@ Application::J Application::profile() const {
     const auto &values = stored.at("values");
     const auto task = optional_profile_text(values, "FARM_TARGET");
     const bool task_specific = values.value("TASK_SPECIFIC_CONFIG", false);
-    return {{"profile", values}, {"revision", stored.at("revision")},
+    return {{"profile", values}, {"logging", storage::LoggingPolicy::from_profile(stored).json()},
+            {"revision", stored.at("revision")},
             {"effective_source", task_specific ? "任务覆盖" : "默认配置"},
             {"task_override_active", task_specific && !task.empty() &&
                  stored.value("task_overrides", J::object()).contains(task)}};
@@ -489,7 +490,8 @@ Application::J Application::profile_for_task(const std::string &task_id) const {
     const auto stored = profile_store_->load();
     auto values = effective_profile_values(task_id, stored);
     const bool overridden = values.value("TASK_SPECIFIC_CONFIG", false);
-    return {{"profile", values}, {"revision", stored.at("revision")},
+    return {{"profile", values}, {"logging", storage::LoggingPolicy::from_profile(stored).json()},
+            {"revision", stored.at("revision")},
             {"effective_source", overridden ? "任务覆盖" : "默认配置"},
             {"task_override_active", overridden}};
 }
@@ -646,6 +648,8 @@ Application::J Application::save_profile(const J &request) {
     require(request.is_object(), "PROFILE_REQUEST_INVALID");
     const auto expected = request.at("revision").get<std::string>();
     auto document = profile_store_->load();
+    if (request.contains("logging"))
+        document["logging"] = storage::LoggingPolicy::parse(request.at("logging")).json();
     const auto old_names = strategy_names(document.at("values"));
     if (request.contains("strategy_renames")) {
         const auto &renames = request.at("strategy_renames");
@@ -744,7 +748,8 @@ Application::J Application::save_profile(const J &request) {
     const auto &values = saved.at("values");
     const auto task = optional_profile_text(values, "FARM_TARGET");
     const bool task_specific = values.value("TASK_SPECIFIC_CONFIG", false);
-    return {{"profile", values}, {"revision", saved.at("revision")},
+    return {{"profile", values}, {"logging", storage::LoggingPolicy::from_profile(saved).json()},
+            {"revision", saved.at("revision")},
             {"effective_source", task_specific ? "任务覆盖" : "默认配置"},
             {"task_override_active", task_specific && !task.empty() &&
                  saved.value("task_overrides", J::object()).contains(task)}};
@@ -1272,6 +1277,7 @@ runtime::NativeRunDefinition Application::assemble_task(const J &request, const 
     runtime::NativeRunDefinition definition;
     definition.request_id = request_id;
     definition.match_budget = match_budget_;
+    definition.logging = storage::LoggingPolicy::from_profile(stored);
     definition.units.assign(count, unit);
     definition.policy = {lifecycle.device_id, "wvd", "jp.co.drecom.wizardry.daphne",
         unit.bundle.revision, "900x1600", {900, 1600},
@@ -1699,6 +1705,7 @@ runtime::NativeRunDefinition Application::assemble_workflow(
     runtime::NativeRunDefinition definition;
     definition.request_id = request_id;
     definition.match_budget = match_budget_;
+    definition.logging = storage::LoggingPolicy::from_profile(stored);
     definition.units.push_back({std::make_shared<const wvd::workflow::FlowProgram>(std::move(publication.program)),
         std::move(publication.bundle), games::vision::native_handlers(aliases_, locale,
             executable.dialogue_policy),

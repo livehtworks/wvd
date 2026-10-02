@@ -71,6 +71,57 @@ int main(int argc, char **argv) {
         const auto data_root = std::filesystem::temp_directory_path() /
             ("wvd-native-coordinator-" + wvd::platform::unique_id());
         std::filesystem::create_directories(data_root);
+        if (argc == 2 && std::string(argv[1]) == "--logging-policy") {
+            using namespace wvd::storage;
+            auto policy = LoggingPolicy{};
+            policy.performance = false;
+            policy.memory = false;
+            policy.recognition = false;
+            const auto parsed = LoggingPolicy::parse(policy.json());
+            if (parsed.performance || parsed.memory || parsed.recognition ||
+                parsed.memory_interval_ms != 1000)
+                throw std::runtime_error("LOGGING_POLICY_ROUNDTRIP");
+            auto invalid = policy.json();
+            invalid["memory_interval_ms"] = 10;
+            bool rejected = false;
+            try { (void)LoggingPolicy::parse(invalid); } catch (const std::runtime_error &) { rejected = true; }
+            if (!rejected) throw std::runtime_error("LOGGING_POLICY_INTERVAL_ACCEPTED");
+            RunStore store(data_root, "logging-off", 1, {{"kind", "isolated"}},
+                std::make_shared<contracts::SteadyClock>(), {}, policy);
+            store.append_timing(1, "timing.segment", {{"node_id", "test"}});
+            store.append_timing(1, "input.attempt", {{"state", "accepted"}});
+            store.append_log(1, LogLevel::Info, "memory", "before_session", {{"private_bytes", 1}});
+            store.append_log(1, LogLevel::Warn, "runtime", "session_incomplete", {{"code", "test"}});
+            const auto summary = store.diagnostic_summary();
+            if (summary.at("action_timing").at("rows") != 1 ||
+                summary.at("action_timing").at("collected") != false ||
+                summary.at("logs").at("rows") != 1 ||
+                summary.at("logs").at("memory_collected") != false ||
+                !summary.at("complete").get<bool>())
+                throw std::runtime_error("LOGGING_POLICY_FILTER_FAILED");
+            nlohmann::json input, warning;
+            { std::ifstream file(store.directory() / "action-timing.jsonl"); file >> input; }
+            { std::ifstream file(store.directory() / "diagnostics.jsonl"); file >> warning; }
+            if (input.at("type") != "input.attempt" || input.at("category") != "input_audit" ||
+                warning.at("type") != "session_incomplete" || warning.at("level") != "warn")
+                throw std::runtime_error("LOGGING_POLICY_AUDIT_FAILED");
+            EventJournal journal("logging-test", 1);
+            journal.emit(1, "input.result", {{"outcome", "confirmed"}});
+            const auto event = journal.read().at("events").at(0);
+            if (event.at("category") != "input_audit" || event.at("level") != "info")
+                throw std::runtime_error("LOGGING_EVENT_CLASSIFICATION_FAILED");
+            policy.level = LogLevel::Off;
+            RunStore disabled(data_root, "logging-off", 2, {{"kind", "isolated"}},
+                std::make_shared<contracts::SteadyClock>(), {}, policy);
+            disabled.append_timing(1, "input.result", {{"state", "confirmed"}});
+            disabled.append_log(1, LogLevel::Error, "runtime", "optional_failure", {});
+            if (disabled.diagnostic_summary().at("action_timing").at("rows") != 1 ||
+                disabled.diagnostic_summary().at("logs").at("rows") != 0 ||
+                LoggingPolicy::parse(policy.json()).accepts(LogLevel::Error))
+                throw std::runtime_error("LOGGING_OFF_AUDIT_FAILED");
+            std::cout << "Logging policy, mandatory audit and categories passed\n";
+            return 0;
+        }
         if (argc == 2 && std::string(argv[1]) == "--restart-diagnostic") {
             using A = runtime::NativeCoordinatorTestAccess;
             for (const auto *mode : {"saved", "missing", "write-failed"}) {
@@ -217,6 +268,30 @@ int main(int argc, char **argv) {
             !ended.result_saved || ended.completed_business_units != 1)
             throw std::runtime_error("COORDINATOR_TERMINAL_INVALID:" + ended.reason +
                 ":" + ended.storage_error);
+        if (argc == 2 && std::string(argv[1]) == "--logging-boundary") {
+            std::ifstream log(coordinator.run_directory() / "diagnostics.jsonl");
+            std::vector<std::string> phases;
+            std::string line;
+            while (std::getline(log, line)) {
+                const auto row = nlohmann::json::parse(line);
+                if (row.at("category") == "memory") {
+                    phases.push_back(row.at("type").get<std::string>());
+                    if (phases.back() == "session_owners_released" &&
+                        (!row.at("payload").at("recognizer_released").get<bool>() ||
+                         !row.at("payload").at("session_released").get<bool>()))
+                        throw std::runtime_error("LOGGING_OWNERS_STILL_ALIVE");
+                }
+            }
+            if (phases != std::vector<std::string>{"before_session", "session_owners_alive",
+                    "session_owners_released", "worker_finishing"})
+                throw std::runtime_error("LOGGING_MEMORY_BOUNDARY_ORDER");
+            const auto summary = coordinator.diagnostics();
+            if (summary.at("logs").at("rows") != 4 ||
+                !summary.at("logs").at("memory_collected").get<bool>())
+                throw std::runtime_error("LOGGING_MEMORY_SUMMARY");
+            std::cout << "Memory owner boundaries passed\n";
+            return 0;
+        }
         {
             runtime::NativeRunCoordinator pending(data_root / "pending-runs");
             auto unreleased = std::make_shared<Backend>(false);

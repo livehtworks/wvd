@@ -12,6 +12,8 @@
 namespace wvd::platform {
 struct MemorySample {
     bool process_ok{}, system_ok{};
+    std::uint32_t process_id{}, handle_count{};
+    std::uint64_t process_created_100ns{};
     std::uint64_t private_bytes{}, sampled_peak_private_bytes{};
     std::uint64_t working_set_bytes{}, peak_working_set_bytes{};
     std::uint64_t commit_total_pages{}, commit_limit_pages{}, commit_peak_pages{};
@@ -24,7 +26,9 @@ class MemoryDiagnostics {
   public:
     explicit MemoryDiagnostics(const std::filesystem::path &path,
                                std::uint64_t run_id = 0,
-                               std::uint64_t generation = 0) noexcept;
+                               std::uint64_t generation = 0,
+                               bool periodic_enabled = true,
+                               std::uint32_t interval_ms = 1000) noexcept;
     ~MemoryDiagnostics();
     MemoryDiagnostics(const MemoryDiagnostics &) = delete;
     MemoryDiagnostics &operator=(const MemoryDiagnostics &) = delete;
@@ -63,5 +67,7 @@ class MemoryDiagnostics {
     std::atomic<std::uint64_t> next_sample_ms_{0};
     std::atomic<std::uint64_t> sampled_peak_private_{0};
     const std::uint64_t run_id_, generation_;
+    const bool periodic_enabled_;
+    const std::uint32_t interval_ms_;
 };
 } // namespace wvd::platform

@@ -3,6 +3,7 @@
 #include "custom.hpp"
 #include "frame.hpp"
 #include "ocr.hpp"
+#include "storage/logging_policy.hpp"
 #include <atomic>
 #include <memory>
 #include <mutex>
@@ -13,7 +14,8 @@ class Service final {
     Service(Bundle bundle, Handlers handlers,
             std::shared_ptr<MatchBudget> budget = {},
             std::filesystem::path diagnostics_path = {},
-            std::uint64_t run_id = 0, std::uint64_t generation = 0);
+            std::uint64_t run_id = 0, std::uint64_t generation = 0,
+            storage::LoggingPolicy logging = {});
     contracts::Observation evaluate(const contracts::FrameEnvelope &frame,
                                     const contracts::FrameIdentity &current,
                                     const Request &request,

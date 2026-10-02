@@ -1,6 +1,7 @@
 #pragma once
 #include "contracts/run.hpp"
 #include "contracts/business_state.hpp"
+#include "logging_policy.hpp"
 #include <deque>
 #include <filesystem>
 #include <functional>
@@ -54,7 +55,8 @@ class RunStore {
     RunStore(const std::filesystem::path &root, const std::string &instance, std::uint64_t run,
              const nlohmann::json &frozen_definition,
              std::shared_ptr<const contracts::MonotonicClock> diagnostic_clock =
-                 std::make_shared<contracts::SteadyClock>(), DiagnosticLimits limits = {});
+                 std::make_shared<contracts::SteadyClock>(), DiagnosticLimits limits = {},
+             LoggingPolicy logging = {});
     ~RunStore();
     nlohmann::json save_diagnostic(const contracts::FrameEnvelope *frame,
                                   const DiagnosticRequest &request,
@@ -66,6 +68,8 @@ class RunStore {
     void save_events(const EventJournal &events);
     void append_timing(std::uint64_t generation, const std::string &type,
                        const nlohmann::json &payload) noexcept;
+    void append_log(std::uint64_t generation, LogLevel level, const char *category,
+                    const char *type, const nlohmann::json &payload) noexcept;
     void save_terminal(const contracts::RunSnapshot &snapshot,
                        const contracts::SessionResult &session,
                        const nlohmann::json &events = nlohmann::json::object());
@@ -84,6 +88,7 @@ class RunStore {
     const nlohmann::json definition_;
     const std::shared_ptr<const contracts::MonotonicClock> diagnostic_clock_;
     const DiagnosticLimits diagnostic_limits_;
+    const LoggingPolicy logging_;
     mutable std::mutex diagnostic_mutex_;
     std::map<std::string, contracts::MonotonicClock::TimePoint> diagnostic_times_;
     std::set<std::string> diagnostic_operations_;
@@ -98,6 +103,9 @@ class RunStore {
     std::uint64_t timing_bytes_{}, timing_rows_{}, timing_dropped_{}, timing_failed_{};
     std::uint64_t timing_write_ns_{};
     bool timing_closed_{};
+    std::ofstream log_stream_;
+    std::uint64_t log_bytes_{}, log_rows_{}, log_failed_{}, log_dropped_{};
+    bool log_closed_{};
     unsigned long diagnostic_volume_{};
     // RunStore 唯一所有者：最多一个待处理帧和一个在途帧，丢弃仅影响辅助历史图。
     std::mutex recent_mutex_;

@@ -1,5 +1,7 @@
 # 当前执行注意项
 
+- 日志设置是profile顶层`logging`，由现有CAS写入并在Run定义冻结；不要放进33项旧游戏字段，也不要以浏览器localStorage作为权威。`info`默认记录每轮内存边界，`debug/trace`才开启识别匹配期内存细采样；`trace`另外记录每帧取图元数据，`off`关闭全部可选明细。输入审计、事件及异常截图不可由日志开关过滤。`diagnostics.action_timing.collected=false`表示用户未采集动作段，不能解读为零耗时或完整性能证据。
+
 - 本轮关键修复新增的`interruption_reason`来自原`stop_if_interrupted_after`声明，不由前端或人工技能名单产生。重启后遍历全部活动pending，保护原因优先于普通菜单重选；旧发布缓存没有此标记，新运行须重新编译/发布源图，历史文件不补写。最近一次恢复事实与同窗口重启事实分别读取`context_recovery`和`application_restarted_in_window`。
 - 普通Await、异常宽限期局部到期和重启前共用只读回执结算，保留原首次提交时间/epoch/预算；未知送达只有原结果命中且通道清理成功才能释放。重启阈值前只核对当前活动Await或本阶段已声明的Observe/ongoing；guard命中不代替Observe结果，异常处理器按钮消失不清父异常，子调用返回的候选出口在真实选中后清理。
 - 构建必须先资源同步/配置，再`package_functional.begin_build()`，完成web及原生构建后`finish_build()`；打包检查源码及全部构建产物身份，不能在编译期间改源码。`manage_service.ps1 -Action Validate`仅预检、不读旧服务、不建数据锁或启动绑定；候选预检先于任何退出请求。旧交付清单缺少这些身份时拒绝部署，不能删校验绕过。
