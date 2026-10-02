@@ -1,6 +1,7 @@
 #include "native_publisher.hpp"
 #include "games/wvd/vision/native_asset_resolver.hpp"
 #include "semantic_catalogue.hpp"
+#include "ocr_models.hpp"
 #include "platform/windows/bundle_lease.hpp"
 #include "platform/windows/file_digest.hpp"
 #include "platform/windows/path_utf8.hpp"
@@ -59,6 +60,26 @@ NativePublication publish_native(const CompiledWorkflow &workflow,
     J all_paths = workflow.authoring.value("source_paths", J::object());
     all_paths.update(source_paths);
     auto program = compile_native_program(workflow, all_paths, "pending");
+    // 发布前验证实际使用的语言模型，防止作者预览能运行而发布包缺模型。
+    const auto serialized = workflow::serialize(program);
+    const auto models = J::parse(wvd_ocr_models).at("models");
+    std::set<std::string> languages;
+    const auto collect = [&](auto &&self, const J &value) -> void {
+        if (value.is_object()) {
+            if (value.value("mode", "") == "ocr" || value.value("kind", "") == "ocr")
+                languages.insert(recognition::parse_ocr_parameters(value).language);
+            for (const auto &child : value) self(self, child);
+        } else if (value.is_array()) for (const auto &child : value) self(self, child);
+    };
+    collect(collect, serialized);
+    for (const auto &language : languages) {
+        const auto &model = models.at(language);
+        for (const auto &[name, file] : model.at("files").items()) {
+            const auto relative = model.at("bundle_directory").get<std::string>() + "/" + name;
+            if (!base_manifest.contains(relative) || base_manifest.at(relative) != file.at("sha256").get<std::string>())
+                throw std::runtime_error("NATIVE_OCR_MODEL_MISSING_OR_UNLOCKED:" + relative);
+        }
+    }
     J identity{{"engine_kind", "wvd_native"},
                {"program_schema", workflow::FlowProgram::schema},
                {"source_revision", baseline.revision},

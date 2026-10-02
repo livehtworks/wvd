@@ -26,6 +26,16 @@ std::string revision(J value) {
     return platform::bytes_sha256(
         {reinterpret_cast<const std::uint8_t *>(text.data()), text.size()});
 }
+void normalize_settings(J &document) {
+    const auto section = [](J &value) {
+        if (value.is_object() && value.contains("STRATEGY")) games::normalize_strategy(value["STRATEGY"]);
+    };
+    for (const auto *name : {"values", "default_values"})
+        if (document.contains(name)) section(document[name]);
+    for (const auto *name : {"task_overrides", "legacy_document"})
+        if (document.contains(name)) for (auto &value : document[name]) section(value);
+    document["strategy_settings_version"] = 2;
+}
 void validate(const J &document) {
     if (document.at("schema") != 1 || !document.at("values").is_object() ||
         document.at("values").size() != 33 || !document.at("legacy_document").is_object() ||
@@ -49,6 +59,30 @@ ProfileStore::ProfileStore(std::filesystem::path path, J descriptor)
     : path_(std::move(path)), importer_(std::move(descriptor)) {
     if (!path_.is_absolute() || _wcsicmp(path_.filename().c_str(), L"config.json") == 0)
         throw std::runtime_error("PROFILE_PATH_INVALID");
+    if (std::filesystem::exists(path_)) {
+        Lock lock(path_);
+        std::ifstream input(path_, std::ios::binary);
+        const std::string original((std::istreambuf_iterator<char>(input)), {});
+        input.close();
+        auto value = parse_legacy_json(original);
+        if (value.at("revision") != revision(value)) throw std::runtime_error("PROFILE_REVISION_INVALID");
+        if (value.value("strategy_settings_version", 0) < 2) {
+            // 整体迁移默认配置与隐藏任务覆盖；写前保留原文，旧字段不再进入运行路径。
+            const auto backup = path_.parent_path() / ("strategy-settings-v1-" + value.at("revision").get<std::string>() + ".json");
+            normalize_settings(value);
+            validate(value);
+            if (importer_.parse({{"GENERAL", value.at("values")}}).values != value.at("values"))
+                throw std::runtime_error("PROFILE_FIELDS_INCOMPLETE");
+            if (!std::filesystem::exists(backup)) platform::atomic_write(backup, original, false);
+            else {
+                std::ifstream saved(backup, std::ios::binary);
+                if (std::string((std::istreambuf_iterator<char>(saved)), {}) != original)
+                    throw std::runtime_error("PROFILE_MIGRATION_BACKUP_CONFLICT");
+            }
+            value["revision"] = revision(value);
+            platform::atomic_write(path_, value.dump(2), true);
+        }
+    }
 }
 J ProfileStore::create(const games::WvdProfile &profile) {
     J value{{"schema", 1},
@@ -57,6 +91,7 @@ J ProfileStore::create(const games::WvdProfile &profile) {
             {"legacy_passthrough", profile.legacy_passthrough},
             {"sources", profile.sources},
             {"selected_section", profile.selected_section}};
+    normalize_settings(value);
     validate(value);
     if (importer_.parse({{"GENERAL", value.at("values")}}).values != value.at("values"))
         throw std::runtime_error("PROFILE_FIELDS_INCOMPLETE");
@@ -84,6 +119,7 @@ J ProfileStore::compare_exchange(const std::string &expected, const J &document)
     if (current.at("revision") != expected)
         throw std::runtime_error("PROFILE_CONFLICT");
     auto next = document;
+    normalize_settings(next);
     validate(next);
     if (importer_.parse({{"GENERAL", next.at("values")}}).values != next.at("values"))
         throw std::runtime_error("PROFILE_FIELDS_INCOMPLETE");

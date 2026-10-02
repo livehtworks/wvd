@@ -1,5 +1,9 @@
 # 当前执行注意项
 
+- 战斗选项版本`strategy_settings_version=2`由ProfileStore统一迁移：先校验旧revision，备份原文为`strategy-settings-v1-<revision>.json`，再原子替换，重复启动不重复迁移。测试必须复制到独立目录，不直接用正式profile触发迁移验证。回滚旧候选须先停服务、保留新配置、人工恢复对应备份；不能只换旧EXE而让旧逻辑消费新频次。`consume=true`代表动作确认，不等于删行；重复动作也必须清prepared并推进epoch。
+
+- OCR模型统一锁在`next/resources/recognition/ocr-models.json`；依赖准备下载和校验，打包前CMake生成锁必须与源一致。繁中采用PP-OCRv5 server识别模型/字典，仍用既有检测模型，不称整套v5已迁移；英文保留原模型。定位配方必须全文匹配且唯一，不能仅移除ASCII检查或把模板阈值沿用为OCR阈值。淡入帧仍可能漏字，记录原文本、框、置信分和耗时，不把置信分当准确率。已有原帧验收不等于实际发点击或整条赏金任务通过。
+
 - 日志设置是profile顶层`logging`，由现有CAS写入并在Run定义冻结；不要放进33项旧游戏字段，也不要以浏览器localStorage作为权威。`info`默认记录每轮内存边界，`debug/trace`才开启识别匹配期内存细采样；`trace`另外记录每帧取图元数据，`off`关闭全部可选明细。输入审计、事件及异常截图不可由日志开关过滤。`diagnostics.action_timing.collected=false`表示用户未采集动作段，不能解读为零耗时或完整性能证据。
 
 - 本轮关键修复新增的`interruption_reason`来自原`stop_if_interrupted_after`声明，不由前端或人工技能名单产生。重启后遍历全部活动pending，保护原因优先于普通菜单重选；旧发布缓存没有此标记，新运行须重新编译/发布源图，历史文件不补写。最近一次恢复事实与同窗口重启事实分别读取`context_recovery`和`application_restarted_in_window`。
@@ -9,6 +13,8 @@
 - C++20的`json.value(...).items()`借用临时对象会在迭代前失效；先保存命名JSON值再取items。独立内置业务节点的未绑定handoff向调用者同名交接，根未接出口仍ExternalBlocked，不以Prepared冒充业务Completed。
 - 本机Python文件symlink测试因`WinError 1314`不能创建夹具，不能据此报告应用器20/20。保留原测试错误；隔离目录junction拒绝证明只覆盖相应Windows reparse路径，不改系统权限、不改弱原断言。
 - `analyze_run_timing.py --runs-root ... --output-dir ...`只读已有日志；缺文件、截断、候选身份混用或无数据均拒绝。exclusive、worker、节点墙钟不可叠加；历史`recognition.resources`事件在Session.run后但局部持有者释放前，不能当join/所有者释放后的OS内存基线。
+- `worker_finishing`位于终态序列化和工作函数返回之前，不代表所有外层对象已析构。后续用`memory-lifecycle.json`区分定义释放、线程join和批次配置释放；只在开启内存且info或更详细时采集。它是终态之后的独立证据，缺失不能按零内存处理，也不得改变已冻结的diagnostics.jsonl行数。candidate66批次结束同一进程从约408降至110 MiB，仍未完成分配归因。
+- `result.events`是包含`events/last_seq/resync_required`的对象，不是事件数组。UI环容量1024；`resync_required=true`只表示尾窗不完整。新候选以`execution-events.jsonl`保留全执行事件、result单独保存终态，分析器校验行数、序号和身份；旧日志没有磁盘事件流时必须报告尾窗覆盖不足。输出前先选择嵌套字段，避免展开整个事件对象。
 
 - 连续异常计时和只读传输故障计时分别维护。60秒升级重启仅关闭绑定游戏；先记录新帧诊断，再走既有VPN/启动/Boot。网络处理器内按钮确认不清除连续异常，正常业务进展或已声明ongoing清除。不得用换节点、弹窗消失或操作已发送冒充恢复；取消与任务总墙钟不放宽。
 - RunStore诊断stage只接受`reward/pre_action/postcondition/recovery_entry`。重启前截图沿用`recovery_entry`，具体用途写入`evidence_kind=before_application_restart`；不能自造stage，否则图片未保存会产生`DIAGNOSTIC_INCOMPLETE`并阻止自动续轮。历史失败保持，不通过跳过诊断准入消除问题。
@@ -82,11 +88,12 @@
 - 模板识别必须区分 Hit/NoHit/Error。OCR 当前锁定英文模型，不冒充繁中识别。图标点击中心只定位入口，不能用通用城市图标推断王城；王城塔楼背景是只读地点证据。
 - 菜单素材必须取淡入结束的稳定帧，再在另一张稳定帧核对。旅店“離開”曾从淡入阶段裁图，稳定画面分数仅0.76；重取稳定素材后独立帧0.996。不能靠降低阈值补偿坏素材。时序条件在同一帧的选路与输入复核必须返回一致结果，且不能仅靠重复读取旧帧累积静止时间。
 - 多个候选在同帧调用识别时，不能每个条件重建并丢弃所有模板叶子证据；模板复用须保持帧身份、ROI、语言、参数和有界内存。高等级技能不能在等级条未命中时放行默认等级，点击后须确认对应按钮选中态。滚动历史截图限频不代表实际取帧周期。
+- 语言排除的NoHit不是像素测量，不含`best_score/best_box`；同帧缓存换阈值时须保留排除结果，不能无条件读取分数或补假分数。candidate65首次实跑已暴露该消费者缺口，candidate66修复；对应定向检查必须包括同帧不同阈值，单模板/每次换帧检查不足以覆盖。
 - 大地图多个地点复用同类建筑图标，地点身份只能由名称证实；繁中地图还需以“關閉”及缩放 `+` 共同确认场景。名称模板的中心不是建筑点击点，不能直接替换旧 `City_*` 输入目标。
 - `next/resources/authoring/{semantic-assets,public-flows}.json` 是编辑源，运行时加载打包副本；`package_functional.py` 同步两份JSON及语义目录实际引用、位于`next/resources/images`的扩展源素材，并更新manifest成员哈希，随后校验繁中引用。既有旧素材没有该源时保持原包，不扫描日志/mod。发布后不得从活动作者源热读配方。语义资源的只读证据不可用作点击目标。准备阶段缺PNG会拒绝运行，HTTP请求已接受不等于任务已启动；须核对最终run状态和准备错误。
 - 改动公共作者流程的节点时，同步检查 `interface.parameters[].bindings`、边与布局引用；删掉旧节点但保留参数绑定会在实际编译时报 `FLOW_BINDING_NODE_MISSING`。打包后，已有用户流程须经正式 API 检查 `update_available` 并以版本校验同步，不能只更新内置 JSON。
 - 构建期生成的原生动态探针带语义源 SHA256；打包会与当前源目录校验，若只改 `semantic-assets.json` 未重新配置/构建则拒绝发布，不允许 EXE 探针与资源包各用一版。
-- `vision::resource()`的原生配方由`next/native/CMakeLists.txt`中的`WVD_PROBE_RESOURCES`筛选生成，`vision/location_probes.hpp`的resource缓存还需注册ID及语言。新增已有语义ID的C++引用时两处同时接入；仅JSON存在或编译通过不证明运行冻结配方包含该ID。缺依赖可能报`SEMANTIC_RESOURCE_MISSING`，漏缓存注册可能报`COMPILE_IMAGE_SCAN:...invalid map<K, T> key`；应修实际依赖，不能绕过校验或重新裁图。
+- 原生语义目录由`next/native/CMakeLists.txt`从作者源完整生成，同时提供模板语言索引；`vision/location_probes.hpp`的resource缓存仍需注册实际使用的ID及语言。新增C++配方引用时不能只改JSON；漏缓存注册可能报`COMPILE_IMAGE_SCAN:...invalid map<K, T> key`。语言分类必须核对图片内容：NEXT/Pause/Auto及无文字图标可能跨语言共用；不按英文文件名或`_zh_hant`后缀猜语言，不将未分类mod自动禁用。改目录须同步资源、重新configure/build再打包。
 - 游戏启动/VPN 需分别观察前后状态，不要求一次点击两秒生效。NoHit、黑帧、缺资源和网络慢不能升级为模拟器重启。已发送但结果不确定的非幂等输入不得重发；但打开菜单/离店这类明确授权的无资源副作用动作应在新帧重认原场景与按钮、排除阻塞后间隔重试，不能照搬一次点击后一直等死。重试保留首次结果期限；提示小ROI变化仅暂缓点击，不可据此认定加载成功或业务完成。停止只释放本工具自有输入/进程。
 - 郊外归还城市可能随机触发队友普通剧情。转场后置条件需接受剧情并交接继续箭头处理，不能只等城市菜单、不能因背景像王城提前宣布完成，也不能超时后重放归还。
 - 正常业务不全量扫描异常：内置网络/异常/特殊规则在当前结果连续未确认后分派，包括输入结果等待；动画去抖/诊断限频 1 秒不是点击生效期限。繁中正文和“重試”按钮共同确认，英文保留独立模板；复用原生事件暂停父等待，退出后检查原后置条件，不重放提交/付款/跳轮。网络处理器总预算 180 秒，按钮消失等待最多 120 秒，再次出现按新帧重试；未知错误/维护页不得借通用确认按钮强行继续。

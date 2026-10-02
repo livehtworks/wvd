@@ -7,6 +7,8 @@
 #include <atomic>
 #include <memory>
 #include <mutex>
+#include <array>
+#include <map>
 
 namespace wvd::recognition {
 class Service final {
@@ -42,7 +44,9 @@ class Service final {
     std::string frame_pixels_key_;
     std::string known_scene_frame_key_;
     std::mutex mutex_;
-    std::atomic<std::shared_ptr<OcrEngine>> ocr_;
+    std::array<std::atomic<std::shared_ptr<OcrEngine>>, 2> ocr_;
+    // 仅保留当前帧至多4个区域的文字框，不持有历史帧像素；不同目标共用检测结果。
+    std::map<std::string, std::vector<contracts::RecognitionMatch>> ocr_frame_results_;
     // 粘性取消覆盖首次模型初始化：取消不能因引擎尚未发布而丢失。
     std::atomic<bool> cancelled_{false};
     std::uint64_t invocation_{};

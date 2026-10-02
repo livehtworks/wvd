@@ -1,6 +1,31 @@
 {
   "schema": 1,
   "description": "语义索引：源码候选，不把素材存在或本文标签当作实机通过；像素文件保持原位置。",
+  "template_languages": {
+    "en": [
+      "boot_attention", "retry", "totitle", "Inn", "guild", "EdgeOfTown", "ruins",
+      "returnText", "returntoTown", "returntotown", "Economy", "royalsuite",
+      "close", "RiseAgain", "ambush", "blessing", "notenoughsp", "notenoughmp", "combatClose",
+      "sandman_recover", "openworldmap", "ignore", "GotoDung", "NoChestCanBeFound",
+      "theRouteToTheDestinationCannotBeFound", "cursedWheel_timeLeap",
+      "City_RoyalCityLuknalia", "City_fortress", "City_DHI", "City_portTownGrandLegion",
+      "dialogueChoices/!adventurersbones", "dialogueChoices/!halfBone", "dialogueChoices/#hammer",
+      "dialogueChoices/DontBuyIt", "dialogueChoices/buyNothing", "dialogueChoices/dontGiveAntitoxin",
+      "dialogueChoices/donthelp", "dialogueChoices/givehimnothing", "dialogueChoices/idonthaveany",
+      "dialogueChoices/ignorethequest", "dialogueChoices/nope", "dialogueChoices/nothanks",
+      "dialogueChoices/spareit", "dialogueChoices/strange_things"
+    ],
+    "zh-Hant": ["boot_attention_zh", "boot_announcement_header", "guild_reveal_close_zh_hant"],
+    "shared": [
+      "next", "combatTarget", "pause", "combatActive", "combatActive_2", "combatActive_3", "combatActive_4",
+      "combat_active_zh_hant", "story_auto_control", "chest_reward_advance",
+      "combat_speed_off_zh_hant", "combat_speed_on_zh_hant", "combat_auto_off_zh_hant", "combat_auto_on_zh_hant",
+      "guild_bounty_card_header", "city_world_map_open_zh_hant", "worldmap_close_zh_hant",
+      "worldmap_zoom_plus_zh_hant", "dungeon_map_close_zh_hant", "premium_purchase_green", "premium_purchase_purple",
+      "retry_blank", "dungFlag", "supportSkillCheck", "chestOpening", "chestfear", "resume",
+      "boot_title_logo", "skull", "leaveDung", "story", "combatSpd", "combatSpd_DHI"
+    ]
+  },
   "locations": {
     "0": {
       "label": "不限定城市",
@@ -9,9 +34,74 @@
     "1": {
       "label": "王城",
       "resource": "city.royal.identity"
+    },
+    "3": {
+      "label": "要塞（第三章城市）",
+      "resource": "city.fortress.identity"
     }
   },
   "resources": {
+    "city.fortress.identity": {
+      "label": "要塞城市独有塔楼背景",
+      "category": "地点/要塞",
+      "role": "observation",
+      "variants": {"shared": {
+        "condition": {"mode": "template", "image": "fortress_city_background", "threshold": 0.9, "roi": [330, 390, 320, 300]},
+        "validation": "REAL_FRAME_REPORTED",
+        "source": "2026-10-02用户指定塔楼；900x1600原帧frame-000001，裁切[436,495,110,103]，排除郊外图标"
+      }}
+    },
+    "outskirts.fortress": {
+      "label": "不落的要塞", "category": "郊外/不落的要塞", "role": "position",
+      "variants": {
+        "en": {"condition": {"mode": "template", "image": "impregnableFortress", "threshold": 0.8}, "source": "既有英文模板"},
+        "zh-Hant": {"condition": {"mode": "template", "image": "outskirts_fortress_zh_hant", "threshold": 0.85, "roi": [400, 150, 480, 900]}, "alternatives": {"ocr": {"mode": "ocr", "language": "zh-Hant", "expected": ["不落的要塞"], "match": "exact", "unique": true, "threshold": 0.9, "roi": [400, 150, 480, 900]}}, "validation": "REAL_FRAME_REPORTED", "source": "2026-10-02 frame-000046，纯名称，不含骷髅"}
+      }
+    },
+    "outskirts.fortress.zone1": {
+      "label": "第一區-古老密道B1F", "category": "郊外/不落的要塞", "role": "position",
+      "variants": {
+        "en": {"condition": {"mode": "template", "image": "fortressb1f", "threshold": 0.8}, "source": "既有英文模板"},
+        "zh-Hant": {"condition": {"mode": "template", "image": "outskirts_fortress_zone1_zh_hant", "threshold": 0.96, "roi": [400, 150, 480, 900]}, "alternatives": {"ocr": {"mode": "ocr", "language": "zh-Hant", "expected": ["第一區-古老密道B1F"], "match": "exact", "unique": true, "threshold": 0.9, "roi": [400, 150, 480, 900]}}, "validation": "REAL_FRAME_REPORTED", "source": "2026-10-02 frame-000055，纯名称，不含骷髅"}
+      }
+    },
+    "outskirts.fortress.zone3": {
+      "label": "第三區-古老密道B3F", "category": "郊外/不落的要塞", "role": "position",
+      "variants": {
+        "en": {"condition": {"mode": "template", "image": "fortressb3f", "threshold": 0.8}, "source": "既有英文模板"},
+        "zh-Hant": {"condition": {"mode": "template", "image": "outskirts_fortress_zone3_zh_hant", "threshold": 0.96, "roi": [400, 150, 480, 900]}, "alternatives": {"ocr": {"mode": "ocr", "language": "zh-Hant", "expected": ["第三區-古老密道B3F"], "match": "exact", "unique": true, "threshold": 0.9, "roi": [400, 150, 480, 900]}}, "validation": "REAL_FRAME_REPORTED", "source": "2026-10-02 frame-000055，纯名称，不含骷髅"}
+      }
+    },
+    "outskirts.fortress.zone4": {
+      "label": "第四區-隧道-", "category": "郊外/不落的要塞", "role": "position",
+      "variants": {"zh-Hant": {"condition": {"mode": "template", "image": "outskirts_fortress_zone4_zh_hant", "threshold": 0.9, "roi": [400, 150, 480, 900]}, "alternatives": {"ocr": {"mode": "ocr", "language": "zh-Hant", "expected": ["第四區-隧道-"], "match": "exact", "unique": true, "threshold": 0.9, "roi": [400, 150, 480, 900]}}, "validation": "REAL_FRAME_REPORTED", "source": "2026-10-02 frame-000055，纯名称"}}
+    },
+    "outskirts.fortress.zone5": {
+      "label": "第五區-史前迴廊B3F", "category": "郊外/不落的要塞", "role": "position",
+      "variants": {"zh-Hant": {"condition": {"mode": "template", "image": "outskirts_fortress_zone5_zh_hant", "threshold": 0.94, "roi": [400, 150, 480, 900]}, "alternatives": {"ocr": {"mode": "ocr", "language": "zh-Hant", "expected": ["第五區-史前迴廊B3F"], "match": "exact", "unique": true, "threshold": 0.9, "roi": [400, 150, 480, 900]}}, "validation": "REAL_FRAME_REPORTED", "source": "2026-10-02 frame-000055，纯名称，不含骷髅"}}
+    },
+    "outskirts.fortress.zone6": {
+      "label": "第六區-史前迴廊B2F", "category": "郊外/不落的要塞", "role": "position",
+      "variants": {"zh-Hant": {"condition": {"mode": "template", "image": "outskirts_fortress_zone6_zh_hant", "threshold": 0.94, "roi": [400, 150, 480, 900]}, "alternatives": {"ocr": {"mode": "ocr", "language": "zh-Hant", "expected": ["第六區-史前迴廊B2F"], "match": "exact", "unique": true, "threshold": 0.9, "roi": [400, 150, 480, 900]}}, "validation": "REAL_FRAME_REPORTED", "source": "2026-10-02 frame-000055，纯名称，不含骷髅"}}
+    },
+    "outskirts.fortress.zone7": {
+      "label": "第七區-史前迴廊B1F", "category": "郊外/不落的要塞", "role": "position",
+      "variants": {
+        "en": {"condition": {"mode": "template", "image": "fortressb7f", "threshold": 0.8}, "source": "既有英文模板"},
+        "zh-Hant": {"condition": {"mode": "template", "image": "outskirts_fortress_zone7_zh_hant", "threshold": 0.94, "roi": [400, 150, 480, 900]}, "alternatives": {"ocr": {"mode": "ocr", "language": "zh-Hant", "expected": ["第七區-史前迴廊B1F"], "match": "exact", "unique": true, "threshold": 0.9, "roi": [400, 150, 480, 900]}}, "validation": "REAL_FRAME_REPORTED", "source": "2026-10-02 frame-000055，纯名称，不含骷髅"}
+      }
+    },
+    "outskirts.fortress.zone9": {
+      "label": "第九區-要塞2F司務室-", "category": "郊外/不落的要塞", "role": "position",
+      "variants": {"zh-Hant": {"condition": {"mode": "template", "image": "outskirts_fortress_zone9_zh_hant", "threshold": 0.9, "roi": [400, 150, 480, 900]}, "alternatives": {"ocr": {"mode": "ocr", "language": "zh-Hant", "expected": ["第九區-要塞2F司務室-"], "match": "exact", "unique": true, "threshold": 0.9, "roi": [400, 150, 480, 900]}}, "validation": "REAL_FRAME_REPORTED", "source": "2026-10-02 frame-000055，纯名称"}}
+    },
+    "outskirts.fortress.zone10": {
+      "label": "第十區-要塞3F領主室", "category": "郊外/不落的要塞", "role": "position",
+      "variants": {
+        "en": {"condition": {"mode": "template", "image": "fortressb10f", "threshold": 0.8}, "source": "既有英文模板"},
+        "zh-Hant": {"condition": {"mode": "template", "image": "outskirts_fortress_zone10_zh_hant", "threshold": 0.9, "roi": [400, 150, 480, 900]}, "alternatives": {"ocr": {"mode": "ocr", "language": "zh-Hant", "expected": ["第十區-要塞3F領主室"], "match": "exact", "unique": true, "threshold": 0.9, "roi": [400, 150, 480, 900]}}, "validation": "REAL_FRAME_REPORTED", "source": "2026-10-02 frame-000055，纯名称，不含骷髅和点击指示"}
+      }
+    },
     "boot.announcement.page": {
       "label": "启动公告弹窗",
       "category": "启动/公告",

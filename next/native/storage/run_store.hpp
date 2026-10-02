@@ -29,7 +29,8 @@ struct DiagnosticLimits {
 };
 class EventJournal {
   public:
-    EventJournal(std::string instance, std::uint64_t run, std::size_t capacity = 256);
+    EventJournal(std::string instance, std::uint64_t run, std::size_t capacity = 256,
+                 std::function<void(const nlohmann::json &)> event_sink = {});
     std::uint64_t emit(std::uint64_t generation, std::string type, nlohmann::json payload = {},
                        bool critical = false);
     nlohmann::json read(std::uint64_t after = 0) const;
@@ -49,6 +50,7 @@ class EventJournal {
     std::deque<Event> events_;
     bool terminal_{};
     bool committing_{};
+    std::function<void(const nlohmann::json &)> event_sink_;
 };
 class RunStore {
   public:
@@ -70,6 +72,9 @@ class RunStore {
                        const nlohmann::json &payload) noexcept;
     void append_log(std::uint64_t generation, LogLevel level, const char *category,
                     const char *type, const nlohmann::json &payload) noexcept;
+    void append_event(const nlohmann::json &event) noexcept;
+    // 终态之后的生命周期证据独立保存，不能追加到已冻结行数的diagnostics.jsonl。
+    void record_memory_boundary(const std::string &phase, const nlohmann::json &sample) noexcept;
     void save_terminal(const contracts::RunSnapshot &snapshot,
                        const contracts::SessionResult &session,
                        const nlohmann::json &events = nlohmann::json::object());
@@ -106,6 +111,11 @@ class RunStore {
     std::ofstream log_stream_;
     std::uint64_t log_bytes_{}, log_rows_{}, log_failed_{}, log_dropped_{};
     bool log_closed_{};
+    std::ofstream event_stream_;
+    std::uint64_t event_bytes_{}, event_rows_{}, event_failed_{}, event_dropped_{};
+    bool event_closed_{};
+    nlohmann::json memory_boundaries_ = nlohmann::json::object();
+    std::uint64_t memory_boundary_failed_{};
     unsigned long diagnostic_volume_{};
     // RunStore 唯一所有者：最多一个待处理帧和一个在途帧，丢弃仅影响辅助历史图。
     std::mutex recent_mutex_;

@@ -3,18 +3,22 @@
 #include "harken_exit.hpp"
 #include "games/wvd/vision/harken_probes.hpp"
 #include "games/wvd/vision/location_probes.hpp"
+#include "games/wvd/vision/dialogue_probes.hpp"
 
 namespace wvd::games::navigation {
 tasks::CompiledWorkflow return_to_fortress() {
     using C = tasks::PipelineCompiler;
     C graph("navigation.return_to_fortress", std::chrono::seconds{240});
     const auto inn = vision::inn_button();
+    // 旅店图标各城复用。要塞独有背景证明地点，城市菜单和无剧情证明可继续操作。
+    const auto arrived = C::all({vision::fortress_city(), vision::city_screen(),
+                                 C::absent(vision::ordinary_story_page())});
     const auto harken = C::any({vision::harken_buff_menu(), vision::harken_floor_menu(),
                                 vision::outskirts_return_button()});
     const auto normal = C::any({inn, C::image("EdgeOfTown"), C::image("returntotown"),
         C::image("returnText"), C::image("leaveDung"), C::image("blessing"), harken});
     graph.route("Entry", {"Done", "Harken", "Exit0", "Exit1", "Exit2", "Exit3", "Dungeon", "Dismiss"});
-    graph.observe("Done", inn, {"Terminal"});
+    graph.observe("Done", arrived, {"Terminal"});
     const auto harken_exit = graph.define_child("HarkenExit", leave_harken());
     graph.observe("Harken", harken, {"LeaveHarken"});
     graph.call_child("LeaveHarken", harken_exit, {"Entry"});

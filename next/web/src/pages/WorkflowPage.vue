@@ -338,7 +338,7 @@ function patchNodeEventResume(id:string,patch:Partial<EventResume>){ if (state.e
         <CheckPolicyEditor v-if="state.current" :model-value="state.current.checks" @update:model-value="!state.editLocked && (state.checkpoint(), state.current.checks=$event)" />
         <EventPolicyPanel v-if="state.current" :model-value="state.current.events"
           :flows="state.workflows" :current-flow-id="state.current.id" :nodes="state.current.nodes"
-          :templates="state.catalog.templates" :resources="publicResources" :recognizers="state.catalog.recognizers"
+          :templates="state.catalog.templates" :resources="publicResources" :recognizers="state.catalog.recognizers" :resource-locale="state.current?.resource_locale"
           @update:model-value="eventsChanged" @open-definition="state.openDefinition" />
         <label v-if="state.current" class="field"><span>游戏素材语言（不是工作台语言）</span><select v-model="state.current.resource_locale" @focus="state.checkpoint"><option v-for="option in resourceLocaleOptions" :key="option.value" :value="option.value">{{ option.label }}</option></select></label>
       </aside>
@@ -370,7 +370,7 @@ function patchNodeEventResume(id:string,patch:Partial<EventResume>){ if (state.e
           <SlotInspector v-else-if="nodeKind==='slot'" :model-value="selectedParameters as unknown as {name:string;calls?:FlowCall[]}" :flows="state.workflows" :current-flow-id="state.current!.id" @update:model-value="replaceParameters" @open-definition="state.openDefinition" />
           <div v-else-if="nodeKind==='route'" class="inspector-group"><p>按后继候选顺序识别，不是同时执行全部分支。调用块为直接命中节点，分支条件请显式放在调用前。</p></div>
           <div v-else-if="nodeKind === 'recognition'" class="inspector-group"><h3>识别</h3>
-            <ConditionEditor :model-value="selectedCondition" :templates="state.catalog.templates" :resources="publicResources" :recognizers="state.catalog.recognizers" @update:model-value="setWholeCondition('condition',$event)" />
+            <ConditionEditor :model-value="selectedCondition" :templates="state.catalog.templates" :resources="publicResources" :recognizers="state.catalog.recognizers" :resource-locale="state.current?.resource_locale" @update:model-value="setWholeCondition('condition',$event)" />
             <details v-if="['template','ocr'].includes(String(selectedCondition.mode))"><summary>旧模板快捷字段</summary>
             <label class="field"><span>识别方式</span><select :value="String(selectedCondition.mode ?? '')" @change="setRecognitionMode"><option value="template">模板</option><option value="ocr">OCR</option><option v-for="item in state.catalog.recognizers ?? []" :key="String(item.value)" :value="String(item.value)">WVD · {{ item.label }}</option></select></label>
             <label v-if="selectedCondition.mode === 'template'" class="field"><span>模板</span><input list="recognition-assets" :value="String(selectedCondition.image ?? '')" @input="setConditionText('image', $event)" /><datalist id="recognition-assets"><option v-for="item in state.catalog.templates ?? []" :key="String(item.value)" :value="String(item.value)">{{ item.label }}</option></datalist></label>
@@ -380,9 +380,9 @@ function patchNodeEventResume(id:string,patch:Partial<EventResume>){ if (state.e
             </details>
           </div>
           <div v-else-if="nodeKind === 'action'" class="inspector-group"><h3>受控动作</h3>
-            <ConditionEditor :model-value="(param('scene')??{}) as JsonObject" :templates="state.catalog.templates" :resources="publicResources" :recognizers="state.catalog.recognizers" @update:model-value="setWholeCondition('scene',$event)" />
-            <ConditionEditor v-if="param('operation')==='click'" :model-value="(param('target')??{}) as JsonObject" :templates="state.catalog.templates" :resources="publicResources" :positional="true" @update:model-value="setWholeCondition('target',$event)" />
-            <ConditionEditor :model-value="(param('postcondition')??{}) as JsonObject" :templates="state.catalog.templates" :resources="publicResources" :recognizers="state.catalog.recognizers" @update:model-value="setWholeCondition('postcondition',$event)" />
+            <ConditionEditor :model-value="(param('scene')??{}) as JsonObject" :templates="state.catalog.templates" :resources="publicResources" :recognizers="state.catalog.recognizers" :resource-locale="state.current?.resource_locale" @update:model-value="setWholeCondition('scene',$event)" />
+            <ConditionEditor v-if="param('operation')==='click'" :model-value="(param('target')??{}) as JsonObject" :templates="state.catalog.templates" :resources="publicResources" :positional="true" :resource-locale="state.current?.resource_locale" @update:model-value="setWholeCondition('target',$event)" />
+            <ConditionEditor :model-value="(param('postcondition')??{}) as JsonObject" :templates="state.catalog.templates" :resources="publicResources" :recognizers="state.catalog.recognizers" :resource-locale="state.current?.resource_locale" @update:model-value="setWholeCondition('postcondition',$event)" />
             <label class="field"><span>动作</span><select :value="String(param('operation') ?? 'fixed_click')" @change="changeAction"><option value="fixed_click">固定坐标点击</option><option value="click">识别目标点击</option><option value="swipe">滑动</option><option value="back">返回键</option></select></label>
             <details v-if="['scene','target','postcondition'].every(k=>Object.keys((param(k)??{}) as JsonObject).length===1)"><summary>旧单模式快捷字段</summary>
             <label class="field"><span>允许场景</span><input :value="String((param('scene') as JsonObject | undefined)?.mode ?? '')" @change="setActionCondition('scene', $event)" /></label>
@@ -422,7 +422,7 @@ function patchNodeEventResume(id:string,patch:Partial<EventResume>){ if (state.e
                   <option v-for="node in state.current?.nodes.filter(item=>item.data.node_type!=='end') ?? []" :key="node.id" :value="node.id">{{ node.data.label }}</option>
                 </select></label>
                 <ConditionEditor :model-value="(state.selectedNode.resume[id].guard ?? {}) as JsonObject"
-                  :templates="state.catalog.templates" :resources="publicResources" :recognizers="state.catalog.recognizers"
+                  :templates="state.catalog.templates" :resources="publicResources" :recognizers="state.catalog.recognizers" :resource-locale="state.current?.resource_locale"
                   @update:model-value="patchNodeEventResume(id,{guard:$event})" />
               </template>
             </div>

@@ -1,0 +1,122 @@
+[
+  {
+    "image": "fortress_city_background",
+    "frame": "frame-000001.png",
+    "crop": [
+      436,
+      495,
+      110,
+      103
+    ],
+    "source_sha256": "0ac318df02f9d329526087f1fd229f2cd504046bb997e77ee50892c214fa62bf",
+    "template_sha256": "4100b1669ec114542f02f40fbc1e185b7d5c24160c4a481b0e86399846ba0bd3"
+  },
+  {
+    "image": "outskirts_fortress_zh_hant",
+    "frame": "frame-000046.png",
+    "crop": [
+      570,
+      862,
+      174,
+      39
+    ],
+    "source_sha256": "bd3d665f8feb8264893812614486657de8eb91d6311011eaceafccedaa600f55",
+    "template_sha256": "9205dd9474c85a5279eb5ed2e51116767ce05b3f1b773d6235861cf47a74e644"
+  },
+  {
+    "image": "outskirts_fortress_zone1_zh_hant",
+    "frame": "frame-000055.png",
+    "crop": [
+      491,
+      234,
+      310,
+      39
+    ],
+    "source_sha256": "9d6a9606d44e0221be2846b0d27109194789fc342bd5fe7e81462f9db2f8a1c4",
+    "template_sha256": "6704b3916f3683ffca33e82999734925329056bba75c8d60e6d858bb4d8b734d"
+  },
+  {
+    "image": "outskirts_fortress_zone3_zh_hant",
+    "frame": "frame-000055.png",
+    "crop": [
+      491,
+      324,
+      310,
+      39
+    ],
+    "source_sha256": "9d6a9606d44e0221be2846b0d27109194789fc342bd5fe7e81462f9db2f8a1c4",
+    "template_sha256": "c62475df55d4db5ff32672ce87d392ad3f00f139431809232d92ffd2168c6ff3"
+  },
+  {
+    "image": "outskirts_fortress_zone4_zh_hant",
+    "frame": "frame-000055.png",
+    "crop": [
+      555,
+      414,
+      201,
+      39
+    ],
+    "source_sha256": "9d6a9606d44e0221be2846b0d27109194789fc342bd5fe7e81462f9db2f8a1c4",
+    "template_sha256": "3ff895cb387ac3e3bd12d95c5e5a7c5866228bece6e78927cd144b5b57f212c8"
+  },
+  {
+    "image": "outskirts_fortress_zone5_zh_hant",
+    "frame": "frame-000055.png",
+    "crop": [
+      491,
+      504,
+      310,
+      39
+    ],
+    "source_sha256": "9d6a9606d44e0221be2846b0d27109194789fc342bd5fe7e81462f9db2f8a1c4",
+    "template_sha256": "e6952e03b224a243dcaf1aefaa20d505d4032ee3bb406a280785009eb431959a"
+  },
+  {
+    "image": "outskirts_fortress_zone6_zh_hant",
+    "frame": "frame-000055.png",
+    "crop": [
+      491,
+      594,
+      310,
+      39
+    ],
+    "source_sha256": "9d6a9606d44e0221be2846b0d27109194789fc342bd5fe7e81462f9db2f8a1c4",
+    "template_sha256": "8ae1095b2755fd9253cf8799f5458a47b5e68d6553cc4bc7df909c3b294025d6"
+  },
+  {
+    "image": "outskirts_fortress_zone7_zh_hant",
+    "frame": "frame-000055.png",
+    "crop": [
+      491,
+      684,
+      310,
+      39
+    ],
+    "source_sha256": "9d6a9606d44e0221be2846b0d27109194789fc342bd5fe7e81462f9db2f8a1c4",
+    "template_sha256": "8a84cb0b0a691a3de3481c7f0ebc5f0cd1be261ff8066a7f87d25eb4f3e8fb8e"
+  },
+  {
+    "image": "outskirts_fortress_zone9_zh_hant",
+    "frame": "frame-000055.png",
+    "crop": [
+      489,
+      773,
+      330,
+      40
+    ],
+    "source_sha256": "9d6a9606d44e0221be2846b0d27109194789fc342bd5fe7e81462f9db2f8a1c4",
+    "template_sha256": "c4bde71c67c5746aab8fd674666de5b2fcb293dca91f00ab538156cd786ca2d5"
+  },
+  {
+    "image": "outskirts_fortress_zone10_zh_hant",
+    "frame": "frame-000055.png",
+    "crop": [
+      489,
+      863,
+      313,
+      40
+    ],
+    "source_sha256": "9d6a9606d44e0221be2846b0d27109194789fc342bd5fe7e81462f9db2f8a1c4",
+    "template_sha256": "bb2d479847861e1ac513cd377c94bfcb1ff42d16aa8a5d22ef1988c6761cfbfa"
+  }
+]

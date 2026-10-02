@@ -2,6 +2,7 @@
 #include "platform/execution_timing.hpp"
 #include "dialogue_probes.hpp"
 #include "native_asset_resolver.hpp"
+#include "template_language.hpp"
 #include "search_regions.hpp"
 #include "bobber.hpp"
 #include "games/wvd/fishing/unknown_window.hpp"
@@ -318,7 +319,9 @@ J evaluate_impl(const recognition::Bundle &bundle, recognition::Pixels pixels, c
     if (const auto *measured = memo.find(key)) {
         platform::timing::count(platform::timing::Counter::CacheHits);
         auto reused = *measured;
-        if (single_template) {
+        // 语言排除没有像素测量值，阈值变化也不能把它重新判成命中。
+        // 保留原NoHit及原因，不伪造best_score来迎合测量缓存。
+        if (single_template && reused.at("evidence").value("reason", "") != "template_language_excluded") {
             auto &evidence = reused.at("evidence");
             const bool hit = evidence.at("best_score").get<double>() >= threshold;
             reused["outcome"] = hit ? "Hit" : "NoHit";
@@ -461,6 +464,14 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
         check((explicit_roi & allowed_rect) == explicit_roi, "WVD_ROI_OUTSIDE_SCOPE");
     }
     auto mode = p.at("mode").get<std::string>();
+    if ((mode == "template" || mode == "bright_mask" || mode == "multiple" ||
+         mode == "harken_stair" || mode == "focus_cursor" || mode == "through_stair" || mode == "portrait") &&
+        !template_language_enabled(p.at("image").get<std::string>(), bound.value("resource_locale", ""))) {
+        // 不加载、不解码、不匹配其它语言。NoHit本身没有点击坐标；不得将当前
+        // 语言的缺图/Error吞成NoHit，也不把这种跳过写成真实像素匹配失败。
+        return decision(false, {}, {{"reason", "template_language_excluded"},
+            {"image", p.at("image")}, {"resource_locale", bound.at("resource_locale")}});
+    }
     if (mode == "ocr") {
         check(!p.contains("preprocess"), "WVD_OCR_PREPROCESS_UNSUPPORTED");
         return scope.recognize_ocr(p);
@@ -623,6 +634,10 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
         for (std::size_t i = 0; i < candidates.size(); ++i) {
             const auto &result = matches.at(i);
             check(result.at("outcome") != "Error", "FISHING_REWARD_RECOGNITION_ERROR");
+            if (result.at("evidence").value("reason", "") == "template_language_excluded") {
+                scores.push_back(nullptr);
+                continue;
+            }
             const auto score = result.at("evidence").at("best_score").get<double>();
             scores.push_back(score);
             if (i < 3 && score > size_score) { size = i; size_score = score; }
@@ -643,6 +658,8 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
         if (empty.at("outcome") != "Hit") return decision(false, {}, {{"reason", "no_empty_marker"}});
         const auto eight = probe("fishing/8bait");
         check(eight.at("outcome") != "Error", "FISHING_BAIT_RECOGNITION_ERROR");
+        if (eight.at("evidence").value("reason", "") == "template_language_excluded")
+            return decision(false, {}, {{"reason", "bait_comparison_language_unavailable"}});
         const auto empty_score = empty.at("evidence").at("best_score").get<double>();
         const auto eight_score = eight.at("evidence").at("best_score").get<double>();
         // 0和8的轮廓接近；旧算法是同一ROI的严格分数比较，不能只见nobait就补饵。
@@ -670,6 +687,10 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
         for (std::size_t i = 0; i < candidates.size(); ++i) {
             const auto &result = matches.at(i);
             check(result.at("outcome") != "Error", "MINING_RECOGNITION_ERROR");
+            if (result.at("evidence").value("reason", "") == "template_language_excluded") {
+                scores.push_back(nullptr);
+                continue;
+            }
             const auto score = result.at("evidence").at("best_score").get<double>();
             scores.push_back(score);
             if (score > best) { best = score; selected = i; }
@@ -964,15 +985,19 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
         return candidate;
     }
     if (mode == "default_dialogue") {
+        check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");
+        if (p.contains("selected"))
+            check(p.at("selected").is_string() && std::find(default_dialogue_names.begin(), default_dialogue_names.end(),
+                  p.at("selected").get<std::string>()) != default_dialogue_names.end(), "WVD_DIALOGUE_OPTION_INVALID");
+        if (!bound.value("resource_locale", std::string{}).empty() &&
+            bound.at("resource_locale") != "en")
+            return decision(false, {}, {{"reason", "default_dialogue_language_unavailable"},
+                {"resource_locale", bound.at("resource_locale")}});
         if (!bound.value("dialogue_task", "").empty()) {
             const auto special = evaluate_impl(bundle, pixels, {{"mode", "special_dialogue"}}, bound, scope, cache, depth + 1, memo);
             check(special.at("outcome") != "Error", "WVD_DIALOGUE_RECOGNITION_ERROR");
             if (special.at("outcome") == "Hit") return decision(false, {}, {{"reason", "special_dialogue_priority"}});
         }
-        check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");
-        if (p.contains("selected"))
-            check(p.at("selected").is_string() && std::find(default_dialogue_names.begin(), default_dialogue_names.end(),
-                  p.at("selected").get<std::string>()) != default_dialogue_names.end(), "WVD_DIALOGUE_OPTION_INVALID");
         const auto candidates = default_dialogue_probes();
         const auto matches = evaluate_batch(bundle, pixels, candidates, bound, scope, cache, depth, memo, 4, BatchUse::OrderedFirst);
         std::optional<std::size_t> selected;

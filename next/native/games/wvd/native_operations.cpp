@@ -181,12 +181,30 @@ Result NativeOperations::execute(const std::string &binding, const J &parameters
         const bool accepted = state_.apply([&](contracts::BusinessRunState &base) {
             if (!current(confirmation)) return false;
             auto &state = dynamic_cast<WvdRunState &>(base);
+            const auto before = state.summary().at("strategy").at("current").value("skill_settings", J::array()).size();
             if (operation == "prepare") state.prepare_skill(scores, parameters.at("catalog"));
             else state.finish_prepared_skill(parameters.at("index").get<std::size_t>(),
                 operation == "success" ? SkillOutcome::Succeeded :
                     SkillOutcome::AutoFallbackConfirmed);
             receipt = {{"operation", operation}, {"frame_id", frame.identity.frame_id},
-                {"generation", frame.identity.generation}, {"consumed", operation != "prepare"}};
+                {"generation", frame.identity.generation}, {"action_confirmed", operation != "prepare"},
+                {"consumed", operation != "prepare" && state.summary().at("strategy").at("current").value("skill_settings", J::array()).size() < before}};
+            if (operation == "prepare") {
+                const auto summary = state.summary();
+                const bool selected = summary.at("has_prepared_skill");
+                const auto &strategy = summary.at("strategy");
+                receipt["selection"] = {{"has_skill", selected},
+                    {"portrait", summary.at("prepared_portrait")},
+                    {"skill_index", summary.at("prepared_skill_index")},
+                    {"strategy_epoch", strategy.at("epoch")},
+                    {"strategy_name", strategy.at("current").value("group_name", "")},
+                    {"reason", selected ? "selected" : strategy.at("automatic").get<bool>()
+                        ? "automatic_or_exhausted_strategy" : "no_configured_portrait_above_threshold"},
+                    {"threshold", .80}};
+                receipt["portrait_scores"] = J::array();
+                for (const auto &score : scores)
+                    receipt["portrait_scores"].push_back({{"portrait", score.portrait}, {"score", score.score}});
+            }
             return true;
         });
         if (!accepted) return {State::ExternalBlocked, "COMBAT_CONFIRMATION_STALE"};

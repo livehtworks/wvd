@@ -10,6 +10,7 @@
 #include "games/wvd/navigation/time_leap.hpp"
 #include "games/wvd/navigation/map_route.hpp"
 #include "games/wvd/navigation/harken_exit.hpp"
+#include "games/wvd/navigation/return_city.hpp"
 #include "games/wvd/navigation/world_travel.hpp"
 #include "games/wvd/navigation/auto_route.hpp"
 #include "games/wvd/combat/auto_combat.hpp"
@@ -21,6 +22,7 @@
 #include "games/wvd/vision/boot_probes.hpp"
 #include "games/wvd/vision/native_recognizers.hpp"
 #include "games/wvd/vision/native_asset_resolver.hpp"
+#include "games/wvd/vision/template_language.hpp"
 #include "recognition/service.hpp"
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
@@ -295,6 +297,138 @@ int transitions() {
 int main(int argc, char **argv) {
     try {
         using J = nlohmann::json;
+        if (argc == 2 && std::string(argv[1]) == "--single-auto-progress") {
+            using namespace closure;
+            for (const bool initially_enabled : {false, true}) {
+                Driver d(games::combat::single_actor_auto());
+                d.ports.combat = true;
+                d.ports.images = {"flee", initially_enabled ? "spellskill/CombatAutoEnable" : "spellskill/CombatAutoDisable"};
+                d.ports.after_input = [&](const auto &) {
+                    if (d.ports.images.contains("spellskill/CombatAutoDisable")) {
+                        d.ports.images.erase("spellskill/CombatAutoDisable");
+                        d.ports.images.insert("spellskill/CombatAutoEnable");
+                    } else {
+                        d.ports.images.erase("spellskill/CombatAutoEnable");
+                        d.ports.images.insert("spellskill/CombatAutoDisable");
+                    }
+                };
+                d.until([&] { return d.executor.current_step_id().find("AwaitAction") != std::string::npos; });
+                const auto before = d.ports.recognitions;
+                d.until([&] { return d.ports.recognitions >= before + 12; });
+                check(!d.terminal() && d.ports.inputs.size() == (initially_enabled ? 0 : 1),
+                      "SINGLE_AUTO_DISABLED_BEFORE_ACTION");
+                // 模拟动作期间Active和指令菜单消失，但Auto控件仍在。
+                d.ports.combat = false;
+                d.ports.images.erase("flee");
+                d.finish();
+                check(d.last.state == runtime::TickState::Completed &&
+                      d.ports.inputs.size() == (initially_enabled ? 1 : 2), "SINGLE_AUTO_DID_NOT_DISABLE_AFTER_ACTION");
+            }
+            Driver ended(games::combat::single_actor_auto());
+            ended.ports.combat = true;
+            ended.ports.images = {"flee", "spellskill/CombatAutoEnable"};
+            ended.until([&] { return ended.executor.current_step_id().find("AwaitAction") != std::string::npos; });
+            ended.ports.scene("ended");
+            ended.finish();
+            check(ended.last.state == runtime::TickState::Completed && ended.ports.inputs.empty(),
+                  "SINGLE_AUTO_CLICK_AFTER_BATTLE_END");
+            auto profile = storage::LegacyConfigImporter(read("packs/wvd/parameters/legacy-config-fields.json"))
+                .parse({{"GENERAL", J::object()}}).values;
+            profile["STRATEGY"] = J::array({{{"group_name", "test"}, {"skill_settings", J::array({
+                {{"role_var", "test"}, {"skill_var", "左下技能"}, {"skill_lvl", 1}, {"target_var", "next"}}
+            })}}});
+            const auto assets = read("resources/authoring/semantic-assets.json");
+            J documents = J::object();
+            for (const auto &doc : read("resources/authoring/public-flows.json"))
+                documents[doc.at("flow").at("id").get<std::string>()] = doc;
+            const games::tasks::PublicFlowLibrary library(documents, assets);
+            const games::tasks::PublicStepScope public_steps([&](const std::string &id, const J &arguments) {
+                return library.compile_step(id, arguments, "zh-Hant");
+            });
+            auto turn = games::combat::take_turn(profile, {});
+            games::tasks::localize_task_assets(turn, assets, "zh-Hant");
+            (void)games::tasks::compile_native_program(turn, J::object(), "single-auto-integration");
+            check(turn.nodes.contains("CharAuto_DisableAfterActionStarted") &&
+                  turn.nodes.contains("Skill0Auto_DisableAfterActionStarted") &&
+                  !turn.nodes.contains("DisableCharAuto"), "SINGLE_AUTO_CALLERS_NOT_MIGRATED");
+            check(turn.nodes.at("CharAuto_DisableAfterActionStarted").dump().find("combat_flee_zh_hant") != std::string::npos,
+                  "SINGLE_AUTO_MENU_NOT_LOCALIZED");
+            std::cout << "Single auto delayed action, already-enabled, battle-end and both callers passed\n";
+            return 0;
+        }
+        if (argc == 2 && std::string(argv[1]) == "--recognition-language") {
+            using namespace wvd;
+            using O = contracts::RecognitionOutcome;
+            const auto manifest = closure::read("packs/wvd/manifest.json");
+            recognition::Bundle source_bundle{std::filesystem::absolute("packs/wvd"), manifest.at("revision"), {}};
+            for (const auto &row : manifest.at("files")) source_bundle.files.push_back({row.at("path"), row.at("sha256")});
+            const auto aliases = manifest.value("aliases", J::object());
+            // 源目录还含清单/说明，不是发布快照；复制实际所需素材到独立且可丢弃的目录。
+            recognition::Bundle bundle{std::filesystem::absolute(".local") /
+                ("language-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count())),
+                source_bundle.revision, {}};
+            for (const auto *name : {"retry", "network_retry_zh_hant", "next"}) {
+                const auto selected = games::vision::resolve_image_source(source_bundle, aliases, name);
+                const auto target = bundle.root / selected.relative_path;
+                std::filesystem::create_directories(target.parent_path());
+                std::filesystem::copy_file(source_bundle.root / selected.relative_path, target);
+                bundle.files.push_back({selected.relative_path, platform::file_sha256(target)});
+            }
+            for (const auto *locale : {"zh-Hant", "en"}) {
+                recognition::Service service(bundle, games::vision::native_handlers(aliases, locale));
+                contracts::FrameEnvelope frame;
+                frame.identity.device_id = "offline-language"; frame.identity.game_id = "wvd";
+                frame.identity.pack_revision = bundle.revision; frame.identity.viewport_id = "900x1600";
+                frame.identity.generation = 1;
+                frame.identity.raw_size = frame.identity.recognition_size = {900, 1600};
+                const auto evaluate = [&](const cv::Mat &pixels, const J &condition, bool fresh_frame = true) {
+                    if (fresh_frame) {
+                        ++frame.identity.frame_id;
+                        frame.identity.captured_at = frame.identity.capture_finished_at = std::chrono::steady_clock::now();
+                        frame.raw_bgr = std::make_shared<const std::vector<std::uint8_t>>(
+                            pixels.data, pixels.data + pixels.total() * pixels.elemSize());
+                    }
+                    return service.evaluate(frame, frame.identity, {"language", "1", {0, 0, 900, 1600},
+                        recognition::CustomParameters{"WvdVision", condition}});
+                };
+                // 使用仓库真实模板拼成受控图，不冒充游戏现场；调用正式Service及OpenCV。
+                for (const auto *name : {"retry", "retry.png", "network_retry_zh_hant", "next"}) {
+                    const auto source = games::vision::resolve_image_source(bundle, aliases, name);
+                    const auto templ = cv::imread((source.bundle->root / source.relative_path).string());
+                    closure::check(!templ.empty(), "LANGUAGE_SAMPLE_MISSING");
+                    cv::Mat pixels = cv::Mat::zeros(1600, 900, CV_8UC3);
+                    templ.copyTo(pixels(cv::Rect(300, 700, templ.cols, templ.rows)));
+                    const auto before = service.resource_stats().decode_count;
+                    const bool allowed = std::string(name) == "next" ||
+                        (std::string(locale) == "en" ? std::string(name).starts_with("retry") : std::string(name) == "network_retry_zh_hant");
+                    const auto result = evaluate(pixels, {{"mode", "template"}, {"image", name}});
+                    closure::check(result.outcome == (allowed ? O::Hit : O::NoHit), "LANGUAGE_WRONG_RESULT:" + std::string(name));
+                    if (!allowed) {
+                        closure::check(service.resource_stats().decode_count == before &&
+                            result.evidence.dump().find("template_language_excluded") != std::string::npos,
+                            "EXCLUDED_TEMPLATE_WAS_DECODED");
+                        const auto repeated = evaluate(pixels, {{"mode", "template"}, {"image", name}, {"threshold", .01}}, false);
+                        closure::check(repeated.outcome == O::NoHit && service.resource_stats().decode_count == before &&
+                            repeated.evidence.dump().find("template_language_excluded") != std::string::npos &&
+                            repeated.evidence.dump().find("best_score") == std::string::npos,
+                            "LANGUAGE_EXCLUSION_LOST_ON_SAME_FRAME_THRESHOLD_CHANGE");
+                    }
+                }
+                cv::Mat blank = cv::Mat::zeros(1600, 900, CV_8UC3);
+                if (std::string(locale) == "zh-Hant") {
+                    const auto before = service.resource_stats().decode_count;
+                    const auto result = evaluate(blank, {{"mode", "default_dialogue"}});
+                    closure::check(result.outcome == O::NoHit && service.resource_stats().decode_count == before,
+                        "ENGLISH_DIALOGUE_SCANNED_IN_ZH");
+                }
+                closure::check(evaluate(blank, {{"mode", "template"}, {"image", "missing_language_test_asset"}}).outcome == O::Error,
+                    "LANGUAGE_FILTER_HID_MISSING_ASSET");
+                for (const auto *name : {"pause", "combatTarget", "combat_active_zh_hant", "premium_purchase_green", "retry_blank", "resume"})
+                    closure::check(games::vision::template_language_enabled(name, locale), "SHARED_TEMPLATE_DISABLED");
+            }
+            std::cout << "language: EN/ZH exclusive real template matches; shared NEXT preserved; excluded decode=0; missing asset remains Error\n";
+            return 0;
+        }
         if (argc == 2 && std::string(argv[1]) == "--critical-input-protection") {
             using namespace wvd;
             using C = games::tasks::PipelineCompiler;
@@ -651,6 +785,42 @@ int main(int argc, char **argv) {
                 if (node.at("id") == "Download")
                     require(node.at("parameters").at("postcondition").at("mode") == "not", "DOWNLOAD_SOURCE_IS_NOT_COMPLETION");
             std::cout << "transition contracts: leap, world, map, auto-combat, inn, bounty, boot; no device input\n";
+            return 0;
+        }
+        if (argc == 2 && std::string(argv[1]) == "--fortress-assets") {
+            std::ifstream input("resources/authoring/semantic-assets.json");
+            const auto catalogue = J::parse(input);
+            wvd::authoring::SemanticAssets resources(catalogue);
+            using C = wvd::games::tasks::PipelineCompiler;
+            for (const auto &[legacy, id] : std::map<std::string, std::string>{
+                {"impregnableFortress", "outskirts.fortress"}, {"fortressb1f", "outskirts.fortress.zone1"},
+                {"fortressb3f", "outskirts.fortress.zone3"}, {"fortressb7f", "outskirts.fortress.zone7"},
+                {"fortressb10f", "outskirts.fortress.zone10"}}) {
+                C graph("test.fortress_assets");
+                graph.click("Entry", C::image(legacy), C::image(legacy), C::image(legacy), {"Terminal"});
+                auto zh = graph.finish(), en = zh;
+                wvd::games::tasks::localize_task_assets(zh, catalogue, "zh-Hant");
+                wvd::games::tasks::localize_task_assets(en, catalogue, "en");
+                const auto image = resources.condition(id, "zh-Hant").at("image").get<std::string>() + ".png";
+                if (std::find(zh.images.begin(), zh.images.end(), image) == zh.images.end() ||
+                    std::find(zh.images.begin(), zh.images.end(), legacy + ".png") != zh.images.end() ||
+                    std::find(en.images.begin(), en.images.end(), legacy + ".png") == en.images.end())
+                    throw std::runtime_error("FORTRESS_LOCALE_MAPPING:" + legacy);
+            }
+            const auto identity = resources.resolve(J{{"mode", "location"}, {"id", 3}}, "zh-Hant");
+            std::ifstream flows("resources/authoring/public-flows.json");
+            J documents = J::object();
+            for (const auto &doc : J::parse(flows))
+                documents[doc.at("flow").at("id").get<std::string>()] = doc;
+            const wvd::games::tasks::PublicFlowLibrary library(documents, catalogue);
+            const wvd::games::tasks::PublicStepScope public_steps([&](const std::string &id, const J &arguments) {
+                return library.compile_step(id, arguments, "zh-Hant");
+            });
+            const auto back = wvd::games::navigation::return_to_fortress();
+            if (identity != wvd::games::vision::fortress_city() ||
+                back.nodes.at("Done").dump().find("fortress_city_background") == std::string::npos)
+                throw std::runtime_error("FORTRESS_ARRIVAL_MUST_REQUIRE_IDENTITY");
+            std::cout << "fortress locale mappings and arrival identity: PASS; no device input\n";
             return 0;
         }
         if (argc == 3 && std::string(argv[1]) == "--roi-review") {

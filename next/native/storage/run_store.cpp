@@ -119,8 +119,9 @@ J event_record(const std::string &instance, std::uint64_t run, std::uint64_t gen
             {"payload", std::move(payload)}};
 }
 } // namespace
-EventJournal::EventJournal(std::string instance, std::uint64_t run, std::size_t capacity)
-    : instance_(std::move(instance)), run_(run), capacity_(capacity) {
+EventJournal::EventJournal(std::string instance, std::uint64_t run, std::size_t capacity,
+                           std::function<void(const J &)> event_sink)
+    : instance_(std::move(instance)), run_(run), capacity_(capacity), event_sink_(std::move(event_sink)) {
     if (capacity < 8 || capacity > 65536)
         throw std::runtime_error("EVENT_CAPACITY_INVALID");
 }
@@ -134,6 +135,9 @@ std::uint64_t EventJournal::emit(std::uint64_t generation, std::string type, J p
     if (committing_)
         throw std::runtime_error("JOURNAL_COMMIT_IN_PROGRESS");
     const auto sequence = ++sequence_;
+    auto value = event_record(instance_, run_, generation, sequence, std::move(type), std::move(payload));
+    // 磁盘审计先于UI环淘汰，容量不再决定能否追溯早期角色选择和恢复事件。
+    if (event_sink_) event_sink_(value);
     if (events_.size() == capacity_) {
         auto discard = std::find_if(events_.begin(), events_.end(),
                                     [](const auto &event) { return !event.critical; });
@@ -146,9 +150,7 @@ std::uint64_t EventJournal::emit(std::uint64_t generation, std::string type, J p
         dropped_through_ = std::max(dropped_through_, discard->seq);
         events_.erase(discard);
     }
-    events_.push_back(
-        {sequence, critical,
-         event_record(instance_, run_, generation, sequence, std::move(type), std::move(payload))});
+    events_.push_back({sequence, critical, std::move(value)});
     return sequence;
 }
 J EventJournal::read(std::uint64_t after) const {
@@ -474,6 +476,14 @@ J RunStore::save_diagnostic(const contracts::FrameEnvelope *frame, const Diagnos
 J RunStore::diagnostic_summary() const {
     std::lock_guard lock(diagnostic_mutex_);
     return {{"schema", 1}, {"entries", diagnostic_entries_}, {"bytes_saved", diagnostic_bytes_},
+        {"event_history", {{"path", "execution-events.jsonl"}, {"rows", event_rows_},
+            {"bytes", event_bytes_}, {"limit_bytes", 64ULL * 1024 * 1024},
+            {"dropped", event_dropped_}, {"failed", event_failed_},
+            {"terminal_source", "result.json"},
+            {"complete", event_failed_ == 0 && event_dropped_ == 0}}},
+        {"post_terminal_memory", {{"path", "memory-lifecycle.json"},
+            {"collected", logging_.memory && logging_.accepts(LogLevel::Info)},
+            {"phases", memory_boundaries_.size()}, {"failed", memory_boundary_failed_}}},
         {"logs", {{"path", "diagnostics.jsonl"}, {"rows", log_rows_},
             {"bytes", log_bytes_}, {"limit_bytes", 16ULL * 1024 * 1024},
             {"dropped", log_dropped_}, {"failed", log_failed_},
@@ -494,7 +504,41 @@ J RunStore::diagnostic_summary() const {
         {"throttled", diagnostic_throttled_}, {"duplicates", diagnostic_duplicates_},
         {"quota_exceeded", diagnostic_quota_}, {"unrecorded", diagnostic_unrecorded_},
         {"complete", diagnostic_failed_ == 0 && diagnostic_quota_ == 0 && diagnostic_unrecorded_ == 0 &&
-            timing_failed_ == 0 && timing_dropped_ == 0 && log_failed_ == 0 && log_dropped_ == 0}};
+            timing_failed_ == 0 && timing_dropped_ == 0 && log_failed_ == 0 && log_dropped_ == 0 &&
+            event_failed_ == 0 && event_dropped_ == 0}};
+}
+void RunStore::append_event(const J &event) noexcept {
+    std::lock_guard lock(diagnostic_mutex_);
+    try {
+        if (event_closed_) { ++event_dropped_; return; }
+        const auto row = event.dump();
+        if (event_bytes_ + row.size() + 1 > 64ULL * 1024 * 1024) {
+            event_closed_ = true; ++event_dropped_; return;
+        }
+        if (!event_stream_.is_open()) {
+            event_stream_.exceptions(std::ios::failbit | std::ios::badbit);
+            event_stream_.open(directory_ / "execution-events.jsonl", std::ios::binary | std::ios::app);
+        }
+        event_stream_ << row << '\n';
+        event_stream_.flush();
+        event_bytes_ += row.size() + 1;
+        ++event_rows_;
+    } catch (...) { ++event_failed_; event_closed_ = true; }
+}
+void RunStore::record_memory_boundary(const std::string &phase, const J &sample) noexcept {
+    if (!logging_.memory || !logging_.accepts(LogLevel::Info)) return;
+    std::lock_guard lock(diagnostic_mutex_);
+    try {
+        if (phase != "worker_definition_released" && phase != "worker_joined" && phase != "batch_payloads_released")
+            throw std::runtime_error("MEMORY_BOUNDARY_INVALID");
+        auto row = sample;
+        row["utc_ms"] = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::system_clock::now().time_since_epoch()).count();
+        memory_boundaries_[phase] = std::move(row);
+        platform::atomic_write(directory_ / "memory-lifecycle.json",
+            J{{"schema", 1}, {"instance_id", instance_}, {"run_id", run_},
+              {"failed", memory_boundary_failed_}, {"samples", memory_boundaries_}}.dump(2), true);
+    } catch (...) { ++memory_boundary_failed_; }
 }
 void RunStore::note_diagnostic_hook_failure() noexcept {
     try {

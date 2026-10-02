@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "source_commit": "6585f4075f5714ab522aa582993860c09af912c1",
-  "revision": "383b080a9faf8f8e1d230a8148e3beb1361810f36547ca991ad366ca6c68de34",
+  "revision": "c09c63e9d28e821d9ad2476f94356d6beb5b577d2e6380e415fc275aeed63b66",
   "files": [
     {
       "path": "image/7000G/icantagreewithU.png",
@@ -2539,6 +2539,12 @@
       ]
     },
     {
+      "path": "image/fortress_city_background.png",
+      "source": "next/resources/images/fortress_city_background.png",
+      "sha256": "4100b1669ec114542f02f40fbc1e185b7d5c24160c4a481b0e86399846ba0bd3",
+      "bytes": 18047
+    },
+    {
       "path": "image/fortressb10f.png",
       "source": "resources/images/fortressb10f.png",
       "sha256": "21ae0a17d375eced8f0ca1f2a2c9bf88af7240080109c3949ad194e1fd76de62",
@@ -3313,6 +3319,60 @@
       "source_refs": [
         "semantic:outskirts.fire"
       ]
+    },
+    {
+      "path": "image/outskirts_fortress_zh_hant.png",
+      "source": "next/resources/images/outskirts_fortress_zh_hant.png",
+      "sha256": "9205dd9474c85a5279eb5ed2e51116767ce05b3f1b773d6235861cf47a74e644",
+      "bytes": 16654
+    },
+    {
+      "path": "image/outskirts_fortress_zone10_zh_hant.png",
+      "source": "next/resources/images/outskirts_fortress_zone10_zh_hant.png",
+      "sha256": "bb2d479847861e1ac513cd377c94bfcb1ff42d16aa8a5d22ef1988c6761cfbfa",
+      "bytes": 29137
+    },
+    {
+      "path": "image/outskirts_fortress_zone1_zh_hant.png",
+      "source": "next/resources/images/outskirts_fortress_zone1_zh_hant.png",
+      "sha256": "6704b3916f3683ffca33e82999734925329056bba75c8d60e6d858bb4d8b734d",
+      "bytes": 27051
+    },
+    {
+      "path": "image/outskirts_fortress_zone3_zh_hant.png",
+      "source": "next/resources/images/outskirts_fortress_zone3_zh_hant.png",
+      "sha256": "c62475df55d4db5ff32672ce87d392ad3f00f139431809232d92ffd2168c6ff3",
+      "bytes": 26991
+    },
+    {
+      "path": "image/outskirts_fortress_zone4_zh_hant.png",
+      "source": "next/resources/images/outskirts_fortress_zone4_zh_hant.png",
+      "sha256": "3ff895cb387ac3e3bd12d95c5e5a7c5866228bece6e78927cd144b5b57f212c8",
+      "bytes": 18079
+    },
+    {
+      "path": "image/outskirts_fortress_zone5_zh_hant.png",
+      "source": "next/resources/images/outskirts_fortress_zone5_zh_hant.png",
+      "sha256": "e6952e03b224a243dcaf1aefaa20d505d4032ee3bb406a280785009eb431959a",
+      "bytes": 29188
+    },
+    {
+      "path": "image/outskirts_fortress_zone6_zh_hant.png",
+      "source": "next/resources/images/outskirts_fortress_zone6_zh_hant.png",
+      "sha256": "8ae1095b2755fd9253cf8799f5458a47b5e68d6553cc4bc7df909c3b294025d6",
+      "bytes": 29467
+    },
+    {
+      "path": "image/outskirts_fortress_zone7_zh_hant.png",
+      "source": "next/resources/images/outskirts_fortress_zone7_zh_hant.png",
+      "sha256": "8a84cb0b0a691a3de3481c7f0ebc5f0cd1be261ff8066a7f87d25eb4f3e8fb8e",
+      "bytes": 29329
+    },
+    {
+      "path": "image/outskirts_fortress_zone9_zh_hant.png",
+      "source": "next/resources/images/outskirts_fortress_zone9_zh_hant.png",
+      "sha256": "c4bde71c67c5746aab8fd674666de5b2fcb293dca91f00ab538156cd786ca2d5",
+      "bytes": 30825
     },
     {
       "path": "image/outskirts_light_b1f_zh_hant.png",
@@ -4826,8 +4886,8 @@
     {
       "path": "parameters/semantic-assets.json",
       "source": "next/resources/authoring/semantic-assets.json",
-      "sha256": "3ba9f733ff82e3340b650e385bdfe246a53527bbed398923a1f57ca7296fde5b",
-      "bytes": 73089,
+      "sha256": "7019e115136d092438a1abf6120d3125d4cb3d03ad26b8caaabbe6b56f437a3d",
+      "bytes": 81585,
       "source_refs": [
         "authoring:public-flow-1"
       ]

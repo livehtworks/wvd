@@ -24,6 +24,7 @@ def analyze(root):
     nodes, input_results, phases = (collections.defaultdict(list) for _ in range(3))
     retries, faults, memory, durations, sources = [], [], [], [], []
     diagnostic_reasons, identities = collections.Counter(), set()
+    event_coverage, lifecycle_memory = [], []
     for directory in directories:
         run = int(directory.name)
         data = {}
@@ -95,8 +96,39 @@ def analyze(root):
             phases[session["generation"]].append(perf["wall_ns"] / 1e9)
             if perf.get("timing_errors"):
                 faults.append({"run": run, "type": "timing_errors", "count": perf["timing_errors"]})
+        # 新版磁盘事件流是完整执行历史；旧版只能声明尾窗，不能据其无错误推断全轮。
+        history = result["diagnostics"].get("event_history")
+        events = result["events"]["events"]
+        if history:
+            read_log("execution-events.jsonl")
+            text = data["execution-events.jsonl"]
+            if not history["complete"] or not text.endswith("\n"):
+                raise ValueError(f"INCOMPLETE_EVENT_HISTORY:{run}")
+            events = [json.loads(line) for line in text.splitlines()]
+            if len(events) != history["rows"]:
+                raise ValueError(f"EVENT_HISTORY_COUNT_MISMATCH:{run}")
+            for index, event in enumerate(events, 1):
+                if (event["run_id"] != run or event["server_instance_id"] != run_info["instance"]
+                        or event["seq"] != index):
+                    raise ValueError(f"EVENT_HISTORY_IDENTITY_OR_SEQUENCE:{run}:{index}")
+            if result["events"]["last_seq"] != len(events) + 1:
+                raise ValueError(f"EVENT_HISTORY_TERMINAL_GAP:{run}")
+        event_coverage.append({"run": run, "source": "execution-events.jsonl" if history else "result_tail",
+                               "complete": bool(history) or not result["events"].get("resync_required", False)})
+        boundary = result["diagnostics"].get("post_terminal_memory", {})
+        if boundary.get("collected"):
+            if (directory / "memory-lifecycle.json").is_file():
+                read_log("memory-lifecycle.json")
+                measured = json.loads(data["memory-lifecycle.json"])
+                if measured["run_id"] != run or measured["instance_id"] != run_info["instance"]:
+                    raise ValueError(f"MEMORY_BOUNDARY_IDENTITY:{run}")
+                lifecycle_memory.append(measured)
+                if measured.get("failed") or "worker_joined" not in measured["samples"]:
+                    faults.append({"run": run, "type": "post_worker_memory_incomplete"})
+            else:
+                faults.append({"run": run, "type": "post_worker_memory_missing"})
         recovery_seen = set()
-        for event in result["events"]["events"]:
+        for event in events:
             payload = event.get("payload", {})
             if event["type"] == "observation.recovery":
                 key = (payload.get("started_at_ns"), payload.get("code"))
@@ -152,6 +184,7 @@ def analyze(root):
             "retry_groups": [{"node": k, "cases": len(v), "max_attempts": max(p["attempts"] for p in v),
                               "max_seconds": max(p["seconds"] for p in v), "runs": [p["run"] for p in v]} for k, v in groups.items()],
             "faults": faults, "diagnostic_reasons": dict(diagnostic_reasons), "memory_samples": memory,
+            "event_coverage": event_coverage, "lifecycle_memory": lifecycle_memory,
             "provenance": {"inputs": sources, "run_identity": list(next(iter(identities))),
                            "binary_identity": (next(iter(identities))[3] if len(next(iter(identities))) > 3
                                                else None) or "NOT_RECORDED_IN_RUN_LOGS"}}

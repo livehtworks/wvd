@@ -11,7 +11,7 @@ inline nlohmann::json resource(const char *id, const char *locale = "") {
     static const auto recipes = [] {
         authoring::SemanticAssets assets(nlohmann::json::parse(wvd_semantic_catalogue));
         std::map<std::string, nlohmann::json> values;
-        for (const char *name : {"boot.announcement.page", "city.royal.identity", "city.inn.entry", "city.temple.entry",
+        for (const char *name : {"boot.announcement.page", "city.royal.identity", "city.fortress.identity", "city.inn.entry", "city.temple.entry",
             "city.blacksmith.entry", "city.ruins.entry", "city.guild.entry",
             "city.ore_merchant.entry", "city.item_shop.entry", "city.edge.entry", "city.any"})
             values.emplace(name, assets.condition(name, ""));
@@ -27,6 +27,7 @@ inline nlohmann::json resource(const char *id, const char *locale = "") {
     return recipes.at(std::string(id) + (locale[0] ? std::string("|") + locale : ""));
 }
 inline nlohmann::json royal_city() { return resource("city.royal.identity"); }
+inline nlohmann::json fortress_city() { return resource("city.fortress.identity"); }
 inline nlohmann::json inn_button() { return resource("city.inn.entry"); }
 inline nlohmann::json inn_menu() {
     return {{"mode", "any"}, {"conditions", {resource("inn.stay.option", "zh-Hant"),

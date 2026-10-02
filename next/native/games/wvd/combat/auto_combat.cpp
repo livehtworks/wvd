@@ -1,6 +1,39 @@
 #include "auto_combat.hpp"
 
 namespace wvd::games::combat {
+tasks::CompiledWorkflow single_actor_auto() {
+    using C = tasks::PipelineCompiler;
+    using J = nlohmann::json;
+    C graph("combat.single_actor_auto");
+    graph.check_policy("combat", {"wvd-network-retry", "wvd-pause", "wvd-download"});
+    const auto image = [](const char *name, J roi) {
+        auto value = C::image(name);
+        value["roi"] = std::move(roi);
+        return value;
+    };
+    const J battle{{"mode", "combat_active"}};
+    const auto ended = C::all({C::any({C::image("dungFlag"), C::image("chestFlag"), C::image("RiseAgain")}), C::absent(battle)});
+    const auto popup = C::any({C::image("combat_skill_detail"), C::image("combat_skill_confirm"),
+                              image("close", {120, 1330, 740, 270})});
+    const auto menu = image("flee", {660, 1080, 240, 220});
+    const auto enabled = image("spellskill/CombatAutoEnable", {740, 940, 160, 280});
+    const auto disabled = image("spellskill/CombatAutoDisable", {740, 940, 160, 280});
+    const auto clear = C::absent(popup);
+    const auto enable = graph.append("Auto", enable_auto(), {"AwaitAction"},
+        {{"BattleEndedExit", {"Terminal"}}, {"BlockedExit", {"BlockedExit"}}});
+    graph.route("Entry", {enable});
+    // 动画中 Active 标识可能消失；以 Auto 控件仍在、指令菜单已退出、无详情遮挡确认。
+    // 同一页只亮灯时不关闭，也不重复开启；网络/暂停继续交给既有异常分派。
+    graph.route("AwaitAction", {"Ended", "DisableAfterActionStarted", "AlreadyDisabled"});
+    graph.observe("Ended", ended, {"Terminal"});
+    graph.fixed_click("DisableAfterActionStarted", C::all({clear, enabled, C::absent(menu)}),
+        C::any({C::all({clear, disabled}), ended}), {850, 1100}, {"Terminal"});
+    graph.retry_menu_input("DisableAfterActionStarted", C::all({clear, enabled}), 3000);
+    graph.observe("AlreadyDisabled", C::all({clear, disabled}), {"Terminal"});
+    graph.interrupt_on(C::absent(J{{"mode", "input_clear"}}), "combat.common_screen_requires_dispatch");
+    return graph.finish();
+}
+
 tasks::CompiledWorkflow enable_auto() {
     using C = tasks::PipelineCompiler;
     using J = nlohmann::json;

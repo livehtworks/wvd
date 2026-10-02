@@ -599,11 +599,22 @@ Application::J Application::catalog() const {
                 const auto resources = semantic_catalogue_.value("resources", J::object());
                 for (const auto &[id, entry] : resources.items()) {
                     J locales = J::array();
+                    J methods = J::object();
                     const auto variants = entry.value("variants", J::object());
-                    for (const auto &[locale, variant] : variants.items()) { (void)variant; locales.push_back(locale); }
+                    for (const auto &[locale, variant] : variants.items()) {
+                        locales.push_back(locale);
+                        const auto algorithm = variant.at("condition").value("mode", "");
+                        J available = J::array({algorithm});
+                        const auto alternatives = variant.value("alternatives", J::object());
+                        for (const auto &[method, recipe] : alternatives.items()) {
+                            (void)recipe;
+                            if (method != algorithm) available.push_back(method);
+                        }
+                        methods[locale] = {{"default", algorithm}, {"available", available}};
+                    }
                     result.push_back({{"value", id}, {"label", entry.value("label", id)},
                         {"category", entry.value("category", "未分类")}, {"role", entry.value("role", "observation")},
-                        {"locales", locales}});
+                        {"locales", locales}, {"methods", methods}});
                 }
                 return result;
             }()},
@@ -625,10 +636,9 @@ Application::J Application::catalog() const {
                                          J{{"value", "右上角色"}, {"label", "右上角色"}},
                                          J{{"value", "左下角色"}, {"label", "左下角色"}},
                                          J{{"value", "中下角色"}, {"label", "中下角色"}},
-                                         J{{"value", "右下角色"}, {"label", "右下角色"}},
-                                         J{{"value", "低生命值"}, {"label", "低生命值"}},
-                                         J{{"value", "不可用"}, {"label", "不可用"}}})},
-            {"skill_frequencies", options({J{{"value", ""}, {"label", "沿用旧版消费规则"}}})},
+                                         J{{"value", "右下角色"}, {"label", "右下角色"}}})},
+            {"skill_frequencies", options({J{{"value", "用完后移除"}, {"label", "用完后移除"}},
+                J{{"value", "重复"}, {"label", "重复该动作"}}})},
             {"chest_openers", options({J{{"value", 0}, {"label", "随机"}},
                                         J{{"value", 1}, {"label", "左上"}},
                                         J{{"value", 2}, {"label", "中上"}},
@@ -1364,7 +1374,7 @@ void Application::watch_task_session(const J &request, const J &stored, J source
         task_session_active_ = true;
     }
     try {
-    handoff_worker_ = std::jthread([this, request, stored, source_values = std::move(source_values),
+    handoff_worker_ = std::jthread([this, request = J(request), stored = J(stored), source_values = std::move(source_values),
         backend = std::move(backend), request_id = std::move(request_id)](std::stop_token stop) mutable {
         const auto update = [this](const std::string &state, const J &detail) {
             std::lock_guard lock(mutex_);
@@ -1387,6 +1397,7 @@ void Application::watch_task_session(const J &request, const J &stored, J source
                 }
             }
             if (stop.stop_requested() || stopping_ || cancel_operation_) return;
+            require(coordinator_->collect_finished_worker(), "HANDOFF_SOURCE_WORKER_NOT_FINISHED");
             const auto snapshot = coordinator_->request_snapshot(request_id);
             require(snapshot && snapshot->quiescent && snapshot->result_saved &&
                 snapshot->storage_error.empty(), "HANDOFF_SOURCE_NOT_COMMITTED");
@@ -1503,9 +1514,15 @@ void Application::watch_task_session(const J &request, const J &stored, J source
         }
         };
         work();
+        const bool repeating = request.value("repeat", false);
+        request = J();
+        stored = J();
+        source_values = J();
+        backend.reset();
+        coordinator_->record_batch_release();
         std::lock_guard lock(mutex_);
         repeat_status_["active"] = false;
-        if (request.value("repeat", false) && repeat_status_.at("state") != "failed" &&
+        if (repeating && repeat_status_.at("state") != "failed" &&
             repeat_status_.at("state") != "stopped" && repeat_status_.at("state") != "completed") repeat_status_["state"] = "stopped";
         if (handoff_status_.value("state", "") == "watching")
             handoff_status_["state"] = "not_requested";
@@ -1837,7 +1854,7 @@ Application::J Application::recognition_probe(const J &request) {
                        {"revision", author_bundle_.revision}, {"roi", roi}};
         if (mode == "ocr") {
             recognition["type"] = "ocr";
-            recognition["expected"] = condition.at("expected");
+            recognition.update(recognition::ocr_parameters_json(recognition::parse_ocr_parameters(condition)));
         } else {
             // 诊断与发布后的 WVD 条件共用匹配器，保留灰度/遮罩/预处理等配方字段。
             recognition["type"] = "custom";

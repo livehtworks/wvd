@@ -64,6 +64,36 @@ class TimingAnalysisTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "MISSING_LOG:1/result.json"):
             analysis.analyze(self.root)
 
+    def test_full_history_and_post_worker_memory(self):
+        directory = self.fixture()
+        path = directory / "result.json"
+        result = json.loads(path.read_text(encoding="utf-8"))
+        result["events"].update(resync_required=True, last_seq=2)
+        result["diagnostics"]["event_history"] = {"rows": 1, "complete": True}
+        result["diagnostics"]["post_terminal_memory"] = {"collected": True}
+        path.write_text(json.dumps(result), encoding="utf-8")
+        event = {"run_id": 1, "server_instance_id": "test-instance", "seq": 1,
+                 "type": "observation.recovery", "payload": {"code": "EARLY_RECOVERY", "started_at_ns": 1}}
+        (directory / "execution-events.jsonl").write_text(json.dumps(event) + "\n", encoding="utf-8")
+        boundary = {"run_id": 1, "instance_id": "test-instance", "failed": 0,
+                    "samples": {"worker_joined": {"private_bytes": 100}}}
+        (directory / "memory-lifecycle.json").write_text(json.dumps(boundary), encoding="utf-8")
+        report = analysis.analyze(self.root)
+        self.assertTrue(report["event_coverage"][0]["complete"])
+        self.assertIn("EARLY_RECOVERY", [row.get("code") for row in report["faults"]])
+        self.assertEqual(report["lifecycle_memory"], [boundary])
+        event["seq"] = 2
+        (directory / "execution-events.jsonl").write_text(json.dumps(event) + "\n", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "EVENT_HISTORY_IDENTITY_OR_SEQUENCE"):
+            analysis.analyze(self.root)
+
+    def test_legacy_tail_not_reported_complete(self):
+        path = self.fixture() / "result.json"
+        result = json.loads(path.read_text(encoding="utf-8"))
+        result["events"]["resync_required"] = True
+        path.write_text(json.dumps(result), encoding="utf-8")
+        self.assertFalse(analysis.analyze(self.root)["event_coverage"][0]["complete"])
+
     def test_truncated(self):
         path = self.fixture() / "action-timing.jsonl"
         path.write_bytes(path.read_bytes().rstrip(b"\n"))

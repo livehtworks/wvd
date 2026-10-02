@@ -22,6 +22,30 @@ def verify(path, item):
         raise RuntimeError(f"固定依赖校验失败: {item['id']}")
 
 
+def prepare_ocr_models():
+    """模型只在依赖准备阶段下载；发布和运行阶段只校验，不联网补洞。"""
+    lock = json.loads((ROOT / "resources/recognition/ocr-models.json").read_text(encoding="utf-8"))
+    for model in lock["models"].values():
+        for item in model["files"].values():
+            target = (ROOT / item["source"]).resolve()
+            if not target.is_relative_to(ROOT.resolve()) or target.is_symlink():
+                raise RuntimeError("OCR依赖路径非法")
+            if not target.is_file():
+                if "url" not in item or not target.is_relative_to(CACHE.resolve()):
+                    raise RuntimeError("OCR固定模型缺失: " + item["source"])
+                target.parent.mkdir(parents=True, exist_ok=True)
+                partial = target.with_suffix(target.suffix + ".partial")
+                if partial.exists():
+                    raise RuntimeError("OCR未完成下载需检查: " + str(partial))
+                with urllib.request.urlopen(item["url"], timeout=120) as source, partial.open("xb") as output:
+                    shutil.copyfileobj(source, output)
+                if digest(partial) != item["sha256"]:
+                    raise RuntimeError("OCR下载哈希不符: " + item["source"])
+                partial.rename(target)
+            if digest(target) != item["sha256"]:
+                raise RuntimeError("OCR固定模型哈希不符: " + item["source"])
+
+
 def prepare():
     lock = json.loads((ROOT / "native-dependencies.lock.json").read_text(encoding="utf-8"))
     archives = CACHE / "archives"
@@ -62,6 +86,7 @@ def prepare():
                     source.extractall(target)
                 if not marker.is_file():
                     raise RuntimeError("ORT 官方归档结构与锁定布局不符")
+    prepare_ocr_models()
     print("Pinned native dependencies ready")
 
 

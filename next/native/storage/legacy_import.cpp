@@ -86,7 +86,7 @@ games::WvdProfile LegacyConfigImporter::parse(const J &source) const {
                                 : general.contains(name) ? "GENERAL"
                                                          : "VERIFIED_DEFAULT";
     }
-    games::validate_strategy(profile.values.at("STRATEGY"));
+    games::normalize_strategy(profile.values.at("STRATEGY"));
     auto points = profile.values.at("TASK_POINT_STRATEGY");
     if (points.contains("overall_strategy"))
         require(points.at("overall_strategy").is_string(), "PROFILE_TASK_POINT_TYPE");

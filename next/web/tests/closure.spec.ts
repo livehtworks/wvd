@@ -70,7 +70,7 @@ test('UI-布局：五视口、三页签、首屏动作、停止与截图焦点',
       const box = await page.getByRole('button', { name, exact: true }).boundingBox();
       expect(box, name).not.toBeNull(); expect(box!.y).toBeGreaterThanOrEqual(0); expect(box!.y + box!.height).toBeLessThanOrEqual(height);
     }
-    for (const name of ['任务目标', '游戏素材语言', '循环模式']) {
+    for (const name of ['任务目标', '游戏识别语言', '循环模式']) {
       const box = await page.getByRole('combobox', { name, exact: true }).boundingBox();
       expect(box!.y).toBeGreaterThanOrEqual(0); expect(box!.y + box!.height).toBeLessThanOrEqual(height);
     }

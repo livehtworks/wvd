@@ -130,7 +130,7 @@ function removeStrategy(index: number) {
 }
 function addSkill(group: StrategyGroup) {
   if (state.editLocked) return;
-  group.skill_settings.push({ role_var: "", skill_var: "", target_var: "", skill_lvl: 1, freq_var: "" });
+  group.skill_settings.push({ role_var: "", skill_var: "", target_var: "左上角色", skill_lvl: 1, freq_var: "用完后移除" });
 }
 function removeSkill(group: StrategyGroup, index: number) {
   if (state.editLocked) return; group.skill_settings.splice(index, 1); }
@@ -167,7 +167,7 @@ function updateSkill(skill: SkillSetting, key: keyof SkillSetting, event: Event)
           <label class="field"><span>循环模式</span><select v-model="state.repeatMode" :disabled="state.editLocked || state.runActive"><option value="forever">一直循环</option><option value="count">指定次数</option></select></label>
           <label v-if="state.repeatMode === 'count'" class="field"><span>循环次数</span><input v-model.number="state.repeatCount" type="number" min="1" max="1000000" :disabled="state.editLocked || state.runActive" /></label>
         </div>
-<label class="field run-locale"><span>游戏素材语言</span><select v-model="state.resourceLocale" :disabled="state.editLocked || state.runActive"><option v-for="option in resourceLocaleOptions" :key="option.value" :value="option.value">{{ option.label }}</option></select></label><button class="button run" :disabled="state.editLocked || state.runActive || state.deviceBusy || state.dirty || !state.draft?.FARM_TARGET" @click="state.startSelectedTask"><Play :size="16" />开始任务</button>
+<label class="field run-locale"><span>游戏识别语言</span><select v-model="state.resourceLocale" :disabled="state.editLocked || state.runActive"><option v-for="option in resourceLocaleOptions" :key="option.value" :value="option.value">{{ option.label }}</option></select></label><button class="button run" :disabled="state.editLocked || state.runActive || state.deviceBusy || state.dirty || !state.draft?.FARM_TARGET" @click="state.startSelectedTask"><Play :size="16" />开始任务</button>
           <span class="source-line span-2">当前来源：{{ state.envelope?.effective_source ?? (state.draft.TASK_SPECIFIC_CONFIG ? '任务覆盖' : '默认配置') }}</span>
           <details v-if="state.selectedTask?.description" class="task-description"><summary>任务说明</summary><p>{{ state.selectedTask.description }}</p></details>
         </div>
@@ -262,13 +262,13 @@ function updateSkill(skill: SkillSetting, key: keyof SkillSetting, event: Event)
               </div>
             </aside>
             <article v-if="selectedStrategy" class="strategy-group">
-              <header><input class="strategy-name" :value="selectedStrategy.group_name" aria-label="方案名称" @input="renameStrategy(selectedStrategy, ($event.target as HTMLInputElement).value)" /><label class="check-field"><input v-model="selectedStrategy.complete_one_as_all" type="checkbox" />释放任一即视为完成</label><button class="icon-button danger" title="删除方案" :aria-label="`删除方案 ${selectedStrategy.group_name}`" @click="removeStrategy(selectedStrategyIndex)"><Trash2 :size="16" /></button></header>
+              <header><input class="strategy-name" :value="selectedStrategy.group_name" aria-label="方案名称" @input="renameStrategy(selectedStrategy, ($event.target as HTMLInputElement).value)" /><label class="check-field" title="完成任一动作后清空本轮方案，优先于单行的重复设置"><input v-model="selectedStrategy.complete_one_as_all" type="checkbox" />任一完成即结束方案（优先于重复）</label><button class="icon-button danger" title="删除方案" :aria-label="`删除方案 ${selectedStrategy.group_name}`" @click="removeStrategy(selectedStrategyIndex)"><Trash2 :size="16" /></button></header>
               <div class="skill-table"><div class="skill-head"><span>角色</span><span>技能</span><span>等级</span><span>目标</span><span>频次</span><span></span></div><div v-for="(skill, skillIndex) in selectedStrategy.skill_settings" :key="skillIndex" class="skill-row">
                 <select :value="skill.role_var" aria-label="角色" @change="updateSkill(skill, 'role_var', $event)"><option value="">默认行为</option><option v-for="item in optionsWithCurrent(state.catalog.roles, skill.role_var)" :key="optionValue(item)" :value="item.value">{{ item.label }}</option></select>
                 <select :value="skill.skill_var" aria-label="技能" @change="updateSkill(skill, 'skill_var', $event)"><option value="">自动战斗</option><option v-for="item in optionsWithCurrent(state.catalog.skills, skill.skill_var)" :key="optionValue(item)" :value="item.value">{{ item.label }}</option></select>
                 <select :value="skill.skill_lvl" aria-label="技能等级" @change="updateSkill(skill, 'skill_lvl', $event)"><option v-for="item in optionsWithCurrent(state.catalog.skill_levels, skill.skill_lvl)" :key="optionValue(item)" :value="item.value">{{ item.label }}</option></select>
-                <select :value="skill.target_var" aria-label="技能目标" @change="updateSkill(skill, 'target_var', $event)"><option value="">默认</option><option v-for="item in optionsWithCurrent(state.catalog.skill_targets, skill.target_var)" :key="optionValue(item)" :value="item.value">{{ item.label }}</option></select>
-                <select :value="skill.freq_var" aria-label="技能频次" @change="updateSkill(skill, 'freq_var', $event)"><option value="">默认</option><option v-for="item in optionsWithCurrent(state.catalog.skill_frequencies, skill.freq_var)" :key="optionValue(item)" :value="item.value">{{ item.label }}</option></select>
+                <select :value="skill.target_var ?? '左上角色'" aria-label="技能目标" title="友方技能的队伍位置；不改变敌方选敌" @change="updateSkill(skill, 'target_var', $event)"><option v-for="item in state.catalog.skill_targets" :key="optionValue(item)" :value="item.value">{{ item.label }}</option></select>
+                <select :value="skill.freq_var ?? '用完后移除'" aria-label="技能频次" title="重复行在角色下次行动时继续使用；一次性技能应排在重复行前" @change="updateSkill(skill, 'freq_var', $event)"><option v-for="item in state.catalog.skill_frequencies" :key="optionValue(item)" :value="item.value">{{ item.label }}</option></select>
                 <button class="icon-button danger" title="删除技能行" aria-label="删除技能行" @click="removeSkill(selectedStrategy, skillIndex)"><Trash2 :size="15" /></button>
               </div></div>
               <button class="text-command" @click="addSkill(selectedStrategy)"><Plus :size="15" />新增角色技能</button>

@@ -65,6 +65,8 @@ class NativeRunCoordinator final {
     std::optional<contracts::RunSnapshot> request_snapshot(const std::string &request_id) const;
     bool wait_for(std::chrono::milliseconds duration);
     bool wait_for_worker(std::chrono::milliseconds duration);
+    bool collect_finished_worker();
+    void record_batch_release();
     nlohmann::json events(std::uint64_t after = 0) const;
     nlohmann::json diagnostics() const;
     std::filesystem::path run_directory() const;
@@ -77,6 +79,8 @@ class NativeRunCoordinator final {
     void drive(const NativeRunDefinition &definition,
                const std::shared_ptr<devices::DeviceBackend> &backend);
     void worker_failed(const std::shared_ptr<devices::DeviceBackend> &backend) noexcept;
+    void join_worker();
+    void record_memory_boundary(const char *phase) noexcept;
     void publish_state(contracts::RunState state, std::string reason = {});
     const std::filesystem::path data_root_;
     const std::string instance_id_;

@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "models": {
+    "en": {
+      "name": "ppocr-v3-en",
+      "bundle_directory": "model/ocr",
+      "files": {
+        "det.onnx": {"sha256": "8fe4bf6abfb20402357827f2efc964c8b28cf980e29fe09a99b742ae29725fa9", "source": "resources/ocr/en_us/det.onnx"},
+        "rec.onnx": {"sha256": "da12c6e863761d774b07d3bd40fbaaa55516f90570e0b1dd9dc112e457301cc9", "source": "resources/ocr/en_us/rec.onnx"},
+        "keys.txt": {"sha256": "5662df9d2d03f0e8ca0d3b0649d6acbab904b6a14b3d3521463c71c37c668ce3", "source": "resources/ocr/en_us/keys.txt"}
+      }
+    },
+    "zh-Hant": {
+      "name": "ppocr-v5-server-rec-with-v3-det",
+      "bundle_directory": "model/ocr/zh-Hant",
+      "files": {
+        "det.onnx": {"sha256": "8fe4bf6abfb20402357827f2efc964c8b28cf980e29fe09a99b742ae29725fa9", "source": "resources/ocr/en_us/det.onnx"},
+        "rec.onnx": {"sha256": "e09385400eaaaef34ceff54aeb7c4f0f1fe014c27fa8b9905d4709b65746562a", "source": ".local/native-deps/ocr-zh-Hant/rec.onnx", "url": "https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.9.2/onnx/PP-OCRv5/rec/ch_PP-OCRv5_rec_server.onnx"},
+        "keys.txt": {"sha256": "d1979e9f794c464c0d2e0b70a7fe14dd978e9dc644c0e71f14158cdf8342af1b", "source": ".local/native-deps/ocr-zh-Hant/keys.txt", "url": "https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/main/ppocr/utils/dict/ppocrv5_dict.txt"}
+      }
+    }
+  }
+}

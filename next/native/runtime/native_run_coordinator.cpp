@@ -84,7 +84,37 @@ NativeRunCoordinator::NativeRunCoordinator(std::filesystem::path data_root,
 
 NativeRunCoordinator::~NativeRunCoordinator() {
     request_stop();
-    if (worker_.joinable()) worker_.join();
+    join_worker();
+}
+
+void NativeRunCoordinator::join_worker() {
+    if (!worker_.joinable()) return;
+    worker_.join();
+    record_memory_boundary("worker_joined");
+}
+
+void NativeRunCoordinator::record_memory_boundary(const char *phase) noexcept {
+    try {
+        if (store_) store_->record_memory_boundary(phase, memory_record(platform::sample_memory()));
+    } catch (...) {
+        // JSON构造也可能在低内存下失败，不能让辅助采样使已完成的任务线程终止进程。
+        if (store_) store_->note_diagnostic_hook_failure();
+    }
+}
+
+bool NativeRunCoordinator::collect_finished_worker() {
+    std::lock_guard starting(start_mutex_);
+    { std::lock_guard lock(mutex_); if (!terminal_recorded_) return false; }
+    // 终态已落盘之后才join；不会在运行中阻塞停止接口，也不把收尾采样称为线程退出。
+    join_worker();
+    return true;
+}
+
+void NativeRunCoordinator::record_batch_release() {
+    std::lock_guard starting(start_mutex_);
+    { std::lock_guard lock(mutex_); if (!terminal_recorded_ || active_) return; }
+    join_worker();
+    record_memory_boundary("batch_payloads_released");
 }
 
 contracts::RunSnapshot NativeRunCoordinator::start(
@@ -119,7 +149,7 @@ contracts::RunSnapshot NativeRunCoordinator::start(
             return snapshot_;
         require(!active_, "NATIVE_RUN_ACTIVE_OR_CLEANUP_PENDING");
     }
-    if (worker_.joinable()) worker_.join();
+    join_worker();
     auto lease = std::make_unique<platform::DeviceLease>(definition.policy.device_id);
     const auto id = next_run_id.fetch_add(1);
     const nlohmann::json frozen{{"engine_kind", "wvd_native"},
@@ -137,9 +167,10 @@ contracts::RunSnapshot NativeRunCoordinator::start(
                                 {"logging", definition.logging.json()},
                                 {"viewport", definition.policy.viewport_id},
                                 {"observed_read_only_viewport", definition.policy.observed_read_only_viewport}};
-    auto journal = std::make_shared<storage::EventJournal>(instance_id_, id, event_capacity_);
     auto store = std::make_unique<storage::RunStore>(data_root_, instance_id_, id, frozen,
         std::make_shared<contracts::SteadyClock>(), storage::DiagnosticLimits{}, definition.logging);
+    auto journal = std::make_shared<storage::EventJournal>(instance_id_, id, event_capacity_,
+        [target = store.get()](const nlohmann::json &event) { target->append_event(event); });
     {
         std::lock_guard lock(mutex_);
         require(!active_, "NATIVE_RUN_ACTIVE_OR_CLEANUP_PENDING");
@@ -158,10 +189,14 @@ contracts::RunSnapshot NativeRunCoordinator::start(
     }
     try {
         worker_ = std::jthread([this, definition = std::move(definition),
-                                backend = std::move(backend)] {
+                                backend = std::move(backend)]() mutable {
             // 参数转换和最后的落盘也在边界内；异常不能逸出 jthread 入口。
             try { drive(definition, backend); }
             catch (...) { worker_failed(backend); }
+            // 整图、bundle和回调捕获的释放边界独立于Session，采样后仍待外层join。
+            definition = NativeRunDefinition{};
+            backend.reset();
+            record_memory_boundary("worker_definition_released");
         });
     } catch (...) {
         std::lock_guard lock(mutex_);

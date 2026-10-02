@@ -28,7 +28,7 @@ CompiledWorkflow return_to_bounty_city(bool guild) {
     J known{target, map, C::image("dungFlag"), vision::city_screen(), harken};
     const std::vector<std::string> exits{"returntotown", "returnText", "leaveDung", "blessing"};
     for (const auto &name : exits) known.push_back(C::image(name));
-    const auto destination = guild ? C::all({target, vision::royal_city()}) : target;
+    const auto destination = C::all({target, guild ? vision::royal_city() : vision::fortress_city()});
     const auto done = C::all({destination, C::absent(map), C::absent(encounter)});
     graph.route("Entry", guild ? J{"Done", "WrongCity", "Harken", "Dungeon", "Back"}
                                : J{"Done", "Harken", "Dungeon", "Exit0", "Exit1", "Exit2", "Exit3", "Back"});

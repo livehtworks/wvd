@@ -4,20 +4,27 @@ set(WVD_OPENCV "${WVD_NATIVE_DEPS}/opencv-unpacked/opencv/build")
 set(WVD_ORT "${WVD_NATIVE_DEPS}/ort-unpacked/onnxruntime-win-x64-1.22.1")
 set(WVD_RAPID "${CMAKE_CURRENT_SOURCE_DIR}/../third_party/rapidocr_core")
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+  "${PROJECT_SOURCE_DIR}/resources/recognition/ocr-models.json")
+file(READ "${PROJECT_SOURCE_DIR}/resources/recognition/ocr-models.json" WVD_OCR_MODELS)
+file(SHA256 "${PROJECT_SOURCE_DIR}/resources/recognition/ocr-models.json" WVD_OCR_MODELS_SHA256)
+file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/generated")
+file(WRITE "${PROJECT_BINARY_DIR}/generated/ocr_models.hpp"
+  "#pragma once\ninline constexpr const char *wvd_ocr_models = R\"wvd(${WVD_OCR_MODELS})wvd\";\n")
+file(WRITE "${PROJECT_BINARY_DIR}/generated/ocr_models.sha256" "${WVD_OCR_MODELS_SHA256}\n")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
   "${PROJECT_SOURCE_DIR}/resources/authoring/semantic-assets.json")
 file(READ "${PROJECT_SOURCE_DIR}/resources/authoring/semantic-assets.json" WVD_SEMANTIC_CATALOGUE)
 file(SHA256 "${PROJECT_SOURCE_DIR}/resources/authoring/semantic-assets.json" WVD_SEMANTIC_SOURCE_SHA256)
 file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/generated")
 file(WRITE "${PROJECT_BINARY_DIR}/generated/semantic_catalogue.sha256" "${WVD_SEMANTIC_SOURCE_SHA256}\n")
 # 按资源生成相邻字符串，避免MSVC单个字符串字面量长度上限；内容仍来自唯一作者源。
-set(WVD_SEMANTIC_LITERAL "R\"wvd({\"schema\":1,\"resources\":{)wvd\"")
+string(JSON WVD_TEMPLATE_LANGUAGES GET "${WVD_SEMANTIC_CATALOGUE}" template_languages)
+set(WVD_SEMANTIC_LITERAL "R\"wvd({\"schema\":1,\"template_languages\":${WVD_TEMPLATE_LANGUAGES},\"resources\":{)wvd\"")
 set(WVD_RESOURCE_SEPARATOR "")
-foreach(ID IN ITEMS boot.announcement.page city.royal.identity city.inn.entry city.temple.entry
-  city.blacksmith.entry city.ruins.entry city.guild.entry city.ore_merchant.entry
-  city.item_shop.entry city.edge.entry city.any
-  guild.commissions.page guild.bounties.page guild.bounty.reveal.close chest.open.option chest.choose.page
-  chest.reward.page inn.stay.option inn.standard.gold.confirmation purchase.premium.button
-  combat.skill.detail combat.skill.confirm character.panel dungeon.recovery.panel dungeon.map.open)
+string(JSON WVD_RESOURCE_COUNT LENGTH "${WVD_SEMANTIC_CATALOGUE}" resources)
+math(EXPR WVD_RESOURCE_LAST "${WVD_RESOURCE_COUNT} - 1")
+foreach(INDEX RANGE 0 ${WVD_RESOURCE_LAST})
+  string(JSON ID MEMBER "${WVD_SEMANTIC_CATALOGUE}" resources ${INDEX})
   string(JSON ENTRY GET "${WVD_SEMANTIC_CATALOGUE}" resources "${ID}")
   string(APPEND WVD_SEMANTIC_LITERAL "\nR\"wvd(${WVD_RESOURCE_SEPARATOR}\"${ID}\":${ENTRY})wvd\"")
   set(WVD_RESOURCE_SEPARATOR ",")
@@ -163,6 +170,12 @@ add_executable(test_native_author EXCLUDE_FROM_ALL
   ../tests/native/test_native_author.cpp)
 target_link_libraries(test_native_author PRIVATE wvd_native_games wvd_native_runtime)
 target_compile_options(test_native_author PRIVATE /utf-8 /W4 /EHsc)
+add_executable(test_recognition_methods EXCLUDE_FROM_ALL ../tests/native/test_recognition_methods.cpp)
+target_link_libraries(test_recognition_methods PRIVATE wvd_native_games wvd_native_runtime)
+target_compile_options(test_recognition_methods PRIVATE /utf-8 /W4 /EHsc)
+add_executable(test_strategy_frequency EXCLUDE_FROM_ALL ../tests/native/test_strategy_frequency.cpp)
+target_link_libraries(test_strategy_frequency PRIVATE wvd_native_games wvd_native_runtime)
+target_compile_options(test_strategy_frequency PRIVATE /utf-8 /W4 /EHsc)
 add_executable(test_native_coordinator EXCLUDE_FROM_ALL
   ../tests/native/test_native_coordinator.cpp)
 target_link_libraries(test_native_coordinator PRIVATE wvd_native_runtime)

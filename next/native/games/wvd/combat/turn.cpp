@@ -61,7 +61,6 @@ tasks::CompiledWorkflow take_turn(const J &profile, const std::set<std::string> 
     const auto popup = C::any({detail, ok, close});
     const auto ended = C::any({C::image("dungFlag"), C::image("chestFlag"), C::image("RiseAgain")});
     const auto menu = C::all({battle, roi_image("flee", {660, 1080, 240, 220}), C::absent(popup)});
-    const auto enabled = roi_image("spellskill/CombatAutoEnable", {740, 940, 160, 280});
     const auto disabled = roi_image("spellskill/CombatAutoDisable", {740, 940, 160, 280});
     const auto clear = C::all({battle, C::absent(popup)});
     const auto speed_off_zh = roi_image("combat_speed_off_zh_hant", {0, 930, 120, 210});
@@ -73,10 +72,8 @@ tasks::CompiledWorkflow take_turn(const J &profile, const std::set<std::string> 
     const auto finished = C::all({C::any({clear, ended}), C::absent(errors), C::absent(popup)});
     const J auto_exits{{"BattleEndedExit", {"Terminal"}}, {"BlockedExit", {"BlockedExit"}}};
     const auto full_auto = graph.append("FullAuto", enable_auto(), {"Terminal"}, auto_exits);
-    const auto char_auto = graph.append("CharAuto", enable_auto(), {"DisableCharAuto", "AutoEnded"}, auto_exits);
-    graph.fixed_click("DisableCharAuto", C::all({clear, enabled}), C::any({C::all({clear, disabled}), ended}),
-                      {850, 1100}, {"AutoEnded"});
-    graph.observe("AutoEnded", C::any({C::all({clear, disabled}), ended}), {"Terminal"});
+    const J single_auto_exits{{"BlockedExit", {"BlockedExit"}}};
+    const auto char_auto = graph.append("CharAuto", single_actor_auto(), {"Terminal"}, single_auto_exits);
     graph.route("Entry", {"Ended", "SpeedZh", "Speed", "SpeedAlt", "Automatic", "Prepare", "UnexpectedPopup"});
     graph.click("SpeedZh", clear, speed_off_zh,
                 C::any({C::all({battle, speed_on_zh}), ended}),
@@ -112,9 +109,7 @@ tasks::CompiledWorkflow take_turn(const J &profile, const std::set<std::string> 
             graph.combat_step(prefix + "Success", advanced, {{"operation", "success"}, {"index", index}}, {"Terminal"});
             continue;
         }
-        const auto automatic = graph.append(prefix + "Auto", enable_auto(), {prefix + "Disable", prefix + "AutoConfirmed"}, auto_exits);
-        graph.fixed_click(prefix + "Disable", C::all({clear, enabled}), C::any({C::all({clear, disabled}), ended}),
-                          {850, 1100}, {prefix + "AutoConfirmed"});
+        const auto automatic = graph.append(prefix + "Auto", single_actor_auto(), {prefix + "AutoConfirmed"}, single_auto_exits);
         graph.combat_step(prefix + "AutoConfirmed", C::any({C::all({clear, disabled}), ended}),
                           {{"operation", "auto_confirmed"}, {"index", index}}, {"Terminal"});
         graph.public_step(prefix + "Success", "combat-confirm-result", J::object(), {prefix + "RecordSuccess"}, J::object(), finished);
@@ -143,13 +138,11 @@ tasks::CompiledWorkflow take_turn(const J &profile, const std::set<std::string> 
                 target_choices, J{automatic});
             graph.observe(s + "Detail", casting, levels);
             graph.observe(s + "OpenFailed", C::all({menu, actor}), {automatic});
-            const auto recipient = support_position(skill.value("target_var", ""));
-            if (!recipient.is_null()) {
-                graph.fixed_click(s + "Support", C::all({casting, support}), C::any({casting, finished, errors}), recipient,
-                                  {prefix + "Success", s + "Confirm", s + "ResourceError"});
-                graph.stop_if_interrupted_after(s + "Support", "combat.skill_outcome_unconfirmed");
-            } else
-                graph.observe(s + "Support", C::all({casting, support}), {s + "Confirm", automatic});
+            const auto recipient = support_position(skill.value("target_var", "左上角色"));
+            if (recipient.is_null()) throw std::runtime_error("PROFILE_SKILL_TARGET_INVALID");
+            graph.fixed_click(s + "Support", C::all({casting, support}), C::any({casting, finished, errors}), recipient,
+                              {prefix + "Success", s + "Confirm", s + "ResourceError"});
+            graph.stop_if_interrupted_after(s + "Support", "combat.skill_outcome_unconfirmed");
             // 确认施放不是选目标：详情仍在不能结清输入，否则下一分支会立即取消技能。
             // 等待原业务期限内的新帧结果，异常处理返回后也继续核对同一次输入。
             graph.click(s + "Confirm", casting, ok, C::any({finished, errors}),

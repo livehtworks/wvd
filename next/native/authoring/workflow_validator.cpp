@@ -2,6 +2,7 @@
 #include "document_parameters.hpp"
 #include "event_policy.hpp"
 #include "resource_locale.hpp"
+#include "recognition/request.hpp"
 #include <algorithm>
 #include <cctype>
 #include <cmath>
@@ -132,7 +133,10 @@ void validate_condition(const J &condition, const std::string &node_id,
                           ? condition.at("mode").get<std::string>()
                           : std::string{};
     if (mode == "semantic") {
-        exact_object(condition, {"mode", "id"}, {}, "AUTHOR_SEMANTIC_INVALID", node_id);
+        exact_object(condition, {"mode", "id"}, {"method"}, "AUTHOR_SEMANTIC_INVALID", node_id);
+        if (condition.contains("method") && (!condition.at("method").is_string() ||
+            !authoring::public_id(condition.at("method").get<std::string>())))
+            fail("AUTHOR_SEMANTIC_INVALID", node_id);
         if (!authoring::public_id(condition.at("id").get<std::string>()))
             fail("AUTHOR_SEMANTIC_INVALID", node_id);
         return;
@@ -174,13 +178,14 @@ void validate_condition(const J &condition, const std::string &node_id,
         return;
     }
     if (mode == "ocr") {
-        exact_object(condition, {"mode", "expected"}, {"roi"},
+        exact_object(condition, {"mode", "expected"}, {"roi", "language", "match", "threshold", "unique"},
                      "AUTHOR_CONDITION_INVALID", node_id);
         const auto &expected = condition.at("expected");
         if (!expected.is_array() || expected.empty() || expected.size() > 32)
             fail("AUTHOR_OCR_EXPECTED_INVALID", node_id);
         for (const auto &text : expected)
             bounded_text(text, 1, 128, "AUTHOR_OCR_EXPECTED_INVALID", node_id);
+        recognition::parse_ocr_parameters(condition);
         if (condition.contains("roi"))
             validate_roi(condition.at("roi"), node_id);
         return;
@@ -239,6 +244,8 @@ void validate_action_parameters(const J &parameters, const std::string &node_id)
                      "AUTHOR_ACTION_PARAMETERS_INVALID", node_id);
         validate_condition(parameters.at("scene"), node_id);
         validate_condition(parameters.at("target"), node_id);
+        if (parameters.at("target").value("mode", "") == "ocr")
+            recognition::validate_ocr_parameters(recognition::parse_ocr_parameters(parameters.at("target")), true);
         validate_condition(parameters.at("postcondition"), node_id);
         if (parameters.contains("menu_retry_interval_ms"))
             integer(parameters.at("menu_retry_interval_ms"), 1000, 60000,

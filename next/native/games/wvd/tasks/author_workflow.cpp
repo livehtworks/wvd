@@ -112,12 +112,7 @@ AuthorWorkflowCompilation compile_author_workflow(const J &source,
                 compiler.route(runtime_name, next);
             } else if (type == "recognition") {
                 const auto &condition = parameters.at("condition");
-                if (condition.value("mode", "") == "ocr")
-                    compiler.observe_ocr(runtime_name,
-                                         condition.at("expected").get<std::vector<std::string>>(),
-                                         condition.value("roi", J::array({0, 0, 900, 1600})), next);
-                else
-                    compiler.observe(runtime_name, condition, next);
+                compiler.observe(runtime_name, condition, next);
             } else if (type == "action") {
                 const auto operation = parameters.at("operation").get<std::string>();
                 if (operation == "click")

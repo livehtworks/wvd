@@ -17,6 +17,12 @@ const std::unordered_map<std::string, std::string> legacy_assets{
     {"chestFlag", "chest.open.option"},
     {"Stay", "inn.stay.option"}, {"Economy", "inn.room.standard"},
     {"royalsuite", "inn.room.royal"},
+    // 要塞的旧文件名指的是区域序号，不是建筑楼层；第十区实际为要塞3F。
+    {"impregnableFortress", "outskirts.fortress"},
+    {"fortressb1f", "outskirts.fortress.zone1"},
+    {"fortressb3f", "outskirts.fortress.zone3"},
+    {"fortressb7f", "outskirts.fortress.zone7"},
+    {"fortressb10f", "outskirts.fortress.zone10"},
     {"DOF", "outskirts.fire"}, {"DOFB1F", "outskirts.fire.b1f"},
     {"DOW", "outskirts.wind"}, {"DOWB1F", "outskirts.wind.b1f"},
     {"DOL", "outskirts.light"}, {"DOLB1F", "outskirts.light.b1f"},
@@ -83,6 +89,13 @@ void replace_templates(J &node, authoring::SemanticAssets &assets, const std::st
         if (found != legacy_assets.end()) id = found->second;
         if (!id.empty()) {
             auto resolved = assets.condition(id, locale, use);
+            if (resolved.value("mode", "") == "ocr" || resolved.value("mode", "") == "bright_mask") {
+                // 模板阈值和预处理不能跨算法沿用；只有无覆盖的旧引用使用素材默认配方。
+                if (!(node.size() == 2 || (node.size() == 3 && node.value("threshold", 0.0) == 0.8)))
+                    throw std::runtime_error("NATIVE_LEGACY_METHOD_OVERRIDE_UNSUPPORTED:" + image);
+                node = std::move(resolved);
+                return;
+            }
             if (resolved.value("mode", "") != "template") {
                 // 繁中世界地图是关闭与缩放的联合只读证据；定位用途和显式
                 // 单模板覆盖都不能广播到两张独立叶子图。

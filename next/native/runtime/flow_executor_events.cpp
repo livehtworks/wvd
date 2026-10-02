@@ -14,7 +14,7 @@ nlohmann::json request_key(const recognition::Request &request) {
         key["parameters"] = {{"binding", custom->binding}, {"value", custom->parameters}};
     else if (const auto *image = std::get_if<recognition::TemplateParameters>(&request.parameters))
         key["parameters"] = {{"image", image->image}, {"threshold", image->threshold}};
-    else key["parameters"] = std::get<recognition::OcrParameters>(request.parameters).expected_text;
+    else key["parameters"] = recognition::ocr_parameters_json(std::get<recognition::OcrParameters>(request.parameters));
     return key;
 }
 }

@@ -15,6 +15,7 @@ const props = defineProps<{
   templates?: Option[];
   resources?: Option[];
   recognizers?: Option[];
+  resourceLocale?: string;
 }>();
 const emit = defineEmits<{
   "update:modelValue": [Record<string, EventRule>];
@@ -124,7 +125,7 @@ function toggleNested(id: string, enabled: boolean) {
         @change="disposition(($event.target as HTMLSelectElement).value as 'handled'|'external_blocked')">
         <option value="handled">处理后返回</option><option value="external_blocked">外部阻断</option>
       </select></label>
-      <ConditionEditor :model-value="current.detect" :templates="templates" :resources="resources"
+      <ConditionEditor :model-value="current.detect" :templates="templates" :resources="resources" :resource-locale="resourceLocale"
         :recognizers="recognizers" @update:model-value="updateRule(selected,{detect:$event})" />
       <template v-if="current.disposition === 'external_blocked'">
         <label class="field"><span>原因码</span><input :value="current.reason ?? ''"
@@ -145,7 +146,7 @@ function toggleNested(id: string, enabled: boolean) {
             <option v-for="node in nodes.filter(item => item.data.node_type !== 'end')" :key="node.id" :value="node.id">{{ node.data.label }}</option>
           </select></label>
           <ConditionEditor :model-value="(current.resume.guard ?? {}) as JsonObject"
-            :templates="templates" :resources="resources" :recognizers="recognizers"
+            :templates="templates" :resources="resources" :recognizers="recognizers" :resource-locale="resourceLocale"
             @update:model-value="updateRule(selected,{resume:{...current.resume!,guard:$event}})" />
         </template>
         <div v-if="ids.length > 1" class="inspector-group"><h4>允许的嵌套事件</h4>

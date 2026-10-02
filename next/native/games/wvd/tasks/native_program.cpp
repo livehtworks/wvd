@@ -24,9 +24,11 @@ std::optional<recognition::Request> guard(const J &node, const std::string &id) 
     const auto kind = node.value("observation", "Always");
     if (kind == "Always") return std::nullopt;
     const auto roi = node.value("roi", J::array({0, 0, 900, 1600}));
-    if (kind == "OCR")
-        return request({{"id", id}, {"revision", "1"}, {"type", "ocr"},
-                        {"roi", roi}, {"expected", node.at("expected")}});
+    if (kind == "OCR") {
+        auto parameters = recognition::ocr_parameters_json(recognition::parse_ocr_parameters(node));
+        parameters.update({{"id", id}, {"revision", "1"}, {"type", "ocr"}, {"roi", roi}});
+        return request(parameters);
+    }
     if (kind == "Registered" && node.value("recognizer", "") == "WvdVision")
         return request({{"id", id}, {"revision", "1"}, {"type", "custom"},
                         {"binding", "WvdVision"}, {"roi", roi},

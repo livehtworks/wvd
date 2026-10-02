@@ -15,7 +15,7 @@ J request(const recognition::Request &value) {
         result["threshold"] = image->threshold;
     } else if (const auto *ocr = std::get_if<recognition::OcrParameters>(&value.parameters)) {
         result["kind"] = "ocr";
-        result["expected"] = ocr->expected_text;
+        result.update(recognition::ocr_parameters_json(*ocr));
     } else {
         const auto &custom = std::get<recognition::CustomParameters>(value.parameters);
         result["kind"] = "registered";

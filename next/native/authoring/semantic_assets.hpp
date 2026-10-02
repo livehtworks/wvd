@@ -1,5 +1,6 @@
 #pragma once
 #include "resource_locale.hpp"
+#include "recognition/request.hpp"
 
 namespace wvd::authoring {
 enum class ResourceUse { Observation, Position };
@@ -90,8 +91,10 @@ class SemanticAssets {
         if (!p.is_object()) contract_error("SEMANTIC_CONDITION_INVALID");
         const auto mode = p.value("mode", std::string{});
         if (mode == "semantic") {
-            if (p.size() != 2 || !p.contains("id")) contract_error("SEMANTIC_REFERENCE_INVALID");
-            return resolve_id(p.at("id").get<std::string>(), locale, use, active);
+            if (!p.contains("id") || p.size() != (p.contains("method") ? 3 : 2))
+                contract_error("SEMANTIC_REFERENCE_INVALID");
+            return resolve_id(p.at("id").get<std::string>(), locale, use, active,
+                              p.value("method", std::string{}));
         }
         if (mode == "location") {
             if (p.size() != 2 || !p.contains("id")) contract_error("LOCATION_REFERENCE_INVALID");
@@ -113,10 +116,13 @@ class SemanticAssets {
             for (auto &child : result["conditions"]) child = resolve_tree(child, locale, use, active);
             return result;
         }
-        return p; // 旧模板/OCR/专用识别原样交给现有作者模型和 PipelineCompiler 校验。
+        if (mode == "ocr")
+            recognition::validate_ocr_parameters(recognition::parse_ocr_parameters(p),
+                                                 use == ResourceUse::Position);
+        return p;
     }
     Json resolve_id(const std::string &id, const std::string &locale, ResourceUse use,
-                    std::set<std::string> &active) {
+                    std::set<std::string> &active, const std::string &method = {}) {
         if (!public_id(id)) contract_error("SEMANTIC_ID_INVALID", id);
         if (active.size() >= 8 || !active.insert(id).second) contract_error("SEMANTIC_REFERENCE_CYCLE", id);
         struct Pop { std::set<std::string> &s; std::string id; ~Pop() { s.erase(id); } } pop{active, id};
@@ -130,6 +136,7 @@ class SemanticAssets {
         if (use == ResourceUse::Position && role != "position")
             contract_error("SEMANTIC_OBSERVATION_NOT_POSITIONAL", id);
         if (entry.contains("condition")) {
+            if (!method.empty()) contract_error("SEMANTIC_METHOD_UNAVAILABLE", id + ":" + method);
             if (entry.contains("variants") || role != "observation") contract_error("SEMANTIC_DEFINITION_INVALID", id);
             auto result = resolve_tree(entry.at("condition"), locale, use, active);
             selections_[id] = {{"role", role}, {"condition", result}};
@@ -142,11 +149,20 @@ class SemanticAssets {
         if (selected.empty()) contract_error("SEMANTIC_LOCALE_UNAVAILABLE", id + ":" + locale);
         const auto &variant = variants.at(selected);
         if (!variant.contains("condition")) contract_error("SEMANTIC_VARIANT_INVALID", id);
-        auto result = resolve_tree(variant.at("condition"), locale, use, active);
+        auto recipe = variant.at("condition");
+        // 显式选择只分派到素材声明的配方；失败不改算法、不改语言、不降阈值。
+        if (!method.empty() && recipe.value("mode", "") != method) {
+            if (!variant.contains("alternatives") || !variant.at("alternatives").contains(method))
+                contract_error("SEMANTIC_METHOD_UNAVAILABLE", id + ":" + method);
+            recipe = variant.at("alternatives").at(method);
+            if (recipe.value("mode", "") != method)
+                contract_error("SEMANTIC_METHOD_INVALID", id + ":" + method);
+        }
+        auto result = resolve_tree(recipe, locale, use, active);
         const auto algorithm = result.value("mode", std::string{});
-        if (use == ResourceUse::Position && algorithm != "template" && algorithm != "bright_mask")
+        if (use == ResourceUse::Position && algorithm != "template" && algorithm != "bright_mask" && algorithm != "ocr")
             contract_error("SEMANTIC_POSITION_RECIPE_INVALID", id);
-        selections_[id] = {{"locale", selected}, {"role", role}, {"condition", result},
+        selections_[method.empty() ? id : id + "@" + method] = {{"locale", selected}, {"role", role}, {"condition", result},
                            {"validation", variant.value("validation", "UNVERIFIED")}};
         return result;
     }

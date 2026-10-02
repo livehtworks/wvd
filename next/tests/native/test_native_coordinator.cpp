@@ -71,6 +71,40 @@ int main(int argc, char **argv) {
         const auto data_root = std::filesystem::temp_directory_path() /
             ("wvd-native-coordinator-" + wvd::platform::unique_id());
         std::filesystem::create_directories(data_root);
+        if (argc == 2 && std::string(argv[1]) == "--event-history") {
+            storage::LoggingPolicy policy;
+            policy.level = storage::LogLevel::Off;
+            storage::RunStore store(data_root, "history", 1, {{"kind", "isolated"}},
+                std::make_shared<contracts::SteadyClock>(), {}, policy);
+            storage::EventJournal journal("history", 1, 8,
+                [&](const auto &event) { store.append_event(event); });
+            for (int i = 0; i < 20; ++i) journal.emit(1, "business_combat", {{"index", i}});
+            if (!journal.read().at("resync_required").get<bool>()) throw std::runtime_error("HISTORY_RING_NOT_TRUNCATED");
+            const auto summary = store.diagnostic_summary().at("event_history");
+            if (summary.at("rows") != 20 || !summary.at("complete").get<bool>())
+                throw std::runtime_error("HISTORY_EARLY_EVENTS_LOST");
+            std::ifstream stream(store.directory() / "execution-events.jsonl");
+            std::string line;
+            int expected = 1;
+            while (std::getline(stream, line)) {
+                const auto row = nlohmann::json::parse(line);
+                if (row.at("seq") != expected || row.at("payload").at("index") != expected - 1)
+                    throw std::runtime_error("HISTORY_SEQUENCE_INVALID");
+                ++expected;
+            }
+            if (expected != 21) throw std::runtime_error("HISTORY_FILE_INCOMPLETE");
+            store.record_memory_boundary("worker_joined", {{"private_bytes", 123}});
+            if (std::filesystem::exists(store.directory() / "memory-lifecycle.json"))
+                throw std::runtime_error("HISTORY_MEMORY_OFF_IGNORED");
+            storage::RunStore failed(data_root, "history", 2, {{"kind", "isolated"}});
+            std::filesystem::create_directory(failed.directory() / "execution-events.jsonl");
+            failed.append_event({{"seq", 1}});
+            if (failed.diagnostic_summary().at("complete").get<bool>() ||
+                failed.diagnostic_summary().at("event_history").at("failed") != 1)
+                throw std::runtime_error("HISTORY_WRITE_FAILURE_HIDDEN");
+            std::cout << "Event history survives ring eviction and logging off; write failure reported\n";
+            return 0;
+        }
         if (argc == 2 && std::string(argv[1]) == "--logging-policy") {
             using namespace wvd::storage;
             auto policy = LoggingPolicy{};
@@ -174,14 +208,15 @@ int main(int argc, char **argv) {
         root.entry = "checkpoint";
         workflow::Step checkpoint;
         checkpoint.id = "checkpoint";
-        checkpoint.source_path = "test/checkpoint";
+        const std::string checkpoint_path = R"([{"definition":"root","native_node":"checkpoint"}])";
+        checkpoint.source_path = checkpoint_path;
         checkpoint.data = workflow::RegisteredOperation{"BusinessCheckpoint",
             nlohmann::json::object()};
         checkpoint.next = {"finish"};
         root.steps.emplace("checkpoint", std::move(checkpoint));
         workflow::Step finish;
         finish.id = "finish";
-        finish.source_path = "test/finish";
+        finish.source_path = R"([{"definition":"root","native_node":"finish"}])";
         finish.data = workflow::Finish{};
         root.steps.emplace("finish", std::move(finish));
         program.definitions.emplace("root", std::move(root));
@@ -230,7 +265,7 @@ int main(int argc, char **argv) {
             return 0;
         }
         definition.units.push_back({std::make_shared<const workflow::FlowProgram>(std::move(program)), std::move(bundle), {},
-            "test/checkpoint", 5s});
+            checkpoint_path, 5s});
         definition.total_time_limit = 5s;
         definition.create_state = [](const auto &) { return std::make_unique<State>(); };
         definition.operations = [](auto &, auto, auto checkpoint_callback) {
@@ -269,6 +304,29 @@ int main(int argc, char **argv) {
             throw std::runtime_error("COORDINATOR_TERMINAL_INVALID:" + ended.reason +
                 ":" + ended.storage_error);
         if (argc == 2 && std::string(argv[1]) == "--logging-boundary") {
+            if (!coordinator.collect_finished_worker()) throw std::runtime_error("MEMORY_WORKER_NOT_JOINED");
+            coordinator.record_batch_release();
+            nlohmann::json boundaries;
+            { std::ifstream file(coordinator.run_directory() / "memory-lifecycle.json"); file >> boundaries; }
+            for (const auto *phase : {"worker_definition_released", "worker_joined", "batch_payloads_released"}) {
+                if (!boundaries.at("samples").at(phase).at("process_memory_available").get<bool>())
+                    throw std::runtime_error("MEMORY_POST_WORKER_SAMPLE_MISSING");
+            }
+            if (boundaries.at("failed") != 0 || boundaries.at("run_id") != ended.run_id)
+                throw std::runtime_error("MEMORY_POST_WORKER_IDENTITY");
+            nlohmann::json saved;
+            { std::ifstream file(coordinator.run_directory() / "result.json"); file >> saved; }
+            std::ifstream history(coordinator.run_directory() / "execution-events.jsonl");
+            std::string event_line;
+            std::uint64_t sequence = 0;
+            while (std::getline(history, event_line)) {
+                const auto event = nlohmann::json::parse(event_line);
+                if (event.at("seq") != ++sequence || event.at("run_id") != ended.run_id)
+                    throw std::runtime_error("COORDINATOR_HISTORY_SEQUENCE");
+            }
+            if (!sequence || saved.at("diagnostics").at("event_history").at("rows") != sequence ||
+                saved.at("events").at("last_seq") != sequence + 1)
+                throw std::runtime_error("COORDINATOR_HISTORY_NOT_CONNECTED");
             std::ifstream log(coordinator.run_directory() / "diagnostics.jsonl");
             std::vector<std::string> phases;
             std::string line;

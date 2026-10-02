@@ -12,11 +12,7 @@ import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "dist/wvd-next-native"
-MODEL_HASHES = {
-    "det.onnx": "8fe4bf6abfb20402357827f2efc964c8b28cf980e29fe09a99b742ae29725fa9",
-    "rec.onnx": "da12c6e863761d774b07d3bd40fbaaa55516f90570e0b1dd9dc112e457301cc9",
-    "keys.txt": "5662df9d2d03f0e8ca0d3b0649d6acbab904b6a14b3d3521463c71c37c668ce3",
-}
+OCR_MODELS = json.loads((ROOT / "resources/recognition/ocr-models.json").read_text(encoding="utf-8"))["models"]
 
 
 def sync_authoring_resources():
@@ -113,6 +109,10 @@ def source_identity():
 
 
 def check_authoring_assets():
+    model_lock = ROOT / "resources/recognition/ocr-models.json"
+    compiled_models = ROOT / "build/generated/ocr_models.sha256"
+    if not compiled_models.is_file() or compiled_models.read_text(encoding="ascii").strip() != sha256(model_lock):
+        raise RuntimeError("OCR模型锁与编译产物不一致，请重新配置构建")
     source = ROOT / "resources/authoring/semantic-assets.json"
     packed = ROOT / "packs/wvd/parameters/semantic-assets.json"
     compiled_hash = ROOT / "build/generated/semantic_catalogue.sha256"
@@ -204,7 +204,6 @@ def stage(target):
     build = verified_build()
     binary = ROOT / "build/Release"
     native = ROOT / ".local/native-deps"
-    model = ROOT / "resources/ocr/en_us"
     lock = json.loads((ROOT / "native-dependencies.lock.json").read_text(encoding="utf-8"))
     for item in lock["binaries"]:
         archive = native / "archives" / item["filename"]
@@ -235,14 +234,16 @@ def stage(target):
     manifest_path = target / "pack/manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     entries = {row["path"]: row for row in manifest["files"]}
-    for name, expected in MODEL_HASHES.items():
-        relative = "model/ocr/" + name
-        checked_copy(model / name, target / "pack" / relative, expected)
-        if relative in entries and entries[relative]["sha256"] != expected:
-            raise RuntimeError("OCR 成员与资源清单冲突: " + relative)
-        if relative not in entries:
-            manifest["files"].append({"path": relative, "sha256": expected,
-                                      "source": "resources/ocr/en_us/" + name})
+    for spec in OCR_MODELS.values():
+        for name, member in spec["files"].items():
+            expected = member["sha256"]
+            relative = spec["bundle_directory"] + "/" + name
+            checked_copy(ROOT / member["source"], target / "pack" / relative, expected)
+            if relative in entries and entries[relative]["sha256"] != expected:
+                raise RuntimeError("OCR 成员与资源清单冲突: " + relative)
+            if relative not in entries:
+                manifest["files"].append({"path": relative, "sha256": expected,
+                                          "source": member["source"]})
     manifest["files"].sort(key=lambda row: row["path"])
     manifest["source_revision"] = manifest["revision"]
     identity = {"files": manifest["files"], "aliases": manifest.get("aliases", {})}

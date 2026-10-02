@@ -99,9 +99,13 @@ bool CombatStrategy::consume(const SkillSelection &selection, SkillOutcome outco
     auto &rows = current_.at("skill_settings");
     if (!rows.is_array() || selection.row >= rows.size() || rows[selection.row] != selection.skill)
         throw std::runtime_error("STALE_STRATEGY_SELECTION");
-    rows.erase(rows.begin() + selection.row);
+    const auto frequency = selection.skill.value("freq_var", "用完后移除");
+    if (frequency != "用完后移除" && frequency != "重复")
+        throw std::runtime_error("PROFILE_SKILL_FREQUENCY_INVALID:" + frequency);
+    if (frequency == "用完后移除") rows.erase(rows.begin() + selection.row);
     if (current_.value("complete_one_as_all", false))
         rows.clear();
+    // 保留重复行也必须作废本次选择，防止同一回执再次结算；下一行动重新识别角色。
     ++epoch_;
     return true;
 }

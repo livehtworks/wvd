@@ -33,7 +33,16 @@ struct TemplateParameters {
 
 struct OcrParameters {
     std::vector<std::string> expected_text;
+    // 旧英文观察保留原语义；新点击配方必须显式 exact + unique。
+    std::string language{"en"};
+    std::string match{"contains"};
+    double threshold{0.3};
+    bool unique{false};
 };
+
+OcrParameters parse_ocr_parameters(const nlohmann::json &value);
+nlohmann::json ocr_parameters_json(const OcrParameters &value);
+void validate_ocr_parameters(const OcrParameters &value, bool positional = false);
 
 struct CustomParameters {
     std::string binding;

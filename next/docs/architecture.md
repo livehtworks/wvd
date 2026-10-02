@@ -51,6 +51,7 @@ Vue 工作台 -> 同源 HTTP API -> Application
 - FlowExecutor 的 ObservationCycle 只保留本轮帧和同有效事件作用域的覆盖层 NoHit；输入、等待轮询、事件返回、身份/TTL失效后重新取帧。技能索引通过游戏层只读业务谓词选路；不是视觉命中，不授权点击，也不消费技能次数。场景和目标仍走 InputGate 单次消费。
 - 结果先保存无分配安全事实并回收输入，再构造富诊断。`details_complete=false` 在 API/历史/终态明示，不能清除未决输入、报告 Completed 或自动恢复。WORKER_ABORT 是最外层兜底，不替代正常存储错误。
 - 最近帧 JPEG 由 RunStore 的受控单线程与单 pending 槽完成，另最多一张 in-flight，结束关闭接收并 join；不移动业务/故障证据到可丢弃槽。匹配日志 OS 标量采样/普通写入至多每秒一次，资源失败仍即时记录。
+- EventJournal的UI环保持有界，执行事件通过RunStore单一回调先写`execution-events.jsonl`，不随环淘汰丢失早期角色选择及恢复记录；终态只由原子提交的result声明。内存收尾分为Session释放、定义释放、线程join及批次配置释放，后两类诊断独立保存，不能改写已经冻结的终态日志计数。详情与配额见[data-authority.md](data-authority.md)。
 - 性能复用固定数组分类和次数；主线程嵌套耗时排除子段，并行 worker 耗时不与墙钟相加。Session在节点/事件切换或终止时记录连续执行段，普通轮询不逐帧写盘；NativeFlowPorts记录输入提交耗时，FlowExecutor只在实际结果命中时记录confirmed，未结清则记录unconfirmed。由同一RunStore保存每轮`action-timing.jsonl`，不依赖256条事件缓存、不新增性能后台服务。64MiB/轮上限、写入失败和落盘耗时进入diagnostics.action_timing；墙钟、worker和包含关系不可重复相加。旧候选未热更新时仍只有原汇总，具体口径见`docs/reviews/action-timing-20260927.md`。
 - 正常战斗/开箱按各自 Definition 推进；内置异常和特殊处理器只在当前结果持续不符时按优先级分派，不再给每个正常节点包裹整组 `!blocking_screen`。动画/加载去抖为 1 秒，仅控制诊断开始与限频，不是页面跳转期限；处理器恢复后核对原回执，不重放输入。作者显式 overlay 抢占规则保留。详见 [分组与恢复边界](../../docs/reviews/flow-check-dispatch-20260926.md)。
 
@@ -60,7 +61,16 @@ Vue 工作台 -> 同源 HTTP API -> Application
 - `workflow/FlowProgram` 的 Call 将子定义的业务失败作为有类型的返回，不把有效子任务 ID 或框架完成态当作业务成功。`runtime/FlowExecutor` 由唯一会话线程推进调用栈及事件栈，普通失败走调用者的失败边，致命错误终止会话；`BusinessConfirm` 只在观察到正面业务证据后改变 WVD 计数。`RegisteredOperation` 通过门禁发一次输入，结果不明时保存未确认回执并禁止重发。停止先封输入，再取消等待/回收自有设备通道，未静止不能标为完成。
 - `FlowExecutor::progress_snapshot()` 只给出当前步骤/调用栈/事件与未决操作标量，Coordinator 存入历史并同源展示在工作台。HTTP 不推进流程；事件与输入的所有者仍是会话线程。
 - 成功 `Return` 只校验即将弹出的子帧 pending；父输入的回执继续挂起，到事件返回后的新帧确认。根终点和业务失败仍核对全栈未确认输入。有序启动/对话候选首命中后不安排无关尾项，`all/any` 与必须全量的反证仍传播已执行的全部 Error；资源 OOM 优先于同批次 Hit。
-- `resources/authoring/semantic-assets.json` 是人工配方源，打包同步到资源包并校验清单；作者及旧原生映射在编译/发布前解析。诊断的非 OCR 条件走同一 WVD 识别绑定。城市公共配方、繁中公会页及开箱/选人/奖励动态探针由同源目录生成于构建期，发布身份带源哈希且打包拒绝 EXE/资源包错配；其他内部动态 boot/地点探针尚未全部做到发布期依赖收集和语义冻结，不能宣称 R05 全面闭合。
+- `resources/authoring/semantic-assets.json` 是人工配方源，打包同步到资源包并校验清单；作者及旧原生映射在编译/发布前解析。模板和 OCR 都保留完整条件字段，诊断与正式运行共用同一识别 Service。城市公共配方、繁中公会页及开箱/选人/奖励动态探针由同源目录生成于构建期，发布身份带源哈希且打包拒绝 EXE/资源包错配；其他内部动态 boot/地点探针尚未全部做到发布期依赖收集和语义冻结，不能宣称 R05 全面闭合。
+
+### 素材识别方式
+
+- `variant.condition.mode` 是素材默认算法，`variant.alternatives` 是该语言下明确配置的替代配方；流程使用 `semantic(id, method?)`。未指定 `method` 跟随默认，指定后只执行对应配方，不自动 fallback、换语言或降阈值。不另设重复的 `type` 权威。
+- `SemanticAssets` 在编译期把选择展开为完整条件；`WvdVision` 负责 mode 分派，`recognition::Service` 负责帧身份、ROI、模型、同帧缓存和统一 Hit/NoHit/Error。业务流程不保存另一套算法选择器。
+- OCR 字段是 `language/expected/match/threshold/unique/roi`。已配置英文和繁中模型；定位用 OCR 必须 `match=exact, unique=true`。多个合格文字框为 NoHit、无坐标，模型错误为 Error；不以流程终态反推识别成功。坐标是全文文字框中心，经现有点击门禁消费，不发固定坐标输入旁路。
+- 模型来源、SHA256、包内目录唯一记录于 `resources/recognition/ocr-models.json`。准备阶段下载并校验，构建编入锁，打包校验构建锁并携带全部模型，发布检查所需模型，运行懒加载选定语言。不在游戏运行期联网补模型。
+- 每个识别 Service 最多各保留一个英文/繁中引擎；同帧最多缓存4个ROI的原始文字框，每项最多128框、64KiB，不持有历史像素。换帧/动作代次即清空；当前缓存计入已有资源统计。模型由会话释放，OCR大模型不因此被宣称“内存问题已解决”。
+- 要塞入口与8个可见区域提供繁中 OCR 选项，默认仍是模板；编辑器读取真实目录按语言展示可选方式。详见 `docs/reviews/recognition-methods-closure-20261002.md`（仓库根目录）。
 - 公会悬赏 Reveal 由原生任务调用同一 `PublicFlowLibrary` 闭包。已处于目标页时零输入；打开列表不是跳轮或提交。英文 Report 保留旧源码的准备、提交后置确认及计数契约；繁中缺 `guild.report.action` 配方的完整任务在准备期拒绝，不进入跳轮或讨伐后才失败，也不拿奖励按钮猜提交点。
 
 ## 工作台与存储准入

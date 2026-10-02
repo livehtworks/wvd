@@ -1,4 +1,5 @@
 #include "service.hpp"
+#include "ocr_models.hpp"
 #include "platform/execution_timing.hpp"
 #include "platform/windows/bundle_lease.hpp"
 #include <algorithm>
@@ -108,6 +109,7 @@ contracts::Observation Service::evaluate(const contracts::FrameEnvelope &frame,
             cache_.result_bytes = 0;
             cache_.template_results.clear();
             cache_.template_result_bytes = 0;
+            ocr_frame_results_.clear();
         }
         return evaluate_locked(*frame_pixels_, request, business, frame.identity);
     } catch (const ResourcePressure &) {
@@ -242,8 +244,10 @@ contracts::Observation Service::evaluate_locked(const FramePixels &pixels, const
             require(condition.value("mode", "") == "ocr", "CUSTOM_OCR_CONTEXT_INVALID");
             auto roi = condition.value("roi", nlohmann::json::array({request.roi.x,
                 request.roi.y, request.roi.width, request.roi.height}));
-            auto nested = parse_request({{"id", "custom.ocr"}, {"revision", bundle_.revision},
-                {"type", "ocr"}, {"roi", roi}, {"expected", condition.at("expected")}});
+            auto definition = condition;
+            definition.update({{"id", "custom.ocr"}, {"revision", bundle_.revision},
+                               {"type", "ocr"}, {"roi", roi}});
+            auto nested = parse_request(definition);
             require(inside(nested.roi, request.roi), "CUSTOM_OCR_OUTSIDE_SCOPE");
             auto observed = recognize_ocr(pixels, nested, basis);
             require(observed.outcome != contracts::RecognitionOutcome::Error,
@@ -297,48 +301,65 @@ contracts::Observation Service::recognize_ocr(const FramePixels &pixels,
     result.outcome = contracts::RecognitionOutcome::NoHit;
     result.error_stage = "ocr";
     const auto &parameters = std::get<OcrParameters>(request.parameters);
-    require(!parameters.expected_text.empty() && parameters.expected_text.size() <= 32,
-            "OCR_EXPECTED_INVALID");
-    for (const auto &expected : parameters.expected_text) {
-        require(!expected.empty() && expected.size() <= 1024 &&
-                    expected.find('\0') == std::string::npos, "OCR_EXPECTED_INVALID");
-        require(std::all_of(expected.begin(), expected.end(), [](unsigned char c) {
-                    return c < 128;
-                }), "OCR_LANGUAGE_UNSUPPORTED");
-    }
-    auto engine = ocr_.load();
+    validate_ocr_parameters(parameters);
+    static const auto models = nlohmann::json::parse(wvd_ocr_models).at("models");
+    const auto &model = models.at(parameters.language);
+    auto &slot = ocr_[parameters.language == "en" ? 0 : 1];
+    const auto started = std::chrono::steady_clock::now();
+    auto engine = slot.load();
     if (!engine) {
-        for (const auto &[relative, expected] : std::vector<std::pair<std::string, std::string>>{
-            {"model/ocr/det.onnx", "8fe4bf6abfb20402357827f2efc964c8b28cf980e29fe09a99b742ae29725fa9"},
-            {"model/ocr/rec.onnx", "da12c6e863761d774b07d3bd40fbaaa55516f90570e0b1dd9dc112e457301cc9"},
-            {"model/ocr/keys.txt", "5662df9d2d03f0e8ca0d3b0649d6acbab904b6a14b3d3521463c71c37c668ce3"}}) {
+        for (const auto &[name, spec] : model.at("files").items()) {
+            const auto relative = model.at("bundle_directory").get<std::string>() + "/" + name;
             bundle_.lease->require_member(relative);
-            require(bundle_.lease->hash(relative) == expected, "OCR_MODEL_NOT_LOCKED");
+            require(bundle_.lease->hash(relative) == spec.at("sha256").get<std::string>(), "OCR_MODEL_NOT_LOCKED");
         }
         require(!cancelled_.load(), "RECOGNITION_CANCELLED");
-        engine = std::make_shared<OcrEngine>(bundle_.root / "model" / "ocr");
-        ocr_.store(engine);
+        engine = std::make_shared<OcrEngine>(bundle_.root / model.at("bundle_directory").get<std::string>());
+        slot.store(engine);
     }
     // 发布前发生的取消由该检查承接；发布后发生的取消直接命中同一引擎。
     if (cancelled_.load()) {
         engine->cancel();
         throw std::runtime_error("RECOGNITION_CANCELLED");
     }
-    auto found = engine->recognize(pixels.mat()(rect(request.roi)));
+    const auto initialized = std::chrono::steady_clock::now();
+    const auto key = parameters.language + ":" + nlohmann::json::array({request.roi.x,
+        request.roi.y, request.roi.width, request.roi.height}).dump();
+    const auto cached = ocr_frame_results_.find(key);
+    const bool cache_hit = cached != ocr_frame_results_.end();
+    auto found = cache_hit ? cached->second : engine->recognize(pixels.mat()(rect(request.roi)));
+    if (!cache_hit) {
+        std::size_t bytes = 0;
+        for (const auto &candidate : found) bytes += candidate.text.size() + sizeof(candidate);
+        if (found.size() <= 128 && bytes <= 65536 && ocr_frame_results_.size() < 4)
+            ocr_frame_results_.emplace(key, found);
+    }
     require(!cancelled_.load(), "RECOGNITION_CANCELLED");
-    result.evidence = {{"language", "en"}, {"model", "locked-det-rec-2026"},
-                       {"candidates", found.size()}};
+    const auto finished = std::chrono::steady_clock::now();
+    result.evidence = {{"language", parameters.language}, {"model", model.at("name")},
+        {"candidates", found.size()}, {"cache_hit", cache_hit}, {"match", parameters.match},
+        {"unique", parameters.unique}, {"threshold", parameters.threshold},
+        {"init_ms", std::chrono::duration<double, std::milli>(initialized - started).count()},
+        {"inference_ms", std::chrono::duration<double, std::milli>(finished - initialized).count()},
+        {"texts", nlohmann::json::array()}};
     for (auto &candidate : found) {
         candidate.box.x += request.roi.x;
         candidate.box.y += request.roi.y;
         bool expected = std::any_of(parameters.expected_text.begin(),
                                     parameters.expected_text.end(), [&](const std::string &needle) {
-                                        return candidate.text.find(needle) != std::string::npos;
+                                        return parameters.match == "exact" ? candidate.text == needle :
+                                            candidate.text.find(needle) != std::string::npos;
                                     });
-        if (expected && candidate.score >= 0.3)
+        if (result.evidence["texts"].size() < 32)
+            result.evidence["texts"].push_back({{"text", candidate.text.substr(0, 1024)},
+                {"score", candidate.score}, {"box", {candidate.box.x, candidate.box.y,
+                    candidate.box.width, candidate.box.height}}});
+        if (expected && candidate.score >= parameters.threshold)
             result.matches.push_back(candidate);
     }
-    if (!result.matches.empty()) hit(result, result.matches.front().box, true);
+    if (parameters.unique && result.matches.size() > 1)
+        result.evidence["reason"] = "OCR_AMBIGUOUS";
+    else if (!result.matches.empty()) hit(result, result.matches.front().box, true);
     return result;
 }
 
@@ -346,7 +367,7 @@ void Service::cancel() noexcept {
     cancelled_.store(true);
     if (cache_.match_budget) cache_.match_budget->wake();
     // 请求取消不等于推理已经退出；Session 仍持有所有资源直到调用实际返回。
-    try { if (auto engine = ocr_.load()) engine->cancel(); }
+    try { for (auto &slot : ocr_) if (auto engine = slot.load()) engine->cancel(); }
     catch (...) { /* 取消标记仍有效，不能由控制线程抛出并破坏停止链。 */ }
 }
 ResourceStats Service::resource_stats() const {
@@ -358,6 +379,12 @@ ResourceStats Service::resource_stats() const {
     result.peak_estimated_workspace_bytes = work.peak_estimated_workspace_bytes;
     result.result_cache_entries = cache_.results.size() + cache_.template_results.size();
     result.result_cache_estimated_bytes = cache_.result_bytes + cache_.template_result_bytes;
+    result.result_cache_entries += ocr_frame_results_.size();
+    for (const auto &[key, values] : ocr_frame_results_) {
+        result.result_cache_estimated_bytes += key.size();
+        for (const auto &value : values)
+            result.result_cache_estimated_bytes += sizeof(value) + value.text.size();
+    }
     return result;
 }
 } // namespace wvd::recognition
