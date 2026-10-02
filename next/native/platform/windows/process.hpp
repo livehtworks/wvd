@@ -16,6 +16,12 @@ struct ProcessResult {
     std::vector<std::uint8_t> stderr_bytes;
 };
 
+// 长期服务独立运行，退出由服务自身的正式接口负责；不继承调用Shell的额外句柄。
+std::uint32_t launch_background(const std::filesystem::path &executable,
+                               const std::vector<std::wstring> &arguments,
+                               const std::filesystem::path &stdout_log,
+                               const std::filesystem::path &stderr_log);
+
 ProcessResult run_process(const std::filesystem::path &executable,
                           const std::vector<std::wstring> &arguments,
                           std::chrono::milliseconds timeout, std::stop_token stop = {},

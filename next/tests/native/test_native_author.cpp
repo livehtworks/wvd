@@ -21,7 +21,9 @@
 #include "games/wvd/vision/native_asset_resolver.hpp"
 #include "recognition/service.hpp"
 #include <opencv2/imgcodecs.hpp>
+#include <opencv2/imgproc.hpp>
 #include "platform/windows/file_digest.hpp"
+#include "platform/windows/path_utf8.hpp"
 #include <algorithm>
 #include <chrono>
 #include <fstream>
@@ -55,7 +57,7 @@ struct Ports final : runtime::FlowPorts {
     std::function<void(const std::string &)> after_input;
     std::vector<std::string> inputs;
     std::uint64_t epoch{}, captures{}, recognitions{};
-    bool stop{}, combat{}, blocker{}, ready{}, network{};
+    bool stop{}, combat{}, blocker{}, ready{}, network{}, quiet{true};
     Ports() : business(storage::LegacyConfigImporter(read("packs/wvd/parameters/legacy-config-fields.json"))
             .parse({{"GENERAL", J::object()}}).values,
             {"closure-transitions", 1, std::make_shared<contracts::SteadyClock>()}),
@@ -88,7 +90,7 @@ struct Ports final : runtime::FlowPorts {
         if (mode == "blocking_screen") return blocker || network;
         if (mode == "boot_ready" || mode == "boot_post") return ready;
         if (mode == "input_clear") return !blocker && !network;
-        if (mode == "region_quiet") return true;
+        if (mode == "region_quiet") return quiet;
         return false;
     }
     contracts::Observation recognize(const contracts::FrameEnvelope &frame, const recognition::Request &request) override {
@@ -140,7 +142,6 @@ struct Ports final : runtime::FlowPorts {
         if (name == "stayed") {
             images = {"Stay"};
             conditions[games::vision::inn_leave_zh().dump()] = true;
-            conditions[games::vision::inn_leave_settled().dump()] = true;
         }
     }
 };
@@ -177,6 +178,40 @@ struct Driver {
         std::cout << id << " PASS\n";
     }
 };
+int inn_transitions() {
+    {
+        Driver d(games::supply::rest_at_inn(false, true));
+        d.ports.business.confirm_event("inn.prepare", "inn_payment_prepared", 1, 1);
+        d.ports.business.inn_payment_submitted(false);
+        d.observe("black"); check(!d.terminal() && d.ports.business.summary().at("inn_payment_pending") == true, "INN_LOADING_LOST_PENDING");
+        d.ports.scene("stayed"); d.ports.after_input = [&](const auto &) { d.ports.scene("city"); };
+        d.finish(); check(d.last.state == runtime::TickState::Completed && d.ports.inputs.size() == 1 &&
+            d.ports.business.summary().at("inn_rest_completed") == true, "INN_PENDING_RECOVERY_FAILED"); d.evidence("TRANS-06");
+    }
+    {
+        Driver d(games::supply::rest_at_inn(false, true)); d.observe("city");
+        check(d.ports.business.summary().at("inn_rest_completed") == false && d.ports.inputs.empty(), "INN_CITY_FALSE_PAID");
+        d.ports.stop = true; d.finish(); d.evidence("TRANS-07");
+    }
+    for (const bool previously_submitted : {false, true}) {
+        // 即使金币已提交但结果漏识别，也允许从正常房型菜单重新办理。
+        Driver d(games::supply::rest_at_inn(false, true));
+        d.ports.business.confirm_event("inn.prepare", "inn_payment_prepared", 1, 1);
+        if (previously_submitted) d.ports.business.inn_payment_submitted(false);
+        d.ports.scene("black"); d.ports.images.insert("Economy");
+        d.ports.after_input = [&](const std::string &path) {
+            if (path.find("Economy") != std::string::npos) d.ports.scene("confirmation");
+            else if (path.find("ConfirmZh") != std::string::npos) d.ports.scene("stayed");
+            else if (path.find("BackFromStayZh") != std::string::npos) d.ports.scene("city");
+            else throw std::runtime_error("INN_UNEXPECTED_INPUT:" + path);
+        };
+        d.finish(); check(d.last.state == runtime::TickState::Completed && d.ports.inputs.size() == 3 &&
+            d.ports.business.summary().at("inn_payment").at("submissions") == (previously_submitted ? 2 : 1) &&
+            d.ports.business.summary().at("inn_rest_completed") == true, "INN_UNPAID_MENU_RECOVERY_FAILED");
+        d.evidence(previously_submitted ? "INN-gold-repeated-menu" : "INN-unpaid-menu");
+    }
+    return 0;
+}
 int transitions() {
     const auto leap = games::navigation::time_leap_without_causality("BeautifulOre", "cursedwheel_dhi", true);
     for (const bool network : {false, true}) {
@@ -224,20 +259,7 @@ int transitions() {
         d.ports.after_input = [&](const auto &) { d.ports.scene("ended"); };
         d.finish(); check(d.ports.inputs.size() == 1 && d.last.code == "combat.auto_not_confirmed_before_battle_end", "COMBAT_EXTRA_INPUT_OR_FALSE_AUTO"); d.evidence("TRANS-05");
     }
-    {
-        Driver d(games::supply::rest_at_inn(false, true));
-        d.ports.business.confirm_event("inn.prepare", "inn_payment_prepared", 1, 1);
-        d.ports.business.inn_payment_submitted(false);
-        d.observe("black"); check(!d.terminal() && d.ports.business.summary().at("inn_payment_pending") == true, "INN_LOADING_LOST_PENDING");
-        d.ports.scene("stayed"); d.ports.after_input = [&](const auto &) { d.ports.scene("city"); };
-        d.finish(); check(d.last.state == runtime::TickState::Completed && d.ports.inputs.size() == 1 &&
-            d.ports.business.summary().at("inn_rest_completed") == true, "INN_PENDING_RECOVERY_FAILED"); d.evidence("TRANS-06");
-    }
-    {
-        Driver d(games::supply::rest_at_inn(false, true)); d.observe("city");
-        check(d.ports.business.summary().at("inn_rest_completed") == false && d.ports.inputs.empty(), "INN_CITY_FALSE_PAID");
-        d.ports.stop = true; d.finish(); d.evidence("TRANS-07");
-    }
+    inn_transitions();
     const auto assets = read("resources/authoring/semantic-assets.json"), flows = read("resources/authoring/public-flows.json");
     J documents = J::object(); for (const auto &doc : flows) documents[doc.at("flow").at("id").get<std::string>()] = doc;
     const games::tasks::PublicFlowLibrary library(documents, assets);
@@ -271,6 +293,181 @@ int transitions() {
 int main(int argc, char **argv) {
     try {
         using J = nlohmann::json;
+        if (argc == 5 && std::string(argv[1]) == "--network-layouts") {
+            using namespace wvd;
+            const auto manifest = closure::read("packs/wvd/manifest.json");
+            recognition::Bundle source{std::filesystem::absolute("packs/wvd"), manifest.at("revision"), {}};
+            for (const auto &row : manifest.at("files")) source.files.push_back({row.at("path"), row.at("sha256")});
+            recognition::Bundle sample{std::filesystem::absolute(".local") /
+                ("network-layouts-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count())), source.revision, {}};
+            for (const auto *name : {"network_error_zh_hant", "network_retry_zh_hant", "retry"}) {
+                const auto selected = games::vision::resolve_image_source(source, manifest.value("aliases", J::object()), name);
+                const auto target = sample.root / selected.relative_path;
+                std::filesystem::create_directories(target.parent_path());
+                std::filesystem::copy_file(source.root / selected.relative_path, target);
+                sample.files.push_back({selected.relative_path, platform::file_sha256(target)});
+            }
+            const auto catalogue = closure::read("resources/authoring/semantic-assets.json");
+            const auto recipe = [&](const char *id) { return catalogue.at("resources").at(id).at("variants").at("zh-Hant").at("condition"); };
+            closure::check(recipe("event.network.prompt") == games::vision::network_prompt_zh_hant() &&
+                recipe("event.network.retry.action") == games::vision::network_retry_button_zh_hant(), "NETWORK_AUTHOR_NATIVE_MISMATCH");
+            recognition::Service service(sample, games::vision::native_handlers(manifest.value("aliases", J::object()), "zh-Hant"));
+            for (int i = 2; i < 5; ++i) {
+                const auto pixels = cv::imread(argv[i], cv::IMREAD_COLOR);
+                closure::check(!pixels.empty() && pixels.cols == 900 && pixels.rows == 1600, "NETWORK_FRAME_INVALID");
+                contracts::FrameEnvelope frame;
+                frame.identity.device_id = "recorded-network"; frame.identity.game_id = "wvd";
+                frame.identity.pack_revision = sample.revision; frame.identity.viewport_id = "900x1600";
+                frame.identity.generation = 1; frame.identity.frame_id = i;
+                frame.identity.raw_size = frame.identity.recognition_size = {900, 1600};
+                frame.identity.captured_at = frame.identity.capture_finished_at = std::chrono::steady_clock::now();
+                frame.raw_bgr = std::make_shared<const std::vector<std::uint8_t>>(pixels.data, pixels.data + pixels.total() * pixels.elemSize());
+                const auto evaluate = [&](const J &condition) {
+                    return service.evaluate(frame, frame.identity, {"network-layout", "1", {0, 0, 900, 1600},
+                        recognition::CustomParameters{"WvdVision", condition}});
+                };
+                const auto expected = i == 4 ? contracts::RecognitionOutcome::NoHit : contracts::RecognitionOutcome::Hit;
+                for (const auto &condition : {games::vision::network_prompt_zh_hant(), games::vision::network_retry_prompt(),
+                                              games::vision::network_retry_button_zh_hant()}) {
+                    const auto result = evaluate(condition);
+                    closure::check(result.outcome == expected, "NETWORK_LAYOUT_RECOGNITION:" + std::to_string(i) + ":" + result.error_code);
+                }
+                if (i != 4) {
+                    const auto result = evaluate(games::vision::network_retry_button_zh_hant());
+                    closure::check(result.center && result.center->y > 850 && result.center->y < 960 &&
+                        (i == 2 ? result.center->x > 400 && result.center->x < 500 : result.center->x > 580 && result.center->x < 700),
+                        "NETWORK_RETRY_WRONG_BUTTON");
+                    std::cout << (i == 2 ? "single" : "double") << " retry center=" << result.center->x << "," << result.center->y << " PASS\n";
+                } else std::cout << "inn confirmation negative PASS\n";
+            }
+            return 0;
+        }
+        if (argc == 2 && std::string(argv[1]) == "--inn-transitions") return closure::inn_transitions();
+        if (argc == 2 && std::string(argv[1]) == "--boot-progress") {
+            using namespace wvd;
+            using namespace std::chrono_literals;
+            auto flow = games::recovery::wait_boot_ready(true);
+            closure::check(!flow.declared_budget, "BOOT_CUMULATIVE_BUDGET_REMAINS");
+            closure::check(flow.nodes.at("TitleObservationEnd").at("observation_args") ==
+                flow.nodes.at("Title").at("observation_args"), "BOOT_ACTION_GUARD_LOST");
+            {
+                // 三次独立网络错误均已确认消失，仍需能返回同一启动分支。
+                // 场景叶子隔离网络服务；启动图与执行器使用生产实现。
+                closure::Driver d(flow); d.ports.scene("network");
+                d.ports.after_input = [&](const auto &) { d.ports.scene("black"); };
+                for (unsigned attempt = 1; attempt <= 3; ++attempt) {
+                    d.until([&] { return d.ports.inputs.size() == attempt; });
+                    d.until([&] { return d.executor.current_step_id() == "HandleNetworkObservationResume"; });
+                    d.ports.scene(attempt == 3 ? "city" : "network");
+                }
+                d.finish();
+                closure::check(d.last.state == runtime::TickState::Completed,
+                    "BOOT_SUCCESSFUL_NETWORK_RECOVERY_COUNTED_AS_FAILURE");
+                d.evidence("BOOT-repeated-network");
+            }
+            {
+                // 错误页仍在、背景持续运动时，正式输入回执等待必须继续补试。
+                closure::Driver d(flow); d.ports.scene("network"); d.ports.quiet = false;
+                d.ports.after_input = [&](const auto &) {
+                    if (d.ports.inputs.size() == 3) d.ports.scene("city");
+                };
+                d.finish();
+                closure::check(d.last.state == runtime::TickState::Completed && d.ports.inputs.size() == 3,
+                    "NETWORK_BACKGROUND_MOTION_BLOCKS_RETRY");
+                d.evidence("BOOT-network-moving-background");
+            }
+            // 仅缩短无进展时钟，正式图、执行器和输入后置不替换。
+            for (auto &node : flow.nodes) if (node.value("binding", "") == "BeginObservationPhase")
+                node["operation_args"]["budget_ms"] = 80;
+            {
+                closure::Driver d(flow); d.ports.scene("black");
+                d.ports.images.insert("boot_title_logo");
+                d.ports.after_input = [&](const auto &) { d.ports.scene("black"); };
+                d.until([&] { return d.ports.inputs.size() == 1; });
+                std::this_thread::sleep_for(120ms);
+                d.ports.scene("city"); d.finish();
+                closure::check(d.last.state == runtime::TickState::Completed, "BOOT_KNOWN_ACTION_USES_UNKNOWN_BUDGET");
+                d.evidence("BOOT-known-action");
+            }
+            {
+                closure::Driver d(flow); d.ports.scene("black");
+                d.ports.images.insert("boot_title_logo");
+                d.until([&] { return d.executor.current_step_id() == "TitleObservationEnd"; });
+                d.ports.scene("city");
+                d.finish();
+                closure::check(d.last.state == runtime::TickState::Completed && d.ports.inputs.empty(),
+                    "BOOT_LATE_TRANSITION_INPUT_REPLAYED");
+                d.evidence("BOOT-late-transition");
+            }
+            {
+                closure::Driver d(flow); d.ports.scene("black"); d.finish();
+                closure::check(d.last.code == "OBSERVATION_PHASE_TIMEOUT:wvd.boot" && d.ports.inputs.empty(),
+                    "BOOT_UNKNOWN_POLL_RESET_BUDGET");
+                d.evidence("BOOT-unknown-timeout");
+            }
+            return 0;
+        }
+        if (argc == 3 && std::string(argv[1]) == "--inn-frame") {
+            // 使用真实失败帧走正式识别器，覆盖住宿观察、后置和重试条件的完整嵌套。
+            // 仅复制本流程依赖到独立目录，不连接设备、不写正式配置。
+            using namespace wvd;
+            const auto flow = games::supply::rest_at_inn(false, true);
+            games::tasks::compile_native_program(flow, J::object(), "inn-frame").validate();
+            const auto pixels = cv::imread(argv[2], cv::IMREAD_COLOR);
+            closure::check(!pixels.empty() && pixels.cols == 900 && pixels.rows == 1600, "INN_FRAME_INVALID");
+            const auto manifest = closure::read("packs/wvd/manifest.json");
+            recognition::Bundle source{std::filesystem::absolute("packs/wvd"), manifest.at("revision"), {}};
+            for (const auto &member : manifest.at("files")) source.files.push_back({member.at("path"), member.at("sha256")});
+            const auto root = std::filesystem::absolute(".local") /
+                ("inn-frame-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+            recognition::Bundle sample{root, source.revision, {}};
+            std::set<std::string> copied;
+            for (const auto &name : flow.images) {
+                const auto selected = games::vision::resolve_image_source(source, manifest.value("aliases", J::object()), name);
+                if (!copied.insert(selected.relative_path).second) continue;
+                const auto target = root / selected.relative_path;
+                std::filesystem::create_directories(target.parent_path());
+                std::filesystem::copy_file(source.root / selected.relative_path, target);
+                sample.files.push_back({selected.relative_path, platform::file_sha256(target)});
+            }
+            recognition::Service service(sample, games::vision::native_handlers(manifest.value("aliases", J::object()), "zh-Hant"));
+            closure::Ports state;
+            state.business.confirm_event("inn.prepare", "inn_payment_prepared", 1, 1);
+            contracts::FrameEnvelope frame;
+            frame.identity.device_id = "recorded-inn"; frame.identity.game_id = "wvd";
+            frame.identity.pack_revision = source.revision; frame.identity.viewport_id = "900x1600";
+            frame.identity.generation = 1; frame.identity.frame_id = 1;
+            frame.identity.raw_size = frame.identity.recognition_size = {900, 1600};
+            frame.identity.captured_at = frame.identity.capture_finished_at = std::chrono::steady_clock::now();
+            frame.raw_bgr = std::make_shared<const std::vector<std::uint8_t>>(pixels.data, pixels.data + pixels.total() * pixels.elemSize());
+            const auto evaluate = [&](const J &condition) {
+                return service.evaluate(frame, frame.identity,
+                    {"inn-frame", "1", {0, 0, 900, 1600}, recognition::CustomParameters{"WvdVision", condition}}, &state.business);
+            };
+            std::size_t count{};
+            std::function<void(const J &, const std::string &)> scan = [&](const J &value, const std::string &path) {
+                if (value.is_object() && value.contains("mode")) {
+                    const auto observed = evaluate(value);
+                    closure::check(observed.outcome != contracts::RecognitionOutcome::Error, path + ":" + observed.error_code);
+                    ++count;
+                    return;
+                }
+                if (value.is_structured()) for (auto it = value.begin(); it != value.end(); ++it)
+                    scan(it.value(), path + "/" + (value.is_object() ? it.key() : std::to_string(it - value.begin())));
+            };
+            scan(flow.nodes, "inn");
+            for (const auto *name : {"ConfirmZh", "ResumeConfirmation"})
+                closure::check(evaluate(flow.nodes.at(name).at("observation_args")).outcome == contracts::RecognitionOutcome::Hit,
+                    std::string("INN_EXPECT_HIT:") + name);
+            for (const auto *name : {"PendingPaid", "PremiumBlocked", "AtCity", "Paid"})
+                closure::check(evaluate(flow.nodes.at(name).at("observation_args")).outcome == contracts::RecognitionOutcome::NoHit,
+                    std::string("INN_EXPECT_NO_HIT:") + name);
+            state.business.inn_payment_submitted(false);
+            closure::check(evaluate(flow.nodes.at("PendingPaid").at("observation_args")).outcome == contracts::RecognitionOutcome::NoHit,
+                "INN_CONFIRMATION_IS_NOT_RECEIPT");
+            std::cout << "inn real failure frame: " << count << " production conditions without Error; confirmation Hit; receipt/city/premium NoHit\n";
+            return 0;
+        }
         if (argc == 2 && std::string(argv[1]) == "--closure-transitions") return closure::transitions();
         if (argc == 2 && std::string(argv[1]) == "--transition-contracts") {
             // 本轮只核对正式工厂的结果条件及可达分支，不连接设备、不执行旧全量矩阵。
@@ -289,7 +486,9 @@ int main(int argc, char **argv) {
                 const auto &node = leap.nodes.at(name);
                 require(node.at("next") == J{"Done"} &&
                     node.at("operation_args").at("postcondition").at("parameters") == leap.nodes.at("Done").at("observation_args") &&
-                    !node.at("operation_args").contains("retry"), "LEAP_MUST_WAIT_FOR_RETURN_WITHOUT_REPLAY");
+                    node.at("operation_args").at("retry").at("restart_from") == "Entry" &&
+                    node.at("operation_args").at("retry").at("interval_ms") >= 5000,
+                    "LEAP_RETRY_MUST_REOBSERVE_AND_CONFIRM_RETURN");
             }
             require(!has(leap.nodes.at("LeapRoute").at("next"), "Done"), "LEAP_PRE_SUBMIT_MUST_NOT_COMPLETE");
             const auto inn = wvd::games::supply::rest_at_inn(false, true);
@@ -298,6 +497,27 @@ int main(int argc, char **argv) {
             require(inn.nodes.at("SelectConfirm").at("next").front() == "PendingPaid", "INN_PENDING_RESULT_MUST_REMAIN_REACHABLE");
             require(inn.nodes.at("PendingPaid").at("observation_args").dump().find("/inn_payment/submitted") != std::string::npos,
                 "INN_PENDING_MUST_REQUIRE_ACTUAL_SUBMISSION");
+            {
+                struct Clock final : wvd::contracts::MonotonicClock {
+                    TimePoint value{};
+                    TimePoint now() const noexcept override { return value; }
+                };
+                auto clock = std::make_shared<Clock>();
+                auto profile = wvd::storage::LegacyConfigImporter(closure::read("packs/wvd/parameters/legacy-config-fields.json"))
+                    .parse({{"GENERAL", J::object()}}).values;
+                wvd::games::WvdRunState state(std::move(profile), {"gold-retry", 1, clock});
+                state.enter_segment(wvd::contracts::SegmentBoundary::Initial, 1, 0);
+                state.confirm_event("inn.prepare", "inn_payment_prepared", 1, 1);
+                for (int i = 0; i < 4; ++i) {
+                    require(state.inn_payment_ready(), "GOLD_RETRY_BLOCKED_BY_CUMULATIVE_COUNT");
+                    state.inn_payment_submitted(false);
+                    require(!state.inn_payment_ready(), "GOLD_RETRY_INTERVAL_MISSING");
+                    clock->value += std::chrono::seconds{5};
+                }
+                require(state.summary().at("inn_payment").at("submissions") == 4 &&
+                    state.summary().at("inn_payment_pending") == true,
+                    "GOLD_RETRY_LOST_LEDGER_OR_FALSE_COMPLETION");
+            }
             const auto combat = wvd::games::combat::enable_auto();
             validate(combat);
             require(combat.nodes.at("BackPopup").at("next") == combat.nodes.at("Entry").at("next") &&
@@ -339,6 +559,84 @@ int main(int argc, char **argv) {
                 if (node.at("id") == "Download")
                     require(node.at("parameters").at("postcondition").at("mode") == "not", "DOWNLOAD_SOURCE_IS_NOT_COMPLETION");
             std::cout << "transition contracts: leap, world, map, auto-combat, inn, bounty, boot; no device input\n";
+            return 0;
+        }
+        if (argc == 3 && std::string(argv[1]) == "--roi-review") {
+            // 有限的已有现场帧回放；仅走正式识别Service，绝不连接设备或发输入。
+            const auto require = [](bool ok, const std::string &message) {
+                if (!ok) throw std::runtime_error(message);
+            };
+            const auto read = [](const char *path) { std::ifstream input(path); return J::parse(input); };
+            const auto plan = read(argv[2]);
+            const auto catalogue = read("resources/authoring/semantic-assets.json");
+            wvd::authoring::SemanticAssets resources(catalogue);
+            const auto manifest = read("packs/wvd/manifest.json");
+            wvd::recognition::Bundle source{std::filesystem::absolute("packs/wvd"), "roi-review", {}};
+            for (const auto &member : manifest.at("files"))
+                source.files.push_back({member.at("path").get<std::string>(), member.at("sha256").get<std::string>()});
+            // 源包目录还含manifest；识别服务只接受闭合成员集合，按实际配方复制到隔离目录。
+            wvd::recognition::Bundle bundle{std::filesystem::absolute(".local") /
+                ("roi-recorded-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count())), source.revision, {}};
+            std::set<std::string> copied;
+            std::function<void(const J &)> collect = [&](const J &value) {
+                if (value.is_object()) {
+                    if (value.contains("image") && value.at("image").is_string()) {
+                        const auto selected = wvd::games::vision::resolve_image_source(
+                            source, manifest.at("aliases"), value.at("image").get<std::string>());
+                        if (copied.insert(selected.relative_path).second) {
+                            const auto relative = wvd::platform::path_from_utf8(selected.relative_path);
+                            const auto target = bundle.root / relative;
+                            std::filesystem::create_directories(target.parent_path());
+                            std::filesystem::copy_file(source.root / relative, target);
+                            bundle.files.push_back({selected.relative_path, wvd::platform::file_sha256(target)});
+                        }
+                    }
+                    for (const auto &child : value) collect(child);
+                } else if (value.is_array()) {
+                    for (const auto &child : value) collect(child);
+                }
+            };
+            for (const auto &item : plan)
+                collect(item.contains("resource") ? resources.condition(item.at("resource").get<std::string>(), "zh-Hant") : item.at("condition"));
+            wvd::recognition::Service service(bundle, wvd::games::vision::native_handlers(
+                manifest.at("aliases"), "zh-Hant"));
+            wvd::contracts::FrameEnvelope frame;
+            frame.identity.device_id = "recorded-roi";
+            frame.identity.game_id = "wvd";
+            frame.identity.pack_revision = bundle.revision;
+            frame.identity.viewport_id = "900x1600";
+            frame.identity.generation = 1;
+            frame.identity.raw_size = frame.identity.recognition_size = {900, 1600};
+            require(plan.is_array() && plan.size() <= 24, "ROI_REVIEW_PLAN_INVALID");
+            for (const auto &item : plan) {
+                auto image = cv::imread(item.at("frame").get<std::string>());
+                require(!image.empty() && image.cols == 900 && image.rows == 1600, "ROI_REVIEW_FRAME_INVALID");
+                if (item.contains("translate")) {
+                    const auto delta = item.at("translate");
+                    const cv::Mat transform = (cv::Mat_<double>(2, 3) << 1, 0,
+                        delta.at(0).get<int>(), 0, 1, delta.at(1).get<int>());
+                    cv::Mat shifted;
+                    cv::warpAffine(image, shifted, transform, image.size());
+                    image = std::move(shifted); // 明确为合成位移，不能声称设备实际发生过。
+                }
+                if (item.value("erase_actor", false)) image(cv::Rect(0, 0, 250, 155)).setTo(0);
+                const auto condition = item.contains("resource")
+                    ? resources.condition(item.at("resource").get<std::string>(), "zh-Hant")
+                    : item.at("condition");
+                ++frame.identity.frame_id;
+                frame.identity.captured_at = frame.identity.capture_finished_at = std::chrono::steady_clock::now();
+                frame.raw_bgr = std::make_shared<const std::vector<std::uint8_t>>(
+                    image.data, image.data + image.total() * image.elemSize());
+                wvd::recognition::Request request{"roi.review", "1", {0, 0, 900, 1600},
+                    wvd::recognition::CustomParameters{"WvdVision", condition}};
+                const auto result = service.evaluate(frame, frame.identity, request);
+                const auto expected = item.at("hit").get<bool>()
+                    ? wvd::contracts::RecognitionOutcome::Hit : wvd::contracts::RecognitionOutcome::NoHit;
+                std::cout << item.at("name").get<std::string>() << ": "
+                          << (result.outcome == expected ? "PASS" : "FAIL") << "\n";
+                require(result.outcome == expected,
+                    "ROI_REVIEW_RESULT:" + result.error_code + ":" + result.evidence.dump());
+            }
             return 0;
         }
         if (argc == 4 && std::string(argv[1]) == "--bounty") {

@@ -59,7 +59,10 @@ struct Route {
 struct InputRetry {
     recognition::Request ready;
     std::chrono::milliseconds interval{5000};
-    unsigned max_submissions{}; // 0沿用无次数上限的安全菜单；付款必须显式限定。
+    unsigned max_submissions{}; // 0不限制次数，但原结果窗口、间隔与总期限保持有效。
+    // 游戏层允许重做的操作在重启后回到本子流程的只读选路点；空值恢复原候选。
+    // 不允许跳回根任务、清业务账目或绕过宝石购买禁令。
+    std::string restart_from;
 };
 struct Input {
     recognition::Request scene;

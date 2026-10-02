@@ -20,7 +20,7 @@ MODEL_HASHES = {
 
 
 def sync_authoring_resources():
-    """Only these two authored JSON files are copied into the generated pack."""
+    """同步两份作者JSON及语义配方实际引用的扩展素材，不扫描日志或用户mod。"""
     manifest_path = ROOT / "packs/wvd/manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     members = {row["path"]: row for row in manifest["files"]}
@@ -42,7 +42,46 @@ def sync_authoring_resources():
             row["sha256"] = digest
             row["bytes"] = len(content)
             changed = True
+    catalogue = json.loads((ROOT / "resources/authoring/semantic-assets.json").read_text(encoding="utf-8"))
+
+    def image_references(value):
+        if isinstance(value, dict):
+            if value.get("mode") == "template" and isinstance(value.get("image"), str):
+                yield value["image"]
+            for child in value.values():
+                yield from image_references(child)
+        elif isinstance(value, list):
+            for child in value:
+                yield from image_references(child)
+
+    for image in sorted(set(image_references(catalogue["resources"]))):
+        name = Path(image + ".png")
+        if name.is_absolute() or ".." in name.parts or "\\" in image or ":" in image:
+            raise RuntimeError("作者素材路径非法: " + image)
+        source = ROOT / "resources/images" / name
+        if not source.is_file():
+            continue  # 旧素材来自既有清单，不借此扫描/替换其权威来源。
+        target = ROOT / "packs/wvd/image" / name
+        if source.is_symlink() or target.is_symlink():
+            raise RuntimeError("作者素材链接不安全: " + image)
+        content = source.read_bytes()
+        relative = "image/" + name.as_posix()
+        digest = hashlib.sha256(content).hexdigest()
+        if not target.is_file() or target.read_bytes() != content:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(content)
+            changed = True
+        row = members.get(relative)
+        if row is None:
+            row = {"path": relative, "source": "next/resources/images/" + name.as_posix()}
+            manifest["files"].append(row)
+            members[relative] = row
+        if row.get("sha256") != digest or row.get("bytes") != len(content):
+            row["sha256"] = digest
+            row["bytes"] = len(content)
+            changed = True
     if changed:
+        manifest["files"].sort(key=lambda row: row["path"])
         identity = {"files": manifest["files"], "aliases": manifest.get("aliases", {})}
         manifest["revision"] = hashlib.sha256(json.dumps(identity, sort_keys=True,
             ensure_ascii=False, separators=(",", ":")).encode("utf-8")).hexdigest()
@@ -173,15 +212,19 @@ def stage(target):
             raise RuntimeError("资源成员哈希不符: " + row["path"])
     manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     checked_copy(target / "pack/parameters/legacy-quests.json", target / "data/quest.json")
+    checked_copy(ROOT / "tools/manage_service.ps1", target / "tools/manage_service.ps1")
     launcher = (
         "@echo off\r\nsetlocal\r\nchcp 65001 >nul\r\n"
-        "set \"ROOT=%~dp0\"\r\nset \"DATA=%LOCALAPPDATA%\\WvdNext\"\r\n"
-        "if not exist \"%DATA%\" mkdir \"%DATA%\"\r\n"
-        "\"%ROOT%automationd.exe\" --web-root \"%ROOT%web\" --data-root \"%DATA%\" "
-        "--pack-root \"%ROOT%pack\" --quests \"%ROOT%data\\quest.json\"\r\n"
+        "set \"ROOT=%~dp0\"\r\n"
+        "powershell -NoProfile -ExecutionPolicy Bypass -File \"%ROOT%tools\\manage_service.ps1\" "
+        "-Action Start -CandidateRoot \"%ROOT%.\" -OpenBrowser\r\n"
+        "if errorlevel 1 pause\r\n"
         "endlocal\r\n"
     )
-    (target / "启动WVD原生版.bat").write_bytes(launcher.encode("utf-8-sig"))
+    # 批处理命令均为ASCII，UTF-8 BOM会使cmd把首行@echo识别成未知命令。
+    (target / "启动WVD原生版.bat").write_bytes(launcher.encode("utf-8"))
+    (target / "退出WVD原生版.bat").write_bytes(launcher.replace(
+        "-Action Start", "-Action Stop").replace(" -OpenBrowser", "").encode("utf-8"))
     (target / "DELIVERY_STATUS.json").write_text(json.dumps({
         "migration_baseline": "8f61540eafa61413852c2c3a85cb81c090e2161f",
         "memory_work_package_baseline": "661069f5688253270d1b940e084ce19ceca01373",

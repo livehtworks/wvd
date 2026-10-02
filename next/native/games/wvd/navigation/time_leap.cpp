@@ -115,7 +115,7 @@ tasks::CompiledWorkflow compile_time_leap(const std::string &target_name,
     graph.click("RuinsEn", C::all({ruins_en, C::absent(title)}), ruins_en, wheel, {"Entry"});
     graph.click("RuinsZhHant", C::all({ruins_icon, C::absent(title)}), ruins_icon, wheel, {"Entry"});
     // 与旧版“看目标->重认原按钮->再点->等新帧”一致；只重试打开菜单，
-    // QuickLeap/Leap 的实际跳轮确认不在这里授权，避免重复执行业务副作用。
+    // 实际跳轮也允许重试，但须重认仍存在的确认页，不能把菜单消失当作完成。
     for (const auto *name : {"OpenFromRoyalCity", "RuinsEn", "RuinsZhHant"})
         graph.retry_menu_input(name, vision::menu_retry_ready(city));
     for (const auto *name : {"OpenWheelEn", "OpenWheelZhHant"})
@@ -211,6 +211,11 @@ tasks::CompiledWorkflow compile_time_leap(const std::string &target_name,
     graph.click("LeapZhHant", leap_zh_hant, leap_zh_hant, after_leap, {"Done"});
     graph.delay_after("LeapEn", 2000);
     graph.delay_after("LeapZhHant", 2000);
+    // 用户允许重做跳轮。重启后从本导航入口认页，保留父悬赏阶段，不重跑根任务。
+    for (const auto *name : {"QuickLeapEn", "LeapEn"})
+        graph.retry_menu_input(name, vision::menu_retry_ready(leap_en), 5000, 0, "Entry");
+    for (const auto *name : {"QuickLeapZhHant", "LeapZhHant"})
+        graph.retry_menu_input(name, vision::menu_retry_ready(leap_zh_hant), 5000, 0, "Entry");
     // 离开按钮不是充分条件。只有已执行跳跃路径之后的新帧正常游戏锚点才是终点。
     // 启动时的城市画面不能直达这里，未知加载帧也不能算业务完成。
     graph.observe("Done", outside, {"Terminal"});

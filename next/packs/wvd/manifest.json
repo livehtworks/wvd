@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "source_commit": "6585f4075f5714ab522aa582993860c09af912c1",
-  "revision": "c672070b309b8be3674e1444dcf81ed7ffa05c8c36c03cdc5e1c76c7818fb57b",
+  "revision": "383b080a9faf8f8e1d230a8148e3beb1361810f36547ca991ad366ca6c68de34",
   "files": [
     {
       "path": "image/7000G/icantagreewithU.png",
@@ -1410,6 +1410,12 @@
       "source_refs": [
         "src/script.py:2219"
       ]
+    },
+    {
+      "path": "image/boot_announcement_header.png",
+      "source": "next/resources/images/boot_announcement_header.png",
+      "sha256": "94fb21439e16b380a79670604943ae77bff8c646b1189622e314fc5a88d27078",
+      "bytes": 7798
     },
     {
       "path": "image/boot_attention.png",
@@ -4811,8 +4817,8 @@
     {
       "path": "parameters/public-flows.json",
       "source": "next/resources/authoring/public-flows.json",
-      "sha256": "ea6463a0c92d90664f18651af068c1c85e894ef041c89de92977d9053f66103b",
-      "bytes": 114330,
+      "sha256": "df4bd51fd300e464bbe11e448f58dd4f3185280695528e5b67c4908c704d347b",
+      "bytes": 113161,
       "source_refs": [
         "authoring:public-flow-1"
       ]
@@ -4820,8 +4826,8 @@
     {
       "path": "parameters/semantic-assets.json",
       "source": "next/resources/authoring/semantic-assets.json",
-      "sha256": "49399a4ec3802c586154f23e3a70350099bb38c3d2710958c741682de7335a77",
-      "bytes": 74977,
+      "sha256": "3ba9f733ff82e3340b650e385bdfe246a53527bbed398923a1f57ca7296fde5b",
+      "bytes": 73089,
       "source_refs": [
         "authoring:public-flow-1"
       ]

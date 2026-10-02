@@ -51,7 +51,7 @@ class BlockingBackend final : public Backend {
 };
 }
 
-int main() {
+int main(int argc, char **argv) {
     try {
         const auto data_root = std::filesystem::temp_directory_path() /
             ("wvd-native-coordinator-" + wvd::platform::unique_id());
@@ -90,6 +90,41 @@ int main() {
         definition.policy.viewport_id = "900x1600";
         definition.policy.recognition_size = {900, 1600};
         definition.policy.allowed_scenes.insert("wvd");
+        if (argc == 2 && std::string(argv[1]) == "--capture-context") {
+            class ContextBackend final : public Backend {
+              public:
+                bool desktop = true;
+                devices::RawFrame capture() override {
+                    auto result = Backend::capture();
+                    if (desktop) {
+                        result.foreground_application = "com.android.launcher";
+                        result.size = {1600, 900}; result.viewport_id = "1600x900";
+                        result.display_rotation = 1;
+                    }
+                    return result;
+                }
+            } source;
+            recognition::Service recognizer(bundle, {});
+            State business;
+            runtime::NativeFlowPorts ports(source, recognizer, business, definition.policy, 1, {});
+            try { (void)ports.capture(); throw std::runtime_error("DESKTOP_REACHED_GAME_ROI"); }
+            catch (const contracts::ObservationUnavailable &error) {
+                if (error.fault().code != "GAME_NOT_FOREGROUND" ||
+                    !ports.failed_pixels() || ports.failed_pixels()->size != contracts::Size{1600,900} ||
+                    ports.last_valid_frame()) throw;
+            }
+            source.desktop = false;
+            const auto frame = ports.capture();
+            if (frame.identity.recognition_size != contracts::Size{900,1600} || ports.failed_pixels())
+                throw std::runtime_error("GAME_FRAME_NOT_RESTORED");
+            auto read_policy = definition.policy; read_policy.observed_read_only_viewport = true;
+            runtime::NativeFlowPorts preview(source, recognizer, business, read_policy, 1, {});
+            source.desktop = true;
+            if (preview.capture().identity.recognition_size != contracts::Size{1600,900})
+                throw std::runtime_error("READ_ONLY_PREVIEW_BLOCKED");
+            std::cout << "capture context: desktop rejected before ROI; game restored; read-only preview preserved\n";
+            return 0;
+        }
         definition.units.push_back({std::make_shared<const workflow::FlowProgram>(std::move(program)), std::move(bundle), {},
             "test/checkpoint", 5s});
         definition.total_time_limit = 5s;

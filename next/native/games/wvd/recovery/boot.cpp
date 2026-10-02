@@ -45,10 +45,10 @@ tasks::CompiledWorkflow retry_network_prompt() {
     graph.wait("Settle", 3000, {"Entry"});
     for (const auto *name : {"RetryZhHant", "RetryEn"}) {
         graph.postcondition_budget(name, 120000);
-        // 已确认网络弹窗中的“重试”无业务资源副作用；原弹窗和按钮仍在时
-        // 可以再次请求联网。不能套用 input_clear（它会反证此弹窗本身）。
-        graph.retry_menu_input(name, C::all({prompt,
-            J{{"mode", "region_quiet"}, {"roi", {650, 1450, 249, 149}}, {"settle_ms", 1000}}}));
+        // 网络弹窗本身已经说明请求失败，可以再次联网；右下加载动画和
+        // 背景运动不能阻止补点。每次仍用新帧复核正文、按钮和匹配中心，
+        // 首次结果期限不刷新，3秒间隔最多允许约40次补试。
+        graph.retry_menu_input(name, prompt, 3000);
         graph.hit_limit(name, 20);
     }
     auto result = graph.finish();
@@ -79,7 +79,9 @@ tasks::CompiledWorkflow retry_network_prompt() {
 }
 tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, DialoguePolicy policy = DialoguePolicy::Default) {
     C graph(common ? "recovery.common_screens" : "recovery.boot_ready", std::chrono::seconds{120});
-    graph.check_policy("exception", J::array(), 1000, 1000, false);
+    // 冷启动是正常进场流程；标题/下载等正面回执表示进展。网络子图仍属exception，
+    // 反复按重试只关闭弹窗，不能重置“未恢复业务现场”的连续异常窗口。
+    graph.check_policy(common ? "exception" : "business", J::array(), 1000, 1000, false);
     graph.use_dialogue(policy);
     const auto task_stop = task_stop_condition(policy);
     const auto panel = C::any({C::image("trait"), C::image("recover")});
@@ -90,6 +92,8 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, Dialogue
         vision::harken_floor_menu()}) : J{{"mode", "boot_ready"}},
                            C::absent(J{{"mode", "blocking_screen"}}), C::absent(story)});
     const auto title = scoped("boot_title_logo", {100, 300, 700, 470}, .86);
+    const auto announcement = vision::resource("boot.announcement.page");
+    const auto announcement_close = scoped("guild_reveal_close_zh_hant", {200, 1320, 500, 220}, .9);
     // 首次免责声明跟随系统区域设置，游戏主体即使配置为英文也可能显示繁中。
     const auto attention = C::any({scoped("boot_attention", {250, 430, 420, 220}, .86),
                                    scoped("boot_attention_zh", {250, 430, 420, 220}, .86)});
@@ -113,8 +117,8 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, Dialogue
     // 这里只等待离开刚处理的提示；它不是“游戏就绪”的证据。
     // recognized 包含当前提示，不能放进 any 后把页面未变化认作进展。
     const auto progressed = [](const J &current) { return C::absent(current); };
-    J entry = common ? J{"NetworkZhHant", "DownloadZhHant", "DownloadEn", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title", "Pause", "Death", "Sandman", "Blessing", "Karma", "Dialogue", "Story", "Defeat", "Ready", "Poll"}
-                     : J{"Ready", "NetworkZhHant", "DownloadZhHant", "DownloadEn", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title", "Pause", "Sandman", "Blessing", "Karma", "Dialogue", "Story", "Poll"};
+    J entry = common ? J{"NetworkZhHant", "DownloadZhHant", "DownloadEn", "Announcement", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title", "Pause", "Death", "Sandman", "Blessing", "Karma", "Dialogue", "Story", "Defeat", "Ready", "Poll"}
+                     : J{"Ready", "NetworkZhHant", "DownloadZhHant", "DownloadEn", "Announcement", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title", "Pause", "Sandman", "Blessing", "Karma", "Dialogue", "Story", "Poll"};
     if (policy != DialoguePolicy::Default) {
         entry.insert(entry.begin(), "SpecialDialogue");
         const auto special = graph.define_child("SpecialChoice", choose_special_dialogue(policy));
@@ -137,7 +141,7 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, Dialogue
             C::any({inn_menu, ready}), {66, 1500}, {"Entry"});
         graph.retry_menu_input("CloseCharacter", character, 3000);
         graph.click("LeaveInnMenuZh", C::all({inn_menu, leave_zh, C::absent(story),
-            C::absent(character), vision::inn_leave_settled()}), leave_zh, left, {"Entry"});
+            C::absent(character), J{{"mode", "input_clear"}, {"phase", "supply"}}}), leave_zh, left, {"Entry"});
         graph.retry_menu_input("LeaveInnMenuZh", C::all({inn_menu, leave_zh, C::absent(character)}), 3000);
         graph.click("LeaveInnMenu", C::all({inn_menu, C::absent(story), C::absent(leave_zh), C::absent(character),
                         J{{"mode", "input_clear"}, {"phase", "supply"}}}),
@@ -202,6 +206,9 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, Dialogue
     graph.click("Resume", resume_prompt, resume, progressed(resume), {"Entry"});
     graph.fixed_click("Attention", attention, progressed(attention), {450, 1450}, {"Entry"});
     graph.fixed_click("Title", title, progressed(title), {450, 1450}, {"Entry"});
+    // 公告正文/日期会变化，只用标题和底部关闭按钮共同确认；不借通用关闭退出其它页面。
+    graph.click("Announcement", announcement, announcement_close, C::absent(announcement), {"Entry"});
+    graph.retry_menu_input("Announcement", announcement, 3000);
     const J pause{{"mode", "pause"}};
     graph.observe("Pause", pause, {"ResumePause0"});
     // 按旧版连续六次无效点击判定冻结，但第六次仍须新帧确认：
@@ -218,7 +225,7 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, Dialogue
     graph.observe("PauseFrozen", pause, {"PauseFrozenExit"});
     graph.recovery("PauseFrozenExit", "pause.physics_frozen");
     // 正常恢复分派不累计经过次数；原页持续无效由输入重试/观察期限约束。
-    for (auto name : {"DownloadEn", "DownloadZhHant", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title"}) {
+    for (auto name : {"DownloadEn", "DownloadZhHant", "Announcement", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title"}) {
         if (!allow_download && (std::string(name) == "DownloadEn" ||
                                std::string(name) == "DownloadZhHant"))
             continue;
@@ -238,7 +245,7 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, Dialogue
         // 动作可能直接到达停点；例如Pause动作的后继不能继续点击或先选对话。
         std::vector<std::string> actions{"ChooseSpecial", "ChooseDialogue", "ChooseKarma",
             "SandmanHandle", "BlessingHandle", "DismissDeath", "AcknowledgeDefeat",
-            "DownloadEn", "DownloadZhHant",
+            "DownloadEn", "DownloadZhHant", "Announcement",
             "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title"};
         for (unsigned i = 0; i < 6; ++i) actions.push_back("ResumePause" + std::to_string(i));
         for (const auto &name : actions) {
@@ -251,8 +258,9 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, Dialogue
         }
         result.validate();
     }
-    // 该图可能被内联进 30 分钟任务。入口轮询不能每轮重置原版 120 秒启动总预算。
-    // 阶段只绑定当前原生 task 与会话，绝不持有游戏存档或假装回滚服务端状态。
+    // 未知页面的轮询保留120秒无进展窗口；它不是启动整条链的累计期限。
+    // 已识别动作由自己的后置期限约束，网络子流程也有独立预算，不能同时
+    // 消耗外层窗口，在下载/重试刚成功后只剩几秒就被强行截断。
     const auto phase = common ? "wvd.common-screen" : "wvd.boot";
     auto &phase_entry = result.nodes.at(result.entry);
     phase_entry["operation"] = "Registered";
@@ -268,7 +276,50 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, Dialogue
     result.nodes[phase_end] = {{"operation", "Registered"}, {"binding", "EndObservationPhase"},
         {"operation_args", {{"phase", phase}}}, {"next", {result.terminal}},
         {"on_error", {"RecoveryRequired"}}, {"pre_delay", 0}, {"post_delay", 0},
-        {"rate_limit", 50}, {"timeout", 120000}, {"max_hit", 1}};
+        // 该节点也被复制成各动作前后的包装节点；每次正常转场都要经过，
+        // 不能按整次启动累计一次就耗尽。无进展由阶段时钟约束。
+        {"rate_limit", 50}, {"timeout", 120000}, {"max_hit", 0}};
+    const auto wrap_observed_action = [&](const std::string &name) {
+        if (!result.nodes.contains(name)) return;
+        const auto binding = result.nodes.at(name).value("binding", "");
+        if (binding != "Input" && binding != "Call") return;
+        const auto before = name + "ObservationEnd", after = name + "ObservationResume";
+        if (result.nodes.contains(before) || result.nodes.contains(after))
+            throw std::runtime_error("BOOT_PHASE_NODE_COLLISION");
+        // 仅包裹已选中页面的本层动作；不改子图、不改输入结果、不重放副作用。
+        for (auto &node : result.nodes)
+            for (const auto *key : {"next", "on_error"})
+                if (node.contains(key)) for (auto &edge : node[key]) if (edge == name) edge = before;
+        auto end = result.nodes.at(phase_end);
+        end["next"] = J{name};
+        for (const auto *key : {"observation", "recognizer", "observation_args", "roi", "expected"})
+            if (result.nodes.at(name).contains(key)) end[key] = result.nodes.at(name).at(key);
+        result.nodes[before] = std::move(end);
+        auto resume = result.nodes.at(phase_end);
+        resume["binding"] = "BeginObservationPhase";
+        resume["operation_args"] = {{"phase", phase}, {"budget_ms", 120000}};
+        resume["next"] = result.nodes.at(name).at("next");
+        result.nodes[after] = std::move(resume);
+        result.nodes.at(name)["next"] = J{after};
+        if (binding == "Input") {
+            // 选中页面后可能自然转场。保留输入前重新选路能力，不能因包装
+            // 计时节点把原来的多候选路由变成只等一个已消失按钮。
+            const std::string reselect = "ObservationReselect";
+            if (!result.nodes.contains(reselect)) {
+                auto node = result.nodes.at(after);
+                node["next"] = J{result.entry};
+                result.nodes[reselect] = std::move(node);
+            }
+            result.nodes.at(before)["next"].push_back(reselect);
+        }
+    };
+    for (const auto *name : {"Story", "CloseCharacter", "LeaveInnMenuZh", "LeaveInnMenu",
+        "HandleNetwork", "ChooseSpecial", "ChooseDialogue", "ChooseKarma", "SandmanHandle", "BlessingHandle",
+        "DismissDeath", "AcknowledgeDefeat", "DownloadEn", "DownloadZhHant", "RetryBlank", "Retry",
+        "RetryLow", "ReturnTitle", "Resume", "Attention", "Title", "Announcement"}) wrap_observed_action(name);
+    for (unsigned i = 0; i < 6; ++i) wrap_observed_action("ResumePause" + std::to_string(i));
+    // 调用方的总任务期限仍生效，不再额外签发与上述无进展窗口冲突的累计120秒。
+    result.declared_budget.reset();
     result.validate();
     return result;
 }

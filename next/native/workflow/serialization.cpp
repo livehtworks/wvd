@@ -56,6 +56,8 @@ J data(const StepData &value) {
             result["retry"] = {{"ready", request(input->retry->ready)},
                                {"interval_ms", input->retry->interval.count()},
                                {"max_submissions", input->retry->max_submissions}};
+        if (input->retry && !input->retry->restart_from.empty())
+            result["retry"]["restart_from"] = input->retry->restart_from;
         if (!input->effect_binding.empty()) result["effect_binding"] = input->effect_binding;
         return result;
     }

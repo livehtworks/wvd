@@ -14,12 +14,12 @@ tasks::CompiledWorkflow enable_auto() {
     const J battle{{"mode", "combat_active"}};
     const auto ended = C::all({C::any({C::image("dungFlag"), C::image("chestFlag"), C::image("RiseAgain")}),
                                C::absent(battle)});
-    const auto close = image("close", {250, 1420, 420, 150});
-    const auto ok = image("combat_skill_confirm", {420, 1420, 340, 160});
+    const auto close = image("close", {120, 1330, 740, 270});
+    const auto ok = image("combat_skill_confirm", {120, 1330, 740, 270});
     const auto detail = C::image("combat_skill_detail");
     const auto popup = C::any({detail, close, ok});
-    const auto enabled = image("spellskill/CombatAutoEnable", {780, 1030, 120, 160});
-    const auto disabled = image("spellskill/CombatAutoDisable", {780, 1030, 120, 160});
+    const auto enabled = image("spellskill/CombatAutoEnable", {740, 940, 160, 280});
+    const auto disabled = image("spellskill/CombatAutoDisable", {740, 940, 160, 280});
     const auto clear_battle = C::all({battle, C::absent(popup)});
     const auto done = C::all({clear_battle, enabled});
     const J choices{"BattleEnded", "Enabled", "ClosePopup", "CancelPopup", "BackPopup", "Enable", "Unknown0"};

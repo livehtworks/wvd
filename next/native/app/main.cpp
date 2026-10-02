@@ -1,7 +1,9 @@
 #include "api/http_server.hpp"
 #include "app/application.hpp"
+#include "app/service_instance.hpp"
 #include "contracts/version.hpp"
 #include "platform/windows/path_utf8.hpp"
+#include "platform/windows/process.hpp"
 #include <charconv>
 #include <atomic>
 #include <csignal>
@@ -25,8 +27,9 @@ BOOL WINAPI console_control(DWORD type) {
 int wmain(int argc, wchar_t **argv) {
     try {
         unsigned short port = 17652;
-        std::filesystem::path root, data_root, pack_root, legacy_config, quests;
+        std::filesystem::path root, data_root, pack_root, legacy_config, quests, stdout_log, stderr_log;
         bool open_browser = true;
+        bool background = false;
         for (int i = 1; i < argc; ++i) {
             std::string arg = wvd::platform::utf8(std::filesystem::path(argv[i]));
             if (arg == "--version") {
@@ -38,8 +41,10 @@ int wmain(int argc, wchar_t **argv) {
                 open_browser = false;
                 continue;
             }
+            if (arg == "--launch") { background = true; continue; }
             if ((arg == "--port" || arg == "--web-root" || arg == "--data-root" ||
-                 arg == "--pack-root" || arg == "--legacy-config" || arg == "--quests") &&
+                 arg == "--pack-root" || arg == "--legacy-config" || arg == "--quests" ||
+                 arg == "--stdout-log" || arg == "--stderr-log") &&
                 i + 1 < argc) {
                 std::string value = wvd::platform::utf8(std::filesystem::path(argv[++i]));
                 if (arg == "--web-root")
@@ -52,6 +57,10 @@ int wmain(int argc, wchar_t **argv) {
                     legacy_config = std::filesystem::path(std::u8string(value.begin(), value.end()));
                 else if (arg == "--quests")
                     quests = std::filesystem::path(std::u8string(value.begin(), value.end()));
+                else if (arg == "--stdout-log")
+                    stdout_log = std::filesystem::path(std::u8string(value.begin(), value.end()));
+                else if (arg == "--stderr-log")
+                    stderr_log = std::filesystem::path(std::u8string(value.begin(), value.end()));
                 else {
                     unsigned int number = 0;
                     auto [end, ec] =
@@ -63,12 +72,34 @@ int wmain(int argc, wchar_t **argv) {
             } else
                 throw std::runtime_error(
                     "usage: automationd --web-root PATH --data-root PATH --pack-root PATH "
-                    "--quests FILE [--legacy-config FILE] [--port PORT] [--no-browser] | --version");
+                    "--quests FILE [--legacy-config FILE] [--port PORT] [--no-browser] "
+                    "[--launch --stdout-log FILE --stderr-log FILE] | --version");
         }
         if (root.empty() || !std::filesystem::is_regular_file(root / "index.html"))
             throw std::runtime_error("built web root with index.html required");
         if (data_root.empty() || pack_root.empty() || quests.empty())
             throw std::runtime_error("application data, pack and quest paths are required");
+        if (background) {
+            if (stdout_log.empty() || stderr_log.empty())
+                throw std::runtime_error("background stdout/stderr log paths are required");
+            std::vector<std::wstring> forwarded;
+            for (int i = 1; i < argc; ++i) {
+                const std::wstring arg(argv[i]);
+                if (arg == L"--launch") continue;
+                if (arg == L"--stdout-log" || arg == L"--stderr-log") { ++i; continue; }
+                forwarded.push_back(arg);
+            }
+            wchar_t executable[32768]{};
+            const auto length = GetModuleFileNameW(nullptr, executable, 32768);
+            if (!length || length >= 32768) throw std::runtime_error("SERVICE_EXECUTABLE_PATH_FAILED");
+            const auto pid = wvd::platform::launch_background(executable, forwarded,
+                std::filesystem::absolute(stdout_log), std::filesystem::absolute(stderr_log));
+            std::cout << nlohmann::json{{"pid", pid}}.dump() << '\n';
+            return 0;
+        }
+        if (!stdout_log.empty() || !stderr_log.empty())
+            throw std::runtime_error("log paths are only valid with --launch");
+        wvd::app::ServiceInstance instance(data_root);
         wvd::app::Application application({std::filesystem::absolute(data_root),
                                            std::filesystem::absolute(pack_root),
                                            legacy_config.empty() ? legacy_config
@@ -80,8 +111,26 @@ int wmain(int argc, wchar_t **argv) {
         wvd::api::HttpServer server(
             io, port, std::move(root),
             [&](const wvd::api::Request &request) {
+                using namespace wvd::api;
+                using Json = nlohmann::json;
+                const auto raw = std::string(request.target());
+                const auto path = raw.substr(0, raw.find('?'));
+                if (path == "/api/v1/service" && request.method() == http::verb::get)
+                    return std::optional<DynamicReply>(DynamicReply{http::status::ok, instance.identity().dump()});
+                if (path == "/api/v1/service/shutdown" && request.method() == http::verb::post) {
+                    const auto body = Json::parse(request.body(), nullptr, false);
+                    if (!body.is_object() || !body.contains("instance_id") || body["instance_id"] != instance.id())
+                        return std::optional<DynamicReply>(DynamicReply{http::status::conflict,
+                            R"({"error_code":"SERVICE_INSTANCE_MISMATCH"})"});
+                    instance.mark_stopping();
+                    application.request_shutdown();
+                    return std::optional<DynamicReply>(DynamicReply{http::status::accepted,
+                        Json{{"state", "stopping"}, {"instance_id", instance.id()}}.dump(),
+                        "application/json; charset=utf-8", [] { shutdown_requested = true; }});
+                }
                 return std::optional<wvd::api::DynamicReply>(application.handle(request));
             });
+        instance.publish(server.port());
         boost::asio::signal_set signals(io, SIGINT, SIGTERM);
 #ifdef SIGBREAK
         signals.add(SIGBREAK);
@@ -91,6 +140,7 @@ int wmain(int argc, wchar_t **argv) {
         auto begin_shutdown = [&] {
             if (shutdown_started) return;
             shutdown_started = true;
+            instance.mark_stopping();
             // I/O线程只关闭准入并发出取消；设备与工作线程在 io.run 返回后回收。
             application.request_shutdown();
             server.stop();

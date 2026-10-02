@@ -12,6 +12,24 @@
     }
   },
   "resources": {
+    "boot.announcement.page": {
+      "label": "启动公告弹窗",
+      "category": "启动/公告",
+      "role": "observation",
+      "variants": {
+        "shared": {
+          "condition": {
+            "mode": "all",
+            "conditions": [
+              {"mode": "template", "image": "boot_announcement_header", "threshold": 0.9, "roi": [300, 90, 300, 170]},
+              {"mode": "template", "image": "guild_reveal_close_zh_hant", "threshold": 0.9, "roi": [200, 1320, 500, 220]}
+            ]
+          },
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "2026-10-01 900x1600启动公告实帧；只截公告标题，复用关闭文字，不截日期、正文或奖励"
+        }
+      }
+    },
     "inn.standard.gold.confirmation": {
       "label": "标准房200金币完整确认句",
       "category": "旅店/付款证据",
@@ -57,12 +75,7 @@
             "mode": "template",
             "image": "inn_icon_shape",
             "threshold": 0.8,
-            "roi": [
-              20,
-              520,
-              200,
-              180
-            ],
+            "roi": [0, 300, 900, 650],
             "grayscale": true
           },
           "validation": "REAL_FRAME_REPORTED",
@@ -80,12 +93,7 @@
             "mode": "template",
             "image": "guild_icon_shape",
             "threshold": 0.8,
-            "roi": [
-              60,
-              700,
-              200,
-              180
-            ],
+            "roi": [0, 300, 900, 650],
             "grayscale": true
           },
           "validation": "REAL_FRAME_REPORTED",
@@ -103,12 +111,7 @@
             "mode": "template",
             "image": "edge_of_town_icon_shape",
             "threshold": 0.8,
-            "roi": [
-              700,
-              750,
-              190,
-              170
-            ],
+            "roi": [0, 300, 900, 650],
             "grayscale": true
           },
           "validation": "REAL_FRAME_REPORTED",
@@ -168,7 +171,7 @@
             "mode": "template",
             "image": "guild_commissions_entry_zh_hant",
             "threshold": 0.8,
-            "roi": [590, 215, 310, 115]
+            "roi": [450, 150, 450, 250]
           },
           "validation": "REAL_FRAME_REPORTED",
           "source": "2026-09-24 MuMu 900x1600 guild-menu-live.png"
@@ -194,10 +197,10 @@
             "mode": "template",
             "image": "guild_bounties_entry_zh_hant",
             "threshold": 0.8,
-            "roi": [600, 1320, 250, 150]
+            "roi": [30, 1320, 870, 150]
           },
           "validation": "REAL_FRAME_REPORTED",
-          "source": "2026-09-24 MuMu 900x1600 guild-commissions-swiped-live.png"
+          "source": "2026-09-24 MuMu 900x1600 guild-commissions-swiped-live.png；2026-09-30覆盖横移页签栏，避免按单次截图锁定入口横坐标"
         },
         "en": {
           "condition": {
@@ -220,7 +223,7 @@
             "mode": "template",
             "image": "guild_report_ready_zh_hant",
             "threshold": 0.8,
-            "roi": [20, 220, 860, 1140]
+            "roi": [0, 190, 900, 1180]
           },
           "validation": "REAL_FRAME_REPORTED",
           "source": "2026-09-25 MuMu scorpion-bounty-list-now.png"
@@ -246,7 +249,7 @@
             "mode": "template",
             "image": "guild_reveal_close_zh_hant",
             "threshold": 0.8,
-            "roi": [330, 1460, 230, 130]
+            "roi": [30, 1430, 840, 170]
           },
           "validation": "REAL_FRAME_REPORTED",
           "source": "2026-09-25 MuMu scorpion-after-leap-board.png"
@@ -263,7 +266,7 @@
             "mode": "template",
             "image": "guild_report_receipt_zh_hant",
             "threshold": 0.8,
-            "roi": [250, 810, 400, 160]
+            "roi": [100, 650, 700, 400]
           },
           "validation": "REAL_FRAME_REPORTED",
           "source": "2026-09-25 MuMu scorpion-bounty-report-after-click.png"
@@ -280,7 +283,7 @@
             "mode": "template",
             "image": "guild_report_receipt_close_zh_hant",
             "threshold": 0.8,
-            "roi": [320, 940, 260, 110]
+            "roi": [100, 900, 700, 300]
           },
           "validation": "REAL_FRAME_REPORTED",
           "source": "2026-09-25 MuMu scorpion-bounty-report-after-click.png"
@@ -344,6 +347,23 @@
         }
       }
     },
+    "guild.bounties.selected": {
+      "label": "悬赏页签选中态（仅限页签可见时）",
+      "category": "公会/页签",
+      "role": "observation",
+      "variants": {
+        "zh-Hant": {
+          "condition": {
+            "mode": "template",
+            "image": "guild_bounty_selected_zh_hant",
+            "threshold": 0.88,
+            "roi": [30, 1370, 870, 90]
+          },
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "2026-09-30 MuMu 900x1600: 页签可横移，按整条页签栏定位；关闭领取回执后选中页签可能离屏，此观察不得作为悬赏列表页面身份的必需条件"
+        }
+      }
+    },
     "guild.bounties.page": {
       "label": "悬赏令列表页",
       "category": "公会/页面",
@@ -354,15 +374,14 @@
             "mode": "all",
             "conditions": [
               {"mode": "template", "image": "guild_bounties_page_zh_hant", "threshold": 0.8, "roi": [270, 20, 360, 125]},
-              {"mode": "template", "image": "guild_bounty_selected_zh_hant", "threshold": 0.88, "roi": [590, 1370, 210, 90]},
-              {"mode": "template", "image": "guild_bounty_card_header", "threshold": 0.85, "roi": [80, 230, 330, 100]},
+              {"mode": "template", "image": "guild_bounty_card_header", "threshold": 0.85, "roi": [0, 190, 900, 1180]},
               {"mode": "not", "conditions": [
                 {"mode": "template", "image": "guild_commissions_page_zh_hant", "threshold": 0.8, "roi": [270, 20, 360, 125]}
               ]}
             ]
           },
           "validation": "REAL_FRAME_REPORTED",
-          "source": "2026-09-27 MuMu 900x1600: 标题、选中页签与已加载WANTED卡片共同确认；不得只凭标题放行"
+          "source": "2026-09-30 MuMu 900x1600: 专属悬赏标题、已加载WANTED卡片和委托页反证共同确认；领取后页签栏会自动回到左侧，当前悬赏页签可能离屏，不能将选中页签作为必需的页面身份依据"
         }
       }
     },
@@ -371,7 +390,7 @@
       "category": "公会/导航",
       "role": "position",
       "variants": {"zh-Hant": {
-        "condition": {"mode": "template", "image": "guild_list_back_zh_hant", "threshold": 0.8, "roi": [80, 1470, 190, 100]},
+        "condition": {"mode": "template", "image": "guild_list_back_zh_hant", "threshold": 0.8, "roi": [30, 1430, 840, 170]},
         "validation": "REAL_FRAME_REPORTED",
         "source": "2026-09-27 MuMu 900x1600 bounty-open-result.png"
       }}
@@ -381,7 +400,7 @@
       "category": "公会/导航",
       "role": "position",
       "variants": {"zh-Hant": {
-        "condition": {"mode": "template", "image": "guild_leave_zh_hant", "threshold": 0.8, "roi": [610, 940, 230, 115]},
+        "condition": {"mode": "template", "image": "guild_leave_zh_hant", "threshold": 0.8, "roi": [450, 850, 450, 300]},
         "validation": "REAL_FRAME_REPORTED",
         "source": "2026-09-27 MuMu 900x1600 bounty-exit-step.png"
       }}
@@ -760,12 +779,7 @@
             "mode": "template",
             "image": "ruins_icon_shape",
             "threshold": 0.7,
-            "roi": [
-              730,
-              525,
-              170,
-              180
-            ],
+            "roi": [0, 300, 900, 650],
             "grayscale": true
           },
           "validation": "REAL_FRAME_REPORTED",
@@ -863,7 +877,7 @@
       "category": "事件/战斗",
       "role": "observation",
       "condition": {"mode": "template", "image": "combat_active_zh_hant", "threshold": 0.8,
-                    "roi": [0, 0, 150, 80]},
+                    "roi": [0, 0, 210, 105]},
       "validation": "REAL_FRAME_REPORTED",
       "source": "2026-09-24 MuMu 900x1600；左上 ACTIVE 标识，不含敌人和技能内容"
     },
@@ -873,9 +887,9 @@
       "role": "observation",
       "variants": {
         "en": {"condition": {"mode": "template", "image": "flee", "threshold": 0.8,
-                             "roi": [720, 1120, 180, 130]}, "validation": "SOURCE_VARIANT_PRESENT"},
+                             "roi": [660, 1080, 240, 220]}, "validation": "SOURCE_VARIANT_PRESENT"},
         "zh-Hant": {"condition": {"mode": "template", "image": "combat_flee_zh_hant", "threshold": 0.82,
-                                  "roi": [720, 1120, 180, 130]}, "validation": "REAL_FRAME_REPORTED",
+                                  "roi": [660, 1080, 240, 220]}, "validation": "REAL_FRAME_REPORTED",
                     "source": "2026-09-24 MuMu 战斗菜单实帧；仅用于确认菜单存在"}
       }
     },
@@ -885,10 +899,10 @@
       "role": "observation",
       "variants": {
         "en": {"condition": {"mode": "template", "image": "spellskill/skillDetail", "threshold": 0.8,
-                             "roi": [750, 800, 130, 150]}, "validation": "SOURCE_VARIANT_PRESENT"},
+                             "roi": [720, 750, 180, 430]}, "validation": "SOURCE_VARIANT_PRESENT"},
         "zh-Hant": {"condition": {"mode": "template", "image": "combat_skill_detail_zh_hant", "threshold": 0.82,
-                                  "roi": [750, 800, 130, 150]}, "validation": "REAL_FRAME_REPORTED",
-                    "source": "2026-09-26 MuMu 蝎女战斗技能详情实帧；明細按钮"}
+                                  "roi": [720, 750, 180, 430]}, "validation": "REAL_FRAME_REPORTED",
+                    "source": "2026-09-26/2026-10-01 MuMu 蝎女战斗实帧；明細按钮随详情布局下移，完整图标可延伸到y=1084；菜单、选级、选敌与自动保底共用此配方"}
       }
     },
     "combat.skill.confirm": {
@@ -897,9 +911,9 @@
       "role": "position",
       "variants": {
         "en": {"condition": {"mode": "template", "image": "OK", "threshold": 0.8,
-                             "roi": [420, 1420, 340, 160]}, "validation": "SOURCE_VARIANT_PRESENT"},
+                             "roi": [120, 1330, 740, 270]}, "validation": "SOURCE_VARIANT_PRESENT"},
         "zh-Hant": {"condition": {"mode": "template", "image": "combat_skill_confirm_zh_hant", "threshold": 0.82,
-                                  "roi": [420, 1420, 340, 160]}, "validation": "REAL_FRAME_REPORTED",
+                                  "roi": [120, 1330, 740, 270]}, "validation": "REAL_FRAME_REPORTED",
                     "source": "2026-09-26 MuMu 蝎女战斗技能详情实帧；確定按钮"}
       }
     },
@@ -909,7 +923,7 @@
       "role": "position",
       "variants": {
         "zh-Hant": {"condition": {"mode": "template", "image": "combat_speed_off_zh_hant", "threshold": 0.9,
-                                  "roi": [10, 1015, 80, 70]}, "validation": "REAL_FRAME_REPORTED",
+                                  "roi": [0, 930, 120, 210]}, "validation": "REAL_FRAME_REPORTED",
                     "source": "2026-09-25 MuMu 蝎女战斗实帧；白色倍速图标，点击前"}
       }
     },
@@ -919,7 +933,7 @@
       "role": "observation",
       "variants": {
         "zh-Hant": {"condition": {"mode": "template", "image": "combat_speed_on_zh_hant", "threshold": 0.9,
-                                  "roi": [10, 1015, 80, 70]}, "validation": "REAL_FRAME_REPORTED",
+                                  "roi": [0, 930, 120, 210]}, "validation": "REAL_FRAME_REPORTED",
                     "source": "2026-09-25 MuMu 蝎女战斗实帧；黄色倍速图标，点击后"}
       }
     },
@@ -929,9 +943,9 @@
       "role": "observation",
       "variants": {
         "en": {"condition": {"mode": "template", "image": "spellskill/CombatAutoDisable", "threshold": 0.8,
-                             "roi": [780, 1030, 120, 160]}, "validation": "SOURCE_VARIANT_PRESENT"},
+                             "roi": [740, 940, 160, 280]}, "validation": "SOURCE_VARIANT_PRESENT"},
         "zh-Hant": {"condition": {"mode": "template", "image": "combat_auto_off_zh_hant", "threshold": 0.82,
-                                  "roi": [780, 1020, 120, 100]}, "validation": "REAL_FRAME_REPORTED",
+                                  "roi": [740, 940, 160, 280]}, "validation": "REAL_FRAME_REPORTED",
                     "source": "2026-09-24 MuMu 战斗中手动开启自动前实帧；白色自動"}
       }
     },
@@ -941,9 +955,9 @@
       "role": "observation",
       "variants": {
         "en": {"condition": {"mode": "template", "image": "spellskill/CombatAutoEnable", "threshold": 0.8,
-                             "roi": [780, 1030, 120, 160]}, "validation": "SOURCE_VARIANT_PRESENT"},
+                             "roi": [740, 940, 160, 280]}, "validation": "SOURCE_VARIANT_PRESENT"},
         "zh-Hant": {"condition": {"mode": "template", "image": "combat_auto_on_zh_hant", "threshold": 0.82,
-                                  "roi": [780, 1020, 120, 100]}, "validation": "REAL_FRAME_REPORTED",
+                                  "roi": [740, 940, 160, 280]}, "validation": "REAL_FRAME_REPORTED",
                     "source": "2026-09-24 MuMu 战斗中手动开启自动后实帧；橙色自動"}
       }
     },
@@ -953,9 +967,9 @@
       "role": "position",
       "variants": {
         "en": {"condition": {"mode": "template", "image": "intoWorldMap", "threshold": 0.8,
-                             "roi": [710, 1410, 180, 180]}, "validation": "SOURCE_VARIANT_PRESENT"},
+                             "roi": [600, 1350, 300, 250]}, "validation": "SOURCE_VARIANT_PRESENT"},
         "zh-Hant": {"condition": {"mode": "template", "image": "city_world_map_open_zh_hant",
-                                  "threshold": 0.9, "roi": [715, 1430, 170, 150]},
+                                  "threshold": 0.9, "roi": [600, 1350, 300, 250]},
                     "validation": "REAL_FRAME_CAPTURED",
                     "source": "2026-09-24 MuMu 王都与港口镇城市主界面；跨城正例0.985，世界地图负例0.229"}
       }
@@ -968,8 +982,8 @@
         "en": {"condition": {"mode": "template", "image": "worldmapflag", "threshold": 0.8},
                "validation": "SOURCE_VARIANT_PRESENT"},
         "zh-Hant": {"condition": {"mode": "all", "conditions": [
-          {"mode": "template", "image": "worldmap_close_zh_hant", "threshold": 0.82, "roi": [730, 1410, 170, 190]},
-          {"mode": "template", "image": "worldmap_zoom_plus_zh_hant", "threshold": 0.82, "roi": [160, 1410, 160, 170]}
+          {"mode": "template", "image": "worldmap_close_zh_hant", "threshold": 0.82, "roi": [600, 1350, 300, 250]},
+          {"mode": "template", "image": "worldmap_zoom_plus_zh_hant", "threshold": 0.82, "roi": [100, 1350, 270, 250]}
         ]}, "validation": "REAL_FRAME_CAPTURED", "source": "2026-09-24 MuMu 900x1600 世界地图"}
       }
     },
@@ -1112,7 +1126,7 @@
       "category": "事件/宝箱",
       "role": "observation",
       "condition": {"mode": "template", "image": "chest_reward_advance", "threshold": 0.8,
-                    "roi": [750, 1400, 150, 150]},
+                    "roi": [730, 1330, 170, 270]},
       "validation": "REAL_FRAME_REPORTED",
       "source": "2026-09-24 MuMu 900x1600；取右下继续箭头，不含道具名和图片"
     },
@@ -1142,7 +1156,7 @@
             "mode": "all",
             "conditions": [
               {"mode": "template", "image": "network_error_zh_hant", "threshold": 0.86, "roi": [200, 650, 500, 180]},
-              {"mode": "template", "image": "network_retry_zh_hant", "threshold": 0.86, "roi": [260, 800, 380, 220]}
+              {"mode": "template", "image": "network_retry_zh_hant", "threshold": 0.86, "roi": [100, 800, 700, 220]}
             ]
           },
           "validation": "REAL_FRAME_REPORTED"
@@ -1155,7 +1169,7 @@
       "role": "position",
       "variants": {
         "zh-Hant": {
-          "condition": {"mode": "template", "image": "network_retry_zh_hant", "threshold": 0.86, "roi": [260, 800, 380, 220]},
+          "condition": {"mode": "template", "image": "network_retry_zh_hant", "threshold": 0.86, "roi": [100, 800, 700, 220]},
           "validation": "REAL_FRAME_REPORTED"
         }
       }
@@ -1177,12 +1191,7 @@
             "mode": "template",
             "image": "temple_icon_shape",
             "threshold": 0.75,
-            "roi": [
-              270,
-              390,
-              160,
-              175
-            ],
+            "roi": [0, 300, 900, 650],
             "grayscale": true
           },
           "validation": "REAL_FRAME_REPORTED",
@@ -1200,12 +1209,7 @@
             "mode": "template",
             "image": "blacksmith_icon_shape",
             "threshold": 0.72,
-            "roi": [
-              365,
-              555,
-              180,
-              180
-            ],
+            "roi": [0, 300, 900, 650],
             "grayscale": true
           },
           "validation": "REAL_FRAME_REPORTED",
@@ -1223,12 +1227,7 @@
             "mode": "template",
             "image": "ore_merchant_icon_shape",
             "threshold": 0.78,
-            "roi": [
-              240,
-              745,
-              180,
-              170
-            ],
+            "roi": [0, 300, 900, 650],
             "grayscale": true
           },
           "validation": "REAL_FRAME_REPORTED",
@@ -1246,12 +1245,7 @@
             "mode": "template",
             "image": "item_shop_icon_shape",
             "threshold": 0.72,
-            "roi": [
-              515,
-              710,
-              170,
-              175
-            ],
+            "roi": [0, 300, 900, 650],
             "grayscale": true
           },
           "validation": "REAL_FRAME_REPORTED",
@@ -1269,7 +1263,7 @@
             "mode": "template",
             "image": "inn_confirm_zh_hant",
             "threshold": 0.8,
-            "roi": [470, 900, 300, 180]
+            "roi": [100, 820, 700, 340]
           },
           "validation": "REAL_FRAME_REPORTED",
           "source": "2026-09-25 MuMu scorpion-preflight-inn.png"
@@ -1284,7 +1278,7 @@
         "zh-Hant": {
           "condition": {
             "mode": "template", "image": "inn_leave_zh_hant",
-            "threshold": 0.86, "roi": [620, 890, 280, 140]
+            "threshold": 0.86, "roi": [500, 550, 400, 550]
           },
           "validation": "REAL_FRAME_REPORTED",
           "source": "2026-09-27 MuMu 900x1600 inn menu; name crop only"
@@ -1301,12 +1295,7 @@
             "mode": "template",
             "image": "inn_stay_zh_hant",
             "threshold": 0.8,
-            "roi": [
-              600,
-              665,
-              300,
-              125
-            ]
+            "roi": [500, 550, 400, 550]
           },
           "validation": "REAL_FRAME_REPORTED",
           "source": "2026-09-23 MuMu 900x1600 inn screenshot"
@@ -1332,12 +1321,7 @@
             "mode": "template",
             "image": "inn_stable_zh_hant",
             "threshold": 0.8,
-            "roi": [
-              465,
-              605,
-              235,
-              90
-            ]
+            "roi": [400, 500, 480, 650]
           },
           "validation": "REAL_FRAME_REPORTED",
           "source": "2026-09-23 MuMu 900x1600 inn screenshot"
@@ -1354,12 +1338,7 @@
             "mode": "template",
             "image": "inn_standard_zh_hant",
             "threshold": 0.8,
-            "roi": [
-              465,
-              685,
-              235,
-              95
-            ]
+            "roi": [400, 500, 480, 650]
           },
           "validation": "REAL_FRAME_REPORTED",
           "source": "2026-09-23 MuMu 900x1600 inn screenshot"
@@ -1376,12 +1355,7 @@
             "mode": "template",
             "image": "inn_deluxe_zh_hant",
             "threshold": 0.8,
-            "roi": [
-              465,
-              770,
-              235,
-              95
-            ]
+            "roi": [400, 500, 480, 650]
           },
           "validation": "REAL_FRAME_REPORTED",
           "source": "2026-09-23 MuMu 900x1600 inn screenshot"
@@ -1398,12 +1372,7 @@
             "mode": "template",
             "image": "inn_royal_zh_hant",
             "threshold": 0.8,
-            "roi": [
-              465,
-              855,
-              235,
-              95
-            ]
+            "roi": [400, 500, 480, 650]
           },
           "validation": "REAL_FRAME_REPORTED",
           "source": "2026-09-23 MuMu 900x1600 inn screenshot"
@@ -1420,12 +1389,7 @@
             "mode": "template",
             "image": "inn_back_zh_hant",
             "threshold": 0.8,
-            "roi": [
-              600,
-              930,
-              190,
-              100
-            ]
+            "roi": [400, 500, 480, 650]
           },
           "validation": "REAL_FRAME_REPORTED",
           "source": "2026-09-23 MuMu 900x1600 inn screenshot"
@@ -1442,12 +1406,7 @@
             "mode": "template",
             "image": "outskirts_fire_zh_hant",
             "threshold": 0.8,
-            "roi": [
-              555,
-              210,
-              204,
-              83
-            ]
+            "roi": [400, 150, 480, 780]
           },
           "validation": "REAL_FRAME_REPORTED",
           "source": "2026-09-23 MuMu 900x1600 outskirts screenshot: outskirts-list-final.png"
@@ -1464,12 +1423,7 @@
             "mode": "template",
             "image": "outskirts_wind_zh_hant",
             "threshold": 0.8,
-            "roi": [
-              555,
-              300,
-              204,
-              83
-            ]
+            "roi": [400, 150, 480, 780]
           },
           "validation": "REAL_FRAME_REPORTED",
           "source": "2026-09-23 MuMu 900x1600 outskirts screenshot: outskirts-list-final.png"
@@ -1486,12 +1440,7 @@
             "mode": "template",
             "image": "outskirts_light_zh_hant",
             "threshold": 0.8,
-            "roi": [
-              555,
-              390,
-              204,
-              83
-            ]
+            "roi": [400, 150, 480, 780]
           },
           "validation": "REAL_FRAME_REPORTED",
           "source": "2026-09-23 MuMu 900x1600 outskirts screenshot: outskirts-list-final.png"
@@ -1508,12 +1457,7 @@
             "mode": "template",
             "image": "outskirts_earth_zh_hant",
             "threshold": 0.8,
-            "roi": [
-              555,
-              480,
-              204,
-              83
-            ]
+            "roi": [400, 150, 480, 780]
           },
           "validation": "REAL_FRAME_REPORTED",
           "source": "2026-09-23 MuMu 900x1600 outskirts screenshot: outskirts-list-final.png"
@@ -1530,12 +1474,7 @@
             "mode": "template",
             "image": "outskirts_water_zh_hant",
             "threshold": 0.8,
-            "roi": [
-              555,
-              570,
-              204,
-              83
-            ]
+            "roi": [400, 150, 480, 780]
           },
           "validation": "REAL_FRAME_REPORTED",
           "source": "2026-09-23 MuMu 900x1600 outskirts screenshot: outskirts-list-final.png"
@@ -1552,12 +1491,7 @@
             "mode": "template",
             "image": "outskirts_resentment_zh_hant",
             "threshold": 0.8,
-            "roi": [
-              555,
-              660,
-              204,
-              83
-            ]
+            "roi": [400, 150, 480, 780]
           },
           "validation": "REAL_FRAME_REPORTED",
           "source": "2026-09-23 MuMu 900x1600 outskirts screenshot: outskirts-list-final.png"
@@ -1574,12 +1508,7 @@
             "mode": "template",
             "image": "outskirts_abyss_zh_hant",
             "threshold": 0.8,
-            "roi": [
-              537,
-              750,
-              238,
-              83
-            ]
+            "roi": [400, 150, 480, 780]
           },
           "validation": "REAL_FRAME_REPORTED",
           "source": "2026-09-23 MuMu 900x1600 outskirts screenshot: outskirts-list-final.png"
@@ -1596,12 +1525,7 @@
             "mode": "template",
             "image": "outskirts_separation_zh_hant",
             "threshold": 0.8,
-            "roi": [
-              555,
-              840,
-              204,
-              83
-            ]
+            "roi": [400, 150, 480, 780]
           },
           "validation": "REAL_FRAME_REPORTED",
           "source": "2026-09-23 MuMu 900x1600 outskirts screenshot: outskirts-list-final.png"
@@ -1618,12 +1542,7 @@
             "mode": "template",
             "image": "outskirts_return_to_town_zh_hant",
             "threshold": 0.8,
-            "roi": [
-              555,
-              935,
-              211,
-              89
-            ]
+            "roi": [400, 900, 480, 200]
           },
           "validation": "REAL_FRAME_REPORTED",
           "source": "2026-09-23 MuMu 900x1600 outskirts screenshot: outskirts-list-final.png"
@@ -1640,12 +1559,7 @@
             "mode": "template",
             "image": "outskirts_fire_b1f_zh_hant",
             "threshold": 0.8,
-            "roi": [
-              528,
-              847,
-              267,
-              73
-            ]
+            "roi": [400, 150, 480, 780]
           },
           "validation": "REAL_FRAME_REPORTED",
           "source": "2026-09-23 MuMu 900x1600 outskirts screenshot: outskirts-fire.png"
@@ -1662,12 +1576,7 @@
             "mode": "template",
             "image": "outskirts_wind_b1f_zh_hant",
             "threshold": 0.8,
-            "roi": [
-              528,
-              847,
-              267,
-              73
-            ]
+            "roi": [400, 150, 480, 780]
           },
           "validation": "REAL_FRAME_REPORTED",
           "source": "2026-09-23 MuMu 900x1600 outskirts screenshot: outskirts-wind.png"
@@ -1684,12 +1593,7 @@
             "mode": "template",
             "image": "outskirts_light_b1f_zh_hant",
             "threshold": 0.8,
-            "roi": [
-              528,
-              847,
-              267,
-              73
-            ]
+            "roi": [400, 150, 480, 780]
           },
           "validation": "REAL_FRAME_REPORTED",
           "source": "2026-09-23 MuMu 900x1600 outskirts screenshot: outskirts-light.png"
@@ -1706,12 +1610,7 @@
             "mode": "template",
             "image": "outskirts_earth_b1f_zh_hant",
             "threshold": 0.8,
-            "roi": [
-              528,
-              847,
-              267,
-              73
-            ]
+            "roi": [400, 150, 480, 780]
           },
           "validation": "REAL_FRAME_REPORTED",
           "source": "2026-09-23 MuMu 900x1600 outskirts screenshot: outskirts-earth.png"
@@ -1728,12 +1627,7 @@
             "mode": "template",
             "image": "outskirts_water_b1f_zh_hant",
             "threshold": 0.8,
-            "roi": [
-              528,
-              847,
-              267,
-              73
-            ]
+            "roi": [400, 150, 480, 780]
           },
           "validation": "REAL_FRAME_REPORTED",
           "source": "2026-09-23 MuMu 900x1600 outskirts screenshot: outskirts-water.png"
@@ -1750,12 +1644,7 @@
             "mode": "template",
             "image": "outskirts_resentment_b1f_zh_hant",
             "threshold": 0.8,
-            "roi": [
-              528,
-              576,
-              267,
-              73
-            ]
+            "roi": [400, 150, 480, 780]
           },
           "validation": "REAL_FRAME_REPORTED",
           "source": "2026-09-23 MuMu 900x1600 outskirts screenshot: outskirts-resentment.png"
@@ -1772,12 +1661,7 @@
             "mode": "template",
             "image": "outskirts_resentment_b2f_zh_hant",
             "threshold": 0.8,
-            "roi": [
-              528,
-              666,
-              267,
-              73
-            ]
+            "roi": [400, 150, 480, 780]
           },
           "validation": "REAL_FRAME_REPORTED",
           "source": "2026-09-23 MuMu 900x1600 outskirts screenshot: outskirts-resentment.png"
@@ -1794,12 +1678,7 @@
             "mode": "template",
             "image": "outskirts_resentment_b3f_zh_hant",
             "threshold": 0.8,
-            "roi": [
-              528,
-              756,
-              267,
-              73
-            ]
+            "roi": [400, 150, 480, 780]
           },
           "validation": "REAL_FRAME_REPORTED",
           "source": "2026-09-23 MuMu 900x1600 outskirts screenshot: outskirts-resentment.png"
@@ -1816,12 +1695,7 @@
             "mode": "template",
             "image": "outskirts_resentment_b4f_zh_hant",
             "threshold": 0.8,
-            "roi": [
-              528,
-              846,
-              267,
-              73
-            ]
+            "roi": [400, 150, 480, 780]
           },
           "validation": "REAL_FRAME_REPORTED",
           "source": "2026-09-23 MuMu 900x1600 outskirts screenshot: outskirts-resentment.png"
@@ -1838,12 +1712,7 @@
             "mode": "template",
             "image": "outskirts_abyss_entrance_zh_hant",
             "threshold": 0.8,
-            "roi": [
-              498,
-              217,
-              297,
-              72
-            ]
+            "roi": [400, 150, 480, 780]
           },
           "validation": "REAL_FRAME_REPORTED",
           "source": "2026-09-23 MuMu 900x1600 outskirts screenshot: outskirts-abyss.png"
@@ -1860,12 +1729,7 @@
             "mode": "template",
             "image": "outskirts_abyss_b1f_zh_hant",
             "threshold": 0.8,
-            "roi": [
-              535,
-              307,
-              260,
-              72
-            ]
+            "roi": [400, 150, 480, 780]
           },
           "validation": "REAL_FRAME_REPORTED",
           "source": "2026-09-23 MuMu 900x1600 outskirts screenshot: outskirts-abyss.png"
@@ -1882,12 +1746,7 @@
             "mode": "template",
             "image": "outskirts_abyss_b2f_zh_hant",
             "threshold": 0.8,
-            "roi": [
-              535,
-              398,
-              260,
-              72
-            ]
+            "roi": [400, 150, 480, 780]
           },
           "validation": "REAL_FRAME_REPORTED",
           "source": "2026-09-23 MuMu 900x1600 outskirts screenshot: outskirts-abyss.png"
@@ -1979,12 +1838,7 @@
             "mode": "template",
             "image": "outskirts_abyss_b3f_zh_hant",
             "threshold": 0.8,
-            "roi": [
-              510,
-              489,
-              285,
-              72
-            ]
+            "roi": [400, 150, 480, 780]
           },
           "validation": "REAL_FRAME_REPORTED",
           "source": "2026-09-23 MuMu 900x1600 outskirts screenshot: outskirts-abyss.png"
@@ -2001,12 +1855,7 @@
             "mode": "template",
             "image": "outskirts_abyss_b4f_zh_hant",
             "threshold": 0.8,
-            "roi": [
-              535,
-              579,
-              260,
-              72
-            ]
+            "roi": [400, 150, 480, 780]
           },
           "validation": "REAL_FRAME_REPORTED",
           "source": "2026-09-23 MuMu 900x1600 outskirts screenshot: outskirts-abyss.png"
@@ -2023,12 +1872,7 @@
             "mode": "template",
             "image": "outskirts_abyss_b5f_zh_hant",
             "threshold": 0.8,
-            "roi": [
-              510,
-              669,
-              285,
-              72
-            ]
+            "roi": [400, 150, 480, 780]
           },
           "validation": "REAL_FRAME_REPORTED",
           "source": "2026-09-23 MuMu 900x1600 outskirts screenshot: outskirts-abyss.png"
@@ -2045,12 +1889,7 @@
             "mode": "template",
             "image": "outskirts_abyss_b7f_zh_hant",
             "threshold": 0.8,
-            "roi": [
-              510,
-              759,
-              285,
-              72
-            ]
+            "roi": [400, 150, 480, 780]
           },
           "validation": "REAL_FRAME_REPORTED",
           "source": "2026-09-23 MuMu 900x1600 outskirts screenshot: outskirts-abyss.png"
@@ -2067,12 +1906,7 @@
             "mode": "template",
             "image": "outskirts_abyss_b8f_zh_hant",
             "threshold": 0.8,
-            "roi": [
-              525,
-              848,
-              270,
-              73
-            ]
+            "roi": [400, 150, 480, 780]
           },
           "validation": "REAL_FRAME_REPORTED",
           "source": "2026-09-23 MuMu 900x1600 outskirts screenshot: outskirts-abyss.png"
@@ -2089,12 +1923,7 @@
             "mode": "template",
             "image": "outskirts_separation_entrance_zh_hant",
             "threshold": 0.8,
-            "roi": [
-              513,
-              759,
-              282,
-              71
-            ]
+            "roi": [400, 150, 480, 780]
           },
           "validation": "REAL_FRAME_REPORTED",
           "source": "2026-09-23 MuMu 900x1600 outskirts screenshot: outskirts-separation.png"
@@ -2111,12 +1940,7 @@
             "mode": "template",
             "image": "outskirts_separation_b2f_zh_hant",
             "threshold": 0.8,
-            "roi": [
-              530,
-              847,
-              265,
-              73
-            ]
+            "roi": [400, 150, 480, 780]
           },
           "validation": "REAL_FRAME_REPORTED",
           "source": "2026-09-23 MuMu 900x1600 outskirts screenshot: outskirts-separation.png"
@@ -2133,12 +1957,7 @@
             "mode": "template",
             "image": "outskirts_submenu_back_zh_hant",
             "threshold": 0.8,
-            "roi": [
-              588,
-              937,
-              142,
-              93
-            ]
+            "roi": [400, 900, 480, 200]
           },
           "validation": "REAL_FRAME_REPORTED",
           "source": "2026-09-23 MuMu 900x1600 outskirts screenshot: outskirts-separation.png"
@@ -2155,12 +1974,7 @@
             "mode": "template",
             "image": "harken_buff_none_zh_hant",
             "threshold": 0.8,
-            "roi": [
-              330,
-              1300,
-              250,
-              140
-            ]
+            "roi": [220, 1230, 460, 240]
           },
           "validation": "REAL_FRAME_REPORTED",
           "source": "2026-09-24 MuMu 900x1600: temple-harken-check-20260924.png"
@@ -2177,12 +1991,7 @@
             "mode": "template",
             "image": "harken_buff_info_zh_hant",
             "threshold": 0.78,
-            "roi": [
-              615,
-              950,
-              82,
-              82
-            ]
+            "roi": [540, 915, 220, 110]
           },
           "validation": "REAL_FRAME_REPORTED",
           "source": "2026-09-24 MuMu 900x1600: temple-harken-check-20260924.png"
@@ -2199,12 +2008,7 @@
             "mode": "template",
             "image": "harken_floor_return_zh_hant",
             "threshold": 0.8,
-            "roi": [
-              340,
-              980,
-              220,
-              110
-            ]
+            "roi": [200, 920, 500, 250]
           },
           "validation": "REAL_FRAME_REPORTED",
           "source": "2026-09-24 MuMu 900x1600: temple-harken-buff-first-after-20260924.png"
@@ -2221,12 +2025,12 @@
             "mode": "any",
             "conditions": [
               {"mode": "all", "conditions": [
-                {"mode": "template", "image": "premium_purchase_text_zh_hant", "threshold": 0.85, "roi": [460, 1140, 320, 95]},
-                {"mode": "template", "image": "premium_purchase_green", "threshold": 0.85, "roi": [460, 1230, 320, 65]}
+                {"mode": "template", "image": "premium_purchase_text_zh_hant", "threshold": 0.85, "roi": [460, 1100, 320, 175]},
+                {"mode": "template", "image": "premium_purchase_green", "threshold": 0.85, "roi": [460, 1190, 320, 145]}
               ]},
               {"mode": "all", "conditions": [
-                {"mode": "template", "image": "premium_purchase_text_zh_hant", "threshold": 0.85, "roi": [115, 1140, 320, 95]},
-                {"mode": "template", "image": "premium_purchase_purple", "threshold": 0.85, "roi": [115, 1230, 320, 65]}
+                {"mode": "template", "image": "premium_purchase_text_zh_hant", "threshold": 0.85, "roi": [115, 1100, 320, 175]},
+                {"mode": "template", "image": "premium_purchase_purple", "threshold": 0.85, "roi": [115, 1190, 320, 145]}
               ]}
             ]
           },
@@ -2245,12 +2049,7 @@
             "mode": "template",
             "image": "harken_floor_move_zh_hant",
             "threshold": 0.8,
-            "roi": [
-              20,
-              280,
-              130,
-              80
-            ]
+            "roi": [0, 230, 250, 170]
           },
           "validation": "REAL_FRAME_REPORTED",
           "source": "2026-09-24 MuMu 900x1600: temple-harken-buff-first-after-20260924.png"

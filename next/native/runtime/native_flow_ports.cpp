@@ -7,6 +7,7 @@ NativeFlowPorts::NativeFlowPorts(devices::DeviceBackend &backend,
     contracts::InputPolicy policy, std::uint64_t generation,
     std::stop_token stop)
     : backend_(backend), recognizer_(recognizer), business_(business),
+      application_id_(policy.application_id), read_only_viewport_(policy.observed_read_only_viewport),
       gate_(backend, std::move(policy), generation), stop_token_(stop) {}
 
 void NativeFlowPorts::set_operation_handler(OperationHandler handler) {
@@ -23,7 +24,21 @@ contracts::FrameEnvelope NativeFlowPorts::capture() {
         failed_pixels_ = backend_.failed_pixels();
         throw;
     }
-    // 原生 BGR 共享像素所有权；只保留一张，不作15秒抽样，也不参与输入授权。
+    // 桌面/其它APP保留真实像素供诊断，但绝不送进游戏ROI，更不授权点击。
+    // 只读设备预览仍可看桌面；游戏会话交由原有生命周期所有者恢复。
+    if (!read_only_viewport_ && frame.identity.foreground_application != application_id_) {
+        if (frame.raw_bgr)
+            failed_pixels_ = contracts::DiagnosticPixels{frame.identity.raw_size, frame.raw_bgr,
+                frame.identity.captured_at, frame.identity.device_id, frame.identity.backend};
+        if (capture_sink_) capture_sink_(frame); // 诊断消费者区分非游戏像素，不能做游戏识图。
+        throw contracts::ObservationUnavailable({contracts::ReadFaultKind::ApplicationUnavailable,
+            contracts::ReadFaultStage::Capture, "GAME_NOT_FOREGROUND", "capture.foreground", {}, {},
+            {{"foreground_application", frame.identity.foreground_application},
+             {"expected_application", application_id_},
+             {"size", {frame.identity.raw_size.width, frame.identity.raw_size.height}}}});
+    }
+    // 原生 BGR 共享像素所有权；非游戏帧不会替换最后有效游戏帧。
+    failed_pixels_.reset();
     last_valid_frame_ = frame;
     platform::timing::count(platform::timing::Counter::Captures);
     if (capture_sink_) {

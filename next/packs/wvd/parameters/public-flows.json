@@ -193,7 +193,7 @@
     "flow": {
       "id": "guild-open-bounties",
       "name": "切到赏金页面",
-      "description": "仅标题、选中的悬赏页签和已加载卡片共同确认才完成；刷新展示卡可连续关闭，不将展示卡当已加载列表。"
+      "description": "专属悬赏标题、已加载WANTED卡片和委托页反证共同确认才完成；领取后页签栏可能自动回到左侧，不要求当前页签仍在屏内。刷新展示卡可连续关闭，不将展示卡当已加载列表。"
     },
     "entry": "Entry",
     "nodes": [
@@ -987,16 +987,8 @@
             "id": "boot.download.action"
           },
           "postcondition": {
-            "mode": "any",
+            "mode": "not",
             "conditions": [
-              {
-                "mode": "semantic",
-                "id": "wheel.title"
-              },
-              {
-                "mode": "semantic",
-                "id": "wheel.entry"
-              },
               {
                 "mode": "semantic",
                 "id": "boot.download.action"
@@ -2380,12 +2372,7 @@
                             "mode": "template",
                             "image": "close",
                             "threshold": 0.8,
-                            "roi": [
-                              250,
-                              1420,
-                              420,
-                              150
-                            ]
+                            "roi": [120, 1330, 740, 270]
                           }
                         ]
                       }
@@ -2444,12 +2431,7 @@
                             "mode": "template",
                             "image": "close",
                             "threshold": 0.8,
-                            "roi": [
-                              250,
-                              1420,
-                              420,
-                              150
-                            ]
+                            "roi": [120, 1330, 740, 270]
                           }
                         ]
                       }
@@ -3039,12 +3021,7 @@
                     "mode": "template",
                     "image": "supportSkillCheck",
                     "threshold": 0.8,
-                    "roi": [
-                      677,
-                      1475,
-                      189,
-                      80
-                    ]
+                    "roi": [580, 1350, 320, 250]
                   }
                 ]
               }
@@ -3101,12 +3078,7 @@
                                     "mode": "template",
                                     "image": "close",
                                     "threshold": 0.8,
-                                    "roi": [
-                                      250,
-                                      1420,
-                                      420,
-                                      150
-                                    ]
+                                    "roi": [120, 1330, 740, 270]
                                   }
                                 ]
                               }
@@ -3174,12 +3146,7 @@
                             "mode": "template",
                             "image": "close",
                             "threshold": 0.8,
-                            "roi": [
-                              250,
-                              1420,
-                              420,
-                              150
-                            ]
+                            "roi": [120, 1330, 740, 270]
                           }
                         ]
                       }
@@ -3349,12 +3316,7 @@
                                 "mode": "template",
                                 "image": "close",
                                 "threshold": 0.8,
-                                "roi": [
-                                  250,
-                                  1420,
-                                  420,
-                                  150
-                                ]
+                                "roi": [120, 1330, 740, 270]
                               }
                             ]
                           }
@@ -3422,12 +3384,7 @@
                         "mode": "template",
                         "image": "close",
                         "threshold": 0.8,
-                        "roi": [
-                          250,
-                          1420,
-                          420,
-                          150
-                        ]
+                        "roi": [120, 1330, 740, 270]
                       }
                     ]
                   }

@@ -21,12 +21,9 @@ inline nlohmann::json default_dialogue_normal_probes() {
     for (auto name : {"trait", "recover", "spellskill/skillDetail", "City_RoyalCityLuknalia",
                       "City_fortress", "City_DHI", "City_portTownGrandLegion"})
         probes.push_back({{"mode", "template"}, {"image", name}});
-    probes.push_back({{"mode", "template"}, {"image", "character_panel_zh_hant"},
-        {"threshold", 0.84}, {"roi", {90, 1400, 240, 190}}});
-    probes.push_back({{"mode", "template"}, {"image", "recovery_panel_zh_hant"},
-        {"threshold", 0.84}, {"roi", {250, 300, 400, 220}}});
-    probes.push_back({{"mode", "template"}, {"image", "combat_skill_detail_zh_hant"},
-        {"threshold", 0.82}, {"roi", {750, 800, 130, 150}}});
+    probes.push_back(resource("character.panel", "zh-Hant"));
+    probes.push_back(resource("dungeon.recovery.panel", "zh-Hant"));
+    probes.push_back(resource("combat.skill.detail", "zh-Hant"));
     return probes;
 }
 inline nlohmann::json story_auto_control() {
@@ -35,7 +32,7 @@ inline nlohmann::json story_auto_control() {
 }
 inline nlohmann::json story_advance_arrow() {
     return {{"mode", "template"}, {"image", "chest_reward_advance"}, {"threshold", .9},
-            {"roi", {750, 1400, 150, 150}}};
+            {"roi", {730, 1330, 170, 270}}};
 }
 // 普通剧情只点继续箭头；已知选项页由独立对话策略处理，不能在导航中代选。
 inline nlohmann::json ordinary_story_page() {

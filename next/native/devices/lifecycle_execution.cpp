@@ -57,7 +57,7 @@ void validate_lifecycle_plan(const LifecyclePlan &plan) {
     if (t.device_id.empty() || t.instance_id.empty() || t.application_id.empty() ||
         t.device_id.size() > 256 || t.instance_id.size() > 128 || t.application_id.size() > 256 ||
         t.vpn_application_id.size() > 256 || (t.vpn_required && t.vpn_application_id.empty()) ||
-        plan.attempt < 1 || plan.attempt > 3 || plan.operations.empty() || plan.operations.size() > 5 ||
+        plan.attempt < 1 || plan.operations.empty() || plan.operations.size() > 5 ||
         plan.step_timeout.count() < 1 || plan.step_timeout > std::chrono::minutes{3} ||
         plan.defer_for < std::chrono::milliseconds::zero() ||
         plan.defer_for > std::chrono::hours{24})

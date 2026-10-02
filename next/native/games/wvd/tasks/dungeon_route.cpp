@@ -92,7 +92,7 @@ CompiledWorkflow traverse_dungeon(const WvdTaskPlan &plan, const J &profile,
     }
     const J combat{{"mode", "combat_active"}};
     auto reward = C::image("chest_reward_advance");
-    reward["roi"] = {750, 1400, 150, 150};
+    reward["roi"] = {730, 1330, 170, 270};
     const auto chest = C::any({C::image("chestFlag"), C::image("whowillopenit"), C::image("chestOpening"), reward});
     const auto revive = C::image("RiseAgain");
     const auto encounter = C::any({combat, chest, revive});

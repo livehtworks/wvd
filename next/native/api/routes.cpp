@@ -51,7 +51,7 @@ static std::optional<std::string> decode_path(std::string_view input) {
     return value;
 }
 Response route(const Request &request, const fs::path &root, unsigned short port,
-               const DynamicHandler &handler) {
+               const DynamicHandler &handler, std::function<void()> *after_send) {
     const std::string authority = "127.0.0.1:" + std::to_string(port);
     if (request[http::field::host] != authority)
         return error(http::status::forbidden, "INVALID_HOST");
@@ -90,6 +90,7 @@ Response route(const Request &request, const fs::path &root, unsigned short port
         if (!dynamic)
             return error(http::status::not_found, "UNKNOWN_API");
         result = response(dynamic->status, std::move(dynamic->body), dynamic->mime);
+        if (after_send) *after_send = std::move(dynamic->after_send);
     }
     else {
         if (request.method() != http::verb::get && request.method() != http::verb::head)

@@ -25,7 +25,9 @@ class NativeFlowPorts final : public FlowPorts {
     contracts::FrameEnvelope capture() override;
     bool prepare_input() override { return gate_.prepare_for_input(); }
     void observation_window(std::chrono::steady_clock::time_point deadline) override { gate_.observation_window(deadline); }
-    std::optional<contracts::ObservationReconnect> recover_observation() override { return backend_.recover_observation(); }
+    contracts::ObservationRecovery recover_observation(bool restart_application = false) override {
+        return backend_.recover_observation(restart_application);
+    }
     bool settle_observed_input() override { return backend_.settle_observed_input(); }
     const std::optional<contracts::DiagnosticPixels> &failed_pixels() const { return failed_pixels_; }
     // 只在 Session 工作线程、run() 返回后由协调器读取；不是实时共享可写帧。
@@ -58,6 +60,8 @@ class NativeFlowPorts final : public FlowPorts {
     devices::DeviceBackend &backend_;
     recognition::Service &recognizer_;
     contracts::BusinessRunState &business_;
+    const std::string application_id_;
+    const bool read_only_viewport_;
     devices::NativeInputGate gate_;
     const std::stop_token stop_token_;
     OperationHandler operation_handler_;

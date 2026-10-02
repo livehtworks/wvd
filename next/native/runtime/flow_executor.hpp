@@ -6,6 +6,7 @@
 #include <chrono>
 #include <map>
 #include <optional>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -33,7 +34,7 @@ class FlowPorts {
     // 只准备本工具的输入通道，不发送游戏操作。通道改变时必须重新观察。
     virtual bool prepare_input() { return false; }
     virtual void observation_window(std::chrono::steady_clock::time_point) {}
-    virtual std::optional<contracts::ObservationReconnect> recover_observation() { return {}; }
+    virtual contracts::ObservationRecovery recover_observation(bool restart_application = false) { return {}; }
     virtual bool settle_observed_input() { return true; }
     virtual contracts::Observation recognize(const contracts::FrameEnvelope &frame,
                                               const recognition::Request &request) = 0;
@@ -82,6 +83,11 @@ class FlowExecutor final {
 
   private:
     using Clock = std::chrono::steady_clock;
+    struct SelectionOrigin {
+        std::string predecessor;
+        Clock::time_point entered_at;
+        bool error_pending{};
+    };
     struct PendingInput {
         std::string source_path;
         contracts::FrameIdentity before;
@@ -98,6 +104,8 @@ class FlowExecutor final {
         Clock::duration delay_pause_base{};
         unsigned attempts{1};
         Clock::duration animation_pause{};
+        // 仅用于已声明可重试菜单在应用重启后的重新选路；不重执行前驱动作。
+        std::optional<SelectionOrigin> selection_origin;
     };
     struct EventExit {
         std::string id;
@@ -115,14 +123,10 @@ class FlowExecutor final {
         std::size_t owner{};
     };
     struct Frame {
-        struct InputSelection {
-            std::string predecessor;
-            Clock::time_point entered_at;
-            bool error_pending{};
-        };
         std::string definition;
         std::string current;
         std::map<std::string, int> hits;
+        std::set<std::string> timeout_reclassifications;
         std::map<std::string, Clock::time_point> phase_deadlines;
         Clock::time_point invoked_at;
         std::optional<Clock::time_point> invocation_deadline;
@@ -141,7 +145,7 @@ class FlowExecutor final {
         std::optional<std::vector<std::string>> returned_targets;
         std::optional<contracts::FrameEnvelope> selected_frame;
         std::optional<contracts::Observation> selected_observation;
-        std::optional<InputSelection> input_selection;
+        std::optional<SelectionOrigin> selection_origin;
         std::optional<ScopedEvent> event;
         std::optional<PendingInput> pending;
         std::vector<EventExit> event_exits;
@@ -166,10 +170,13 @@ class FlowExecutor final {
         Clock::time_point started, next_attempt;
         unsigned failures{};
         contracts::ReadFault last;
+        std::chrono::milliseconds outage_limit{};
         bool suspended{true};
         // 输入前查询失败后，成功截一张图还不足以宣称该查询已恢复。
         bool awaiting_input_validation{};
         bool device_checked{};
+        bool restart_application{};
+        nlohmann::json context_recovery = nullptr;
         std::string source_path;
         std::size_t stack_depth{};
     };
@@ -178,6 +185,8 @@ class FlowExecutor final {
     nlohmann::json last_read_recovery_ = nullptr;
     std::vector<contracts::ObservationReconnect> reconnects_;
     bool restart_handler_pending_{};
+    bool exception_restart_supported_{};
+    std::optional<Clock::time_point> exception_since_;
     bool result_identity_matches(const contracts::FrameIdentity &, const contracts::FrameIdentity &) const;
     void begin_observation_recovery(const contracts::ReadFault &fault);
     void finish_observation_recovery(const char *outcome);
@@ -190,12 +199,14 @@ class FlowExecutor final {
     const workflow::Step &step() const;
     TickResult progress() const;
     TickResult waiting(std::chrono::milliseconds delay);
-    TickResult reconsider_unsubmitted_input(Frame &frame);
+    TickResult reconsider_uncommitted_selection(Frame &frame);
     TickResult fail(std::string code);
     TickResult business_fail(std::string reason, std::string source);
     TickResult return_business_failure(const std::string &reason);
     TickResult blocked(std::string code);
     TickResult route_error(Frame &frame, const workflow::Step &current, std::string code);
+    std::optional<TickResult> reclassify_timeout(Frame &frame, const workflow::Step &current,
+                                                  const std::string &code);
     TickResult select_next(Frame &frame, const workflow::Step &current);
     void record_known_scene(Frame &frame, const contracts::Observation &observed);
     TickResult execute_step(Frame &frame, const workflow::Step &current);

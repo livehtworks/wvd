@@ -23,7 +23,7 @@ tasks::CompiledWorkflow fight_encounter(const nlohmann::json &profile,
     const bool detect_portrait = !repel && special.value("portrait", false);
     if (detect_skull || detect_portrait) {
         auto flee = C::image("flee");
-        flee["roi"] = {720, 1120, 180, 130};
+        flee["roi"] = {660, 1080, 240, 220};
         const auto ready = C::all({battle, flee});
         J detectors = J::array();
         if (detect_skull) {
@@ -62,7 +62,7 @@ tasks::CompiledWorkflow fight_encounter(const nlohmann::json &profile,
     graph.handoff("ReviveExit", "revive");
     graph.recovery("AutoTimeout", "combat.auto_progress_timeout");
     auto enabled = C::image("spellskill/CombatAutoEnable"), disabled = C::image("spellskill/CombatAutoDisable");
-    enabled["roi"] = disabled["roi"] = {780, 1030, 120, 160};
+    enabled["roi"] = disabled["roi"] = {740, 940, 160, 280};
     const auto popup = C::any({C::image("combat_skill_detail"), C::image("combat_skill_confirm"), C::image("close")});
     const auto clear = C::all({battle, C::absent(popup)});
     const auto full_auto = C::all({clear, enabled, C::business("/strategy/automatic", true)});

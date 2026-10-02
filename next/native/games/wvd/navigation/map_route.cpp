@@ -65,9 +65,11 @@ tasks::CompiledWorkflow reach_map_target(const MapTarget &target,
     if (target.harken_arrival)
         graph.observe("HarkenArrived", vision::harken_floor_menu(), {"Terminal"});
     graph.observe("Encounter", encounter, {"EncounterExit"});
+    graph.mark_known_scene("Encounter");
     graph.handoff("EncounterExit", "encounter");
     if (floor) {
         graph.observe("WrongFloor", C::all({map_scene, C::absent(C::image(*floor))}), {"FloorExit"});
+        graph.mark_known_scene("WrongFloor");
         graph.handoff("FloorExit", "floor");
     }
     graph.observe("BeginSearch", correct_map, {"Search0"});
@@ -169,6 +171,7 @@ tasks::CompiledWorkflow reach_map_target(const MapTarget &target,
     if (target.harken_arrival)
         after_move.insert(after_move.begin(), "HarkenArrived");
     graph.observe("Exited", outside, {"Terminal"});
+    graph.mark_known_scene("Exited");
     auto hint = C::image("AutoMove");
     if (positional) {
         // 已采集繁中按钮文字；只在所选格上方寻找，点击匹配框中心。

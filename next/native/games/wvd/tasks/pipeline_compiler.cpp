@@ -596,13 +596,20 @@ void PipelineCompiler::allowed_area(const std::string &name, J area) {
                 area[1].get<int>() <= 1600 - area[3].get<int>(), "COMPILE_ACTION_AREA_INVALID");
     workflow_.nodes[name]["operation_args"]["allowed_area"] = std::move(area);
 }
-void PipelineCompiler::retry_menu_input(const std::string &name, const J &ready, int interval_ms, unsigned max_submissions) {
+void PipelineCompiler::retry_menu_input(const std::string &name, const J &ready, int interval_ms,
+    unsigned max_submissions, const std::string &restart_from) {
     require(workflow_.nodes.contains(name) &&
         workflow_.nodes.at(name).value("binding", "") == "Input" &&
         workflow_.nodes.at(name).at("operation_args").at("command").at("kind") == "Click" &&
         interval_ms >= 1000 && interval_ms <= 60000, "COMPILE_INPUT_RETRY_INVALID");
     workflow_.nodes[name]["operation_args"]["retry"] = {
         {"ready", request(ready)}, {"interval_ms", interval_ms}, {"max_submissions", max_submissions}};
+    if (!restart_from.empty()) {
+        require(workflow_.nodes.contains(restart_from) &&
+            workflow_.nodes.at(restart_from).value("operation", "Route") == "Route" &&
+            !workflow_.nodes.at(restart_from).contains("binding"), "COMPILE_INPUT_RESTART_ROUTE_INVALID");
+        workflow_.nodes[name]["operation_args"]["retry"]["restart_from"] = restart_from;
+    }
 }
 void PipelineCompiler::input_effect(const std::string &name, const std::string &binding) {
     require(workflow_.nodes.at(name).value("binding", "") == "Input" && !binding.empty(),
@@ -741,6 +748,11 @@ std::string PipelineCompiler::append(const std::string &prefix, const CompiledWo
                 reset_name = prefix + "_" + reset_name.get<std::string>();
             for (auto &targets : node["operation_args"]["handoffs"])
                 for (auto &target : targets) target = prefix + "_" + target.get<std::string>();
+        }
+        if (node.value("binding", "") == "Input" && node.at("operation_args").contains("retry")) {
+            auto &retry = node["operation_args"]["retry"];
+            if (retry.contains("restart_from"))
+                retry["restart_from"] = prefix + "_" + retry.at("restart_from").get<std::string>();
         }
         for (const auto *key : {"next", "on_error"})
             if (node.contains(key))

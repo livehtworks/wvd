@@ -82,6 +82,10 @@ void FlowProgram::validate() const {
                     input->retry->interval < std::chrono::seconds{1} ||
                     input->retry->interval > std::chrono::minutes{1}))
                     throw std::runtime_error("FLOW_INPUT_RETRY_INVALID");
+                if (input->retry && !input->retry->restart_from.empty() &&
+                    (!definition.steps.contains(input->retry->restart_from) ||
+                     !std::holds_alternative<Route>(definition.steps.at(input->retry->restart_from).data)))
+                    throw std::runtime_error("FLOW_INPUT_RESTART_ROUTE_INVALID");
                 if (!input->command.is_object() || input->allowed_area.width <= 0 ||
                     input->allowed_area.height <= 0)
                     throw std::runtime_error("FLOW_INPUT_INVALID");

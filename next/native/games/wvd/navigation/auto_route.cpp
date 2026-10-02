@@ -34,11 +34,11 @@ tasks::CompiledWorkflow auto_route(const std::string &target) {
         graph.observe("Outside", outside, {"Terminal"});
     } else {
         auto button = C::image(target);
-        button["roi"] = {720, 250, 150, 180};
+        button["roi"] = {680, 220, 220, 240};
         auto available = button;
         if (target == "chest_auto") {
             auto minus = C::image("chest_auto_minus");
-            minus.update({{"roi", {811, 340, 41, 30}},
+            minus.update({{"roi", {760, 280, 140, 140}},
                           {"preprocess", {{"operation", "subtract"}, {"rgb", {90, 90, 90}}}}});
             available = C::all({button, minus});
         }

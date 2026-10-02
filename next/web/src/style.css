@@ -140,6 +140,10 @@ body { min-width: 0; background: #f3f5f4; }
 .main-nav button[aria-current="page"] { color: #fff; border-bottom-color: #4cb584; background: #26332e; }
 .dirty-dot { width: 6px; height: 6px; border-radius: 50%; background: #e6a93c; }
 .service-state { display: flex; justify-content: flex-end; align-items: center; gap: 9px; color: #b9c6c0; font-size: 12px; }
+.service-exit-dialog { width:360px; max-width:calc(100vw - 32px); padding:20px; border:1px solid #82948a; border-radius:4px; background:#fff; color:#252a28; }
+.service-exit-dialog::backdrop { background:rgb(0 0 0 / 35%); }
+.service-exit-dialog h2 { margin:0 0 12px; font-size:18px; }
+.service-exit-dialog .command-row { justify-content:flex-end; margin-top:20px; }
 .app-header .icon-button { background: #283630; color: #d8e2dd; border-color: #46544e; }
 .connection-dot { width: 8px; height: 8px; flex: 0 0 8px; border-radius: 50%; background: #9aa39f; display: inline-block; }
 .connection-dot.online { background: #43b978; box-shadow: 0 0 0 3px rgb(67 185 120 / 15%); }

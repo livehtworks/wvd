@@ -30,7 +30,7 @@ class DeviceBackend {
     virtual void disconnect() {}
     virtual bool release_owned_inputs() { return true; }
     virtual void observation_window(std::chrono::steady_clock::time_point, std::stop_token) {}
-    virtual std::optional<contracts::ObservationReconnect> recover_observation() { return {}; }
+    virtual contracts::ObservationRecovery recover_observation(bool restart_application = false) { return {}; }
     virtual std::optional<contracts::DiagnosticPixels> failed_pixels() const { return {}; }
     virtual bool settle_observed_input() { return true; }
     virtual LifecyclePort *lifecycle_port() { return nullptr; }

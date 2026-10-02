@@ -27,8 +27,8 @@ bool WvdRunState::inn_payment_ready() const {
         throw std::runtime_error("INN_PAYMENT_NOT_PREPARED");
     if (inn_payment_delivery_unknown_)
         throw std::runtime_error("INN_PAYMENT_DELIVERY_UNKNOWN");
-    if (inn_payment_submissions_ >= 3)
-        throw std::runtime_error("INN_GOLD_SUBMISSIONS_EXHAUSTED");
+    // 普通金币可重复住宿；由输入间隔、原结果窗口和任务期限限制无进展重试，
+    // 不以全阶段累计消费三次截断正常恢复。每次费用仍保留在诊断账目。
     return !inn_payment_last_submit_ ||
         clock_->now() - *inn_payment_last_submit_ >= std::chrono::milliseconds{5000};
 }
@@ -997,7 +997,7 @@ J WvdRunState::summarize() const {
             {"inn_payment_pending", inn_payment_pending_},
             {"inn_payment", {{"currency", "G"}, {"submitted", inn_payment_submissions_ > 0},
                 {"amount_per_submission", profile_.value("ACTIVE_ROYALSUITE_REST", false) ? J(nullptr) : J(200)},
-                {"submissions", inn_payment_submissions_}, {"max_submissions", 3},
+                {"submissions", inn_payment_submissions_}, {"max_submissions", 0},
                 {"delivery_unknown", inn_payment_delivery_unknown_},
                 {"possible_cost_g", profile_.value("ACTIVE_ROYALSUITE_REST", false) ? J(nullptr) : J(inn_payment_submissions_ * 200)},
                 {"cycle", inn_payment_cycle_ ? J(*inn_payment_cycle_) : J(nullptr)}}},

@@ -9,19 +9,20 @@ file(READ "${PROJECT_SOURCE_DIR}/resources/authoring/semantic-assets.json" WVD_S
 file(SHA256 "${PROJECT_SOURCE_DIR}/resources/authoring/semantic-assets.json" WVD_SEMANTIC_SOURCE_SHA256)
 file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/generated")
 file(WRITE "${PROJECT_BINARY_DIR}/generated/semantic_catalogue.sha256" "${WVD_SEMANTIC_SOURCE_SHA256}\n")
-set(WVD_PROBE_RESOURCES "")
-foreach(ID IN ITEMS city.royal.identity city.inn.entry city.temple.entry
+# 按资源生成相邻字符串，避免MSVC单个字符串字面量长度上限；内容仍来自唯一作者源。
+set(WVD_SEMANTIC_LITERAL "R\"wvd({\"schema\":1,\"resources\":{)wvd\"")
+set(WVD_RESOURCE_SEPARATOR "")
+foreach(ID IN ITEMS boot.announcement.page city.royal.identity city.inn.entry city.temple.entry
   city.blacksmith.entry city.ruins.entry city.guild.entry city.ore_merchant.entry
   city.item_shop.entry city.edge.entry city.any
   guild.commissions.page guild.bounties.page guild.bounty.reveal.close chest.open.option chest.choose.page
-  chest.reward.page inn.stay.option inn.standard.gold.confirmation purchase.premium.button)
+  chest.reward.page inn.stay.option inn.standard.gold.confirmation purchase.premium.button
+  combat.skill.detail combat.skill.confirm character.panel dungeon.recovery.panel dungeon.map.open)
   string(JSON ENTRY GET "${WVD_SEMANTIC_CATALOGUE}" resources "${ID}")
-  if(NOT WVD_PROBE_RESOURCES STREQUAL "")
-    string(APPEND WVD_PROBE_RESOURCES ",")
-  endif()
-  string(APPEND WVD_PROBE_RESOURCES "\"${ID}\":${ENTRY}")
+  string(APPEND WVD_SEMANTIC_LITERAL "\nR\"wvd(${WVD_RESOURCE_SEPARATOR}\"${ID}\":${ENTRY})wvd\"")
+  set(WVD_RESOURCE_SEPARATOR ",")
 endforeach()
-set(WVD_SEMANTIC_CATALOGUE "{\"schema\":1,\"resources\":{${WVD_PROBE_RESOURCES}}}")
+string(APPEND WVD_SEMANTIC_LITERAL "\nR\"wvd(}})wvd\"")
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/games/wvd/vision/semantic_catalogue.hpp.in"
   "${PROJECT_BINARY_DIR}/generated/semantic_catalogue.hpp" @ONLY)
 file(READ "${PROJECT_SOURCE_DIR}/native-dependencies.lock.json" WVD_NATIVE_LOCK)

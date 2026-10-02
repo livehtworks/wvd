@@ -412,12 +412,15 @@ nlohmann::json DeviceSession::instance_metadata() {
             binding_.at("serial").get<std::string>(), "MUMU_ADB_BINDING_MISMATCH");
     return live;
 }
-std::optional<contracts::ObservationReconnect> DeviceSession::recover_observation() try {
+contracts::ObservationRecovery DeviceSession::recover_observation(bool restart_application) try {
     // 只由当前Session工作线程调用。每次只推进一次连接/启动检查，退避归执行器。
     const auto live = instance_metadata(); // 包括创建标识、端口、实例核对，失败不得换设备。
     const auto pending = [&]() -> void {
         throw contracts::ObservationUnavailable({contracts::ReadFaultKind::TransportUnavailable,
-            contracts::ReadFaultStage::Capture, "DEVICE_RECONNECT_WAIT", "bound_device.reconnect", {}, {}});
+            contracts::ReadFaultStage::Capture,
+            recovery_launched_ ? "DEVICE_INSTANCE_STARTING" :
+                recovery_instance_detected_ ? "DEVICE_INSTANCE_RESTART_REQUIRED" : "DEVICE_RECONNECT_WAIT",
+            "bound_device.reconnect", {}, {}});
     };
     const auto cancelled = [&] { return read_stop_.stop_requested() ||
         std::chrono::steady_clock::now() >= read_deadline_; };
@@ -426,6 +429,10 @@ std::optional<contracts::ObservationReconnect> DeviceSession::recover_observatio
     if (!live.at("is_process_started").get<bool>()) {
         if (recovery_launched_) pending();
         if (!recovery_origin_) recovery_origin_ = generation_.load();
+        if (!recovery_instance_detected_) {
+            recovery_instance_detected_ = true;
+            pending(); // 先让执行器扩展已证实实例退出的读取窗口，再启动模拟器。
+        }
         LifecyclePlan plan{target, {LifecycleOperation::RestartInstance}, 1};
         if (!execute_lifecycle(plan.operations.front(), target, cancelled)) pending();
         recovery_launched_ = true;
@@ -440,23 +447,47 @@ std::optional<contracts::ObservationReconnect> DeviceSession::recover_observatio
         LifecyclePlan plan{target, {LifecycleOperation::Reconnect}, 1};
         if (!execute_lifecycle(plan.operations.front(), target, cancelled)) pending();
     }
-    if (!recovery_origin_) return {};
-    if (recovery_launched_) {
-        LifecyclePlan plan{target, {}, 1};
-        if (target.vpn_required) plan.operations.push_back(LifecycleOperation::EnsureVpn);
-        plan.operations.push_back(LifecycleOperation::StartApplication);
-        for (const auto operation : plan.operations)
-            if (!execute_lifecycle(operation, target, cancelled)) pending();
+    // 仅执行器确认连续异常到期才关闭存活游戏；后续重试不再次停止已拉起的应用。
+    if (restart_application && !recovery_application_started_) {
+        record({{"event", "observation.application_restart_requested"},
+            {"reason", "CONTINUOUS_EXCEPTION_TIMEOUT"}, {"device", target.device_id},
+            {"instance", target.instance_id}, {"application", target.application_id}});
+        if (!execute_lifecycle(LifecycleOperation::StopApplication, target, cancelled)) pending();
+        recovery_application_started_ = true;
+        metadata_at_ = {};
+    }
+    // 读取恢复也检查应用，而非仅检查ADB。前台丢失时按pid区分切回和冷启动；
+    // 只恢复绑定实例，不force-stop存活游戏，不关其它模拟器，不重放游戏点击。
+    const bool running = android::process(query("pidof " + target.application_id)) ==
+                         android::Presence::Present;
+    const bool focused = foreground(read_stop_) == target.application_id;
+    bool restored = false;
+    if (recovery_launched_ || recovery_application_started_ || !focused) {
+        if (target.vpn_required &&
+            !execute_lifecycle(LifecycleOperation::EnsureVpn, target, cancelled)) pending();
+        if (!running) recovery_application_started_ = true;
+        if (!execute_lifecycle(LifecycleOperation::StartApplication, target, cancelled)) pending();
+        metadata_at_ = {}; // 丢弃切回前的桌面视口/焦点缓存。
+        if (foreground(read_stop_) != target.application_id) pending();
+        restored = true;
     }
     (void)instance_metadata();
-    const contracts::ObservationReconnect proof{target.device_id, target.instance_id,
-        binding_.at("created_timestamp").dump(), *recovery_origin_, generation_, recovery_launched_};
-    require(proof.after > proof.before, "RECONNECT_GENERATION_NOT_ADVANCED");
-    recovery_origin_.reset(); recovery_launched_ = false;
-    record({{"event", "observation.reconnected"}, {"device", proof.device_id},
-        {"instance", proof.instance_id}, {"created_identity", proof.created_identity},
-        {"before", proof.before}, {"after", proof.after}, {"application_restarted", proof.application_restarted}});
-    return proof;
+    contracts::ObservationRecovery result;
+    result.application_restarted = recovery_launched_ || recovery_application_started_;
+    result.foreground_restored = restored;
+    if (recovery_origin_) {
+        result.reconnect = contracts::ObservationReconnect{target.device_id, target.instance_id,
+            binding_.at("created_timestamp").dump(), *recovery_origin_, generation_};
+        require(result.reconnect->after > result.reconnect->before, "RECONNECT_GENERATION_NOT_ADVANCED");
+    }
+    record({{"event", "observation.context_restored"}, {"device", target.device_id},
+        {"instance", target.instance_id}, {"application_was_running", running},
+        {"application_restarted", result.application_restarted}, {"foreground_restored", restored},
+        {"reconnected", result.reconnect.has_value()},
+        {"before", recovery_origin_.value_or(generation_)}, {"after", generation_.load()}});
+    recovery_origin_.reset(); recovery_instance_detected_ = false;
+    recovery_launched_ = recovery_application_started_ = false;
+    return result;
 } catch (const AdbCommandFailure &error) {
     record_adb_failure(error.info(), "observation.reconnect");
     if (!read_stop_.stop_requested() && error.info().retryable_transport)
@@ -590,7 +621,9 @@ bool DeviceSession::execute_lifecycle(LifecycleOperation operation, const Lifecy
                     "VPN_START_INTENT_FAILED");
         }
         bool main_open{}, clicked{};
-        const auto deadline = std::chrono::steady_clock::now() + 10s;
+        // 冷启动的系统授权/Clash界面与tun建立是异步的。沿用生命周期步骤期限，
+        // 不把一次慢UI读取跨过10秒当成配置缺失；停止/读图恢复仍受外层期限约束。
+        const auto deadline = std::chrono::steady_clock::now() + 120s;
         while (!cancelled() && std::chrono::steady_clock::now() < deadline) {
             if (vpn_connected()) return true;
             if (!main_open && foreground() != "com.android.vpndialogs") {
@@ -601,6 +634,7 @@ bool DeviceSession::execute_lifecycle(LifecycleOperation operation, const Lifecy
             std::this_thread::sleep_for(200ms);
         }
         if (cancelled()) return false;
+        if (vpn_connected()) return true;
         throw std::runtime_error("VPN_PERMISSION_OR_PROFILE_REQUIRED");
     }
     return false;

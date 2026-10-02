@@ -196,19 +196,229 @@ workflow::Step step(std::string id, workflow::StepData data,
 
 int main(int argc, char **argv) {
     try {
+        if (argc == 2 && std::string(argv[1]) == "--timeout-reclassification") {
+            struct ScenePorts final : Ports {
+                bool moved{};
+                int stale_checks{};
+                contracts::Observation recognize(const contracts::FrameEnvelope &frame,
+                                                  const recognition::Request &request) override {
+                    auto result = Ports::recognize(frame, request);
+                    if (request.recognizer_id == "stale" && ++stale_checks > 1)
+                        result.outcome = contracts::RecognitionOutcome::NoHit;
+                    if (request.recognizer_id == "battle" && !moved)
+                        result.outcome = contracts::RecognitionOutcome::NoHit;
+                    return result;
+                }
+            };
+            for (bool moved : {false, true}) {
+                recognition::Request stale{"stale", "1", {0, 0, 900, 1600},
+                    recognition::CustomParameters{"WvdVision", nlohmann::json::object()}};
+                auto battle = stale; battle.recognizer_id = "battle";
+                workflow::FlowProgram program; program.revision = "timeout-scene"; program.root_definition = "root";
+                workflow::Definition root; root.id = "root"; root.entry = "entry";
+                auto entry = step("entry", workflow::Route{}, {"stale"});
+                root.steps.emplace("entry", std::move(entry));
+                auto old = step("stale", workflow::Observe{stale}, {"done"});
+                old.guard = stale; old.time_limit = 60ms;
+                root.steps.emplace("stale", std::move(old));
+                auto new_scene = step("battle", workflow::Observe{battle}, {"done"});
+                new_scene.guard = battle; new_scene.marks_known_scene = true;
+                root.steps.emplace("battle", std::move(new_scene));
+                root.steps.emplace("done", step("done", workflow::Finish{}));
+                program.definitions.emplace("root", std::move(root));
+                ScenePorts ports; ports.moved = moved;
+                runtime::FlowExecutor executor(program, ports, 1s);
+                runtime::TickResult result;
+                for (int i = 0; i < 100; ++i) {
+                    result = executor.tick();
+                    if (result.state != runtime::TickState::Waiting && result.state != runtime::TickState::Progress) break;
+                    if (result.state == runtime::TickState::Waiting) std::this_thread::sleep_until(result.wake_at);
+                }
+                if (moved ? result.state != runtime::TickState::Completed :
+                    (result.state != runtime::TickState::Failed || result.code != "FLOW_STAGE_TIMEOUT"))
+                    throw std::runtime_error("TIMEOUT_RECLASSIFICATION:" + result.code);
+                if (ports.operations || executor.has_unresolved_input())
+                    throw std::runtime_error("TIMEOUT_RECLASSIFICATION_REPLAYED_INPUT");
+            }
+            return 0;
+        }
+        if (argc == 2 && std::string(argv[1]) == "--instance-start-window") {
+            struct RecoveryPorts final : Ports {
+                int attempts{};
+                std::string fault_code;
+                contracts::FrameEnvelope capture() override {
+                    throw contracts::ObservationUnavailable({contracts::ReadFaultKind::TransportUnavailable,
+                        contracts::ReadFaultStage::Capture, "ADB_OFFLINE", "bound_device.capture", {}, {}});
+                }
+                contracts::ObservationRecovery recover_observation(bool restart_application = false) override {
+                    ++attempts;
+                    throw contracts::ObservationUnavailable({contracts::ReadFaultKind::TransportUnavailable,
+                        contracts::ReadFaultStage::Capture, fault_code, "bound_device.reconnect", {}, {}});
+                }
+            } ports;
+            recognition::Request scene{"scene", "1", {0, 0, 900, 1600},
+                recognition::CustomParameters{"WvdVision", nlohmann::json::object()}};
+            workflow::FlowProgram program; program.revision = "instance-window"; program.root_definition = "root";
+            workflow::Definition root; root.id = "root"; root.entry = "scene";
+            root.steps.emplace("scene", step("scene", workflow::Observe{scene}, {"done"}));
+            root.steps.emplace("done", step("done", workflow::Finish{}));
+            program.definitions.emplace("root", std::move(root));
+            for (const char *code : {"DEVICE_INSTANCE_RESTART_REQUIRED", "DEVICE_INSTANCE_STARTING", "DEVICE_RECONNECT_WAIT"}) {
+                ports.attempts = 0; ports.fault_code = code;
+                runtime::FlowExecutor executor(program, ports, 4min, {60s, 1ms, 2ms});
+                for (int i = 0; i < 10 && !ports.attempts; ++i) {
+                    const auto result = executor.tick();
+                    if (result.state == runtime::TickState::Waiting) std::this_thread::sleep_until(result.wake_at);
+                }
+                const auto recovery = executor.progress_snapshot().at("observation_recovery");
+                const int expected = ports.fault_code == "DEVICE_RECONNECT_WAIT" ? 60000 : 180000;
+                if (ports.attempts != 1 || recovery.at("outage_limit_ms") != expected ||
+                    recovery.at("code") != code)
+                    throw std::runtime_error("INSTANCE_START_WINDOW_NOT_EVIDENCE_BASED");
+            }
+            return 0;
+        }
+        if (argc == 2 && std::string(argv[1]) == "--selection-race") {
+            // 导航停止分类选中后，新帧进入战斗；执行器应重选，而非卡在旧 Observe。
+            for (const char *mode : {"guarded", "unguarded", "flapping"}) {
+                struct RacePorts final : Ports {
+                    int stopped_checks{};
+                    bool flapping{}, unguarded{};
+                    contracts::Observation recognize(const contracts::FrameEnvelope &frame,
+                                                      const recognition::Request &request) override {
+                        auto result = Ports::recognize(frame, request);
+                        const bool hit = request.recognizer_id == "stopped"
+                            ? (++stopped_checks % 2 == 1 && !unguarded)
+                            : (!flapping && stopped_checks > 0);
+                        if (!hit) result.outcome = contracts::RecognitionOutcome::NoHit;
+                        return result;
+                    }
+                } ports;
+                ports.flapping = std::string(mode) == "flapping";
+                ports.unguarded = std::string(mode) == "unguarded";
+                recognition::Request stopped{"stopped", "1", {0, 0, 900, 1600},
+                    recognition::CustomParameters{"WvdVision", nlohmann::json::object()}};
+                auto battle = stopped; battle.recognizer_id = "battle";
+                workflow::FlowProgram p; p.revision = "selection-race"; p.root_definition = "root";
+                workflow::Definition d; d.id = "root"; d.entry = "dispatch";
+                auto dispatch = step("dispatch", workflow::Route{}, {"battle", "stopped"});
+                dispatch.time_limit = 180ms;
+                d.steps.emplace("dispatch", std::move(dispatch));
+                auto observe = step("stopped", workflow::Observe{stopped}, {"dispatch"});
+                if (std::string(mode) != "unguarded") observe.guard = stopped;
+                d.steps.emplace("stopped", std::move(observe));
+                auto finish = step("battle", workflow::Finish{}); finish.guard = battle;
+                d.steps.emplace("battle", std::move(finish));
+                p.definitions.emplace("root", std::move(d));
+                runtime::FlowExecutor executor(p, ports, 2s);
+                runtime::TickResult result;
+                const auto began = std::chrono::steady_clock::now();
+                for (int i = 0; i < 100; ++i) {
+                    result = executor.tick();
+                    if (result.state != runtime::TickState::Waiting && result.state != runtime::TickState::Progress) break;
+                    if (result.state == runtime::TickState::Waiting) std::this_thread::sleep_until(result.wake_at);
+                }
+                if (ports.flapping ? (result.state != runtime::TickState::Failed ||
+                    result.code != "FLOW_STAGE_TIMEOUT" || std::chrono::steady_clock::now() - began > 1s)
+                    : result.state != runtime::TickState::Completed)
+                    throw std::runtime_error(std::string("SELECTION_RACE:") + mode + ":" + result.code);
+                if (ports.operations || executor.has_unresolved_input())
+                    throw std::runtime_error("SELECTION_RACE_CHANGED_INPUT_STATE");
+                std::cout << "selection " << mode << ": " << result.code << " no input/replay\n";
+            }
+            return 0;
+        }
+        if (argc == 2 && std::string(argv[1]) == "--exception-restart") {
+            // 只缩短注入的时钟门槛，执行同一生产重启/Boot/原调用恢复路径。
+            // 设备执行仍须由本轮真实黑屏现场另行验收。
+            struct ExceptionPorts final : Ports {
+                bool restored{}, progressing{}, stop{};
+                int restarts{}, boots{}, prepares{};
+                contracts::ObservationRecovery recover_observation(bool restart_application = false) override {
+                    if (!restart_application) throw std::runtime_error("EXCEPTION_RESTART_REQUEST_MISSING");
+                    ++restarts; restored = true;
+                    return {{}, true, true};
+                }
+                contracts::Observation recognize(const contracts::FrameEnvelope &frame, const recognition::Request &request) override {
+                    auto result = Ports::recognize(frame, request);
+                    if (request.recognizer_id == "ready" && !restored && !(progressing && captures > 20))
+                        result.outcome = contracts::RecognitionOutcome::NoHit;
+                    return result;
+                }
+                runtime::OperationResult operate(const std::string &binding, const nlohmann::json &,
+                    const std::optional<contracts::FrameEnvelope> &, const std::optional<contracts::Observation> &,
+                    const std::string &) override {
+                    if (binding == "Prepare") ++prepares;
+                    if (binding == "Boot") ++boots;
+                    return {runtime::OperationState::Done};
+                }
+                bool cancelled() const override { return stop; }
+            };
+            for (const auto *mode : {"black", "progress", "stop"}) {
+                workflow::FlowProgram program; program.revision = "exception-restart"; program.root_definition = "root";
+                recognition::Request ready{"ready", "1", {0,0,900,1600}, recognition::CustomParameters{"WvdVision", nlohmann::json::object()}};
+                workflow::Definition root; root.id = "root"; root.entry = "prepare";
+                root.steps.emplace("prepare", step("prepare", workflow::RegisteredOperation{"Prepare", nlohmann::json::object()}, {"work"}));
+                root.steps.emplace("work", step("work", workflow::Call{"work", {}}, {"done"}));
+                root.steps.emplace("done", step("done", workflow::Finish{}));
+                workflow::Definition work; work.id = "work"; work.entry = "dispatch";
+                work.steps.emplace("dispatch", step("dispatch", workflow::Route{}, {"ready", "poll"}));
+                auto found = step("ready", workflow::Observe{ready}, {"return"}); found.guard = ready;
+                work.steps.emplace("ready", std::move(found));
+                work.steps.emplace("poll", step("poll", workflow::Poll{2ms, {}, {}}, {"dispatch"}));
+                work.steps.at("dispatch").max_hit = work.steps.at("poll").max_hit = 0;
+                // 局部10ms到期仍要交异常窗口，而不是停止；正常进行的显式Poll则不重启。
+                work.steps.at("dispatch").time_limit = 10ms;
+                work.steps.emplace("return", step("return", workflow::Return{"completed"}));
+                workflow::Definition boot; boot.id = "boot"; boot.entry = "boot";
+                boot.steps.emplace("boot", step("boot", workflow::RegisteredOperation{"Boot", nlohmann::json::object()}, {"return"}));
+                boot.steps.emplace("return", step("return", workflow::Return{"completed"}));
+                workflow::EventRule event; event.id = "context-restart"; event.detect = ready;
+                event.handler_definition = "boot"; event.on_device_restart = true; root.events.push_back(event);
+                program.definitions.emplace("root", std::move(root));
+                program.definitions.emplace("work", std::move(work));
+                program.definitions.emplace("boot", std::move(boot));
+                ExceptionPorts ports; ports.progressing = std::string(mode) == "progress";
+                if (ports.progressing) {
+                    auto ongoing = ready; ongoing.recognizer_id = "moving";
+                    std::get<workflow::Poll>(program.definitions.at("work").steps.at("poll").data).ongoing = ongoing;
+                    program.definitions.at("work").steps.at("dispatch").time_limit = 1s;
+                }
+                runtime::FlowExecutor executor(program, ports, 2s, {100ms, 2ms, 5ms, 30ms});
+                runtime::TickResult result;
+                for (int i = 0; i < 500; ++i) {
+                    result = executor.tick();
+                    if (std::string(mode) == "stop" && ports.captures > 3) ports.stop = true;
+                    if (result.state != runtime::TickState::Progress && result.state != runtime::TickState::Waiting) break;
+                    if (result.state == runtime::TickState::Waiting) std::this_thread::sleep_until(result.wake_at);
+                }
+                const bool black = std::string(mode) == "black";
+                if (ports.prepares != 1 || ports.restarts != (black ? 1 : 0) || ports.boots != (black ? 1 : 0) ||
+                    result.state != (std::string(mode) == "stop" ? runtime::TickState::Cancelled : runtime::TickState::Completed))
+                    throw std::runtime_error(std::string("EXCEPTION_RESTART:") + mode + ":" + result.code +
+                        ":restarts=" + std::to_string(ports.restarts) + ":boots=" + std::to_string(ports.boots));
+                std::cout << "exception " << mode << " restarts=" << ports.restarts << " prepares=" << ports.prepares << " result=" << result.code << '\n';
+            }
+            return 0;
+        }
         if (argc == 2 && std::string(argv[1]) == "--closure-recovery") {
             struct ReadPorts final : MenuRetryPorts {
                 int recoveries{};
+                int prepares{}, confirms{};
+                bool transfer_pending{};
                 bool recovered{}, forever{}, stop{};
+                std::string recovery_mode;
                 std::chrono::steady_clock::time_point window{};
                 void observation_window(std::chrono::steady_clock::time_point value) override { window = value; }
                 contracts::FrameEnvelope capture() override {
                     if (epoch && !recovered)
-                        throw contracts::ObservationUnavailable({contracts::ReadFaultKind::TransportUnavailable,
-                            contracts::ReadFaultStage::Capture, "ADB_OFFLINE", "offline.capture", {}, {}});
+                        throw contracts::ObservationUnavailable({recovery_mode.empty() ? contracts::ReadFaultKind::TransportUnavailable
+                            : contracts::ReadFaultKind::ApplicationUnavailable,
+                            contracts::ReadFaultStage::Capture, recovery_mode.empty() ? "ADB_OFFLINE" : "GAME_NOT_FOREGROUND",
+                            "offline.capture", {}, {}});
                     return MenuRetryPorts::capture();
                 }
-                std::optional<contracts::ObservationReconnect> recover_observation() override {
+                contracts::ObservationRecovery recover_observation(bool restart_application = false) override {
                     if (++recoveries <= 2 || forever) {
                         devices::require_metadata_read({{"success", false}, {"error", "METADATA_TIMEOUT"},
                             {"primary_error", "METADATA_TIMEOUT"}, {"quiescent", true}, {"handles_released", true},
@@ -216,25 +426,87 @@ int main(int argc, char **argv) {
                             std::chrono::duration_cast<std::chrono::milliseconds>(window - std::chrono::steady_clock::now()));
                     }
                     recovered = true;
-                    return {};
+                    return {{}, recovery_mode.starts_with("restart") || recovery_mode == "unknown" || recovery_mode == "effect",
+                        !recovery_mode.empty()};
                 }
                 bool cancelled() const override { return stop; }
+                runtime::OperationResult operate(const std::string &binding, const nlohmann::json &,
+                    const std::optional<contracts::FrameEnvelope> &, const std::optional<contracts::Observation> &,
+                    const std::string &) override {
+                    if (binding == "Boot") ++operations;
+                    if (binding == "Prepare") { ++prepares; transfer_pending = true; }
+                    if (binding == "Confirm") {
+                        if (!transfer_pending) throw std::runtime_error("RESTART_LOST_PREPARED_TRANSFER");
+                        ++confirms; transfer_pending = false;
+                    }
+                    return {runtime::OperationState::Done};
+                }
                 contracts::Observation recognize(const contracts::FrameEnvelope &f, const recognition::Request &r) override {
                     auto result = Ports::recognize(f, r);
                     result.box = contracts::Box{100,100,20,20}; result.center = contracts::Point{110,110};
                     result.action_eligible = true;
+                    if (recovery_mode == "restart-nested" &&
+                        ((r.recognizer_id == "old-menu" && operations) ||
+                         (r.recognizer_id == "new-menu" && !operations) ||
+                         (r.recognizer_id == "menu-result" && epoch < 2)))
+                        result.outcome = contracts::RecognitionOutcome::NoHit;
                     return result;
                 }
             };
-            for (const auto *scenario : {"recover", "exhaust", "stop"}) {
+            for (const auto *scenario : {"recover", "exhaust", "stop", "focus", "restart", "restart-nested", "restart-gold", "unknown", "effect"}) {
                 workflow::FlowProgram program; program.revision = "closure-read"; program.root_definition = "root";
                 recognition::Request probe{"scene", "1", {0,0,900,1600}, recognition::CustomParameters{"WvdVision", nlohmann::json::object()}};
                 workflow::Definition root; root.id = "root"; root.entry = "input";
                 root.steps.emplace("input", step("input", workflow::Input{probe, probe, {{"kind","Click"}}, {0,0,900,1600}}, {"await"}));
                 root.steps.emplace("await", step("await", workflow::AwaitResult{probe, 1s, 0ms, 1ms}, {"done"}));
                 root.steps.emplace("done", step("done", workflow::Finish{}));
+                const std::string mode = scenario;
+                if (mode.starts_with("restart") || mode == "unknown" || mode == "effect") {
+                    auto &input = std::get<workflow::Input>(root.steps.at("input").data);
+                    input.retry = workflow::InputRetry{probe, 1s, 2};
+                    if (mode == "effect") input.effect_binding = "Effect";
+                    if (mode == "restart-gold") {
+                        input.effect_binding = "Effect"; input.retry->restart_from = "dispatch";
+                        root.steps.emplace("dispatch", step("dispatch", workflow::Route{}, {"input"}));
+                        root.steps.at("input").max_hit = root.steps.at("await").max_hit = 2;
+                        root.entry = "dispatch";
+                    }
+                    workflow::Definition boot; boot.id = "boot"; boot.entry = "boot";
+                    boot.steps.emplace("boot", step("boot", workflow::RegisteredOperation{"Boot", nlohmann::json::object()}, {"return"}));
+                    boot.steps.emplace("return", step("return", workflow::Return{"completed"}));
+                    program.definitions.emplace("boot", std::move(boot));
+                    workflow::EventRule event;
+                    event.id = "context-restart"; event.detect = probe; event.handler_definition = "boot";
+                    event.on_device_restart = true;
+                    root.events.push_back(std::move(event));
+                }
+                if (mode == "restart-nested") {
+                    // 复现父业务已prepare、子菜单被重启打断；恢复后菜单候选已改变。
+                    // 必须在原Call内重新选路，不能重跑根Prepare或把旧点击记成成功。
+                    root.steps.clear(); root.entry = "prepare";
+                    root.steps.emplace("prepare", step("prepare", workflow::RegisteredOperation{"Prepare", nlohmann::json::object()}, {"call"}));
+                    root.steps.emplace("call", step("call", workflow::Call{"navigation", {}}, {"confirm"}));
+                    root.steps.emplace("confirm", step("confirm", workflow::RegisteredOperation{"Confirm", nlohmann::json::object()}, {"done"}));
+                    root.steps.emplace("done", step("done", workflow::Finish{}));
+                    workflow::Definition navigation; navigation.id = "navigation"; navigation.entry = "dispatch";
+                    navigation.steps.emplace("dispatch", step("dispatch", workflow::Route{}, {"old", "new"}));
+                    auto result_probe = probe; result_probe.recognizer_id = "menu-result";
+                    for (const auto *name : {"old", "new"}) {
+                        auto menu = probe; menu.recognizer_id = std::string(name) + "-menu";
+                        workflow::Input input{menu, menu, {{"kind", "Click"}}, {0,0,900,1600}};
+                        input.retry = workflow::InputRetry{menu, 1s, 2};
+                        auto node = step(name, std::move(input), {std::string(name) + "-await"}); node.guard = menu;
+                        navigation.steps.emplace(name, std::move(node));
+                        navigation.steps.emplace(std::string(name) + "-await",
+                            step(std::string(name) + "-await", workflow::AwaitResult{result_probe, 1s, 0ms, 1ms}, {"return"}));
+                    }
+                    navigation.steps.emplace("return", step("return", workflow::Return{"completed"}));
+                    program.definitions.emplace("navigation", std::move(navigation));
+                }
                 program.definitions.emplace("root", std::move(root));
                 ReadPorts ports; ports.forever = std::string(scenario) == "exhaust";
+                if (mode == "focus" || mode.starts_with("restart") || mode == "unknown" || mode == "effect") ports.recovery_mode = mode;
+                if (mode == "unknown") ports.mode = "delivery_unknown";
                 runtime::FlowExecutor executor(program, ports, 2s, {80ms, 5ms, 10ms});
                 nlohmann::json pending;
                 runtime::TickResult result;
@@ -245,13 +517,15 @@ int main(int argc, char **argv) {
                     const auto current = state.at("pending_inputs");
                     if (!current.empty()) {
                         if (pending.is_null()) pending = current;
-                        else if (pending != current) throw std::runtime_error("READ_PENDING_CHANGED");
+                        else if (pending != current && !(mode.starts_with("restart") && ports.operations == 1 && ports.epoch == 2))
+                            throw std::runtime_error("READ_PENDING_CHANGED");
                     }
                     if (std::string(scenario) == "stop" && ports.recoveries) ports.stop = true;
                     if (result.state != runtime::TickState::Progress && result.state != runtime::TickState::Waiting) break;
                     if (result.state == runtime::TickState::Waiting) std::this_thread::sleep_until(result.wake_at);
                 }
-                if (ports.epoch != 1 || pending.is_null()) throw std::runtime_error("READ_INPUT_COUNT_OR_BASIS_LOST");
+                if (ports.epoch != (mode.starts_with("restart") ? 2 : 1) || pending.is_null())
+                    throw std::runtime_error("READ_INPUT_COUNT_OR_BASIS_LOST:" + mode + ":" + result.code + ":" + std::to_string(ports.epoch));
                 if (std::string(scenario) == "recover" && (result.state != runtime::TickState::Completed || ports.recoveries != 3))
                     throw std::runtime_error("READ-01:" + result.code);
                 if (std::string(scenario) == "exhaust" && (result.state != runtime::TickState::Failed ||
@@ -259,6 +533,14 @@ int main(int argc, char **argv) {
                     throw std::runtime_error("READ-02:" + result.code);
                 if (std::string(scenario) == "stop" && (result.state != runtime::TickState::Cancelled || !executor.has_unresolved_input()))
                     throw std::runtime_error("READ-03:" + result.code);
+                if (mode == "focus" && (result.state != runtime::TickState::Completed || ports.operations))
+                    throw std::runtime_error("FOREGROUND_RESTORE_RESTARTED_BUSINESS:" + result.code);
+                if (mode.starts_with("restart") && (result.state != runtime::TickState::Completed || executor.has_unresolved_input() || ports.operations != 1))
+                    throw std::runtime_error("MENU_RESTART_NOT_REPLANNED:" + result.code);
+                if (mode == "restart-nested" && (ports.prepares != 1 || ports.confirms != 1 || ports.transfer_pending))
+                    throw std::runtime_error("MENU_RESTART_REPLAYED_ROOT_BUSINESS");
+                if ((mode == "unknown" || mode == "effect") && (result.state != runtime::TickState::Completed || ports.operations != 1))
+                    throw std::runtime_error("PROTECTED_INPUT_NOT_REOBSERVED:" + result.code);
                 std::cout << "READ " << scenario << " inputs=" << ports.epoch << " recoveries=" << ports.recoveries << " result=" << result.code << '\n';
             }
             return 0;

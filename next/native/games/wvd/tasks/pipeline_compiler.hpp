@@ -92,9 +92,10 @@ class PipelineCompiler {
     void delay_after(const std::string &name, int milliseconds);
     void postcondition_budget(const std::string &name, int milliseconds);
     // 菜单操作的显式重试授权；ready 必须证实原页/按钮仍在且无阻塞。
-    // 不可用于付款、领奖、跳轮确认或消耗资源的动作。
+    // 领奖/宝石购买不可重复；普通金币住宿、跳轮由游戏层显式授权。
+    // restart_from仅允许本子流程的只读Route，重启后重新认页而非重跑根任务。
     void retry_menu_input(const std::string &name, const nlohmann::json &ready, int interval_ms = 5000,
-                          unsigned max_submissions = 0);
+                          unsigned max_submissions = 0, const std::string &restart_from = "");
     void input_effect(const std::string &name, const std::string &binding);
     void allowed_area(const std::string &name, nlohmann::json area);
     // 仅在正常候选全未命中、且异常处理器未接住时检查本作用域的插入出口。

@@ -45,6 +45,10 @@ export const formatApiError = (error: unknown) => error instanceof ApiError
   : error instanceof Error ? error.message : String(error);
 
 export const readVersion = () => get<Version>("/api/v1/version");
+export interface ServiceIdentity { instance_id: string; pid: number; executable: string; data_root: string; port: number }
+export const readService = () => get<ServiceIdentity>("/api/v1/service");
+export const shutdownService = (instanceId: string) => send<{ state: string; instance_id: string }>(
+  "/api/v1/service/shutdown", "POST", { instance_id: instanceId });
 export const readCapabilities = () => get<Capabilities>("/api/v1/capabilities");
 export const readProfile = () => get<ProfileEnvelope>("/api/v1/profile");
 export const readTaskProfile = (taskId: string) => send<ProfileEnvelope>("/api/v1/profile/effective", "POST", { task_id: taskId });

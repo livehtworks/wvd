@@ -32,7 +32,8 @@ struct HttpServer::Impl : std::enable_shared_from_this<HttpServer::Impl> {
     static bool control_request(const Request &request) {
         const auto raw = std::string(request.target());
         const auto path = raw.substr(0, raw.find('?'));
-        return ((request.method() == http::verb::get || request.method() == http::verb::head) &&
+        return path == "/api/v1/service" || path == "/api/v1/service/shutdown" ||
+               ((request.method() == http::verb::get || request.method() == http::verb::head) &&
                  (path == "/api/v1/runs/current" || path == "/api/v1/device" || path == "/api/v1/version")) ||
                (request.method() == http::verb::post && path.starts_with("/api/v1/runs/") && path.ends_with("/stop"));
     }
@@ -49,12 +50,15 @@ struct HttpServer::Impl : std::enable_shared_from_this<HttpServer::Impl> {
             parser.body_limit(16 * 1024 * 1024);
             parser.header_limit(8192);
         }
-        void send(Response response) { // io thread only
-            if (closed || owner->stopping) { close(); return; }
+        void send(Response response, std::function<void()> after_send = {}) { // io thread only
+            if (closed || owner->stopping) { close(); if (after_send) after_send(); return; }
             reply = std::move(response);
             finalize_response_for_send(parser.get(), reply);
             stream.expires_after(std::chrono::seconds(5));
-            http::async_write(stream, reply, [self=shared_from_this()](beast::error_code, std::size_t) { self->close(); });
+            http::async_write(stream, reply, [self=shared_from_this(), after_send=std::move(after_send)](beast::error_code, std::size_t) {
+                self->close();
+                if (after_send) after_send();
+            });
         }
         void read() {
             stream.expires_after(std::chrono::seconds(5));
@@ -74,17 +78,18 @@ struct HttpServer::Impl : std::enable_shared_from_this<HttpServer::Impl> {
                     asio::post(pool, [self] {
                         if (self->owner->stopping) return;
                         Response response;
+                        std::function<void()> after_send;
                         try {
                             response = route(self->parser.get(), self->owner->root,
-                                             self->owner->bound_port, self->owner->handler);
+                                             self->owner->bound_port, self->owner->handler, &after_send);
                         } catch (...) {
                             response = Response{http::status::internal_server_error, 11};
                             response.set(http::field::content_type, "application/json");
                             response.body() = "{\"error_code\":\"INTERNAL_ERROR\"}";
                             response.prepare_payload();
                         }
-                        asio::post(self->stream.get_executor(), [self, response=std::move(response)]() mutable {
-                            self->send(std::move(response));
+                        asio::post(self->stream.get_executor(), [self, response=std::move(response), after_send=std::move(after_send)]() mutable {
+                            self->send(std::move(response), std::move(after_send));
                         });
                     });
                 });

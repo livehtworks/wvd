@@ -24,7 +24,7 @@ class DeviceSession final : public DeviceConnection, public LifecyclePort {
     void disconnect() override;
     bool release_owned_inputs() override;
     void observation_window(std::chrono::steady_clock::time_point deadline, std::stop_token stop) override;
-    std::optional<contracts::ObservationReconnect> recover_observation() override;
+    contracts::ObservationRecovery recover_observation(bool restart_application = false) override;
     std::optional<contracts::DiagnosticPixels> failed_pixels() const override { return failed_pixels_; }
     bool settle_observed_input() override;
     RawFrame capture() override;
@@ -79,7 +79,9 @@ class DeviceSession final : public DeviceConnection, public LifecyclePort {
     std::stop_token read_stop_;
     std::optional<contracts::DiagnosticPixels> failed_pixels_;
     std::optional<std::uint64_t> recovery_origin_;
+    bool recovery_instance_detected_{};
     bool recovery_launched_{};
+    bool recovery_application_started_{};
     std::chrono::milliseconds read_budget(std::chrono::milliseconds ceiling) const;
 };
 } // namespace wvd::devices

@@ -34,11 +34,12 @@ void FlowExecutor::account_event_time() {
         const auto &current = program_.definitions.at(frame.definition).steps.at(frame.current);
         // 动画/纯Sleep的现实时间继续流逝；只有有效观察预算扣除读故障区间。
         if (event_suspended || !std::holds_alternative<workflow::Wait>(current.data)) frame.entered_at += elapsed;
-        if (frame.input_selection) frame.input_selection->entered_at += elapsed;
+        if (frame.selection_origin) frame.selection_origin->entered_at += elapsed;
         frame.paused_event_time += elapsed;
         if (frame.invocation_deadline) *frame.invocation_deadline += elapsed;
         if (frame.pending) {
             frame.pending->event_pause += elapsed;
+            if (frame.pending->selection_origin) frame.pending->selection_origin->entered_at += elapsed;
             if (event_suspended) frame.pending->animation_pause += elapsed;
         }
         if (event_suspended && frame.delay_until) *frame.delay_until += elapsed;
@@ -78,6 +79,7 @@ std::vector<FlowExecutor::ScopedEvent> FlowExecutor::effective_events(const work
 std::optional<TickResult> FlowExecutor::check_unexpected(Frame &frame, const workflow::Step &current,
     const contracts::FrameEnvelope &image, const std::string &reason, bool force) {
     if (!frame.no_progress_since) frame.no_progress_since = Clock::now();
+    if (exception_restart_supported_ && !exception_since_) exception_since_ = Clock::now();
     // 一帧 NoHit 常是动画/加载，不是异常。这里只延迟诊断，不缩短原业务等待预算。
     const auto now = Clock::now();
     const auto &policy = program_.definitions.at(frame.definition).checks;
@@ -288,7 +290,7 @@ TickResult FlowExecutor::resume_event(Frame &frame, const workflow::Step &curren
     if (found->second.max_hit > 0) ++target.hits[found->first];
     target.next_pending = target.error_pending = false;
     target.selected_frame.reset(); target.selected_observation.reset();
-    target.input_selection.reset();
+    target.selection_origin.reset();
     target.resume.reset(); target.delay_until.reset(); target.event_exits.clear();
     target.entered_at = Clock::now(); // 仅新步骤起点，phase_deadlines 与全任务期限不重置。
     invalidate_observation();

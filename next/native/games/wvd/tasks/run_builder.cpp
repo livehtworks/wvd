@@ -65,7 +65,7 @@ std::function<std::optional<devices::LifecyclePlan>(const contracts::SessionResu
         const contracts::BusinessRunState &business, unsigned attempt)
         -> std::optional<devices::LifecyclePlan> {
         if (result.end != contracts::SessionEnd::Failed || !result.quiescent ||
-            attempt < 1 || attempt > 3) return std::nullopt;
+            attempt < 1) return std::nullopt;
         const auto facts = business.summary();
         if (handoff_has_unconfirmed_effect(facts)) return std::nullopt;
         const auto leap = facts.value("handoff_intent", J(nullptr));
@@ -84,8 +84,9 @@ std::function<std::optional<devices::LifecyclePlan>(const contracts::SessionResu
         const bool instance_exited = result.reason == "device.instance_exited";
         const bool disconnected = result.reason == "device.disconnected";
         const bool application_exited = result.reason == "device.application_exited";
+        const bool application_background = result.reason == "device.application_background";
         if (!deferred_leap && !frozen_pause && !stalled_game &&
-            !instance_exited && !disconnected && !application_exited) return std::nullopt;
+            !instance_exited && !disconnected && !application_exited && !application_background) return std::nullopt;
         devices::LifecyclePlan plan;
         plan.target = target;
         plan.attempt = attempt;
@@ -97,7 +98,7 @@ std::function<std::optional<devices::LifecyclePlan>(const contracts::SessionResu
         if (disconnected) plan.operations.push_back(devices::LifecycleOperation::Reconnect);
         if (target.vpn_required) plan.operations.push_back(devices::LifecycleOperation::EnsureVpn);
         // 设备恢复或游戏已退出不再重复force-stop；保留仍在前台的正常游戏。
-        if (!instance_exited && !disconnected && !application_exited)
+        if (!instance_exited && !disconnected && !application_exited && !application_background)
             plan.operations.push_back(devices::LifecycleOperation::StopApplication);
         plan.operations.push_back(devices::LifecycleOperation::StartApplication);
         return plan;

@@ -25,6 +25,7 @@ inline nlohmann::json input_blockers(const std::string &phase = {}) {
 inline nlohmann::json exception_probes() {
     using J = nlohmann::json;
     J probes = J::array({network_prompt_zh_hant(), download_button_zh_hant(), download_button_en()});
+    probes.push_back(resource("boot.announcement.page"));
     for (const auto &[image, threshold] : {std::pair{"retry_blank", .65}, std::pair{"retry", .8},
                                          std::pair{"retry", .60}, std::pair{"totitle", .8}})
         probes.push_back({{"mode", "template"}, {"image", image}, {"threshold", threshold}});
@@ -49,6 +50,7 @@ inline nlohmann::json special_screen_probes() {
 inline nlohmann::json blocking_probes(bool include_party_prompts = true) {
     using J = nlohmann::json;
     J probes = J::array();
+    probes.push_back(resource("boot.announcement.page"));
     auto add = [&](const char *image, J roi = nullptr, double threshold = .8) {
         J p{{"mode", "template"}, {"image", image}, {"threshold", threshold}};
         if (!roi.is_null())

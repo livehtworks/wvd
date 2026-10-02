@@ -2,6 +2,7 @@
 #include "platform/execution_timing.hpp"
 #include "dialogue_probes.hpp"
 #include "native_asset_resolver.hpp"
+#include "search_regions.hpp"
 #include "bobber.hpp"
 #include "games/wvd/fishing/unknown_window.hpp"
 #include "boot_probes.hpp"
@@ -70,32 +71,27 @@ J decision(bool hit, cv::Rect area, J evidence, bool target = false) {
 }
 J dungeon_map_probe(const J &bound) {
     if (bound.value("resource_locale", std::string{}) == "zh-Hant")
-        return {{"mode", "template"}, {"image", "dungeon_map_close_zh_hant"},
-            {"threshold", 0.8}, {"roi", {300, 1460, 300, 130}}};
+        return resource("dungeon.map.open", "zh-Hant");
     return {{"mode", "template"}, {"image", "mapFlag"}, {"threshold", 0.8}};
 }
 J combat_detail_probe(const J &bound) {
     if (bound.value("resource_locale", std::string{}) == "zh-Hant")
-        return {{"mode", "template"}, {"image", "combat_skill_detail_zh_hant"},
-            {"threshold", 0.82}, {"roi", {750, 800, 130, 150}}};
+        return resource("combat.skill.detail", "zh-Hant");
     return {{"mode", "template"}, {"image", "spellskill/skillDetail"}, {"threshold", 0.8}};
 }
 J combat_confirm_probe(const J &bound) {
     if (bound.value("resource_locale", std::string{}) == "zh-Hant")
-        return {{"mode", "template"}, {"image", "combat_skill_confirm_zh_hant"},
-            {"threshold", 0.82}, {"roi", {420, 1420, 340, 160}}};
+        return resource("combat.skill.confirm", "zh-Hant");
     return {{"mode", "template"}, {"image", "OK"}, {"threshold", 0.8}};
 }
 J character_panel_probe(const J &bound) {
     if (bound.value("resource_locale", std::string{}) == "zh-Hant")
-        return {{"mode", "template"}, {"image", "character_panel_zh_hant"},
-            {"threshold", 0.84}, {"roi", {90, 1400, 240, 190}}};
+        return resource("character.panel", "zh-Hant");
     return {{"mode", "template"}, {"image", "trait"}, {"threshold", 0.8}};
 }
 J recovery_panel_probe(const J &bound) {
     if (bound.value("resource_locale", std::string{}) == "zh-Hant")
-        return {{"mode", "template"}, {"image", "recovery_panel_zh_hant"},
-            {"threshold", 0.84}, {"roi", {250, 300, 400, 220}}};
+        return resource("dungeon.recovery.panel", "zh-Hant");
     return {{"mode", "template"}, {"image", "recover"}, {"threshold", 0.8}};
 }
 J match(const cv::Mat &source, cv::Mat templ, J p, recognition::Cache &cache,
@@ -191,6 +187,9 @@ J match(const cv::Mat &source, cv::Mat templ, J p, recognition::Cache &cache,
     cv::Rect found(main.x + location.x, main.y + location.y, templ.cols, templ.rows);
     J evidence{{"best_score", maximum},
                {"best_box", box(found)},
+               {"search_roi", box(main)},
+               {"template_size", {templ.cols, templ.rows}},
+               {"translation_travel_px", {main.width - templ.cols, main.height - templ.rows}},
                {"threshold", threshold},
                {"scale", scale},
                {"method", bright ? "CCORR_NORMED_BRIGHT_MASK" :
@@ -1223,13 +1222,13 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
         if (!p.contains("roi") && p.value("default_roi", false)) {
             const auto name = p.at("image").get<std::string>();
             if (name == "next" || name == "combatTarget")
-                parameters["roi"] = {80, 220, 819, 680};
+                parameters["roi"] = combat_target_search_roi();
             else if (name == "flee")
-                parameters["roi"] = {720, 1120, 180, 130};
+                parameters["roi"] = {660, 1080, 240, 220};
             else if (name == "combatActive" || name == "combatActive_2" ||
                      name == "combatActive_3" || name == "combatActive_4" ||
                      name == "combat_active_zh_hant")
-                parameters["roi"] = {0, 0, 150, 80};
+                parameters["roi"] = {0, 0, 210, 105};
             if (parameters.contains("roi"))
                 parameters["roi_source"] = "default";
         }
@@ -1263,7 +1262,7 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
     if (mode == "next_low_confidence" || mode == "target_marker") {
         auto result = one(
             mode == "target_marker" ? "combatTarget" : "next",
-            {{"roi", {80, 220, 819, 680}}, {"threshold", mode == "target_marker" ? 0.86 : 0.60}});
+            {{"roi", combat_target_search_roi()}, {"threshold", mode == "target_marker" ? 0.86 : 0.60}});
         result["action_eligible"] = mode != "next_low_confidence";
         return result;
     }
@@ -1271,7 +1270,7 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
         J attempts = J::array();
         for (const auto &name : {"next", "combatTarget"}) {
             for (double scale : p.value("scales", std::vector<double>{1.0})) {
-                auto result = one(name, {{"roi", {80, 220, 819, 680}},
+                auto result = one(name, {{"roi", combat_target_search_roi()},
                                          {"threshold", p.value("threshold", 0.86)},
                                          {"scale", scale}});
                 attempts.push_back({{"image", name}, {"result", result}});
@@ -1309,7 +1308,7 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
             return decision(false, {}, detail);
         J negative_probes = J::array({character_panel_probe(bound), recovery_panel_probe(bound),
             combat_detail_probe(bound), J{{"mode", "template"}, {"image", "close"},
-                {"roi", {250, 1420, 420, 150}}}});
+                {"roi", {120, 1330, 740, 270}}}});
         for (const auto &probe : negative_probes) {
             const auto name = probe.at("image").get<std::string>();
             auto evidence = evaluate_impl(bundle, pixels, probe, bound, scope, cache, depth + 1, memo);
@@ -1329,7 +1328,7 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
         J attempts = J::array();
         for (const auto &name :
               {"combat_active_zh_hant", "combatActive", "combatActive_2", "combatActive_3", "combatActive_4"}) {
-            auto result = one(name, {{"roi", {0, 0, 150, 80}}});
+            auto result = one(name, {{"roi", {0, 0, 210, 105}}});
             attempts.push_back(result);
             if (result["outcome"] == "Hit") {
                 result["attempts"] = attempts;
@@ -1358,12 +1357,12 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
             bound, scope, cache, depth + 1, memo);
         auto ok = evaluate_impl(bundle, pixels, combat_confirm_probe(bound),
             bound, scope, cache, depth + 1, memo);
-        auto support = one("supportSkillCheck", {{"roi", {677, 1475, 189, 80}}});
+        auto support = one("supportSkillCheck", {{"roi", {580, 1350, 320, 250}}});
         if (detail.at("outcome") != "Hit" || ok.at("outcome") == "Hit" || support.at("outcome") == "Hit")
             return decision(false, {}, {{"reason", "not_enemy_selection"}});
         J attempts = J::array();
         for (const auto &candidate : {std::pair{"next", .86}, std::pair{"combatTarget", .86}, std::pair{"next", .60}}) {
-            auto result = one(candidate.first, {{"roi", {80, 220, 819, 680}}, {"threshold", candidate.second}});
+            auto result = one(candidate.first, {{"roi", combat_target_search_roi()}, {"threshold", candidate.second}});
             attempts.push_back(result);
             if (result.at("outcome") == "Hit") {
                 result["evidence"]["attempts"] = attempts;
@@ -1379,31 +1378,29 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
         auto name = p.at("image").get<std::string>();
         auto templ = assets.load(name);
         int w = templ.cols, h = templ.rows;
-        std::vector<cv::Point> bases{{87, 55}, {24, 55}, {24, 63}, {32, 55}};
-        if (p.contains("active"))
-            bases.push_back(
-                {int(p["active"][0].get<int>() - w * 0.35), p["active"][1].get<int>() + 35});
+        // 裁片选择负责避开等级/姓名；搜索范围负责位置容差，二者不能相等。
+        // 旧实现ROI恰好等于裁片大小，每个猜测坐标只做一次像素对齐比较。
+        auto search_roi = active_actor_search_roi();
+        if (p.contains("active")) search_roi[1] = p.at("active").at(1).get<int>() + 15;
+        const auto search_area = rect(search_roi, image.size());
+        check((search_area & allowed_rect) == search_area, "WVD_ROI_OUTSIDE_SCOPE");
         std::vector<cv::Rect> crops{{0, 0, w, h},
                                     {w * 40 / 100, 0, w - w * 40 / 100, h},
                                     {w * 33 / 100, 0, w - w * 33 / 100, h * 80 / 100},
                                     {0, 0, w, h * 70 / 100}};
         J best;
         double score = -2;
-        for (auto base : bases)
-            for (auto crop : crops) {
-                auto result =
-                    match(image, templ,
-                          {{"roi", {base.x + crop.x, base.y + crop.y, crop.width, crop.height}},
-                           {"crop", box(crop)},
-                           {"threshold", p.value("threshold", 0.8)}},
-                          cache, assets.canonical_key(name));
-                if (result["evidence"]["best_score"].get<double>() > score) {
-                    score = result["evidence"]["best_score"];
-                    best = result;
-                    best["evidence"]["base"] = {base.x, base.y};
-                    best["evidence"]["crop"] = box(crop);
-                }
+        for (auto crop : crops) {
+            auto result = match(image, templ,
+                {{"roi", box(search_area)}, {"crop", box(crop)},
+                 {"threshold", p.value("threshold", 0.8)}},
+                cache, assets.canonical_key(name));
+            if (result["evidence"]["best_score"].get<double>() > score) {
+                score = result["evidence"]["best_score"];
+                best = result;
+                best["evidence"]["crop"] = box(crop);
             }
+        }
         return best;
     }
     if (mode == "skill_level") {

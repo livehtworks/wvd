@@ -134,7 +134,7 @@ Step translate(const std::string &id, const J &node, const J &paths,
             const auto &retry = p.at("retry");
             input.retry = workflow::InputRetry{request(retry.at("ready")),
                 std::chrono::milliseconds{retry.at("interval_ms").get<int>()},
-                retry.value("max_submissions", 0U)};
+                retry.value("max_submissions", 0U), retry.value("restart_from", "")};
         }
         input.effect_binding = p.value("effect_binding", "");
         step.data = std::move(input);

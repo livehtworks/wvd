@@ -224,10 +224,13 @@ void NativeRunCoordinator::drive(const NativeRunDefinition &definition,
                         {{"source_path", source}});
                 };
                 auto factory = definition.operations(*business, event, checkpoint);
+                // 共享最后一帧的既有缓冲，不额外取图/解码；只供同一工作线程重启前落盘。
+                auto recovery_frame = std::make_shared<std::optional<contracts::FrameEnvelope>>();
                 auto session = std::make_shared<NativeExecutionSession>(unit.program,
                     *backend, recognizer, *business, definition.policy, generation,
                     std::min(unit.time_limit, remaining), std::move(factory),
-                    [this, generation](const nlohmann::json &progress) {
+                    [this, generation, index, recovery_frame, restart_diagnostic_started = 0ULL]
+                    (const nlohmann::json &progress) mutable {
                         bool step_changed = false;
                         bool recovery_changed = false;
                         nlohmann::json previous_pending = nlohmann::json::array();
@@ -247,6 +250,21 @@ void NativeRunCoordinator::drive(const NativeRunDefinition &definition,
                         }
                         if (recovery_changed && !progress.value("observation_recovery", nlohmann::json(nullptr)).is_null())
                             journal_->emit(generation, "observation.recovery", progress.at("observation_recovery"));
+                        const auto recovery = progress.value("observation_recovery", nlohmann::json(nullptr));
+                        if (recovery.is_object() && recovery.value("active", false) &&
+                            recovery.value("code", "") == "CONTINUOUS_EXCEPTION_TIMEOUT" &&
+                            recovery.value("started_at_ns", 0ULL) != restart_diagnostic_started) {
+                            restart_diagnostic_started = recovery.value("started_at_ns", 0ULL);
+                            try {
+                                storage::DiagnosticRequest request;
+                                { std::lock_guard lock(mutex_); request.run_id = snapshot_.run_id; }
+                                request.generation = generation; request.unit_index = index;
+                                request.node = progress.value("step_id", ""); request.reason = "CONTINUOUS_EXCEPTION_TIMEOUT";
+                                request.stage = "recovery_entry"; request.evidence_kind = "before_application_restart";
+                                journal_->emit(generation, "diagnostic.application_restart",
+                                    store_->save_diagnostic(recovery_frame->has_value() ? &**recovery_frame : nullptr, request));
+                            } catch (...) { store_->note_diagnostic_hook_failure(); }
+                        }
                         if (step_changed) {
                             auto source = nlohmann::json::parse(progress.value("source_path", ""), nullptr, false);
                             if (source.is_discarded()) source = progress.value("source_path", "");
@@ -271,8 +289,21 @@ void NativeRunCoordinator::drive(const NativeRunDefinition &definition,
                         store_->append_timing(generation, type, input);
                         journal_->emit(generation, type, input);
                     },
-                    [this, generation, warned = false](const contracts::FrameEnvelope &frame) mutable {
-                        try { store_->save_recent_frame(frame); }
+                    [this, generation, index, event, recovery_frame, application = definition.policy.application_id, warned = false]
+                    (const contracts::FrameEnvelope &frame) mutable {
+                        *recovery_frame = frame;
+                        try {
+                            if (frame.identity.foreground_application != application && frame.raw_bgr) {
+                                storage::DiagnosticRequest request;
+                                { std::lock_guard lock(mutex_); request.run_id = snapshot_.run_id; }
+                                request.generation = generation; request.unit_index = index;
+                                request.node = "capture.foreground"; request.reason = "GAME_NOT_FOREGROUND";
+                                request.stage = "recovery_entry"; request.evidence_kind = "foreground_lost_pixels";
+                                const contracts::DiagnosticPixels pixels{frame.identity.raw_size, frame.raw_bgr,
+                                    frame.identity.captured_at, frame.identity.device_id, frame.identity.backend};
+                                event("diagnostic.foreground_lost", store_->save_diagnostic(nullptr, request, &pixels));
+                            } else store_->save_recent_frame(frame);
+                        }
                         catch (const std::exception &error) {
                             if (!warned) {
                                 warned = true;
@@ -398,16 +429,12 @@ void NativeRunCoordinator::drive(const NativeRunDefinition &definition,
                         {"unresolved_input", result.unresolved_input}, {"observation_recovery", result.observation_recovery},
                         {"cleanup_error", result.cleanup_error}, {"performance", result.performance}});
                 }
-                // 外部维护/输入结果未知不是重启理由，禁止进入自动生命周期恢复。
-                if (stop_ || !quiescent || result.unresolved_input || !result.details_complete ||
-                    result.flow.state == TickState::BusinessFailed ||
-                    result.flow.state == TickState::ExternalBlocked || !definition.recovery ||
-                    recovery_attempt >= 3) break;
                 auto *lifecycle = backend->lifecycle_port();
                 auto recovery_result = last;
                 // 业务判定与基础设施故障分开：只有实际设备观察能选中重连/实例恢复。
                 // 原始flow_code与session.ended保留，不能用恢复理由覆盖事故证据。
-                if (lifecycle && !backend->offline()) {
+                // 输入未确认仍可只读记录设备真相；观察不授权重放，也不覆盖原错误。
+                if (!stop_ && quiescent && lifecycle && !backend->offline()) try {
                     const auto observed = lifecycle->observe_lifecycle();
                     if (observed) {
                         require(observed->target.device_id == definition.policy.device_id,
@@ -417,11 +444,21 @@ void NativeRunCoordinator::drive(const NativeRunDefinition &definition,
                             recovery_result.reason = "device.disconnected";
                         else if (observed->connected && !observed->application_running)
                             recovery_result.reason = "device.application_exited";
+                        else if (observed->connected && !observed->application_foreground)
+                            recovery_result.reason = "device.application_background";
                         event("recovery.device_observed", {{"reason", recovery_result.reason},
                             {"original_reason", last.reason}, {"instance_exited", observed->instance_exited},
-                            {"connected", observed->connected}, {"application_running", observed->application_running}});
+                            {"connected", observed->connected}, {"application_running", observed->application_running},
+                            {"application_foreground", observed->application_foreground},
+                            {"unresolved_input", result.unresolved_input}});
                     }
+                } catch (const std::exception &error) {
+                    event("recovery.observation_failed", {{"reason", error.what()}, {"original_reason", last.reason}});
                 }
+                // 外部维护/副作用未知不授权整段重跑；同一Session的读图恢复先处理现场。
+                if (stop_ || !quiescent || result.unresolved_input || !result.details_complete ||
+                    result.flow.state == TickState::BusinessFailed ||
+                    result.flow.state == TickState::ExternalBlocked || !definition.recovery) break;
                 auto plan = definition.recovery(recovery_result, *business, recovery_attempt + 1);
                 if (!plan) break;
                 devices::validate_lifecycle_plan(*plan);

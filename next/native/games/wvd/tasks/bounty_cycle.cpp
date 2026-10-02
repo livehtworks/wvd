@@ -42,7 +42,10 @@ CompiledWorkflow return_to_bounty_city(bool guild) {
     graph.call_child("LeaveHarken", harken_exit, {"Entry"});
     const auto return_harken = graph.define_child("ReturnHarken", navigation::auto_route("dungFlag"));
     graph.observe("Dungeon", C::all({C::image("dungFlag"), C::absent(map), C::absent(encounter)}), {"GoHarken"});
-    graph.call_child("GoHarken", return_harken, {"Entry"}, {{"blocked", {"Entry"}}, {"encounter", {"RecoveryRequired"}}, {"stopped", {"RecoveryRequired"}}});
+    // 返哈肯途中遇怪/宝箱或导航暂时停止是业务插入，交还调用者处理后再续返城。
+    graph.call_child("GoHarken", return_harken, {"Entry"}, {{"blocked", {"Entry"}}, {"encounter", {"EncounterExit"}}, {"stopped", {"StoppedExit"}}});
+    graph.handoff("EncounterExit", "encounter");
+    graph.handoff("StoppedExit", "stopped");
     if (!guild)
         for (std::size_t i = 0; i < exits.size(); ++i) {
             const auto image = C::image(exits[i]);
@@ -94,6 +97,7 @@ CompiledWorkflow bounty_cycle(const WvdQuestDefinition &definition, const J &pro
     // 普通蝎女路线的第二步是快捷返哈肯，不再在战后重新选地图坐标。
     const auto first_route = traverse_dungeon(jier ? first_plan.with_route(jier_positions) : first_plan, profile, images, allow_download, dialogue);
     C graph("tasks." + definition.id, first_route.time_limit + std::chrono::seconds{360});
+    const auto first_dungeon = graph.define_child("FirstDungeon", first_route);
     const auto inn = vision::inn_button(), guild = vision::guild_button(),
                edge = vision::edge_of_town_button(), map = C::image("mapFlag");
     const auto royal_city = vision::royal_city();
@@ -131,18 +135,45 @@ CompiledWorkflow bounty_cycle(const WvdQuestDefinition &definition, const J &pro
     const auto ruins_title = C::any({C::image("cursedWheelTitle"), C::image("cursedWheelTitle_zh_hant")});
     const auto ruins_ready = C::all({ruins_menu, C::absent(ruins_title),
         J{{"mode", "input_clear"}, {"phase", "navigation"}}});
-    const auto inspect_ready = C::any({vision::city_screen(), board_page,
-        library.resource_condition("guild.menu", locale, authoring::ResourceUse::Observation)});
-    graph.route("InspectBoard", locale == "zh-Hant" ? J{"CloseLateOldReveal", "InspectReady", "InspectOutside", "LeaveRuinsForInspection"}
-        : J{"InspectReady", "InspectOutside", "LeaveRuinsForInspection"});
+    J inspect_ready_pages = {vision::city_screen(), board_page,
+        library.resource_condition("guild.menu", locale, authoring::ResourceUse::Observation)};
+    if (locale == "zh-Hant")
+        inspect_ready_pages.push_back(library.resource_condition("guild.commissions.page", locale,
+            authoring::ResourceUse::Observation));
+    const auto inspect_ready = C::any(inspect_ready_pages);
+    // 服务重启不保留上一轮内存账目，但游戏可能仍在战斗/迷宫。
+    // 先结束现场遭遇并返城，再查看可提交报告；不能凭此补记上一轮成功或直接跳轮。
+    const J current_combat{{"mode", "combat_active"}};
+    graph.route("InspectBoard", locale == "zh-Hant" ? J{"InspectCombat", "InspectChest", "InspectRevive", "InspectDungeon", "CloseLateOldReveal", "InspectReady", "InspectOutside", "LeaveRuinsForInspection"}
+        : J{"InspectCombat", "InspectChest", "InspectRevive", "InspectDungeon", "InspectReady", "InspectOutside", "LeaveRuinsForInspection"});
+    // 复用正式副本中已定义的战斗子流程及其Return出口，不复制整张角色/技能图。
+    const auto unfinished_battle = "FirstDungeon_" +
+        first_route.nodes.at("Fight").at("operation_args").at("entry").get<std::string>();
+    graph.route("RecoverReturn", {"InspectCombat", "InspectChest", "InspectRevive", "ResumeReturn"});
+    graph.route("ResumeReturn", {"Entry"});
+    graph.observe("InspectCombat", current_combat, {"FinishBattleForInspection"});
+    graph.call_child("FinishBattleForInspection", unfinished_battle, {"Entry"},
+        {{"blocked", {"RecoverReturn"}}, {"chest", {"RecoverReturn"}}, {"revive", {"RecoverReturn"}}});
+    graph.observe("InspectChest", first_route.nodes.at("Chest").at("observation_args"), {"FinishChestForInspection"});
+    graph.call_child("FinishChestForInspection", "FirstDungeon_" +
+        first_route.nodes.at("OpenChest").at("operation_args").at("entry").get<std::string>(), {"Entry"},
+        {{"combat", {"RecoverReturn"}}, {"revive", {"RecoverReturn"}}, {"ambush", {"RecoverReturn"}},
+         {"blocked", {"RecoverReturn"}}, {"retry", {"RecoverReturn"}}});
+    graph.observe("InspectRevive", first_route.nodes.at("Revive").at("observation_args"), {"ReviveForInspection"});
+    graph.call_child("ReviveForInspection", "FirstDungeon_" +
+        first_route.nodes.at("Resurrect").at("operation_args").at("entry").get<std::string>(), {"Entry"});
+    graph.observe("InspectDungeon", C::all({C::image("dungFlag"), C::absent(current_combat),
+        C::absent(C::image("chestFlag")), C::absent(C::image("RiseAgain"))}), {"ReturnForInspection"});
     const auto inspect_return = graph.define_child("InspectReturnCity", return_to_bounty_city(true));
     graph.observe("InspectOutside", vision::outskirts_return_button(), {"ReturnForInspection"});
-    graph.call_child("ReturnForInspection", inspect_return, {"InspectBoard"});
+    graph.call_child("ReturnForInspection", inspect_return, {"InspectBoard"},
+        {{"encounter", {"RecoverReturn"}}, {"stopped", {"RecoverReturn"}}});
     if (locale == "zh-Hant") {
         const auto reveal = library.resource_condition("guild.bounty.reveal.close", locale, authoring::ResourceUse::Position);
         // 跳轮后的联网展示卡可以晚于开页回执到达；关卡后仍重新进入悬赏页查报告。
         // 只确认关闭展示，不把它当作领取/提交，也不因此直接开始下一次跳轮。
-        graph.click("CloseLateOldReveal", reveal, reveal,
+        // “關閉”不是公会独有控件，技能详情也有；战斗中不得借公会步骤关闭它。
+        graph.click("CloseLateOldReveal", C::all({reveal, C::absent(current_combat)}), reveal,
             C::any({board_page, reveal, library.resource_condition("guild.menu", locale, authoring::ResourceUse::Observation)}),
             {"InspectBoard"});
         graph.delay_after("CloseLateOldReveal", 700);
@@ -206,7 +237,7 @@ CompiledWorkflow bounty_cycle(const WvdQuestDefinition &definition, const J &pro
         graph.observe(name + "RoutePhase", phase(second ? Phase::SecondRoute : Phase::FirstRoute), {name + "Enter"});
         const auto entry = graph.define_child(name + "Entry", navigation::enter_dungeon(plan));
         graph.call_child(name + "Enter", entry, {name + "Traverse"});
-        const auto route = graph.define_child(name + "Dungeon", second ? traverse_dungeon(plan, profile, images, allow_download) : first_route);
+        const auto route = second ? graph.define_child(name + "Dungeon", traverse_dungeon(plan, profile, images, allow_download)) : first_dungeon;
         graph.call_child(name + "Traverse", route, {name + "Points", "Incomplete"});
         graph.observe(name + "Points", C::business("/task_step", 2), {jier ? "LeaveByHarken" : name + "RouteDone"});
         if (jier) {
@@ -218,7 +249,8 @@ CompiledWorkflow bounty_cycle(const WvdQuestDefinition &definition, const J &pro
                  : plan.route().back().harken_arrival ? C::any({map, vision::harken_floor_menu()}) : map,
             {name + "ReturnPhase"});
         graph.observe(name + "ReturnPhase", phase(second ? Phase::SecondReturn : Phase::FirstReturn), {name + "Return"});
-        graph.call_child(name + "Return", return_guild, {name + "Returned"});
+        graph.call_child(name + "Return", return_guild, {name + "Returned"},
+            {{"encounter", {"RecoverReturn"}}, {"stopped", {"RecoverReturn"}}});
         graph.confirm(name + "Returned", "bounty.return." + name, "bounty_return_completed", guild, {"Terminal"});
     }
     graph.recovery("Incomplete", "quest.bounty_route_incomplete");

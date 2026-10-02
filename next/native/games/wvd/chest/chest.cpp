@@ -12,7 +12,7 @@ tasks::CompiledWorkflow open_chest(int preferred_character, bool quick, std::uin
     graph.check_policy("chest", {"wvd-network-retry", "wvd-pause", "wvd-download"});
     const auto flag = C::image("chestFlag"), choose = C::image("whowillopenit"), opening = C::image("chestOpening");
     auto reward = C::image("chest_reward_advance");
-    reward["roi"] = {750, 1400, 150, 150};
+    reward["roi"] = {730, 1330, 170, 270};
     const J combat{{"mode", "combat_active"}};
     const auto revive = C::image("RiseAgain"), ambush = C::image("ambush");
     const auto interrupted = C::any({combat, revive, ambush});

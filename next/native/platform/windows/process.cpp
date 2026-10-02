@@ -98,6 +98,50 @@ struct AttributeList {
 
 } // namespace
 
+std::uint32_t launch_background(const std::filesystem::path &executable,
+                               const std::vector<std::wstring> &arguments,
+                               const std::filesystem::path &stdout_log,
+                               const std::filesystem::path &stderr_log) {
+    if (!executable.is_absolute() || !std::filesystem::is_regular_file(executable) ||
+        !stdout_log.is_absolute() || !stderr_log.is_absolute() || stdout_log == stderr_log)
+        throw std::runtime_error("BACKGROUND_ARGUMENTS_INVALID");
+    std::wstring command = quote(executable.wstring());
+    for (const auto &argument : arguments) {
+        if (argument.find(L'\0') != std::wstring::npos)
+            throw std::runtime_error("PROCESS_ARGUMENT_NUL");
+        command += L" " + quote(argument);
+    }
+    SECURITY_ATTRIBUTES security{sizeof(security), nullptr, TRUE};
+    Handle input(CreateFileW(L"NUL", GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                            &security, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
+    Handle out(CreateFileW(stdout_log.c_str(), GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                          &security, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
+    Handle err(CreateFileW(stderr_log.c_str(), GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                          &security, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
+    if (input.value == INVALID_HANDLE_VALUE || out.value == INVALID_HANDLE_VALUE ||
+        err.value == INVALID_HANDLE_VALUE)
+        throw std::runtime_error("BACKGROUND_LOG_OPEN_FAILED");
+    // 仅传这三个句柄。Windows PowerShell 5.1的Start-Process会额外继承Shell管道，
+    // 即使重定向标准流，启动命令也可能一直等待后台退出才收到EOF。
+    std::array<HANDLE, 3> handles{input.value, out.value, err.value};
+    AttributeList attributes;
+    attributes.create(handles);
+    STARTUPINFOEXW startup{};
+    startup.StartupInfo.cb = sizeof(startup);
+    startup.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
+    startup.StartupInfo.hStdInput = input.value;
+    startup.StartupInfo.hStdOutput = out.value;
+    startup.StartupInfo.hStdError = err.value;
+    startup.lpAttributeList = attributes.list;
+    PROCESS_INFORMATION process{};
+    if (!CreateProcessW(executable.c_str(), command.data(), nullptr, nullptr, TRUE,
+                       EXTENDED_STARTUPINFO_PRESENT | CREATE_NO_WINDOW, nullptr, nullptr,
+                       &startup.StartupInfo, &process))
+        throw std::runtime_error("BACKGROUND_START_FAILED: " + std::to_string(GetLastError()));
+    Handle child(process.hProcess), thread(process.hThread);
+    return process.dwProcessId;
+}
+
 ProcessResult run_process(const std::filesystem::path &executable,
                           const std::vector<std::wstring> &arguments,
                           std::chrono::milliseconds timeout, std::stop_token stop,

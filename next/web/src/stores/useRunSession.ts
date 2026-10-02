@@ -8,6 +8,7 @@ function createSession() {
   const device = ref<DeviceState>();
   const starting = ref(false);
   const stopping = ref(false);
+  const serviceClosing = ref(false);
   const lastSuccess = ref(0);
   const now = ref(Date.now());
   const linkError = ref("");
@@ -21,7 +22,7 @@ function createSession() {
   let runFlight: Promise<void> | undefined;
   let deviceFlight: Promise<void> | undefined;
   let timer: number | undefined;
-  const fresh = computed(() => !linkError.value && lastSuccess.value > 0 && now.value - lastSuccess.value <= 5000);
+  const fresh = computed(() => !serviceClosing.value && !linkError.value && lastSuccess.value > 0 && now.value - lastSuccess.value <= 5000);
   const busy = computed(() => starting.value || runBusy(run.value));
   const canStart = computed(() => fresh.value && !busy.value && !stopping.value);
   const label = computed(() => !fresh.value ? "状态未知" : stopping.value ? "停止结果待确认" : starting.value ? "提交启动请求" : displayRunState(run.value));
@@ -31,6 +32,7 @@ function createSession() {
 
   // 全 App 每种 GET 最多一个在途请求；命令前的旧读取不允许覆盖命令后的状态。
   function refreshRun(): Promise<void> {
+    if (serviceClosing.value) return Promise.resolve();
     if (runFlight) return runFlight;
     const epoch = generation;
     runFlight = (async () => {
@@ -47,6 +49,7 @@ function createSession() {
     return runFlight;
   }
   function refreshDevice(): Promise<void> {
+    if (serviceClosing.value) return Promise.resolve();
     if (deviceFlight) return deviceFlight;
     const epoch = deviceGeneration;
     deviceFlight = (async () => {
@@ -99,10 +102,15 @@ function createSession() {
     const value = await send();
     if (alive) device.value = value;
   }
+  function closeServiceSession() {
+    serviceClosing.value = true;
+    ++generation; ++deviceGeneration;
+    window.clearInterval(timer);
+  }
   onMounted(() => { void refresh(); timer = window.setInterval(() => { now.value = Date.now(); void refresh(); }, 1500); });
   onBeforeUnmount(() => { alive = false; ++generation; ++deviceGeneration; window.clearInterval(timer); });
   return reactive({ run, device, starting, stopping, fresh, busy, canStart, label, error, deviceError,
-    lastSuccess, intent, writing, refresh, submit, requestStop, deviceCommand });
+    lastSuccess, intent, writing, refresh, submit, requestStop, deviceCommand, closeServiceSession });
 }
 type Session = ReturnType<typeof createSession>;
 const key: InjectionKey<Session> = Symbol("run-session");
