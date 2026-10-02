@@ -31,4 +31,6 @@ ProfileStore为唯一配置写入者。旧profile先检查revision，保留完�
 
 ## 部署核对
 
+2026-10-03已将待提交修复、素材及识别/诊断接入统一提交为`76ef381`，推送个人fork的`agent/local-stability-notes`。重新构建部署candidate70，清单源码身份对应该提交；原17654、原data目录，服务Idle、run_id=0，profile哈希未变。证据为`next/.local/commit-deploy-service.log`和`next/.local/commit-deploy-verification.json`；`.vscode`本机设置未纳入提交。本报告的此次补充是部署后记录，不改变已部署二进制。
+
 candidate69使用既有17654和原data目录；部署/身份/空闲状态及正式配置迁移核对写入`next/.local/strategy-frequency-deploy.log`、`next/.local/strategy-frequency-deployment-check.json`。仅在这些证据完成后认定部署完成。旧candidate68与迁移备份保留供人工恢复。
