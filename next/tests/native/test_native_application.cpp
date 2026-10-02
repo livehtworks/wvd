@@ -1,10 +1,14 @@
 #include "app/application.hpp"
+#include "games/wvd/tasks/public_step_scope.hpp"
 #include "platform/windows/file_digest.hpp"
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
 #include <iostream>
 #include <thread>
 #include <fstream>
+#include <windows.h>
+#include <dbghelp.h>
+#pragma comment(lib, "dbghelp.lib")
 
 namespace wvd::app {
 // 仅测试替换磁盘查询依赖；生产 API 不暴露容量覆盖或离线开关。
@@ -16,6 +20,14 @@ struct ApplicationAssemblyTestAccess {
         };
     }
     static runtime::NativeRunCoordinator &coordinator(Application &app) { return *app.coordinator_; }
+    static runtime::NativeRunDefinition prepare_author(Application &app, const nlohmann::json &document,
+                                                       const nlohmann::json &stored) {
+        const auto library = app.workflow_store_->snapshot_closure(document, games::tasks::native_public_steps);
+        return app.assemble_workflow({{"revision", document.at("revision")},
+            {"request_id", "critical-author-entry"}}, stored, document,
+            {"offline-product", "offline-instance", "jp.co.drecom.wizardry.daphne", "", false},
+            nullptr, library);
+    }
     static void watch(Application &app, const std::shared_ptr<devices::DeviceConnection> &backend,
                       const std::string &id) {
         app.watch_task_session({{"task_id", "Scorpionesses"}, {"repeat", true}, {"repeat_count", 2}},
@@ -218,6 +230,66 @@ int closure_application(const std::filesystem::path &pack, const std::filesystem
 
 int main(int argc, char **argv) {
     try {
+        if (argc == 6 && std::string(argv[1]) == "--critical-author-entry") {
+            // 输入为原保存文档/配置的只读副本；仅运行真实装配/发布准备，不 start Session。
+            const auto root = std::filesystem::temp_directory_path() / ("wvd-author-entry-" + wvd::platform::unique_id());
+            std::filesystem::create_directories(root / "workflows");
+            std::ifstream original(argv[4]), profile(argv[5]);
+            const auto document = J::parse(original), stored = J::parse(profile);
+            const auto id = document.at("flow").at("id").get<std::string>();
+            std::filesystem::copy_file(argv[4], root / "workflows" / (id + ".json"));
+            auto backend = std::make_shared<OfflineConnection>(std::filesystem::absolute(argv[2]));
+            wvd::app::Application application({root, std::filesystem::absolute(argv[2]), {}, std::filesystem::absolute(argv[3])}, backend);
+            // 第一机会 C++ 异常的栈在展开前采集，调试限定在这个隔离入口。
+            SymSetOptions(SYMOPT_UNDNAME | SYMOPT_LOAD_LINES);
+            SymInitialize(GetCurrentProcess(), nullptr, TRUE);
+            const auto handler = AddVectoredExceptionHandler(1, [](EXCEPTION_POINTERS *info) -> LONG {
+                if (info->ExceptionRecord->ExceptionCode != 0xE06D7363) return EXCEPTION_CONTINUE_SEARCH;
+                void *frames[32]; const auto count = CaptureStackBackTrace(0, 32, frames, nullptr);
+                std::cerr << "FIRST_CHANCE_CPP_EXCEPTION\n";
+                for (USHORT i = 0; i < count; ++i) {
+                    alignas(SYMBOL_INFO) char buffer[sizeof(SYMBOL_INFO) + MAX_SYM_NAME]{};
+                    auto *symbol = reinterpret_cast<SYMBOL_INFO *>(buffer);
+                    symbol->SizeOfStruct = sizeof(SYMBOL_INFO); symbol->MaxNameLen = MAX_SYM_NAME;
+                    DWORD64 displacement{};
+                    if (SymFromAddr(GetCurrentProcess(), reinterpret_cast<DWORD64>(frames[i]), &displacement, symbol)) {
+                        std::cerr << symbol->Name << "+" << displacement;
+                        IMAGEHLP_LINE64 line{}; line.SizeOfStruct = sizeof(line); DWORD offset{};
+                        if (SymGetLineFromAddr64(GetCurrentProcess(), reinterpret_cast<DWORD64>(frames[i]), &offset, &line))
+                            std::cerr << " " << line.FileName << ":" << line.LineNumber;
+                        std::cerr << '\n';
+                    }
+                }
+                return EXCEPTION_CONTINUE_SEARCH;
+            });
+            try {
+                const auto definition = wvd::app::ApplicationAssemblyTestAccess::prepare_author(application, document, stored);
+                if (definition.units.empty()) throw std::runtime_error("AUTHOR_PREPARE_EMPTY");
+                const auto &program = *definition.units.front().program;
+                const auto &root_definition = program.definitions.at(program.root_definition);
+                if (root_definition.handoffs != std::set<std::string>{"blocked", "chest", "revive"})
+                    throw std::runtime_error("AUTHOR_BUSINESS_HANDOFF_NOT_PRESERVED");
+                std::cout << "PREPARED revision=" << document.at("revision") << " units=" << definition.units.size()
+                          << " source=" << root.string() << '\n';
+                std::cout << "root handoffs=blocked,chest,revive; unhandled exits remain ExternalBlocked, not success\n";
+                RemoveVectoredExceptionHandler(handler); SymCleanup(GetCurrentProcess());
+            } catch (...) { RemoveVectoredExceptionHandler(handler); SymCleanup(GetCurrentProcess()); throw; }
+            auto invalid = document;
+            invalid.erase("revision");
+            invalid["nodes"][0]["parameters"]["binding"] = 123;
+            wvd::api::Request request{wvd::api::http::verb::post, "/api/v1/workflows", 11};
+            request.body() = invalid.dump(); request.prepare_payload();
+            const auto rejected = application.handle(request);
+            if (static_cast<unsigned>(rejected.status) < 400 ||
+                rejected.body.find("AUTHOR_BUSINESS_PARAMETERS_INVALID") == std::string::npos ||
+                rejected.body.find("battle") == std::string::npos)
+                throw std::runtime_error("AUTHOR_INVALID_FIELD_NOT_REJECTED");
+            std::cout << "INVALID /nodes/0/parameters/binding number rejected: " << rejected.body << '\n';
+            if (backend->connections || backend->captures || backend->inputs)
+                throw std::runtime_error("AUTHOR_PREPARE_DEVICE_SIDE_EFFECT");
+            std::cout << "device connections=0 captures=0 inputs=0\n";
+            return 0;
+        }
         if (argc == 4 && std::string(argv[1]) == "--closure-application")
             return closure_application(std::filesystem::absolute(argv[2]), std::filesystem::absolute(argv[3]));
         if (argc != 3) throw std::runtime_error("PACK_AND_QUEST_PATH_REQUIRED");

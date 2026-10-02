@@ -4,6 +4,21 @@
 #include <fstream>
 #include <iostream>
 #include <thread>
+#include <opencv2/imgcodecs.hpp>
+
+namespace wvd::runtime {
+struct NativeCoordinatorTestAccess {
+    static void initialize(NativeRunCoordinator &coordinator, const nlohmann::json &definition) {
+        coordinator.snapshot_.run_id = 1;
+        coordinator.snapshot_.reason = "ORIGINAL_BUSINESS_FAILURE";
+        coordinator.journal_ = std::make_shared<storage::EventJournal>(coordinator.instance_id_, 1);
+        coordinator.store_ = std::make_unique<storage::RunStore>(coordinator.data_root_, coordinator.instance_id_, 1, definition);
+    }
+    static void save(NativeRunCoordinator &coordinator, const contracts::FrameEnvelope *frame) {
+        coordinator.save_application_restart_diagnostic(1, 0, {{"step_id", "test-await"}}, frame);
+    }
+};
+}
 
 namespace {
 using namespace wvd;
@@ -56,6 +71,44 @@ int main(int argc, char **argv) {
         const auto data_root = std::filesystem::temp_directory_path() /
             ("wvd-native-coordinator-" + wvd::platform::unique_id());
         std::filesystem::create_directories(data_root);
+        if (argc == 2 && std::string(argv[1]) == "--restart-diagnostic") {
+            using A = runtime::NativeCoordinatorTestAccess;
+            for (const auto *mode : {"saved", "missing", "write-failed"}) {
+                runtime::NativeRunCoordinator coordinator(data_root / mode);
+                A::initialize(coordinator, {{"engine_kind", "wvd_native"}, {"device_id", "native-test"},
+                    {"game_id", "wvd"}, {"pack_revision", "native-test"}, {"viewport", "900x1600"}});
+                contracts::FrameEnvelope frame;
+                frame.identity.device_id = "native-test"; frame.identity.game_id = "wvd";
+                frame.identity.pack_revision = "native-test"; frame.identity.viewport_id = "900x1600";
+                frame.identity.generation = frame.identity.frame_id = frame.identity.connection_generation = 1;
+                frame.identity.raw_size = frame.identity.recognition_size = {900,1600};
+                frame.identity.captured_at = std::chrono::steady_clock::now();
+                frame.identity.backend = "synthetic-diagnostic";
+                frame.raw_bgr = std::make_shared<const std::vector<std::uint8_t>>(900 * 1600 * 3, 123);
+                if (std::string(mode) == "write-failed")
+                    std::ofstream(coordinator.run_directory() / "diagnostics") << "isolated obstruction";
+                A::save(coordinator, std::string(mode) == "missing" ? nullptr : &frame);
+                const auto summary = coordinator.diagnostics();
+                const auto &entry = summary.at("entries").at(0);
+                const bool saved = std::string(mode) == "saved";
+                if (entry.at("stage") != "recovery_entry" || entry.at("evidence_kind") != "before_application_restart" ||
+                    entry.at("reason") != "CONTINUOUS_EXCEPTION_TIMEOUT" || entry.at("generation") != 1 ||
+                    entry.at("status") != (saved ? "saved" : "failed") || summary.at("complete") != saved ||
+                    coordinator.snapshot().reason != "ORIGINAL_BUSINESS_FAILURE")
+                    throw std::runtime_error("RESTART_DIAGNOSTIC_CONTRACT");
+                if (saved) {
+                    const auto path = coordinator.run_directory() / entry.at("path").get<std::string>();
+                    const auto image = cv::imread(path.string());
+                    if (image.rows != 1600 || image.cols != 900 || image.at<cv::Vec3b>(0,0) != cv::Vec3b{123,123,123} ||
+                        platform::file_sha256(path) != entry.at("sha256").get<std::string>() || entry.at("frame").at("frame_id") != 1)
+                        throw std::runtime_error("RESTART_DIAGNOSTIC_PIXELS");
+                }
+                std::cout << "restart diagnostic " << mode << " complete=" << summary.at("complete") << '\n';
+                std::ofstream(coordinator.run_directory() / "hook-result.json") << summary.dump(2);
+            }
+            std::cout << "Evidence: " << data_root.string() << '\n';
+            return 0;
+        }
         const auto bundle_root = data_root / "bundle";
         std::filesystem::create_directories(bundle_root);
         { std::ofstream marker(bundle_root / "marker.txt", std::ios::binary);

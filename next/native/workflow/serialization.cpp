@@ -59,6 +59,7 @@ J data(const StepData &value) {
         if (input->retry && !input->retry->restart_from.empty())
             result["retry"]["restart_from"] = input->retry->restart_from;
         if (!input->effect_binding.empty()) result["effect_binding"] = input->effect_binding;
+        if (!input->interruption_reason.empty()) result["interruption_reason"] = input->interruption_reason;
         return result;
     }
     if (const auto *await = std::get_if<AwaitResult>(&value))

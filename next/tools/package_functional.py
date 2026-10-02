@@ -93,7 +93,10 @@ def sync_authoring_resources():
 def source_identity():
     repo = ROOT.parent
     head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True).strip()
-    diff = subprocess.check_output(["git", "diff", "--binary", "--", "next", "docs"], cwd=repo)
+    # 比较实际工作树与 HEAD：已暂存、未暂存和部分暂存的净源码变化都进入身份。
+    # 禁用展示型外部差异/转换，不修改用户 Git 配置；构建并不读取暂存区内容。
+    diff = subprocess.check_output(["git", "diff", "--binary", "--no-ext-diff", "--no-textconv",
+        "HEAD", "--", "next", "docs"], cwd=repo)
     untracked = subprocess.check_output(["git", "ls-files", "--others", "--exclude-standard", "-z",
         "--", "next", "docs"], cwd=repo).split(b"\0")
     digest = hashlib.sha256(diff)
@@ -155,9 +158,50 @@ def checked_copy(source, target, expected=None):
         raise RuntimeError("打包复制校验失败: " + str(target))
 
 
+BUILD_RECEIPT = ROOT / ".local/build-input.json"
+
+
+def begin_build():
+    """资源同步和 CMake 配置结束后冻结输入；不把打包时的 HEAD 当作构建来源。"""
+    check_authoring_assets()
+    receipt = {"schema": 1, "state": "BUILDING", "source": source_identity(),
+               "started_at_utc": datetime.now(timezone.utc).isoformat()}
+    BUILD_RECEIPT.parent.mkdir(parents=True, exist_ok=True)
+    BUILD_RECEIPT.write_text(json.dumps(receipt, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return receipt
+
+
+def build_artifacts():
+    paths = [ROOT / "build/Release" / name for name in
+             ("automationd.exe", "wvd-capture-host.exe", "opencv_world4120.dll", "onnxruntime.dll", "scrcpy-server-v3.3.4")]
+    paths += sorted(p for p in (ROOT / "web/dist").rglob("*") if p.is_file())
+    if not (ROOT / "web/dist/index.html").is_file():
+        raise RuntimeError("BUILD_WEB_MISSING")
+    return {p.relative_to(ROOT).as_posix(): sha256(p) for p in paths}
+
+
+def finish_build():
+    receipt = json.loads(BUILD_RECEIPT.read_text(encoding="utf-8"))
+    if receipt.get("state") != "BUILDING" or receipt["source"] != source_identity():
+        raise RuntimeError("BUILD_SOURCE_CHANGED")
+    receipt.update(state="BUILT", artifacts=build_artifacts(), finished_at_utc=datetime.now(timezone.utc).isoformat())
+    BUILD_RECEIPT.write_text(json.dumps(receipt, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return receipt
+
+
+def verified_build():
+    receipt = json.loads(BUILD_RECEIPT.read_text(encoding="utf-8"))
+    if receipt.get("state") != "BUILT" or receipt.get("source") != source_identity():
+        raise RuntimeError("BUILD_SOURCE_CHANGED_OR_NOT_COMPLETED")
+    if receipt.get("artifacts") != build_artifacts():
+        raise RuntimeError("BUILD_ARTIFACT_CHANGED")
+    return receipt
+
+
 def stage(target):
     sync_authoring_resources()
     check_authoring_assets()
+    build = verified_build()
     binary = ROOT / "build/Release"
     native = ROOT / ".local/native-deps"
     model = ROOT / "resources/ocr/en_us"
@@ -180,8 +224,8 @@ def stage(target):
                  target / "licenses/THIRD_PARTY.md")
     # Windows can retain an image handle briefly after exit; never execute inside
     # the staging directory that must be renamed immediately afterward.
-    subprocess.run([str(binary / "automationd.exe"), "--version"], check=True,
-                   capture_output=True, timeout=10)
+    version = subprocess.run([str(binary / "automationd.exe"), "--version"], check=True,
+                             capture_output=True, timeout=10).stdout.decode("utf-8").strip()
     web = ROOT / "web/dist"
     pack = ROOT / "packs/wvd"
     if not (web / "index.html").is_file() or not (pack / "manifest.json").is_file():
@@ -228,15 +272,28 @@ def stage(target):
     (target / "DELIVERY_STATUS.json").write_text(json.dumps({
         "migration_baseline": "8f61540eafa61413852c2c3a85cb81c090e2161f",
         "memory_work_package_baseline": "661069f5688253270d1b940e084ce19ceca01373",
-        **source_identity(),
+        **build["source"],
+        "build_input": build,
         "built_at_utc": datetime.now(timezone.utc).isoformat(),
         "engine": "wvd_native", "status": "BUILT_NOT_GAME_ACCEPTED",
         "exe_sha256": sha256(target / "automationd.exe"),
+        "version_output": version,
         "web_index_sha256": sha256(target / "web/index.html"),
         "pack_revision": manifest["revision"],
         "resource_catalog_sha256": sha256(target / "pack/parameters/semantic-assets.json"),
+        "pack_manifest_sha256": sha256(target / "pack/manifest.json"),
+        "files": [{"path": p.relative_to(target).as_posix(), "sha256": sha256(p)}
+                  for p in sorted(target.rglob("*")) if p.is_file()],
         "game_scope": "NOT_RUN_THIS_BUILD",
     }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    # 同一预检入口由部署管理器在任何旧服务退出之前调用。
+    validation = subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
+        str(target / "tools/manage_service.ps1"), "-Action", "Validate", "-CandidateRoot", str(target)],
+        capture_output=True, timeout=60)
+    if validation.returncode:
+        detail = (validation.stdout + validation.stderr).decode("utf-8", errors="replace")
+        raise RuntimeError(f"CANDIDATE_PREFLIGHT_FAILED: exit={validation.returncode}\n{detail}")
+    verified_build()  # 复制窗口内的源码/EXE/前端变化同样拒绝，不能记录成完整候选。
 
 
 def package():

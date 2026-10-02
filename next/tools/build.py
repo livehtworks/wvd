@@ -6,6 +6,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import package_functional
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -54,10 +55,13 @@ def build():
     cmake = cmake_path()
     run("dependencies", [sys.executable, str(ROOT / "tools/dependencies.py")])
     run("native-dependencies", [sys.executable, str(ROOT / "tools/prepare_native.py")])
+    package_functional.sync_authoring_resources()
     run("npm-ci", [npm, "ci", "--ignore-scripts", "--no-fund", "--no-audit"], ROOT / "web")
-    run("web-build", [npm, "run", "build"], ROOT / "web")
     run("native-configure", [cmake, "--preset", "windows-x64"])
+    package_functional.begin_build()
+    run("web-build", [npm, "run", "build"], ROOT / "web")
     run("native-build", [cmake, "--build", "--preset", "windows-release", "--target", "automationd"])
+    package_functional.finish_build()
     run("native-package", [sys.executable, str(ROOT / "tools/package_functional.py")])
     print("Maa-free Windows candidate ready; legacy wvd.exe/config/mod untouched.")
 

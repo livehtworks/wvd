@@ -137,6 +137,7 @@ Step translate(const std::string &id, const J &node, const J &paths,
                 retry.value("max_submissions", 0U), retry.value("restart_from", "")};
         }
         input.effect_binding = p.value("effect_binding", "");
+        input.interruption_reason = p.value("interruption_reason", "");
         step.data = std::move(input);
     } else if (action == "Registered" && binding == "Call") {
         step.data = workflow::Call{node.at("operation_args").at("entry"),

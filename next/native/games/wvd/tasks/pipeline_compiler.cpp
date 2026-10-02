@@ -628,6 +628,8 @@ void PipelineCompiler::stop_if_interrupted_after(const std::string &name, std::s
                 workflow_.nodes.at(name).value("binding", "") == "Input" && !reason.empty(),
             "COMPILE_UNCERTAIN_ACTION_INVALID");
     require(uncertain_actions_.emplace(name, std::move(reason)).second, "COMPILE_UNCERTAIN_ACTION_DUPLICATE");
+    // 同一声明同时约束正常中断出口和应用重启入口，不能从 retry 反推重做授权。
+    workflow_.nodes.at(name).at("operation_args")["interruption_reason"] = uncertain_actions_.at(name);
 }
 void PipelineCompiler::compile_interruption() {
     if (interruption_.is_null()) {

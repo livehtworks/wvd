@@ -1,5 +1,6 @@
 #include "games/wvd/tasks/author_workflow.hpp"
 #include "games/wvd/tasks/native_program.hpp"
+#include "workflow/serialization.hpp"
 #include "games/wvd/tasks/public_flow_library.hpp"
 #include "games/wvd/tasks/public_step_scope.hpp"
 #include "games/wvd/tasks/bounty_visit.hpp"
@@ -14,6 +15,7 @@
 #include "games/wvd/combat/auto_combat.hpp"
 #include "games/wvd/combat/encounter.hpp"
 #include "games/wvd/combat/strategy.hpp"
+#include "games/wvd/combat/turn.hpp"
 #include "games/wvd/supply/inn.hpp"
 #include "games/wvd/recovery/boot.hpp"
 #include "games/wvd/vision/boot_probes.hpp"
@@ -293,6 +295,96 @@ int transitions() {
 int main(int argc, char **argv) {
     try {
         using J = nlohmann::json;
+        if (argc == 2 && std::string(argv[1]) == "--critical-input-protection") {
+            using namespace wvd;
+            using C = games::tasks::PipelineCompiler;
+            const std::string reason = "combat.skill_outcome_unconfirmed";
+            const auto require = [](bool value, const char *message) {
+                if (!value) throw std::runtime_error(message);
+            };
+            const auto make = [&](bool protect) {
+                C graph(protect ? "critical.protected" : "critical.menu");
+                const auto scene = C::image("combatActive");
+                graph.route("Entry", {"Confirm"});
+                graph.click("Confirm", scene, scene, scene, {"Done"});
+                graph.retry_menu_input("Confirm", scene, 5000);
+                if (protect) graph.stop_if_interrupted_after("Confirm", reason);
+                graph.observe("Done", scene, {"Terminal"});
+                graph.interrupt_on(C::absent(scene), "combat.common_screen_requires_dispatch");
+                return graph.finish();
+            };
+            const auto check_program = [&](const games::tasks::CompiledWorkflow &source,
+                                           const std::string &node, bool protected_input) {
+                const auto &args = source.nodes.at(node).at("operation_args");
+                require(args.value("interruption_reason", std::string{}) == (protected_input ? reason : std::string{}),
+                    "CRITICAL_COMPILER_PROTECTION_LOST");
+                const auto program = games::tasks::compile_native_program(source, J::object(), "critical-protection");
+                const workflow::Input *input = nullptr;
+                std::string owner;
+                for (const auto &[id, definition] : program.definitions) {
+                    const auto found = definition.steps.find(node);
+                    if (found == definition.steps.end()) continue;
+                    require(input == nullptr, "CRITICAL_INPUT_MULTIPLE_OWNERS");
+                    input = std::get_if<workflow::Input>(&found->second.data);
+                    require(input != nullptr, "CRITICAL_INPUT_KIND_CHANGED");
+                    owner = id;
+                }
+                require(input && input->interruption_reason == (protected_input ? reason : std::string{}) && input->retry.has_value(),
+                    "CRITICAL_LOWERING_PROTECTION_OR_MENU_RETRY_LOST");
+                const auto encoded = workflow::serialize(program);
+                const auto &data = encoded.at("definitions").at(owner).at("steps").at(node).at("data");
+                require(protected_input ? data.at("interruption_reason").get<std::string>() == reason : !data.contains("interruption_reason"),
+                    "CRITICAL_SERIALIZED_PROTECTION_LOST");
+            };
+            const auto protected_source = make(true);
+            check_program(protected_source, "Confirm", true);
+            check_program(make(false), "Confirm", false);
+            C parent("critical.parent");
+            const auto child_entry = parent.append("Skill", protected_source, {"Terminal"});
+            parent.route("Entry", {child_entry});
+            check_program(parent.finish(), "Skill_Confirm", true);
+            // 使用真实工厂和正式公共步骤装配，不能以简化图代替施放链接线验证。
+            const auto assets = closure::read("resources/authoring/semantic-assets.json");
+            const auto flows = closure::read("resources/authoring/public-flows.json");
+            J documents = J::object();
+            for (const auto &doc : flows) documents[doc.at("flow").at("id").get<std::string>()] = doc;
+            games::tasks::PublicFlowLibrary library(documents, assets);
+            games::tasks::PublicStepScope public_steps([&](const std::string &id, const J &args) {
+                return library.compile_step(id, args, "zh-Hant");
+            });
+            const J profile{{"STRATEGY", J::array({J{{"skill_settings", J::array({
+                J{{"role_var", ""}, {"skill_var", "Top-Left Skill"}, {"skill_lvl", 1}, {"target_var", "next"}},
+                J{{"role_var", ""}, {"skill_var", "defend"}, {"skill_lvl", 1}, {"target_var", "next"}},
+                J{{"role_var", ""}, {"skill_var", "Bottom-Left Skill"}, {"skill_lvl", 1}, {"target_var", "左上角色"}}
+            })}}})}};
+            const auto turn = games::combat::take_turn(profile, {});
+            const auto native_turn = games::tasks::compile_native_program(turn, J::object(), "critical-real-turn");
+            const auto serialized_turn = workflow::serialize(native_turn);
+            std::size_t protected_count{};
+            for (const auto &[definition_id, definition] : native_turn.definitions)
+                for (const auto &[id, node] : definition.steps) {
+                    const auto *input = std::get_if<workflow::Input>(&node.data);
+                    if (!input) continue;
+                    const auto original = turn.nodes.at(id).at("operation_args").value("interruption_reason", std::string{});
+                    require(input->interruption_reason == original, "REAL_TURN_PROTECTION_LOST");
+                    const auto &encoded = serialized_turn.at("definitions").at(definition_id).at("steps").at(id).at("data");
+                    require(original.empty() ? !encoded.contains("interruption_reason") : encoded.at("interruption_reason").get<std::string>() == original,
+                        "REAL_TURN_SERIALIZATION_LOST");
+                    if (!original.empty()) ++protected_count;
+                }
+            for (const auto *id : {"Skill0Try0Confirm", "Skill1Defend", "Skill1DefendConfirm", "Skill2Try0Support", "Skill2Try0Confirm"})
+                require(turn.nodes.at(id).at("operation_args").at("interruption_reason") == "combat.skill_outcome_unconfirmed",
+                    "REAL_TURN_DECLARATION_MISSING");
+            const auto source_protected = std::count_if(turn.nodes.begin(), turn.nodes.end(), [](const J &node) {
+                return node.value("binding", "") == "Input" &&
+                    !node.at("operation_args").value("interruption_reason", std::string{}).empty();
+            });
+            require(protected_count == static_cast<std::size_t>(source_protected), "REAL_TURN_PROTECTED_COUNT");
+            std::cout << "critical input protection: source, lowering, append, serialization; ordinary menu retry retained\n";
+            std::cout << "real take_turn: five direct confirm/defend/friendly-target inputs plus public-step protections; total="
+                      << protected_count << "; ordinary inputs unmarked\n";
+            return 0;
+        }
         if (argc == 5 && std::string(argv[1]) == "--network-layouts") {
             using namespace wvd;
             const auto manifest = closure::read("packs/wvd/manifest.json");

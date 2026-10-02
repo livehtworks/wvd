@@ -114,10 +114,13 @@ class PublicFlowLibrary {
             if (used.contains(id) && used.at(id) != doc) authoring::contract_error("FLOW_SNAPSHOT_CONFLICT", id);
             used[id] = doc;
         }
-        for (const auto &[name, path] : result.workflow.authoring.value("source_paths", J::object()).items())
+        // items() 借用容器；C++20 下不能借用 value() 返回的临时 JSON。
+        const auto native_source_paths = result.workflow.authoring.value("source_paths", J::object());
+        for (const auto &[name, path] : native_source_paths.items())
             if (!result.source_paths.contains(name)) result.source_paths[name] = path;
         auto resources = assets.selections();
-        for (const auto &[id, selected] : result.workflow.authoring.value("resources", J::object()).items()) {
+        const auto native_resources = result.workflow.authoring.value("resources", J::object());
+        for (const auto &[id, selected] : native_resources.items()) {
             if (resources.contains(id) && resources.at(id) != selected)
                 authoring::contract_error("FLOW_RESOURCE_SNAPSHOT_CONFLICT", id);
             resources[id] = selected;

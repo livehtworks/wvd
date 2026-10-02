@@ -309,7 +309,21 @@ TickResult FlowExecutor::tick() {
         account_event_time();
         if (!read_recovery_ && exception_since_ &&
             Clock::now() - *exception_since_ >= observation_policy_.exception_timeout) {
+            invalidate_observation();
             const auto image = observation_frame(); // 重启前保存本次真实帧，不能只留旧缓存。
+            auto &active = stack_.back();
+            const auto &current = step();
+            if (!active.next_pending && !active.resume && active.pending &&
+                std::holds_alternative<workflow::AwaitResult>(current.data)) {
+                if (!active.pending->delivery_unknown)
+                    if (auto event = check_events(active, current, image, workflow::EventClass::Overlay)) return *event;
+                if (auto settled = settle_await_result(active, current, image)) return *settled;
+            } else if (auto resumed = recheck_normal_observation(active, current, image)) return *resumed;
+            if (ports_.cancelled()) {
+                terminal_ = {TickState::Cancelled, {}, "CANCELLED", current_source_path()};
+                return terminal_;
+            }
+            if (Clock::now() >= deadline_) return fail("FLOW_TOTAL_DEADLINE");
             last_diagnostic_ = {{"reason", "continuous_exception_game_restart"},
                 {"source_path", current_source_path()}, {"frame_id", image.identity.frame_id},
                 {"elapsed_ms", std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - *exception_since_).count()},
@@ -693,9 +707,136 @@ std::optional<TickResult> FlowExecutor::retry_pending_input(Frame &frame,
         receipt.submitted_at >= image.identity.captured_at, "INPUT_RECEIPT_INVALID");
     return waiting(250ms);
 }
+std::optional<TickResult> FlowExecutor::settle_await_result(Frame &frame,
+    const workflow::Step &current, const contracts::FrameEnvelope &image) {
+    require(frame.pending.has_value(), "AWAIT_WITHOUT_SUBMISSION");
+    const auto &await = std::get<workflow::AwaitResult>(current.data);
+    const auto observed = ports_.recognize(image, await.condition);
+    if (ports_.cancelled()) {
+        terminal_ = {TickState::Cancelled, {}, "CANCELLED", current_source_path()};
+        return terminal_;
+    }
+    if (Clock::now() >= deadline_) return fail("FLOW_TOTAL_DEADLINE");
+    if (observed.outcome == contracts::RecognitionOutcome::NoHit) return std::nullopt;
+    require_hit(observed, "AWAIT_RECOGNITION_ERROR");
+    require(same_device(observed.basis, image.identity) &&
+        observed.basis.frame_id == image.identity.frame_id &&
+        observed.basis.action_epoch == image.identity.action_epoch &&
+        result_identity_matches(observed.basis, frame.pending->before) &&
+        observed.basis.frame_id > frame.pending->before.frame_id &&
+        observed.basis.action_epoch >= frame.pending->action_epoch, "AWAIT_EVIDENCE_STALE");
+    // 通道清理未确认时不修改计数或释放回执；真实结果不能掩盖未知送达状态。
+    if (frame.pending->delivery_unknown && !ports_.settle_observed_input())
+        return blocked("OBSERVED_RESULT_INPUT_CLEANUP_UNCONFIRMED");
+    // 通道回收也可能等待；取消/硬总期限不能在这段等待后被成功结果覆盖。
+    if (ports_.cancelled()) {
+        terminal_ = {TickState::Cancelled, {}, "CANCELLED", current_source_path()};
+        return terminal_;
+    }
+    if (Clock::now() >= deadline_) return fail("FLOW_TOTAL_DEADLINE");
+    const auto &submitted = program_.definitions.at(frame.definition).steps.at(frame.pending->submitted_step);
+    if (submitted.consecutive_input_limit) {
+        frame.hits.erase(submitted.id);
+        frame.hits.erase(current.id);
+    }
+    report_input_result(*frame.pending, "confirmed", observed.basis.frame_id);
+    frame.pending.reset();
+    finish_observation_recovery("original_result_confirmed");
+    advance(frame);
+    // 仅正向结清允许后继开始选路，旧 Await 的局部期限不再截断新阶段。
+    frame.entered_at = Clock::now();
+    return progress();
+}
+
+std::optional<TickResult> FlowExecutor::recheck_normal_observation(Frame &frame,
+    const workflow::Step &current, const contracts::FrameEnvelope &image) {
+    if (has_unresolved_input() || frame.resume || frame.error_pending ||
+        std::any_of(stack_.begin(), stack_.end(), [&](const Frame &active) {
+            const auto &checks = program_.definitions.at(active.definition).checks;
+            return (checks && checks->phase == "exception") ||
+                (active.event && active.event->rule.category == workflow::EventClass::Exception &&
+                 !active.event->rule.on_device_restart);
+        })) return std::nullopt;
+    const auto &definition = program_.definitions.at(frame.definition);
+    const auto verify = [&](const recognition::Request &condition) {
+        auto observed = ports_.recognize(image, condition);
+        if (observed.outcome == contracts::RecognitionOutcome::Error)
+            require_hit(observed, "NORMAL_RECHECK_ERROR");
+        if (observed.outcome == contracts::RecognitionOutcome::Hit)
+            require(same_device(observed.basis, image.identity) &&
+                observed.basis.frame_id == image.identity.frame_id &&
+                observed.basis.action_epoch == image.identity.action_epoch, "NORMAL_RECHECK_EVIDENCE_STALE");
+        return observed;
+    };
+    const auto check = [&](const workflow::Step &candidate) -> std::optional<TickResult> {
+        const bool entering = frame.next_pending || candidate.id != frame.current;
+        if (candidate.unexpected_only || candidate.business_guard ||
+            (entering && candidate.max_hit && frame.hits.contains(candidate.id) &&
+             frame.hits.at(candidate.id) >= candidate.max_hit)) return std::nullopt;
+        if (const auto *observe = std::get_if<workflow::Observe>(&candidate.data)) {
+            // guard 只证明允许进入，不等于 Observe 本身的业务结果；二者都须成立。
+            if (candidate.guard && verify(*candidate.guard).outcome != contracts::RecognitionOutcome::Hit)
+                return std::nullopt;
+            const auto observed = verify(observe->request);
+            if (observed.outcome != contracts::RecognitionOutcome::Hit) return std::nullopt;
+            if (ports_.cancelled()) {
+                terminal_ = {TickState::Cancelled, {}, "CANCELLED", current_source_path()};
+                return terminal_;
+            }
+            if (Clock::now() >= deadline_) return fail("FLOW_TOTAL_DEADLINE");
+            // 只选原阶段声明的只读目标，实际 Observe 仍在下一 tick 复核同帧。
+            frame.current = candidate.id;
+            frame.next_pending = false;
+            frame.returned_targets.reset();
+            frame.entered_at = Clock::now();
+            frame.delay_until.reset();
+            frame.poll_until.reset();
+            frame.selection_origin.reset();
+            frame.selected_frame = image;
+            frame.selected_observation = observed;
+            if (entering && candidate.max_hit) ++frame.hits[candidate.id];
+            clear_unexpected(frame);
+            return progress();
+        }
+        if (const auto *poll = std::get_if<workflow::Poll>(&candidate.data); poll && poll->ongoing) {
+            const auto observed = verify(*poll->ongoing);
+            if (observed.outcome == contracts::RecognitionOutcome::Hit) {
+                if (ports_.cancelled()) {
+                    terminal_ = {TickState::Cancelled, {}, "CANCELLED", current_source_path()};
+                    return terminal_;
+                }
+                if (Clock::now() >= deadline_) return fail("FLOW_TOTAL_DEADLINE");
+                clear_unexpected(frame);
+                frame.known_wait = true;
+                record_known_scene(frame, observed);
+                return waiting(poll->interval);
+            }
+        }
+        return std::nullopt;
+    };
+    if (!frame.next_pending) return check(current);
+    const auto &candidates = frame.returned_targets ? *frame.returned_targets : current.next;
+    for (const auto &id : candidates) {
+        const auto &candidate = definition.steps.at(id);
+        // 不跨过尚未执行的动作/调用去找远处页面，更不扫全图或父业务。
+        if (!std::holds_alternative<workflow::Observe>(candidate.data) &&
+            !std::holds_alternative<workflow::Poll>(candidate.data)) break;
+        if (auto result = check(candidate)) return result;
+    }
+    return std::nullopt;
+}
+
 TickResult FlowExecutor::execute_step(Frame &frame, const workflow::Step &current) {
-    if (frame.event_exits.empty() && Clock::now() - frame.entered_at >= current.time_limit)
+    if (frame.event_exits.empty() && Clock::now() - frame.entered_at >= current.time_limit) {
+        if (exception_since_ && frame.pending && std::holds_alternative<workflow::AwaitResult>(current.data)) {
+            invalidate_observation();
+            const auto image = observation_frame();
+            if (!frame.pending->delivery_unknown)
+                if (auto event = check_events(frame, current, image, workflow::EventClass::Overlay)) return *event;
+            if (auto settled = settle_await_result(frame, current, image)) return *settled;
+        }
         return route_error(frame, current, "FLOW_STAGE_TIMEOUT");
+    }
     if (!frame.event_exits.empty()) {
         const auto image = observation_frame();
         if (auto event = check_events(frame, current, image, workflow::EventClass::Overlay)) return *event;
@@ -836,31 +977,12 @@ TickResult FlowExecutor::execute_step(Frame &frame, const workflow::Step &curren
         const auto image = observation_frame();
         if (!frame.pending->delivery_unknown)
             if (auto event = check_events(frame, current, image, workflow::EventClass::Overlay)) return *event;
-        const auto observed = ports_.recognize(image, await->condition);
-        if (observed.outcome == contracts::RecognitionOutcome::NoHit) {
-            if (!frame.pending->delivery_unknown)
-                if (auto event = check_unexpected(frame, current, image, "input_result_not_confirmed", now >= deadline)) return *event;
-            if (frame.event_exits.empty() && now >= deadline) return route_error(frame, current, "AWAIT_RESULT_TIMEOUT");
-            if (auto retried = retry_pending_input(frame, current, image)) return *retried;
-            return waiting(await->poll_interval);
-        }
-        require_hit(observed, "AWAIT_RECOGNITION_ERROR");
-        require(result_identity_matches(observed.basis, frame.pending->before) &&
-            observed.basis.frame_id > frame.pending->before.frame_id &&
-            observed.basis.action_epoch >= frame.pending->action_epoch, "AWAIT_EVIDENCE_STALE");
-        // 新帧正向确认结果才结束连续尝试；异常处理器返回、纯跳转、动画均不清零。
-        // 作者显式repeat_limit仍是业务循环约束，不冒充连续失败次数。
-        const auto &submitted_step = program_.definitions.at(frame.definition).steps.at(frame.pending->submitted_step);
-        if (submitted_step.consecutive_input_limit) {
-            frame.hits.erase(submitted_step.id);
-            frame.hits.erase(current.id);
-        }
-        if (frame.pending->delivery_unknown && !ports_.settle_observed_input())
-            return blocked("OBSERVED_RESULT_INPUT_CLEANUP_UNCONFIRMED");
-        report_input_result(*frame.pending, "confirmed", observed.basis.frame_id);
-        frame.pending.reset();
-        finish_observation_recovery("original_result_confirmed");
-        advance(frame); return progress();
+        if (auto settled = settle_await_result(frame, current, image)) return *settled;
+        if (!frame.pending->delivery_unknown)
+            if (auto event = check_unexpected(frame, current, image, "input_result_not_confirmed", now >= deadline)) return *event;
+        if (frame.event_exits.empty() && now >= deadline) return route_error(frame, current, "AWAIT_RESULT_TIMEOUT");
+        if (auto retried = retry_pending_input(frame, current, image)) return *retried;
+        return waiting(await->poll_interval);
     }
     if (const auto *poll = std::get_if<workflow::Poll>(&current.data)) {
         if (frame.pending) return blocked("POLL_WITH_PENDING_INPUT");
@@ -988,6 +1110,7 @@ nlohmann::json FlowExecutor::observation_recovery_snapshot() const {
         {"started_at_ns", std::chrono::duration_cast<std::chrono::nanoseconds>(read.started.time_since_epoch()).count()},
         {"command_details", read.last.details},
         {"context_recovery", read.context_recovery},
+        {"application_restarted_in_window", read.application_restarted_in_window},
         {"reconnect_count", reconnects_.size()},
         {"source_path", current_source_path()}, {"input_replayed", false}};
 }
@@ -1049,6 +1172,10 @@ TickResult FlowExecutor::retry_observation() {
     if (!read_recovery_->device_checked) {
         try {
             const auto recovery = ports_.recover_observation(read_recovery_->restart_application);
+            // 已完成的一次强制重启必须即时消费。首张游戏帧再失焦/断线只恢复观察，
+            // 不因设备适配层已释放本轮标志而重复 force-stop 刚刚拉起的应用。
+            if (recovery.application_restarted) read_recovery_->restart_application = false;
+            read_recovery_->application_restarted_in_window |= recovery.application_restarted;
             if (const auto &proof = recovery.reconnect) {
                 require(proof->after > proof->before && !proof->created_identity.empty(), "RECONNECT_PROOF_INVALID");
                 reconnects_.push_back(*proof);
@@ -1068,6 +1195,24 @@ TickResult FlowExecutor::retry_observation() {
     if (Clock::now() >= std::min(deadline_, read_recovery_->started + read_recovery_->outage_limit))
         return fail("OBSERVATION_RECOVERY_EXHAUSTED:" + read_recovery_->last.code);
     if (restart_handler_pending_) {
+        // 技能等输入已有明确的中断保护。重启后的菜单/战斗底图不能证明旧动作成功；
+        // 保留全部 pending 与业务账目，沿原保护原因停止，不进入菜单重选或 Boot 输入。
+        for (const auto &active : stack_) {
+            if (!active.pending) continue;
+            const auto &source = program_.definitions.at(active.definition).steps.at(active.pending->submitted_step);
+            const auto &input = std::get<workflow::Input>(source.data);
+            if (input.interruption_reason.empty()) continue;
+            last_diagnostic_ = {{"reason", "application_restart_protected_input"},
+                {"source_path", active.pending->source_path}, {"definition", active.definition},
+                {"interrupted_step", active.pending->submitted_step},
+                {"interruption_reason", input.interruption_reason},
+                {"delivery_unknown", active.pending->delivery_unknown},
+                {"action_epoch", active.pending->action_epoch}};
+            read_recovery_->awaiting_input_validation = false;
+            finish_observation_recovery("application_restarted_input_protected");
+            restart_handler_pending_ = false;
+            return blocked(input.interruption_reason);
+        }
         // 普通菜单的旧页面许可随应用重启失效；恢复原候选集而非重启根业务。
         // 根业务可能已记录“准备跳轮”，清掉或重跑都会混淆真实副作用。
         // 实际跳轮/付款、送达未知仍保留原回执，走Boot后核对原后置条件。

@@ -1,19 +1,26 @@
-﻿param([Parameter(Mandatory)][string]$CandidateRoot, [int]$Port = 17764)
+﻿param([Parameter(Mandatory)][string]$CandidateRoot, [int]$Port = 17764, [switch]$PreflightOnly)
 $ErrorActionPreference = 'Stop'
+if ($PreflightOnly) {
+    & python (Join-Path $PSScriptRoot 'test_delivery_preflight.py') --candidate $CandidateRoot
+    if ($LASTEXITCODE -ne 0) { throw 'CANDIDATE_PREFLIGHT_TEST_FAILED' }
+    return
+}
 $sourceCandidate = (Resolve-Path $CandidateRoot).Path
 # 专属空目录，不读取正式 profile，不连设备、不启动游戏任务。
 $root = Join-Path $env:TEMP ('wvd-service-lifecycle-' + [Guid]::NewGuid().ToString('N'))
 $null = New-Item -ItemType Directory -Path $root
 $CandidateRoot = Join-Path $root 'candidate'
 $null = New-Item -ItemType Directory -Path $CandidateRoot
-Get-ChildItem -LiteralPath $sourceCandidate -File | Where-Object { $_.Extension -in '.exe', '.dll' } |
+Get-ChildItem -LiteralPath $sourceCandidate -File | Where-Object { $_.Name -ne 'service-launch.json' } |
     Copy-Item -Destination $CandidateRoot
 foreach ($directory in @('web', 'pack')) {
     $null = New-Item -ItemType Junction -Path (Join-Path $CandidateRoot $directory) -Target (Join-Path $sourceCandidate $directory)
 }
-$null = New-Item -ItemType Directory -Path "$CandidateRoot/tools", "$CandidateRoot/data"
-Copy-Item -LiteralPath "$sourceCandidate/tools/manage_service.ps1" -Destination "$CandidateRoot/tools"
-Copy-Item -LiteralPath "$sourceCandidate/data/quest.json" -Destination "$CandidateRoot/data"
+foreach ($directory in @('tools', 'data', 'licenses')) {
+    if (Test-Path -LiteralPath (Join-Path $sourceCandidate $directory)) {
+        Copy-Item -LiteralPath (Join-Path $sourceCandidate $directory) -Destination $CandidateRoot -Recurse
+    }
+}
 $manager = Join-Path $CandidateRoot 'tools/manage_service.ps1'
 $url = "http://127.0.0.1:$Port"
 function Require($condition, $message) { if (-not $condition) { throw $message } }

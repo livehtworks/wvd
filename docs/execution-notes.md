@@ -1,5 +1,13 @@
 # 当前执行注意项
 
+- 本轮关键修复新增的`interruption_reason`来自原`stop_if_interrupted_after`声明，不由前端或人工技能名单产生。重启后遍历全部活动pending，保护原因优先于普通菜单重选；旧发布缓存没有此标记，新运行须重新编译/发布源图，历史文件不补写。最近一次恢复事实与同窗口重启事实分别读取`context_recovery`和`application_restarted_in_window`。
+- 普通Await、异常宽限期局部到期和重启前共用只读回执结算，保留原首次提交时间/epoch/预算；未知送达只有原结果命中且通道清理成功才能释放。重启阈值前只核对当前活动Await或本阶段已声明的Observe/ongoing；guard命中不代替Observe结果，异常处理器按钮消失不清父异常，子调用返回的候选出口在真实选中后清理。
+- 构建必须先资源同步/配置，再`package_functional.begin_build()`，完成web及原生构建后`finish_build()`；打包检查源码及全部构建产物身份，不能在编译期间改源码。`manage_service.ps1 -Action Validate`仅预检、不读旧服务、不建数据锁或启动绑定；候选预检先于任何退出请求。旧交付清单缺少这些身份时拒绝部署，不能删校验绕过。
+- Python启动Windows PowerShell 5.1可能继承PS7模块搜索路径，令`Get-FileHash`不可用；候选新预检使用.NET SHA256流计算，不修改全局模块路径。原生测试程序位于`next/build/native/Release`，构建preset为`windows-release`；`windows-x64`是configure preset，不是build preset。
+- C++20的`json.value(...).items()`借用临时对象会在迭代前失效；先保存命名JSON值再取items。独立内置业务节点的未绑定handoff向调用者同名交接，根未接出口仍ExternalBlocked，不以Prepared冒充业务Completed。
+- 本机Python文件symlink测试因`WinError 1314`不能创建夹具，不能据此报告应用器20/20。保留原测试错误；隔离目录junction拒绝证明只覆盖相应Windows reparse路径，不改系统权限、不改弱原断言。
+- `analyze_run_timing.py --runs-root ... --output-dir ...`只读已有日志；缺文件、截断、候选身份混用或无数据均拒绝。exclusive、worker、节点墙钟不可叠加；历史`recognition.resources`事件在Session.run后但局部持有者释放前，不能当join/所有者释放后的OS内存基线。
+
 - 连续异常计时和只读传输故障计时分别维护。60秒升级重启仅关闭绑定游戏；先记录新帧诊断，再走既有VPN/启动/Boot。网络处理器内按钮确认不清除连续异常，正常业务进展或已声明ongoing清除。不得用换节点、弹窗消失或操作已发送冒充恢复；取消与任务总墙钟不放宽。
 - RunStore诊断stage只接受`reward/pre_action/postcondition/recovery_entry`。重启前截图沿用`recovery_entry`，具体用途写入`evidence_kind=before_application_restart`；不能自造stage，否则图片未保存会产生`DIAGNOSTIC_INCOMPLETE`并阻止自动续轮。历史失败保持，不通过跳过诊断准入消除问题。
 - 应用重启后不能因父业务已prepare跳轮而退出会话再要求外层重跑根任务。送达已知的可重试菜单在原Call内重新选择；跳轮/普通金币住宿可用显式`retry.restart_from`指向同定义只读Route，append时必须同步命名空间。金币提交无累计3次硬上限，仍记录真实次数、5秒间隔和结果；宝石购买/送达未知保护保留。

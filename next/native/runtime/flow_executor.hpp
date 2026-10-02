@@ -176,6 +176,7 @@ class FlowExecutor final {
         bool awaiting_input_validation{};
         bool device_checked{};
         bool restart_application{};
+        bool application_restarted_in_window{};
         nlohmann::json context_recovery = nullptr;
         std::string source_path;
         std::size_t stack_depth{};
@@ -210,6 +211,11 @@ class FlowExecutor final {
     TickResult select_next(Frame &frame, const workflow::Step &current);
     void record_known_scene(Frame &frame, const contracts::Observation &observed);
     TickResult execute_step(Frame &frame, const workflow::Step &current);
+    // 普通等待、到期宽限与重启前复核共用唯一回执结算，不在这里补发输入。
+    std::optional<TickResult> settle_await_result(Frame &frame, const workflow::Step &current,
+        const contracts::FrameEnvelope &image);
+    std::optional<TickResult> recheck_normal_observation(Frame &frame, const workflow::Step &current,
+        const contracts::FrameEnvelope &image);
     std::optional<TickResult> retry_pending_input(Frame &frame, const workflow::Step &current,
         const contracts::FrameEnvelope &image);
     TickResult resume_event(Frame &frame, const workflow::Step &current);

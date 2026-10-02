@@ -69,6 +69,9 @@ class NativeRunCoordinator final {
     std::filesystem::path run_directory() const;
 
   private:
+    friend struct NativeCoordinatorTestAccess;
+    void save_application_restart_diagnostic(std::uint64_t generation, std::size_t index,
+        const nlohmann::json &progress, const contracts::FrameEnvelope *frame) noexcept;
     // definition 由线程闭包拥有，drive 只借用；严禁在线程入口再复制整图。
     void drive(const NativeRunDefinition &definition,
                const std::shared_ptr<devices::DeviceBackend> &backend);

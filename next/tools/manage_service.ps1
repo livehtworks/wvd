@@ -1,5 +1,5 @@
 ﻿param(
-    [ValidateSet('Start', 'Stop', 'Deploy')][string]$Action = 'Start',
+    [ValidateSet('Start', 'Stop', 'Deploy', 'Validate')][string]$Action = 'Start',
     [string]$CandidateRoot = (Split-Path -Parent $PSScriptRoot),
     [string]$DataRoot = (Join-Path $env:LOCALAPPDATA 'WvdNext'),
     [ValidateRange(1, 65535)][int]$Port = 17652,
@@ -9,6 +9,88 @@
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 $CandidateRoot = [IO.Path]::GetFullPath($CandidateRoot).TrimEnd('\', '/')
+function Get-CandidateHash([string]$path) {
+    # Python 子进程可能继承 PS7 的模块路径；标准 .NET 哈希不依赖 Get-FileHash 脚本模块。
+    $stream = [IO.File]::OpenRead($path)
+    $hasher = [Security.Cryptography.SHA256]::Create()
+    try { return [BitConverter]::ToString($hasher.ComputeHash($stream)).Replace('-', '').ToLowerInvariant() }
+    finally { $hasher.Dispose(); $stream.Dispose() }
+}
+function Assert-Candidate {
+    $marker = Join-Path $CandidateRoot 'DELIVERY_STATUS.json'
+    if (-not (Test-Path -LiteralPath $marker -PathType Leaf)) { throw 'CANDIDATE_MARKER_MISSING' }
+    $delivery = Get-Content -LiteralPath $marker -Raw -Encoding UTF8 | ConvertFrom-Json
+    if ($delivery.engine -ne 'wvd_native' -or $delivery.status -ne 'BUILT_NOT_GAME_ACCEPTED' -or
+        $delivery.build_input.state -ne 'BUILT' -or -not $delivery.build_input.artifacts -or
+        -not $delivery.source_commit -or -not $delivery.worktree_diff_sha256 -or -not $delivery.files) { throw 'CANDIDATE_MARKER_INVALID' }
+    if ($delivery.source_commit -ne $delivery.build_input.source.source_commit -or
+        $delivery.worktree_diff_sha256 -ne $delivery.build_input.source.worktree_diff_sha256 -or
+        $delivery.worktree_dirty -ne $delivery.build_input.source.worktree_dirty -or
+        $delivery.untracked_source_count -ne $delivery.build_input.source.untracked_source_count) { throw 'CANDIDATE_BUILD_IDENTITY_MISMATCH' }
+    $members = @{}
+    foreach ($row in $delivery.files) {
+        $relative = [string]$row.path
+        if (-not $relative -or $relative.Contains('\') -or $relative.Contains(':') -or
+            $relative.Split('/') -contains '..' -or [IO.Path]::IsPathRooted($relative) -or $members.ContainsKey($relative)) {
+            throw 'CANDIDATE_MEMBER_PATH_INVALID'
+        }
+        $path = Join-Path $CandidateRoot $relative
+        if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "CANDIDATE_INCOMPLETE: $relative" }
+        if ((Get-CandidateHash $path) -ine $row.sha256) { throw "CANDIDATE_HASH_MISMATCH: $relative" }
+        $members[$relative] = $row.sha256
+    }
+    foreach ($relative in @('automationd.exe','wvd-capture-host.exe','opencv_world4120.dll','onnxruntime.dll',
+        'scrcpy-server-v3.3.4','web/index.html','pack/manifest.json','pack/parameters/semantic-assets.json',
+        'data/quest.json','tools/manage_service.ps1')) {
+        if (-not $members.ContainsKey($relative)) { throw "CANDIDATE_REQUIRED_MEMBER_UNRECORDED: $relative" }
+    }
+    if ($members['automationd.exe'] -ine $delivery.exe_sha256 -or $members['web/index.html'] -ine $delivery.web_index_sha256 -or
+        $members['pack/manifest.json'] -ine $delivery.pack_manifest_sha256 -or
+        $members['pack/parameters/semantic-assets.json'] -ine $delivery.resource_catalog_sha256) { throw 'CANDIDATE_IDENTITY_HASH_MISMATCH' }
+    $manifest = Get-Content -LiteralPath (Join-Path $CandidateRoot 'pack/manifest.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+    foreach ($artifact in $delivery.build_input.artifacts.PSObject.Properties) {
+        $relative = [string]$artifact.Name
+        if ($relative.StartsWith('build/Release/')) { $relative = $relative.Substring('build/Release/'.Length) }
+        elseif ($relative.StartsWith('web/dist/')) { $relative = 'web/' + $relative.Substring('web/dist/'.Length) }
+        else { throw 'CANDIDATE_BUILD_ARTIFACT_PATH_INVALID' }
+        if (-not $members.ContainsKey($relative) -or $members[$relative] -ine $artifact.Value) { throw 'CANDIDATE_BUILD_ARTIFACT_MISMATCH' }
+    }
+    foreach ($relative in @('automationd.exe','wvd-capture-host.exe','opencv_world4120.dll','onnxruntime.dll','scrcpy-server-v3.3.4')) {
+        if (-not $delivery.build_input.artifacts.PSObject.Properties['build/Release/' + $relative]) { throw 'CANDIDATE_BUILD_ARTIFACT_MISSING' }
+    }
+    if (-not $delivery.build_input.artifacts.PSObject.Properties['web/dist/index.html']) { throw 'CANDIDATE_BUILD_ARTIFACT_MISSING' }
+    if ($manifest.revision -ne $delivery.pack_revision) { throw 'CANDIDATE_PACK_REVISION_MISMATCH' }
+    $packMembers = @{}
+    foreach ($row in $manifest.files) {
+        $relative = 'pack/' + $row.path
+        if ($packMembers.ContainsKey($relative) -or -not $members.ContainsKey($relative) -or $members[$relative] -ine $row.sha256) {
+            throw "CANDIDATE_PACK_MEMBER_MISMATCH: $relative"
+        }
+        $packMembers[$relative] = $true
+    }
+    # 前端/资源多出来的文件同样改变发布身份，不只检查首页及模板叶子。
+    foreach ($folder in @('web','pack')) {
+        foreach ($file in Get-ChildItem -LiteralPath (Join-Path $CandidateRoot $folder) -File -Recurse) {
+            $relative = $file.FullName.Substring($CandidateRoot.Length + 1).Replace('\','/')
+            if (-not $members.ContainsKey($relative)) { throw "CANDIDATE_UNRECORDED_MEMBER: $relative" }
+        }
+    }
+    $process = [Diagnostics.Process]::new()
+    $process.StartInfo = [Diagnostics.ProcessStartInfo]::new((Join-Path $CandidateRoot 'automationd.exe'), '--version')
+    $process.StartInfo.UseShellExecute = $false
+    $process.StartInfo.CreateNoWindow = $true
+    $process.StartInfo.RedirectStandardOutput = $true
+    $process.StartInfo.RedirectStandardError = $true
+    try {
+        $null = $process.Start()
+        if (-not $process.WaitForExit(10000)) { $process.Kill(); $process.WaitForExit(); throw 'CANDIDATE_VERSION_TIMEOUT' }
+        if ($process.ExitCode -ne 0 -or -not $delivery.version_output -or
+            $process.StandardOutput.ReadToEnd().Trim() -cne $delivery.version_output) { throw 'CANDIDATE_VERSION_FAILED' }
+    } finally { $process.Dispose() }
+}
+# 预检在读取旧服务、申请数据锁和发送 shutdown 之前；Validate不写启动绑定。
+if ($Action -ne 'Stop') { Assert-Candidate }
+if ($Action -eq 'Validate') { Write-Output 'CANDIDATE_VALIDATED_NOT_DEPLOYED'; return }
 $launchPath = Join-Path $CandidateRoot 'service-launch.json'
 if (Test-Path -LiteralPath $launchPath -PathType Leaf) {
     $launch = Get-Content -LiteralPath $launchPath -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -86,11 +168,6 @@ while (-not $lock) {
     }
 }
 try {
-    if ($Action -ne 'Stop') {
-        foreach ($item in @('automationd.exe', 'web/index.html', 'pack/manifest.json', 'data/quest.json')) {
-            if (-not (Test-Path -LiteralPath (Join-Path $CandidateRoot $item) -PathType Leaf)) { throw "CANDIDATE_INCOMPLETE: $item" }
-        }
-    }
     $service = Read-Service
     if (-not $service) { $service = Wait-PreviousCleanup }
     if ($service) {

@@ -210,6 +210,15 @@ AuthorWorkflowCompilation compile_author_workflow(const J &source,
                     const auto prefix = runtime_name + "_Business";
                     const auto child = resolver(parameters);
                     const auto child_entry = compiler.define_child(prefix, child);
+                    // 内置业务节点只声明正常完成也可独立使用；未绑定的业务交接
+                    // 原样向外传递，根入口会 ExternalBlocked，不伪造成功或吞掉出口。
+                    for (const auto &port : child.handoffs) {
+                        if (bindings.contains(port)) continue;
+                        const auto exit = runtime_name + "_Handoff" + std::to_string(bindings.size());
+                        compiler.handoff(exit, port);
+                        bindings[port] = {exit};
+                        result.source_paths[exit] = J::array({J{{"flow_id", flow_id}, {"node_id", id}}});
+                    }
                     compiler.call_child(runtime_name, child_entry, next, bindings);
                 }
                 else

@@ -74,6 +74,9 @@ struct Input {
     bool clip_target_to_area{};
     std::optional<InputRetry> retry;
     std::string effect_binding; // 业务层准入/实际提交记账；运行层不解释币种。
+    // 由既有 stop_if_interrupted_after 声明产生；同页补点许可不能覆盖跨重启保护。
+    // 空值保持既有普通菜单及显式 restart_from 行为，不新增业务重试次数上限。
+    std::string interruption_reason;
 };
 struct AwaitResult {
     recognition::Request condition;

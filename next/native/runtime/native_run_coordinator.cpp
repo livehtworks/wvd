@@ -255,15 +255,8 @@ void NativeRunCoordinator::drive(const NativeRunDefinition &definition,
                             recovery.value("code", "") == "CONTINUOUS_EXCEPTION_TIMEOUT" &&
                             recovery.value("started_at_ns", 0ULL) != restart_diagnostic_started) {
                             restart_diagnostic_started = recovery.value("started_at_ns", 0ULL);
-                            try {
-                                storage::DiagnosticRequest request;
-                                { std::lock_guard lock(mutex_); request.run_id = snapshot_.run_id; }
-                                request.generation = generation; request.unit_index = index;
-                                request.node = progress.value("step_id", ""); request.reason = "CONTINUOUS_EXCEPTION_TIMEOUT";
-                                request.stage = "recovery_entry"; request.evidence_kind = "before_application_restart";
-                                journal_->emit(generation, "diagnostic.application_restart",
-                                    store_->save_diagnostic(recovery_frame->has_value() ? &**recovery_frame : nullptr, request));
-                            } catch (...) { store_->note_diagnostic_hook_failure(); }
+                            save_application_restart_diagnostic(generation, index, progress,
+                                recovery_frame->has_value() ? &**recovery_frame : nullptr);
                         }
                         if (step_changed) {
                             auto source = nlohmann::json::parse(progress.value("source_path", ""), nullptr, false);
@@ -582,6 +575,18 @@ void NativeRunCoordinator::drive(const NativeRunDefinition &definition,
         terminal_recorded_ = true;
     }
     complete_.notify_all();
+}
+
+void NativeRunCoordinator::save_application_restart_diagnostic(std::uint64_t generation,
+    std::size_t index, const nlohmann::json &progress, const contracts::FrameEnvelope *frame) noexcept {
+    try {
+        storage::DiagnosticRequest request;
+        { std::lock_guard lock(mutex_); request.run_id = snapshot_.run_id; }
+        request.generation = generation; request.unit_index = index;
+        request.node = progress.value("step_id", ""); request.reason = "CONTINUOUS_EXCEPTION_TIMEOUT";
+        request.stage = "recovery_entry"; request.evidence_kind = "before_application_restart";
+        journal_->emit(generation, "diagnostic.application_restart", store_->save_diagnostic(frame, request));
+    } catch (...) { store_->note_diagnostic_hook_failure(); }
 }
 
 void NativeRunCoordinator::request_stop() {
