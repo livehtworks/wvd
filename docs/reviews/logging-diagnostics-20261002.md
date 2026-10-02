@@ -28,4 +28,13 @@
 - 隔离profile API测试覆盖默认值、CAS保存、重读和非法间隔拒绝；未连接设备。
 - 隔离RunStore检查覆盖关闭可选日志时保留输入审计、类别与级别；单轮内存边界检查确认顺序及两个所有者已释放；未操作游戏。
 - 独立数据目录的工作台在桌面/手机视口完成正式API保存与刷新回读，截图已由Playwright生成；临时服务经正式shutdown退出。
-- 此次未部署正式17654后台、未运行蝎女任务或循环。以上不构成实机内存归因或长期稳定性验收。
+- 上述限定检查不构成实机内存归因或长期稳定性验收。
+
+## 后续授权部署与实跑
+
+- 用户追加要求commit/push、部署并执行50次蝎女任务。源码提交`7af267c`已推送`fork/agent/local-stability-notes`；资源同步和CMake配置后冻结源码，完成Vue与Release构建，产物整理为`next/.local/c11-flow-product/candidate64`。
+- 经正式`manage_service.ps1 -Action Deploy`预检和生命周期入口部署，沿用原data目录与17654端口；未覆盖旧`config.json`、mod或历史运行日志。
+- EXE SHA256：`f459472e640927787985f20c02bdd9a06ea415d7d5063a0d569f6f5bb728d3bf`；服务实例`9F20ECA2-DEFE-431B-9F47-E9E55F5C2146`。运行日志实例与服务实例职责不同，不以UUID相同作为判断条件。
+- 启动请求`ccac0078-1c55-4992-a237-dda9a9f21a60`，`Scorpionesses`、`zh-Hant`、`repeat=true`、`repeat_count=50`；日志批次`next/.local/c11-flow-product/data/runs/1ADE8F5C-EBC0-4B3B-8987-82327F5F1ECB`。
+- 通过正式profile CAS仅调整日志至Debug、内存/动作耗时/识别统计开启、1000毫秒细采样；原自动Clash/VPN开启、战斗方案及任务配置保持。首轮生命周期记录确认VPN就绪及游戏前台启动，繁中下载确认正常通过，随后进入王城、公会悬赏页和跳轮。
+- `run.json`已冻结EXE身份与日志策略；`diagnostics.jsonl`内存边界、`recognition-memory.log`细采样和`action-timing.jsonl`均已实际落盘。当前为运行中采集，不宣称50轮已经完成或内存问题已解决；异常仍由既有恢复、截图和终态机制记录，不手工抹掉失败续计成功。
