@@ -38,3 +38,4 @@
 - 启动请求`ccac0078-1c55-4992-a237-dda9a9f21a60`，`Scorpionesses`、`zh-Hant`、`repeat=true`、`repeat_count=50`；日志批次`next/.local/c11-flow-product/data/runs/1ADE8F5C-EBC0-4B3B-8987-82327F5F1ECB`。
 - 通过正式profile CAS仅调整日志至Debug、内存/动作耗时/识别统计开启、1000毫秒细采样；原自动Clash/VPN开启、战斗方案及任务配置保持。首轮生命周期记录确认VPN就绪及游戏前台启动，繁中下载确认正常通过，随后进入王城、公会悬赏页和跳轮。
 - `run.json`已冻结EXE身份与日志策略；`diagnostics.jsonl`内存边界、`recognition-memory.log`细采样和`action-timing.jsonl`均已实际落盘。当前为运行中采集，不宣称50轮已经完成或内存问题已解决；异常仍由既有恢复、截图和终态机制记录，不手工抹掉失败续计成功。
+- 首轮实际终态`Completed`，411.079秒，战斗1次、提交报告1次、住宿1次（200G）、崩溃计数0；第二轮已自动开始。首轮诊断完整，动作日志672条、分级日志13条，均无写入失败或丢弃；历史帧保存25张，两个局部所有者释放标记为true。这是单轮及续轮证据，不是50轮完成证明。
