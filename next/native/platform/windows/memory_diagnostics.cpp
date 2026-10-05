@@ -6,6 +6,32 @@
 #include <utility>
 
 namespace wvd::platform {
+namespace {
+struct OwnerCounters { std::atomic<std::uint64_t> created{}, destroyed{}, live{}, ready{}; };
+std::array<OwnerCounters, 3> owner_counters;
+}
+MemoryOwnerLifetime::MemoryOwnerLifetime(MemoryOwnerKind kind) noexcept : kind_(kind) {
+    auto &c = owner_counters[static_cast<std::size_t>(kind_)];
+    id_ = c.created.fetch_add(1) + 1;
+    c.live.fetch_add(1);
+}
+MemoryOwnerLifetime::~MemoryOwnerLifetime() {
+    auto &c = owner_counters[static_cast<std::size_t>(kind_)];
+    if (ready_) c.ready.fetch_sub(1);
+    c.live.fetch_sub(1);
+    c.destroyed.fetch_add(1);
+}
+void MemoryOwnerLifetime::ready() noexcept {
+    if (!ready_) { ready_ = true; owner_counters[static_cast<std::size_t>(kind_)].ready.fetch_add(1); }
+}
+std::array<LifetimeCounts, 3> MemoryOwnerLifetime::counts() noexcept {
+    std::array<LifetimeCounts, 3> result;
+    for (std::size_t i = 0; i < result.size(); ++i) {
+        const auto &c = owner_counters[i];
+        result[i] = {c.created.load(), c.destroyed.load(), c.live.load(), c.ready.load()};
+    }
+    return result;
+}
 MemoryOwners sample_memory_owners() noexcept {
     MemoryOwners result;
     const auto started = GetTickCount64();
@@ -94,6 +120,23 @@ MemoryDiagnostics::~MemoryDiagnostics() {
 }
 MemoryDiagnostics::Slot::Slot(Slot &&other) noexcept
     : owner_(std::exchange(other.owner_, nullptr)), index_(other.index_) {}
+void MemoryDiagnostics::owner_boundary(const char *phase, const char *kind, std::uint64_t owner_id) noexcept {
+    if (!periodic_enabled_ || file_ == INVALID_HANDLE_VALUE) return;
+    const auto sample = sample_memory();
+    char line[512];
+    const int length = std::snprintf(line, sizeof(line),
+        "level=debug category=memory event=owner_boundary run=%llu generation=%llu tick_ms=%llu kind=%s owner=%llu phase=%s private=%llu handles=%u process_ok=%d\r\n",
+        static_cast<unsigned long long>(run_id_), static_cast<unsigned long long>(generation_),
+        static_cast<unsigned long long>(GetTickCount64()), kind, static_cast<unsigned long long>(owner_id), phase,
+        static_cast<unsigned long long>(sample.private_bytes), sample.handle_count, sample.process_ok);
+    if (length < 0 || length >= static_cast<int>(sizeof(line))) { write_failed_ = true; return; }
+    try {
+        std::lock_guard lock(write_mutex_);
+        DWORD written{};
+        if (!WriteFile(file_, line, static_cast<DWORD>(length), &written, nullptr) ||
+            written != static_cast<DWORD>(length)) write_failed_ = true;
+    } catch (...) { write_failed_ = true; }
+}
 MemoryDiagnostics::Slot::~Slot() { finish(); }
 void MemoryDiagnostics::Slot::finish() noexcept {
     if (!owner_) return;

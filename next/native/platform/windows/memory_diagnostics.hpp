@@ -20,6 +20,22 @@ struct MemorySample {
     std::uint64_t physical_available_pages{}, page_size{};
 };
 MemorySample sample_memory() noexcept;
+enum class MemoryOwnerKind { RecognitionService, OcrEngine, ExecutionSession };
+struct LifetimeCounts { std::uint64_t created{}, destroyed{}, live{}, ready{}; };
+class MemoryOwnerLifetime final {
+  public:
+    explicit MemoryOwnerLifetime(MemoryOwnerKind kind) noexcept;
+    ~MemoryOwnerLifetime();
+    MemoryOwnerLifetime(const MemoryOwnerLifetime &) = delete;
+    MemoryOwnerLifetime &operator=(const MemoryOwnerLifetime &) = delete;
+    void ready() noexcept;
+    std::uint64_t id() const { return id_; }
+    static std::array<LifetimeCounts, 3> counts() noexcept;
+  private:
+    MemoryOwnerKind kind_;
+    std::uint64_t id_{};
+    bool ready_{};
+};
 struct MemoryOwner {
     std::uint32_t process_id{};
     std::uint64_t created_100ns{}, private_bytes{}, working_set_bytes{};
@@ -43,6 +59,7 @@ class MemoryDiagnostics {
                                bool periodic_enabled = true,
                                std::uint32_t interval_ms = 1000) noexcept;
     ~MemoryDiagnostics();
+    void owner_boundary(const char *phase, const char *kind, std::uint64_t owner_id) noexcept;
     MemoryDiagnostics(const MemoryDiagnostics &) = delete;
     MemoryDiagnostics &operator=(const MemoryDiagnostics &) = delete;
     struct Context {

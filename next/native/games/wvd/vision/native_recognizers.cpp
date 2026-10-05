@@ -36,6 +36,8 @@ struct MovementSample {
     std::chrono::steady_clock::time_point at;
     std::string evaluated_frame;
     J result;
+    std::string context;
+    bool completed{}, stopped{};
 };
 struct CausalityScrollSample {
     cv::Mat bgr;
@@ -394,6 +396,7 @@ ProbeBatch evaluate_batch(const recognition::Bundle &bundle, recognition::Pixels
         worker.cancelled = cache.cancelled;
         worker.source_id = cache.source_id;
         worker.frame_key = cache.frame_key;
+        worker.frame_identity = cache.frame_identity;
     }
     std::atomic<bool> resource_failure{false};
     auto *metrics = platform::timing::active;
@@ -956,8 +959,11 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
         };
         // The toast may vanish before the caller resumes. Classify it on the
         // input-result frame before accepting the persistent dungeon background.
-        if (observe(navigation_no_route_probe(bound.value("resource_locale", ""))))
-            return decision(true, allowed_rect, {{"stage", "navigation_no_route"}});
+        if (observe(navigation_no_route_probe(bound.value("resource_locale", "")))) {
+            auto result = decision(true, allowed_rect, {{"stage", "navigation_no_route"}}, false);
+            result["confirmed_result"] = {{"classification", "navigation_no_route"}};
+            return result;
+        }
         const bool map = observe(dungeon_map_probe(bound));
         // 原式 moving|encounter|outside|no_target 中，!map && dungFlag 足以证明结果；
         // 即使同时出现遭遇/退场图标也属于允许返回状态，不必重算所有排除条件。
@@ -1309,6 +1315,10 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
         // 沿用旧移动检查的 3 秒间隔和小地图 ROI，只保存一个 Session 内的灰度副本。
         // Hit 仅表示需要重新打开地图检查，不表示目标完成或整局游戏卡死。
         check(image.cols == 900 && image.rows == 1600, "WVD_VIEWPORT_INVALID");
+        if (cache.frame_identity.foreground_application != "jp.co.drecom.wizardry.daphne") {
+            cache.assets.erase("movement.sample");
+            return decision(false, {}, {{"reason", "game_not_foreground"}}, false);
+        }
         const cv::Rect area(650, 25, 225, 225);
         check((area & allowed_rect) == area, "WVD_ROI_OUTSIDE_SCOPE");
         const auto dungeon = one("dungFlag", J::object());
@@ -1316,18 +1326,33 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
             bound, scope, cache, depth + 1, memo);
         check(map.at("outcome") != "Error", "WVD_NAVIGATION_RECOGNITION_ERROR");
         const std::string key = "movement.sample";
-        if (dungeon.at("outcome") != "Hit" || map.at("outcome") == "Hit") {
+        const auto scene = evaluate_impl(bundle, pixels, {{"mode", "auto_route_moving"}},
+            bound, scope, cache, depth + 1, memo);
+        const auto clear = evaluate_impl(bundle, pixels, {{"mode", "input_clear"}, {"phase", "navigation"}},
+            bound, scope, cache, depth + 1, memo);
+        check(scene.at("outcome") != "Error" && clear.at("outcome") != "Error", "WVD_NAVIGATION_RECOGNITION_ERROR");
+        if (dungeon.at("outcome") != "Hit" || map.at("outcome") == "Hit" ||
+            scene.at("outcome") != "Hit" || clear.at("outcome") != "Hit") {
             cache.assets.erase(key);
             return decision(false, {}, {{"reason", "not_moving_scene"}});
         }
         cv::Mat gray;
         cv::cvtColor(image(area), gray, cv::COLOR_BGR2GRAY);
         const auto now = std::chrono::steady_clock::now();
+        const auto &identity = cache.frame_identity;
+        const auto context = J::array({identity.device_id, identity.game_id, identity.pack_revision,
+            identity.viewport_id, identity.generation, identity.action_epoch, identity.connection_generation,
+            identity.backend, identity.foreground_application, identity.display_rotation,
+            identity.raw_size.width, identity.raw_size.height, p.value("scope", "navigation")}).dump();
         auto found = cache.assets.find(key);
+        if (found != cache.assets.end() && std::any_cast<MovementSample &>(found->second).context != context) {
+            cache.assets.erase(found);
+            found = cache.assets.end();
+        }
         if (found == cache.assets.end()) {
             check(cache.assets.size() < 2048, "WVD_SESSION_ASSET_CAPACITY");
             auto result = decision(false, {}, {{"reason", "first_sample"}});
-            cache.assets.emplace(key, MovementSample{gray, now, cache.frame_key, result});
+            cache.assets.emplace(key, MovementSample{gray, now, cache.frame_key, result, context});
             return result;
         }
         auto &previous = std::any_cast<MovementSample &>(found->second);
@@ -1335,15 +1360,22 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
         // Sampling once must not consume the evidence needed by the next branch.
         if (previous.evaluated_frame == cache.frame_key) return previous.result;
         previous.evaluated_frame = cache.frame_key;
-        if (now - previous.at < std::chrono::seconds(3)) {
-            previous.result = decision(false, {}, {{"reason", "sample_interval"}});
-            return previous.result;
-        }
         cv::Mat difference;
         cv::absdiff(gray, previous.gray, difference);
         const double mean = cv::mean(difference)[0] / 255;
+        // A fresh-frame motion counterexample revokes a completed stop immediately.
+        if (mean >= 0.1) { previous.completed = false; previous.stopped = false; }
+        if (now - previous.at < std::chrono::seconds(3)) {
+            const bool held = previous.completed && previous.stopped;
+            previous.result = decision(held, held ? area : cv::Rect{},
+                {{"reason", held ? "completed_sample_revalidated" : "sample_interval"},
+                 {"mean_difference", mean}, {"threshold", 0.1}}, false);
+            return previous.result;
+        }
         previous.gray = std::move(gray);
         previous.at = now;
+        previous.completed = true;
+        previous.stopped = mean < 0.1;
         previous.result = decision(mean < 0.1, area, {{"mean_difference", mean}, {"threshold", 0.1}}, false);
         return previous.result;
     }

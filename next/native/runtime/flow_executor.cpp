@@ -199,7 +199,43 @@ TickResult FlowExecutor::blocked(std::string code) {
     terminal_ = {TickState::ExternalBlocked, {}, std::move(code), current_source_path()};
     return terminal_;
 }
+contracts::Observation FlowExecutor::recognize_result(const contracts::FrameEnvelope &image,
+    const recognition::Request &request) {
+    const auto *custom = std::get_if<recognition::CustomParameters>(&request.parameters);
+    if (!custom || custom->binding != "ConfirmedInputResult") return ports_.recognize(image, request);
+    const auto &parameters = custom->parameters;
+    require(parameters.value("mode", "") == "confirmed_input_result" &&
+        parameters.contains("classification"), "CONFIRMED_RESULT_QUERY_INVALID");
+    contracts::Observation result;
+    result.basis = image.identity;
+    result.recognizer_id = request.recognizer_id;
+    result.parameter_revision = request.parameter_revision;
+    result.action_eligible = false;
+    result.outcome = contracts::RecognitionOutcome::NoHit;
+    const auto &saved = stack_.back().confirmed_result;
+    if (saved && !has_unresolved_input() && result_identity_matches(image.identity, saved->basis) &&
+        image.identity.action_epoch == saved->action_epoch &&
+        saved->classification == parameters.at("classification").get<std::string>() &&
+        (!parameters.contains("source_path") || parameters.at("source_path") == saved->source_path)) {
+        result.outcome = contracts::RecognitionOutcome::Hit;
+        result.evidence = {{"historical_result", true}, {"classification", saved->classification},
+            {"source_path", saved->source_path}, {"source_definition", saved->source_definition},
+            {"confirmed_frame", saved->basis.frame_id}, {"action_epoch", saved->action_epoch}};
+    }
+    return result;
+}
+void FlowExecutor::consume_result(const recognition::Request &request) {
+    const auto *custom = std::get_if<recognition::CustomParameters>(&request.parameters);
+    if (custom && custom->binding == "ConfirmedInputResult" && custom->parameters.value("consume", false))
+        stack_.back().confirmed_result.reset();
+}
 TickResult FlowExecutor::route_error(Frame &frame, const workflow::Step &current, std::string code) {
+    if (code == "FLOW_STAGE_TIMEOUT" && std::holds_alternative<workflow::Poll>(current.data) &&
+        !frame.error_pending && !frame.resume && frame.event_exits.empty() && !has_unresolved_input()) {
+        invalidate_observation();
+        const auto image = observation_frame();
+        if (auto result = recheck_expired_poll(frame, current, image)) return *result;
+    }
     // 有界等待耗尽前再给已知现场一次诊断机会；Error/取消/送达未知不走盲目恢复。
     if (!frame.error_pending && (code == "FLOW_STAGE_TIMEOUT" ||
         code == "FLOW_HIT_LIMIT_EXHAUSTED" || code == "EVENT_RESUME_UNCONFIRMED")) {
@@ -247,7 +283,7 @@ TickResult FlowExecutor::route_error(Frame &frame, const workflow::Step &current
 std::optional<TickResult> FlowExecutor::reclassify_timeout(Frame &frame,
     const workflow::Step &current, const std::string &code) {
     // 只读场景过期后按本子图声明的业务场景复核；不重走输入或动作节点。
-    if (frame.pending || frame.error_pending || frame.resume || !frame.event_exits.empty() ||
+    if (has_unresolved_input() || frame.error_pending || frame.resume || !frame.event_exits.empty() ||
         !(std::holds_alternative<workflow::Observe>(current.data) ||
           std::holds_alternative<workflow::Route>(current.data) ||
           std::holds_alternative<workflow::Poll>(current.data) ||
@@ -263,13 +299,23 @@ std::optional<TickResult> FlowExecutor::reclassify_timeout(Frame &frame,
                 frame.hits.at(candidate.id) >= candidate.max_hit)) return;
         candidates.push_back(&candidate);
     };
-    for (const auto &[id, candidate] : definition.steps)
-        include(candidate);
+    // Known-scene labels classify observations; only declared edges authorize recovery.
+    std::vector<std::string> reachable = current.next;
+    if (frame.returned_targets) reachable = *frame.returned_targets;
+    else if (frame.selection_origin) {
+        const auto &origin = *frame.selection_origin;
+        const auto &predecessor = definition.steps.at(origin.predecessor);
+        reachable = origin.returned_targets ? *origin.returned_targets :
+            (origin.error_pending ? predecessor.on_error : predecessor.next);
+    }
+    for (const auto &id : current.on_error)
+        if (std::find(reachable.begin(), reachable.end(), id) == reachable.end()) reachable.push_back(id);
+    for (const auto &id : reachable) include(definition.steps.at(id));
     if (candidates.empty()) return std::nullopt;
     invalidate_observation();
     const auto image = observation_frame();
     for (const auto *candidate : candidates) {
-        auto observed = ports_.recognize(image, *candidate->guard);
+        auto observed = recognize_result(image, *candidate->guard);
         if (observed.outcome == contracts::RecognitionOutcome::Error)
             return fail(observed.error_code.empty() ? "RECOGNITION_ERROR" : observed.error_code);
         if (observed.outcome != contracts::RecognitionOutcome::Hit) continue;
@@ -277,11 +323,12 @@ std::optional<TickResult> FlowExecutor::reclassify_timeout(Frame &frame,
         last_diagnostic_ = {{"reason", "timeout_scene_reclassified"},
             {"original_reason", code}, {"source_path", current.source_path},
             {"target", candidate->source_path}, {"frame_id", image.identity.frame_id}};
+        const SelectionOrigin origin{current.id, frame.entered_at, frame.error_pending, reachable};
         frame.current = candidate->id;
         frame.entered_at = Clock::now();
         frame.next_pending = frame.error_pending = false;
         frame.returned_targets.reset();
-        frame.selection_origin.reset();
+        frame.selection_origin = origin;
         frame.selected_frame = image;
         frame.selected_observation = std::move(observed);
         frame.timeout_reclassifications.insert(candidate->id);
@@ -422,6 +469,7 @@ TickResult FlowExecutor::reconsider_uncommitted_selection(Frame &frame) {
         frame.entered_at = origin.entered_at;
         frame.next_pending = true;
         frame.error_pending = origin.error_pending;
+        frame.returned_targets = origin.returned_targets;
         frame.selected_frame.reset();
         frame.selected_observation.reset();
     }
@@ -482,8 +530,8 @@ TickResult FlowExecutor::select_next(Frame &frame, const workflow::Step &current
         const bool reconsiderable = std::holds_alternative<workflow::Input>(candidate.data) ||
             std::holds_alternative<workflow::Observe>(candidate.data) ||
             (candidate.guard && std::holds_alternative<workflow::Route>(candidate.data));
-        if (reconsiderable && candidates.size() > 1 && !frame.pending)
-            frame.selection_origin = SelectionOrigin{previous, entered, was_error};
+        if (reconsiderable && (candidates.size() > 1 || frame.returned_targets.has_value()) && !frame.pending)
+            frame.selection_origin = SelectionOrigin{previous, entered, was_error, frame.returned_targets};
         else frame.selection_origin.reset();
         frame.current = candidate.id;
         if (!is_poll) frame.known_wait = false;
@@ -520,7 +568,7 @@ TickResult FlowExecutor::select_next(Frame &frame, const workflow::Step &current
         }
         std::optional<contracts::Observation> observed;
         if (candidate.guard) {
-            observed = ports_.recognize(acquire_image(), *candidate.guard);
+            observed = recognize_result(acquire_image(), *candidate.guard);
             if (observed->outcome == contracts::RecognitionOutcome::Error)
                 return fail(observed->error_code.empty() ? "RECOGNITION_ERROR" : observed->error_code);
             if (observed->outcome == contracts::RecognitionOutcome::NoHit) continue;
@@ -748,11 +796,132 @@ std::optional<TickResult> FlowExecutor::settle_await_result(Frame &frame,
         frame.hits.erase(current.id);
     }
     report_input_result(*frame.pending, "confirmed", observed.basis.frame_id);
+    if (const auto metadata = observed.evidence.find("confirmed_result"); metadata != observed.evidence.end()) {
+        require(metadata->is_object() && metadata->contains("classification") &&
+            metadata->at("classification").is_string(), "CONFIRMED_RESULT_METADATA_INVALID");
+        auto classification = metadata->at("classification").get<std::string>();
+        require(!classification.empty() && classification.size() <= 64, "CONFIRMED_RESULT_METADATA_INVALID");
+        frame.confirmed_result = ConfirmedInputResult{std::move(classification),
+            frame.pending->source_path, frame.definition, observed.basis, frame.pending->action_epoch};
+    }
     frame.pending.reset();
     finish_observation_recovery("original_result_confirmed");
     advance(frame);
     // 仅正向结清允许后继开始选路，旧 Await 的局部期限不再截断新阶段。
     frame.entered_at = Clock::now();
+    return progress();
+}
+
+std::optional<TickResult> FlowExecutor::recheck_expired_poll(Frame &frame,
+    const workflow::Step &current, const contracts::FrameEnvelope &image) {
+    const auto *poll = std::get_if<workflow::Poll>(&current.data);
+    // This is a read-only final dispatch of the CURRENT Poll, not a graph-wide replan.
+    if (!poll || frame.error_pending || frame.resume || !frame.event_exits.empty() ||
+        has_unresolved_input() || Clock::now() - frame.entered_at < current.time_limit ||
+        std::any_of(stack_.begin(), stack_.end(), [&](const Frame &active) {
+            const auto &checks = program_.definitions.at(active.definition).checks;
+            return (checks && checks->phase == "exception") ||
+                (active.event && active.event->rule.category == workflow::EventClass::Exception &&
+                 !active.event->rule.on_device_restart);
+        })) return std::nullopt;
+    const auto interrupted = [&]() -> std::optional<TickResult> {
+        if (ports_.cancelled()) {
+            terminal_ = {TickState::Cancelled, {}, "CANCELLED", current_source_path()};
+            return terminal_;
+        }
+        if (Clock::now() >= deadline_) return fail("FLOW_TOTAL_DEADLINE");
+        return std::nullopt;
+    };
+    if (auto result = interrupted()) return result;
+    const auto verify = [&](const recognition::Request &condition) {
+        auto observed = recognize_result(image, condition);
+        if (observed.outcome == contracts::RecognitionOutcome::Error)
+            require_hit(observed, "EXPIRED_POLL_RECOGNITION_ERROR");
+        require(same_device(observed.basis, image.identity) &&
+            observed.basis.frame_id == image.identity.frame_id &&
+            observed.basis.action_epoch == image.identity.action_epoch,
+            "EXPIRED_POLL_EVIDENCE_STALE");
+        return observed;
+    };
+    const auto &definition = program_.definitions.at(frame.definition);
+    const auto candidates = frame.returned_targets.value_or(current.next);
+    // Do not jump over an unexecuted action, call, business operation or control node.
+    // Those shapes keep their existing recovery path and are not covered by this repair.
+    for (const auto &id : candidates) {
+        const auto &candidate = definition.steps.at(id);
+        if (candidate.unexpected_only) continue;
+        if (candidate.business_guard ||
+            (!std::holds_alternative<workflow::Observe>(candidate.data) &&
+             !std::holds_alternative<workflow::Poll>(candidate.data))) return std::nullopt;
+    }
+    if (auto event = check_events(frame, current, image, workflow::EventClass::Overlay)) return event;
+    if (auto result = interrupted()) return result;
+    for (const auto &id : candidates) {
+        const auto &candidate = definition.steps.at(id);
+        const auto *observe = std::get_if<workflow::Observe>(&candidate.data);
+        if (!observe || candidate.unexpected_only ||
+            (candidate.max_hit && frame.hits.contains(id) && frame.hits.at(id) >= candidate.max_hit)) continue;
+        if (candidate.guard) {
+            const auto allowed = verify(*candidate.guard);
+            if (auto result = interrupted()) return result;
+            if (allowed.outcome != contracts::RecognitionOutcome::Hit) continue;
+        }
+        auto observed = verify(observe->request);
+        if (auto result = interrupted()) return result;
+        if (observed.outcome != contracts::RecognitionOutcome::Hit) continue;
+        if (candidate.marks_known_scene) record_known_scene(frame, observed);
+        // If the new read-only selection becomes invalid, restore the expired Poll
+        // and its ORIGINAL deadline/candidate source; do not grant a fresh wait window.
+        frame.selection_origin = SelectionOrigin{current.id, frame.entered_at,
+            frame.error_pending, frame.returned_targets};
+        frame.current = id;
+        frame.entered_at = Clock::now();
+        frame.next_pending = frame.error_pending = false;
+        frame.returned_targets.reset();
+        frame.delay_until.reset(); frame.poll_until.reset(); frame.known_wait = false;
+        frame.selected_frame = image; frame.selected_observation = std::move(observed);
+        if (candidate.max_hit) ++frame.hits[id];
+        clear_unexpected(frame);
+        last_diagnostic_ = {{"reason", "expired_poll_successor_selected"},
+            {"source_path", current.source_path}, {"target", candidate.source_path},
+            {"frame_id", image.identity.frame_id}};
+        return progress();
+    }
+    // A known background must not suppress registered error/encounter handlers.
+    if (auto event = check_unexpected(frame, current, image, "poll_no_progress_timeout", true)) return event;
+    if (auto result = interrupted()) return result;
+    if (!poll->ongoing) return std::nullopt;
+    const auto ongoing = verify(*poll->ongoing);
+    if (auto result = interrupted()) return result;
+    if (ongoing.outcome != contracts::RecognitionOutcome::Hit) return std::nullopt;
+    if (poll->progress) {
+        const auto changed = verify(*poll->progress);
+        if (auto result = interrupted()) return result;
+        if (changed.outcome == contracts::RecognitionOutcome::Hit) {
+            // Only the already-declared progress evidence renews the local window.
+            // Invocation budgets, total wall-clock limit and input receipts are untouched.
+            frame.entered_at = Clock::now();
+            frame.known_wait = true;
+            clear_unexpected(frame);
+            record_known_scene(frame, ongoing);
+            last_diagnostic_ = {{"reason", "expired_poll_progress_observed"},
+                {"source_path", current.source_path}, {"frame_id", image.identity.frame_id}};
+            return waiting(poll->interval);
+        }
+    }
+    if (current.on_error.empty()) return std::nullopt;
+    // Dispatch the existing explicit no-progress edge, not a success edge.
+    // No input or business confirmation is executed in this helper.
+    frame.next_pending = frame.error_pending = true;
+    frame.returned_targets.reset(); frame.selection_origin.reset();
+    frame.selected_frame.reset(); frame.selected_observation.reset();
+    frame.delay_until.reset(); frame.poll_until.reset(); frame.known_wait = false;
+    frame.entered_at = Clock::now();
+    frame.no_progress_since.reset(); frame.next_diagnostic_poll = {};
+    frame.diagnostic_checked = false;
+    exception_since_.reset(); // The declared failure edge now owns this known stalled scene.
+    last_diagnostic_ = {{"reason", "expired_poll_no_progress_error_route"},
+        {"source_path", current.source_path}, {"frame_id", image.identity.frame_id}};
     return progress();
 }
 
@@ -765,9 +934,12 @@ std::optional<TickResult> FlowExecutor::recheck_normal_observation(Frame &frame,
                 (active.event && active.event->rule.category == workflow::EventClass::Exception &&
                  !active.event->rule.on_device_restart);
         })) return std::nullopt;
+    if (std::holds_alternative<workflow::Poll>(current.data) &&
+        Clock::now() - frame.entered_at >= current.time_limit)
+        return recheck_expired_poll(frame, current, image);
     const auto &definition = program_.definitions.at(frame.definition);
     const auto verify = [&](const recognition::Request &condition) {
-        auto observed = ports_.recognize(image, condition);
+        auto observed = recognize_result(image, condition);
         if (observed.outcome == contracts::RecognitionOutcome::Error)
             require_hit(observed, "NORMAL_RECHECK_ERROR");
         if (observed.outcome == contracts::RecognitionOutcome::Hit)
@@ -809,11 +981,20 @@ std::optional<TickResult> FlowExecutor::recheck_normal_observation(Frame &frame,
         if (const auto *poll = std::get_if<workflow::Poll>(&candidate.data); poll && poll->ongoing) {
             const auto observed = verify(*poll->ongoing);
             if (observed.outcome == contracts::RecognitionOutcome::Hit) {
+                const bool expired = Clock::now() - frame.entered_at >= current.time_limit;
+                if (expired) {
+                    // A fallback Poll cannot clear a timed-out Route merely because
+                    // its background is still visible. Require real declared progress.
+                    if (!poll->progress) return std::nullopt;
+                    const auto changed = verify(*poll->progress);
+                    if (changed.outcome != contracts::RecognitionOutcome::Hit) return std::nullopt;
+                }
                 if (ports_.cancelled()) {
                     terminal_ = {TickState::Cancelled, {}, "CANCELLED", current_source_path()};
                     return terminal_;
                 }
                 if (Clock::now() >= deadline_) return fail("FLOW_TOTAL_DEADLINE");
+                if (expired) frame.entered_at = Clock::now();
                 clear_unexpected(frame);
                 frame.known_wait = true;
                 record_known_scene(frame, observed);
@@ -865,7 +1046,7 @@ TickResult FlowExecutor::execute_step(Frame &frame, const workflow::Step &curren
     if (current.guard && !frame.selected_observation) {
         const auto image = observation_frame();
         if (auto event = check_events(frame, current, image, workflow::EventClass::Overlay)) return *event;
-        auto observed = ports_.recognize(image, *current.guard);
+        auto observed = recognize_result(image, *current.guard);
         if (observed.outcome == contracts::RecognitionOutcome::Error)
             return fail(observed.error_code.empty() ? "RECOGNITION_ERROR" : observed.error_code);
         if (observed.outcome == contracts::RecognitionOutcome::NoHit) {
@@ -885,17 +1066,23 @@ TickResult FlowExecutor::execute_step(Frame &frame, const workflow::Step &curren
         // Observe 自身的请求必须执行；不能靠当前 lowering 恰好又填了 guard。
         const auto image = observation_frame();
         if (auto event = check_events(frame, current, image, workflow::EventClass::Overlay)) return *event;
-        const auto result = ports_.recognize(image, observe->request);
+        const auto result = recognize_result(image, observe->request);
         if (result.outcome == contracts::RecognitionOutcome::NoHit) {
             frame.selected_frame.reset(); frame.selected_observation.reset();
             if (auto event = check_unexpected(frame, current, image, "observation_not_confirmed")) return *event;
             return reconsider_uncommitted_selection(frame);
         }
         require_hit(result, "OBSERVE_UNCONFIRMED");
+        consume_result(observe->request);
         advance(frame); return progress();
     }
     if (const auto *input = std::get_if<workflow::Input>(&current.data)) {
         if (frame.pending) return blocked("INPUT_UNRESOLVED");
+        for (const auto *request : {&input->scene, &input->target}) {
+            const auto *custom = std::get_if<recognition::CustomParameters>(&request->parameters);
+            if (custom && custom->binding == "ConfirmedInputResult")
+                return fail("HISTORICAL_RESULT_CANNOT_AUTHORIZE_INPUT");
+        }
         if (ports_.prepare_input()) {
             invalidate_observation();
             return reconsider_uncommitted_selection(frame);
@@ -956,6 +1143,7 @@ TickResult FlowExecutor::execute_step(Frame &frame, const workflow::Step &curren
             return fail("INPUT_REJECTED:" + submitted.detail);
         }
         // 先留下实际副作用事实，再验证回执；任何后续失败都不能丢掉它。
+        for (auto &scope : stack_) scope.confirmed_result.reset();
         frame.pending = PendingInput{current.source_path, image.identity, submitted.action_epoch,
             submitted.submitted_at, {}, std::move(expected), result_budget,
             submitted.state == SubmissionState::Unresolved, current.id, submitted.submitted_at};
@@ -1018,6 +1206,7 @@ TickResult FlowExecutor::execute_step(Frame &frame, const workflow::Step &curren
         require(stack_.size() < 8, "FLOW_CALL_DEPTH_LIMIT");
         const auto &child = program_.definitions.at(call->definition);
         Frame nested;
+        frame.confirmed_result.reset();
         nested.definition = child.id; nested.current = child.entry;
         nested.invoked_at = nested.entered_at = Clock::now();
         if (child.cumulative_budget) nested.invocation_deadline = nested.invoked_at + *child.cumulative_budget;
@@ -1048,6 +1237,7 @@ TickResult FlowExecutor::execute_step(Frame &frame, const workflow::Step &curren
             if (event.resume == workflow::ResumeMode::Replan)
                 parent.resume = PendingResume{event, ended.event->owner};
         } else {
+            parent.confirmed_result = std::move(ended.confirmed_result);
             // 普通子调用不消耗父调用节点的选路等待；已排除的事件时间不重复加。
             parent.entered_at += std::max(Clock::duration::zero(),
                 Clock::now() - ended.invoked_at - ended.paused_event_time);
@@ -1082,7 +1272,10 @@ TickResult FlowExecutor::execute_step(Frame &frame, const workflow::Step &curren
         const auto image = observation_frame();
         if (auto event = check_events(frame, current, image, workflow::EventClass::Overlay)) return *event;
         const auto result = ports_.operate(binding, parameters, image, frame.selected_observation, current.source_path);
-        if (result.state == OperationState::Done) { advance(frame); return progress(); }
+        if (result.state == OperationState::Done) {
+            if (business) consume_result(business->condition);
+            advance(frame); return progress();
+        }
         if (result.state == OperationState::Waiting) {
             frame.selected_frame.reset(); frame.selected_observation.reset();
             if (auto event = check_unexpected(frame, current, image, "business_confirmation_pending")) return *event;
@@ -1253,6 +1446,8 @@ TickResult FlowExecutor::retry_observation() {
                 // next_pending只重新检查前驱的候选，不执行前驱的确认/输入。
                 frame.next_pending = restart_from.empty() && pending.selection_origin.has_value();
                 frame.error_pending = restart_from.empty() && pending.selection_origin && pending.selection_origin->error_pending;
+                frame.returned_targets = restart_from.empty() && pending.selection_origin
+                    ? pending.selection_origin->returned_targets : std::nullopt;
                 frame.selection_origin.reset();
                 frame.selected_frame.reset(); frame.selected_observation.reset();
                 frame.delay_until.reset(); frame.poll_until.reset();

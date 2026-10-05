@@ -16,9 +16,9 @@
 | `runs/<instance>/<run_id>/run.json`、`events.json`、`result.json` | 分别记录请求、活动事件和最终结果；只有 `result.json` 是持久化终态证据，`events.json` 不能反推业务完成。 | `RunStore`/`NativeRunCoordinator` | 工作台历史与诊断 |
 | `runs/.../execution-events.jsonl` | 正式运行的逐项执行事件审计，先落盘再进入有界UI事件环；每轮64MiB上限，丢弃/失败计入`result.diagnostics.event_history`。终态仍只以`result.json`为权威，文件不提前写成功终态。与run/instance/seq关联，不是测试数据。 | `EventJournal`的唯一RunStore写入回调 | 只读计时分析器、故障排查 |
 | `runs/.../action-timing.jsonl`、`diagnostics.jsonl` | 正式动作耗时/输入审计及按级别开关采集的诊断；上限分别64MiB/16MiB，终态冻结行数与失败计数。内存开启且info以上时，现有取帧回调每30秒记录进程/系统提交与可用物理内存；会话首帧、系统提交>=90%及失败收尾附带可读进程私有提交前8名（PID、创建时间、名称、私有/工作集字节），最多枚举4096项/200ms并记录不可读/截断/耗时，不采命令行、不额外截图、不终止进程。可读进程之和不是系统提交的完整分解。 | `RunStore` | 工作台诊断、只读分析器 |
-| `runs/.../memory-lifecycle.json` | 终态之后的内存诊断，按运行定义释放、worker join、整批配置释放分别保存；最多三个具名标量快照，按run/instance关联。受内存开关与info级别控制，不回写终态、不作为业务成功条件；失败计数可由当前diagnostics读取。 | `NativeRunCoordinator`经`RunStore`；整批释放由唯一Application调用 | 只读分析器、资源归因 |
+| `runs/.../memory-lifecycle.json` | 终态之后的内存诊断，按运行定义释放、worker join、整批配置释放分别保存；最多三个具名快照，按run/instance关联，附进程范围Service/OCR/Session创建/销毁/live/ready标量。会话持有阶段的diagnostics另记租约ID/共享引用/原文件缓冲和程序参数容器估算。受内存开关与info级别控制，不回写终态、不作为业务成功条件；失败计数可由当前diagnostics读取。 | `NativeRunCoordinator`经`RunStore`；整批释放由唯一Application调用 | 只读分析器、资源归因 |
 | `recent-frames/*.jpg`、`*.png` | 同一辅助滚动历史，不授权输入、不证明业务完成；周期JPEG至多每15秒一张，选人/输入前后/确认关键帧以无损PNG绕过周期限制并同帧去重。共用240张/128MiB上限，pending四张、in-flight一张，共享不可变BGR；`recent_frame.action`记录frame_id、阶段、是否入队，实际落盘仍须核对文件及失败/丢弃计数。 | `NativeRunCoordinator`提交，唯一`RunStore`线程写入 | 用户与诊断 |
-| `runs/.../recognition-memory.log`及运行诊断文件 | 资源调查标量及必要故障证据，不是资源稳定或泄漏归因结论；普通采样限频，故障即时。 | Recognition/MemoryDiagnostics | 用户与诊断 |
+| `runs/.../recognition-memory.log`及运行诊断文件 | 资源调查标量及必要故障证据；原memory/debug开关下附OCR owner ID及初始化/销毁begin/end私有内存/句柄配对，按run/generation关联，无新日志权威。配对差为进程观察差，非独占分配栈；普通采样限频，故障即时。只读归因工具的输出是独立诊断报告，不回写运行文件。 | Recognition/MemoryDiagnostics | 用户与诊断 |
 | `legacy-import/` | 首次导入时对旧配置的私有副本，不回写源 `config.json`。 | 显式初次导入 | `ProfileStore` 初始化 |
 | 源码 `resources/authoring/semantic-assets.json` | 素材语言、默认 condition 和显式 alternatives 的唯一人工配方源；流程只持有资源ID及可选method。 | 源码维护 | 作者目录、编译期展开、包同步 |
 | 源码 `resources/recognition/ocr-models.json` | OCR来源、语言、SHA256、包路径的唯一锁；`.local/native-deps/ocr-zh-Hant`仅为可重建下载缓存。发布的`pack/model/ocr`为只读模型。 | 源码维护；prepare工具写缓存 | 构建、打包、发布器、识别Service |

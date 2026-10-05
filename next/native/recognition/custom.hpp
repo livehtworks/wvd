@@ -58,6 +58,7 @@ struct Cache {
     // 已声明正面场景的序号，由 Service 单线程更新；供时序分类器切断未知区间。
     std::uint64_t known_scene_epoch{};
     std::string frame_key;
+    contracts::FrameIdentity frame_identity;
     std::map<std::string, nlohmann::json> results;
     std::uint64_t result_bytes{};
     // 单帧的纯模板叶子证据，服务换帧时清空；不保存像素或业务/运动状态。

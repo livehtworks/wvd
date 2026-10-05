@@ -80,6 +80,14 @@ class WvdRunState final : public contracts::BusinessRunState {
     double combat_seconds_{}, chest_seconds_{}, total_seconds_{};
     bool pending_combat_{}, pending_chest_{}, need_initial_recover_{true}, recover_after_rez_{},
         met_encounter_{}, combat_speed_{}, zoom_world_map_{};
+    // One target attempt belongs to this Run, route and point, across recovery generations.
+    struct TargetEncounter {
+        std::size_t unit{}, route{}, point{}, attempt{}, combat{};
+        int phase{}; // 0 idle, 1 fighting, 2 interlude, 3 confirmed, 4 settled.
+        bool resume_authorized{};
+        std::string completion_reason;
+    } target_encounter_;
+    std::size_t target_attempt_sequence_{};
     std::size_t wall_bypass_step_{3}, wall_bypass_sequence_{};
     std::size_t trap_cycles_completed_{};
     std::optional<std::size_t> trap_unit_;

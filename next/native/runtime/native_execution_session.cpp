@@ -1,5 +1,6 @@
 #include "native_execution_session.hpp"
 #include "platform/execution_timing.hpp"
+#include "platform/json_storage.hpp"
 #include <algorithm>
 #include <stdexcept>
 
@@ -40,6 +41,44 @@ NativeExecutionSession::NativeExecutionSession(std::shared_ptr<const workflow::F
     ports_.set_operation_handler(operations(ports_));
     ports_.set_input_sink(std::move(input_sink));
     ports_.set_capture_sink(std::move(capture_sink));
+    lifetime_.ready();
+}
+
+nlohmann::json NativeExecutionSession::ownership_snapshot() const {
+    std::size_t steps{};
+    platform::JsonStorageEstimate parameters;
+    const auto count_request = [&](const recognition::Request &request) {
+        if (const auto *custom = std::get_if<recognition::CustomParameters>(&request.parameters)) parameters.add(custom->parameters);
+    };
+    for (const auto &[id, definition] : program_owner_->definitions) {
+        (void)id;
+        steps += definition.steps.size();
+        for (const auto &[name, step] : definition.steps) {
+            (void)name;
+            if (step.guard) count_request(*step.guard);
+            if (step.business_guard) parameters.add(*step.business_guard);
+            std::visit([&](const auto &value) {
+                using T = std::decay_t<decltype(value)>;
+                if constexpr (std::is_same_v<T, workflow::Observe>) count_request(value.request);
+                else if constexpr (std::is_same_v<T, workflow::Input>) {
+                    count_request(value.scene); count_request(value.target); parameters.add(value.command);
+                    if (value.retry) count_request(value.retry->ready);
+                } else if constexpr (std::is_same_v<T, workflow::AwaitResult>) count_request(value.condition);
+                else if constexpr (std::is_same_v<T, workflow::BusinessConfirm>) {
+                    count_request(value.condition); parameters.add(value.parameters);
+                } else if constexpr (std::is_same_v<T, workflow::RegisteredOperation>) parameters.add(value.parameters);
+                else if constexpr (std::is_same_v<T, workflow::Poll>) {
+                    if (value.ongoing) count_request(*value.ongoing);
+                    if (value.progress) count_request(*value.progress);
+                }
+            }, step.data);
+        }
+    }
+    return {{"owner_id", lifetime_.id()}, {"program_revision", program_owner_->revision},
+        {"program_owners", program_owner_.use_count()}, {"recognizer_owners", recognizer_owner_.use_count()},
+        {"program_definitions", program_owner_->definitions.size()}, {"program_steps", steps},
+        {"program_parameter_containers", parameters.json()},
+        {"excluded", {"allocator_overhead", "event_request_containers", "callback_captures", "external_runtime_allocations"}}};
 }
 
 NativeExecutionResult NativeExecutionSession::run() {

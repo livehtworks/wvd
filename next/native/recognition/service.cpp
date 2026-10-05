@@ -69,6 +69,7 @@ Service::Service(Bundle bundle, Handlers handlers, std::shared_ptr<MatchBudget> 
                 bundle_.lease->revision() == bundle_.revision,
             "BUNDLE_LEASE_MISMATCH");
     bundle_.lease->verify_members();
+    lifetime_.ready();
 }
 
 contracts::Observation Service::evaluate(const contracts::FrameEnvelope &frame,
@@ -126,6 +127,11 @@ contracts::Observation Service::evaluate(const contracts::FrameEnvelope &frame,
             "RECOGNITION_OPENCV_ERROR:" + std::to_string(error.code);
         result.outcome = contracts::RecognitionOutcome::Error;
         return result;
+    } catch (const platform::MissingBundleMember &error) {
+        result.error_code = error.what();
+        result.evidence = {{"missing_resource", error.member()}};
+        result.outcome = contracts::RecognitionOutcome::Error;
+        return result;
     } catch (const std::exception &error) {
         result.error_code = error.what();
         result.outcome = contracts::RecognitionOutcome::Error;
@@ -158,6 +164,7 @@ contracts::Observation Service::evaluate_locked(const FramePixels &pixels, const
     result.outcome = contracts::RecognitionOutcome::NoHit;
     result.error_stage = "recognition";
     cache_.source_id = std::hash<std::string>{}(request.recognizer_id);
+    cache_.frame_identity = basis;
     if (const auto *templ = std::get_if<TemplateParameters>(&request.parameters)) {
         require(std::isfinite(templ->threshold) && templ->threshold >= 0 &&
                     templ->threshold <= 1, "THRESHOLD_INVALID");
@@ -314,7 +321,7 @@ contracts::Observation Service::recognize_ocr(const FramePixels &pixels,
             require(bundle_.lease->hash(relative) == spec.at("sha256").get<std::string>(), "OCR_MODEL_NOT_LOCKED");
         }
         require(!cancelled_.load(), "RECOGNITION_CANCELLED");
-        engine = std::make_shared<OcrEngine>(bundle_.root / model.at("bundle_directory").get<std::string>());
+        engine = std::make_shared<OcrEngine>(bundle_.root / model.at("bundle_directory").get<std::string>(), cache_.diagnostics);
         slot.store(engine);
     }
     // 发布前发生的取消由该检查承接；发布后发生的取消直接命中同一引擎。
@@ -369,6 +376,25 @@ void Service::cancel() noexcept {
     // 请求取消不等于推理已经退出；Session 仍持有所有资源直到调用实际返回。
     try { for (auto &slot : ocr_) if (auto engine = slot.load()) engine->cancel(); }
     catch (...) { /* 取消标记仍有效，不能由控制线程抛出并破坏停止链。 */ }
+}
+nlohmann::json Service::ownership_snapshot() const {
+    nlohmann::json models = nlohmann::json::array();
+    for (std::size_t i = 0; i < ocr_.size(); ++i) {
+        const auto engine = ocr_[i].load();
+        models.push_back({{"language", i ? "zh-Hant" : "en"}, {"initialized", bool(engine)},
+            {"owners_excluding_probe", engine ? engine.use_count() - 1 : 0},
+            {"runtime_allocation_bytes", nullptr}});
+    }
+    const auto bytes = bundle_.lease->storage_stats();
+    return {{"owner_id", lifetime_.id()}, {"ocr", models},
+        {"bundle_lease", {{"identity", bundle_.lease->identity()}, {"owners", bundle_.lease.use_count()},
+            {"held_file_bytes", bytes.size_bytes}, {"held_capacity_bytes", bytes.capacity_bytes},
+            {"model_file_bytes", bytes.model_bytes}, {"image_file_bytes", bytes.image_bytes},
+            {"json_file_bytes", bytes.json_bytes}, {"other_file_bytes", bytes.other_bytes},
+            {"files", bundle_.lease->file_count()}}},
+        {"temporal_state_entries", cache_.assets.size()},
+        {"result_cache_entries", cache_.results.size() + cache_.template_results.size()},
+        {"decoded_frame_bytes", frame_pixels_ ? frame_pixels_->bgr().size() : 0}};
 }
 ResourceStats Service::resource_stats() const {
     auto result = cache_.decoded->stats();

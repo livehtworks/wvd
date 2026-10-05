@@ -196,6 +196,213 @@ workflow::Step step(std::string id, workflow::StepData data,
 
 int main(int argc, char **argv) {
     try {
+        if (argc == 2 && std::string(argv[1]) == "--linkage-closure") {
+            // Uses the production FlowExecutor. Only pixels, device and recognition leaves
+            // are replaced; no real game input or service is opened by this entry.
+            const auto check = [](bool ok, const std::string &reason) {
+                if (!ok) throw std::runtime_error("LINKAGE_CLOSURE:" + reason);
+            };
+            const auto request = [](const char *id) {
+                return recognition::Request{id, "1", {0, 0, 900, 1600},
+                    recognition::CustomParameters{"WvdVision", nlohmann::json::object()}};
+            };
+            const auto drive = [&](runtime::FlowExecutor &executor) {
+                runtime::TickResult result;
+                for (int i = 0; i < 2000; ++i) {
+                    result = executor.tick();
+                    if (result.state != runtime::TickState::Progress && result.state != runtime::TickState::Waiting)
+                        return result;
+                    if (result.state == runtime::TickState::Waiting) std::this_thread::sleep_until(result.wake_at);
+                }
+                throw std::runtime_error("LINKAGE_CLOSURE:bounded driver exhausted");
+            };
+            const auto add_boot = [&](workflow::FlowProgram &program, workflow::Definition &root) {
+                workflow::Definition boot; boot.id = "boot"; boot.entry = "marker";
+                boot.steps.emplace("marker", step("marker", workflow::RegisteredOperation{"BootMarker", nlohmann::json::object()}, {"return"}));
+                boot.steps.emplace("return", step("return", workflow::Return{"completed"}));
+                program.definitions.emplace("boot", std::move(boot));
+                workflow::EventRule event; event.id = "test-restart"; event.detect = request("never");
+                event.handler_definition = "boot"; event.on_device_restart = true;
+                root.events.push_back(std::move(event));
+            };
+            for (const bool single : {false, true}) {
+                struct HandoffPorts final : Ports {
+                    bool single{};
+                    int a_checks{}, child_calls{};
+                    contracts::Observation recognize(const contracts::FrameEnvelope &frame,
+                        const recognition::Request &r) override {
+                        auto result = Ports::recognize(frame, r);
+                        bool hit = false;
+                        if (r.recognizer_id == "a") { ++a_checks; hit = a_checks == 1 || (single && a_checks >= 3); }
+                        if (r.recognizer_id == "b") hit = a_checks >= 2;
+                        if (!hit) result.outcome = contracts::RecognitionOutcome::NoHit;
+                        return result;
+                    }
+                    runtime::OperationResult operate(const std::string &, const nlohmann::json &,
+                        const std::optional<contracts::FrameEnvelope> &, const std::optional<contracts::Observation> &,
+                        const std::string &) override { ++child_calls; return {runtime::OperationState::Done}; }
+                } ports;
+                ports.single = single;
+                workflow::FlowProgram program; program.root_definition = "root"; program.revision = "handoff-source";
+                workflow::Definition root; root.id = "root"; root.entry = "call";
+                root.steps.emplace("call", step("call", workflow::Call{"child", {{"route", single ? std::vector<std::string>{"a"} : std::vector<std::string>{"a", "b"}}}}, {"wrong"}));
+                for (const auto *id : {"a", "b"}) {
+                    auto node = step(id, workflow::Observe{request(id)}, {"done"}); node.guard = request(id);
+                    root.steps.emplace(id, std::move(node));
+                }
+                root.steps.emplace("wrong", step("wrong", workflow::ExternalBlocked{"wrong_success_continuation"}));
+                root.steps.emplace("done", step("done", workflow::Finish{}));
+                workflow::Definition child; child.id = "child"; child.entry = "marker"; child.handoffs.insert("route");
+                child.steps.emplace("marker", step("marker", workflow::RegisteredOperation{"ChildMarker", nlohmann::json::object()}, {"return"}));
+                child.steps.emplace("return", step("return", workflow::Return{"handoff", "", "route"}));
+                program.definitions.emplace("root", std::move(root)); program.definitions.emplace("child", std::move(child));
+                runtime::FlowExecutor executor(program, ports, 3s);
+                bool observed_retraction = false;
+                for (int i = 0; i < 100 && ports.a_checks < 2; ++i) {
+                    const auto result = executor.tick();
+                    check(result.state == runtime::TickState::Progress || result.state == runtime::TickState::Waiting, "handoff ended before race");
+                    if (ports.a_checks == 2) observed_retraction = executor.current_step_id() == "call";
+                    if (result.state == runtime::TickState::Waiting) std::this_thread::sleep_until(result.wake_at);
+                }
+                check(observed_retraction, "handoff race did not restore caller selection");
+                const auto result = drive(executor);
+                check(result.state == runtime::TickState::Completed && ports.child_calls == 1 && !executor.has_unresolved_input(), "handoff became success/replayed child:" + result.code);
+                std::cout << "linkage handoff " << (single ? "single" : "multiple") << " PASS\n";
+            }
+            for (const std::string mode : {"arrival", "stopped", "stalled", "progress", "unknown", "error", "stale", "cancel", "total", "stalled-threshold"}) {
+                struct PollPorts final : Ports {
+                    std::string mode;
+                    bool stopped{}, restored{}, arrival_ready{}, changed{}, scene_known{true};
+                    int restarts{}, boots{};
+                    contracts::Observation recognize(const contracts::FrameEnvelope &frame,
+                        const recognition::Request &r) override {
+                        auto result = Ports::recognize(frame, r);
+                        bool hit = false;
+                        if (r.recognizer_id == "arrival") hit = mode == "arrival" || arrival_ready || restored;
+                        if (r.recognizer_id == "stopped") hit = mode == "stopped";
+                        if (r.recognizer_id == "scene") hit = scene_known || restored;
+                        if (r.recognizer_id == "changed") hit = changed;
+                        if (!hit) result.outcome = contracts::RecognitionOutcome::NoHit;
+                        if (mode == "error" && r.recognizer_id == "arrival") {
+                            result.outcome = contracts::RecognitionOutcome::Error; result.error_code = "TEST_POLL_RESOURCE_ERROR";
+                        }
+                        if (mode == "stale") ++result.basis.action_epoch;
+                        return result;
+                    }
+                    contracts::ObservationRecovery recover_observation(bool force = false) override {
+                        if (force) ++restarts;
+                        restored = true;
+                        return {{}, true, true};
+                    }
+                    runtime::OperationResult operate(const std::string &binding, const nlohmann::json &,
+                        const std::optional<contracts::FrameEnvelope> &, const std::optional<contracts::Observation> &,
+                        const std::string &) override {
+                        if (binding == "BootMarker") ++boots;
+                        return {runtime::OperationState::Done};
+                    }
+                    bool cancelled() const override { return stopped; }
+                } ports;
+                ports.mode = mode; ports.changed = mode == "progress";
+                ports.scene_known = mode != "unknown" && mode != "stalled-threshold";
+                workflow::FlowProgram program; program.root_definition = "root"; program.revision = "expired-poll";
+                workflow::Definition root; root.id = "root"; root.entry = "moving";
+                auto moving = step("moving", workflow::Poll{1ms, request("scene"), request("changed")}, {"arrival", "stopped", "moving"});
+                moving.max_hit = 0; moving.time_limit = 40ms; moving.on_error = {"stall"};
+                root.steps.emplace("moving", std::move(moving));
+                for (const auto *id : {"arrival", "stopped"}) {
+                    auto node = step(id, workflow::Observe{request(id)}, {"done"}); node.guard = request(id);
+                    root.steps.emplace(id, std::move(node));
+                }
+                root.steps.emplace("stall", step("stall", workflow::ExternalBlocked{"TEST_POLL_NO_PROGRESS"}));
+                root.steps.emplace("done", step("done", workflow::Finish{}));
+                add_boot(program, root); program.definitions.emplace("root", std::move(root));
+                runtime::FlowExecutor executor(program, ports, mode == "total" ? 50ms : 3s, {1000ms, 1ms, 5ms, 60ms});
+                if (mode == "stalled-threshold") {
+                    for (int i = 0; i < 100 && !executor.progress_snapshot().at("continuous_exception").at("active").get<bool>(); ++i) {
+                        const auto r = executor.tick();
+                        check(r.state == runtime::TickState::Progress || r.state == runtime::TickState::Waiting, "threshold priming failed");
+                        if (r.state == runtime::TickState::Waiting) std::this_thread::sleep_until(r.wake_at);
+                    }
+                    check(executor.progress_snapshot().at("continuous_exception").at("active").get<bool>(), "exception clock not armed");
+                    ports.scene_known = true;
+                }
+                std::this_thread::sleep_for(80ms); // Compress test budget, never change production thresholds.
+                if (mode == "cancel") ports.stopped = true;
+                if (mode == "progress") {
+                    const auto first = executor.tick();
+                    check(first.state == runtime::TickState::Waiting && executor.current_step_id() == "moving", "declared progress not accepted");
+                    ports.changed = false; ports.arrival_ready = true;
+                }
+                const auto result = drive(executor);
+                if (mode == "stalled" || mode == "stalled-threshold")
+                    check(result.state == runtime::TickState::ExternalBlocked && result.code == "TEST_POLL_NO_PROGRESS", "explicit error edge lost:" + result.code);
+                else if (mode == "error") check(result.state == runtime::TickState::Failed && result.code == "TEST_POLL_RESOURCE_ERROR", "recognition error swallowed");
+                else if (mode == "stale") check(result.state == runtime::TickState::Failed && result.code == "EXPIRED_POLL_EVIDENCE_STALE", "stale evidence accepted");
+                else if (mode == "cancel") check(result.state == runtime::TickState::Cancelled, "cancel overridden");
+                else if (mode == "total") check(result.state == runtime::TickState::Failed && result.code == "FLOW_TOTAL_DEADLINE", "hard deadline overridden");
+                else check(result.state == runtime::TickState::Completed, "late/normal result lost:" + mode + ":" + result.code);
+                check(ports.restarts == (mode == "unknown" ? 1 : 0) && !executor.has_unresolved_input(), "unexpected restart or pending");
+                std::cout << "linkage poll " << mode << " PASS\n";
+            }
+            {
+                // A repeatable menu chosen from a handoff is interrupted by app restart.
+                // After Boot, only the ORIGINAL handoff may select its replacement menu.
+                struct RestartPorts final : Ports {
+                    std::uint64_t epoch{};
+                    int child_calls{}, boots{};
+                    bool restored{};
+                    contracts::FrameEnvelope capture() override {
+                        if (epoch && !restored)
+                            throw contracts::ObservationUnavailable({contracts::ReadFaultKind::ApplicationUnavailable,
+                                contracts::ReadFaultStage::Capture, "GAME_NOT_FOREGROUND", "test.capture", {}, {}});
+                        auto frame = Ports::capture(); frame.identity.action_epoch = epoch;
+                        frame.identity.raw_size = {900, 1600}; return frame;
+                    }
+                    contracts::Observation recognize(const contracts::FrameEnvelope &frame, const recognition::Request &r) override {
+                        auto result = Ports::recognize(frame, r);
+                        const bool hit = r.recognizer_id == "old" ? !restored : r.recognizer_id == "new" ? restored :
+                            r.recognizer_id == "result" ? epoch == 2 : false;
+                        if (!hit) result.outcome = contracts::RecognitionOutcome::NoHit;
+                        result.action_eligible = true; result.box = contracts::Box{100,100,20,20}; result.center = contracts::Point{110,110};
+                        return result;
+                    }
+                    runtime::Submission submit(const contracts::Command &, const contracts::Observation &,
+                        const contracts::Observation &, contracts::Box, const std::string &) override {
+                        return {runtime::SubmissionState::Accepted, ++epoch, std::chrono::steady_clock::now(), {}};
+                    }
+                    contracts::ObservationRecovery recover_observation(bool = false) override { restored = true; return {{},true,true}; }
+                    runtime::OperationResult operate(const std::string &binding, const nlohmann::json &,
+                        const std::optional<contracts::FrameEnvelope> &, const std::optional<contracts::Observation> &, const std::string &) override {
+                        if (binding == "ChildMarker") ++child_calls;
+                        if (binding == "BootMarker") ++boots;
+                        return {runtime::OperationState::Done};
+                    }
+                } ports;
+                workflow::FlowProgram program; program.root_definition = "root"; program.revision = "restart-handoff";
+                workflow::Definition root; root.id = "root"; root.entry = "call";
+                root.steps.emplace("call", step("call", workflow::Call{"child", {{"route", {"old", "new"}}}}, {"wrong"}));
+                for (const auto *id : {"old", "new"}) {
+                    workflow::Input input{request(id), request(id), {{"kind","Click"}}, {0,0,900,1600}};
+                    input.retry = workflow::InputRetry{request(id), 1s, 2};
+                    auto node = step(id, std::move(input), {std::string(id) + "-await"}); node.guard = request(id);
+                    root.steps.emplace(id, std::move(node));
+                    root.steps.emplace(std::string(id)+"-await", step(std::string(id)+"-await", workflow::AwaitResult{request("result"),2s,0ms,1ms}, {"done"}));
+                }
+                root.steps.emplace("wrong", step("wrong", workflow::ExternalBlocked{"wrong_success_continuation"}));
+                root.steps.emplace("done", step("done", workflow::Finish{}));
+                workflow::Definition child; child.id = "child"; child.entry = "marker"; child.handoffs.insert("route");
+                child.steps.emplace("marker", step("marker", workflow::RegisteredOperation{"ChildMarker",nlohmann::json::object()}, {"return"}));
+                child.steps.emplace("return", step("return", workflow::Return{"handoff","","route"}));
+                add_boot(program,root); program.definitions.emplace("root",std::move(root));program.definitions.emplace("child",std::move(child));
+                runtime::FlowExecutor executor(program,ports,3s);
+                const auto result = drive(executor);
+                check(result.state == runtime::TickState::Completed && ports.epoch == 2 && ports.child_calls == 1 && ports.boots == 1,
+                    "restart menu lost handoff or replayed child:" + result.code);
+                std::cout << "linkage restart handoff PASS\n";
+            }
+            std::cout << "linkage closure: 13 bounded production-executor cases; no real device input\n";
+            return 0;
+        }
         if (argc == 2 && std::string(argv[1]) == "--child-result-frame") {
             struct ResultPorts final : Ports {
                 bool valid{true};
@@ -610,6 +817,100 @@ int main(int argc, char **argv) {
             }
             return 0;
         }
+        if (argc == 2 && std::string(argv[1]) == "--confirmed-result") {
+            using J = nlohmann::json;
+            struct ResultPorts final : Ports {
+                std::uint64_t epoch{};
+                int submissions{}, result_checks{};
+                bool recorded{true};
+                std::string mutation;
+                contracts::FrameEnvelope capture() override {
+                    auto frame = Ports::capture();
+                    frame.identity.action_epoch = epoch;
+                    frame.identity.raw_size = {900, 1600};
+                    return frame;
+                }
+                contracts::Observation recognize(const contracts::FrameEnvelope &frame, const recognition::Request &request) override {
+                    auto result = Ports::recognize(frame, request);
+                    if (request.recognizer_id == "post") {
+                        if (++result_checks > 1) result.outcome = contracts::RecognitionOutcome::NoHit;
+                        if (recorded) result.evidence["confirmed_result"] = {{"classification", "navigation_no_route"}};
+                    }
+                    return result;
+                }
+                runtime::Submission submit(const contracts::Command &, const contracts::Observation &,
+                    const contracts::Observation &, contracts::Box, const std::string &) override {
+                    ++submissions;
+                    return {runtime::SubmissionState::Accepted, ++epoch, std::chrono::steady_clock::now(), {}};
+                }
+                runtime::OperationResult operate(const std::string &, const J &,
+                    const std::optional<contracts::FrameEnvelope> &, const std::optional<contracts::Observation> &,
+                    const std::string &) override {
+                    if (mutation == "epoch") ++epoch;
+                    return {runtime::OperationState::Done};
+                }
+            };
+            for (const auto *scenario : {"valid", "wrong-class", "wrong-source", "epoch", "another-call", "no-record", "result-input"}) {
+                recognition::Request image{"scene", "1", {0, 0, 900, 1600},
+                    recognition::CustomParameters{"WvdVision", J::object()}};
+                auto post = image; post.recognizer_id = "post";
+                auto query = image;
+                query.recognizer_id = "result";
+                query.parameters = recognition::CustomParameters{"ConfirmedInputResult", {
+                    {"mode", "confirmed_input_result"}, {"classification", std::string(scenario) == "wrong-class"
+                        ? "harken_arrived" : "navigation_no_route"}, {"consume", true}}};
+                if (std::string(scenario) == "wrong-source")
+                    std::get<recognition::CustomParameters>(query.parameters).parameters["source_path"] = "foreign-call";
+                workflow::FlowProgram program; program.revision = "recorded-result"; program.root_definition = "root";
+                workflow::Definition root; root.id = "root"; root.entry = "call";
+                root.steps.emplace("call", step("call", workflow::Call{"child"}, {"context"}));
+                root.steps.emplace("context", std::string(scenario) == "another-call"
+                    ? step("context", workflow::Call{"empty"}, {"choose"})
+                    : step("context", workflow::RegisteredOperation{"context", J::object()}, {"choose"}));
+                root.steps.emplace("choose", step("choose", workflow::Route{}, {"result", "missing"}));
+                auto result_step = step("result", workflow::Observe{query}, {"again"}); result_step.guard = query;
+                if (std::string(scenario) == "result-input") {
+                    result_step.data = workflow::Input{query, image, {{"kind", "Click"}, {"x", 100}, {"y", 100}},
+                        {1, 1, 898, 1598}, std::nullopt, false};
+                    result_step.next = {"forbidden-await"};
+                    root.steps.emplace("forbidden-await", step("forbidden-await", workflow::AwaitResult{post, 1s}, {"again"}));
+                }
+                root.steps.emplace("result", std::move(result_step));
+                root.steps.emplace("again", step("again", workflow::Route{}, {"duplicate", "done"}));
+                auto duplicate = step("duplicate", workflow::Observe{query}, {"bad"}); duplicate.guard = query;
+                root.steps.emplace("duplicate", std::move(duplicate));
+                root.steps.emplace("bad", step("bad", workflow::Fail{"RESULT_CONSUMED_TWICE"}));
+                root.steps.emplace("missing", step("missing", workflow::Fail{"EXPECTED_RESULT_REJECTED"}));
+                root.steps.emplace("done", step("done", workflow::Finish{}));
+                workflow::Definition child; child.id = "child"; child.entry = "click";
+                workflow::Input input{image, image, {{"kind", "Click"}, {"x", 100}, {"y", 100}},
+                    {1, 1, 898, 1598}, std::nullopt, false};
+                child.steps.emplace("click", step("click", input, {"await"}));
+                child.steps.emplace("await", step("await", workflow::AwaitResult{post, 1s}, {"wait"}));
+                child.steps.emplace("wait", step("wait", workflow::Wait{5ms}, {"return"}));
+                child.steps.emplace("return", step("return", workflow::Return{"completed"}));
+                workflow::Definition empty; empty.id = "empty"; empty.entry = "return";
+                empty.steps.emplace("return", step("return", workflow::Return{"completed"}));
+                program.definitions.emplace("root", std::move(root));
+                program.definitions.emplace("child", std::move(child));
+                program.definitions.emplace("empty", std::move(empty));
+                ResultPorts ports;
+                ports.recorded = std::string(scenario) != "no-record";
+                ports.mutation = scenario;
+                runtime::FlowExecutor executor(program, ports, 2s);
+                runtime::TickResult result;
+                do {
+                    result = executor.tick();
+                    if (result.state == runtime::TickState::Waiting) std::this_thread::sleep_until(result.wake_at);
+                } while (result.state == runtime::TickState::Progress || result.state == runtime::TickState::Waiting);
+                if ((std::string(scenario) == "valid" ? result.state != runtime::TickState::Completed :
+                        result.code != (std::string(scenario) == "result-input" ? "HISTORICAL_RESULT_CANNOT_AUTHORIZE_INPUT" :
+                            "EXPECTED_RESULT_REJECTED")) || ports.submissions != 1 || executor.has_unresolved_input())
+                    throw std::runtime_error("CONFIRMED_RESULT:" + std::string(scenario) + ":" + result.code);
+                std::cout << "confirmed result " << scenario << " PASS; inputs=1; pending=0\n";
+            }
+            return 0;
+        }
         if (argc == 2 && std::string(argv[1]) == "--timeout-reclassification") {
             struct ScenePorts final : Ports {
                 bool moved{};
@@ -624,13 +925,15 @@ int main(int argc, char **argv) {
                     return result;
                 }
             };
-            for (bool moved : {false, true}) {
+            for (bool reachable : {false, true}) for (bool moved : {false, true}) {
                 recognition::Request stale{"stale", "1", {0, 0, 900, 1600},
                     recognition::CustomParameters{"WvdVision", nlohmann::json::object()}};
                 auto battle = stale; battle.recognizer_id = "battle";
                 workflow::FlowProgram program; program.revision = "timeout-scene"; program.root_definition = "root";
                 workflow::Definition root; root.id = "root"; root.entry = "entry";
-                auto entry = step("entry", workflow::Route{}, {"stale"});
+                auto entry = step("entry", workflow::Route{}, reachable
+                    ? std::vector<std::string>{"stale", "battle"} : std::vector<std::string>{"stale"});
+                entry.time_limit = 60ms; // The saved selection source owns the original waiting window.
                 root.steps.emplace("entry", std::move(entry));
                 auto old = step("stale", workflow::Observe{stale}, {"done"});
                 old.guard = stale; old.time_limit = 60ms;
@@ -648,12 +951,13 @@ int main(int argc, char **argv) {
                     if (result.state != runtime::TickState::Waiting && result.state != runtime::TickState::Progress) break;
                     if (result.state == runtime::TickState::Waiting) std::this_thread::sleep_until(result.wake_at);
                 }
-                if (moved ? result.state != runtime::TickState::Completed :
+                if ((moved && reachable) ? result.state != runtime::TickState::Completed :
                     (result.state != runtime::TickState::Failed || result.code != "FLOW_STAGE_TIMEOUT"))
                     throw std::runtime_error("TIMEOUT_RECLASSIFICATION:" + result.code);
                 if (ports.operations || executor.has_unresolved_input())
                     throw std::runtime_error("TIMEOUT_RECLASSIFICATION_REPLAYED_INPUT");
             }
+            std::cout << "timeout: declared origin recovers; unrelated known scene cannot jump phase; no inputs PASS\n";
             return 0;
         }
         if (argc == 2 && std::string(argv[1]) == "--instance-start-window") {

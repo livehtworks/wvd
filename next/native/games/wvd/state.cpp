@@ -116,6 +116,7 @@ void WvdRunState::on_segment(contracts::SegmentBoundary boundary, std::uint64_t 
         });
     }
     generation_ = generation;
+    if (unit != unit_index_) target_encounter_ = {};
     unit_index_ = unit;
     prepared_.reset();
     prepared_portrait_.clear();
@@ -134,6 +135,9 @@ void WvdRunState::enter_dungeon() {
     if (inn_payment_pending_)
         throw std::runtime_error("INN_PAYMENT_UNCONFIRMED");
     prepared_.reset();
+    if (target_encounter_.phase > 0 && target_encounter_.phase < 4 &&
+        target_encounter_.unit == unit_index_) return;
+    target_encounter_ = {};
     task_step_ = 0;
     need_initial_recover_ = true;
     healing_pending_ = false;
@@ -145,6 +149,11 @@ void WvdRunState::enter_dungeon() {
 }
 void WvdRunState::target_point_completed() {
     prepared_.reset();
+    if (target_encounter_.phase > 0 && target_encounter_.phase < 4) {
+        if (target_encounter_.point != task_step_ || target_encounter_.phase != 3)
+            throw std::runtime_error("TARGET_ENCOUNTER_RESULT_UNCONFIRMED");
+        target_encounter_.phase = 4;
+    }
     ++task_step_;
     if (strategy_.uses_task_points())
         strategy_.reload(task_step_);
@@ -219,6 +228,8 @@ void WvdRunState::resurrected() {
         pending_chest_ = false;
     last_encounter_ = Encounter::None;
     revival_pending_ = false;
+    if (target_encounter_.phase == 2 && target_encounter_.unit == unit_index_)
+        target_encounter_.resume_authorized = true;
     suicide_requested_ = false;
     ++revivals_;
     recover_after_rez_ = true;
@@ -227,6 +238,8 @@ void WvdRunState::resurrected() {
 }
 void WvdRunState::restart_game() {
     prepared_.reset();
+    if (target_encounter_.phase > 0 && target_encounter_.phase < 3)
+        target_encounter_.resume_authorized = false;
     healing_active_ = false;
     combat_speed_ = false;
     zoom_world_map_ = false;
@@ -318,6 +331,16 @@ std::string WvdRunState::confirmation_id(const std::string &operation, const std
     // 仅该局部路线开始新轮；住宿/善恶/专项开始回执仍保留，不能按 generation 全部重放。
     if (event == "dungeon_entered" || event == "target_completed")
         id += ":route:" + std::to_string(lifecycle_recovery_sequence_);
+    else if (event == "target_encounter_started")
+        id += ":target:" + std::to_string(target_encounter_.phase > 0 && target_encounter_.phase < 4
+            ? target_encounter_.attempt : target_attempt_sequence_ + 1) + ":combat:" +
+            std::to_string(combat_sequence_ + (pending_combat_ ? 0 : 1)) + ":route:" +
+            std::to_string(lifecycle_recovery_sequence_);
+    else if (event == "target_encounter_interrupted" || event == "target_encounter_result" ||
+             event == "target_continuation_lost" ||
+             event == "target_navigation_terminated")
+        id += ":target:" + std::to_string(target_encounter_.attempt) + ":combat:" +
+            std::to_string(target_encounter_.combat) + ":phase:" + std::to_string(target_encounter_.phase);
     else if (event == "combat_observed" || event == "combat_special_observed")
         id += ":combat:" + std::to_string(combat_sequence_ + (pending_combat_ ? 0 : 1));
     else if (event == "chest_observed")
@@ -817,6 +840,46 @@ bool WvdRunState::confirm_event(const std::string &operation, const std::string 
             {"frame_id", frame_id}, {"generation", generation}, {"save_status", "Pending"}};
         karma_value_ = karma_choice_->after;
         karma_choice_.reset();
+    } else if (event == "target_encounter_started") {
+        if (!expected_step) throw std::runtime_error("BUSINESS_TASK_STEP_REQUIRED");
+        if (target_encounter_.phase == 0 || target_encounter_.phase == 4) {
+            target_encounter_ = {unit_index_, supply_cycle_, task_step_, ++target_attempt_sequence_,
+                combat_sequence_ + (pending_combat_ ? 0 : 1), 1, true, {}};
+        } else {
+            if (target_encounter_.unit != unit_index_ || target_encounter_.point != task_step_ ||
+                target_encounter_.phase == 3)
+                throw std::runtime_error("TARGET_ENCOUNTER_IDENTITY_INVALID");
+            target_encounter_.combat = combat_sequence_ + (pending_combat_ ? 0 : 1);
+            target_encounter_.phase = 1;
+            target_encounter_.resume_authorized = true;
+        }
+    } else if (event == "target_encounter_interrupted") {
+        if (!expected_step || target_encounter_.phase < 1 || target_encounter_.phase > 2 ||
+            target_encounter_.unit != unit_index_ || target_encounter_.point != task_step_)
+            throw std::runtime_error("TARGET_ENCOUNTER_IDENTITY_INVALID");
+        target_encounter_.phase = 2;
+    } else if (event == "target_continuation_lost") {
+        if (!expected_step || target_encounter_.phase < 1 || target_encounter_.phase > 2 ||
+            target_encounter_.unit != unit_index_ || target_encounter_.point != task_step_)
+            throw std::runtime_error("TARGET_ENCOUNTER_IDENTITY_INVALID");
+        target_encounter_.phase = 2;
+        target_encounter_.resume_authorized = false;
+    } else if (event == "target_encounter_result") {
+        if (!expected_step || target_encounter_.unit != unit_index_ ||
+            target_encounter_.point != task_step_ || !target_encounter_.resume_authorized ||
+            target_encounter_.combat != combat_sequence_ || revival_pending_ ||
+            target_encounter_.phase < 1 || target_encounter_.phase > 2)
+            throw std::runtime_error("TARGET_ENCOUNTER_RESULT_UNCONFIRMED");
+        // The target dispatch supplies a fresh dungeon end, never a revival or chest page.
+        resume_dungeon();
+        target_encounter_.phase = 3;
+        target_encounter_.completion_reason = "target_encounter_ended";
+    } else if (event == "target_navigation_terminated") {
+        if (!expected_step) throw std::runtime_error("BUSINESS_TASK_STEP_REQUIRED");
+        if (target_encounter_.phase > 0 && target_encounter_.phase < 3)
+            throw std::runtime_error("TARGET_ENCOUNTER_RESULT_UNCONFIRMED");
+        target_encounter_ = {unit_index_, supply_cycle_, task_step_, ++target_attempt_sequence_,
+            0, 3, false, "navigation_terminated"};
     } else if (event == "target_completed") {
         if (!expected_step)
             throw std::runtime_error("BUSINESS_TASK_STEP_REQUIRED");
@@ -839,6 +902,10 @@ bool WvdRunState::confirm_event(const std::string &operation, const std::string 
     else if (event == "dungeon_completed")
         dungeon_completed();
     else if (event == "revival_observed") {
+        if (target_encounter_.phase > 0 && target_encounter_.phase < 3) {
+            target_encounter_.phase = 2;
+            target_encounter_.resume_authorized = false;
+        }
         if (!revival_pending_)
             ++revival_sequence_;
         revival_pending_ = true;
@@ -959,6 +1026,13 @@ J WvdRunState::summarize() const {
             {"generation", generation_},
             {"unit_index", unit_index_},
             {"task_step", task_step_},
+            {"target_encounter", {{"active", target_encounter_.phase > 0 && target_encounter_.phase < 4},
+                {"phase", target_encounter_.phase}, {"point", target_encounter_.point},
+                {"unit", target_encounter_.unit}, {"route", target_encounter_.route},
+                {"attempt", target_encounter_.attempt}, {"combat", target_encounter_.combat},
+                {"unit_matches", target_encounter_.unit == unit_index_},
+                {"resume_authorized", target_encounter_.resume_authorized},
+                {"completion_reason", target_encounter_.completion_reason}}},
             {"strategy", std::move(strategy)},
             {"has_prepared_skill", prepared_.has_value()},
             {"combat_actor_recognized", combat_actor_recognized_},

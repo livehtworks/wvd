@@ -6,8 +6,16 @@
 #include <string>
 #include <vector>
 #include <cstdint>
+#include <stdexcept>
 
 namespace wvd::platform {
+class MissingBundleMember final : public std::runtime_error {
+  public:
+    explicit MissingBundleMember(std::string member) : std::runtime_error("RESOURCE_NOT_IN_MANIFEST"), member_(std::move(member)) {}
+    const std::string &member() const { return member_; }
+  private:
+    std::string member_;
+};
 // Win32 文件共享锁保护整个快照，不依赖文件时间戳。由运行会话持有至资源释放。
 class BundleLease final {
   public:
@@ -24,6 +32,10 @@ class BundleLease final {
     const std::string &revision() const;
     const std::string &identity() const;
     std::uint64_t hash_bytes() const;
+    struct StorageStats {
+        std::uint64_t size_bytes{}, capacity_bytes{}, model_bytes{}, image_bytes{}, json_bytes{}, other_bytes{};
+    };
+    StorageStats storage_stats() const;
     std::size_t file_count() const;
     std::size_t directory_count() const;
     std::uint64_t directory_checks() const;

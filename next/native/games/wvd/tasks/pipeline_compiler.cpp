@@ -458,7 +458,8 @@ J PipelineCompiler::business(const std::string &field, J value, const std::strin
 }
 J PipelineCompiler::request(const J &condition) const {
     return {{"id", workflow_.kind},   {"revision", "1"},          {"type", "custom"},
-            {"binding", "WvdVision"}, {"roi", {0, 0, 900, 1600}}, {"parameters", condition}};
+            {"binding", condition.value("mode", "") == "confirmed_input_result" ? "ConfirmedInputResult" : "WvdVision"},
+            {"roi", {0, 0, 900, 1600}}, {"parameters", condition}};
 }
 void PipelineCompiler::add(const std::string &name, J node) {
     require(!workflow_.nodes.contains(name), "COMPILE_NODE_DUPLICATE");
@@ -994,7 +995,10 @@ void PipelineCompiler::confirm(const std::string &name, const std::string &opera
                                       "mining_reward_observed", "mining_reward_dismissed", "mining_refill_requested",
                                       "mining_party_assembled", "mining_refill_completed", "mining_cycle_completed",
                                       "dark_light_entered", "dark_light_completed"};
-    require(events.contains(event) && !operation.empty() && operation.size() <= 128,
+    require((events.contains(event) || event == "target_encounter_started" ||
+        event == "target_encounter_interrupted" || event == "target_encounter_result" ||
+        event == "target_navigation_terminated" || event == "target_continuation_lost") &&
+        !operation.empty() && operation.size() <= 128,
             "COMPILE_BUSINESS_EVENT_INVALID");
     require(step.is_null() || (step.is_number_integer() && step >= 0 && step <= 4096),
             "COMPILE_TASK_STEP_INVALID");

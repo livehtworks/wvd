@@ -31,7 +31,8 @@ std::optional<recognition::Request> guard(const J &node, const std::string &id) 
     }
     if (kind == "Registered" && node.value("recognizer", "") == "WvdVision")
         return request({{"id", id}, {"revision", "1"}, {"type", "custom"},
-                        {"binding", "WvdVision"}, {"roi", roi},
+                        {"binding", node.at("observation_args").value("mode", "") == "confirmed_input_result"
+                            ? "ConfirmedInputResult" : "WvdVision"}, {"roi", roi},
                         {"parameters", node.at("observation_args")}});
     throw std::runtime_error("NATIVE_RECOGNITION_UNSUPPORTED:" + id);
 }

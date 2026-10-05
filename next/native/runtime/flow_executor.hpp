@@ -87,6 +87,9 @@ class FlowExecutor final {
         std::string predecessor;
         Clock::time_point entered_at;
         bool error_pending{};
+        // Preserve the caller's handoff candidates, including a single-candidate handoff.
+        // Restoring only predecessor would silently fall back to Call.next (success).
+        std::optional<std::vector<std::string>> returned_targets;
     };
     struct PendingInput {
         std::string source_path;
@@ -122,6 +125,11 @@ class FlowExecutor final {
         workflow::EventRule rule;
         std::size_t owner{};
     };
+    struct ConfirmedInputResult {
+        std::string classification, source_path, source_definition;
+        contracts::FrameIdentity basis;
+        std::uint64_t action_epoch{};
+    };
     struct Frame {
         std::string definition;
         std::string current;
@@ -148,6 +156,8 @@ class FlowExecutor final {
         std::optional<SelectionOrigin> selection_origin;
         std::optional<ScopedEvent> event;
         std::optional<PendingInput> pending;
+        // A single acknowledged result, scoped to this invocation; no historical pixels.
+        std::optional<ConfirmedInputResult> confirmed_result;
         std::vector<EventExit> event_exits;
         std::optional<PendingResume> resume;
         std::optional<Clock::time_point> ambiguity_since;
@@ -201,6 +211,8 @@ class FlowExecutor final {
     TickResult progress() const;
     TickResult waiting(std::chrono::milliseconds delay);
     TickResult reconsider_uncommitted_selection(Frame &frame);
+    contracts::Observation recognize_result(const contracts::FrameEnvelope &, const recognition::Request &);
+    void consume_result(const recognition::Request &);
     TickResult fail(std::string code);
     TickResult business_fail(std::string reason, std::string source);
     TickResult return_business_failure(const std::string &reason);
@@ -215,6 +227,8 @@ class FlowExecutor final {
     std::optional<TickResult> settle_await_result(Frame &frame, const workflow::Step &current,
         const contracts::FrameEnvelope &image);
     std::optional<TickResult> recheck_normal_observation(Frame &frame, const workflow::Step &current,
+        const contracts::FrameEnvelope &image);
+    std::optional<TickResult> recheck_expired_poll(Frame &frame, const workflow::Step &current,
         const contracts::FrameEnvelope &image);
     std::optional<TickResult> retry_pending_input(Frame &frame, const workflow::Step &current,
         const contracts::FrameEnvelope &image);

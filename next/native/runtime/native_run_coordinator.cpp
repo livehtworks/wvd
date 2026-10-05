@@ -32,7 +32,13 @@ struct ScopeExit {
 };
 
 nlohmann::json memory_record(const platform::MemorySample &memory) {
-    return {{"process_id", memory.process_id},
+    nlohmann::json lifetimes = nlohmann::json::object();
+    const auto counts = platform::MemoryOwnerLifetime::counts();
+    const std::array<const char *, 3> names{"recognizers", "ocr_engines", "execution_sessions"};
+    for (std::size_t i = 0; i < names.size(); ++i)
+        lifetimes[names[i]] = {{"created", counts[i].created}, {"destroyed", counts[i].destroyed},
+            {"live", counts[i].live}, {"ready", counts[i].ready}};
+    return {{"object_lifetimes", lifetimes}, {"object_lifetimes_scope", "process"}, {"process_id", memory.process_id},
             {"process_created_100ns", memory.process_created_100ns},
             {"process_memory_available", memory.process_ok},
             {"private_bytes", memory.process_ok ? nlohmann::json(memory.private_bytes) : nullptr},
@@ -529,6 +535,8 @@ void NativeRunCoordinator::drive(const NativeRunDefinition &definition,
                 if (definition.logging.memory && definition.logging.accepts(storage::LogLevel::Info)) {
                     auto held = memory_record(memory);
                     held["unit_index"] = index;
+                    held["recognizer_ownership"] = recognizer->ownership_snapshot();
+                    held["execution_ownership"] = session->ownership_snapshot();
                     held["cache_retained_bytes"] = resources.retained_bytes;
                     held["cache_in_use_bytes"] = resources.in_use_bytes;
                     held["result_cache_estimated_bytes"] = resources.result_cache_estimated_bytes;

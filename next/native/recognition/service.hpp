@@ -22,6 +22,7 @@ class Service final {
                                     const contracts::FrameIdentity &current,
                                     const Request &request,
                                     const contracts::BusinessRunState *business = nullptr);
+    nlohmann::json ownership_snapshot() const;
     // 接收本服务同帧的有效 Hit；不是一个额外识别调用。
     void note_known_scene(const contracts::Observation &observation);
     void cancel() noexcept;
@@ -50,5 +51,6 @@ class Service final {
     // 粘性取消覆盖首次模型初始化：取消不能因引擎尚未发布而丢失。
     std::atomic<bool> cancelled_{false};
     std::uint64_t invocation_{};
+    platform::MemoryOwnerLifetime lifetime_{platform::MemoryOwnerKind::RecognitionService};
 };
 } // namespace wvd::recognition

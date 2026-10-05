@@ -38,6 +38,7 @@ class NativeExecutionSession final {
     const std::optional<contracts::DiagnosticPixels> &failed_pixels() const { return ports_.failed_pixels(); }
     std::string diagnostic_node() const { return executor_.current_step_id(); }
     int diagnostic_depth() const { return static_cast<int>(executor_.invocation_depth()) - 1; }
+    nlohmann::json ownership_snapshot() const;
 
   private:
     std::stop_source stop_source_;
@@ -50,5 +51,6 @@ class NativeExecutionSession final {
     ProgressSink timing_sink_;
     mutable std::mutex wait_mutex_;
     std::condition_variable_any wake_;
+    platform::MemoryOwnerLifetime lifetime_{platform::MemoryOwnerKind::ExecutionSession};
 };
 } // namespace wvd::runtime

@@ -205,7 +205,8 @@ tasks::CompiledWorkflow reach_map_target(const MapTarget &target,
     if (target.harken_arrival) during_move.insert(during_move.begin(), "HarkenArrived");
     graph.poll("Moving", 250, during_move, moving,
         J{{"mode", "region_changed"}, {"channel", "navigation"}, {"roi", {650, 25, 225, 225}}});
-    graph.observe("Stopped", C::all({moving, J{{"mode", "movement_stopped"}}}), {"OpenMap"});
+    graph.observe("Stopped", C::all({moving, J{{"mode", "movement_stopped"},
+        {"scope", "map_route." + target.target}}}), {"OpenMap"});
     // 多次采样不产生输入；时间和节点数均有界，预算耗尽交给恢复。
     graph.failure_route("Moving", {"StalledExit"});
     graph.interrupt_on(C::absent(J{{"mode", "input_clear"}}), "navigation.common_screen_requires_dispatch", "blocked");

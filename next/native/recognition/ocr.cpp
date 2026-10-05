@@ -30,7 +30,9 @@ contracts::Box bounds(const std::vector<cv::Point> &points, cv::Size size) {
 }
 } // namespace
 
-OcrEngine::OcrEngine(const std::filesystem::path &model_root) {
+OcrEngine::OcrEngine(const std::filesystem::path &model_root,
+    std::shared_ptr<platform::MemoryDiagnostics> diagnostics) : diagnostics_(std::move(diagnostics)) {
+    if (diagnostics_) diagnostics_->owner_boundary("initialize.begin", "ocr", lifetime_.id());
     const auto det = model_root / "det.onnx";
     const auto rec = model_root / "rec.onnx";
     const auto keys = model_root / "keys.txt";
@@ -42,9 +44,15 @@ OcrEngine::OcrEngine(const std::filesystem::path &model_root) {
     model_->initLogger(false, false, false);
     if (!model_->initModels(utf8(det), {}, utf8(rec), utf8(keys)))
         throw std::runtime_error("OCR_MODEL_INITIALIZATION_FAILED");
+    lifetime_.ready();
+    if (diagnostics_) diagnostics_->owner_boundary("initialize.end", "ocr", lifetime_.id());
 }
 
-OcrEngine::~OcrEngine() = default;
+OcrEngine::~OcrEngine() {
+    if (diagnostics_) diagnostics_->owner_boundary("destroy.begin", "ocr", lifetime_.id());
+    model_.reset();
+    if (diagnostics_) diagnostics_->owner_boundary("destroy.end", "ocr", lifetime_.id());
+}
 
 std::vector<contracts::RecognitionMatch> OcrEngine::recognize(const cv::Mat &region) {
     if (region.empty() || region.type() != CV_8UC3)

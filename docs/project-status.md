@@ -1,8 +1,14 @@
 # 项目当前事实
 
+## aa0957a工作包收束
+
+- 2026-10-06完成C01–C07源码修复与独立Windows原生验证：handoff原选择来源、过期Poll合法出口、目标战跨再起/宝箱/阻断承接、同帧/跨帧静止采样、中性已确认导航结果、超时重分类合法边。完整巨人工厂图从正常入口验证；真实PNG经正式识别服务和auto_route执行器通过，不等同实机验收。
+- 内存诊断改为释放边界的对象/引用/容器规模与OCR初始化/销毁配对。run7冻结包的原文件缓冲约135.29MiB已定位；独立真实OCR初始化/推理/释放留下约14.24MiB净余量，仍为unknown，生产805.6MiB峰值未全部归因。没有调整预算/缓存/并发或用重启掩盖内存。
+- 独立产品在`next/.local/linkage-aa0957a-20261006/build/Release/automationd.exe`；本包禁止生产服务操作、部署、游戏输入、恢复95轮和commit/push，均未执行。正式候选仍candidate116，最后已知状态5/100完成、repeat inactive；旧成功次数不转记为新补丁验收。实际保存公共库七条组合也通过，但旧wheel-open下载后置与作者源不同，尚未触发/验收，生产替换前须核对。源码/证据/未验证边界见[交付报告](reviews/linkage-aa0957a-20261006.md)。
+
 ## 第三章巨人悬赏
 
-- 2026-10-06本批100轮完成5轮(run2–6 Completed)，第6轮run7卡在Route0_Moving；排查停止后UserStopped/quiescent、repeat inactive，剩余95轮。candidate116仍部署17654/PID48136，不是后台闪退。确认目标战再起后转普通Battle丢失目标返程承接；同帧静止采样存在跨复合结果不一致，原因及内存表见[异常汇报](reviews/giant116-stall-memory-20261006.md)。用户要求只汇报/commit/push，不继续改动：最后同帧静止补丁及检查入口写入但未编译/验证/部署，不恢复循环。5轮已采样峰值706–794MiB、定义释放后74–81MiB，run7峰值810/释放后82.6MiB，内存来源仍未归因。下条启动描述为停止前历史。
+- 2026-10-06本批100轮完成5轮(run2–6 Completed)，第6轮run7卡在Route0_Moving；排查停止后UserStopped/quiescent、repeat inactive，剩余95轮。最后核查candidate116部署17654/PID48136，不是后台闪退。目标战再起转普通Battle及静止采样原因见[异常汇报](reviews/giant116-stall-memory-20261006.md)；当时未验证的补丁已在上述独立工作包承接，生产未替换。5轮已采样峰值706–794MiB、定义释放后74–81MiB，run7峰值810/释放后82.6MiB，生产内存尚未全部归因。下条启动描述为停止前历史。
 
 - 用户处理日常后重新授权新一批100轮，不续算旧68/100。candidate116/17654/PID48136，启动前新鲜截图确认要塞城市，私有内存51.6MiB/工作集75.44MiB/317句柄。请求`f2e9d5a7-376b-40c9-814b-03141aa2646d`已接受，run`6F50586C-82C6-4975-A12D-B131B1BCA676/2`实际Running，repeat active/目标100；开始时0轮完成。沿用正式巨人配置、繁中及已有VPN设置，debug/memory/performance/recognition日志开启，未修改profile。截图`next/.local/giant116-new100-start.png`，请求`giant116-new100-request.json`；内存增长来源仍未归因，不将收尾回落当作稳定性通过。下条暂停记录为本次启动前历史。
 

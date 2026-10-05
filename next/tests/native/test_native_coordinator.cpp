@@ -334,17 +334,25 @@ int main(int argc, char **argv) {
                 const auto row = nlohmann::json::parse(line);
                 if (row.at("category") == "memory") {
                     phases.push_back(row.at("type").get<std::string>());
+                    const auto &owners = row.at("payload").at("object_lifetimes");
+                    if (phases.back() == "session_owners_alive" &&
+                        (owners.at("recognizers").at("live") == 0 || owners.at("execution_sessions").at("live") == 0 ||
+                         !row.at("payload").contains("recognizer_ownership") || !row.at("payload").contains("execution_ownership")))
+                        throw std::runtime_error("LOGGING_OWNERSHIP_CENSUS_MISSING");
+                    if (phases.back() == "session_owners_released" &&
+                        (owners.at("recognizers").at("live") != 0 || owners.at("execution_sessions").at("live") != 0))
+                        throw std::runtime_error("LOGGING_OWNERSHIP_LIFETIMES_NOT_ZERO");
                     if (phases.back() == "session_owners_released" &&
                         (!row.at("payload").at("recognizer_released").get<bool>() ||
                          !row.at("payload").at("session_released").get<bool>()))
                         throw std::runtime_error("LOGGING_OWNERS_STILL_ALIVE");
                 }
             }
-            if (phases != std::vector<std::string>{"before_session", "session_owners_alive",
+            if (phases != std::vector<std::string>{"before_session", "runtime_sample", "session_owners_alive",
                     "session_owners_released", "worker_finishing"})
                 throw std::runtime_error("LOGGING_MEMORY_BOUNDARY_ORDER");
             const auto summary = coordinator.diagnostics();
-            if (summary.at("logs").at("rows") != 4 ||
+            if (summary.at("logs").at("rows") != 5 ||
                 !summary.at("logs").at("memory_collected").get<bool>())
                 throw std::runtime_error("LOGGING_MEMORY_SUMMARY");
             std::cout << "Memory owner boundaries passed\n";

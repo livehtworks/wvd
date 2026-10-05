@@ -66,12 +66,15 @@ struct Ports final : runtime::FlowPorts {
     std::set<std::string> images;
     std::map<std::string, bool> conditions;
     std::function<void(const std::string &)> after_input;
+    std::function<std::optional<bool>(const J &)> semantic_leaf;
     std::vector<std::string> inputs;
     std::vector<contracts::Command> commands;
     std::uint64_t epoch{}, captures{}, recognitions{};
+    std::uint64_t generation{1};
     bool stop{}, combat{}, blocker{}, ready{}, network{}, quiet{true};
-    Ports() : business(storage::LegacyConfigImporter(read("packs/wvd/parameters/legacy-config-fields.json"))
-            .parse({{"GENERAL", J::object()}}).values,
+    explicit Ports(J profile = J::object()) : business(profile.empty()
+            ? storage::LegacyConfigImporter(read("packs/wvd/parameters/legacy-config-fields.json"))
+                .parse({{"GENERAL", J::object()}}).values : std::move(profile),
             {"closure-transitions", 1, std::make_shared<contracts::SteadyClock>()}),
         operations(business, {[this] { return capture(); },
             [this](const auto &frame, const auto &request) { return recognize(frame, request); },
@@ -82,7 +85,7 @@ struct Ports final : runtime::FlowPorts {
         contracts::FrameEnvelope frame;
         frame.identity.device_id = "closure"; frame.identity.game_id = "wvd";
         frame.identity.pack_revision = "closure"; frame.identity.viewport_id = "900x1600";
-        frame.identity.generation = 1; frame.identity.connection_generation = 1;
+        frame.identity.generation = generation; frame.identity.connection_generation = 1;
         frame.identity.action_epoch = epoch; frame.identity.frame_id = ++captures;
         frame.identity.raw_size = frame.identity.recognition_size = {900, 1600};
         frame.identity.captured_at = std::chrono::steady_clock::now(); current = frame.identity;
@@ -97,6 +100,7 @@ struct Ports final : runtime::FlowPorts {
             return mode == "any" ? any : mode == "all" ? all : !any;
         }
         if (mode == "business") return games::business_condition(business.summary(), p);
+        if (semantic_leaf) if (const auto supplied = semantic_leaf(p)) return *supplied;
         if (mode == "template") return images.contains(p.at("image").get<std::string>());
         if (mode == "combat_active") return combat;
         if (mode == "blocking_screen") return blocker || network;
@@ -163,8 +167,9 @@ struct Driver {
     runtime::FlowExecutor executor;
     runtime::TickResult last{runtime::TickState::Progress};
     std::vector<std::string> trace;
-    explicit Driver(const games::tasks::CompiledWorkflow &graph)
+    explicit Driver(const games::tasks::CompiledWorkflow &graph, J profile = J::object())
       : program(games::tasks::compile_native_program(graph, J::object(), "closure-transitions")),
+        ports(std::move(profile)),
         executor(program, ports, 30s) {}
     bool terminal() const { return last.state != runtime::TickState::Progress && last.state != runtime::TickState::Waiting; }
     void until(const std::function<bool()> &done, std::chrono::milliseconds budget = 12s) {
@@ -305,8 +310,13 @@ int transitions() {
 }
 }
 
+#include "giant_linkage_cases.hpp"
+#include "memory_owner_cases.hpp"
 int main(int argc, char **argv) {
     try {
+        if (argc == 3 && std::string(argv[1]) == "--giant-linkage") return closure::giant_linkage(argv[2]);
+        if (argc == 4 && std::string(argv[1]) == "--giant-linkage") return closure::giant_linkage(argv[2], argv[3]);
+        if (argc == 4 && std::string(argv[1]) == "--memory-owners") return closure::memory_owner_census(argv[2], argv[3]);
         using J = nlohmann::json;
         if (argc == 2 && std::string(argv[1]) == "--locale-coverage") {
             using namespace closure;
@@ -441,7 +451,9 @@ int main(int argc, char **argv) {
                 check(route.at("next").dump().find("Confirm0") != std::string::npos &&
                     flow.nodes.at("FirstDungeon_Route0_Entry").at("next").dump().find("Arrived") == std::string::npos &&
                     route.dump().find("TargetEncounter0") != std::string::npos &&
-                    flow.nodes.at("FirstDungeon_FightTarget0").at("next") == J{"FirstDungeon_AfterTargetBattle0"} &&
+                    flow.nodes.at("FirstDungeon_FightTarget0").at("next") == J{"FirstDungeon_TargetResult0"} &&
+                    flow.nodes.at("FirstDungeon_TargetResult0").at("next") == J{"FirstDungeon_AfterTargetBattle0"} &&
+                    flow.nodes.at("FirstDungeon_TargetResult0").at("operation_args").at("event") == "target_encounter_result" &&
                     flow.nodes.at("FirstDungeon_AfterTargetBattle0").at("operation_args").at("duration_ms") == 3000 &&
                     flow.nodes.at("FirstDungeon_AfterTargetBattle0").at("next") ==
                         J{"FirstDungeon_Confirm0", "FirstDungeon_AfterTargetResult0"},
@@ -481,7 +493,7 @@ int main(int argc, char **argv) {
             arrived.ports.conditions[J{{"mode", "auto_route_post"}}.dump()] = true;
             arrived.ports.conditions[J{{"mode", "navigation_resume_unavailable"}}.dump()] = true;
             arrived.ports.after_input = [&](const auto &) {
-                arrived.ports.conditions[J{{"mode", "movement_stopped"}}.dump()] = true;
+                arrived.ports.conditions[J{{"mode", "movement_stopped"}, {"scope", "auto_route.mark_auto"}}.dump()] = true;
             };
             arrived.finish();
             check(arrived.last.state == runtime::TickState::Completed && arrived.ports.inputs.size() == 1 &&
@@ -1370,28 +1382,36 @@ int main(int argc, char **argv) {
             std::cout << "bounty: real wanted Hit, real commissions NoHit, title-only NoHit; report/reveal graphs valid\n";
             return 0;
         }
-        if (argc == 3 && std::string(argv[1]) == "--movement-frame") {
+        if (argc == 4 && std::string(argv[1]) == "--movement-frame") {
             using namespace wvd;
+            using namespace std::chrono_literals;
+            using C = games::tasks::PipelineCompiler;
             using O = contracts::RecognitionOutcome;
             auto image = cv::imread(argv[2], cv::IMREAD_COLOR);
             if (image.empty() || image.cols != 900 || image.rows != 1600)
                 throw std::runtime_error("MOVEMENT_FRAME_INVALID");
             const auto manifest = closure::read("packs/wvd/manifest.json");
-            recognition::Bundle source{std::filesystem::absolute("packs/wvd"), manifest.at("revision"), {}};
-            for (const auto &row : manifest.at("files")) source.files.push_back({row.at("path"), row.at("sha256")});
+            recognition::Bundle source{std::filesystem::absolute(argv[3]), "movement-recorded", {}};
+            for (const auto &file : std::filesystem::recursive_directory_iterator(source.root)) {
+                if (!file.is_regular_file()) continue;
+                const auto relative = std::filesystem::relative(file.path(), source.root).generic_u8string();
+                source.files.push_back({std::string(reinterpret_cast<const char *>(relative.data()), relative.size()),
+                    platform::file_sha256(file.path())});
+            }
             const auto aliases = manifest.value("aliases", J::object());
             recognition::Bundle bundle{std::filesystem::absolute(".local") /
                 ("movement-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count())), source.revision, {}};
-            for (const auto *name : {"dungFlag", "mapFlag"}) {
-                const auto selected = games::vision::resolve_image_source(source, aliases, name);
-                const auto target = bundle.root / selected.relative_path;
+            for (const auto &selected : source.files) {
+                const auto relative = platform::path_from_utf8(selected.relative_path);
+                const auto target = bundle.root / relative;
                 std::filesystem::create_directories(target.parent_path());
-                std::filesystem::copy_file(source.root / selected.relative_path, target);
+                std::filesystem::copy_file(source.root / relative, target);
                 bundle.files.push_back({selected.relative_path, platform::file_sha256(target)});
             }
             recognition::Service service(bundle, games::vision::native_handlers(aliases, "zh-Hant"));
             contracts::FrameEnvelope frame;
             frame.identity.device_id = "recorded-movement";
+            frame.identity.foreground_application = "jp.co.drecom.wizardry.daphne";
             frame.identity.game_id = "wvd";
             frame.identity.pack_revision = bundle.revision;
             frame.identity.viewport_id = "900x1600";
@@ -1408,7 +1428,8 @@ int main(int argc, char **argv) {
                     recognition::CustomParameters{"WvdVision", p}};
                 const auto result = service.evaluate(frame, frame.identity, request);
                 if (result.outcome != expected)
-                    throw std::runtime_error("MOVEMENT_CONTRACT:" + result.error_code + ":" + result.evidence.dump());
+                    throw std::runtime_error("MOVEMENT_CONTRACT:frame=" + std::to_string(frame.identity.frame_id) + ":" +
+                        p.dump() + ":" + result.error_code + ":" + result.evidence.dump());
                 return result;
             };
             const J stopped{{"mode", "movement_stopped"}};
@@ -1426,13 +1447,127 @@ int main(int argc, char **argv) {
             service.note_known_scene(stopped_result); // Bust outer result cache, preserve frame evidence.
             evaluate(stopped, O::Hit);
             fresh();
-            evaluate(stopped, O::NoHit); // The three-second sampling interval still applies.
-            std::this_thread::sleep_for(3100ms);
+            evaluate(stopped, O::Hit); // A completed stop survives an unchanged fresh frame.
+            evaluate(arrival, O::NoHit); // Reverse condition order has the same result.
             image(cv::Rect(650, 25, 225, 225)).setTo(cv::Scalar(255, 255, 255));
             fresh();
             evaluate(arrival, O::NoHit);
             evaluate(stopped, O::NoHit); // Changed minimap is not stopped.
-            std::cout << "movement: real stalled frame, cross-composite consistency, old-frame rejection and changed-map negative PASS\n";
+            image = cv::imread(argv[2], cv::IMREAD_COLOR);
+            ++frame.identity.action_epoch;
+            fresh(); evaluate(stopped, O::NoHit);
+            ++frame.identity.connection_generation;
+            fresh(); evaluate(stopped, O::NoHit);
+            ++frame.identity.generation;
+            fresh(); evaluate(stopped, O::NoHit);
+            std::this_thread::sleep_for(3100ms);
+            fresh(); evaluate(stopped, O::Hit);
+            const auto completed_sample = [&] {
+                std::this_thread::sleep_for(3100ms);
+                fresh(); evaluate(stopped, O::Hit);
+            };
+            frame.identity.device_id = "recorded-other-device";
+            fresh(); evaluate(stopped, O::NoHit);
+            completed_sample();
+            frame.identity.viewport_id = "900x1600-other-viewport";
+            fresh(); evaluate(stopped, O::NoHit);
+            completed_sample();
+            const auto map_probe = games::vision::resource("dungeon.map.open", "zh-Hant");
+            const auto map_source = games::vision::resolve_image_source(source, aliases, map_probe.at("image").get<std::string>());
+            const auto map_icon = cv::imread((source.root / map_source.relative_path).string());
+            map_icon.copyTo(image(cv::Rect(400, 1480, map_icon.cols, map_icon.rows)));
+            fresh(); evaluate(stopped, O::NoHit);
+            image = cv::imread(argv[2], cv::IMREAD_COLOR);
+            fresh(); evaluate(stopped, O::NoHit); // Closing a map starts a new sampling window.
+            // Synthetic overlays use real recorded template pixels; they are not game frames.
+            const auto overlay = [&](const char *name, int x, int y) {
+                const auto asset = games::vision::resolve_image_source(source, aliases, name);
+                const auto pixels = cv::imread((source.root / asset.relative_path).string());
+                closure::check(!pixels.empty(), "MOVEMENT_OVERLAY_ASSET_MISSING");
+                pixels.copyTo(image(cv::Rect(x, y, pixels.cols, pixels.rows)));
+            };
+            completed_sample();
+            overlay("network_error_zh_hant", 230, 670);
+            overlay("network_retry_zh_hant", 320, 850);
+            fresh(); evaluate(stopped, O::NoHit);
+            image = cv::imread(argv[2], cv::IMREAD_COLOR);
+            fresh(); evaluate(stopped, O::NoHit);
+            completed_sample();
+            overlay("combat_active_zh_hant", 20, 10);
+            fresh(); evaluate(stopped, O::NoHit);
+            image = cv::imread(argv[2], cv::IMREAD_COLOR);
+            fresh(); evaluate(stopped, O::NoHit);
+            frame.identity.foreground_application = "launcher";
+            fresh(); evaluate(stopped, O::NoHit);
+            frame.identity.foreground_application = "jp.co.drecom.wizardry.daphne";
+            fresh(); evaluate(stopped, O::NoHit);
+            evaluate({{"mode", "movement_stopped"}, {"scope", "other-navigation"}}, O::NoHit);
+            struct MovementPorts final : runtime::FlowPorts {
+                recognition::Service &service;
+                contracts::FrameEnvelope frame;
+                std::shared_ptr<const std::vector<std::uint8_t>> pixels;
+                unsigned inputs{};
+                std::uint64_t recognition_ns{}, recognition_calls{};
+                J last_stopped = nullptr;
+                MovementPorts(recognition::Service &s, const cv::Mat &image, const std::string &revision)
+                    : service(s), pixels(std::make_shared<const std::vector<std::uint8_t>>(
+                        image.data, image.data + image.total() * image.elemSize())) {
+                    frame.identity = {"recorded-auto-route", "wvd", revision, "900x1600", 1, 0, 0,
+                        {900, 1600}, {900, 1600}, {}, "BGR8", 1, "replay", "jp.co.drecom.wizardry.daphne"};
+                }
+                contracts::FrameEnvelope capture() override {
+                    ++frame.identity.frame_id;
+                    frame.identity.captured_at = frame.identity.capture_finished_at = std::chrono::steady_clock::now();
+                    frame.raw_bgr = pixels;
+                    return frame;
+                }
+                contracts::Observation recognize(const contracts::FrameEnvelope &f, const recognition::Request &r) override {
+                    const auto began = std::chrono::steady_clock::now();
+                    auto result = service.evaluate(f, f.identity, r);
+                    recognition_ns += std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - began).count();
+                    ++recognition_calls;
+                    if (std::get<recognition::CustomParameters>(r.parameters).parameters.dump().find("movement_stopped") != std::string::npos)
+                        last_stopped = {{"frame", f.identity.frame_id}, {"outcome", int(result.outcome)},
+                            {"parameters", std::get<recognition::CustomParameters>(r.parameters).parameters},
+                            {"evidence", result.evidence}};
+                    return result;
+                }
+                runtime::Submission submit(const contracts::Command &, const contracts::Observation &,
+                    const contracts::Observation &, contracts::Box, const std::string &) override {
+                    ++inputs;
+                    return {runtime::SubmissionState::Accepted, ++frame.identity.action_epoch, std::chrono::steady_clock::now(), {}};
+                }
+                runtime::OperationResult operate(const std::string &, const J &, const std::optional<contracts::FrameEnvelope> &,
+                    const std::optional<contracts::Observation> &, const std::string &) override { return {runtime::OperationState::Done}; }
+                bool cancelled() const override { return false; }
+            } ports(service, image, bundle.revision);
+            J documents = J::object();
+            for (const auto &entry : closure::read("resources/authoring/public-flows.json"))
+                documents[entry.at("flow").at("id").get<std::string>()] = entry;
+            const games::tasks::PublicFlowLibrary library(documents, closure::read("resources/authoring/semantic-assets.json"));
+            const games::tasks::PublicStepScope public_steps([&](const auto &id, const auto &args) {
+                return library.compile_step(id, args, "zh-Hant");
+            });
+            C graph("movement.recorded");
+            const auto route = graph.define_child("Route", games::navigation::auto_route("mark_auto"));
+            graph.call_child("Entry", route, {"Done"}, {{"stopped", {"Done"}},
+                {"encounter", {"Unexpected"}}, {"blocked", {"Unexpected"}}});
+            graph.recovery("Unexpected", "MOVEMENT_RECORDING_UNEXPECTED_ENCOUNTER");
+            graph.route("Done", {"Terminal"});
+            auto program = games::tasks::compile_native_program(graph.finish(), J::object(), "movement-recorded");
+            // Real OCR-backed guards consumed almost all of the former 15s harness
+            // window before the first stop sample. Production budgets are unchanged.
+            runtime::FlowExecutor executor(program, ports, 35s);
+            runtime::TickResult outcome;
+            do {
+                outcome = executor.tick();
+                if (outcome.state == runtime::TickState::Waiting) std::this_thread::sleep_until(outcome.wake_at);
+            } while (outcome.state == runtime::TickState::Progress || outcome.state == runtime::TickState::Waiting);
+            closure::check(outcome.state == runtime::TickState::Completed && ports.inputs >= 1 && ports.inputs <= 2,
+                "MOVEMENT_REAL_ROUTE:" + outcome.code + ":" + executor.progress_snapshot().dump() +
+                ":inputs=" + std::to_string(ports.inputs) + ":stopped=" + ports.last_stopped.dump());
+            std::cout << "movement: real frame and auto-route executor, cross-composite/cross-frame stop, motion/device/viewport/context/map/network/combat negatives PASS; device transport isolated; recognition_calls="
+                << ports.recognition_calls << "; recognition_ms=" << ports.recognition_ns / 1000000 << '\n';
             return 0;
         }
         if (argc == 3 && std::string(argv[1]) == "--temporal") {

@@ -124,6 +124,9 @@ CompiledWorkflow traverse_dungeon(const WvdTaskPlan &plan, const J &profile,
     graph.confirm("Entered", "dungeon.enter", "dungeon_entered", inside, {"Dispatch"});
     J dispatch = {"UnknownFrozen"};
     if (plan.route().back().harken_arrival) dispatch.push_back("HarkenCompleted");
+    for (std::size_t i = 0; i < plan.route().size(); ++i)
+        if (plan.route()[i].shortcut_battle_wait_ms)
+            dispatch.push_back("ResumeTarget" + std::to_string(i));
     for (const auto *name : {"Blocked", "Combat", "Chest", "Revive", "Outside", "HealingPanel", "Resume", "Map"})
         dispatch.push_back(name);
     if (plan.route().back().harken_arrival) dispatch.push_back("HarkenArrived");
@@ -191,10 +194,41 @@ CompiledWorkflow traverse_dungeon(const WvdTaskPlan &plan, const J &profile,
             if (target.shortcut_battle_wait_ms) {
                 // 此标记路线不靠地图坐标证明完成；目标战斗复用同一Battle定义，
                 // 仅成功返回后等待，再以副本新帧确认。普通停止仍重新导航，不冒充击杀。
-                graph.route("TargetEncounter" + suffix, {"TargetCombat" + suffix, "Chest", "Revive", "Dispatch"});
-                graph.observe("TargetCombat" + suffix, combat, {"FightTarget" + suffix});
-                graph.call_child("FightTarget" + suffix, battle, {"AfterTargetBattle" + suffix},
-                    {{"blocked", {"Dispatch"}}, {"revive", {"Dispatch"}}, {"chest", {"Dispatch"}}});
+                const auto active = C::all({C::business("/target_encounter/active", true),
+                    C::business("/target_encounter/unit_matches", true),
+                    C::business("/target_encounter/point", i)});
+                const auto authorized = C::business("/target_encounter/resume_authorized", true);
+                graph.observe("ResumeTarget" + suffix, active, {"TargetDispatch" + suffix});
+                graph.route("TargetEncounter" + suffix, {"TargetStart" + suffix, "Chest", "Revive", "Dispatch"});
+                graph.confirm("TargetStart" + suffix, "target.begin." + suffix,
+                    "target_encounter_started", combat, {"FightTarget" + suffix}, i);
+                graph.observe("TargetCombat" + suffix, C::all({combat, active, authorized}), {"TargetStart" + suffix});
+                graph.call_child("FightTarget" + suffix, battle, {"TargetResult" + suffix},
+                    {{"blocked", {"TargetInterrupted" + suffix}}, {"revive", {"TargetInterrupted" + suffix}},
+                     {"chest", {"TargetInterrupted" + suffix}}});
+                graph.confirm("TargetInterrupted" + suffix, "target.interlude." + suffix,
+                    "target_encounter_interrupted", active, {"TargetDispatch" + suffix}, i);
+                graph.route("TargetDispatch" + suffix, {"TargetConfirmed" + suffix, "TargetRevive" + suffix,
+                    "TargetChest" + suffix, "TargetCombat" + suffix, "TargetResult" + suffix,
+                    "TargetReacquire" + suffix, "TargetIdentityUnknown" + suffix, "TargetWait" + suffix});
+                graph.observe("TargetConfirmed" + suffix, C::all({active, C::business("/target_encounter/phase", 3)}),
+                    {"AfterTargetBattle" + suffix});
+                graph.observe("TargetRevive" + suffix, C::all({active, revive}), {"ResurrectTarget" + suffix});
+                graph.call_child("ResurrectTarget" + suffix, resurrection, {"TargetDispatch" + suffix});
+                graph.observe("TargetChest" + suffix, C::all({active, chest}), {"OpenTargetChest" + suffix});
+                graph.call_child("OpenTargetChest" + suffix, box, {"TargetDispatch" + suffix},
+                    {{"combat", {"TargetContinuationLost" + suffix}}, {"revive", {"TargetDispatch" + suffix}},
+                     {"ambush", {"TargetContinuationLost" + suffix}}, {"blocked", {"TargetDispatch" + suffix}},
+                     {"retry", {"TargetDispatch" + suffix}}});
+                graph.confirm("TargetContinuationLost" + suffix, "target.ambiguous." + suffix,
+                    "target_continuation_lost", active, {"TargetDispatch" + suffix}, i);
+                graph.confirm("TargetResult" + suffix, "target.result." + suffix, "target_encounter_result",
+                    C::all({active, authorized, dungeon}), {"AfterTargetBattle" + suffix}, i);
+                graph.observe("TargetReacquire" + suffix, C::all({active, C::absent(authorized), dungeon}), {"SelectPoint"});
+                graph.observe("TargetIdentityUnknown" + suffix, C::all({active, C::absent(authorized), combat}),
+                    {"TargetIdentityUnknownExit" + suffix});
+                graph.recovery("TargetIdentityUnknownExit" + suffix, "target.continuation_identity_unconfirmed");
+                graph.poll("TargetWait" + suffix, 250, {"TargetDispatch" + suffix});
                 graph.wait("AfterTargetBattle" + suffix, *target.shortcut_battle_wait_ms,
                     {"Confirm" + suffix, "AfterTargetResult" + suffix});
                 // 战后可以立即出现宝箱或另一场遭遇；已成功的目标战斗不能因此
@@ -219,8 +253,20 @@ CompiledWorkflow traverse_dungeon(const WvdTaskPlan &plan, const J &profile,
             normal["floor"] = {"Retreat"};
         const auto route_definition = graph.define_child("Route" + suffix, child);
         const auto route = "CallRoute" + suffix;
+        if (automatic && target.target != "dungFlag" && target.target != "stay") {
+            graph.confirm("NavigationTerminated" + suffix, "navigation.terminated." + suffix,
+                "target_navigation_terminated", {{"mode", "confirmed_input_result"},
+                    {"classification", "navigation_no_route"}, {"consume", true}},
+                {"ConfirmNavigation" + suffix}, i);
+            graph.confirm("ConfirmNavigation" + suffix, "point." + suffix, "target_completed",
+                C::all({input_clear, inside}), {"Dispatch"}, i);
+        }
+        J completed_route = {"Outside"};
+        if (automatic && target.target != "dungFlag" && target.target != "stay")
+            completed_route.push_back("NavigationTerminated" + suffix);
+        completed_route.push_back("Confirm" + suffix);
         graph.call_child(route, route_definition,
-            candidates({"Outside", "Confirm" + suffix}), normal);
+            candidates(std::move(completed_route)), normal);
         graph.observe_business("Point" + suffix, C::business("/task_step", i), {route});
         graph.confirm("Confirm" + suffix, "point." + suffix, "target_completed",
             // 确认动作另取新帧。基础弹窗探针沿用已有并行实现，避免串行扫描耗尽

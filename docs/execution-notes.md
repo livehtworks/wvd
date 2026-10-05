@@ -1,6 +1,8 @@
 # 当前执行注意项
 
-- movement_stopped嵌入多个all条件时，外层请求缓存不能保证同一帧子采样一致；首次读取更新采样时间后另一个分支可能变为sample_interval。静止结果须按完整帧身份保留，且旧帧等待不能变成新证据。本次补丁和--movement-frame入口尚未构建/验证/部署，用户禁止继续修改后停止。目标战再起后回普通Dispatch会丢失目标成功/返程路径，另列待修，不用静止证据冒充击杀。见`reviews/giant116-stall-memory-20261006.md`。
+- movement_stopped嵌入多个all条件时，外层请求缓存不能保证子采样一致；静止结论按完整帧身份保存，跨新帧续读须复核场景、小地图及输入epoch/设备/连接/视口/导航作用域。初次采样和等待旧帧不证明静止，反证立即失效，3秒周期/ROI/阈值不变。`--movement-frame <900x1600 PNG> <完整冻结包>`须包含实际OCR模型；源码pack子集缺模型时报真实missing_resource，不允许跳过Error。真实auto_route回放记录38次识别约25秒，原15秒测试墙钟不足，独立测试窗口35秒不改变生产预算或TTL。见`reviews/linkage-aa0957a-20261006.md`。
+- 目标战的再起/宝箱/阻断必须回原目标处理上下文，不能返回普通Dispatch丢失战后链；原目标身份不明时保留未完成，不把任意新遭遇结算为目标。短暂无路线提示通过当前调用帧的ConfirmedInputResult交接，消费一次；历史结果无点击资格，实际新输入/另一调用清除，祖先pending和身份/epoch检查继续有效。超时known_scene只能复核当时声明的合法候选，不能扫描整个Definition跳阶段。
+- 内存仅有工作区估算和释放后OS数字不足以归因。现沿释放边界记录Service/OCR/Session活对象、资源租约ID/共享引用及Held::content原文件缓冲、程序参数容器规模；OCR初始化/销毁配对记录受原memory/debug开关控制，不每帧扫描。相同租约去重，容器容量估算不当作常驻分配；释放后余量仍unknown。`analyze_memory_owners.py`只读输入、输出独立，旧日志缺字段标missing，不补造对象计数。
 
 - 友方六卡的增益图标会将左上外轮廓拉高，不能只从左列起建网格；中/右列也可锚定，缺轮廓格仍要求四条真实边。多个锚点的同一物理网格允许小像素差，真正多布局/卡片缺失仍拒绝点击。一级无等级按钮是正常handoff，父级也须承接角色改变、详情关闭和战斗结束。am start成功不等于前台已到达，须新状态核对并在原期限内补发。
 - 应用在Boot内再次重启可能留下旧Title待确认输入及同根恢复事件帧。新Boot结束后只允许同owner/同事件/同处理器/同replan目标的device-restart链退出，旧pending仍逐一核对原后置和身份；不得删除通用跨处理器检查或把boot_ready当旧输入成功。Title需要在原结果期限内按新帧补点，因为logo出现不表示Tap to Start已可交互。第29轮实帧/事件见`reviews/repeated-boot-recovery-20261005.md`。

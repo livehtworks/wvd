@@ -175,7 +175,7 @@ void BundleLease::verify_members() const {
         expected.insert(name);
     auto found = s.members();
     for (const auto &name : found)
-        require(expected.contains(name), "RESOURCE_NOT_IN_MANIFEST");
+        if (!expected.contains(name)) throw MissingBundleMember(name);
     require(found == expected, "BUNDLE_MANIFEST_INCOMPLETE");
     for (const auto &[_, directory] : s.directories)
         directory->verify_identity();
@@ -183,7 +183,7 @@ void BundleLease::verify_members() const {
 }
 void BundleLease::require_member(const std::string &relative) const {
     checked_relative(relative);
-    require(impl_->files.contains(relative), "RESOURCE_NOT_IN_MANIFEST");
+    if (!impl_->files.contains(relative)) throw MissingBundleMember(relative);
 }
 const std::vector<std::uint8_t> &BundleLease::bytes(const std::string &relative) const {
     require_member(relative);
@@ -197,6 +197,19 @@ const std::filesystem::path &BundleLease::root() const { return impl_->root; }
 const std::string &BundleLease::revision() const { return impl_->revision; }
 const std::string &BundleLease::identity() const { return impl_->id; }
 std::uint64_t BundleLease::hash_bytes() const { return impl_->hashed_bytes; }
+BundleLease::StorageStats BundleLease::storage_stats() const {
+    StorageStats result;
+    for (const auto &[name, file] : impl_->files) {
+        const auto size = file->content.size();
+        result.size_bytes += size;
+        result.capacity_bytes += file->content.capacity();
+        if (name.ends_with(".onnx")) result.model_bytes += size;
+        else if (name.ends_with(".png")) result.image_bytes += size;
+        else if (name.ends_with(".json")) result.json_bytes += size;
+        else result.other_bytes += size;
+    }
+    return result;
+}
 std::size_t BundleLease::file_count() const { return impl_->files.size(); }
 std::size_t BundleLease::directory_count() const { return impl_->directories.size(); }
 std::uint64_t BundleLease::directory_checks() const { return impl_->directory_checks; }
