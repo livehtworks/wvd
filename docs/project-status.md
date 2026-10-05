@@ -2,9 +2,10 @@
 
 ## aa0957a工作包收束
 
+- 用户追加授权后，源码`96024f5`已commit/push，candidate117部署原17654/PID28944、原data；原candidate116正常退出。新巨人50轮请求`3916784c-63ac-44c9-b285-c86bcb9fc029`，run`57479A08-CE93-4390-A8F2-66EE8BB5AB65/1`已实际Running、repeat active/目标50，初始0轮，不累计旧5轮。前台要塞及正式EnsureVpn就绪已确认，debug/内存/耗时/识别和关键帧已落盘。记录时尚未完成首轮；不宣称50轮或内存稳定通过。见[部署与采集](reviews/linkage50-deployment-20261006.md)。
 - 2026-10-06完成C01–C07源码修复与独立Windows原生验证：handoff原选择来源、过期Poll合法出口、目标战跨再起/宝箱/阻断承接、同帧/跨帧静止采样、中性已确认导航结果、超时重分类合法边。完整巨人工厂图从正常入口验证；真实PNG经正式识别服务和auto_route执行器通过，不等同实机验收。
 - 内存诊断改为释放边界的对象/引用/容器规模与OCR初始化/销毁配对。run7冻结包的原文件缓冲约135.29MiB已定位；独立真实OCR初始化/推理/释放留下约14.24MiB净余量，仍为unknown，生产805.6MiB峰值未全部归因。没有调整预算/缓存/并发或用重启掩盖内存。
-- 独立产品在`next/.local/linkage-aa0957a-20261006/build/Release/automationd.exe`；本包禁止生产服务操作、部署、游戏输入、恢复95轮和commit/push，均未执行。正式候选仍candidate116，最后已知状态5/100完成、repeat inactive；旧成功次数不转记为新补丁验收。实际保存公共库七条组合也通过，但旧wheel-open下载后置与作者源不同，尚未触发/验收，生产替换前须核对。源码/证据/未验证边界见[交付报告](reviews/linkage-aa0957a-20261006.md)。
+- 初次工作包限定交付的独立产品在`next/.local/linkage-aa0957a-20261006/build/Release/automationd.exe`，当时未部署/操作游戏/恢复95轮或commit/push；该边界是历史验收记录，当前部署按上条新授权。实际保存公共库七条组合通过；旧wheel-open下载后置现已备份/CAS单点同步，profile未变，自然下载分支仍未实测。源码/限定证据见[交付报告](reviews/linkage-aa0957a-20261006.md)。
 
 ## 第三章巨人悬赏
 
