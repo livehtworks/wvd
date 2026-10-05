@@ -5,6 +5,11 @@
 #include "games/wvd/tasks/public_step_scope.hpp"
 #include "games/wvd/tasks/bounty_visit.hpp"
 #include "games/wvd/tasks/bounty_cycle.hpp"
+#include "games/wvd/tasks/run_builder.hpp"
+#include "games/wvd/tasks/bull_cave.hpp"
+#include "games/wvd/tasks/cave_of_separation.hpp"
+#include "games/wvd/tasks/sandman.hpp"
+#include "games/wvd/tasks/gold_income.hpp"
 #include "games/wvd/tasks/locale_assets.hpp"
 #include "games/wvd/tasks/native_publisher.hpp"
 #include "games/wvd/navigation/time_leap.hpp"
@@ -19,6 +24,7 @@
 #include "games/wvd/combat/turn.hpp"
 #include "games/wvd/supply/inn.hpp"
 #include "games/wvd/recovery/boot.hpp"
+#include "games/wvd/recovery/party_death.hpp"
 #include "games/wvd/vision/boot_probes.hpp"
 #include "games/wvd/vision/native_recognizers.hpp"
 #include "games/wvd/vision/native_asset_resolver.hpp"
@@ -42,6 +48,7 @@
 #include "games/wvd/vision/network_probes.hpp"
 #include "games/wvd/vision/inn_leave_probes.hpp"
 #include "storage/legacy_import.hpp"
+#include "storage/run_store.hpp"
 
 namespace closure {
 using namespace wvd;
@@ -60,6 +67,7 @@ struct Ports final : runtime::FlowPorts {
     std::map<std::string, bool> conditions;
     std::function<void(const std::string &)> after_input;
     std::vector<std::string> inputs;
+    std::vector<contracts::Command> commands;
     std::uint64_t epoch{}, captures{}, recognitions{};
     bool stop{}, combat{}, blocker{}, ready{}, network{}, quiet{true};
     Ports() : business(storage::LegacyConfigImporter(read("packs/wvd/parameters/legacy-config-fields.json"))
@@ -106,9 +114,9 @@ struct Ports final : runtime::FlowPorts {
         result.action_eligible = parameters.value("mode", "") != "business";
         return result;
     }
-    runtime::Submission submit(const contracts::Command &, const contracts::Observation &, const contracts::Observation &,
+    runtime::Submission submit(const contracts::Command &command, const contracts::Observation &, const contracts::Observation &,
                                contracts::Box, const std::string &path) override {
-        inputs.push_back(path); ++epoch;
+        inputs.push_back(path); commands.push_back(command); ++epoch;
         if (after_input) after_input(path);
         return {runtime::SubmissionState::Accepted, epoch, std::chrono::steady_clock::now(), {}};
     }
@@ -216,7 +224,7 @@ int inn_transitions() {
     }
     return 0;
 }
-int transitions() {
+void leap_transitions() {
     const auto leap = games::navigation::time_leap_without_causality("BeautifulOre", "cursedwheel_dhi", true);
     for (const bool network : {false, true}) {
         Driver d(network ? games::recovery::with_boot_recovery(leap, true) : leap);
@@ -242,6 +250,9 @@ int transitions() {
         Driver d(leap); d.observe("city"); check(!d.terminal() && d.ports.inputs.empty(), "LEAP_PRE_SUBMIT_FALSE_COMPLETION");
         d.ports.stop = true; d.finish(); d.evidence("TRANS-03");
     }
+}
+int transitions() {
+    leap_transitions();
     for (bool accepts : {true, false}) {
         games::MapTarget target{}; target.target = "position"; target.position = games::TaskPoint{505, 760};
         target.swipes.push_back(std::nullopt); target.harken_arrival = accepts;
@@ -297,6 +308,322 @@ int transitions() {
 int main(int argc, char **argv) {
     try {
         using J = nlohmann::json;
+        if (argc == 2 && std::string(argv[1]) == "--locale-coverage") {
+            using namespace closure;
+            using C = games::tasks::PipelineCompiler;
+            C direct("closure.locale.direct");
+            direct.observe("Entry", C::image("theRouteToTheDestinationCannotBeFound"), {"Terminal"});
+            auto graph = direct.finish();
+            const auto missing = games::tasks::locale_asset_coverage(graph, "zh-Hant");
+            check(!missing.at("complete").get<bool>() &&
+                missing.at("unresolved_foreign").get<std::vector<std::string>>() ==
+                    std::vector<std::string>{"theRouteToTheDestinationCannotBeFound"}, "LOCALE_DIRECT_FOREIGN_NOT_REJECTED");
+            bool rejected = false;
+            try { games::tasks::require_locale_asset_coverage(graph, "zh-Hant"); }
+            catch (const std::runtime_error &error) {
+                rejected = std::string(error.what()).starts_with("LOCALE_ASSET_COVERAGE_INCOMPLETE:");
+            }
+            check(rejected, "LOCALE_GATE_NOT_ENFORCED");
+            games::tasks::require_locale_asset_coverage(graph, "en");
+            C implicit("closure.locale.implicit");
+            implicit.observe("Entry", {{"mode", "auto_route_post"}}, {"Terminal"});
+            auto localized = implicit.finish();
+            const auto dependencies = games::tasks::locale_asset_coverage(localized, "zh-Hant");
+            check(!dependencies.at("complete").get<bool>() &&
+                dependencies.at("unresolved_foreign").dump().find("theRouteToTheDestinationCannotBeFound") != std::string::npos,
+                "LOCALE_IMPLICIT_FOREIGN_NOT_REJECTED");
+            localized.random_maze_events = false;
+            games::tasks::localize_task_assets(localized, read("resources/authoring/semantic-assets.json"), "zh-Hant");
+            check(std::find(localized.images.begin(), localized.images.end(), "navigation_no_route_zh_hant.png") != localized.images.end() &&
+                std::find(localized.images.begin(), localized.images.end(), "theRouteToTheDestinationCannotBeFound.png") == localized.images.end(),
+                "LOCALE_IMPLICIT_NAVIGATION_NOT_LOCALIZED");
+            games::tasks::require_locale_asset_coverage(localized, "zh-Hant");
+            C shared("closure.locale.shared");
+            shared.observe("Entry", C::image("next"), {"Terminal"});
+            games::tasks::require_locale_asset_coverage(shared.finish(), "zh-Hant");
+            C unclassified("closure.locale.unclassified");
+            unclassified.observe("Entry", C::image("unregistered-local-template"), {"Terminal"});
+            const auto unknown = games::tasks::locale_asset_coverage(unclassified.finish(), "zh-Hant");
+            check(!unknown.at("complete").get<bool>() && unknown.at("unclassified").size() == 1,
+                "LOCALE_UNCLASSIFIED_NOT_REJECTED");
+            Driver manual(games::recovery::acknowledge_party_defeat());
+            manual.ports.conditions[J{{"mode", "party_defeat"}}.dump()] = true;
+            manual.finish();
+            check(manual.last.state == runtime::TickState::ExternalBlocked && manual.ports.inputs.empty() &&
+                manual.last.code.find("party.multiple_deaths_manual_required") != std::string::npos,
+                "MULTIPLE_DEATH_MUST_STOP_WITHOUT_INPUT");
+            J documents = J::object();
+            for (const auto &doc : read("resources/authoring/public-flows.json"))
+                documents[doc.at("flow").at("id").get<std::string>()] = doc;
+            const games::tasks::PublicFlowLibrary library(documents, read("resources/authoring/semantic-assets.json"));
+            std::vector<games::tasks::CompiledWorkflow> children{
+                games::combat::single_actor_auto(), games::combat::enable_auto()};
+            for (const auto &[id, doc] : documents.items())
+                if (doc.value("execution", J::object()).value("checks", J::object()).value("phase", "") == "combat")
+                    children.push_back(library.compile_step(id, J::object(), "zh-Hant"));
+            for (const auto &child : children) {
+                C root("closure.multiple_death_nested");
+                root.check_policy("combat", {"wvd-party-defeat"});
+                const auto action = root.define_child("Action", child);
+                const auto handler = root.define_child("Defeat", games::recovery::acknowledge_party_defeat());
+                root.route("Entry", {"Call"});
+                J handoffs = J::object();
+                for (const auto &port : child.handoffs) handoffs[port] = J::array({"Terminal"});
+                root.call_child("Call", action, {"Terminal"}, handoffs);
+                root.event_scope("Entry", J::array({{
+                    {"id", "wvd-party-defeat"}, {"class", "exception"}, {"priority", 690},
+                    {"detect", J{{"mode", "party_defeat"}}}, {"source_node", "Entry"},
+                    {"entry", handler}, {"resume", {{"mode", "reobserve"}}}
+                }}));
+                Driver nested(root.finish());
+                nested.until([&] { return nested.executor.current_step_id() == action; });
+                nested.ports.conditions[J{{"mode", "party_defeat"}}.dump()] = true;
+                nested.finish();
+                check(nested.last.state == runtime::TickState::ExternalBlocked && nested.ports.inputs.empty(),
+                    "INNER_COMBAT_FILTERED_MULTIPLE_DEATH_STOP:" + child.kind);
+            }
+            std::cout << "locale coverage: direct/implicit foreign and unclassified inputs blocked; shared and correct language accepted\n";
+            return 0;
+        }
+        if ((argc == 2 || argc == 3) && std::string(argv[1]) == "--giant-bounty") {
+            using namespace closure;
+            games::WvdQuestCatalog quests(read("packs/wvd/parameters/legacy-quests.json"));
+            const auto &task = quests.at("GiantBounty");
+            check(task.source.at("questName") == "[悬赏]巨人" &&
+                task.source.at("questCategory") == "主线前三章", "GIANT_BOUNTY_CATALOG");
+            const auto plan = games::tasks::giant_bounty_plan(task);
+            check(plan.entry_steps()[0].target == "impregnableFortress" &&
+                plan.entry_steps()[1].target == "fortressb10f" &&
+                plan.route()[0].target == "mark_auto" && plan.route()[0].shortcut_battle_wait_ms == 3000 &&
+                plan.route()[1].target == "dungFlag" && plan.route()[1].harken_arrival,
+                "GIANT_BOUNTY_ROUTE");
+            J documents = J::object();
+            for (const auto &entry : read("resources/authoring/public-flows.json"))
+                documents[entry.at("flow").at("id").get<std::string>()] = entry;
+            const auto catalogue = read("resources/authoring/semantic-assets.json");
+            const games::tasks::PublicFlowLibrary library(documents, catalogue);
+            const games::tasks::PublicStepScope public_steps([&](const std::string &id, const J &arguments) {
+                return library.compile_step(id, arguments, "zh-Hant");
+            });
+            auto profile = storage::LegacyConfigImporter(read("packs/wvd/parameters/legacy-config-fields.json"))
+                .parse({{"GENERAL", J::object()}}).values;
+            if (argc == 3) profile = read(argv[2]).at("values");
+            profile["FARM_TARGET"] = "GiantBounty";
+            for (const bool ore : {false, true}) for (const bool triumph : {false, true}) {
+                profile["ACTIVE_BEAUTIFUL_ORE"] = ore;
+                profile["ACTIVE_TRIUMPH"] = triumph;
+                const auto before = profile;
+                const auto leap = games::tasks::bounty_time_leap(plan, profile);
+                check(leap.target == "Triumph" && leap.chapter == "cursedwheel_impregnableFortress" &&
+                    profile == before, "TASK_LEAP_MUST_OVERRIDE_DEFAULT_WITHOUT_WRITING_PROFILE");
+                auto flow = games::tasks::build_task_workflow(task, profile, {}, [&](const auto &selected,
+                    const auto &values, const auto &images) {
+                    return games::tasks::bounty_cycle(selected, values, images, library,
+                        documents.at("guild-open-bounty-page"), "zh-Hant");
+                });
+                games::tasks::localize_task_assets(flow, catalogue, "zh-Hant");
+                std::cout << "giant compiled nodes: " << flow.nodes.size() << '\n';
+                games::tasks::compile_native_program(flow, J::object(), "giant-bounty").validate();
+                if (!ore && !triumph) {
+                    auto production = games::recovery::with_boot_recovery(flow, true);
+                    games::tasks::localize_task_assets(production, catalogue, "zh-Hant");
+                    const auto coverage = games::tasks::locale_asset_coverage(production, "zh-Hant");
+                    std::cout << "production locale coverage: " << coverage.dump() << '\n';
+                    games::tasks::require_locale_asset_coverage(production, "zh-Hant");
+                }
+                check(games::tasks::task_unit_count(task.id, profile) == 3 &&
+                    flow.nodes.at("Start").dump().find("giant_bounty_started") != std::string::npos &&
+                    flow.nodes.at("Start").dump().find("fortress_city_background") != std::string::npos &&
+                    flow.nodes.at("ReturnGuild_Done").dump().find("fortress_city_background") != std::string::npos &&
+                    !flow.nodes.contains("GoRoyalCity") && !flow.nodes.contains("FirstDungeon_CallAutoMap0"),
+                    "GIANT_BOUNTY_MUST_STAY_IN_CHAPTER_THREE_WITHOUT_MAP_NAVIGATION");
+                const auto &route = flow.nodes.at("FirstDungeon_CallRoute0");
+                check(route.at("next").dump().find("Confirm0") != std::string::npos &&
+                    flow.nodes.at("FirstDungeon_Route0_Entry").at("next").dump().find("Arrived") == std::string::npos &&
+                    route.dump().find("TargetEncounter0") != std::string::npos &&
+                    flow.nodes.at("FirstDungeon_FightTarget0").at("next") == J{"FirstDungeon_AfterTargetBattle0"} &&
+                    flow.nodes.at("FirstDungeon_AfterTargetBattle0").at("operation_args").at("duration_ms") == 3000 &&
+                    flow.nodes.at("FirstDungeon_AfterTargetBattle0").at("next") ==
+                        J{"FirstDungeon_Confirm0", "FirstDungeon_AfterTargetResult0"},
+                    "GIANT_MARK_STOP_IS_NOT_A_KILL_OR_AN_EXTRA_MAP_CLICK");
+                const auto serialized = flow.nodes.dump();
+                check(serialized.find("outskirts_fortress_zone10_zh_hant") != std::string::npos &&
+                    serialized.find("Triumph_zh_hant") != std::string::npos &&
+                    serialized.find("BeautifulOre_zh_hant") == std::string::npos,
+                    "GIANT_ROUTE_ASSETS_AND_EXPLICIT_LEAP");
+            }
+            // 同一生产账目接受新悬赏开始/跳轮回执，即使外部矿石选项关闭仍可在要塞原地续段。
+            profile["ACTIVE_BEAUTIFUL_ORE"] = false;
+            games::WvdRunState state(profile, {"giant-bounty", 1, std::make_shared<contracts::SteadyClock>()});
+            state.enter_segment(contracts::SegmentBoundary::Initial, 1, 0);
+            std::uint64_t receipt{};
+            for (const auto *event : {"giant_bounty_started", "bounty_leap_prepared", "bounty_leap_completed",
+                                     "bounty_travel_skipped"})
+                check(state.confirm_event(event, event, 1, ++receipt), "GIANT_BOUNTY_BUSINESS_RECEIPT");
+            check(state.summary().at("bounty_cycle").at("phase") == int(games::quests::BountyCycle::Phase::Reveal),
+                "GIANT_BOUNTY_REVEAL_PHASE");
+            auto after_battle = games::tasks::traverse_dungeon(plan, profile, {});
+            after_battle.entry = "AfterTargetBattle0";
+            for (const auto *scene : {"dungFlag", "chestFlag"}) {
+                Driver wait(after_battle);
+                const auto waited_from = std::chrono::steady_clock::now();
+                wait.until([&] { return wait.executor.current_step_id() == "AfterTargetResult0"; }, 5s);
+                check(wait.ports.business.summary().at("task_step") == 0 && wait.ports.inputs.empty(),
+                    "GIANT_UNKNOWN_POST_BATTLE_FRAME_MUST_NOT_CONFIRM_OR_RENAVIGATE");
+                wait.ports.images = {scene};
+                wait.until([&] { return wait.ports.business.summary().at("task_step") == 1; }, 2s);
+                check(std::chrono::steady_clock::now() - waited_from >= 3s && wait.ports.inputs.empty(),
+                    "GIANT_POST_BATTLE_RESULT_MUST_KEEP_SUCCESS_THROUGH_CHEST_OR_LOADING");
+            }
+            Driver arrived(games::navigation::auto_route("mark_auto"));
+            arrived.ports.images = {"dungFlag", "mark_auto"};
+            arrived.ports.conditions[J{{"mode", "auto_route_moving"}}.dump()] = true;
+            arrived.ports.conditions[J{{"mode", "auto_route_post"}}.dump()] = true;
+            arrived.ports.conditions[J{{"mode", "navigation_resume_unavailable"}}.dump()] = true;
+            arrived.ports.after_input = [&](const auto &) {
+                arrived.ports.conditions[J{{"mode", "movement_stopped"}}.dump()] = true;
+            };
+            arrived.finish();
+            check(arrived.last.state == runtime::TickState::Completed && arrived.ports.inputs.size() == 1 &&
+                arrived.ports.inputs.front().find("Choose") != std::string::npos,
+                "BLACK_RESUME_MUST_COMPLETE_AFTER_NAVIGATION_NOT_SKIP_INITIAL_INPUT_OR_REQUIRE_TEXT");
+            // 与巨人同一共享调用出口修复须保护默认非矿石蝎女编译，不扩大为实机通过。
+            profile["FARM_TARGET"] = "Scorpionesses";
+            auto scorpion = games::tasks::bounty_cycle(quests.at("Scorpionesses"), profile, {}, library,
+                documents.at("guild-open-bounty-page"), "zh-Hant");
+            games::tasks::compile_native_program(scorpion, J::object(), "scorpion-regression").validate();
+            check(scorpion.nodes.contains("GoRoyalCity") &&
+                !scorpion.nodes.contains("FirstDungeon_FightTarget0"), "SCORPION_ROUTE_MUST_REMAIN_UNCHANGED");
+            std::cout << "giant bounty: catalogue, four default override combinations, localized native graph, shortcut battle/wait/return and business receipts PASS; no device input\n";
+            return 0;
+        }
+        if (argc == 2 && std::string(argv[1]) == "--post-leap-ready") {
+            using namespace closure;
+            J documents = J::object();
+            for (const auto &entry : read("resources/authoring/public-flows.json"))
+                documents[entry.at("flow").at("id").get<std::string>()] = entry;
+            const auto catalogue = read("resources/authoring/semantic-assets.json");
+            games::tasks::PublicFlowLibrary library(documents, catalogue);
+            const games::tasks::PublicStepScope public_steps([&](const std::string &id, const J &arguments) {
+                return library.compile_step(id, arguments, "zh-Hant");
+            });
+            auto profile = storage::LegacyConfigImporter(read("packs/wvd/parameters/legacy-config-fields.json"))
+                .parse({{"GENERAL", J::object()}}).values;
+            // 当前蝎女链使用矿石跳轮；不扩展成其它任务路线的全量验收。
+            profile["ACTIVE_BEAUTIFUL_ORE"] = true;
+            const auto assert_ready = [](const games::tasks::CompiledWorkflow &flow, const std::string &node) {
+                std::cout << "checking " << flow.kind << ":" << node << '\n';
+                check(flow.nodes.at(node).value("post_delay", 0) == 0, "POST_LEAP_FIXED_DELAY:" + flow.kind);
+                const auto program = games::tasks::compile_native_program(flow, J::object(), "post-leap-ready");
+                program.validate();
+                const auto &step = program.definitions.at(program.root_definition).steps.at(node);
+                check(step.delay_after == 0ms && step.guard.has_value(), "POST_LEAP_READY_GUARD_LOST:" + flow.kind);
+                check(!step.next.empty(), "POST_LEAP_NEXT_LOST:" + flow.kind);
+            };
+            assert_ready(games::tasks::bounty_cycle({"Scorpionesses", "quest", J::object()}, profile, {},
+                library, documents.at("guild-open-bounty-page"), "zh-Hant", true), "Leaped");
+            assert_ready(games::tasks::bull_cave_cycle({"LBC-oneGorgon", "quest", J::object()}, profile, {}), "Leaped");
+            assert_ready(games::tasks::cave_of_separation_segment({"CaveOfSeperation", "quest", J::object()},
+                profile, {}, games::tasks::CaveOfSeparationSegment::Preparation), "Leaped");
+            assert_ready(games::tasks::sandman_cycle({"sandman", "quest", J::object()}, profile, {}), "DukeLeaped");
+            assert_ready(games::tasks::gold_income_cycle({"7000G", "quest", J::object()}, true), "Confirmed0");
+            leap_transitions();
+            std::cout << "post-leap: five production confirmations have no extra delay; loading/remnant/network checks retained; no game input\n";
+            return 0;
+        }
+        if (argc == 2 && std::string(argv[1]) == "--combat-open-repair") {
+            using namespace closure;
+            const auto assets = read("resources/authoring/semantic-assets.json");
+            J documents = J::object();
+            for (const auto &doc : read("resources/authoring/public-flows.json"))
+                documents[doc.at("flow").at("id").get<std::string>()] = doc;
+            const games::tasks::PublicFlowLibrary library(documents, assets);
+            const auto graph = library.compile_step("combat-open-detail", {{"x", 640}, {"y", 965}}, "zh-Hant");
+            const auto open_node = graph.nodes.at("Entry").at("next").at(0).get<std::string>();
+            const auto &args = graph.nodes.at(open_node).at("operation_args");
+            check(args.at("retry").at("interval_ms") == 1500, "OPEN_RETRY_NOT_COMPILED");
+            const auto flee = library.resource_condition("combat.menu.flee", "zh-Hant", authoring::ResourceUse::Observation);
+            const auto detail = library.resource_condition("combat.skill.detail", "zh-Hant", authoring::ResourceUse::Observation);
+            const auto setup = [&](Ports &ports) {
+                ports.combat = true;
+                ports.conditions[J{{"mode", "prepared_actor"}}.dump()] = true;
+                ports.conditions[flee.dump()] = true;
+            };
+            // 帧语义由受控端口提供；公共定义、重试门禁和回执来自生产执行器。
+            Driver d(graph);
+            setup(d.ports);
+            d.ports.after_input = [&](const auto &) {
+                if (d.ports.inputs.size() == 2) d.ports.conditions[detail.dump()] = true;
+            };
+            d.until([&] { return d.ports.inputs.size() == 1; });
+            check(!d.terminal(), "UNCHANGED_MENU_CONFIRMED");
+            d.finish();
+            check(d.last.state == runtime::TickState::Completed && d.ports.inputs.size() == 2,
+                  "OPEN_DID_NOT_RETRY_AND_CONFIRM");
+
+            Driver changed(graph);
+            setup(changed.ports);
+            changed.ports.after_input = [&](const auto &) {
+                changed.ports.conditions[J{{"mode", "prepared_actor"}}.dump()] = false;
+            };
+            changed.finish();
+            check(changed.ports.inputs.size() == 1, "OPEN_CLICKED_AFTER_SCENE_CHANGED");
+
+            C failed_open("closure.unavailable_skill");
+            const auto child = failed_open.define_child("Open", graph);
+            failed_open.route("Entry", {"Call"});
+            failed_open.call_child("Call", child, {"Terminal"}, {{"UnavailableExit", {"Defend"}}});
+            const auto same_menu = args.at("scene_recognition").at("parameters");
+            failed_open.fixed_click("Defend", same_menu, C::absent(J{{"mode", "prepared_actor"}}),
+                {513, 1200}, {"Terminal"});
+            Driver unavailable(failed_open.finish());
+            setup(unavailable.ports);
+            // Only the test clock is compressed; failure routing/input receipts are production code.
+            for (auto &[id, definition] : unavailable.program.definitions)
+                for (auto &[name, step] : definition.steps) {
+                    if (auto *await = std::get_if<workflow::AwaitResult>(&step.data)) {
+                        await->budget = 80ms; await->initial_delay = 0ms;
+                    }
+                    if (auto *input = std::get_if<workflow::Input>(&step.data); input && input->retry)
+                        input->retry->interval = 1ms;
+                }
+            unavailable.ports.after_input = [&](const auto &) {
+                if (unavailable.ports.commands.back().x == 513)
+                    unavailable.ports.conditions[J{{"mode", "prepared_actor"}}.dump()] = false;
+            };
+            unavailable.finish();
+            check(unavailable.last.state == runtime::TickState::Completed && unavailable.ports.commands.size() > 2 &&
+                unavailable.ports.commands.back().x == 513, "UNCHANGED_MENU_DID_NOT_HANDOFF_MANUAL_DEFEND");
+            for (const auto &command : unavailable.ports.commands)
+                check(command.x != 850 && command.click_pair_interval_ms == 0, "UNAVAILABLE_SKILL_ENABLED_AUTO");
+
+            const auto root = std::filesystem::absolute(".local") /
+                ("combat-action-frames-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+            storage::RunStore store(root / "runs", "isolated", 1, J{{"engine_kind", "wvd_native"}});
+            contracts::FrameEnvelope frame;
+            frame.identity.generation = 1; frame.identity.frame_id = 1;
+            frame.identity.raw_size = frame.identity.recognition_size = {900, 1600};
+            frame.raw_bgr = std::make_shared<const std::vector<std::uint8_t>>(900 * 1600 * 3, 81);
+            check(store.save_recent_frame(frame), "PERIODIC_FRAME_NOT_QUEUED");
+            ++frame.identity.frame_id;
+            check(store.save_recent_frame(frame, true), "ACTION_FRAME_THROTTLED");
+            check(store.save_recent_frame(frame, true), "DUPLICATE_ACTION_NOT_REUSED");
+            store.finish_recent_frames();
+            unsigned png = 0, jpg = 0;
+            for (const auto &file : std::filesystem::directory_iterator(root / "recent-frames")) {
+                png += file.path().extension() == ".png";
+                jpg += file.path().extension() == ".jpg";
+                if (file.path().extension() == ".png") {
+                    const auto image = cv::imread(file.path().string());
+                    check(!image.empty() && cv::norm(image, cv::Mat(1600, 900, CV_8UC3, cv::Scalar(81,81,81)), cv::NORM_INF) == 0,
+                          "ACTION_FRAME_NOT_LOSSLESS");
+                }
+            }
+            check(png == 1 && jpg == 1 && store.diagnostic_summary().at("recent_frames").at("failed") == 0,
+                  "ACTION_FRAME_ARCHIVE_INVALID");
+            std::cout << "PASS: unchanged-menu retry, changed-scene no repeat, lossless action frame bypass/flush/dedup. No device input.\n";
+            return 0;
+        }
         if (argc == 2 && std::string(argv[1]) == "--single-auto-progress") {
             using namespace closure;
             for (const bool initially_enabled : {false, true}) {
@@ -304,38 +631,48 @@ int main(int argc, char **argv) {
                 d.ports.combat = true;
                 d.ports.images = {"flee", initially_enabled ? "spellskill/CombatAutoEnable" : "spellskill/CombatAutoDisable"};
                 d.ports.after_input = [&](const auto &) {
-                    if (d.ports.images.contains("spellskill/CombatAutoDisable")) {
-                        d.ports.images.erase("spellskill/CombatAutoDisable");
-                        d.ports.images.insert("spellskill/CombatAutoEnable");
-                    } else {
-                        d.ports.images.erase("spellskill/CombatAutoEnable");
-                        d.ports.images.insert("spellskill/CombatAutoDisable");
-                    }
+                    check(d.ports.commands.back().click_pair_interval_ms == (initially_enabled ? 0 : 100),
+                          "SINGLE_AUTO_PULSE_CONTRACT_LOST");
+                    d.ports.images.erase("spellskill/CombatAutoEnable");
+                    d.ports.images.insert("spellskill/CombatAutoDisable");
                 };
-                d.until([&] { return d.executor.current_step_id().find("AwaitAction") != std::string::npos; });
-                const auto before = d.ports.recognitions;
-                d.until([&] { return d.ports.recognitions >= before + 12; });
-                check(!d.terminal() && d.ports.inputs.size() == (initially_enabled ? 0 : 1),
-                      "SINGLE_AUTO_DISABLED_BEFORE_ACTION");
-                // 模拟动作期间Active和指令菜单消失，但Auto控件仍在。
-                d.ports.combat = false;
-                d.ports.images.erase("flee");
+                // The instruction menu deliberately remains visible. It must not gate OFF.
                 d.finish();
                 check(d.last.state == runtime::TickState::Completed &&
-                      d.ports.inputs.size() == (initially_enabled ? 1 : 2), "SINGLE_AUTO_DID_NOT_DISABLE_AFTER_ACTION");
+                      d.ports.inputs.size() == 1, "SINGLE_AUTO_WAITED_FOR_MENU_DISAPPEARANCE");
             }
             Driver ended(games::combat::single_actor_auto());
-            ended.ports.combat = true;
-            ended.ports.images = {"flee", "spellskill/CombatAutoEnable"};
-            ended.until([&] { return ended.executor.current_step_id().find("AwaitAction") != std::string::npos; });
             ended.ports.scene("ended");
             ended.finish();
             check(ended.last.state == runtime::TickState::Completed && ended.ports.inputs.empty(),
                   "SINGLE_AUTO_CLICK_AFTER_BATTLE_END");
+            Driver still_on(games::combat::single_actor_auto());
+            still_on.ports.combat = true;
+            still_on.ports.images = {"flee", "spellskill/CombatAutoDisable"};
+            still_on.ports.after_input = [&](const auto &) {
+                const auto count = still_on.ports.commands.size();
+                check(still_on.ports.commands.back().click_pair_interval_ms == (count == 1 ? 100 : 0),
+                      "YELLOW_STATE_REPLAYED_OPEN_PULSE");
+                still_on.ports.images.erase(count == 1 ? "spellskill/CombatAutoDisable" : "spellskill/CombatAutoEnable");
+                still_on.ports.images.insert(count == 1 ? "spellskill/CombatAutoEnable" : "spellskill/CombatAutoDisable");
+            };
+            bool checked_immediate_color = false;
+            for (const auto &[id, definition] : still_on.program.definitions)
+                for (const auto &[step_id, step] : definition.steps)
+                    if (step_id == "Pulse@await") {
+                        const auto &await = std::get<workflow::AwaitResult>(step.data);
+                        check(await.initial_delay.count() == 0, "AUTO_COLOR_CHECK_DELAYED");
+                        checked_immediate_color = true;
+                    }
+            check(checked_immediate_color, "AUTO_COLOR_CHECK_MISSING");
+            still_on.finish();
+            check(still_on.ports.commands.size() == 2, "YELLOW_STATE_NOT_CLOSED");
             auto profile = storage::LegacyConfigImporter(read("packs/wvd/parameters/legacy-config-fields.json"))
                 .parse({{"GENERAL", J::object()}}).values;
+            profile["DEFAULT_OVERALL_STRATEGY"] = "test";
+            profile["TASK_SPECIFIC_CONFIG"] = false;
             profile["STRATEGY"] = J::array({{{"group_name", "test"}, {"skill_settings", J::array({
-                {{"role_var", "test"}, {"skill_var", "左下技能"}, {"skill_lvl", 1}, {"target_var", "next"}}
+                {{"role_var", "test"}, {"skill_var", "左下技能"}, {"skill_lvl", 1}, {"target_var", "左上角色"}}
             })}}});
             const auto assets = read("resources/authoring/semantic-assets.json");
             J documents = J::object();
@@ -345,15 +682,76 @@ int main(int argc, char **argv) {
             const games::tasks::PublicStepScope public_steps([&](const std::string &id, const J &arguments) {
                 return library.compile_step(id, arguments, "zh-Hant");
             });
-            auto turn = games::combat::take_turn(profile, {});
+            auto localized_rescue = games::recovery::dismiss_party_death();
+            games::tasks::localize_task_assets(localized_rescue, assets, "zh-Hant");
+            const auto &rescue_post = localized_rescue.nodes.at("Cleared").at("observation_args");
+            check(rescue_post.dump().find("revival_prompt") != std::string::npos &&
+                rescue_post.dump().find("RiseAgain") == std::string::npos,
+                "RESCUE_REVIVAL_LANGUAGE_NOT_LOCALIZED");
+            auto turn = games::combat::take_turn(profile, {"spellskill/char/test.png"});
             games::tasks::localize_task_assets(turn, assets, "zh-Hant");
             (void)games::tasks::compile_native_program(turn, J::object(), "single-auto-integration");
-            check(turn.nodes.contains("CharAuto_DisableAfterActionStarted") &&
-                  turn.nodes.contains("Skill0Auto_DisableAfterActionStarted") &&
+            check(turn.nodes.contains("CharAuto_Pulse") &&
+                  !turn.nodes.contains("Skill0Auto_Pulse") &&
                   !turn.nodes.contains("DisableCharAuto"), "SINGLE_AUTO_CALLERS_NOT_MIGRATED");
-            check(turn.nodes.at("CharAuto_DisableAfterActionStarted").dump().find("combat_flee_zh_hant") != std::string::npos,
-                  "SINGLE_AUTO_MENU_NOT_LOCALIZED");
-            std::cout << "Single auto delayed action, already-enabled, battle-end and both callers passed\n";
+            check(turn.nodes.at("CharAuto_Pulse").at("operation_args").at("command").at("click_pair_interval_ms") == 100,
+                  "SINGLE_AUTO_PAIR_NOT_COMPILED");
+            check(turn.nodes.at("CharAuto_Pulse").at("operation_args").at("use_target_center") == true,
+                  "SINGLE_AUTO_FIXED_POINT");
+            check(turn.nodes.contains("Skill0Try0Enemy23") && !turn.nodes.contains("Skill0Try0Missing"),
+                  "ENEMY_SCAN_NOT_CONNECTED");
+            check(turn.nodes.at("Skill0DefendFallbackDone").at("operation_args").at("operation") == "defend_fallback_confirmed",
+                "UNAVAILABLE_SKILL_FALSE_SUCCESS");
+            check(turn.nodes.at("Skill0Try0StillDetail").at("next").dump().find("Auto") == std::string::npos,
+                  "FAILED_SKILL_SWITCHED_AUTO");
+            const auto &unknown = turn.nodes.at("UnknownActor");
+            check(unknown.at("next") == J::array({"Entry", "Interrupt"}) &&
+                  unknown.at("observation_args").dump().find("combat_actor_recognized") != std::string::npos,
+                  "UNKNOWN_ACTOR_NOT_REOBSERVED");
+            check(turn.nodes.at("NoSelection").at("observation_args").dump().find("combat_actor_recognized") != std::string::npos,
+                  "UNRECOGNIZED_ACTOR_AUTHORIZED_AUTO");
+            for (const auto &child : {turn, games::combat::single_actor_auto(),
+                                     library.compile_step("combat-confirm-result", J::object(), "zh-Hant")}) {
+                for (const auto &[entry, policy] : child.definition_checks.items()) {
+                    (void)entry;
+                    if (policy.at("phase") == "combat")
+                        check(std::find(policy.at("inherit").begin(), policy.at("inherit").end(),
+                            "wvd-party-death") != policy.at("inherit").end(),
+                            "INNER_COMBAT_FILTERED_PARTY_DEATH");
+                }
+                C root("closure.death_dispatch");
+                root.check_policy("combat", {"wvd-party-death"});
+                const auto action = root.define_child("Action", child, child.nodes.contains("BlockedExit")
+                    ? std::vector<std::string>{"BlockedExit"} : std::vector<std::string>{});
+                const auto death = root.define_child("Death", games::recovery::dismiss_party_death());
+                root.route("Entry", {"Call"});
+                root.call_child("Call", action, {"Terminal"});
+                root.event_scope("Entry", J::array({{
+                    {"id", "wvd-party-death"}, {"class", "exception"}, {"priority", 700},
+                    {"detect", J{{"mode", "party_death"}}}, {"source_node", "Entry"},
+                    {"entry", death}, {"resume", {{"mode", "reobserve"}}}
+                }}));
+                Driver rescue(root.finish());
+                rescue.until([&] { return rescue.executor.current_step_id() == action; });
+                rescue.ports.conditions[J{{"mode", "party_death"}}.dump()] = true;
+                rescue.ports.conditions[J{{"mode", "party_death_post"}}.dump()] = true;
+                rescue.ports.after_input = [&](const auto &) {
+                    if (rescue.ports.commands.size() >= 8) {
+                        rescue.ports.conditions[J{{"mode", "party_death"}}.dump()] = false;
+                        if (child.kind == turn.kind) rescue.ports.combat = true;
+                        else rescue.ports.images.insert("RiseAgain");
+                    }
+                };
+                rescue.until([&] {
+                    const auto facts = rescue.ports.business.summary();
+                    return facts.at("death_prompt_sequence") == 1 && !facts.at("death_prompt_pending").get<bool>();
+                });
+                check(rescue.ports.commands.size() == 8 &&
+                    std::all_of(rescue.ports.commands.begin(), rescue.ports.commands.end(), [](const auto &command) {
+                        return command.x == 450 && command.y == 800;
+                    }), "DEATH_CENTER_LOOP_STOPPED_EARLY_OR_CLICKED_NEW_SCENE");
+            }
+            std::cout << "Single auto center pair, already-enabled off, battle-end, enemy scan and no skill-to-Auto passed\n";
             return 0;
         }
         if (argc == 2 && std::string(argv[1]) == "--recognition-language") {
@@ -858,8 +1256,17 @@ int main(int argc, char **argv) {
                     for (const auto &child : value) collect(child);
                 }
             };
-            for (const auto &item : plan)
-                collect(item.contains("resource") ? resources.condition(item.at("resource").get<std::string>(), "zh-Hant") : item.at("condition"));
+            for (const auto &item : plan) {
+                const auto condition = item.contains("resource")
+                    ? resources.condition(item.at("resource").get<std::string>(), "zh-Hant") : item.at("condition");
+                collect(condition);
+                // Composite probes load implicit dependencies too; use the production index.
+                wvd::games::tasks::PipelineCompiler compiler("closure.recorded_probe");
+                compiler.observe("Entry", condition, {"Terminal"});
+                auto graph = compiler.finish();
+                wvd::games::tasks::localize_task_assets(graph, catalogue, "zh-Hant");
+                for (const auto &image : graph.images) collect(J{{"image", image}});
+            }
             wvd::recognition::Service service(bundle, wvd::games::vision::native_handlers(
                 manifest.at("aliases"), "zh-Hant"));
             wvd::contracts::FrameEnvelope frame;
@@ -898,6 +1305,9 @@ int main(int argc, char **argv) {
                           << (result.outcome == expected ? "PASS" : "FAIL") << "\n";
                 require(result.outcome == expected,
                     "ROI_REVIEW_RESULT:" + result.error_code + ":" + result.evidence.dump());
+                if (item.contains("stage"))
+                    require(result.evidence.at("evidence").value("stage", std::string{}) == item.at("stage").get<std::string>(),
+                        "ROI_REVIEW_STAGE:" + result.evidence.dump());
             }
             return 0;
         }
@@ -958,6 +1368,71 @@ int main(int argc, char **argv) {
             bounty(cv::Rect(0, 0, 900, 200)).copyTo(header_only(cv::Rect(0, 0, 900, 200)));
             evaluate(header_only, wvd::contracts::RecognitionOutcome::NoHit);
             std::cout << "bounty: real wanted Hit, real commissions NoHit, title-only NoHit; report/reveal graphs valid\n";
+            return 0;
+        }
+        if (argc == 3 && std::string(argv[1]) == "--movement-frame") {
+            using namespace wvd;
+            using O = contracts::RecognitionOutcome;
+            auto image = cv::imread(argv[2], cv::IMREAD_COLOR);
+            if (image.empty() || image.cols != 900 || image.rows != 1600)
+                throw std::runtime_error("MOVEMENT_FRAME_INVALID");
+            const auto manifest = closure::read("packs/wvd/manifest.json");
+            recognition::Bundle source{std::filesystem::absolute("packs/wvd"), manifest.at("revision"), {}};
+            for (const auto &row : manifest.at("files")) source.files.push_back({row.at("path"), row.at("sha256")});
+            const auto aliases = manifest.value("aliases", J::object());
+            recognition::Bundle bundle{std::filesystem::absolute(".local") /
+                ("movement-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count())), source.revision, {}};
+            for (const auto *name : {"dungFlag", "mapFlag"}) {
+                const auto selected = games::vision::resolve_image_source(source, aliases, name);
+                const auto target = bundle.root / selected.relative_path;
+                std::filesystem::create_directories(target.parent_path());
+                std::filesystem::copy_file(source.root / selected.relative_path, target);
+                bundle.files.push_back({selected.relative_path, platform::file_sha256(target)});
+            }
+            recognition::Service service(bundle, games::vision::native_handlers(aliases, "zh-Hant"));
+            contracts::FrameEnvelope frame;
+            frame.identity.device_id = "recorded-movement";
+            frame.identity.game_id = "wvd";
+            frame.identity.pack_revision = bundle.revision;
+            frame.identity.viewport_id = "900x1600";
+            frame.identity.generation = 1;
+            frame.identity.raw_size = frame.identity.recognition_size = {900, 1600};
+            const auto fresh = [&] {
+                ++frame.identity.frame_id;
+                frame.identity.captured_at = frame.identity.capture_finished_at = std::chrono::steady_clock::now();
+                frame.raw_bgr = std::make_shared<const std::vector<std::uint8_t>>(
+                    image.data, image.data + image.total() * image.elemSize());
+            };
+            const auto evaluate = [&](const J &p, O expected) {
+                recognition::Request request{"movement", "1", {0, 0, 900, 1600},
+                    recognition::CustomParameters{"WvdVision", p}};
+                const auto result = service.evaluate(frame, frame.identity, request);
+                if (result.outcome != expected)
+                    throw std::runtime_error("MOVEMENT_CONTRACT:" + result.error_code + ":" + result.evidence.dump());
+                return result;
+            };
+            const J stopped{{"mode", "movement_stopped"}};
+            // The false arrival branch still evaluates its movement child, as production all does.
+            const J arrival{{"mode", "all"}, {"conditions", J::array({
+                stopped, J{{"mode", "template"}, {"image", "mapFlag"}}})}};
+            fresh();
+            evaluate(stopped, O::NoHit);
+            std::this_thread::sleep_for(3100ms);
+            evaluate(arrival, O::NoHit);
+            evaluate(stopped, O::NoHit); // Waiting on an old frame cannot prove a stop.
+            fresh();
+            evaluate(arrival, O::NoHit);
+            const auto stopped_result = evaluate(stopped, O::Hit);
+            service.note_known_scene(stopped_result); // Bust outer result cache, preserve frame evidence.
+            evaluate(stopped, O::Hit);
+            fresh();
+            evaluate(stopped, O::NoHit); // The three-second sampling interval still applies.
+            std::this_thread::sleep_for(3100ms);
+            image(cv::Rect(650, 25, 225, 225)).setTo(cv::Scalar(255, 255, 255));
+            fresh();
+            evaluate(arrival, O::NoHit);
+            evaluate(stopped, O::NoHit); // Changed minimap is not stopped.
+            std::cout << "movement: real stalled frame, cross-composite consistency, old-frame rejection and changed-map negative PASS\n";
             return 0;
         }
         if (argc == 3 && std::string(argv[1]) == "--temporal") {

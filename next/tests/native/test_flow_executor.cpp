@@ -196,6 +196,48 @@ workflow::Step step(std::string id, workflow::StepData data,
 
 int main(int argc, char **argv) {
     try {
+        if (argc == 2 && std::string(argv[1]) == "--child-result-frame") {
+            struct ResultPorts final : Ports {
+                bool valid{true};
+                std::uint64_t child_frame{}, parent_frame{};
+                bool reusable(const contracts::FrameIdentity &) const override { return valid; }
+                contracts::Observation recognize(const contracts::FrameEnvelope &frame,
+                    const recognition::Request &request) override {
+                    if (request.recognizer_id == "child.result") child_frame = frame.identity.frame_id;
+                    if (request.recognizer_id == "parent.result") parent_frame = frame.identity.frame_id;
+                    return Ports::recognize(frame, request);
+                }
+            };
+            for (const bool valid : {true, false}) {
+                const auto request = [](const char *id) {
+                    return recognition::Request{id, "1", {0, 0, 900, 1600},
+                        recognition::CustomParameters{"WvdVision", nlohmann::json::object()}};
+                };
+                workflow::FlowProgram program;
+                program.revision = "child-result-frame"; program.root_definition = "root";
+                workflow::Definition root; root.id = "root"; root.entry = "call";
+                root.steps.emplace("call", step("call", workflow::Call{"child", {}}, {"check"}));
+                root.steps.emplace("check", step("check", workflow::Observe{request("parent.result")}, {"done"}));
+                root.steps.emplace("done", step("done", workflow::Finish{}));
+                workflow::Definition child; child.id = "child"; child.entry = "observe";
+                child.steps.emplace("observe", step("observe", workflow::Observe{request("child.result")}, {"return"}));
+                child.steps.emplace("return", step("return", workflow::Return{"completed"}));
+                program.definitions.emplace("root", std::move(root));
+                program.definitions.emplace("child", std::move(child));
+                ResultPorts ports; ports.valid = valid;
+                runtime::FlowExecutor executor(program, ports, 2s);
+                runtime::TickResult result;
+                for (int i = 0; i < 20; ++i) {
+                    result = executor.tick();
+                    if (result.state != runtime::TickState::Progress) break;
+                }
+                if (result.state != runtime::TickState::Completed || !ports.child_frame ||
+                    (valid ? ports.parent_frame != ports.child_frame : ports.parent_frame <= ports.child_frame))
+                    throw std::runtime_error("CHILD_RESULT_FRAME_HANDOFF:" + result.code);
+            }
+            std::cout << "child result frame retained only while port identity/age gate accepts reuse\n";
+            return 0;
+        }
         if (argc == 2 && std::string(argv[1]) == "--late-receipt") {
             for (const std::string mode : {"local", "threshold", "black", "stale", "generation",
                 "error", "unknown", "cleanup", "cleanup-cancel", "cleanup-total", "cancel", "total", "handler"}) {
@@ -700,6 +742,113 @@ int main(int argc, char **argv) {
             }
             return 0;
         }
+        if (argc == 2 && std::string(argv[1]) == "--restart-during-boot") {
+            const auto require = [](bool ok, const std::string &message) {
+                if (!ok) throw std::runtime_error(message);
+            };
+            const auto drive = [](runtime::FlowExecutor &executor) {
+                runtime::TickResult result;
+                for (int i = 0; i < 500; ++i) {
+                    result = executor.tick();
+                    if (result.state != runtime::TickState::Progress && result.state != runtime::TickState::Waiting) break;
+                    if (result.state == runtime::TickState::Waiting) std::this_thread::sleep_until(result.wake_at);
+                }
+                return result;
+            };
+            struct RestartBootPorts final : MenuRetryPorts {
+                std::string scenario;
+                int recoveries{}, prepares{}, resumes{}, parent_result_reads{}, cleanup_calls{};
+                int required_recoveries() const { return scenario == "other-handler" ? 1 : 2; }
+                contracts::FrameEnvelope capture() override {
+                    if ((prepares && !recoveries && scenario != "other-handler") ||
+                        (epoch && recoveries < required_recoveries()))
+                        throw contracts::ObservationUnavailable({contracts::ReadFaultKind::ApplicationUnavailable,
+                            contracts::ReadFaultStage::Capture, "GAME_NOT_FOREGROUND", "boot.capture", {}, {}});
+                    return MenuRetryPorts::capture();
+                }
+                contracts::ObservationRecovery recover_observation(bool = false) override {
+                    ++recoveries;
+                    return {{}, true, true};
+                }
+                contracts::Observation recognize(const contracts::FrameEnvelope &frame,
+                                                   const recognition::Request &request) override {
+                    auto observed = MenuRetryPorts::recognize(frame, request);
+                    if (request.recognizer_id == "work-ready" ||
+                        (request.recognizer_id == "boot-ready" && recoveries < required_recoveries()) ||
+                        (request.recognizer_id == "other-event" && (!prepares || epoch)))
+                        observed.outcome = contracts::RecognitionOutcome::NoHit;
+                    if (request.recognizer_id == "boot-result") {
+                        ++parent_result_reads;
+                        if (scenario == "unconfirmed" || recoveries < required_recoveries())
+                            observed.outcome = contracts::RecognitionOutcome::NoHit;
+                    }
+                    return observed;
+                }
+                runtime::OperationResult operate(const std::string &binding, const nlohmann::json &,
+                    const std::optional<contracts::FrameEnvelope> &, const std::optional<contracts::Observation> &,
+                    const std::string &) override {
+                    if (binding == "Prepare") ++prepares;
+                    if (binding == "Resume") ++resumes;
+                    return {runtime::OperationState::Done};
+                }
+                bool settle_observed_input() override { ++cleanup_calls; return false; }
+                bool cancelled() const override {
+                    return scenario == "unconfirmed" && parent_result_reads >= 2;
+                }
+            };
+            const auto probe = [](const char *id) {
+                return recognition::Request{id, "1", {0,0,900,1600},
+                    recognition::CustomParameters{"WvdVision", nlohmann::json::object()}};
+            };
+            for (const std::string scenario : {"confirmed", "unconfirmed", "cleanup-failed", "other-handler"}) {
+                const auto ready = probe("boot-ready"), scene = probe("boot-scene"), result_probe = probe("boot-result");
+                workflow::FlowProgram program; program.revision = "repeated-boot"; program.root_definition = "root";
+                workflow::Definition root; root.id = "root"; root.entry = "prepare";
+                root.steps.emplace("prepare", step("prepare", workflow::RegisteredOperation{"Prepare", nlohmann::json::object()}, {"work"}));
+                root.steps.emplace("work", step("work", workflow::Observe{probe("work-ready")}, {"done"}));
+                root.steps.emplace("resumed", step("resumed", workflow::RegisteredOperation{"Resume", nlohmann::json::object()}, {"done"}));
+                root.steps.emplace("done", step("done", workflow::Finish{}));
+                workflow::EventRule restart; restart.id = "context-restart"; restart.detect = ready;
+                restart.handler_definition = "boot"; restart.on_device_restart = true;
+                restart.resume = workflow::ResumeMode::Replan; restart.replan_step = "resumed"; restart.resume_guard = ready;
+                root.events.push_back(restart);
+                if (scenario == "other-handler") {
+                    auto other = restart; other.id = "other"; other.on_device_restart = false;
+                    other.category = workflow::EventClass::Overlay; other.detect = probe("other-event");
+                    other.resume = workflow::ResumeMode::Reobserve;
+                    root.events.push_back(std::move(other));
+                }
+                workflow::Definition boot; boot.id = "boot"; boot.entry = "dispatch";
+                boot.steps.emplace("dispatch", step("dispatch", workflow::Route{}, {"ready", "title"}));
+                auto observed = step("ready", workflow::Observe{ready}, {"return"}); observed.guard = ready;
+                boot.steps.emplace("ready", std::move(observed));
+                boot.steps.emplace("title", step("title", workflow::Input{scene, scene, {{"kind","Click"}}, {0,0,900,1600}}, {"await"}));
+                boot.steps.emplace("await", step("await", workflow::AwaitResult{result_probe, 2s, 0ms, 1ms}, {"return"}));
+                boot.steps.emplace("return", step("return", workflow::Return{"completed"}));
+                program.definitions.emplace("root", std::move(root));
+                program.definitions.emplace("boot", std::move(boot));
+                RestartBootPorts ports; ports.scenario = scenario;
+                if (scenario == "cleanup-failed") ports.mode = "delivery_unknown";
+                runtime::FlowExecutor executor(program, ports, 3s, {1s, 1ms, 5ms, 2s});
+                const auto result = drive(executor);
+                require(ports.prepares == 1 && ports.epoch == 1 && ports.recoveries == ports.required_recoveries(),
+                    "REPEATED_BOOT_REPLAYED:" + scenario + ":" + result.code);
+                if (scenario == "confirmed") {
+                    require(result.state == runtime::TickState::Completed && ports.resumes == 1 && !executor.has_unresolved_input(),
+                        "REPEATED_BOOT_FAILED:" + result.code);
+                } else {
+                    require(ports.resumes == 0 && executor.has_unresolved_input(), "REPEATED_BOOT_DROPPED_PENDING:" + scenario);
+                    if (scenario == "unconfirmed")
+                        require(result.state == runtime::TickState::Cancelled && ports.parent_result_reads >= 2,
+                            "REPEATED_BOOT_FALSE_CONFIRMATION:" + result.code);
+                    else require(result.state == runtime::TickState::ExternalBlocked &&
+                        result.code == (scenario == "cleanup-failed" ? "OBSERVED_RESULT_INPUT_CLEANUP_UNCONFIRMED" :
+                            "EVENT_REPLAN_CROSSES_ACTIVE_HANDLER"), "REPEATED_BOOT_BOUNDARY:" + scenario + ":" + result.code);
+                }
+                std::cout << "repeated boot " << scenario << ": " << result.code << '\n';
+            }
+            return 0;
+        }
         if (argc == 2 && std::string(argv[1]) == "--exception-restart") {
             // 只缩短注入的时钟门槛，执行同一生产重启/Boot/原调用恢复路径。
             // 设备执行仍须由本轮真实黑屏现场另行验收。
@@ -726,7 +875,7 @@ int main(int argc, char **argv) {
                 }
                 bool cancelled() const override { return stop; }
             };
-            for (const auto *mode : {"black", "progress", "stop"}) {
+            for (const auto *mode : {"black", "progress", "stop", "expired-call"}) {
                 workflow::FlowProgram program; program.revision = "exception-restart"; program.root_definition = "root";
                 recognition::Request ready{"ready", "1", {0,0,900,1600}, recognition::CustomParameters{"WvdVision", nlohmann::json::object()}};
                 workflow::Definition root; root.id = "root"; root.entry = "prepare";
@@ -747,6 +896,15 @@ int main(int argc, char **argv) {
                 boot.steps.emplace("return", step("return", workflow::Return{"completed"}));
                 workflow::EventRule event; event.id = "context-restart"; event.detect = ready;
                 event.handler_definition = "boot"; event.on_device_restart = true; root.events.push_back(event);
+                if (std::string(mode) == "expired-call") {
+                    work.cumulative_budget = 5ms; // Expires before the 30ms exception restart threshold.
+                    boot.steps.emplace("settle", step("settle", workflow::Wait{20ms}, {"return"}));
+                    boot.steps.at("boot").next = {"settle"};
+                    auto &restart = root.events.back();
+                    restart.resume = workflow::ResumeMode::Replan;
+                    restart.replan_step = "resumed"; restart.resume_guard = ready;
+                    root.steps.emplace("resumed", step("resumed", workflow::Route{}, {"done"}));
+                }
                 program.definitions.emplace("root", std::move(root));
                 program.definitions.emplace("work", std::move(work));
                 program.definitions.emplace("boot", std::move(boot));
@@ -764,7 +922,7 @@ int main(int argc, char **argv) {
                     if (result.state != runtime::TickState::Progress && result.state != runtime::TickState::Waiting) break;
                     if (result.state == runtime::TickState::Waiting) std::this_thread::sleep_until(result.wake_at);
                 }
-                const bool black = std::string(mode) == "black";
+                const bool black = std::string(mode) == "black" || std::string(mode) == "expired-call";
                 if (ports.prepares != 1 || ports.restarts != (black ? 1 : 0) || ports.boots != (black ? 1 : 0) ||
                     result.state != (std::string(mode) == "stop" ? runtime::TickState::Cancelled : runtime::TickState::Completed))
                     throw std::runtime_error(std::string("EXCEPTION_RESTART:") + mode + ":" + result.code +

@@ -2,6 +2,8 @@
 
 #include "games/wvd/chest/chest.hpp"
 #include "games/wvd/combat/encounter.hpp"
+#include "games/wvd/combat/debug.hpp"
+#include "games/wvd/combat/enemy_rules.hpp"
 #include "games/wvd/combat/turn.hpp"
 #include "games/wvd/recovery/boot.hpp"
 #include "games/wvd/state.hpp"
@@ -55,6 +57,13 @@ namespace wvd::app {
 using namespace std::chrono_literals;
 namespace {
 using J = nlohmann::json;
+void declare_portrait_assets(games::tasks::CompiledWorkflow &workflow,
+                            const std::optional<recognition::Bundle> &validated) {
+    auto &images = workflow.authoring["provided_portrait_images"] = J::array();
+    if (validated)
+        for (const auto &file : validated->files)
+            images.push_back(file.relative_path.substr(std::string("image/").size()));
+}
 std::filesystem::path executable_directory() {
     std::wstring buffer(32768, L'\0');
     const auto count = GetModuleFileNameW(nullptr, buffer.data(),
@@ -93,6 +102,8 @@ void strategy_references(J &scope, const std::function<void(J &)> &visit) {
         auto &special = bindings["special_combat"];
         if (special.contains("normal_strategy")) visit(special["normal_strategy"]);
         if (special.contains("special_strategy")) visit(special["special_strategy"]);
+        if (special.contains("rules") && special["rules"].is_array())
+            for (auto &rule : special["rules"]) if (rule.is_object() && rule.contains("strategy")) visit(rule["strategy"]);
     }
     if (bindings.contains("overall_strategy")) visit(bindings["overall_strategy"]);
     if (!bindings.contains("task_point")) return;
@@ -107,6 +118,20 @@ void all_profile_references(J &document, const std::function<void(J &)> &visit) 
     if (document.contains("default_values")) strategy_references(document["default_values"], visit);
     if (document.contains("task_overrides"))
         for (auto &scope : document["task_overrides"]) strategy_references(scope, visit);
+}
+J profile_save_sections() {
+    return {
+        {"task", {"FARM_TARGET", "FARM_TARGET_TEXT", "TASK_SPECIFIC_CONFIG"}},
+        {"common", {"WHO_WILL_OPEN_IT", "QUICK_DISARM_CHEST", "SKIP_COMBAT_RECOVER",
+                    "SKIP_CHEST_RECOVER", "RECOVER_WHEN_BEGINNING", "ACTIVE_REST",
+                    "REST_INTERVEL", "KARMA_ADJUST", "RE_ASSEMBLE_PARTY",
+                    "DEFAULT_OVERALL_STRATEGY", "TASK_POINT_STRATEGY"}},
+        {"combat", {"STRATEGY", "RELOAD_STRATEGY_WHEN"}},
+        {"advanced", {"EMU_PATH", "EMU_INDEX", "ADB_ADRESS", "AUTO_START_CLASH",
+                      "LANGUAGE", "WEBSITE_ORG_TIME", "AM_REFRESH_TIME", "ACTIVE_BEG_MONEY",
+                      "ACTIVE_ROYALSUITE_REST", "ACTIVE_TRIUMPH", "ACTIVE_BEAUTIFUL_ORE",
+                      "ACTIVE_CSC", "BYPASS_THE_WALL", "MAX_TRY_LIMIT", "MAX_CRASH_LIMIT"}}
+    };
 }
 std::string optional_profile_text(const J &object, const char *key) {
     const auto it = object.find(key);
@@ -565,6 +590,7 @@ Application::J Application::catalog() const {
         roles.push_back({{"value", role}, {"label", role}});
     return {{"tasks", tasks}, {"task_categories", category_options},
             {"fields", descriptor_.at("fields")},
+            {"profile_save_sections", profile_save_sections()},
             {"node_types", options({
                 J{{"type", "recognition"}, {"label", "画面识别"}, {"category", "视觉"},
                   {"defaults", {{"condition", {{"mode", "combat_active"}}}}}},
@@ -658,13 +684,51 @@ Application::J Application::save_profile(const J &request) {
     require(request.is_object(), "PROFILE_REQUEST_INVALID");
     const auto expected = request.at("revision").get<std::string>();
     auto document = profile_store_->load();
+    auto requested_values = request.value("operation", "") == "clear_task_override" ? document.at("values")
+        : request.contains("profile") ? request.at("profile") : request.at("document").at("values");
+    if (request.contains("scope")) {
+        require(request.at("scope").is_string(), "PROFILE_SCOPE_INVALID");
+        const auto scope = request.at("scope").get<std::string>();
+        const auto sections = profile_save_sections();
+        require(sections.contains(scope) && !request.contains("operation"), "PROFILE_SCOPE_INVALID");
+        const auto &fields = sections.at(scope);
+        require(requested_values.is_object() && requested_values.size() == fields.size(), "PROFILE_SCOPE_FIELDS_INVALID");
+        auto merged = document.at("values");
+        if (scope == "task") {
+            const auto task = optional_profile_text(requested_values, "FARM_TARGET");
+            if (!task.empty() && task != optional_profile_text(merged, "FARM_TARGET"))
+                merged = effective_profile_values(task, document);
+        }
+        // 局部保存由服务端合并到CAS基线；浏览器不能夹带其它区域的草稿。
+        for (const auto &field : fields) {
+            const auto name = field.get<std::string>();
+            require(requested_values.contains(name), "PROFILE_SCOPE_FIELDS_INVALID");
+            merged[name] = requested_values.at(name);
+        }
+        require(scope == "advanced" || !request.contains("logging"), "PROFILE_SCOPE_LOGGING_INVALID");
+        require(scope == "combat" || !request.contains("strategy_renames"), "PROFILE_SCOPE_RENAME_INVALID");
+        if (scope == "common") {
+            const auto names = strategy_names(document.at("values"));
+            std::set<std::string> existing;
+            strategy_references(document["values"], [&](J &reference) {
+                if (reference.is_string()) existing.insert(reference.get<std::string>());
+            });
+            strategy_references(merged, [&](J &reference) {
+                if (!reference.is_string()) return;
+                const auto name = reference.get<std::string>();
+                require(name.empty() || name == "全自动战斗" || name == "自定义任务点策略" ||
+                    names.contains(name) || existing.contains(name), "PROFILE_STRATEGY_NOT_SAVED");
+            });
+        }
+        requested_values = std::move(merged);
+    }
     if (request.contains("logging"))
         document["logging"] = storage::LoggingPolicy::parse(request.at("logging")).json();
     const auto old_names = strategy_names(document.at("values"));
     if (request.contains("strategy_renames")) {
         const auto &renames = request.at("strategy_renames");
         require(renames.is_object() && renames.size() <= 128, "STRATEGY_RENAME_INVALID");
-        const auto desired_names = strategy_names(request.at("profile"));
+        const auto desired_names = strategy_names(requested_values);
         std::set<std::string> targets;
         for (const auto &[old_name, new_name] : renames.items()) {
             require(old_names.contains(old_name) && new_name.is_string() &&
@@ -676,6 +740,11 @@ Application::J Application::save_profile(const J &request) {
             if (reference.is_string() && renames.contains(reference.get<std::string>()))
                 reference = renames.at(reference.get<std::string>());
         });
+        if (request.value("scope", "") == "combat")
+            strategy_references(requested_values, [&](J &reference) {
+                if (reference.is_string() && renames.contains(reference.get<std::string>()))
+                    reference = renames.at(reference.get<std::string>());
+            });
     }
     if (request.value("operation", "") == "clear_task_override") {
         const auto task = request.at("task_id").get<std::string>();
@@ -687,8 +756,7 @@ Application::J Application::save_profile(const J &request) {
         values["TASK_SPECIFIC_CONFIG"] = false;
         document["values"] = std::move(values);
     } else {
-        const auto values = request.contains("profile") ? request.at("profile")
-                                                         : request.at("document").at("values");
+        const auto &values = requested_values;
         require(values.is_object(), "PROFILE_VALUES_INVALID");
         auto defaults = document.value("default_values", document.at("values"));
         const auto task = optional_profile_text(values, "FARM_TARGET");
@@ -731,6 +799,7 @@ Application::J Application::save_profile(const J &request) {
         document["default_values"] = std::move(defaults);
     }
     const auto new_names = strategy_names(document.at("values"));
+    (void)portrait_bundle(document.at("values"), false);
     const auto &points = document.at("values").at("TASK_POINT_STRATEGY");
     if (points.contains("special_combat")) {
         const auto &special = points.at("special_combat");
@@ -738,10 +807,12 @@ Application::J Application::save_profile(const J &request) {
         const bool enabled = special.value("skull", false) || special.value("portrait", false);
         if (enabled) {
             for (const auto *field : {"normal_strategy", "special_strategy"})
+                if (std::string(field) != "special_strategy" || special.value("skull", false) ||
+                    games::combat::enemy_rules(document.at("values")).empty())
                 require(special.contains(field) && special.at(field).is_string() &&
                     new_names.contains(special.at(field).get<std::string>()),
                     "SPECIAL_COMBAT_STRATEGY_INVALID");
-            if (special.value("portrait", false)) {
+            if (special.value("portrait", false) && games::combat::enemy_rules(document.at("values")).empty()) {
                 require(special.contains("portrait_image") && special.at("portrait_image").is_string() &&
                     available_images_.contains(special.at("portrait_image").get<std::string>() + ".png"),
                     "SPECIAL_COMBAT_PORTRAIT_MISSING");
@@ -795,7 +866,7 @@ void Application::start_device_job(std::string name, std::function<void()> job) 
             std::lock_guard finished(mutex_);
             operation_ = {{"state", failure.empty() ? "completed" : "failed"},
                           {"name", name}, {"error", failure.empty() ? J(nullptr) : J(failure)}};
-            if (name == "start_task" || name == "start_workflow") {
+            if (name == "start_task" || name == "start_workflow" || name == "start_combat_debug") {
                 submission_["state"] = failure.empty() ? "submitted" :
                     failure == "PREPARATION_CANCELLED" ? "cancelled" : "failed";
                 submission_["error"] = failure.empty() ? J(nullptr) : J(failure);
@@ -865,6 +936,123 @@ Application::J Application::queue_run(const std::string &kind, const J &request,
     return {{"accepted", true}, {"request_id", id}, {"submission_state", "preparing"}};
 }
 
+std::optional<recognition::Bundle> Application::portrait_bundle(const J &values, bool persist) const {
+    std::map<std::string, std::vector<std::uint8_t>> images;
+    for (const auto &rule : games::combat::enemy_rules(values)) {
+        if (rule.png.empty()) {
+            require(available_images_.contains(rule.image + ".png"), "ENEMY_PORTRAIT_MISSING");
+            continue;
+        }
+        auto bytes = decode_base64(rule.png);
+        constexpr std::array<std::uint8_t, 8> signature{137, 80, 78, 71, 13, 10, 26, 10};
+        require(bytes.size() >= 24 && bytes.size() <= 262144 &&
+            std::equal(signature.begin(), signature.end(), bytes.begin()) &&
+            bytes[12] == 'I' && bytes[13] == 'H' && bytes[14] == 'D' && bytes[15] == 'R',
+            "ENEMY_PORTRAIT_PNG_REQUIRED");
+        // Bound the decoded allocation before handing compressed user input to OpenCV.
+        const auto dimension = [&](std::size_t offset) {
+            return (std::uint32_t(bytes[offset]) << 24) | (std::uint32_t(bytes[offset + 1]) << 16) |
+                (std::uint32_t(bytes[offset + 2]) << 8) | std::uint32_t(bytes[offset + 3]);
+        };
+        require(dimension(16) >= 16 && dimension(16) <= 160 && dimension(20) >= 16 && dimension(20) <= 220,
+            "ENEMY_PORTRAIT_SIZE_INVALID");
+        const auto pixels = cv::imdecode(bytes, cv::IMREAD_COLOR);
+        require(!pixels.empty() && pixels.cols >= 16 && pixels.rows >= 16 &&
+            pixels.cols <= 160 && pixels.rows <= 220, "ENEMY_PORTRAIT_SIZE_INVALID");
+        const auto hash = platform::bytes_sha256(bytes);
+        require(rule.image == "custom/monster_" + hash, "ENEMY_PORTRAIT_ID_MISMATCH");
+        images.emplace("image/" + rule.image + ".png", std::move(bytes));
+    }
+    if (images.empty()) return std::nullopt;
+    J identity = J::object();
+    recognition::Bundle result;
+    for (const auto &[path, bytes] : images) {
+        const auto hash = platform::bytes_sha256(bytes);
+        result.files.push_back({path, hash}); identity[path] = hash;
+    }
+    const auto material = identity.dump();
+    result.revision = platform::bytes_sha256({reinterpret_cast<const std::uint8_t *>(material.data()), material.size()});
+    result.root = paths_.data_root / "asset-cache" / ("portraits-" + result.revision);
+    result.snapshot_parent = paths_.data_root / "active-snapshots";
+    if (!persist) return result;
+    if (!std::filesystem::exists(result.root)) {
+        const auto staging = result.root.parent_path() / ("portraits-tmp-" + platform::unique_id());
+        std::filesystem::create_directories(staging);
+        try {
+            for (const auto &[path, bytes] : images) {
+                const auto target = staging / platform::BundleLease::checked_relative(path);
+                std::filesystem::create_directories(target.parent_path());
+                std::ofstream out(target, std::ios::binary);
+                out.write(reinterpret_cast<const char *>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+                out.close(); require(bool(out), "ENEMY_PORTRAIT_WRITE_FAILED");
+            }
+            std::filesystem::rename(staging, result.root);
+        } catch (...) {
+            std::error_code ignored; std::filesystem::remove_all(staging, ignored); throw;
+        }
+    }
+    platform::BundleLease::Manifest members;
+    for (const auto &file : result.files) members.emplace(file.relative_path, file.sha256);
+    result.lease = std::make_shared<platform::BundleLease>(result.root, result.revision, members);
+    result.lease->verify_members();
+    return result;
+}
+
+Application::J Application::start_combat_debug(const J &request) {
+    std::lock_guard command(command_mutex_);
+    const auto stored = profile_store_->load();
+    require(request.at("profile_revision") == stored.at("revision"), "PROFILE_REVISION_MISMATCH");
+    const auto name = request.at("strategy_name").get<std::string>();
+    require(strategy_names(stored.at("values")).contains(name), "COMBAT_DEBUG_STRATEGY_MISSING");
+    auto frozen = request;
+    frozen["request_id"] = checked_request_id(request);
+    frozen["resource_locale"] = authoring::effective_resource_locale(request, J::object());
+    frozen["mode"] = "combat_debug";
+    frozen["revision"] = stored.at("revision");
+    auto debug_stored = stored;
+    auto &values = debug_stored["values"];
+    values["TASK_SPECIFIC_CONFIG"] = false;
+    values["DEFAULT_OVERALL_STRATEGY"] = name;
+    values["TASK_POINT_STRATEGY"]["special_combat"] = J::object();
+    const auto document = games::combat::debug_document(stored.at("revision"));
+    // Only saved public dependencies need repository CAS; the debug root is deliberately transient.
+    auto library = workflow_store_->snapshot_closure(
+        workflow_store_->read(games::tasks::native_public_steps.front()), games::tasks::native_public_steps);
+    library[document.at("flow").at("id").get<std::string>()] = document;
+    return queue_run("start_combat_debug", frozen,
+        {{"kind", "combat_debug"}, {"request", frozen}, {"profile_revision", stored.at("revision")}},
+        [this, frozen, stored, debug_stored, document, library] {
+            auto prepared = compile_workflow_graph(frozen, debug_stored, document, library);
+            std::shared_ptr<devices::DeviceConnection> backend;
+            { std::lock_guard lock(mutex_); backend = backend_; }
+            if (!backend) {
+                const auto &values = stored.at("values");
+                const auto binding = platform::create_mumu_binding(manager_from_path(
+                    platform::path_from_utf8(values.at("EMU_PATH"))), values.at("EMU_INDEX"), values.at("ADB_ADRESS"));
+                require(binding.at("initial_manager").value("is_android_started", false), "COMBAT_DEBUG_EMULATOR_NOT_RUNNING");
+                backend = ensure_connected_for_run(stored);
+            }
+            require(backend->connect(), "DEVICE_RECONNECT_FAILED");
+            auto frame = backend->capture_preview();
+            require(frame.foreground_application == "jp.co.drecom.wizardry.daphne" &&
+                frame.size == contracts::Size{900, 1600}, "COMBAT_DEBUG_NOT_IN_BATTLE");
+            if (frame.encoded.empty()) {
+                require(frame.raw_bgr && frame.raw_bgr->size() == 900u * 1600u * 3u, "COMBAT_DEBUG_FRAME_INVALID");
+                const cv::Mat pixels(1600, 900, CV_8UC3, const_cast<std::uint8_t *>(frame.raw_bgr->data()));
+                require(cv::imencode(".png", pixels, frame.encoded), "COMBAT_DEBUG_FRAME_INVALID");
+            }
+            { std::lock_guard lock(mutex_);
+              frame_png_ = std::move(frame.encoded); frame_captured_at_ = frame.captured_at;
+              frame_info_ = {{"width", frame.size.width}, {"height", frame.size.height},
+                  {"device_id", frame.device_id}, {"viewport", frame.viewport_id}, {"backend", frame.backend},
+                  {"connection_generation", frame.connection_generation}, {"foreground_application", frame.foreground_application}}; }
+            const auto observed = recognition_probe({{"recognition", {{"mode", "combat_active"}}},
+                {"resource_locale", frozen.at("resource_locale")}});
+            require(observed.at("outcome") == "Hit", "COMBAT_DEBUG_NOT_IN_BATTLE");
+            return prepare_workflow("combat-debug", frozen, debug_stored, document, backend, library, std::move(prepared));
+        });
+}
+
 Application::J Application::start_task(const J &request) {
     std::lock_guard command(command_mutex_);
     auto frozen = request;
@@ -877,9 +1065,10 @@ Application::J Application::start_task(const J &request) {
         const auto count = request.at("repeat_count").get<std::int64_t>();
         require(count >= 1 && count <= 1000000, "REPEAT_COUNT_INVALID");
     }
-    // 连续运行目前只开放已有完整单轮与结算契约的蝎女任务。
+    // 两条单目标悬赏共用三段业务结算与清理契约。
     if (request.value("repeat", false))
-        require(request.value("task_id", stored.at("values").value("FARM_TARGET", "")) == "Scorpionesses",
+        require(request.value("task_id", stored.at("values").value("FARM_TARGET", "")) == "Scorpionesses" ||
+                request.value("task_id", stored.at("values").value("FARM_TARGET", "")) == "GiantBounty",
                 "REPEAT_TASK_UNSUPPORTED");
     if (request.contains("profile_revision"))
         require(request.at("profile_revision") == stored.at("revision"), "PROFILE_REVISION_MISMATCH");
@@ -891,10 +1080,11 @@ Application::J Application::start_task(const J &request) {
                 ? selected.get<std::string>() : std::string{});
             const auto source_values = effective_profile_values(task_id, stored);
             auto prepared = compile_task_graph(frozen, catalog_->at(task_id), source_values);
+            const auto portraits = portrait_bundle(source_values);
             for (const auto &image : prepared.images) {
                 const auto selected_image = games::vision::resolve_image_source(
-                    author_bundle_, aliases_, image);
-                if (!std::any_of(author_bundle_.files.begin(), author_bundle_.files.end(),
+                    author_bundle_, aliases_, image, portraits ? &*portraits : nullptr);
+                if (!std::any_of(selected_image.bundle->files.begin(), selected_image.bundle->files.end(),
                     [&](const auto &file) { return file.relative_path == selected_image.relative_path; }))
                     throw std::runtime_error("NATIVE_IMAGE_MISSING:" + selected_image.relative_path);
             }
@@ -907,6 +1097,7 @@ Application::J Application::start_task(const J &request) {
 }
 Application::J Application::start_workflow(const std::string &flow_id, const J &request) {
     std::lock_guard command(command_mutex_);
+    require(request.value("mode", "workflow") == "workflow" || request.value("mode", "workflow") == "selected_node", "WORKFLOW_MODE_INVALID");
     auto frozen = request;
     frozen["request_id"] = checked_request_id(request);
     const auto stored = profile_store_->load();
@@ -922,12 +1113,10 @@ Application::J Application::start_workflow(const std::string &flow_id, const J &
          {"profile_revision", stored.at("revision")}, {"library", library}},
         [this, flow_id, frozen, stored, document, library] {
             // 不齐全的语言素材/循环引用在连接和启动模拟器之前暴露。
-            const auto locale = authoring::effective_resource_locale(frozen, document.at("execution"));
-            (void)games::tasks::PublicFlowLibrary(library, semantic_catalogue_).task_profiles(
-                document, frozen.value("arguments", J::object()), locale);
+            auto prepared = compile_workflow_graph(frozen, stored, document, library);
             require(!stopping_ && !cancel_operation_, "PREPARATION_CANCELLED");
             const auto backend = ensure_connected_for_run(stored);
-            return prepare_workflow(flow_id, frozen, stored, document, backend, library);
+            return prepare_workflow(flow_id, frozen, stored, document, backend, library, std::move(prepared));
         });
 }
 
@@ -1241,6 +1430,8 @@ games::tasks::CompiledWorkflow Application::compile_task_graph(const J &request,
     require(workflow.nodes.contains("Boot_Entry"), "PRODUCTION_BOOT_ENTRY_MISSING");
     games::tasks::localize_task_assets(workflow, semantic_catalogue_,
         authoring::effective_resource_locale(request, J::object()));
+    declare_portrait_assets(workflow, portrait_bundle(values, false));
+    games::tasks::require_locale_asset_coverage(workflow, locale);
     return workflow;
 }
 
@@ -1272,16 +1463,18 @@ runtime::NativeRunDefinition Application::assemble_task(const J &request, const 
         handoff_source["digest"] = games::tasks::digest_handoff_json(handoff_source);
     }
     auto workflow = prepared ? std::move(*prepared) : compile_task_graph(request, task, values);
+    games::tasks::require_locale_asset_coverage(workflow, resource_locale);
     const auto request_id = checked_request_id(request);
     const auto destination = paths_.data_root / "published" / request_id;
+    const auto portraits = portrait_bundle(values);
     auto publication = games::tasks::publish_native(workflow, author_bundle_,
-        destination, aliases_);
+        destination, aliases_, J::object(), portraits ? &*portraits : nullptr);
     const auto &root = publication.program.definitions.at(publication.program.root_definition);
     require(root.steps.contains(workflow.checkpoint), "NATIVE_CHECKPOINT_MISSING");
     const auto checkpoint_source = root.steps.at(workflow.checkpoint).source_path;
     runtime::NativeUnit unit{std::make_shared<const wvd::workflow::FlowProgram>(std::move(publication.program)),
         std::move(publication.bundle), games::vision::native_handlers(aliases_, resource_locale,
-            workflow.dialogue_policy),
+            workflow.dialogue_policy, workflow.random_maze_events),
         checkpoint_source, workflow.time_limit};
     const auto count = games::tasks::task_unit_count(task_id, values);
     runtime::NativeRunDefinition definition;
@@ -1628,7 +1821,7 @@ void Application::delete_workflow(const std::string &flow_id, const J &request) 
 
 Application::J Application::prepare_workflow(const std::string &flow_id, const J &request,
     const J &stored, J document, std::shared_ptr<devices::DeviceConnection> backend,
-    const J &library_snapshot) {
+    const J &library_snapshot, std::optional<PreparedWorkflow> prepared) {
     require_storage_space();
     require(bool(backend), "DEVICE_NOT_CONNECTED");
     if (stopping_ || cancel_operation_) throw std::runtime_error("PREPARATION_CANCELLED");
@@ -1638,7 +1831,7 @@ Application::J Application::prepare_workflow(const std::string &flow_id, const J
     std::map<std::string, std::string> pipeline_to_node;
     J source_paths = J::object();
     auto definition = assemble_workflow(request, stored, std::move(document),
-                                        backend->lifecycle_target(), &pipeline_to_node, library_snapshot, &source_paths);
+        backend->lifecycle_target(), &pipeline_to_node, library_snapshot, &source_paths, std::move(prepared));
     const auto request_id = definition.request_id;
     std::lock_guard handoff(command_mutex_);
     require(!stopping_ && !cancel_operation_, "PREPARATION_CANCELLED");
@@ -1664,9 +1857,8 @@ Application::J Application::prepare_workflow(const std::string &flow_id, const J
     return result;
 }
 
-runtime::NativeRunDefinition Application::assemble_workflow(
-    const J &request, const J &stored, J document, const devices::LifecycleTarget &lifecycle,
-    std::map<std::string, std::string> *pipeline_to_node, const J &library_snapshot, J *source_paths) {
+Application::PreparedWorkflow Application::compile_workflow_graph(
+    const J &request, const J &stored, J document, const J &library_snapshot) {
     if (stopping_ || cancel_operation_) throw std::runtime_error("PREPARATION_CANCELLED");
     require(request.value("revision", std::string{}) ==
                 document.at("revision").get<std::string>(),
@@ -1708,14 +1900,34 @@ runtime::NativeRunDefinition Application::assemble_workflow(
                 return games::tasks::traverse_dungeon(plan, values, available_images_);
             throw std::runtime_error("AUTHOR_TASK_STAGE_UNSUPPORTED");
         }, supplied, locale);
-    auto executable = games::recovery::with_boot_recovery(compiled.workflow, true);
+    const bool combat_debug = request.value("mode", "workflow") == "combat_debug";
+    auto executable = combat_debug ? compiled.workflow : games::recovery::with_boot_recovery(compiled.workflow, true);
+    if (combat_debug) executable.random_maze_events = false;
     games::tasks::localize_task_assets(executable, semantic_catalogue_, locale);
-    require(executable.nodes.contains("Boot_Entry"), "PRODUCTION_BOOT_ENTRY_MISSING");
+    declare_portrait_assets(executable, portrait_bundle(values, false));
+    games::tasks::require_locale_asset_coverage(executable, locale);
+    require(combat_debug || executable.nodes.contains("Boot_Entry"), "PRODUCTION_BOOT_ENTRY_MISSING");
+    return {std::move(executable), std::move(values), std::move(document),
+        std::move(compiled.pipeline_to_node), locale};
+}
+
+runtime::NativeRunDefinition Application::assemble_workflow(
+    const J &request, const J &stored, J document, const devices::LifecycleTarget &lifecycle,
+    std::map<std::string, std::string> *pipeline_to_node, const J &library_snapshot, J *source_paths,
+    std::optional<PreparedWorkflow> prepared) {
+    auto graph = prepared ? std::move(*prepared) : compile_workflow_graph(request, stored, document, library_snapshot);
+    auto &executable = graph.executable;
+    const auto &values = graph.values;
+    const auto &locale = graph.locale;
+    document = std::move(graph.document);
+    const bool combat_debug = request.value("mode", "workflow") == "combat_debug";
+    games::tasks::require_locale_asset_coverage(executable, locale);
     const auto request_id = checked_request_id(request);
     const auto destination = paths_.data_root / "published" / request_id;
     const auto provenance = executable.authoring.value("source_paths", J::object());
+    const auto portraits = portrait_bundle(values);
     auto publication = games::tasks::publish_native(executable, author_bundle_,
-        destination, aliases_, provenance);
+        destination, aliases_, provenance, portraits ? &*portraits : nullptr);
     const auto &root = publication.program.definitions.at(publication.program.root_definition);
     require(root.steps.contains(executable.checkpoint), "NATIVE_CHECKPOINT_MISSING");
     const auto checkpoint_source = root.steps.at(executable.checkpoint).source_path;
@@ -1725,7 +1937,7 @@ runtime::NativeRunDefinition Application::assemble_workflow(
     definition.logging = storage::LoggingPolicy::from_profile(stored);
     definition.units.push_back({std::make_shared<const wvd::workflow::FlowProgram>(std::move(publication.program)),
         std::move(publication.bundle), games::vision::native_handlers(aliases_, locale,
-            executable.dialogue_policy),
+            executable.dialogue_policy, executable.random_maze_events),
         checkpoint_source, executable.time_limit});
     definition.total_time_limit = std::chrono::milliseconds(
         document.at("execution").at("time_limit_ms").get<std::int64_t>());
@@ -1750,10 +1962,15 @@ runtime::NativeRunDefinition Application::assemble_workflow(
             std::move(event), std::move(checkpoint));
     };
     definition.recovery = games::tasks::recovery_policy(lifecycle);
+    if (combat_debug) {
+        // 调试只接管当前一场战斗，不拉起应用、重启游戏、返回王城或启动任务循环。
+        definition.startup.reset();
+        definition.recovery = {};
+    }
     if (source_paths) *source_paths = executable.authoring.value("source_paths", J::object());
     if (pipeline_to_node) {
         pipeline_to_node->clear();
-        for (const auto &[pipeline, node] : compiled.pipeline_to_node)
+        for (const auto &[pipeline, node] : graph.pipeline_to_node)
             (*pipeline_to_node)["Task_" + pipeline] = node;
     }
     return definition;
@@ -1926,6 +2143,29 @@ api::DynamicReply Application::handle(const api::Request &request) {
             return json_reply(disconnect_device(), api::http::status::accepted);
         if (path == "/api/v1/device/capture" && method == api::http::verb::post)
             return json_reply(capture_device(), api::http::status::accepted);
+        if (path == "/api/v1/combat/debug" && method == api::http::verb::post)
+            return json_reply(start_combat_debug(parse_body(request)), api::http::status::accepted);
+        constexpr std::string_view portrait_prefix = "/api/v1/combat/portraits/";
+        if (path.starts_with(portrait_prefix) && method == api::http::verb::get) {
+            const auto encoded = path.substr(portrait_prefix.size());
+            require(!encoded.empty() && encoded.size() <= 512 && encoded.size() % 2 == 0, "ENEMY_PORTRAIT_ID_INVALID");
+            const auto hex = [](char value) -> int {
+                if (value >= '0' && value <= '9') return value - '0';
+                if (value >= 'a' && value <= 'f') return value - 'a' + 10;
+                return -1;
+            };
+            std::string image;
+            for (std::size_t i = 0; i < encoded.size(); i += 2) {
+                const int high = hex(encoded[i]), low = hex(encoded[i + 1]);
+                require(high >= 0 && low >= 0, "ENEMY_PORTRAIT_ID_INVALID");
+                image.push_back(static_cast<char>(high * 16 + low));
+            }
+            require(available_images_.contains(image + ".png"), "ENEMY_PORTRAIT_MISSING");
+            const auto source = games::vision::resolve_image_source(author_bundle_, aliases_, image);
+            std::ifstream input(source.bundle->root / source.relative_path, std::ios::binary);
+            require(bool(input), "ENEMY_PORTRAIT_MISSING");
+            return {api::http::status::ok, std::string(std::istreambuf_iterator<char>(input), {}), "image/png"};
+        }
         if (path == "/api/v1/device/frame" && (method == api::http::verb::get || method == api::http::verb::head)) {
             std::lock_guard lock(mutex_);
             require(!frame_png_.empty(), "FRAME_NOT_AVAILABLE");

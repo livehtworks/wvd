@@ -207,14 +207,30 @@ void validate_condition(const J &condition, const std::string &node_id,
         if (condition.contains("selected") && !condition.at("selected").is_boolean()) fail("AUTHOR_CONDITION_INVALID", node_id);
         return;
     }
+    if (mode == "support_selection") {
+        exact_object(condition, {"mode"}, {"expect", "slot"}, "AUTHOR_CONDITION_INVALID", node_id);
+        const auto expected = condition.value("expect", "present");
+        if (expected != "present" && expected != "absent") fail("AUTHOR_CONDITION_INVALID", node_id);
+        if (condition.contains("slot")) {
+            integer(condition.at("slot"), 0, 5, "AUTHOR_CONDITION_INVALID", node_id);
+            if (expected != "present") fail("AUTHOR_CONDITION_INVALID", node_id);
+        }
+        return;
+    }
+    if (mode == "skill_target") {
+        exact_object(condition, {"mode"}, {"candidate_index"}, "AUTHOR_CONDITION_INVALID", node_id);
+        if (condition.contains("candidate_index"))
+            integer(condition.at("candidate_index"), 0, 23, "AUTHOR_CONDITION_INVALID", node_id);
+        return;
+    }
     static const std::set<std::string> builtins{
         "auto_route_moving", "auto_route_post", "blocking_screen", "boot_post", "input_clear",
         "boot_ready", "combat_active", "dark_light_clear", "dark_light_post",
         "default_dialogue", "dialogue_post", "fast_forward_off", "fishing_bait_empty",
         "fishing_reward", "fishing_unknown", "map_route_post", "mining_reward",
-        "movement_stopped", "next_low_confidence", "party_death", "party_defeat",
+        "movement_stopped", "navigation_resume_unavailable", "next_low_confidence", "party_death", "party_defeat",
         "pause", "pause_negative", "special_dialogue", "special_dialogue_post",
-        "target_marker", "task_stop", "prepared_actor", "skill_target"};
+        "target_marker", "task_stop", "prepared_actor", "skill_target", "revival_prompt", "combat_resource_error"};
     if (!builtins.contains(mode) || condition.size() != 1)
         fail("AUTHOR_CONDITION_UNSUPPORTED", node_id + ":" + mode);
 }
@@ -226,7 +242,19 @@ void validate_action_parameters(const J &parameters, const std::string &node_id)
     const auto operation = parameters.at("operation").get<std::string>();
     const std::set<std::string> common_optional{
         "allowed_area", "postcondition_timeout_ms", "delay_after_ms", "interrupted_reason"};
+    auto click_optional = common_optional;
+    click_optional.insert("menu_retry_interval_ms");
+    click_optional.insert("menu_retry_max_submissions");
     auto validate_common = [&] {
+        if (parameters.contains("menu_retry_interval_ms"))
+            integer(parameters.at("menu_retry_interval_ms"), 1000, 60000,
+                    "AUTHOR_MENU_RETRY_INTERVAL_INVALID", node_id);
+        if (parameters.contains("menu_retry_max_submissions")) {
+            if (!parameters.contains("menu_retry_interval_ms"))
+                fail("AUTHOR_MENU_RETRY_INTERVAL_REQUIRED", node_id);
+            integer(parameters.at("menu_retry_max_submissions"), 1, 1000,
+                "AUTHOR_MENU_RETRY_MAX_SUBMISSIONS_INVALID", node_id);
+        }
         if (parameters.contains("interrupted_reason"))
             bounded_text(parameters.at("interrupted_reason"), 1, 256, "AUTHOR_ACTION_INTERRUPTION_INVALID", node_id);
         if (parameters.contains("allowed_area"))
@@ -247,15 +275,6 @@ void validate_action_parameters(const J &parameters, const std::string &node_id)
         if (parameters.at("target").value("mode", "") == "ocr")
             recognition::validate_ocr_parameters(recognition::parse_ocr_parameters(parameters.at("target")), true);
         validate_condition(parameters.at("postcondition"), node_id);
-        if (parameters.contains("menu_retry_interval_ms"))
-            integer(parameters.at("menu_retry_interval_ms"), 1000, 60000,
-                    "AUTHOR_MENU_RETRY_INTERVAL_INVALID", node_id);
-        if (parameters.contains("menu_retry_max_submissions")) {
-            if (!parameters.contains("menu_retry_interval_ms"))
-                fail("AUTHOR_MENU_RETRY_INTERVAL_REQUIRED", node_id);
-            integer(parameters.at("menu_retry_max_submissions"), 1, 1000,
-                "AUTHOR_MENU_RETRY_MAX_SUBMISSIONS_INVALID", node_id);
-        }
         if (parameters.contains("offset")) {
             const auto &offset = parameters.at("offset");
             if (!offset.is_array() || offset.size() != 2)
@@ -265,7 +284,7 @@ void validate_action_parameters(const J &parameters, const std::string &node_id)
         }
     } else if (operation == "fixed_click") {
         exact_object(parameters, {"operation", "scene", "postcondition", "position"},
-                     common_optional, "AUTHOR_ACTION_PARAMETERS_INVALID", node_id);
+                     click_optional, "AUTHOR_ACTION_PARAMETERS_INVALID", node_id);
         validate_condition(parameters.at("scene"), node_id);
         validate_condition(parameters.at("postcondition"), node_id);
         validate_point(parameters.at("position"), node_id);

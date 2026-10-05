@@ -18,7 +18,7 @@ inline nlohmann::json network_prompt_zh_hant() {
 inline nlohmann::json network_retry_prompt() {
     return {{"mode", "any"}, {"conditions", {
         network_prompt_zh_hant(),
-        {{"mode", "template"}, {"image", "retry"}, {"threshold", .86},
+        {{"mode", "template"}, {"image", "retry"}, {"locale_only", "en"}, {"threshold", .86},
          {"roi", {200, 600, 500, 600}}}}}};
 }
 }

@@ -1,6 +1,9 @@
 #include "app/application.hpp"
 #include "games/wvd/tasks/public_step_scope.hpp"
+#include "games/wvd/combat/debug.hpp"
+#include "games/wvd/combat/strategy.hpp"
 #include "platform/windows/file_digest.hpp"
+#include "platform/windows/bundle_lease.hpp"
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
 #include <iostream>
@@ -20,6 +23,26 @@ struct ApplicationAssemblyTestAccess {
         };
     }
     static runtime::NativeRunCoordinator &coordinator(Application &app) { return *app.coordinator_; }
+    static runtime::NativeRunDefinition prepare_debug(Application &app, nlohmann::json stored, bool force_selected = true) {
+        auto &values = stored["values"];
+        if (force_selected) {
+            values["TASK_SPECIFIC_CONFIG"] = false;
+            values["DEFAULT_OVERALL_STRATEGY"] = values.at("STRATEGY")[0].at("group_name");
+            values["TASK_POINT_STRATEGY"]["special_combat"] = nlohmann::json::object();
+        }
+        const auto document = games::combat::debug_document(stored.at("revision"));
+        auto library = app.workflow_store_->snapshot_closure(
+            app.workflow_store_->read(games::tasks::native_public_steps.front()), games::tasks::native_public_steps);
+        library[document.at("flow").at("id").get<std::string>()] = document;
+        return app.assemble_workflow({{"mode", "combat_debug"}, {"resource_locale", "zh-Hant"},
+            {"revision", document.at("revision")}, {"request_id", force_selected ? "combat-editor-debug" : "combat-editor-enemies"}}, stored, document,
+            {"offline-product", "offline-instance", "jp.co.drecom.wizardry.daphne", "", false}, nullptr, library);
+    }
+    static void check_portraits(Application &app, const nlohmann::json &values) {
+        const auto bundle = app.portrait_bundle(values);
+        if (!bundle || bundle->files.empty()) throw std::runtime_error("CUSTOM_PORTRAIT_NOT_FROZEN");
+        bundle->lease->verify_members();
+    }
     static runtime::NativeRunDefinition prepare_author(Application &app, const nlohmann::json &document,
                                                        const nlohmann::json &stored) {
         const auto library = app.workflow_store_->snapshot_closure(document, games::tasks::native_public_steps);
@@ -230,6 +253,51 @@ int closure_application(const std::filesystem::path &pack, const std::filesystem
 
 int main(int argc, char **argv) {
     try {
+        if (argc == 5 && std::string(argv[1]) == "--combat-editor") {
+            const auto isolated = std::getenv("WVD_COMBAT_TEST_ROOT");
+            if (!isolated) throw std::runtime_error("WVD_COMBAT_TEST_ROOT_REQUIRED");
+            const auto root = std::filesystem::absolute(isolated);
+            if (std::filesystem::exists(root)) throw std::runtime_error("COMBAT_TEST_ROOT_MUST_BE_FRESH");
+            std::filesystem::create_directories(root);
+            std::filesystem::copy_file(argv[4], root / "profile.json");
+            auto backend = std::make_shared<OfflineConnection>(std::filesystem::absolute(argv[2]));
+            wvd::app::Application app({root, std::filesystem::absolute(argv[2]), {}, std::filesystem::absolute(argv[3])}, backend);
+            const auto before = wvd::platform::file_sha256(root / "profile.json");
+            const auto profile = call(app, wvd::api::http::verb::get, "/api/v1/profile");
+            std::ifstream input(root / "profile.json"); const auto stored = J::parse(input);
+            auto definition = wvd::app::ApplicationAssemblyTestAccess::prepare_debug(app, stored);
+            require_closure(definition.units.size() == 1 && !definition.startup && !definition.recovery, "DEBUG_SCOPE_INVALID");
+            for (const auto &[id, flow] : definition.units[0].program->definitions)
+                for (const auto &[key, step] : flow.steps)
+                    require_closure(key.find("Boot_") == std::string::npos, "DEBUG_BOOT_PRESENT");
+            const auto &values = stored.at("values");
+            wvd::app::ApplicationAssemblyTestAccess::check_portraits(app, values);
+            auto enemies = wvd::app::ApplicationAssemblyTestAccess::prepare_debug(app, stored, false);
+            bool published_custom = false;
+            for (const auto &file : enemies.units.at(0).bundle.files)
+                published_custom |= file.relative_path.starts_with("image/custom/monster_");
+            require_closure(published_custom, "CUSTOM_PORTRAIT_NOT_PUBLISHED");
+            const auto &rules = values.at("TASK_POINT_STRATEGY").at("special_combat").at("rules");
+            wvd::games::CombatStrategy strategy(values);
+            strategy.reload(0);
+            for (const auto &rule : rules) {
+                strategy.begin_encounter(true, rule.at("id"));
+                require_closure(strategy.summary().at("current").at("group_name") == rule.at("strategy"), "ENEMY_SCHEME_NOT_SELECTED");
+            }
+            auto city_request = J{{"strategy_name", values.at("STRATEGY")[0].at("group_name")},
+                {"profile_revision", profile.at("revision")}, {"request_id", "combat-editor-city-rejection"}, {"resource_locale", "zh-Hant"}};
+            (void)call(app, wvd::api::http::verb::post, "/api/v1/combat/debug", city_request);
+            J status;
+            const auto deadline = std::chrono::steady_clock::now() + 10s;
+            do { std::this_thread::sleep_for(50ms); status = call(app, wvd::api::http::verb::get, "/api/v1/device"); }
+            while (status.at("operation").value("state", "") == "running" && std::chrono::steady_clock::now() < deadline);
+            require_closure(status.at("operation").value("error", "").find("COMBAT_DEBUG_NOT_IN_BATTLE") != std::string::npos,
+                "DEBUG_CITY_NOT_REJECTED:" + status.dump());
+            require_closure(backend->inputs == 0 && before == wvd::platform::file_sha256(root / "profile.json"), "DEBUG_INPUT_OR_PROFILE_SIDE_EFFECT");
+            app.stop();
+            std::cout << "Combat debug native compilation/publication, monster selection and frozen portraits passed; city rejected, inputs=0, profile unchanged\n";
+            return 0;
+        }
         if (argc == 4 && std::string(argv[1]) == "--logging-profile") {
             const auto root = std::filesystem::temp_directory_path() /
                 ("wvd-logging-profile-" + wvd::platform::unique_id());

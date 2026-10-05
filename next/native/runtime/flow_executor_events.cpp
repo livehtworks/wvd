@@ -255,7 +255,18 @@ TickResult FlowExecutor::resume_event(Frame &frame, const workflow::Step &curren
     // 专用导航的重新规划策略必须由游戏层显式表达，不能在通用内核猜幂等性。
     for (std::size_t i = resume.owner; i < stack_.size(); ++i) {
         const auto &item = stack_[i];
-        if (i > resume.owner && item.event) return blocked("EVENT_REPLAN_CROSSES_ACTIVE_HANDLER");
+        if (i > resume.owner && item.event) {
+            const auto &active = *item.event;
+            // Another restart may finish Boot while the previous Boot still owns
+            // a pending title input. Only the same restart chain can be unwound;
+            // its pending results must still pass the checks below.
+            const bool same_restart = resume.rule.on_device_restart && active.rule.on_device_restart &&
+                active.owner == resume.owner && active.rule.id == resume.rule.id &&
+                active.rule.handler_definition == resume.rule.handler_definition &&
+                active.rule.resume == workflow::ResumeMode::Replan &&
+                active.rule.replan_step == resume.rule.replan_step;
+            if (!same_restart) return blocked("EVENT_REPLAN_CROSSES_ACTIVE_HANDLER");
+        }
         if (!item.pending) continue;
         const auto &pending = *item.pending;
         if (!pending.expected_result) return blocked("EVENT_REPLAN_INPUT_UNKNOWN");

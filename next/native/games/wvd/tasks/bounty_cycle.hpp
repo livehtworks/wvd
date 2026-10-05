@@ -6,6 +6,8 @@ class PublicFlowLibrary;
 WvdTaskPlan scorpion_plan(const WvdQuestDefinition &, bool hands_route,
                          const std::string &locale);
 WvdTaskPlan jier_plan(const WvdQuestDefinition &, const std::string &locale);
+WvdTaskPlan giant_bounty_plan(const WvdQuestDefinition &);
+TaskTimeLeap bounty_time_leap(const WvdTaskPlan &, const nlohmann::json &profile);
 CompiledWorkflow bounty_cycle(const WvdQuestDefinition &, const nlohmann::json &profile,
     const std::set<std::string> &images, const PublicFlowLibrary &library,
     const nlohmann::json &board_root, const std::string &locale, bool allow_download = true);

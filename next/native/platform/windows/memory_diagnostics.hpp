@@ -20,6 +20,19 @@ struct MemorySample {
     std::uint64_t physical_available_pages{}, page_size{};
 };
 MemorySample sample_memory() noexcept;
+struct MemoryOwner {
+    std::uint32_t process_id{};
+    std::uint64_t created_100ns{}, private_bytes{}, working_set_bytes{};
+    std::array<wchar_t, MAX_PATH> name{};
+};
+struct MemoryOwners {
+    bool available{}, truncated{};
+    std::uint32_t examined{}, unreadable{}, count{};
+    std::uint64_t elapsed_ms{}, readable_private_bytes{};
+    std::array<MemoryOwner, 8> top{};
+};
+// Bounded read-only process counters, never command lines or process termination.
+MemoryOwners sample_memory_owners() noexcept;
 
 // 匹配前预留标量槽并打开句柄；低内存记录不生成 JSON 或复制异常长文本。
 class MemoryDiagnostics {

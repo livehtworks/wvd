@@ -1,0 +1,122 @@
+{
+  "schema": 1,
+  "collected_on": "2026-10-04",
+  "scope": "Saved screenshots only; no device input or profile change",
+  "baseline": {
+    "width": 900,
+    "height": 1600
+  },
+  "runtime_use": "Import PNG through Add Monster; profile remains the runtime rule authority",
+  "records": [
+    {
+      "id": "scorpion",
+      "name": "蝎女（头像可被换皮怪复用）",
+      "status": "collected",
+      "source": "next/.local/scorpion-boss-frame-a.png",
+      "source_sha256": "49eb80e4afacfe0420cb38f8279f17076d2f60d34f2d6d4c91ab8a4239da1c3b",
+      "rect": [
+        50,
+        475,
+        65,
+        48
+      ],
+      "image": "next/resources/images/monster-portraits/scorpion.png",
+      "image_sha256": "81e87efb6cf574d9833828741cbefe95e69235442c9f11501e06534ee6d8f30f",
+      "reference": "next/.local/scorpion-boss-frame-b.png",
+      "resized": false,
+      "pixels_equal_source": true,
+      "reference_match": {
+        "score": 0.999993,
+        "x": 50,
+        "y": 475
+      },
+      "other_battle_frame": {
+        "source": "next/.local/combat-current-20260924.png",
+        "score": 0.612069
+      },
+      "existing_asset": "next/resources/images/combat_scorpion_portrait.png",
+      "existing_pixels_identical": true
+    },
+    {
+      "id": "cyclops",
+      "name": "要塞独眼巨人（正式名称待确认）",
+      "status": "collected",
+      "source": "next/.local/material-collection/fortress-20261002/session-20261002-221351/frame-000230.png",
+      "source_sha256": "67969bd62dfdbc987e574a6b6cc5a242d6ec9ee290312d57d0c93c3b432572df",
+      "rect": [
+        46,
+        155,
+        68,
+        44
+      ],
+      "image": "next/resources/images/monster-portraits/cyclops.png",
+      "image_sha256": "95fcbb5f4428ec75cd9405fe95c27be11881b6f9ca744bdc448e6a448774bfe3",
+      "reference": "next/.local/material-collection/fortress-20261002/session-20261002-221351/frame-000170.png",
+      "resized": false,
+      "pixels_equal_source": true,
+      "reference_match": {
+        "score": 0.972933,
+        "x": 46,
+        "y": 472
+      },
+      "other_battle_frame": {
+        "source": "next/.local/combat-current-20260924.png",
+        "score": 0.482083
+      }
+    },
+    {
+      "id": "red_hair_serpent",
+      "name": "要塞红发蛇身随从（正式名称待确认）",
+      "status": "collected",
+      "source": "next/.local/material-collection/fortress-20261002/session-20261002-221351/frame-000130.png",
+      "source_sha256": "5f8e36d464e34d4689b0f903f9b126f4a274371af30f34f5b9f2a325a81873a8",
+      "rect": [
+        48,
+        283,
+        66,
+        44
+      ],
+      "image": "next/resources/images/monster-portraits/red_hair_serpent.png",
+      "image_sha256": "c738687501e2551f758f8104f3d1e1ed09129583e59332e3045f2f64dc6fc6fe",
+      "reference": "next/.local/material-collection/fortress-20261002/session-20261002-221351/frame-000110.png",
+      "resized": false,
+      "pixels_equal_source": true,
+      "reference_match": {
+        "score": 0.985446,
+        "x": 48,
+        "y": 473
+      },
+      "other_battle_frame": {
+        "source": "next/.local/combat-current-20260924.png",
+        "score": 0.707556
+      }
+    },
+    {
+      "id": "dark_enemy_candidate",
+      "name": "要塞暗色敌方头像（身份待确认，不建议绑定）",
+      "status": "needs_identity_confirmation",
+      "source": "next/.local/material-collection/fortress-20261002/session-20261002-221351/frame-000149.png",
+      "source_sha256": "bb64cc15cfed73581b9ae6888efd407f768e998e6621b6762cc64eb93c497b4a",
+      "rect": [
+        48,
+        155,
+        66,
+        44
+      ],
+      "image": "next/resources/images/monster-portraits/dark_enemy_candidate.png",
+      "image_sha256": "ac10ad18ac8aff46128294f8e94a6b0ff8232d3b148d471b6f8a48d3a1f81a31",
+      "reference": "next/.local/material-collection/fortress-20261002/session-20261002-221351/frame-000130.png",
+      "resized": false,
+      "pixels_equal_source": true,
+      "reference_match": {
+        "score": 0.884107,
+        "x": 48,
+        "y": 472
+      },
+      "other_battle_frame": {
+        "source": "next/.local/combat-current-20260924.png",
+        "score": 0.644589
+      }
+    }
+  ]
+}

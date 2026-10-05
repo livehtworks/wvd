@@ -132,9 +132,18 @@
           "postcondition": {
             "mode": "any",
             "conditions": [
-              {"mode": "semantic", "id": "guild.commissions.page"},
-              {"mode": "semantic", "id": "guild.bounties.page"},
-              {"mode": "semantic", "id": "guild.bounty.reveal.close"}
+              {
+                "mode": "semantic",
+                "id": "guild.commissions.page"
+              },
+              {
+                "mode": "semantic",
+                "id": "guild.bounties.page"
+              },
+              {
+                "mode": "semantic",
+                "id": "guild.bounty.reveal.close"
+              }
             ]
           },
           "menu_retry_interval_ms": 5000
@@ -208,7 +217,10 @@
         "type": "recognition",
         "name": "已在悬赏页",
         "parameters": {
-          "condition": {"mode": "semantic", "id": "guild.bounties.page"}
+          "condition": {
+            "mode": "semantic",
+            "id": "guild.bounties.page"
+          }
         },
         "repeat_limit": 1
       },
@@ -218,12 +230,34 @@
         "name": "横移公会页签",
         "parameters": {
           "operation": "swipe",
-          "scene": {"mode": "all", "conditions": [
-            {"mode": "semantic", "id": "guild.commissions.page"},
-            {"mode": "not", "conditions": [{"mode": "semantic", "id": "guild.bounties.entry"}]}
-          ]},
-          "postcondition": {"mode": "semantic", "id": "guild.commissions.page"},
-          "coordinates": [600, 1400, 300, 1400],
+          "scene": {
+            "mode": "all",
+            "conditions": [
+              {
+                "mode": "semantic",
+                "id": "guild.commissions.page"
+              },
+              {
+                "mode": "not",
+                "conditions": [
+                  {
+                    "mode": "semantic",
+                    "id": "guild.bounties.entry"
+                  }
+                ]
+              }
+            ]
+          },
+          "postcondition": {
+            "mode": "semantic",
+            "id": "guild.commissions.page"
+          },
+          "coordinates": [
+            600,
+            1400,
+            300,
+            1400
+          ],
           "duration_ms": 400,
           "delay_after_ms": 1000
         },
@@ -244,9 +278,16 @@
             "id": "guild.bounties.entry"
           },
           "postcondition": {
-            "mode": "any", "conditions": [
-              {"mode": "semantic", "id": "guild.bounties.page"},
-              {"mode": "semantic", "id": "guild.bounty.reveal.close"}
+            "mode": "any",
+            "conditions": [
+              {
+                "mode": "semantic",
+                "id": "guild.bounties.page"
+              },
+              {
+                "mode": "semantic",
+                "id": "guild.bounty.reveal.close"
+              }
             ]
           },
           "menu_retry_interval_ms": 5000
@@ -259,12 +300,27 @@
         "name": "关闭新悬赏展示卡",
         "parameters": {
           "operation": "click",
-          "scene": {"mode": "semantic", "id": "guild.bounty.reveal.close"},
-          "target": {"mode": "semantic", "id": "guild.bounty.reveal.close"},
-          "postcondition": {"mode": "any", "conditions": [
-            {"mode": "semantic", "id": "guild.bounties.page"},
-            {"mode": "semantic", "id": "guild.bounty.reveal.close"}
-          ]},
+          "scene": {
+            "mode": "semantic",
+            "id": "guild.bounty.reveal.close"
+          },
+          "target": {
+            "mode": "semantic",
+            "id": "guild.bounty.reveal.close"
+          },
+          "postcondition": {
+            "mode": "any",
+            "conditions": [
+              {
+                "mode": "semantic",
+                "id": "guild.bounties.page"
+              },
+              {
+                "mode": "semantic",
+                "id": "guild.bounty.reveal.close"
+              }
+            ]
+          },
           "delay_after_ms": 700
         }
       },
@@ -313,9 +369,27 @@
         "outcome": "success",
         "order": 0
       },
-      {"id":"entry_close_reveal","from":"Entry","to":"CloseReveal","outcome":"success","order":1},
-      {"id":"entry_open_visible_tab","from":"Entry","to":"Open","outcome":"success","order":2},
-      {"id":"reveal_recheck","from":"CloseReveal","to":"Entry","outcome":"success","order":0}
+      {
+        "id": "entry_close_reveal",
+        "from": "Entry",
+        "to": "CloseReveal",
+        "outcome": "success",
+        "order": 1
+      },
+      {
+        "id": "entry_open_visible_tab",
+        "from": "Entry",
+        "to": "Open",
+        "outcome": "success",
+        "order": 2
+      },
+      {
+        "id": "reveal_recheck",
+        "from": "CloseReveal",
+        "to": "Entry",
+        "outcome": "success",
+        "order": 0
+      }
     ],
     "layout": {
       "nodes": [
@@ -375,10 +449,46 @@
     },
     "entry": "Entry",
     "nodes": [
-      {"id":"Entry","type":"route","name":"确认当前公会页面","parameters":{},"repeat_limit":4},
-      {"id":"Already","type":"recognition","name":"已在悬赏页","parameters":{"condition":{"mode":"semantic","id":"guild.bounties.page"}}},
-      {"id":"OnCommissions","type":"recognition","name":"已在委托页","parameters":{"condition":{"mode":"semantic","id":"guild.commissions.page"}}},
-      {"id":"OnGuild","type":"recognition","name":"已在公会菜单","parameters":{"condition":{"mode":"semantic","id":"guild.menu"}}},
+      {
+        "id": "Entry",
+        "type": "route",
+        "name": "确认当前公会页面",
+        "parameters": {},
+        "repeat_limit": 4
+      },
+      {
+        "id": "Already",
+        "type": "recognition",
+        "name": "已在悬赏页",
+        "parameters": {
+          "condition": {
+            "mode": "semantic",
+            "id": "guild.bounties.page"
+          }
+        }
+      },
+      {
+        "id": "OnCommissions",
+        "type": "recognition",
+        "name": "已在委托页",
+        "parameters": {
+          "condition": {
+            "mode": "semantic",
+            "id": "guild.commissions.page"
+          }
+        }
+      },
+      {
+        "id": "OnGuild",
+        "type": "recognition",
+        "name": "已在公会菜单",
+        "parameters": {
+          "condition": {
+            "mode": "semantic",
+            "id": "guild.menu"
+          }
+        }
+      },
       {
         "id": "Guild",
         "type": "call",
@@ -424,13 +534,55 @@
       }
     ],
     "edges": [
-      {"id":"entry_already","from":"Entry","to":"Already","outcome":"success","order":0},
-      {"id":"entry_commissions","from":"Entry","to":"OnCommissions","outcome":"success","order":1},
-      {"id":"entry_guild","from":"Entry","to":"OnGuild","outcome":"success","order":2},
-      {"id":"entry_city","from":"Entry","to":"Guild","outcome":"success","order":3},
-      {"id":"already_done","from":"Already","to":"Done","outcome":"success","order":0},
-      {"id":"commissions_bounties","from":"OnCommissions","to":"Bounties","outcome":"success","order":0},
-      {"id":"guild_commissions","from":"OnGuild","to":"Commissions","outcome":"success","order":0},
+      {
+        "id": "entry_already",
+        "from": "Entry",
+        "to": "Already",
+        "outcome": "success",
+        "order": 0
+      },
+      {
+        "id": "entry_commissions",
+        "from": "Entry",
+        "to": "OnCommissions",
+        "outcome": "success",
+        "order": 1
+      },
+      {
+        "id": "entry_guild",
+        "from": "Entry",
+        "to": "OnGuild",
+        "outcome": "success",
+        "order": 2
+      },
+      {
+        "id": "entry_city",
+        "from": "Entry",
+        "to": "Guild",
+        "outcome": "success",
+        "order": 3
+      },
+      {
+        "id": "already_done",
+        "from": "Already",
+        "to": "Done",
+        "outcome": "success",
+        "order": 0
+      },
+      {
+        "id": "commissions_bounties",
+        "from": "OnCommissions",
+        "to": "Bounties",
+        "outcome": "success",
+        "order": 0
+      },
+      {
+        "id": "guild_commissions",
+        "from": "OnGuild",
+        "to": "Commissions",
+        "outcome": "success",
+        "order": 0
+      },
       {
         "id": "e0",
         "from": "Guild",
@@ -455,10 +607,26 @@
     ],
     "layout": {
       "nodes": [
-        {"node_id":"Entry","x":0,"y":100},
-        {"node_id":"Already","x":210,"y":-200},
-        {"node_id":"OnCommissions","x":210,"y":-100},
-        {"node_id":"OnGuild","x":210,"y":0},
+        {
+          "node_id": "Entry",
+          "x": 0,
+          "y": 100
+        },
+        {
+          "node_id": "Already",
+          "x": 210,
+          "y": -200
+        },
+        {
+          "node_id": "OnCommissions",
+          "x": 210,
+          "y": -100
+        },
+        {
+          "node_id": "OnGuild",
+          "x": 210,
+          "y": 0
+        },
         {
           "node_id": "Guild",
           "x": 40,
@@ -1631,8 +1799,14 @@
           "postcondition": {
             "mode": "any",
             "conditions": [
-              {"mode": "semantic", "id": "wheel.title"},
-              {"mode": "semantic", "id": "wheel.target.ore"}
+              {
+                "mode": "semantic",
+                "id": "wheel.title"
+              },
+              {
+                "mode": "semantic",
+                "id": "wheel.target.ore"
+              }
             ]
           },
           "coordinates": [
@@ -1673,8 +1847,14 @@
           "postcondition": {
             "mode": "any",
             "conditions": [
-              {"mode": "semantic", "id": "wheel.title"},
-              {"mode": "semantic", "id": "wheel.target.ore"}
+              {
+                "mode": "semantic",
+                "id": "wheel.title"
+              },
+              {
+                "mode": "semantic",
+                "id": "wheel.target.ore"
+              }
             ]
           },
           "coordinates": [
@@ -1733,9 +1913,27 @@
         "outcome": "success",
         "order": 1
       },
-      {"id": "e28", "from": "FindChapter", "to": "NextFromWaterway", "outcome": "success", "order": 2},
-      {"id": "e29", "from": "FindChapter", "to": "NextFromFortress", "outcome": "success", "order": 3},
-      {"id": "e32", "from": "FindChapter", "to": "PrevFromDhi", "outcome": "success", "order": 4},
+      {
+        "id": "e28",
+        "from": "FindChapter",
+        "to": "NextFromWaterway",
+        "outcome": "success",
+        "order": 2
+      },
+      {
+        "id": "e29",
+        "from": "FindChapter",
+        "to": "NextFromFortress",
+        "outcome": "success",
+        "order": 3
+      },
+      {
+        "id": "e32",
+        "from": "FindChapter",
+        "to": "PrevFromDhi",
+        "outcome": "success",
+        "order": 4
+      },
       {
         "id": "e15",
         "from": "FindChapter",
@@ -1750,14 +1948,62 @@
         "outcome": "success",
         "order": 0
       },
-      {"id": "e30", "from": "NextFromWaterway", "to": "FindChapter", "outcome": "success", "order": 0},
-      {"id": "e31", "from": "NextFromFortress", "to": "FindChapter", "outcome": "success", "order": 0},
-      {"id": "e33", "from": "PrevFromDhi", "to": "ReverseFindChapter", "outcome": "success", "order": 0},
-      {"id": "e34", "from": "ReverseFindChapter", "to": "Chapter", "outcome": "success", "order": 0},
-      {"id": "e35", "from": "ReverseFindChapter", "to": "PrevFromFortress", "outcome": "success", "order": 1},
-      {"id": "e36", "from": "ReverseFindChapter", "to": "PrevFromWaterway", "outcome": "success", "order": 2},
-      {"id": "e37", "from": "PrevFromFortress", "to": "ReverseFindChapter", "outcome": "success", "order": 0},
-      {"id": "e38", "from": "PrevFromWaterway", "to": "ReverseFindChapter", "outcome": "success", "order": 0},
+      {
+        "id": "e30",
+        "from": "NextFromWaterway",
+        "to": "FindChapter",
+        "outcome": "success",
+        "order": 0
+      },
+      {
+        "id": "e31",
+        "from": "NextFromFortress",
+        "to": "FindChapter",
+        "outcome": "success",
+        "order": 0
+      },
+      {
+        "id": "e33",
+        "from": "PrevFromDhi",
+        "to": "ReverseFindChapter",
+        "outcome": "success",
+        "order": 0
+      },
+      {
+        "id": "e34",
+        "from": "ReverseFindChapter",
+        "to": "Chapter",
+        "outcome": "success",
+        "order": 0
+      },
+      {
+        "id": "e35",
+        "from": "ReverseFindChapter",
+        "to": "PrevFromFortress",
+        "outcome": "success",
+        "order": 1
+      },
+      {
+        "id": "e36",
+        "from": "ReverseFindChapter",
+        "to": "PrevFromWaterway",
+        "outcome": "success",
+        "order": 2
+      },
+      {
+        "id": "e37",
+        "from": "PrevFromFortress",
+        "to": "ReverseFindChapter",
+        "outcome": "success",
+        "order": 0
+      },
+      {
+        "id": "e38",
+        "from": "PrevFromWaterway",
+        "to": "ReverseFindChapter",
+        "outcome": "success",
+        "order": 0
+      },
       {
         "id": "e17",
         "from": "Reopen",
@@ -1849,12 +2095,36 @@
           "x": 480,
           "y": 580
         },
-        {"node_id": "NextFromWaterway", "x": 480, "y": 680},
-        {"node_id": "NextFromFortress", "x": 480, "y": 780},
-        {"node_id": "PrevFromDhi", "x": 600, "y": 900},
-        {"node_id": "PrevFromFortress", "x": 600, "y": 1000},
-        {"node_id": "PrevFromWaterway", "x": 600, "y": 1100},
-        {"node_id": "ReverseFindChapter", "x": 380, "y": 1000},
+        {
+          "node_id": "NextFromWaterway",
+          "x": 480,
+          "y": 680
+        },
+        {
+          "node_id": "NextFromFortress",
+          "x": 480,
+          "y": 780
+        },
+        {
+          "node_id": "PrevFromDhi",
+          "x": 600,
+          "y": 900
+        },
+        {
+          "node_id": "PrevFromFortress",
+          "x": 600,
+          "y": 1000
+        },
+        {
+          "node_id": "PrevFromWaterway",
+          "x": 600,
+          "y": 1100
+        },
+        {
+          "node_id": "ReverseFindChapter",
+          "x": 380,
+          "y": 1000
+        },
         {
           "node_id": "Reopen",
           "x": 700,
@@ -2324,9 +2594,8 @@
       "category": "公会",
       "parameters": []
     }
-  }
-,
-{
+  },
+  {
     "schema": 1,
     "flow": {
       "id": "combat-open-detail",
@@ -2372,7 +2641,12 @@
                             "mode": "template",
                             "image": "close",
                             "threshold": 0.8,
-                            "roi": [120, 1330, 740, 270]
+                            "roi": [
+                              0,
+                              600,
+                              900,
+                              1000
+                            ]
                           }
                         ]
                       }
@@ -2410,30 +2684,10 @@
                     "mode": "combat_active"
                   },
                   {
-                    "mode": "semantic",
-                    "id": "combat.menu.flee"
-                  },
-                  {
                     "mode": "not",
                     "conditions": [
                       {
-                        "mode": "any",
-                        "conditions": [
-                          {
-                            "mode": "semantic",
-                            "id": "combat.skill.detail"
-                          },
-                          {
-                            "mode": "semantic",
-                            "id": "combat.skill.confirm"
-                          },
-                          {
-                            "mode": "template",
-                            "image": "close",
-                            "threshold": 0.8,
-                            "roi": [120, 1330, 740, 270]
-                          }
-                        ]
+                        "mode": "prepared_actor"
                       }
                     ]
                   }
@@ -2480,8 +2734,30 @@
             266,
             965
           ],
-          "delay_after_ms": 600
+          "delay_after_ms": 600,
+          "menu_retry_interval_ms": 1500,
+          "postcondition_timeout_ms": 20000
         }
+      },
+      {
+        "id": "unavailable-menu",
+        "type": "recognition",
+        "name": "补点后确认仍是同角色菜单",
+        "parameters": {"condition": {"mode": "all", "conditions": [
+          {"mode": "combat_active"}, {"mode": "prepared_actor"},
+          {"mode": "semantic", "id": "combat.menu.flee"},
+          {"mode": "not", "conditions": [{"mode": "any", "conditions": [
+            {"mode": "semantic", "id": "combat.skill.detail"},
+            {"mode": "semantic", "id": "combat.skill.confirm"},
+            {"mode": "template", "image": "close", "threshold": 0.8, "roi": [0, 600, 900, 1000]}
+          ]}]}, {"mode": "input_clear"}
+        ]}}
+      },
+      {
+        "id": "unavailable",
+        "type": "end",
+        "name": "未施放，转交手动防御",
+        "parameters": {"outcome": "handoff", "port": "UnavailableExit"}
       },
       {
         "id": "done",
@@ -2499,10 +2775,14 @@
         "to": "done",
         "outcome": "success",
         "order": 0
-      }
+      },
+      {"id": "open-no-progress", "from": "open", "to": "unavailable-menu", "outcome": "failure", "order": 0},
+      {"id": "menu-unavailable", "from": "unavailable-menu", "to": "unavailable", "outcome": "success", "order": 0}
     ],
     "layout": {
       "nodes": [
+        {"node_id": "unavailable-menu", "x": 260, "y": 100},
+        {"node_id": "unavailable", "x": 520, "y": 100},
         {
           "node_id": "open",
           "x": 0,
@@ -2527,7 +2807,9 @@
         "inherit": [
           "wvd-network-retry",
           "wvd-pause",
-          "wvd-download"
+          "wvd-download",
+          "wvd-party-death",
+          "wvd-party-defeat"
         ],
         "debounce_ms": 1000,
         "interval_ms": 1000,
@@ -2567,7 +2849,7 @@
           ]
         }
       ],
-      "handoffs": []
+      "handoffs": ["UnavailableExit"]
     }
   },
   {
@@ -2929,7 +3211,9 @@
         "inherit": [
           "wvd-network-retry",
           "wvd-pause",
-          "wvd-download"
+          "wvd-download",
+          "wvd-party-death",
+          "wvd-party-defeat"
         ],
         "debounce_ms": 1000,
         "interval_ms": 1000,
@@ -3015,20 +3299,14 @@
                 ]
               },
               {
-                "mode": "not",
-                "conditions": [
-                  {
-                    "mode": "template",
-                    "image": "supportSkillCheck",
-                    "threshold": 0.8,
-                    "roi": [580, 1350, 320, 250]
-                  }
-                ]
+                "mode": "support_selection",
+                "expect": "absent"
               }
             ]
           },
           "target": {
-            "mode": "skill_target"
+            "mode": "skill_target",
+            "candidate_index": 0
           },
           "postcondition": {
             "mode": "any",
@@ -3078,7 +3356,12 @@
                                     "mode": "template",
                                     "image": "close",
                                     "threshold": 0.8,
-                                    "roi": [120, 1330, 740, 270]
+                                    "roi": [
+                                      0,
+                                      600,
+                                      900,
+                                      1000
+                                    ]
                                   }
                                 ]
                               }
@@ -3146,7 +3429,12 @@
                             "mode": "template",
                             "image": "close",
                             "threshold": 0.8,
-                            "roi": [120, 1330, 740, 270]
+                            "roi": [
+                              0,
+                              600,
+                              900,
+                              1000
+                            ]
                           }
                         ]
                       }
@@ -3173,15 +3461,15 @@
           },
           "offset": [
             0,
-            80
+            0
           ],
           "allowed_area": [
-            1,
-            260,
-            898,
-            641
+            220,
+            180,
+            620,
+            720
           ],
-          "delay_after_ms": 200,
+          "delay_after_ms": 500,
           "interrupted_reason": "combat.skill_outcome_unconfirmed"
         }
       },
@@ -3229,7 +3517,9 @@
         "inherit": [
           "wvd-network-retry",
           "wvd-pause",
-          "wvd-download"
+          "wvd-download",
+          "wvd-party-death",
+          "wvd-party-defeat"
         ],
         "debounce_ms": 1000,
         "interval_ms": 1000,
@@ -3241,30 +3531,16 @@
       "category": "战斗",
       "parameters": [
         {
-          "name": "dx",
-          "label": "相对横向偏移",
+          "name": "candidate_index",
+          "label": "选敌尝试序号",
           "type": "integer",
           "default": 0,
-          "min": -900,
-          "max": 900,
+          "min": 0,
+          "max": 23,
           "bindings": [
             {
               "node": "target",
-              "path": "/offset/0"
-            }
-          ]
-        },
-        {
-          "name": "dy",
-          "label": "相对纵向偏移",
-          "type": "integer",
-          "default": 80,
-          "min": -1600,
-          "max": 1600,
-          "bindings": [
-            {
-              "node": "target",
-              "path": "/offset/1"
+              "path": "/target/candidate_index"
             }
           ]
         }
@@ -3316,7 +3592,12 @@
                                 "mode": "template",
                                 "image": "close",
                                 "threshold": 0.8,
-                                "roi": [120, 1330, 740, 270]
+                                "roi": [
+                                  0,
+                                  600,
+                                  900,
+                                  1000
+                                ]
                               }
                             ]
                           }
@@ -3384,7 +3665,12 @@
                         "mode": "template",
                         "image": "close",
                         "threshold": 0.8,
-                        "roi": [120, 1330, 740, 270]
+                        "roi": [
+                          0,
+                          600,
+                          900,
+                          1000
+                        ]
                       }
                     ]
                   }
@@ -3438,7 +3724,9 @@
         "inherit": [
           "wvd-network-retry",
           "wvd-pause",
-          "wvd-download"
+          "wvd-download",
+          "wvd-party-death",
+          "wvd-party-defeat"
         ],
         "debounce_ms": 1000,
         "interval_ms": 1000,

@@ -1,9 +1,54 @@
 #include "memory_diagnostics.hpp"
 #include <cstdio>
 #include <psapi.h>
+#include <tlhelp32.h>
+#include <algorithm>
 #include <utility>
 
 namespace wvd::platform {
+MemoryOwners sample_memory_owners() noexcept {
+    MemoryOwners result;
+    const auto started = GetTickCount64();
+    const auto snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (snapshot == INVALID_HANDLE_VALUE) return result;
+    PROCESSENTRY32W entry{};
+    entry.dwSize = sizeof(entry);
+    result.available = Process32FirstW(snapshot, &entry) != FALSE;
+    if (result.available) do {
+        if (result.examined >= 4096 || GetTickCount64() - started >= 200) {
+            result.truncated = true;
+            break;
+        }
+        ++result.examined;
+        const auto process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION,
+            FALSE, entry.th32ProcessID);
+        if (!process) { ++result.unreadable; continue; }
+        PROCESS_MEMORY_COUNTERS_EX memory{};
+        if (GetProcessMemoryInfo(process, reinterpret_cast<PROCESS_MEMORY_COUNTERS *>(&memory), sizeof(memory))) {
+            MemoryOwner owner;
+            owner.process_id = entry.th32ProcessID;
+            owner.private_bytes = memory.PrivateUsage;
+            owner.working_set_bytes = memory.WorkingSetSize;
+            std::copy_n(entry.szExeFile, MAX_PATH, owner.name.begin());
+            owner.name.back() = L'\0';
+            FILETIME created{}, exited{}, kernel{}, user{};
+            if (GetProcessTimes(process, &created, &exited, &kernel, &user))
+                owner.created_100ns = (static_cast<std::uint64_t>(created.dwHighDateTime) << 32) | created.dwLowDateTime;
+            result.readable_private_bytes += owner.private_bytes;
+            unsigned place = 0;
+            while (place < result.count && result.top[place].private_bytes >= owner.private_bytes) ++place;
+            if (place < result.top.size()) {
+                result.count = std::min<std::uint32_t>(result.count + 1, static_cast<std::uint32_t>(result.top.size()));
+                for (unsigned i = result.count - 1; i > place; --i) result.top[i] = result.top[i - 1];
+                result.top[place] = owner;
+            }
+        } else ++result.unreadable;
+        CloseHandle(process);
+    } while (Process32NextW(snapshot, &entry));
+    CloseHandle(snapshot);
+    result.elapsed_ms = GetTickCount64() - started;
+    return result;
+}
 MemorySample sample_memory() noexcept {
     MemorySample result;
     result.process_id = GetCurrentProcessId();

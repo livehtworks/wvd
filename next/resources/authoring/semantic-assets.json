@@ -5,7 +5,7 @@
     "en": [
       "boot_attention", "retry", "totitle", "Inn", "guild", "EdgeOfTown", "ruins",
       "returnText", "returntoTown", "returntotown", "Economy", "royalsuite",
-      "close", "RiseAgain", "ambush", "blessing", "notenoughsp", "notenoughmp", "combatClose",
+      "close", "RiseAgain", "ambush", "blessing", "notenoughsp", "notenoughmp", "combatClose", "multipeopledead",
       "sandman_recover", "openworldmap", "ignore", "GotoDung", "NoChestCanBeFound",
       "theRouteToTheDestinationCannotBeFound", "cursedWheel_timeLeap",
       "City_RoyalCityLuknalia", "City_fortress", "City_DHI", "City_portTownGrandLegion",
@@ -15,15 +15,24 @@
       "dialogueChoices/ignorethequest", "dialogueChoices/nope", "dialogueChoices/nothanks",
       "dialogueChoices/spareit", "dialogueChoices/strange_things"
     ],
-    "zh-Hant": ["boot_attention_zh", "boot_announcement_header", "guild_reveal_close_zh_hant"],
+    "zh-Hant": ["boot_attention_zh", "boot_announcement_header", "boot_announcement_header_soft_zh_hant", "boot_announcement_close_soft_zh_hant", "guild_reveal_close_zh_hant"],
     "shared": [
       "next", "combatTarget", "pause", "combatActive", "combatActive_2", "combatActive_3", "combatActive_4",
       "combat_active_zh_hant", "story_auto_control", "chest_reward_advance",
       "combat_speed_off_zh_hant", "combat_speed_on_zh_hant", "combat_auto_off_zh_hant", "combat_auto_on_zh_hant",
       "guild_bounty_card_header", "city_world_map_open_zh_hant", "worldmap_close_zh_hant",
       "worldmap_zoom_plus_zh_hant", "dungeon_map_close_zh_hant", "premium_purchase_green", "premium_purchase_purple",
-      "retry_blank", "dungFlag", "supportSkillCheck", "chestOpening", "chestfear", "resume",
-      "boot_title_logo", "skull", "leaveDung", "story", "combatSpd", "combatSpd_DHI"
+      "retry_blank", "dungFlag", "supportSkillCheck", "chestOpening", "chestfear", "resume", "mark_auto", "shared_close_cross",
+      "spellskill/char/0 面具", "spellskill/char/F 普修利", "spellskill/char/F 柚奈壬姬",
+      "spellskill/char/F 狮樱", "spellskill/char/F 艾妮琪", "spellskill/char/P 爱丽丝",
+      "spellskill/char/P 爱丽丝_alt", "spellskill/char/P 爱丽丝_sp",
+      "boot_title_logo", "skull", "leaveDung", "story", "combatSpd", "combatSpd_DHI", "someonedead",
+      "combat_level1_label", "combat_level2_label", "combat_level3_label", "combat_level4_label",
+      "combat_level5_label", "combat_level6_label", "combat_level7_label",
+      "spellskill/skillLvl/lv1", "spellskill/skillLvl/lv2", "spellskill/skillLvl/lv3", "spellskill/skillLvl/lv4",
+      "spellskill/skillLvl/lv5", "spellskill/skillLvl/lv6", "spellskill/skillLvl/lv7",
+      "spellskill/skillLvl/s_lv1", "spellskill/skillLvl/s_lv2", "spellskill/skillLvl/s_lv3", "spellskill/skillLvl/s_lv4",
+      "spellskill/skillLvl/s_lv5", "spellskill/skillLvl/s_lv6", "spellskill/skillLvl/s_lv7"
     ]
   },
   "locations": {
@@ -41,6 +50,56 @@
     }
   },
   "resources": {
+    "worldmap.open.option": {
+      "label": "開啟世界地圖", "category": "大地图/入口", "role": "position",
+      "variants": {
+        "en": {"condition": {"mode": "template", "image": "openworldmap", "threshold": 0.8}, "validation": "LEGACY_RECIPE"},
+        "zh-Hant": {"condition": {"mode": "template", "image": "worldmap_open_option_zh_hant", "threshold": 0.8, "roi": [400, 450, 500, 750]},
+          "validation": "REAL_FRAME_REPORTED", "source": "worldmap-entry-flower_cave-ready-20260924.png; crop [552,963,210,42]"}
+      }
+    },
+    "ui.close.cross": {
+      "label": "关闭叉号", "role": "position",
+      "variants": {"shared": {"condition": {"mode": "template", "image": "shared_close_cross", "threshold": 0.8},
+        "validation": "LEGACY_RECIPE", "source": "close.png [18,12,40,40], same reviewed language-independent crop as support selection"}}
+    },
+    "navigation.no_route": {
+      "label": "找不到前往目的地的路线",
+      "category": "迷宫/导航",
+      "role": "observation",
+      "variants": {
+        "en": {
+          "condition": {"mode": "template", "image": "theRouteToTheDestinationCannotBeFound", "threshold": 0.8},
+          "validation": "LEGACY_RECIPE"
+        },
+        "zh-Hant": {
+          "condition": {"mode": "template", "image": "navigation_no_route_zh_hant", "threshold": 0.8, "roi": [80, 620, 740, 380]},
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "2026-10-05 MuMu continuous capture navigation-live-20261005-100933/frame-00038.png; crop [250,795,398,41]; source SHA256 dea8a9e7afa0b330c885e864ea4d881700c66a1156f242f67540e631ca96c3c9"
+        }
+      }
+    },
+    "combat.resource.error": {
+      "label": "战斗SP或MP不足提示",
+      "role": "observation",
+      "variants": {"zh-Hant": {"condition": {"mode": "combat_resource_error"}, "validation": "UNVERIFIED_REAL_FRAME"}}
+    },
+    "party.revival.page": {
+      "label": "再起页面观察",
+      "role": "observation",
+      "variants": {
+        "en": {"condition": {"mode": "template", "image": "RiseAgain", "threshold": 0.8}, "validation": "LEGACY_RECIPE"},
+        "zh-Hant": {"condition": {"mode": "revival_prompt"}, "validation": "UNVERIFIED_REAL_FRAME"}
+      }
+    },
+    "party.revival.action": {
+      "label": "战斗失败后的再起",
+      "role": "position",
+      "variants": {
+        "en": {"condition": {"mode": "template", "image": "RiseAgain", "threshold": 0.8}, "validation": "LEGACY_RECIPE"},
+        "zh-Hant": {"condition": {"mode": "ocr", "language": "zh-Hant", "expected": ["再起"], "match": "exact", "unique": true, "threshold": 0.9, "roi": [0, 600, 900, 1000]}, "validation": "UNVERIFIED_REAL_FRAME", "source": "用户确认再起按钮；英文模板不适用于繁中。自然出现页面后留存实机证据。"}
+      }
+    },
     "city.fortress.identity": {
       "label": "要塞城市独有塔楼背景",
       "category": "地点/要塞",
@@ -111,12 +170,30 @@
           "condition": {
             "mode": "all",
             "conditions": [
-              {"mode": "template", "image": "boot_announcement_header", "threshold": 0.9, "roi": [300, 90, 300, 170]},
-              {"mode": "template", "image": "guild_reveal_close_zh_hant", "threshold": 0.9, "roi": [200, 1320, 500, 220]}
+              {"mode": "any", "conditions": [
+                {"mode": "template", "image": "boot_announcement_header", "threshold": 0.9, "roi": [300, 90, 300, 170]},
+                {"mode": "template", "image": "boot_announcement_header_soft_zh_hant", "threshold": 0.9, "roi": [300, 90, 300, 170]}
+              ]},
+              {"mode": "any", "conditions": [
+                {"mode": "template", "image": "guild_reveal_close_zh_hant", "threshold": 0.9, "roi": [200, 1320, 500, 220]},
+                {"mode": "template", "image": "boot_announcement_close_soft_zh_hant", "threshold": 0.9, "roi": [200, 1320, 500, 220]}
+              ]}
             ]
           },
           "validation": "REAL_FRAME_REPORTED",
-          "source": "2026-10-01 900x1600启动公告实帧；只截公告标题，复用关闭文字，不截日期、正文或奖励"
+          "source": "2026-10-01及2026-10-05 900x1600启动公告实帧；标题与关闭联合判断，不截日期、正文或奖励。新帧来源见启动救人与内存修复报告。"
+        }
+      }
+    },
+    "boot.announcement.close": {
+      "label": "启动公告关闭",
+      "category": "启动/公告",
+      "role": "position",
+      "variants": {
+        "shared": {
+          "condition": {"mode": "template", "image": "boot_announcement_close_soft_zh_hant", "threshold": 0.9, "roi": [200, 1320, 500, 220]},
+          "validation": "REAL_FRAME_REPORTED",
+          "source": "仅在boot.announcement.page成立后定位关闭；2026-10-05实帧裁切[380,1420,120,42]，不改变公会关闭配方。"
         }
       }
     },
@@ -198,11 +275,10 @@
       "variants": {
         "shared": {
           "condition": {
-            "mode": "template",
+            "mode": "bright_mask",
             "image": "edge_of_town_icon_shape",
-            "threshold": 0.8,
-            "roi": [0, 300, 900, 650],
-            "grayscale": true
+            "threshold": 0.94,
+            "roi": [0, 300, 900, 650]
           },
           "validation": "REAL_FRAME_REPORTED",
           "source": "native/games/wvd/vision/location_probes.hpp"
@@ -989,10 +1065,10 @@
       "role": "observation",
       "variants": {
         "en": {"condition": {"mode": "template", "image": "spellskill/skillDetail", "threshold": 0.8,
-                             "roi": [720, 750, 180, 430]}, "validation": "SOURCE_VARIANT_PRESENT"},
+                             "roi": [0, 600, 900, 1000]}, "validation": "SOURCE_VARIANT_PRESENT"},
         "zh-Hant": {"condition": {"mode": "template", "image": "combat_skill_detail_zh_hant", "threshold": 0.82,
-                                  "roi": [720, 750, 180, 430]}, "validation": "REAL_FRAME_REPORTED",
-                    "source": "2026-09-26/2026-10-01 MuMu 蝎女战斗实帧；明細按钮随详情布局下移，完整图标可延伸到y=1084；菜单、选级、选敌与自动保底共用此配方"}
+                                  "roi": [0, 600, 900, 1000]}, "validation": "REAL_FRAME_REPORTED",
+                    "source": "2026-09-26/2026-10-01敌方、2026-10-03友方及2026-10-04巨人战斗技能实帧；明細按钮随详情高度移动，友方接近y=690、三重霞按钮框y=1127至1207；菜单、选级、选敌与自动保底共用此配方"}
       }
     },
     "combat.skill.confirm": {
@@ -1001,9 +1077,9 @@
       "role": "position",
       "variants": {
         "en": {"condition": {"mode": "template", "image": "OK", "threshold": 0.8,
-                             "roi": [120, 1330, 740, 270]}, "validation": "SOURCE_VARIANT_PRESENT"},
+                             "roi": [0, 600, 900, 1000]}, "validation": "SOURCE_VARIANT_PRESENT"},
         "zh-Hant": {"condition": {"mode": "template", "image": "combat_skill_confirm_zh_hant", "threshold": 0.82,
-                                  "roi": [120, 1330, 740, 270]}, "validation": "REAL_FRAME_REPORTED",
+                                  "roi": [0, 600, 900, 1000]}, "validation": "REAL_FRAME_REPORTED",
                     "source": "2026-09-26 MuMu 蝎女战斗技能详情实帧；確定按钮"}
       }
     },
@@ -1030,7 +1106,7 @@
     "combat.auto.off": {
       "label": "自动战斗关闭状态",
       "category": "事件/战斗",
-      "role": "observation",
+      "role": "position",
       "variants": {
         "en": {"condition": {"mode": "template", "image": "spellskill/CombatAutoDisable", "threshold": 0.8,
                              "roi": [740, 940, 160, 280]}, "validation": "SOURCE_VARIANT_PRESENT"},
@@ -1042,7 +1118,7 @@
     "combat.auto.on": {
       "label": "自动战斗开启状态",
       "category": "事件/战斗",
-      "role": "observation",
+      "role": "position",
       "variants": {
         "en": {"condition": {"mode": "template", "image": "spellskill/CombatAutoEnable", "threshold": 0.8,
                              "roi": [740, 940, 160, 280]}, "validation": "SOURCE_VARIANT_PRESENT"},
@@ -2098,7 +2174,7 @@
             "mode": "template",
             "image": "harken_floor_return_zh_hant",
             "threshold": 0.8,
-            "roi": [200, 920, 500, 250]
+            "roi": [200, 400, 500, 1000]
           },
           "validation": "REAL_FRAME_REPORTED",
           "source": "2026-09-24 MuMu 900x1600: temple-harken-buff-first-after-20260924.png"
@@ -2139,7 +2215,7 @@
             "mode": "template",
             "image": "harken_floor_move_zh_hant",
             "threshold": 0.8,
-            "roi": [0, 230, 250, 170]
+            "roi": [0, 100, 250, 400]
           },
           "validation": "REAL_FRAME_REPORTED",
           "source": "2026-09-24 MuMu 900x1600: temple-harken-buff-first-after-20260924.png"

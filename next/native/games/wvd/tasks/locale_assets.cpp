@@ -1,5 +1,6 @@
 #include "locale_assets.hpp"
 #include "authoring/semantic_assets.hpp"
+#include "games/wvd/vision/template_language.hpp"
 #include <stdexcept>
 #include <unordered_map>
 
@@ -37,16 +38,31 @@ const std::unordered_map<std::string, std::string> legacy_assets{
     {"map_abyss_b2f_zh_hant", "map.abyss.b2f.title"},
     {"AutoMove", "map.auto_move"},
     {"mapFlag", "dungeon.map.open"},
+    {"openworldmap", "worldmap.open.option"},
+    {"returnText", "outskirts.submenu.back"},
+    {"Stay.png", "inn.stay.option"},
+    {"close", "ui.close.cross"}, {"combatClose", "ui.close.cross"},
+    {"cursedWheel", "wheel.entry"}, {"cursedWheelTitle", "wheel.title"},
+    {"leap", "wheel.leap"}, {"cursedWheel_timeLeap", "wheel.leap"},
+    {"Triumph", "wheel.target.triumph"}, {"BeautifulOre", "wheel.target.ore"},
+    {"GhostsOfYore", "wheel.target.ghosts"},
+    {"cursedwheel_dhi", "wheel.chapter.dhi"},
+    {"cursedwheel_impregnableFortress", "wheel.chapter.fortress"},
+    {"TradeWaterway", "wheel.chapter.waterway"},
     {"trait", "character.panel"},
     {"recover", "dungeon.recovery.panel"},
     {"combat_skill_detail", "combat.skill.detail"},
+    {"spellskill/skillDetail", "combat.skill.detail"},
     {"combat_skill_confirm", "combat.skill.confirm"},
+    {"RiseAgain", "party.revival.action"},
     {"returntoTown", "outskirts.return.to.town"},
     {"returntotown", "outskirts.return.to.town"},
     {"COS/COS", "outskirts.separation"}, {"COS/COSB2F", "outskirts.separation.b2f"},
 };
 
 const std::unordered_map<std::string, std::string> legacy_observations{
+    {"theRouteToTheDestinationCannotBeFound", "navigation.no_route"},
+    {"notenoughsp", "combat.resource.error"}, {"notenoughmp", "combat.resource.error"},
     {"worldmapflag", "worldmap.open"},
     {"flee", "combat.menu.flee"},
     {"spellskill/CombatAutoDisable", "combat.auto.off"},
@@ -77,6 +93,7 @@ void replace_templates(J &node, authoring::SemanticAssets &assets, const std::st
         return;
     }
     if (!node.is_object()) return;
+    if (node.contains("locale_only") && node.at("locale_only") != locale) return;
     if (node.value("mode", std::string{}) == "template" && node.contains("image")) {
         const auto image = node.at("image").get<std::string>();
         std::string id;
@@ -87,6 +104,8 @@ void replace_templates(J &node, authoring::SemanticAssets &assets, const std::st
         if (observation != legacy_observations.end()) id = observation->second;
         const auto found = legacy_assets.find(image);
         if (found != legacy_assets.end()) id = found->second;
+        if (image == "RiseAgain" && use == authoring::ResourceUse::Observation)
+            id = "party.revival.page";
         if (!id.empty()) {
             auto resolved = assets.condition(id, locale, use);
             if (resolved.value("mode", "") == "ocr" || resolved.value("mode", "") == "bright_mask") {
@@ -101,8 +120,11 @@ void replace_templates(J &node, authoring::SemanticAssets &assets, const std::st
                 // 单模板覆盖都不能广播到两张独立叶子图。
                 const bool default_threshold = node.size() == 3 &&
                     node.contains("threshold") && node.at("threshold") == 0.8;
-                if (image != "worldmapflag" || use != authoring::ResourceUse::Observation ||
-                    resolved.value("mode", "") != "all" ||
+                const bool revival = image == "RiseAgain" && resolved.value("mode", "") == "revival_prompt";
+                const bool resource_error = (image == "notenoughsp" || image == "notenoughmp") &&
+                    resolved.value("mode", "") == "combat_resource_error";
+                const bool worldmap = image == "worldmapflag" && resolved.value("mode", "") == "all";
+                if ((!worldmap && !revival && !resource_error) || use != authoring::ResourceUse::Observation ||
                     !(node.size() == 2 || default_threshold))
                     throw std::runtime_error("NATIVE_LEGACY_COMPOSITE_OVERRIDE_UNSUPPORTED:" + image);
                 node = std::move(resolved);
@@ -110,6 +132,11 @@ void replace_templates(J &node, authoring::SemanticAssets &assets, const std::st
             }
             for (const auto &[key, value] : node.items()) {
                 if (key == "mode" || key == "image") continue;
+                if ((image == "close" || image == "combatClose") && key == "crop") {
+                    if (value != J::array({18, 12, 40, 40}))
+                        throw std::runtime_error("NATIVE_LEGACY_CLOSE_CROP_UNSUPPORTED");
+                    continue;
+                }
                 if (key == "threshold" && value == 0.8 && node.size() == 3) continue;
                 if (key != "threshold" && key != "roi" && key != "grayscale" &&
                     key != "preprocess")
@@ -129,9 +156,48 @@ void replace_templates(J &node, authoring::SemanticAssets &assets, const std::st
 }
 } // namespace
 
+bool random_maze_probe(const J &condition) {
+    if (!condition.is_object()) return false;
+    const auto image = condition.value("image", "");
+    return condition.value("mode", "") == "default_dialogue" || image == "ambush" ||
+        image == "ignore" || image == "sandman_recover" || image.starts_with("dialogueChoices/");
+}
+
+J localize_implicit_probe(const J &condition, const std::string &locale) {
+    if (locale != "zh-Hant" || condition.value("mode", "") != "template" ||
+        !condition.contains("image") || (condition.contains("locale_only") && condition.at("locale_only") != locale))
+        return condition;
+    static const auto recipes = [] {
+        authoring::SemanticAssets assets(J::parse(wvd_semantic_catalogue));
+        std::unordered_map<std::string, J> result;
+        for (const auto &[image, id] : legacy_assets) result[image] = assets.condition(id, "zh-Hant");
+        for (const auto &[image, id] : legacy_observations) result[image] = assets.condition(id, "zh-Hant");
+        result["RiseAgain"] = assets.condition("party.revival.page", "zh-Hant");
+        result["whowillopenit"] = assets.condition("chest.choose.page", "zh-Hant");
+        return result;
+    }();
+    const auto image = condition.at("image").get<std::string>();
+    const auto found = recipes.find(image);
+    if (found == recipes.end()) return condition;
+    auto resolved = found->second;
+    if (resolved.value("mode", "") != "template") return resolved;
+    for (const auto &[key, value] : condition.items()) {
+        if (key == "mode" || key == "image" || key == "locale_only") continue;
+        if ((image == "close" || image == "combatClose") && key == "crop") {
+            if (value != J::array({18, 12, 40, 40}))
+                throw std::runtime_error("NATIVE_LEGACY_CLOSE_CROP_UNSUPPORTED");
+            continue;
+        }
+        if (key == "threshold" && value == 0.8) continue;
+        resolved[key] = value;
+    }
+    return resolved;
+}
+
 void localize_task_assets(CompiledWorkflow &workflow, const J &catalogue,
                           const std::string &locale) {
     authoring::validate_resource_locale(locale);
+    workflow.authoring["resource_locale"] = locale;
     // 战斗专用别名在英文环境仍解析回原图，避免把中文素材带进英文任务。
     if (locale.empty() || locale == "en") {
         resolve_combat_assets_en(workflow.nodes);
@@ -145,5 +211,48 @@ void localize_task_assets(CompiledWorkflow &workflow, const J &catalogue,
     workflow.authoring["resource_locale"] = locale;
     workflow.authoring["semantic_selections"] = assets.selections();
     workflow.refresh_images();
+}
+
+J locale_asset_coverage(const CompiledWorkflow &workflow, const std::string &locale) {
+    authoring::validate_resource_locale(locale);
+    J missing = J::array(), foreign = J::array(), ocr = J::array();
+    const auto &index = vision::template_language_index();
+    std::set<std::string> seen;
+    const auto provided = workflow.authoring.value("provided_portrait_images", J::array());
+    for (auto name : workflow.images) {
+        // These PNGs were decoded, dimension-checked and hash-bound by the
+        // profile's portrait provider, not inferred from a filename prefix.
+        if (std::find(provided.begin(), provided.end(), J(name)) != provided.end()) continue;
+        if (name.ends_with(".png")) name.resize(name.size() - 4);
+        if (!seen.insert(name).second) continue;
+        const auto found = index.find(name);
+        if (found == index.end()) missing.push_back(name);
+        else if (!found->second.contains("shared") && !found->second.contains(locale))
+            foreign.push_back(name);
+    }
+    const auto inspect = [&](auto &&self, const J &value, const std::string &path) -> void {
+        if (value.is_object()) {
+            if (value.contains("locale_only") && value.at("locale_only") != locale) return;
+            if (value.value("mode", std::string{}) == "ocr" && value.value("language", std::string{}) != locale)
+                ocr.push_back({{"path", path}, {"language", value.value("language", std::string{})}});
+            for (const auto &[key, child] : value.items()) self(self, child, path + "/" + key);
+        } else if (value.is_array()) {
+            for (std::size_t i = 0; i < value.size(); ++i) self(self, value[i], path + "/" + std::to_string(i));
+        }
+    };
+    inspect(inspect, workflow.nodes, "nodes");
+    inspect(inspect, workflow.event_scopes, "events");
+    return {{"locale", locale}, {"complete", !locale.empty() && missing.empty() && foreign.empty() && ocr.empty()},
+        {"unclassified", missing}, {"unresolved_foreign", foreign}, {"foreign_ocr", ocr}};
+}
+
+void require_locale_asset_coverage(const CompiledWorkflow &workflow, const std::string &locale) {
+    authoring::validate_resource_locale(locale);
+    // This admission rule closes the requested Chinese migration. English
+    // execution keeps its existing resource checks rather than losing features.
+    if (locale != "zh-Hant") return;
+    const auto coverage = locale_asset_coverage(workflow, locale);
+    if (!coverage.at("complete").get<bool>())
+        throw std::runtime_error("LOCALE_ASSET_COVERAGE_INCOMPLETE:" + coverage.dump());
 }
 } // namespace wvd::games::tasks

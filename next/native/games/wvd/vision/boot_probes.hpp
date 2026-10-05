@@ -4,13 +4,30 @@
 #include "chest_probes.hpp"
 #include "download_probes.hpp"
 #include "network_probes.hpp"
+#include "games/wvd/tasks/locale_assets.hpp"
 #include <json.hpp>
 #include <utility>
 
 namespace wvd::games::vision {
+inline nlohmann::json task_probes(nlohmann::json probes, const std::string &locale,
+                                  bool random_maze_events) {
+    nlohmann::json selected = nlohmann::json::array();
+    for (auto &probe : probes) {
+        const auto image = probe.value("image", "");
+        if (!random_maze_events && (probe.value("mode", "") == "default_dialogue" ||
+            image == "ambush" || image == "ignore" || image == "sandman_recover" || image.starts_with("fishing/"))) continue;
+        // These are English recovery variants; the same table declares the
+        // Chinese network, attention and Harken alternatives separately.
+        if (image == "retry" || image == "totitle" || image == "boot_attention" || image == "blessing")
+            probe["locale_only"] = "en";
+        if (!locale.empty() && probe.contains("locale_only") && probe.at("locale_only") != locale) continue;
+        selected.push_back(tasks::localize_implicit_probe(probe, locale));
+    }
+    return selected;
+}
 // 透明覆盖层可能保留业务底图。这里只排除会遮住当前输入的已知提示，
 // 不做城市/公会/钓鱼/宝箱等全局分类；配方同时供资源冻结使用。
-inline nlohmann::json input_blockers(const std::string &phase = {}) {
+inline nlohmann::json input_blockers(const std::string &phase = {}, const std::string &locale = {}, bool random_maze_events = true) {
     using J = nlohmann::json;
     auto probes = J::array({network_retry_prompt(), download_button_zh_hant(), download_button_en(),
         J{{"mode", "pause"}}});
@@ -19,10 +36,10 @@ inline nlohmann::json input_blockers(const std::string &phase = {}) {
         for (const auto *image : {"blessing", "ambush", "ignore", "sandman_recover"})
             probes.push_back({{"mode", "template"}, {"image", image}});
     }
-    return probes;
+    return task_probes(std::move(probes), locale, random_maze_events);
 }
 // 结果不符后的异常诊断：网络/资源/启动/Pause/死亡。正常业务帧不调用此表。
-inline nlohmann::json exception_probes() {
+inline nlohmann::json exception_probes(const std::string &locale = {}) {
     using J = nlohmann::json;
     J probes = J::array({network_prompt_zh_hant(), download_button_zh_hant(), download_button_en()});
     probes.push_back(resource("boot.announcement.page"));
@@ -35,19 +52,19 @@ inline nlohmann::json exception_probes() {
     probes.push_back({{"mode", "template"}, {"image", "boot_title_logo"}, {"threshold", .86},
                       {"roi", {100, 300, 700, 470}}});
     for (const auto *mode : {"pause", "party_death", "party_defeat"}) probes.push_back({{"mode", mode}});
-    return probes;
+    return task_probes(std::move(probes), locale, true);
 }
 // 特殊流程不与网络故障、战斗、开箱混成一个全局候选池。
-inline nlohmann::json special_screen_probes() {
+inline nlohmann::json special_screen_probes(const std::string &locale = {}, bool random_maze_events = true) {
     using J = nlohmann::json;
     J probes = J::array({J{{"mode", "special_dialogue"}}, J{{"mode", "default_dialogue"}}});
     for (const auto *image : {"sandman_recover", "blessing", "ambush", "ignore"})
         probes.push_back({{"mode", "template"}, {"image", image}});
     probes.push_back(harken_buff_menu());
-    return probes;
+    return task_probes(std::move(probes), locale, random_maze_events);
 }
 // 阻塞页的资源/参数由视觉和发布清单共同消费；低阈值仅保留旧 Retry 退路。
-inline nlohmann::json blocking_probes(bool include_party_prompts = true) {
+inline nlohmann::json blocking_probes(bool include_party_prompts = true, const std::string &locale = {}, bool random_maze_events = true) {
     using J = nlohmann::json;
     J probes = J::array();
     probes.push_back(resource("boot.announcement.page"));
@@ -81,15 +98,17 @@ inline nlohmann::json blocking_probes(bool include_party_prompts = true) {
         probes.push_back({{"mode", "default_dialogue"}});
         probes.push_back({{"mode", "party_defeat"}});
     }
-    return probes;
+    return task_probes(std::move(probes), locale, random_maze_events);
 }
 // 启动就绪只看稳定游戏场景；动作后置还接受已知的中间阻塞页。
-inline nlohmann::json boot_probes(bool transient) {
+inline nlohmann::json boot_probes(bool transient, const std::string &locale = {}, bool random_maze_events = true) {
     using J = nlohmann::json;
-    J probes = transient ? blocking_probes() : J::array();
+    J probes = transient ? blocking_probes(true, locale, random_maze_events) : J::array();
     // 各城市的建筑按钮图标相同，不能用来区分地点。王城身份只由其固定塔楼
     // 背景确认；该锚点只读，不用于点击或推断其他城市业务状态。
     probes.push_back(royal_city());
+    // Shared city icons prove readiness, not city identity; task guards still locate the city.
+    probes.push_back(city_screen());
     // 郊外和哈肯楼层菜单也是可交给任务继续收敛的稳定场景；它们不是城市完成证据。
     probes.push_back(outskirts_return_button());
     probes.push_back(harken_floor_menu());
@@ -111,6 +130,6 @@ inline nlohmann::json boot_probes(bool transient) {
         {"threshold", .8}, {"roi", {250, 0, 400, 180}}});
     for (const auto &probe : chest_stage_probes()) probes.push_back(probe);
     probes.push_back({{"mode", "combat_active"}});
-    return probes;
+    return task_probes(std::move(probes), locale, random_maze_events);
 }
 }

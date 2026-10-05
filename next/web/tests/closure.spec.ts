@@ -1,6 +1,12 @@
 import { test, expect, type Page, type Route } from '@playwright/test';
 
 const copy = <T>(value: T): T => JSON.parse(JSON.stringify(value));
+const saveSections = {
+  task: ['FARM_TARGET', 'FARM_TARGET_TEXT', 'TASK_SPECIFIC_CONFIG'],
+  common: ['WHO_WILL_OPEN_IT', 'QUICK_DISARM_CHEST', 'SKIP_COMBAT_RECOVER', 'SKIP_CHEST_RECOVER', 'RECOVER_WHEN_BEGINNING', 'ACTIVE_REST', 'REST_INTERVEL', 'KARMA_ADJUST', 'RE_ASSEMBLE_PARTY', 'DEFAULT_OVERALL_STRATEGY', 'TASK_POINT_STRATEGY'],
+  combat: ['STRATEGY', 'RELOAD_STRATEGY_WHEN'],
+  advanced: ['EMU_PATH', 'EMU_INDEX', 'ADB_ADRESS', 'AUTO_START_CLASH', 'LANGUAGE', 'WEBSITE_ORG_TIME', 'AM_REFRESH_TIME', 'ACTIVE_BEG_MONEY', 'ACTIVE_ROYALSUITE_REST', 'ACTIVE_TRIUMPH', 'ACTIVE_BEAUTIFUL_ORE', 'ACTIVE_CSC', 'BYPASS_THE_WALL', 'MAX_TRY_LIMIT', 'MAX_CRASH_LIMIT'],
+};
 const profile = () => ({ revision: 'profile-1', effective_source: 'default', profile: {
   FARM_TARGET: 'Scorpionesses', FARM_TARGET_TEXT: '蝎女', TASK_SPECIFIC_CONFIG: false,
   EMU_PATH: 'isolated-not-a-device', EMU_INDEX: 2, ADB_ADRESS: 'offline', AUTO_START_CLASH: false,
@@ -31,8 +37,9 @@ async function fixture(page: Page) {
     if (request.method() !== 'GET') writes.push({ url: url.pathname, method: request.method(), request_id: body?.request_id, body });
     if (state.handlers.has(key)) { await state.handlers.get(key)!(route, body); return; }
     if (key === 'GET /api/v1/version') return route.fulfill({ json: { version: 'closure-candidate', api_version: 1 } });
+    if (key === 'GET /api/v1/service') return route.fulfill({ json: { instance_id: 'isolated-fixture', pid: 0, data_root: 'isolated-fixture', port: 18754 } });
     if (key === 'GET /api/v1/profile') return route.fulfill({ json: copy(state.profile) });
-    if (key === 'GET /api/v1/catalog') return route.fulfill({ json: { tasks: [
+    if (key === 'GET /api/v1/catalog') return route.fulfill({ json: { profile_save_sections: saveSections, tasks: [
       { id: 'Scorpionesses', name: '蝎女', category: '副本', type: 'dungeon' }, { id: 'B', name: '任务B', category: '副本', type: 'dungeon' },
       { id: 'C', name: '任务C', category: '副本' }, { id: 'Temple', name: '炉壶灵庙', category: '日常' }],
       task_categories: [{ value: '副本', label: '副本' }], chest_openers: [{ value: 0, label: '随机' }],
@@ -66,7 +73,7 @@ test('UI-布局：五视口、三页签、首屏动作、停止与截图焦点',
   const f = await fixture(page); f.state.screenshot = true;
   for (const [width, height] of [[1440,900],[1366,768],[1920,1080],[800,900],[390,844]]) {
     await page.setViewportSize({ width, height }); await home(page);
-    for (const name of ['停止', '保存配置', '开始任务']) {
+    for (const name of ['停止', '保存任务设置', '开始任务']) {
       const box = await page.getByRole('button', { name, exact: true }).boundingBox();
       expect(box, name).not.toBeNull(); expect(box!.y).toBeGreaterThanOrEqual(0); expect(box!.y + box!.height).toBeLessThanOrEqual(height);
     }
@@ -74,7 +81,7 @@ test('UI-布局：五视口、三页签、首屏动作、停止与截图焦点',
       const box = await page.getByRole('combobox', { name, exact: true }).boundingBox();
       expect(box!.y).toBeGreaterThanOrEqual(0); expect(box!.y + box!.height).toBeLessThanOrEqual(height);
     }
-    for (const tab of ['常用参数', '战斗方案', '设备与高级']) {
+    for (const tab of ['常用参数', '设备与高级']) {
       await page.getByRole('button', { name: tab, exact: true }).click();
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
       await page.screenshot({ path: info.outputPath(`${width}-${height}-${tab}.png`) });
@@ -100,13 +107,15 @@ test('UI-布局：五视口、三页签、首屏动作、停止与截图焦点',
 test('UI-工作台写入：不可变快照、双击锁、失败保留、字典规范化', async ({ page }, info) => {
   const f = await fixture(page);
   (f.state.profile.profile as any).STRATEGY = { '方案A': { skill_settings: [], unknown: 42 } };
-  await home(page); await expect(page.getByRole('button', { name: '保存配置' })).toBeDisabled();
-  await page.getByRole('button', { name: '战斗方案', exact: true }).click();
+  await home(page); await expect(page.getByRole('button', { name: '保存常用参数' })).toBeDisabled();
+  await page.getByRole('button', { name: '常用参数', exact: true }).click();
+  await page.getByRole('button', { name: '重命名', exact: true }).click();
   await page.getByLabel('方案名称').fill('改名方案');
+  await page.getByRole('button', { name: '确认重命名', exact: true }).click();
   const lock = deferred();
   f.state.handlers.set('PUT /api/v1/profile', async route => { await lock.promise; await route.fulfill({ status: 409, json: { error_code: 'PROFILE_REVISION_CONFLICT', message: 'fixture' } }); });
-  await page.getByRole('button', { name: '保存配置' }).dblclick({ delay: 30 });
-  await expect(page.getByLabel('方案名称')).toBeDisabled();
+  await page.getByRole('button', { name: '保存战斗方案' }).dblclick({ delay: 30 });
+  await expect(page.getByRole('button', { name: '重命名', exact: true })).toBeDisabled();
   await expect(page.getByRole('button', { name: '流程编辑', exact: true })).toBeDisabled();
   await expect(page.getByRole('button', { name: '停止', exact: true })).toBeEnabled();
   expect(f.writes).toHaveLength(1); const sent = copy(f.writes[0].body);
@@ -114,17 +123,19 @@ test('UI-工作台写入：不可变快照、双击锁、失败保留、字典�
   await page.getByRole('button', { name: '停止', exact: true }).click();
   await expect.poll(() => f.writes.filter(w => w.url.endsWith('/stop')).length).toBe(1);
   lock.resolve(); await expect(page.getByRole('alert')).toContainText('PROFILE_REVISION_CONFLICT');
-  await expect(page.getByLabel('方案名称')).toHaveValue('改名方案');
-  await expect(page.getByRole('button', { name: '保存配置' })).toBeEnabled();
+  await expect(page.locator('.strategy-title')).toHaveText('改名方案');
+  await expect(page.getByRole('button', { name: '保存战斗方案' })).toBeEnabled();
   expect((await page.getByText('有未保存更改', { exact: true }).boundingBox())!.y).toBeLessThan(900);
-  expect(sent.strategy_renames).toEqual({ '方案A': '改名方案' }); expect(sent.profile.UNKNOWN_KEEP).toEqual({ nested: ['unchanged'] });
-  expect(sent.profile.TASK_POINT_STRATEGY.special_combat.portrait_image).toBe('retained-custom');
-  f.state.handlers.set('PUT /api/v1/profile', async (route, body) => { f.state.profile = { ...body, revision: 'profile-2' }; await route.fulfill({ json: f.state.profile }); });
-  await page.getByRole('button', { name: '保存配置' }).click();
-  await expect(page.getByRole('button', { name: '保存配置' })).toBeDisabled();
+  expect(sent.strategy_renames).toEqual({ '方案A': '改名方案' });
+  expect(Object.keys(sent.profile).sort()).toEqual(saveSections.combat.slice().sort());
+  f.state.handlers.set('PUT /api/v1/profile', async (route, body) => { f.state.profile = { ...f.state.profile, profile: { ...f.state.profile.profile, ...body.profile }, revision: 'profile-2' }; await route.fulfill({ json: f.state.profile }); });
+  await page.getByRole('button', { name: '保存战斗方案' }).click();
+  await expect(page.getByRole('button', { name: '保存战斗方案' })).toBeDisabled();
+  expect(f.state.profile.profile.UNKNOWN_KEEP).toEqual({ nested: ['unchanged'] });
+  expect(f.state.profile.profile.TASK_POINT_STRATEGY.special_combat.portrait_image).toBe('retained-custom');
   const saves = f.writes.filter(w => w.method === 'PUT'); expect(saves).toHaveLength(2); expect(saves[1].body).toEqual(sent);
-  await page.reload(); await page.getByRole('button', { name: '战斗方案', exact: true }).click();
-  await expect(page.getByLabel('方案名称')).toHaveValue('改名方案');
+  await page.reload(); await page.getByRole('button', { name: '常用参数', exact: true }).click();
+  await expect(page.locator('.strategy-title')).toHaveText('改名方案');
   expect(f.violations).toEqual([]); await info.attach('writes', { body: JSON.stringify(f.writes), contentType: 'application/json' });
 });
 
@@ -140,12 +151,13 @@ test('UI-任务选择：乱序、失败恢复、真正保存基线、灵庙同�
   });
   await home(page); await page.getByRole('combobox', { name: '任务目标', exact: true }).selectOption('B');
   await page.getByRole('combobox', { name: '任务目标', exact: true }).selectOption('C');
-  await expect(page.getByRole('button', { name: '保存配置' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: '保存任务设置' })).toBeDisabled();
   await expect(page.getByRole('button', { name: '开始任务' })).toBeDisabled();
   c.resolve(); await expect(page.getByLabel('旅店间隔')).toHaveValue('9'); b.resolve();
   await expect(page.getByRole('combobox', { name: '任务目标', exact: true })).toHaveValue('C');
-  await expect(page.getByRole('button', { name: '保存配置' })).toBeEnabled();
-  await page.getByRole('button', { name: '重载', exact: true }).click();
+  await expect(page.getByRole('button', { name: '保存任务设置' })).toBeEnabled();
+  page.once('dialog', dialog => dialog.accept());
+  await page.getByRole('button', { name: '重新读取配置', exact: true }).click();
   await expect(page.getByRole('combobox', { name: '任务目标', exact: true })).toHaveValue('Scorpionesses');
   await expect(page.getByLabel('旅店间隔')).toHaveValue('1');
   fail = true; await page.getByRole('combobox', { name: '任务目标', exact: true }).selectOption('B');
@@ -155,9 +167,15 @@ test('UI-任务选择：乱序、失败恢复、真正保存基线、灵庙同�
   await page.getByRole('button', { name: '灵庙已刷新，切换目标' }).click();
   await expect(page.getByRole('combobox', { name: '任务目标', exact: true })).toHaveValue('Temple');
   await expect(page.getByLabel('灵庙切换记录')).not.toHaveValue('');
-  await expect(page.getByRole('button', { name: '保存配置' })).toBeEnabled(); expect(f.violations).toEqual([]);
-  f.state.handlers.set('PUT /api/v1/profile', async (route, body) => { f.state.profile = body; await route.fulfill({ json: body }); });
-  await page.getByRole('button', { name: '保存配置' }).click(); await expect(page.getByRole('button', { name: '保存配置' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: '保存任务设置' })).toBeEnabled(); expect(f.violations).toEqual([]);
+  f.state.handlers.set('PUT /api/v1/profile', async (route, body) => { f.state.profile = { ...f.state.profile, profile: { ...f.state.profile.profile, ...body.profile }, revision: 'profile-2' }; await route.fulfill({ json: f.state.profile }); });
+  await page.getByRole('button', { name: '保存任务设置' }).click(); await expect(page.getByRole('button', { name: '保存任务设置' })).toBeDisabled();
+  await page.getByRole('button', { name: '常用参数', exact: true }).click();
+  await page.getByRole('button', { name: '保存常用参数' }).click();
+  await expect(page.getByRole('button', { name: '保存常用参数' })).toBeDisabled();
+  await page.getByRole('button', { name: '设备与高级', exact: true }).click();
+  await page.getByRole('button', { name: '保存设备与高级' }).click();
+  await expect(page.getByRole('button', { name: '保存设备与高级' })).toBeDisabled();
   await page.reload(); await expect(page.getByRole('combobox', { name: '任务目标', exact: true })).toHaveValue('Temple');
 });
 
@@ -245,7 +263,7 @@ test('UI-选择拒绝与CAS：迟到成功不掩盖新失败，放弃取消与�
   await expect(target).toHaveValue('Scorpionesses'); await expect(page.getByLabel('旅店间隔')).toHaveValue('4');
   page.once('dialog', dialog => dialog.dismiss()); await page.getByRole('button', { name: '流程编辑', exact: true }).click();
   await expect(page.getByLabel('旅店间隔')).toHaveValue('4');
-  await page.getByRole('button', { name: '重载', exact: true }).click();
+  await page.getByRole('button', { name: '重新读取配置', exact: true }).click();
   f.state.handlers.set('POST /api/v1/profile/effective', async route => { await route.fulfill({ json: { ...f.state.profile, revision: 'outside-change' } }); });
   await target.selectOption('C'); await expect(page.getByRole('alert')).toContainText('PROFILE_REVISION_CONFLICT'); await expect(target).toHaveValue('Scorpionesses');
   await page.getByRole('button', { name: '设备与高级', exact: true }).click();
@@ -328,7 +346,7 @@ test('UI-附加写入锁：清覆盖、导入、同步、提取及删除失败�
 
 test('UI-功能保留：三组配置、恢复反向布尔、策略列表与隐藏字段保存重开', async ({ page }, info) => {
   const f = await fixture(page);
-  f.state.handlers.set('PUT /api/v1/profile', async (route, body) => { f.state.profile = { ...body, revision: 'saved-all-controls' }; await route.fulfill({ json: f.state.profile }); });
+  f.state.handlers.set('PUT /api/v1/profile', async (route, body) => { f.state.profile = { ...f.state.profile, profile: { ...f.state.profile.profile, ...body.profile }, revision: 'saved-all-controls' }; await route.fulfill({ json: f.state.profile }); });
   await home(page);
   const checks: Record<string,string> = { '快速开箱': 'QUICK_DISARM_CHEST', '刚入地下城恢复': 'RECOVER_WHEN_BEGINNING', '主动旅店休息': 'ACTIVE_REST', '每六小时重组队伍': 'RE_ASSEMBLE_PARTY' };
   for (const label of Object.keys(checks)) await page.getByRole('checkbox', { name: label, exact: true }).check();
@@ -337,11 +355,14 @@ test('UI-功能保留：三组配置、恢复反向布尔、策略列表与隐�
   await page.getByRole('checkbox', { name: '行动栏头像识别特殊敌人' }).check();
   await expect(page.getByRole('combobox', { name: '头像模板' })).toHaveValue('retained-custom');
   await page.getByRole('checkbox', { name: '行动栏头像识别特殊敌人' }).uncheck();
-  await page.getByRole('button', { name: '战斗方案', exact: true }).click();
+  await page.getByRole('button', { name: '常用参数', exact: true }).click();
   await expect(page.getByLabel('旅店间隔')).not.toBeVisible();
   await page.getByLabel('释放任一即视为完成').check(); await page.getByRole('button', { name: '新增角色技能' }).click();
   await expect(page.locator('.skill-row')).toHaveCount(2); await page.getByRole('button', { name: '删除技能行' }).last().click();
-  await page.getByRole('button', { name: '新建方案', exact: true }).click(); await page.getByLabel('方案名称').fill('temporary');
+  await page.getByRole('button', { name: '新建方案', exact: true }).click();
+  await page.getByRole('button', { name: '重命名', exact: true }).click();
+  await page.getByLabel('方案名称').fill('temporary');
+  await page.getByRole('button', { name: '确认重命名', exact: true }).click();
   page.once('dialog', dialog => dialog.accept()); await page.getByRole('button', { name: '删除方案 temporary' }).click();
   await page.getByLabel('查找方案').fill('方案A'); await expect(page.getByRole('option', { name: '方案A 1 项' })).toBeVisible();
   await page.getByRole('button', { name: '设备与高级', exact: true }).click();
@@ -352,8 +373,12 @@ test('UI-功能保留：三组配置、恢复反向布尔、策略列表与隐�
   await page.getByLabel('官网领取记录').fill('2026-09-27'); await page.getByLabel('灵庙切换记录').fill('2026-09-27');
   await expect(page.getByRole('link', { name: '领取 50 钻（旧）' })).toHaveAttribute('href','https://store.wizardry.info/');
   await expect(page.getByRole('link', { name: '领取 50 钻（新）' })).toHaveAttribute('href','https://webstore.wizardry.info/');
-  await page.getByRole('button', { name: '保存配置' }).click(); await expect(page.getByRole('button', { name: '保存配置' })).toBeDisabled();
-  const saved = f.writes.find(w => w.method === 'PUT')!.body.profile;
+  await page.getByRole('button', { name: '保存设备与高级' }).click(); await expect(page.getByRole('button', { name: '保存设备与高级' })).toBeDisabled();
+  await page.getByRole('button', { name: '常用参数', exact: true }).click();
+  await page.getByRole('button', { name: '保存战斗方案' }).click(); await expect(page.getByRole('button', { name: '保存战斗方案' })).toBeDisabled();
+  await page.getByRole('button', { name: '常用参数', exact: true }).click();
+  await page.getByRole('button', { name: '保存常用参数' }).click(); await expect(page.getByRole('button', { name: '保存常用参数' })).toBeDisabled();
+  const saved = f.state.profile.profile as any;
   for (const key of Object.values(checks)) expect(saved[key], key).toBe(true);
   expect(saved.SKIP_COMBAT_RECOVER).toBe(true); expect(saved.SKIP_CHEST_RECOVER).toBe(true);
   expect(saved.STRATEGY).toHaveLength(1); expect(saved.STRATEGY[0].skill_settings).toHaveLength(1); expect(saved.STRATEGY[0].complete_one_as_all).toBe(true);

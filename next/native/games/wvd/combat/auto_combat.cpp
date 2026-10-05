@@ -5,7 +5,7 @@ tasks::CompiledWorkflow single_actor_auto() {
     using C = tasks::PipelineCompiler;
     using J = nlohmann::json;
     C graph("combat.single_actor_auto");
-    graph.check_policy("combat", {"wvd-network-retry", "wvd-pause", "wvd-download"});
+    graph.check_policy("combat", {"wvd-network-retry", "wvd-pause", "wvd-download", "wvd-party-death", "wvd-party-defeat"});
     const auto image = [](const char *name, J roi) {
         auto value = C::image(name);
         value["roi"] = std::move(roi);
@@ -14,22 +14,35 @@ tasks::CompiledWorkflow single_actor_auto() {
     const J battle{{"mode", "combat_active"}};
     const auto ended = C::all({C::any({C::image("dungFlag"), C::image("chestFlag"), C::image("RiseAgain")}), C::absent(battle)});
     const auto popup = C::any({C::image("combat_skill_detail"), C::image("combat_skill_confirm"),
-                              image("close", {120, 1330, 740, 270})});
-    const auto menu = image("flee", {660, 1080, 240, 220});
+                              image("close", {0, 600, 900, 1000})});
     const auto enabled = image("spellskill/CombatAutoEnable", {740, 940, 160, 280});
     const auto disabled = image("spellskill/CombatAutoDisable", {740, 940, 160, 280});
     const auto clear = C::absent(popup);
-    const auto enable = graph.append("Auto", enable_auto(), {"AwaitAction"},
-        {{"BattleEndedExit", {"Terminal"}}, {"BlockedExit", {"BlockedExit"}}});
-    graph.route("Entry", {enable});
-    // 动画中 Active 标识可能消失；以 Auto 控件仍在、指令菜单已退出、无详情遮挡确认。
-    // 同一页只亮灯时不关闭，也不重复开启；网络/暂停继续交给既有异常分派。
-    graph.route("AwaitAction", {"Ended", "DisableAfterActionStarted", "AlreadyDisabled"});
+    const auto close = image("close", {0, 600, 900, 1000});
+    const auto ok = C::image("combat_skill_confirm");
+    const auto detail = C::image("combat_skill_detail");
+    const auto clear_battle = C::all({battle, clear});
+    const auto off = C::all({clear, disabled, C::absent(enabled)});
+    const auto on = C::all({clear, enabled, C::absent(disabled)});
+    const J choices{"Ended", "DisableAuto", "ClosePopup", "CancelPopup", "BackPopup", "Pulse"};
+    graph.route("Entry", choices);
+    graph.click("ClosePopup", C::all({battle, popup}), close, C::any({clear_battle, ended}), choices);
+    graph.click("CancelPopup", C::all({battle, popup, C::absent(close)}), ok,
+                C::any({clear_battle, ended}), choices, {-280, 0});
+    graph.back("BackPopup", C::all({battle, detail, C::absent(close), C::absent(ok)}),
+               C::any({clear_battle, ended}), choices);
+    // User-selected 100 ms pulse, followed immediately by a fresh color-state observation.
+    // This pair is never retried as a unit; any remaining ON state is only turned OFF.
+    graph.click_pair("Pulse", C::all({clear_battle, disabled, C::absent(enabled)}), disabled,
+        C::any({off, on, ended}), {"CheckOff"});
+    graph.hit_limit("Pulse", 1);
+    graph.route("CheckOff", {"Ended", "DisableAuto", "AlreadyDisabled"});
     graph.observe("Ended", ended, {"Terminal"});
-    graph.fixed_click("DisableAfterActionStarted", C::all({clear, enabled, C::absent(menu)}),
-        C::any({C::all({clear, disabled}), ended}), {850, 1100}, {"Terminal"});
-    graph.retry_menu_input("DisableAfterActionStarted", C::all({clear, enabled}), 3000);
-    graph.observe("AlreadyDisabled", C::all({clear, disabled}), {"Terminal"});
+    graph.click("DisableAuto", on, enabled, C::any({off, ended}), {"CheckOff"});
+    graph.retry_menu_input("DisableAuto", on, 1000);
+    graph.observe("AlreadyDisabled", off, {"Terminal"});
+    // This settling delay is AFTER OFF confirmation; it must never defer the first color check.
+    graph.delay_after("AlreadyDisabled", 2000);
     graph.interrupt_on(C::absent(J{{"mode", "input_clear"}}), "combat.common_screen_requires_dispatch");
     return graph.finish();
 }
@@ -38,7 +51,7 @@ tasks::CompiledWorkflow enable_auto() {
     using C = tasks::PipelineCompiler;
     using J = nlohmann::json;
     C graph("combat.enable_auto");
-    graph.check_policy("combat", {"wvd-network-retry", "wvd-pause", "wvd-download"});
+    graph.check_policy("combat", {"wvd-network-retry", "wvd-pause", "wvd-download", "wvd-party-death", "wvd-party-defeat"});
     auto image = [](const std::string &name, J roi) {
         auto value = C::image(name);
         value["roi"] = std::move(roi);
@@ -47,8 +60,8 @@ tasks::CompiledWorkflow enable_auto() {
     const J battle{{"mode", "combat_active"}};
     const auto ended = C::all({C::any({C::image("dungFlag"), C::image("chestFlag"), C::image("RiseAgain")}),
                                C::absent(battle)});
-    const auto close = image("close", {120, 1330, 740, 270});
-    const auto ok = image("combat_skill_confirm", {120, 1330, 740, 270});
+    const auto close = image("close", {0, 600, 900, 1000});
+    const auto ok = C::image("combat_skill_confirm");
     const auto detail = C::image("combat_skill_detail");
     const auto popup = C::any({detail, close, ok});
     const auto enabled = image("spellskill/CombatAutoEnable", {740, 940, 160, 280});

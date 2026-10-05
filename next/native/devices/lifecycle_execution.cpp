@@ -1,4 +1,5 @@
 #include "lifecycle_execution.hpp"
+#include "adb_failure.hpp"
 #include <thread>
 #include <set>
 
@@ -98,6 +99,10 @@ LifecycleEnd execute_lifecycle_plan(const LifecyclePlan &plan, LifecyclePort &po
         return *value;
     };
     for (auto operation : plan.operations) {
+        const auto deadline = std::chrono::steady_clock::now() + plan.step_timeout;
+        unsigned transport_failures = 0;
+        bool operation_done = false;
+        while (!operation_done && std::chrono::steady_clock::now() < deadline) try {
         if (cancelled())
             return LifecycleEnd::Cancelled;
         auto before = observe();
@@ -105,7 +110,8 @@ LifecycleEnd execute_lifecycle_plan(const LifecyclePlan &plan, LifecyclePort &po
         event("lifecycle.observed", {{"operation", operation_name}, {"state", state_json(before)}});
         if (already_done(operation, before)) {
             event("lifecycle.confirmed", {{"operation", operation_name}, {"skipped", true}});
-            continue;
+            operation_done = true;
+            break;
         }
         if (!precondition(operation, before)) {
             event("lifecycle.retry_required", {{"operation", operation_name}, {"reason", "PRECONDITION_MISSING"}});
@@ -115,7 +121,6 @@ LifecycleEnd execute_lifecycle_plan(const LifecyclePlan &plan, LifecyclePort &po
         if (cancelled())
             return LifecycleEnd::Cancelled;
         event("lifecycle.backend_called", {{"operation", operation_name}});
-        const auto deadline = std::chrono::steady_clock::now() + plan.step_timeout;
         const auto stop_or_expired = [&] {
             return cancelled() || std::chrono::steady_clock::now() >= deadline;
         };
@@ -126,6 +131,8 @@ LifecycleEnd execute_lifecycle_plan(const LifecyclePlan &plan, LifecyclePort &po
             return LifecycleEnd::RetryRequired;
         }
         bool confirmed = false;
+        auto next_start_retry = std::chrono::steady_clock::now() + std::chrono::seconds(3);
+        unsigned start_attempts = 1;
         do {
             if (cancelled())
                 return LifecycleEnd::Cancelled;
@@ -136,10 +143,43 @@ LifecycleEnd execute_lifecycle_plan(const LifecyclePlan &plan, LifecyclePort &po
                 confirmed = true;
                 break;
             }
+            // Android can acknowledge am start before the task actually gains
+            // focus. Recheck the bound target before bringing it forward again.
+            if (operation == O::StartApplication && precondition(operation, after) &&
+                std::chrono::steady_clock::now() >= next_start_retry && !stop_or_expired()) {
+                event("lifecycle.backend_retried", {{"operation", operation_name},
+                    {"attempt", ++start_attempts}, {"reason", "FOREGROUND_NOT_CONFIRMED"},
+                    {"state", state_json(after)}});
+                const bool accepted = port.execute_lifecycle(operation, plan.target, stop_or_expired);
+                if (!accepted) event("lifecycle.retry_pending", {{"operation", operation_name},
+                    {"reason", "BACKEND_RETURNED_FALSE"}, {"attempt", start_attempts}});
+                next_start_retry = std::chrono::steady_clock::now() + std::chrono::seconds(3);
+            }
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         } while (std::chrono::steady_clock::now() < deadline);
         if (!confirmed) {
             event("lifecycle.retry_required", {{"operation", operation_name}, {"reason", "POSTCONDITION_TIMEOUT"}});
+            return LifecycleEnd::RetryRequired;
+        }
+        operation_done = true;
+        } catch (const AdbCommandFailure &error) {
+            const auto &failure = error.info();
+            event("lifecycle.command_failed", {{"operation", name(operation)},
+                {"code", failure.code}, {"command", failure.command}, {"serial", failure.serial},
+                {"timeout_ms", failure.timeout.count()}, {"elapsed_ms", failure.elapsed.count()},
+                {"retryable_transport", failure.retryable_transport}, {"attempt", ++transport_failures}});
+            if (cancelled()) return LifecycleEnd::Cancelled;
+            if (!failure.retryable_transport) throw;
+            // An intent may have taken effect despite ADB timing out. Re-observe
+            // the bound target before any repeat; never replay gameplay inputs.
+            const auto wake = std::min(deadline, std::chrono::steady_clock::now() + std::chrono::milliseconds(250));
+            while (!cancelled() && std::chrono::steady_clock::now() < wake)
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+        if (!operation_done) {
+            if (cancelled()) return LifecycleEnd::Cancelled;
+            event("lifecycle.retry_required", {{"operation", name(operation)},
+                {"reason", "TRANSPORT_RETRY_WINDOW_EXHAUSTED"}, {"failures", transport_failures}});
             return LifecycleEnd::RetryRequired;
         }
     }

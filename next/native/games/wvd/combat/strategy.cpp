@@ -1,9 +1,31 @@
 #include "strategy.hpp"
+#include "enemy_rules.hpp"
 #include "games/wvd/profile.hpp"
 #include <cmath>
 
 namespace wvd::games {
 using J = nlohmann::json;
+std::set<std::string> reachable_strategy_groups(const J &profile) {
+    std::set<std::string> result;
+    const auto &points = profile.at("TASK_POINT_STRATEGY");
+    const auto name = profile.at("TASK_SPECIFIC_CONFIG").get<bool>()
+        ? points.value("overall_strategy", "")
+        : profile.at("DEFAULT_OVERALL_STRATEGY").get<std::string>();
+    const auto custom = profile.at("LANGUAGE") == "en_US" ? "Custom Task Point Strategy" : "自定义任务点策略";
+    if (profile.at("TASK_SPECIFIC_CONFIG").get<bool>() && name == custom) {
+        const auto mapping = points.value("task_point", J::object());
+        for (const auto &value : mapping) result.insert(value.get<std::string>());
+    } else result.insert(name);
+    const auto special = points.value("special_combat", J::object());
+    const bool portrait = special.value("portrait", false), skull = special.value("skull", false);
+    if (portrait || skull) {
+        result.insert(special.value("normal_strategy", ""));
+        const auto rules = combat::enemy_rules(profile);
+        if (skull || rules.empty()) result.insert(special.value("special_strategy", ""));
+        if (portrait) for (const auto &rule : rules) result.insert(rule.strategy);
+    }
+    return result;
+}
 CombatStrategy::CombatStrategy(J profile)
     : profile_(std::move(profile)), english_(profile_.at("LANGUAGE") == "en_US") {
     validate_strategy(profile_.at("STRATEGY"));
@@ -13,12 +35,14 @@ CombatStrategy::CombatStrategy(J profile)
         throw std::runtime_error("STRATEGY_PROFILE_INVALID");
     const auto special = profile_.at("TASK_POINT_STRATEGY").value("special_combat", J::object());
     if (!special.is_object()) throw std::runtime_error("SPECIAL_COMBAT_INVALID");
+    const auto rules = combat::enemy_rules(profile_);
     if (!special.value("skull", false) && !special.value("portrait", false)) return;
-    if (special.value("portrait", false) &&
+    if (special.value("portrait", false) && rules.empty() &&
         (!special.contains("portrait_image") || !special.at("portrait_image").is_string() ||
          special.at("portrait_image").get<std::string>().empty()))
         throw std::runtime_error("SPECIAL_COMBAT_PORTRAIT_REQUIRED");
     for (const auto *field : {"normal_strategy", "special_strategy"}) {
+        if (std::string(field) == "special_strategy" && !special.value("skull", false) && !rules.empty()) continue;
         if (!special.contains(field) || !special.at(field).is_string() ||
             special.at(field).get<std::string>().empty())
             throw std::runtime_error("SPECIAL_COMBAT_STRATEGY_REQUIRED");
@@ -57,9 +81,16 @@ void CombatStrategy::load_group(const std::string &key) {
     }
     ++epoch_;
 }
-void CombatStrategy::begin_encounter(bool special) {
+void CombatStrategy::begin_encounter(bool special, const std::string &enemy_rule) {
     const auto config = profile_.at("TASK_POINT_STRATEGY").value("special_combat", J::object());
     if (!config.value("skull", false) && !config.value("portrait", false)) return;
+    if (!enemy_rule.empty()) {
+        for (const auto &rule : combat::enemy_rules(profile_)) if (rule.id == enemy_rule) {
+            load_group(rule.strategy);
+            return;
+        }
+        throw std::runtime_error("ENEMY_RULE_NOT_FOUND");
+    }
     load_group(config.at(special ? "special_strategy" : "normal_strategy").get<std::string>());
 }
 bool CombatStrategy::automatic() const {
@@ -92,7 +123,8 @@ CombatStrategy::select(const std::vector<PortraitScore> &scores) const {
     return highest >= .80 ? selected : std::nullopt;
 }
 bool CombatStrategy::consume(const SkillSelection &selection, SkillOutcome outcome) {
-    if (outcome != SkillOutcome::Succeeded && outcome != SkillOutcome::AutoFallbackConfirmed)
+    if (outcome != SkillOutcome::Succeeded && outcome != SkillOutcome::AutoFallbackConfirmed &&
+        outcome != SkillOutcome::DefendFallbackConfirmed)
         return false;
     if (selection.strategy_epoch != epoch_ || !current_.contains("skill_settings"))
         throw std::runtime_error("STALE_STRATEGY_SELECTION");
@@ -102,9 +134,11 @@ bool CombatStrategy::consume(const SkillSelection &selection, SkillOutcome outco
     const auto frequency = selection.skill.value("freq_var", "用完后移除");
     if (frequency != "用完后移除" && frequency != "重复")
         throw std::runtime_error("PROFILE_SKILL_FREQUENCY_INVALID:" + frequency);
-    if (frequency == "用完后移除") rows.erase(rows.begin() + selection.row);
-    if (current_.value("complete_one_as_all", false))
-        rows.clear();
+    // 自动保底只确认本次角色行动，不能冒充所配置技能已施放。
+    if (outcome == SkillOutcome::Succeeded) {
+        if (frequency == "用完后移除") rows.erase(rows.begin() + selection.row);
+        if (current_.value("complete_one_as_all", false)) rows.clear();
+    }
     // 保留重复行也必须作废本次选择，防止同一回执再次结算；下一行动重新识别角色。
     ++epoch_;
     return true;

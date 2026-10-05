@@ -35,7 +35,7 @@ class WvdRunState final : public contracts::BusinessRunState {
     void inn_payment_submitted(bool delivery_unknown);
     void enter_dungeon();
     void target_point_completed();
-    void observe_combat(bool special = false);
+    void observe_combat(bool special = false, const std::string &enemy_rule = {});
     void observe_chest();
     void prepare_chest_character(const std::array<bool, 6> &fear, int preferred, std::uint32_t seed);
     void resume_dungeon();
@@ -54,7 +54,7 @@ class WvdRunState final : public contracts::BusinessRunState {
     bool confirm_event(const std::string &operation, const std::string &event,
                        std::uint64_t generation, std::uint64_t frame_id,
                        std::optional<std::size_t> expected_step = {},
-                       std::optional<std::size_t> reward_index = {});
+                       std::optional<std::size_t> reward_index = {}, const std::string &enemy_rule = {});
 
   protected:
     void on_segment(contracts::SegmentBoundary, std::uint64_t, std::size_t) override;
@@ -114,6 +114,7 @@ class WvdRunState final : public contracts::BusinessRunState {
     std::optional<SkillSelection> prepared_;
     std::size_t prepared_index_{};
     std::string prepared_portrait_;
+    bool combat_actor_recognized_{};
     bool lifecycle_recovery_active_{};
     std::size_t lifecycle_recovery_sequence_{};
     bool healing_pending_{}, healing_active_{};

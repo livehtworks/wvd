@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "source_commit": "6585f4075f5714ab522aa582993860c09af912c1",
-  "revision": "c09c63e9d28e821d9ad2476f94356d6beb5b577d2e6380e415fc275aeed63b66",
+  "revision": "b68617dcd994331a12af87812b297a65eba6ab90d23884a6ec5b248151759cd8",
   "files": [
     {
       "path": "image/7000G/icantagreewithU.png",
@@ -1412,10 +1412,22 @@
       ]
     },
     {
+      "path": "image/boot_announcement_close_soft_zh_hant.png",
+      "source": "next/resources/images/boot_announcement_close_soft_zh_hant.png",
+      "sha256": "355e16c86f0f06f68a6bbdbb7fb5430ed879b70e6de401c6dca0c27b66cd1a83",
+      "bytes": 9279
+    },
+    {
       "path": "image/boot_announcement_header.png",
       "source": "next/resources/images/boot_announcement_header.png",
       "sha256": "94fb21439e16b380a79670604943ae77bff8c646b1189622e314fc5a88d27078",
       "bytes": 7798
+    },
+    {
+      "path": "image/boot_announcement_header_soft_zh_hant.png",
+      "source": "next/resources/images/boot_announcement_header_soft_zh_hant.png",
+      "sha256": "aebf7960a2cb0481d4cfedeec54577225b1f57ceee65fee77119e6387f0458b9",
+      "bytes": 7257
     },
     {
       "path": "image/boot_attention.png",
@@ -3123,6 +3135,12 @@
       ]
     },
     {
+      "path": "image/navigation_no_route_zh_hant.png",
+      "source": "next/resources/images/navigation_no_route_zh_hant.png",
+      "sha256": "d404eff4e040a883d80aeb3bab0c5c87c1b33365f9a7ab218b5638f2deac584b",
+      "bytes": 34089
+    },
+    {
       "path": "image/network_error_zh_hant.png",
       "source": "resources/images/network_error_zh_hant.png",
       "sha256": "604543a8b97cc258924ff4265d417d4daf4613f86d1859185d7bd88644a56801",
@@ -3717,6 +3735,12 @@
       "source_refs": [
         "src/script.py:2236"
       ]
+    },
+    {
+      "path": "image/shared_close_cross.png",
+      "source": "next/resources/images/shared_close_cross.png",
+      "sha256": "95c5f8014301b29adc69b1ca641dca0b1dbffc797fd111b7e0c598078ecfe638",
+      "bytes": 2483
     },
     {
       "path": "image/shiphold.png",
@@ -4774,6 +4798,12 @@
       "bytes": 13801
     },
     {
+      "path": "image/worldmap_open_option_zh_hant.png",
+      "source": "next/resources/images/worldmap_open_option_zh_hant.png",
+      "sha256": "27ab8c84c0e23862af9ba531bc625a48a6cba8a980d0bed8325b06e1806890ce",
+      "bytes": 22054
+    },
+    {
       "path": "image/worldmap_port_town_zh_hant.png",
       "source": "next/resources/images/worldmap_port_town_zh_hant.png",
       "source_refs": [
@@ -4877,8 +4907,8 @@
     {
       "path": "parameters/public-flows.json",
       "source": "next/resources/authoring/public-flows.json",
-      "sha256": "df4bd51fd300e464bbe11e448f58dd4f3185280695528e5b67c4908c704d347b",
-      "bytes": 113161,
+      "sha256": "2995b8f820ef446f39fa5e9583f5012e389533620882b1bf187fef4dd88b212a",
+      "bytes": 121932,
       "source_refs": [
         "authoring:public-flow-1"
       ]
@@ -4886,8 +4916,8 @@
     {
       "path": "parameters/semantic-assets.json",
       "source": "next/resources/authoring/semantic-assets.json",
-      "sha256": "7019e115136d092438a1abf6120d3125d4cb3d03ad26b8caaabbe6b56f437a3d",
-      "bytes": 81585,
+      "sha256": "5c89c513e2c0b36fd6d4e0391de90707e50af9a2be3b10ca65b90c6c4037383e",
+      "bytes": 86509,
       "source_refs": [
         "authoring:public-flow-1"
       ]

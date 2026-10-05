@@ -50,7 +50,8 @@ tasks::CompiledWorkflow compile_time_leap(const std::string &target_name,
             translated_chapter_name = "cursedwheel_impregnableFortress_zh_hant";
         else if (chapter_name == "TradeWaterway") translated_chapter_name = "TradeWaterway_zh_hant";
         else if (chapter_name == "beginningAbyss") translated_chapter_name = "beginningAbyss_zh_hant";
-    const auto chapter_en = C::image(chapter_name);
+    auto chapter_en = C::image(chapter_name);
+    chapter_en["locale_only"] = "en";
     J chapter_zh_hant;
     if (!translated_chapter_name.empty()) {
         chapter_zh_hant = C::image(translated_chapter_name);
@@ -70,7 +71,9 @@ tasks::CompiledWorkflow compile_time_leap(const std::string &target_name,
     const auto chapter_at = [&](std::size_t index) -> J {
         auto zh_hant = C::image(chapter_order[index].second);
         zh_hant["roi"] = {250, 120, 400, 220};
-        return C::any({C::image(chapter_order[index].first), zh_hant});
+        auto en = C::image(chapter_order[index].first);
+        en["locale_only"] = "en";
+        return C::any({en, zh_hant});
     };
     std::size_t target_chapter = chapter_order.size();
     for (std::size_t i = 0; i < chapter_order.size(); ++i)

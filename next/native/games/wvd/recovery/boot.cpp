@@ -9,6 +9,7 @@
 #include "games/wvd/vision/dialogue_probes.hpp"
 #include "games/wvd/vision/inn_leave_probes.hpp"
 #include <tuple>
+#include <algorithm>
 
 namespace wvd::games::recovery {
 namespace {
@@ -18,6 +19,12 @@ J scoped(const char *name, J roi, double threshold) {
     auto result = C::image(name);
     result["roi"] = roi;
     result["threshold"] = threshold;
+    if (std::string_view(name) == "boot_attention") result["locale_only"] = "en";
+    return result;
+}
+J english_image(const char *name) {
+    auto result = C::image(name);
+    result["locale_only"] = "en";
     return result;
 }
 J task_stop_condition(DialoguePolicy policy) {
@@ -39,7 +46,7 @@ tasks::CompiledWorkflow retry_network_prompt() {
     graph.click("RetryZhHant", vision::network_prompt_zh_hant(),
                 vision::network_retry_button_zh_hant(), cleared, {"Settle"});
     const auto english = C::all({prompt, C::absent(vision::network_prompt_zh_hant())});
-    graph.click("RetryEn", english, C::image("retry"), cleared, {"Settle"});
+    graph.click("RetryEn", english, english_image("retry"), cleared, {"Settle"});
     // 重试是网络弹窗自身的动作，不重放挂起的提交、付款或跳轮。
     // 给慢网络留出等待；弹窗再次出现则按新帧重试，绝不把弹窗消失当作业务成功。
     graph.wait("Settle", 3000, {"Entry"});
@@ -77,7 +84,8 @@ tasks::CompiledWorkflow retry_network_prompt() {
     result.validate();
     return result;
 }
-tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, DialoguePolicy policy = DialoguePolicy::Default) {
+tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, DialoguePolicy policy = DialoguePolicy::Default,
+                                    bool random_maze_events = true) {
     C graph(common ? "recovery.common_screens" : "recovery.boot_ready", std::chrono::seconds{120});
     // 冷启动是正常进场流程；标题/下载等正面回执表示进展。网络子图仍属exception，
     // 反复按重试只关闭弹窗，不能重置“未恢复业务现场”的连续异常窗口。
@@ -93,7 +101,8 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, Dialogue
                            C::absent(J{{"mode", "blocking_screen"}}), C::absent(story)});
     const auto title = scoped("boot_title_logo", {100, 300, 700, 470}, .86);
     const auto announcement = vision::resource("boot.announcement.page");
-    const auto announcement_close = scoped("guild_reveal_close_zh_hant", {200, 1320, 500, 220}, .9);
+    const auto announcement_close = vision::resource("boot.announcement.close");
+    const auto announcement_classic = scoped("guild_reveal_close_zh_hant", {200, 1320, 500, 220}, .9);
     // 首次免责声明跟随系统区域设置，游戏主体即使配置为英文也可能显示繁中。
     const auto attention = C::any({scoped("boot_attention", {250, 430, 420, 220}, .86),
                                    scoped("boot_attention_zh", {250, 430, 420, 220}, .86)});
@@ -102,12 +111,12 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, Dialogue
     const auto download_en = vision::download_button_en();
     const auto download_zh_hant = vision::download_button_zh_hant();
     const auto download = C::any({download_en, download_zh_hant});
-    const auto retry = C::image("retry");
+    const auto retry = english_image("retry");
     auto blank = C::image("retry_blank");
     blank["threshold"] = .65;
     auto low_retry = retry;
     low_retry["threshold"] = .60;
-    const auto to_title = C::image("totitle"), resume = C::image("resume");
+    const auto to_title = english_image("totitle"), resume = C::image("resume");
     // 地图快捷继续也复用 resume；异常处理器不能把底层常驻导航按钮当启动提示。
     const auto resume_prompt = C::all({resume, C::absent(J{{"mode", "combat_active"}}),
         C::absent(C::image("dungFlag")), C::absent(C::image("mapFlag"))});
@@ -117,8 +126,12 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, Dialogue
     // 这里只等待离开刚处理的提示；它不是“游戏就绪”的证据。
     // recognized 包含当前提示，不能放进 any 后把页面未变化认作进展。
     const auto progressed = [](const J &current) { return C::absent(current); };
-    J entry = common ? J{"NetworkZhHant", "DownloadZhHant", "DownloadEn", "Announcement", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title", "Pause", "Death", "Sandman", "Blessing", "Karma", "Dialogue", "Story", "Defeat", "Ready", "Poll"}
-                     : J{"Ready", "NetworkZhHant", "DownloadZhHant", "DownloadEn", "Announcement", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title", "Pause", "Sandman", "Blessing", "Karma", "Dialogue", "Story", "Poll"};
+    J entry = common ? J{"NetworkZhHant", "DownloadZhHant", "DownloadEn", "Announcement", "AnnouncementClassic", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title", "Pause", "Death", "Sandman", "Blessing", "Karma", "Dialogue", "Story", "Defeat", "Ready", "Poll"}
+                     : J{"Ready", "NetworkZhHant", "DownloadZhHant", "DownloadEn", "Announcement", "AnnouncementClassic", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title", "Pause", "Sandman", "Blessing", "Karma", "Dialogue", "Story", "Poll"};
+    if (!random_maze_events)
+        entry.erase(std::remove_if(entry.begin(), entry.end(), [](const J &name) {
+            return name == "Sandman" || name == "Karma" || name == "Dialogue";
+        }), entry.end());
     if (policy != DialoguePolicy::Default) {
         entry.insert(entry.begin(), "SpecialDialogue");
         const auto special = graph.define_child("SpecialChoice", choose_special_dialogue(policy));
@@ -162,18 +175,21 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, Dialogue
     // 应用刚切到前台时可能仍是黑帧，免责声明也可能在首轮候选扫描后才出现。
     // NoHit 只做有界等待后重扫；任何识别 Error 仍通过各节点 on_error 立即退出。
     graph.poll("Poll", 500, {"Entry"});
-    const auto dialogue = graph.define_child("DefaultDialogue", choose_default_dialogue());
-    graph.observe("Dialogue", {{"mode", "default_dialogue"}}, {"ChooseDialogue"});
-    graph.call_child("ChooseDialogue", dialogue, {"Entry"});
-    const auto karma = graph.define_child("KarmaPrompt", choose_karma_prompt());
-    graph.observe("Karma", C::any({C::image("ambush"), C::image("ignore")}), {"ChooseKarma"});
-    graph.call_child("ChooseKarma", karma, {"Entry"});
+    if (random_maze_events) {
+        const auto dialogue = graph.define_child("DefaultDialogue", choose_default_dialogue());
+        graph.observe("Dialogue", {{"mode", "default_dialogue"}}, {"ChooseDialogue"});
+        graph.call_child("ChooseDialogue", dialogue, {"Entry"});
+        const auto karma = graph.define_child("KarmaPrompt", choose_karma_prompt());
+        graph.observe("Karma", C::any({C::image("ambush"), C::image("ignore")}), {"ChooseKarma"});
+        graph.call_child("ChooseKarma", karma, {"Entry"});
+    }
     for (const auto &[prefix, prompt] : {std::pair{"Sandman", GlobalPrompt::SandmanRecovery},
                                          std::pair{"Blessing", GlobalPrompt::Blessing}}) {
         const std::string name = prefix;
+        if (prompt == GlobalPrompt::SandmanRecovery && !random_maze_events) continue;
         const auto child = graph.define_child(name + "Prompt", dismiss_global_prompt(prompt));
         const auto marker = prompt == GlobalPrompt::Blessing
-            ? C::any({vision::harken_buff_menu(), C::image("blessing")}) : C::image("sandman_recover");
+            ? C::any({vision::harken_buff_menu(), english_image("blessing")}) : C::image("sandman_recover");
         graph.observe(name, marker, {name + "Handle"});
         graph.call_child(name + "Handle", child, {"Entry"});
     }
@@ -206,9 +222,17 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, Dialogue
     graph.click("Resume", resume_prompt, resume, progressed(resume), {"Entry"});
     graph.fixed_click("Attention", attention, progressed(attention), {450, 1450}, {"Entry"});
     graph.fixed_click("Title", title, progressed(title), {450, 1450}, {"Entry"});
+    // The logo also exists before Tap to Start becomes interactive. Retry only
+    // while a fresh frame still confirms this title page, within the same deadline.
+    graph.retry_menu_input("Title", title, 3000);
     // 公告正文/日期会变化，只用标题和底部关闭按钮共同确认；不借通用关闭退出其它页面。
-    graph.click("Announcement", announcement, announcement_close, C::absent(announcement), {"Entry"});
-    graph.retry_menu_input("Announcement", announcement, 3000);
+    // Composite scene evidence has no target coordinates. Locate each button separately.
+    for (const auto &[name, button] : {std::pair{"Announcement", announcement_close},
+                                      std::pair{"AnnouncementClassic", announcement_classic}}) {
+        const auto scene = C::all({announcement, button});
+        graph.click(name, scene, button, C::absent(announcement), {"Entry"});
+        graph.retry_menu_input(name, scene, 3000);
+    }
     const J pause{{"mode", "pause"}};
     graph.observe("Pause", pause, {"ResumePause0"});
     // 按旧版连续六次无效点击判定冻结，但第六次仍须新帧确认：
@@ -225,7 +249,7 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, Dialogue
     graph.observe("PauseFrozen", pause, {"PauseFrozenExit"});
     graph.recovery("PauseFrozenExit", "pause.physics_frozen");
     // 正常恢复分派不累计经过次数；原页持续无效由输入重试/观察期限约束。
-    for (auto name : {"DownloadEn", "DownloadZhHant", "Announcement", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title"}) {
+    for (auto name : {"DownloadEn", "DownloadZhHant", "Announcement", "AnnouncementClassic", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title"}) {
         if (!allow_download && (std::string(name) == "DownloadEn" ||
                                std::string(name) == "DownloadZhHant"))
             continue;
@@ -245,7 +269,7 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, Dialogue
         // 动作可能直接到达停点；例如Pause动作的后继不能继续点击或先选对话。
         std::vector<std::string> actions{"ChooseSpecial", "ChooseDialogue", "ChooseKarma",
             "SandmanHandle", "BlessingHandle", "DismissDeath", "AcknowledgeDefeat",
-            "DownloadEn", "DownloadZhHant", "Announcement",
+            "DownloadEn", "DownloadZhHant", "Announcement", "AnnouncementClassic",
             "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title"};
         for (unsigned i = 0; i < 6; ++i) actions.push_back("ResumePause" + std::to_string(i));
         for (const auto &name : actions) {
@@ -316,7 +340,7 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, Dialogue
     for (const auto *name : {"Story", "CloseCharacter", "LeaveInnMenuZh", "LeaveInnMenu",
         "HandleNetwork", "ChooseSpecial", "ChooseDialogue", "ChooseKarma", "SandmanHandle", "BlessingHandle",
         "DismissDeath", "AcknowledgeDefeat", "DownloadEn", "DownloadZhHant", "RetryBlank", "Retry",
-        "RetryLow", "ReturnTitle", "Resume", "Attention", "Title", "Announcement"}) wrap_observed_action(name);
+        "RetryLow", "ReturnTitle", "Resume", "Attention", "Title", "Announcement", "AnnouncementClassic"}) wrap_observed_action(name);
     for (unsigned i = 0; i < 6; ++i) wrap_observed_action("ResumePause" + std::to_string(i));
     // 调用方的总任务期限仍生效，不再额外签发与上述无进展窗口冲突的累计120秒。
     result.declared_budget.reset();
@@ -399,12 +423,12 @@ tasks::CompiledWorkflow with_boot_recovery(const tasks::CompiledWorkflow &task, 
         confirmed.insert(confirmed.begin(), "RestartAtTaskStop");
     }
     graph.confirm("RestartConfirmed", "game.restart", "game_restarted", {{"mode", "boot_ready"}}, {task_entry});
-    const auto boot = graph.append("Boot", boot_workflow(allow_download, false, task.dialogue_policy), confirmed);
+    const auto boot = graph.append("Boot", boot_workflow(allow_download, false, task.dialogue_policy, task.random_maze_events), confirmed);
     // 正常首段也必须先处理启动页。Task_Entry 常为 DirectHit，放在前面会使 Boot 永远不可达。
     // 非恢复首段不执行 game_restarted，避免把首次进入误记成崩溃/重置策略。
     graph.route("Entry", {boot});
     const auto network_entry = graph.define_child("NetworkOverlay", retry_network_prompt());
-    const auto reconnect_boot = graph.define_child("ReconnectBoot", boot_workflow(allow_download, false, task.dialogue_policy));
+    const auto reconnect_boot = graph.define_child("ReconnectBoot", boot_workflow(allow_download, false, task.dialogue_policy, task.random_maze_events));
     // finish 会验证完整调用闭包，处理器必须从声明入口可达，而非封存后才补孤立引用。
     J rules = J::array({
         J{{"id", "wvd-network-retry"}, {"class", "exception"}, {"priority", 1000},
@@ -413,7 +437,9 @@ tasks::CompiledWorkflow with_boot_recovery(const tasks::CompiledWorkflow &task, 
     });
     rules.push_back({{"id", "wvd-bound-device-restarted"}, {"class", "exception"},
         {"priority", 1000}, {"detect", J{{"mode", "boot_ready"}}}, {"source_node", "Entry"},
-        {"entry", reconnect_boot}, {"on_device_restart", true}, {"resume", {{"mode", "reobserve"}}}});
+        {"entry", reconnect_boot}, {"on_device_restart", true},
+        {"resume", {{"mode", "replan"}, {"node_id", "Entry"},
+            {"guard", stop.is_null() ? J{{"mode", "boot_ready"}} : C::any({stop, J{{"mode", "boot_ready"}}})}}}});
     const auto add = [&](const std::string &id, const std::string &category, int priority,
                          const J &detect, const tasks::CompiledWorkflow &handler) {
         // 公共规则 ID 不参与内部节点命名；运行权限仍只由显式策略决定。
@@ -426,22 +452,26 @@ tasks::CompiledWorkflow with_boot_recovery(const tasks::CompiledWorkflow &task, 
     add("wvd-party-death", "exception", 700, J{{"mode", "party_death"}}, dismiss_party_death());
     add("wvd-party-defeat", "exception", 690, J{{"mode", "party_defeat"}}, acknowledge_party_defeat());
     add("wvd-story", "special", 600, vision::ordinary_story_page(), handle_story());
-    add("wvd-blessing", "special", 500, C::any({vision::harken_buff_menu(), C::image("blessing")}), dismiss_global_prompt(GlobalPrompt::Blessing));
-    add("wvd-karma", "special", 400, C::any({C::image("ambush"), C::image("ignore")}), choose_karma_prompt());
-    add("wvd-dialogue", "special", 300, J{{"mode", "default_dialogue"}}, choose_default_dialogue());
-    add("wvd-sandman", "special", 490, C::image("sandman_recover"), dismiss_global_prompt(GlobalPrompt::SandmanRecovery));
+    add("wvd-blessing", "special", 500, C::any({vision::harken_buff_menu(), english_image("blessing")}), dismiss_global_prompt(GlobalPrompt::Blessing));
+    if (task.random_maze_events) {
+        add("wvd-karma", "special", 400, C::any({C::image("ambush"), C::image("ignore")}), choose_karma_prompt());
+        add("wvd-dialogue", "special", 300, J{{"mode", "default_dialogue"}}, choose_default_dialogue());
+        add("wvd-sandman", "special", 490, C::image("sandman_recover"), dismiss_global_prompt(GlobalPrompt::SandmanRecovery));
+    }
     if (task.dialogue_policy != DialoguePolicy::Default)
         add("wvd-special-dialogue", "special", 350,
             J{{"mode", "special_dialogue"}, {"policy", static_cast<int>(task.dialogue_policy)}},
             choose_special_dialogue(task.dialogue_policy));
     graph.event_scope("Entry", rules);
     auto result = graph.finish();
+    result.random_maze_events = task.random_maze_events;
     result.authoring = task.authoring;
     if (result.authoring.contains("source_paths")) {
         J renamed = J::object();
         for (const auto &[name, path] : result.authoring.at("source_paths").items()) renamed["Task_" + name] = path;
         result.authoring["source_paths"] = std::move(renamed);
     }
+    result.refresh_images();
     return result;
 }
 }

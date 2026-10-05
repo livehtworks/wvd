@@ -8,8 +8,9 @@ tasks::CompiledWorkflow rest_at_inn(bool royal_suite, bool record_completion) {
     using C = tasks::PipelineCompiler;
     C graph("supply.inn");
     graph.check_policy("supply", {"wvd-network-retry", "wvd-download", "wvd-story", "wvd-dialogue"});
-    const auto inn = vision::inn_button(), stay = C::image("Stay"), economy = C::image("Economy"),
+    auto inn = vision::inn_button(), stay = C::image("Stay"), economy = C::image("Economy"),
                royal = C::image("royalsuite"), ok_en = C::image("OK");
+    ok_en["locale_only"] = "en";
     const auto ok_zh = nlohmann::json{{"mode", "template"}, {"image", "inn_confirm_zh_hant"},
         {"threshold", 0.8}, {"roi", {100, 820, 700, 340}}};
     const auto ok = C::any({ok_zh, ok_en});

@@ -9,7 +9,8 @@ tasks::CompiledWorkflow dismiss_global_prompt(GlobalPrompt prompt) {
     const std::string name = blessing ? "blessing" : "sandman_recover";
     C graph("recovery.global_prompt." + name, std::chrono::seconds{90});
     graph.check_policy("special", {"wvd-network-retry"}, 1000, 1000, false);
-    const auto marker = C::image(name);
+    auto marker = C::image(name);
+    if (blessing) marker["locale_only"] = "en";
     const auto known = C::any({marker, vision::harken_floor_menu(),
         C::image("dungFlag"), C::image("mapFlag")});
     const auto changed = C::all({known, C::absent(marker)});

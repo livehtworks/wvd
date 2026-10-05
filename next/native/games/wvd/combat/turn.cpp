@@ -1,6 +1,7 @@
 #include "turn.hpp"
 #include "level_selection_steps.hpp"
 #include "auto_combat.hpp"
+#include "strategy.hpp"
 #include <algorithm>
 #include <map>
 
@@ -24,22 +25,27 @@ J slot(const std::string &name) {
         throw std::runtime_error("COMBAT_SKILL_SLOT_UNKNOWN");
     return found->second;
 }
-J support_position(const std::string &name) {
+int support_slot(const std::string &name) {
     // 固定旧实现的友方目标键未做 gettext，不能擅自翻译配置值。
-    static const std::map<std::string, J> positions{
-        {"左上角色", {200, 1200}}, {"中上角色", {450, 1200}}, {"右上角色", {700, 1200}},
-        {"左下角色", {200, 1400}}, {"中下角色", {450, 1400}}, {"右下角色", {700, 1400}}};
+    static const std::map<std::string, int> positions{
+        {"左上角色", 0}, {"中上角色", 1}, {"右上角色", 2},
+        {"左下角色", 3}, {"中下角色", 4}, {"右下角色", 5}};
     const auto found = positions.find(name);
-    return found == positions.end() ? J(nullptr) : found->second;
+    if (found == positions.end()) throw std::runtime_error("PROFILE_SKILL_TARGET_INVALID");
+    return found->second;
 }
 }
 
 tasks::CompiledWorkflow take_turn(const J &profile, const std::set<std::string> &available_images) {
     C graph("combat.turn");
-    graph.check_policy("combat", {"wvd-network-retry", "wvd-pause", "wvd-download"});
+    graph.check_policy("combat", {"wvd-network-retry", "wvd-pause", "wvd-download", "wvd-party-death", "wvd-party-defeat"});
     J catalog = J::array(), portraits = J::array();
     std::set<std::string> declared;
-    for (const auto &group : profile.at("STRATEGY"))
+    const auto reachable = reachable_strategy_groups(profile);
+    std::set<std::string> selected_groups;
+    for (const auto &group : profile.at("STRATEGY")) {
+        const auto name = group.value("group_name", "");
+        if (!reachable.contains(name) || !selected_groups.insert(name).second) continue;
         for (const auto &skill : group.value("skill_settings", J::array())) {
             if (std::find(catalog.begin(), catalog.end(), skill) == catalog.end())
                 catalog.push_back(skill);
@@ -52,29 +58,35 @@ tasks::CompiledWorkflow take_turn(const J &profile, const std::set<std::string> 
                     portraits.push_back({{"image", image}, {"role", name}});
             }
         }
+    }
     if (catalog.size() > 128)
         throw std::runtime_error("COMBAT_SKILL_CATALOG_INVALID");
     const J battle{{"mode", "combat_active"}};
     const auto detail = C::image("combat_skill_detail");
     const auto ok = C::image("combat_skill_confirm");
-    const auto close = roi_image("close", {120, 1330, 740, 270});
+    const auto close = roi_image("close", {0, 600, 900, 1000});
     const auto popup = C::any({detail, ok, close});
     const auto ended = C::any({C::image("dungFlag"), C::image("chestFlag"), C::image("RiseAgain")});
     const auto menu = C::all({battle, roi_image("flee", {660, 1080, 240, 220}), C::absent(popup)});
     const auto disabled = roi_image("spellskill/CombatAutoDisable", {740, 940, 160, 280});
+    const auto enabled = roi_image("spellskill/CombatAutoEnable", {740, 940, 160, 280});
     const auto clear = C::all({battle, C::absent(popup)});
     const auto speed_off_zh = roi_image("combat_speed_off_zh_hant", {0, 930, 120, 210});
     const auto speed_on_zh = roi_image("combat_speed_on_zh_hant", {0, 930, 120, 210});
     const auto speed = C::any({C::image("combatSpd"), C::image("combatSpd_DHI"), speed_off_zh});
     const auto actor = J{{"mode", "prepared_actor"}, {"portraits", portraits}};
-    const auto support = roi_image("supportSkillCheck", {580, 1350, 320, 250});
+    const J support{{"mode", "support_selection"}};
+    const J no_support{{"mode", "support_selection"}, {"expect", "absent"}};
     const auto errors = C::any({C::image("notenoughsp"), C::image("notenoughmp")});
     const auto finished = C::all({C::any({clear, ended}), C::absent(errors), C::absent(popup)});
     const J auto_exits{{"BattleEndedExit", {"Terminal"}}, {"BlockedExit", {"BlockedExit"}}};
     const auto full_auto = graph.append("FullAuto", enable_auto(), {"Terminal"}, auto_exits);
     const J single_auto_exits{{"BlockedExit", {"BlockedExit"}}};
     const auto char_auto = graph.append("CharAuto", single_actor_auto(), {"Terminal"}, single_auto_exits);
-    graph.route("Entry", {"Ended", "SpeedZh", "Speed", "SpeedAlt", "Automatic", "Prepare", "UnexpectedPopup"});
+    graph.route("Entry", {"Ended", "AutoOff", "SpeedZh", "Speed", "SpeedAlt", "Automatic", "Prepare", "UnexpectedPopup"});
+    const auto unintended_auto = C::all({clear, enabled, C::absent(disabled), C::business("/strategy/automatic", false)});
+    graph.click("AutoOff", unintended_auto, enabled, C::any({disabled, ended}), {"Entry"});
+    graph.retry_menu_input("AutoOff", unintended_auto, 1000);
     graph.click("SpeedZh", clear, speed_off_zh,
                 C::any({C::all({battle, speed_on_zh}), ended}),
                 {"Ended", "Automatic", "Prepare", "UnexpectedPopup"});
@@ -87,13 +99,22 @@ tasks::CompiledWorkflow take_turn(const J &profile, const std::set<std::string> 
         graph.retry_menu_input(node, C::all({clear, C::image(image)}), 3000);
     }
     graph.observe("Ended", ended, {"Terminal"});
+    graph.observe("ActorChanged", C::all({battle, C::absent(actor)}), {"Terminal"});
     graph.observe("Automatic", C::all({battle, C::business("/strategy/automatic", true)}), {full_auto});
-    graph.observe("UnexpectedPopup", C::all({battle, popup}), {char_auto});
-    J choices = {"NoSelection"};
+    graph.observe("UnexpectedPopup", C::all({battle, popup}), {"UnownedDetail"});
+    graph.recovery("UnownedDetail", "combat.unowned_skill_detail");
+    const auto recognized_actor = C::business("/combat_actor_recognized", true);
+    J choices = {"UnknownActor", "NoSelection"};
     for (std::size_t index = 0; index < catalog.size(); ++index)
         choices.push_back("Select" + std::to_string(index));
     graph.combat_step("Prepare", menu, {{"operation", "prepare"}, {"portraits", portraits}, {"catalog", catalog}}, choices);
-    graph.observe_business("NoSelection", C::business("/has_prepared_skill", false), {char_auto});
+    // A transient portrait miss is not permission to replace a configured skill with Auto.
+    // Use Prepare's identity evidence, then capture again under the existing phase deadline.
+    graph.observe("UnknownActor", C::all({C::business("/has_prepared_skill", false),
+                  C::absent(recognized_actor)}), {"Entry"});
+    graph.delay_after("UnknownActor", 250);
+    graph.observe("NoSelection", C::all({C::business("/has_prepared_skill", false),
+                  recognized_actor}), {char_auto});
     for (std::size_t index = 0; index < catalog.size(); ++index) {
         const auto &skill = catalog[index];
         const auto prefix = "Skill" + std::to_string(index);
@@ -109,38 +130,45 @@ tasks::CompiledWorkflow take_turn(const J &profile, const std::set<std::string> 
             graph.combat_step(prefix + "Success", advanced, {{"operation", "success"}, {"index", index}}, {"Terminal"});
             continue;
         }
-        const auto automatic = graph.append(prefix + "Auto", single_actor_auto(), {prefix + "AutoConfirmed"}, single_auto_exits);
-        graph.combat_step(prefix + "AutoConfirmed", C::any({C::all({clear, disabled}), ended}),
-                          {{"operation", "auto_confirmed"}, {"index", index}}, {"Terminal"});
         graph.public_step(prefix + "Success", "combat-confirm-result", J::object(), {prefix + "RecordSuccess"}, J::object(), finished);
         graph.combat_step(prefix + "RecordSuccess", C::business("/prepared_skill_index", index),
             {{"operation", "success"}, {"index", index}}, {"Terminal"});
+        // Failed opening is not a cast or permission to enable Auto. The public
+        // handoff and this input both require fresh proof of the same actor/menu.
+        const auto defended = C::all({finished, C::any({ended, C::absent(actor)})});
+        graph.fixed_click(prefix + "UnavailableDefend", C::all({menu, actor}), defended,
+            {513, 1200}, {prefix + "DefendFallbackDone"});
+        graph.retry_menu_input(prefix + "UnavailableDefend", C::all({menu, actor}), 3000);
+        graph.stop_if_interrupted_after(prefix + "UnavailableDefend", "combat.defend_outcome_unconfirmed");
+        graph.combat_step(prefix + "DefendFallbackDone", defended,
+            {{"operation", "defend_fallback_confirmed"}, {"index", index}}, {"Terminal"});
         const auto position = slot(skill_name);
         const int level = skill.at("skill_lvl");
         if (level < 1 || level > 9)
             throw std::runtime_error("WVD_SKILL_LEVEL_INVALID");
+        if (level > 1) graph.recovery(prefix + "LevelUnconfirmed", "combat.skill_level_unconfirmed");
         graph.observe_business("Select" + std::to_string(index), C::business("/prepared_skill_index", index), {prefix + "Open0"});
         const auto casting = C::all({battle, actor, detail});
-        // 正常等级失败可有界重试一次 1 级；第二次资源不足保留为恢复出口。
+        // A confirmed resource error retries level one, then uses manual defend.
         const int attempts = level == 1 ? 1 : 2;
         for (int attempt = 0; attempt < attempts; ++attempt) {
             const auto s = prefix + "Try" + std::to_string(attempt);
             const int use_level = attempt ? 1 : level;
-            const J target_choices{s + "Support", s + "Confirm", s + "Enemy0", s + "Missing"};
+            const J target_choices{s + "Support", s + "Confirm", s + "Enemy0",
+                "ActorChanged", "Ended", s + "ResourceError", s + "DetailClosed"};
             graph.route(prefix + "Open" + std::to_string(attempt), {s + "Open0"});
-            for (int opening = 0; opening < 3; ++opening) {
-                const auto open = s + "Open" + std::to_string(opening);
-                graph.public_step(open, "combat-open-detail", {{"x", position[0]}, {"y", position[1]}},
-                                  {s + "Detail", s + "ResourceError", opening == 2 ? s + "OpenFailed" : s + "Open" + std::to_string(opening + 1)}, J::object(), C::all({menu, actor}));
-                graph.hit_limit(open, 1);
-            }
+            // 详情打开由同一次公共调用等待并补点，原菜单不能充当成功回执。
+            graph.public_step(s + "Open0", "combat-open-detail", {{"x", position[0]}, {"y", position[1]}},
+                              {s + "Detail", s + "ResourceError", "Ended", "ActorChanged"},
+                              {{"UnavailableExit", {prefix + "UnavailableDefend"}}}, C::all({menu, actor}));
             const auto levels = append_level_selection_steps(graph, s, use_level, casting,
-                target_choices, J{automatic});
+                target_choices, J{prefix + "LevelUnconfirmed"});
             graph.observe(s + "Detail", casting, levels);
-            graph.observe(s + "OpenFailed", C::all({menu, actor}), {automatic});
-            const auto recipient = support_position(skill.value("target_var", "左上角色"));
-            if (recipient.is_null()) throw std::runtime_error("PROFILE_SKILL_TARGET_INVALID");
-            graph.fixed_click(s + "Support", C::all({casting, support}), C::any({casting, finished, errors}), recipient,
+            // Level selection returns before a target is clicked. A closed popup
+            // on the same actor may be reopened; a changed actor must be reselected.
+            graph.observe(s + "DetailClosed", C::all({menu, actor, C::absent(detail)}), {prefix + "Open" + std::to_string(attempt)});
+            const J recipient{{"mode", "support_selection"}, {"slot", support_slot(skill.value("target_var", "左上角色"))}};
+            graph.click(s + "Support", C::all({casting, support}), recipient, C::any({casting, finished, errors}),
                               {prefix + "Success", s + "Confirm", s + "ResourceError"});
             graph.stop_if_interrupted_after(s + "Support", "combat.skill_outcome_unconfirmed");
             // 确认施放不是选目标：详情仍在不能结清输入，否则下一分支会立即取消技能。
@@ -150,25 +178,24 @@ tasks::CompiledWorkflow take_turn(const J &profile, const std::set<std::string> 
             graph.retry_menu_input(s + "Confirm", casting, 3000);
             graph.failure_route(s + "Confirm", {s + "StillDetail"});
             graph.stop_if_interrupted_after(s + "Confirm", "combat.skill_outcome_unconfirmed");
-            const auto target = J{{"mode", "skill_target"}, {"portraits", portraits}};
-            const auto enemy = C::all({casting, C::absent(ok), C::absent(support)});
-            const std::vector<J> offsets{{-80,80}, {0,80}, {80,80}, {-120,140}, {-40,140}, {40,140}, {120,140},
-                                        {-110,210}, {-35,210}, {35,210}, {110,210}, {-70,275}, {0,275}, {70,275}};
-            for (std::size_t point = 0; point < offsets.size(); ++point) {
+            const auto enemy = C::all({casting, C::absent(ok), no_support});
+            // Each public step captures and guards anew; never batch points across actor changes.
+            for (int point = 0; point < 24; ++point) {
                 const auto name = s + "Enemy" + std::to_string(point);
                 J next{prefix + "Success", s + "ResourceError"};
-                next.push_back(point + 1 < offsets.size() ? s + "Enemy" + std::to_string(point + 1) : s + "StillDetail");
-                next.push_back(s + "Missing");
-                graph.public_step(name, "combat-select-target", {{"dx", offsets[point][0]}, {"dy", offsets[point][1]}}, next, J::object(), C::all({enemy, target}));
-                graph.hit_limit(name, 1);
+                next.push_back("ActorChanged");
+                next.push_back(s + "Support");
+                next.push_back(s + "Confirm");
+                next.push_back(point + 1 < 24 ? s + "Enemy" + std::to_string(point + 1) : s + "StillDetail");
+                graph.public_step(name, "combat-select-target", {{"candidate_index", point}}, next, J::object(), enemy);
             }
-            graph.observe(s + "Missing", C::all({enemy, C::absent(target)}), {automatic});
-            graph.observe(s + "StillDetail", casting, {automatic});
+            // Keep the selected skill while retrying under the existing no-progress deadline.
+            graph.observe(s + "StillDetail", casting, target_choices);
+            graph.delay_after(s + "StillDetail", 1000);
             if (attempt + 1 < attempts)
                 graph.back(s + "ResourceError", errors, menu, {prefix + "Open" + std::to_string(attempt + 1)});
             else {
-                graph.observe(s + "ResourceError", errors, {prefix + "ResourceExit"});
-                graph.recovery(prefix + "ResourceExit", "combat.resource_insufficient_at_level_one");
+                graph.back(s + "ResourceError", errors, menu, {prefix + "UnavailableDefend"});
             }
         }
     }

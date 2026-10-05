@@ -39,6 +39,10 @@ export interface StrategyGroup extends JsonObject {
 export interface SpecialCombatSettings extends JsonObject {
   skull: boolean; portrait: boolean; portrait_image: string;
   normal_strategy: string; special_strategy: string;
+  rules?: EnemyRule[];
+}
+export interface EnemyRule extends JsonObject {
+  id: string; name: string; portrait_image: string; strategy: string; portrait_png_base64?: string;
 }
 export interface WvdProfile extends JsonObject {
   EMU_PATH?: string; ADB_ADRESS?: string; EMU_INDEX?: number; AUTO_START_CLASH?: boolean;
@@ -59,6 +63,7 @@ export interface CatalogOption { value: string | number; label: string; descript
 export interface TaskCatalogItem { id: string; name: string; type?: string; category?: string; description?: string; task_points?: CatalogOption[] }
 export interface WorkflowNodeType { type: string; label: string; category?: string; description?: string; defaults?: JsonObject }
 export interface Catalog extends JsonObject {
+  profile_save_sections?: Record<"task" | "common" | "combat" | "advanced", string[]>;
   task_categories?: CatalogOption[]; tasks?: TaskCatalogItem[]; roles?: CatalogOption[]; skills?: CatalogOption[];
   skill_levels?: CatalogOption[]; skill_targets?: CatalogOption[]; skill_frequencies?: CatalogOption[];
   chest_openers?: CatalogOption[]; karma_directions?: CatalogOption[]; strategy_reload_timings?: CatalogOption[];

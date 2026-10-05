@@ -1,5 +1,6 @@
 #include "native_operations.hpp"
 #include "games/wvd/state.hpp"
+#include "games/wvd/combat/selection_diagnostics.hpp"
 #include "games/wvd/business_condition.hpp"
 #include "recognition/request.hpp"
 #include <array>
@@ -152,10 +153,11 @@ Result NativeOperations::execute(const std::string &binding, const J &parameters
             const auto id = state.confirmation_id(operation, event);
             const bool applied = state.confirm_event(id, event,
                 confirmation.basis.generation, confirmation.basis.frame_id,
-                expected_step, reward_index);
+                expected_step, reward_index, parameters.value("enemy_rule", std::string{}));
             receipt = {{"operation_id", id}, {"event", event}, {"applied", applied},
                 {"frame_id", confirmation.basis.frame_id},
                 {"generation", confirmation.basis.generation}};
+            if (parameters.contains("enemy_rule")) receipt["enemy_rule"] = parameters.at("enemy_rule");
             return true;
         });
         if (!accepted) return {State::ExternalBlocked, "BUSINESS_CONFIRMATION_STALE"};
@@ -165,6 +167,7 @@ Result NativeOperations::execute(const std::string &binding, const J &parameters
     if (binding == "WvdCombat") {
         const auto operation = parameters.at("operation").get<std::string>();
         std::vector<PortraitScore> scores;
+        J portrait_evidence = J::array();
         if (operation == "prepare") {
             for (const auto &candidate : parameters.at("portraits")) {
                 if (context_.cancelled()) return {State::ExternalBlocked, "CANCELLED"};
@@ -173,8 +176,15 @@ Result NativeOperations::execute(const std::string &binding, const J &parameters
                     {{"mode", "portrait"}, {"image", image}}, "wvd.combat.portrait");
                 scores.push_back({candidate.at("role"),
                     observation.evidence.at("evidence").at("best_score")});
+                const auto &match = observation.evidence.at("evidence");
+                portrait_evidence.push_back({{"portrait", candidate.at("role")},
+                    {"best_score", match.at("best_score")},
+                    {"best_box", match.value("best_box", J(nullptr))},
+                    {"search_roi", match.value("search_roi", J(nullptr))},
+                    {"crop", match.value("crop", J(nullptr))},
+                    {"identity_basis", match.value("identity_basis", "unknown")}});
             }
-        } else if (operation != "success" && operation != "auto_confirmed") {
+        } else if (operation != "success" && operation != "auto_confirmed" && operation != "defend_fallback_confirmed") {
             throw std::runtime_error("COMBAT_OPERATION_UNKNOWN");
         }
         J receipt;
@@ -185,25 +195,19 @@ Result NativeOperations::execute(const std::string &binding, const J &parameters
             if (operation == "prepare") state.prepare_skill(scores, parameters.at("catalog"));
             else state.finish_prepared_skill(parameters.at("index").get<std::size_t>(),
                 operation == "success" ? SkillOutcome::Succeeded :
+                    operation == "defend_fallback_confirmed" ? SkillOutcome::DefendFallbackConfirmed :
                     SkillOutcome::AutoFallbackConfirmed);
             receipt = {{"operation", operation}, {"frame_id", frame.identity.frame_id},
                 {"generation", frame.identity.generation}, {"action_confirmed", operation != "prepare"},
+                {"skill_confirmed", operation == "success"},
                 {"consumed", operation != "prepare" && state.summary().at("strategy").at("current").value("skill_settings", J::array()).size() < before}};
             if (operation == "prepare") {
                 const auto summary = state.summary();
-                const bool selected = summary.at("has_prepared_skill");
-                const auto &strategy = summary.at("strategy");
-                receipt["selection"] = {{"has_skill", selected},
-                    {"portrait", summary.at("prepared_portrait")},
-                    {"skill_index", summary.at("prepared_skill_index")},
-                    {"strategy_epoch", strategy.at("epoch")},
-                    {"strategy_name", strategy.at("current").value("group_name", "")},
-                    {"reason", selected ? "selected" : strategy.at("automatic").get<bool>()
-                        ? "automatic_or_exhausted_strategy" : "no_configured_portrait_above_threshold"},
-                    {"threshold", .80}};
+                receipt["selection"] = combat::selection_diagnostics(summary, scores);
                 receipt["portrait_scores"] = J::array();
                 for (const auto &score : scores)
                     receipt["portrait_scores"].push_back({{"portrait", score.portrait}, {"score", score.score}});
+                receipt["portrait_evidence"] = std::move(portrait_evidence);
             }
             return true;
         });

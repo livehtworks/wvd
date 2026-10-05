@@ -167,6 +167,11 @@ InputReceipt NativeInputGate::submit(const contracts::Command &command,
             ++counts_.rejected;
             return {InputDisposition::Rejected, 0, {}, "INPUT_EVIDENCE_EXPIRED"};
         }
+        if (command.click_pair_interval_ms &&
+            (command.kind != contracts::ActionKind::Click || command.click_pair_interval_ms != 100)) {
+            ++counts_.rejected;
+            return {InputDisposition::Rejected, 0, {}, "INPUT_CLICK_PAIR_INVALID"};
+        }
         if (command.kind == contracts::ActionKind::Click &&
             !inside(command.x, command.y, area)) {
             ++counts_.rejected;

@@ -138,7 +138,8 @@ AuthorWorkflowCompilation compile_author_workflow(const J &source,
                 if (parameters.contains("menu_retry_interval_ms"))
                     compiler.retry_menu_input(runtime_name, vision::menu_retry_ready(
                         PipelineCompiler::all({parameters.at("scene"),
-                            PipelineCompiler::absent(parameters.at("postcondition"))})),
+                            PipelineCompiler::absent(parameters.at("postcondition"))}),
+                        document.at("execution").value("checks", J::object()).value("phase", "navigation").c_str()),
                         static_cast<int>(parameters.at("menu_retry_interval_ms").get<std::int64_t>()),
                         parameters.value("menu_retry_max_submissions", 0U));
                 if (parameters.contains("allowed_area"))

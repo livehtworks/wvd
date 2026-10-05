@@ -1,5 +1,6 @@
 #include "pipeline_compiler.hpp"
 #include "public_step_scope.hpp"
+#include "locale_assets.hpp"
 #include "games/wvd/vision/boot_probes.hpp"
 #include "games/wvd/vision/navigation_probes.hpp"
 #include "games/wvd/vision/dialogue_probes.hpp"
@@ -26,46 +27,65 @@ const J &scope_rules(const J &scope) {
             "COMPILE_EVENT_SCOPE_INVALID");
     return scope.at("rules");
 }
+struct ImageCollector {
+std::string locale;
+bool random_maze_events{true};
+void add_image(std::string name, std::set<std::string> &images, std::set<std::string> &expanded_modes) {
+    if (name.ends_with(".png")) name.resize(name.size() - 4);
+    const auto probe = localize_implicit_probe(J{{"mode", "template"}, {"image", name}}, locale);
+    if (probe.value("mode", "") != "template" || probe.value("image", "") != name) {
+        collect_images(probe, images, expanded_modes);
+        return;
+    }
+    images.insert(name + ".png");
+}
 void collect_images(const J &value, std::set<std::string> &images, std::set<std::string> &expanded_modes) {
     if (value.is_object()) {
+        if (!locale.empty() && value.contains("locale_only") && value.at("locale_only") != locale) return;
+        if (!random_maze_events && random_maze_probe(value)) return;
+        const auto localized = localize_implicit_probe(value, locale);
+        if (localized != value) {
+            collect_images(localized, images, expanded_modes);
+            return;
+        }
         // 专用识别器内部加载的资源也必须进入发布清单，不能等运行才发现缺图。
         const auto mode = value.value("mode", "");
         // 常量隐式依赖在本次收集内只展开一次；显式 image/动态参数仍逐项收集。
         // 不缓存整份图或跨编译共享结果，validate 仍独立重算完整资源集合。
         const bool expand = expanded_modes.insert(mode + ":" + value.value("classification", "legacy") + ":" + value.value("phase", "")).second;
-        if (expand && mode == "featured_request_accepted") images.insert("request_accepted.png");
+        if (expand && mode == "featured_request_accepted") add_image("request_accepted.png", images, expanded_modes);
         if (expand && mode == "fishing_bait_empty") {
-            images.insert("fishing/nobait.png");
-            images.insert("fishing/8bait.png");
+            add_image("fishing/nobait.png", images, expanded_modes);
+            add_image("fishing/8bait.png", images, expanded_modes);
         }
         if (expand && mode == "fishing_reward") {
             for (auto name : {"CloseFishInfo", "size_small", "size_average", "size_large", "鲈鱼", "雅罗", "鲶鱼", "鳟鱼", "鳗鱼", "三文鱼", "杂鱼"})
-                images.insert(std::string("fishing/") + name + ".png");
+                add_image(std::string("fishing/") + name + ".png", images, expanded_modes);
             collect_images(J{{"mode", "blocking_screen"}}, images, expanded_modes);
         }
-        if (expand && mode == "fishing_bobber") images.insert("fishing/bobber.png");
+        if (expand && mode == "fishing_bobber") add_image("fishing/bobber.png", images, expanded_modes);
         if (expand && mode == "fishing_unknown") {
             for (auto name : {"fishing/cast", "fishing/striking", "fishing/CloseFishInfo", "dungFlag"})
-                images.insert(std::string(name) + ".png");
+                add_image(std::string(name) + ".png", images, expanded_modes);
             collect_images(J{{"mode", "blocking_screen"}}, images, expanded_modes);
         }
         if (expand && mode == "mining_reward") {
             for (auto name : {"receive", "org_fine", "org_high", "org_mid", "org_low", "org_refine", "org_alter",
                               "org_sliver", "org_ouro", "org_lesser_full", "org_full"})
-                images.insert(std::string("FFXI/") + name + ".png");
+                add_image(std::string("FFXI/") + name + ".png", images, expanded_modes);
             collect_images(J{{"mode", "blocking_screen"}}, images, expanded_modes);
         }
         if (expand && mode == "dark_light_clear") {
             for (auto name : {"darklight", "darklight_lightIt", "dungFlag", "mapFlag", "trait", "recover",
                               "character_panel_zh_hant", "recovery_panel_zh_hant",
                               "RiseAgain"})
-                images.insert(std::string(name) + ".png");
+                add_image(std::string(name) + ".png", images, expanded_modes);
             collect_images(vision::chest_stage_probes(), images, expanded_modes);
             collect_images(J{{"mode", "combat_active"}}, images, expanded_modes);
             collect_images(J{{"mode", "blocking_screen"}}, images, expanded_modes);
         }
         if (expand && mode == "dark_light_post") {
-            images.insert("darklight_lightIt.png");
+            add_image("darklight_lightIt.png", images, expanded_modes);
             collect_images(J{{"mode", "boot_ready"}}, images, expanded_modes);
             collect_images(J{{"mode", "blocking_screen"}}, images, expanded_modes);
         }
@@ -76,28 +96,28 @@ void collect_images(const J &value, std::set<std::string> &images, std::set<std:
             collect_images(vision::harken_floor_menu(), images, expanded_modes);
             for (const auto *name : {"trait", "recover", "character_panel_zh_hant", "recovery_panel_zh_hant",
                 "spellskill/skillDetail", "combat_skill_detail_zh_hant"})
-                images.insert(std::string(name) + ".png");
+                add_image(std::string(name) + ".png", images, expanded_modes);
         }
         if (expand && (mode == "boot_ready" || mode == "boot_post"))
-            collect_images(vision::boot_probes(mode == "boot_post"), images, expanded_modes);
+            collect_images(vision::boot_probes(mode == "boot_post", locale, random_maze_events), images, expanded_modes);
         if (expand && mode == "blocking_screen")
-            collect_images(vision::blocking_probes(), images, expanded_modes);
+            collect_images(vision::blocking_probes(true, locale, random_maze_events), images, expanded_modes);
         if (expand && mode == "input_clear")
-            collect_images(vision::input_blockers(value.value("phase", "")), images, expanded_modes);
+            collect_images(vision::input_blockers(value.value("phase", ""), locale, random_maze_events), images, expanded_modes);
         if (expand && mode == "exception_screen")
-            collect_images(vision::exception_probes(), images, expanded_modes);
+            collect_images(vision::exception_probes(locale), images, expanded_modes);
         if (expand && mode == "special_screen") {
-            collect_images(vision::special_screen_probes(), images, expanded_modes);
+            collect_images(vision::special_screen_probes(locale, random_maze_events), images, expanded_modes);
             collect_images(vision::ordinary_story_page(), images, expanded_modes);
         }
         if (expand && (mode == "dialogue_post" || mode == "special_dialogue_post")) {
             collect_images(J{{"mode", "default_dialogue"}}, images, expanded_modes);
-            collect_images(vision::boot_probes(true), images, expanded_modes);
+            collect_images(vision::boot_probes(true, locale, random_maze_events), images, expanded_modes);
         }
         if (expand && mode == "default_dialogue") {
             collect_images(vision::default_dialogue_probes(), images, expanded_modes);
             collect_images(vision::default_dialogue_normal_probes(), images, expanded_modes);
-            collect_images(vision::blocking_probes(false), images, expanded_modes);
+            collect_images(vision::blocking_probes(false, locale, random_maze_events), images, expanded_modes);
             collect_images(J{{"mode", "party_death"}}, images, expanded_modes);
         }
         if (expand && mode == "auto_route_moving")
@@ -105,50 +125,67 @@ void collect_images(const J &value, std::set<std::string> &images, std::set<std:
         if (expand && mode == "map_route_post")
             collect_images(vision::map_route_post_probes(), images, expanded_modes);
         if (expand && mode == "auto_route_post") {
-            images.insert("mapFlag.png");
-            images.insert("dungFlag.png");
-            collect_images(vision::auto_route_probes(), images, expanded_modes);
+            add_image("mapFlag.png", images, expanded_modes);
+            add_image("dungFlag.png", images, expanded_modes);
+            collect_images(vision::auto_route_probes(locale), images, expanded_modes);
             collect_images(vision::auto_route_outside_probes(), images, expanded_modes);
         }
         if (expand && (mode == "party_death" || mode == "party_defeat")) {
-            images.insert("someonedead.png");
+            add_image("someonedead.png", images, expanded_modes);
             if (mode == "party_defeat")
-                images.insert("multipeopledead.png");
-            collect_images(vision::boot_probes(false), images, expanded_modes);
+                add_image(locale == "zh-Hant" ? "skull.png" : "multipeopledead.png", images, expanded_modes);
+            collect_images(vision::boot_probes(false, locale, random_maze_events), images, expanded_modes);
             collect_images(J{{"mode", "pause"}}, images, expanded_modes);
-            collect_images(vision::blocking_probes(false), images, expanded_modes);
+            collect_images(vision::blocking_probes(false, locale, random_maze_events), images, expanded_modes);
         }
         if (expand && mode == "party_death_post") {
             collect_images(J{{"mode", "party_death"}}, images, expanded_modes);
             collect_images(J{{"mode", "party_defeat"}}, images, expanded_modes);
-            images.insert("RiseAgain.png");
-            collect_images(vision::boot_probes(true), images, expanded_modes);
+            collect_images(J{{"mode", "template"}, {"image", "RiseAgain"}}, images, expanded_modes);
+            collect_images(vision::boot_probes(true, locale, random_maze_events), images, expanded_modes);
         }
         if (mode == "pause" || mode == "pause_negative")
             for (const auto *name : {"trait", "recover", "character_panel_zh_hant", "recovery_panel_zh_hant",
                 "spellskill/skillDetail", "combat_skill_detail_zh_hant", "close"})
-                images.insert(std::string(name) + ".png");
+                add_image(std::string(name) + ".png", images, expanded_modes);
         if (mode == "reached")
             for (int i = 0; i < 4; ++i)
-                images.insert("cursor_" + std::to_string(i) + ".png");
+                add_image("cursor_" + std::to_string(i) + ".png", images, expanded_modes);
+        if (expand && mode == "revival_prompt")
+            collect_images(J{{"mode", "combat_active"}}, images, expanded_modes);
+        if (expand && mode == "combat_resource_error") {
+            collect_images(J{{"mode", "combat_active"}}, images, expanded_modes);
+            add_image("combat_skill_detail_zh_hant.png", images, expanded_modes);
+            add_image("combat_flee_zh_hant.png", images, expanded_modes);
+            add_image("next.png", images, expanded_modes);
+        }
         if (mode == "combat_active")
-            for (const auto *name : {"combat_active_zh_hant", "combatActive", "combatActive_2", "combatActive_3", "combatActive_4"})
-                images.insert(std::string(name) + ".png");
+            for (const auto *name : {"combat_active_zh_hant", "combatActive", "combatActive_2", "combatActive_3", "combatActive_4",
+                                    "combat_speed_off_zh_hant", "combat_speed_on_zh_hant", "combat_skill_detail_zh_hant"})
+                add_image(std::string(name) + ".png", images, expanded_modes);
         if (mode == "movement_stopped")
             for (const auto *name : {"dungFlag", "mapFlag"})
-                images.insert(std::string(name) + ".png");
+                add_image(std::string(name) + ".png", images, expanded_modes);
+        if (mode == "navigation_resume_unavailable")
+            add_image("resume.png", images, expanded_modes);
         if (mode == "harken_stair" && value.contains("stair"))
-            images.insert(value.at("stair").get<std::string>() + ".png");
+            add_image(value.at("stair").get<std::string>() + ".png", images, expanded_modes);
         if (mode == "skill_level") {
             const int level = value.at("level");
-            if (level <= 7) images.insert("combat_level" + std::to_string(level) + "_label.png");
+            if (level <= 7) add_image("combat_level" + std::to_string(level) + "_label.png", images, expanded_modes);
             for (const auto *prefix : {"lv", "s_lv"})
-                images.insert(std::string("spellskill/skillLvl/") + prefix + std::to_string(value.at("level").get<int>()) + ".png");
+                add_image(std::string("spellskill/skillLvl/") + prefix + std::to_string(value.at("level").get<int>()) + ".png", images, expanded_modes);
         }
-        if (mode == "skill_target")
+        if (mode == "support_selection")
+            for (const auto *name : {"spellskill/skillDetail", "combat_skill_detail_zh_hant", "close"})
+                add_image(std::string(name) + ".png", images, expanded_modes);
+        if (mode == "skill_target") {
+            collect_images(J{{"mode", "support_selection"}}, images, expanded_modes);
             for (const auto *name : {"next", "combatTarget", "spellskill/skillDetail", "combat_skill_detail_zh_hant",
-                    "OK", "combat_skill_confirm_zh_hant", "supportSkillCheck"})
-                images.insert(std::string(name) + ".png");
+                    "OK", "combat_skill_confirm_zh_hant"})
+                if (locale != "zh-Hant" || std::string_view(name) != "OK")
+                    add_image(std::string(name) + ".png", images, expanded_modes);
+        }
         for (const auto &[key, child] : value.items()) {
             if (key == "image") {
                 const auto path = child.get<std::string>();
@@ -157,7 +194,7 @@ void collect_images(const J &value, std::set<std::string> &images, std::set<std:
                             path.find('\\') == std::string::npos &&
                             path.find("..") == std::string::npos,
                         "COMPILE_IMAGE_PATH_INVALID");
-                images.insert(path.ends_with(".png") ? path : path + ".png");
+                add_image(path.ends_with(".png") ? path : path + ".png", images, expanded_modes);
             } else
                 collect_images(child, images, expanded_modes);
         }
@@ -170,8 +207,9 @@ void collect_images(const J &value, std::set<std::string> &images) {
     collect_images(value, images, expanded_modes);
     // 原生复合识别器按语言选地图锚点，两张图都属于该识别能力的静态依赖。
     if (images.contains("mapFlag.png"))
-        images.insert("dungeon_map_close_zh_hant.png");
+        add_image("dungeon_map_close_zh_hant.png", images, expanded_modes);
 }
+};
 std::set<std::string> collect_actions(const J &nodes) {
     std::set<std::string> actions;
     for (const auto &node : nodes) {
@@ -364,8 +402,9 @@ void CompiledWorkflow::validate() const {
         require(nodes.contains(checkpoint) && nodes.at(checkpoint).value("binding", "") == "BusinessCheckpoint",
                 "COMPILE_CHECKPOINT_INVALID");
     std::set<std::string> actual_images;
-    collect_images(nodes, actual_images);
-    collect_images(event_scopes, actual_images);
+    ImageCollector collector{authoring.value("resource_locale", std::string{}), random_maze_events};
+    collector.collect_images(nodes, actual_images);
+    collector.collect_images(event_scopes, actual_images);
     if (dialogue_policy != recovery::DialoguePolicy::Default) {
         for (const auto name : recovery::special_dialogue_options(dialogue_policy)) actual_images.insert(std::string(name) + ".png");
         for (const auto name : recovery::dialogue_task_stops(dialogue_policy)) actual_images.insert(std::string(name) + ".png");
@@ -380,13 +419,14 @@ void CompiledWorkflow::validate() const {
 void CompiledWorkflow::refresh_images() {
     std::set<std::string> indexed;
     std::set<std::string> expanded;
+    ImageCollector collector{authoring.value("resource_locale", std::string{}), random_maze_events};
     for (const auto &[name, node] : nodes.items()) {
-        try { collect_images(node, indexed, expanded); }
+        try { collector.collect_images(node, indexed, expanded); }
         catch (const std::exception &error) {
             throw std::runtime_error("COMPILE_IMAGE_SCAN:" + name + ":" + error.what());
         }
     }
-    collect_images(event_scopes, indexed);
+    collector.collect_images(event_scopes, indexed);
     if (dialogue_policy != recovery::DialoguePolicy::Default) {
         for (const auto name : recovery::special_dialogue_options(dialogue_policy)) indexed.insert(std::string(name) + ".png");
         for (const auto name : recovery::dialogue_task_stops(dialogue_policy)) indexed.insert(std::string(name) + ".png");
@@ -558,6 +598,11 @@ void PipelineCompiler::fixed_click(const std::string &name, const J &scene, cons
             "COMPILE_POSITION_INVALID");
     action(name, scene, scene, post, {{"kind", "Click"}, {"x", position[0]}, {"y", position[1]}},
            std::move(next), nullptr);
+}
+void PipelineCompiler::click_pair(const std::string &name, const J &scene, const J &target,
+                                 const J &post, J next) {
+    click(name, scene, target, post, std::move(next));
+    workflow_.nodes[name]["operation_args"]["command"]["click_pair_interval_ms"] = 100;
 }
 void PipelineCompiler::hit_limit(const std::string &name, int limit, bool invocation_count) {
     require(workflow_.nodes.contains(name) && limit >= 1 && limit <= 256,
@@ -901,7 +946,7 @@ void PipelineCompiler::failure_route(const std::string &name, J next) {
     workflow_.nodes[name]["on_error"] = std::move(next);
 }
 void PipelineCompiler::confirm(const std::string &name, const std::string &operation,
-                               const std::string &event, const J &condition, J next, J step) {
+                               const std::string &event, const J &condition, J next, J step, const std::string &enemy_rule) {
     const std::set<std::string> events{"target_completed", "dungeon_entered", "combat_observed", "combat_special_observed",
                                       "chest_observed", "dungeon_resumed", "dungeon_completed", "revival_observed", "resurrected", "game_restarted",
                                       "healing_requested", "healing_completed", "inn_payment_prepared", "inn_rest_completed", "party_reassembled", "chest_character_attempted",
@@ -940,7 +985,7 @@ void PipelineCompiler::confirm(const std::string &name, const std::string &opera
                                       "fishing_supplies_finished", "fishing_supplies_returned", "fishing_refilled",
                                       "sleep_visit_started", "sleep_visit_completed",
                                       "scorpion_started", "scorpion_hands_started", "bounty_leap_prepared", "bounty_leap_completed",
-                                      "jier_started",
+                                      "jier_started", "giant_bounty_started",
                                       "bounty_travel_prepared", "bounty_travel_completed", "bounty_cycle_revealed", "bounty_route_completed",
                                       "bounty_travel_skipped",
                                       "bounty_return_completed", "bounty_cycle_reported", "bounty_cycle_completed",
@@ -959,6 +1004,10 @@ void PipelineCompiler::confirm(const std::string &name, const std::string &opera
     require(event != "fishing_reward_prepared" || (condition.value("mode", "") == "fishing_reward" && step.is_null()),
             "COMPILE_FISHING_REWARD_RECOGNITION_REQUIRED");
     J parameters{{"event", event}, {"operation", operation}, {"confirmation", request(condition)}};
+    if (!enemy_rule.empty()) {
+        require(event == "combat_special_observed", "COMPILE_ENEMY_RULE_EVENT_INVALID");
+        parameters["enemy_rule"] = enemy_rule;
+    }
     if (!step.is_null())
         parameters["expected_step"] = step;
     add(name, {{"observation", "Registered"}, {"recognizer", "WvdVision"},

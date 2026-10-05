@@ -8,7 +8,7 @@ CompiledWorkflow leave_bounty_board(const PublicFlowLibrary &library, const std:
     using C = PipelineCompiler;
     using J = nlohmann::json;
     C graph("quest.bounty.leave_board", std::chrono::seconds{180});
-    const auto edge = vision::edge_of_town_button();
+    const auto edge = vision::city_screen();
     const auto story = vision::ordinary_story_page();
     auto city = C::all({edge, C::absent(story)});
     if (locale == "zh-Hant") {
@@ -149,7 +149,7 @@ CompiledWorkflow visit_bounty_board(BountyVisit operation, const PublicFlowLibra
         const auto exit = graph.define_child("LeaveBoard", leave_bounty_board(library, locale));
         graph.call_child("Exit", exit, {"Revealed"});
         graph.confirm("Revealed", "bounty.reveal.done", "bounty_revealed",
-            vision::edge_of_town_button(), {"Terminal"});
+            vision::city_screen(), {"Terminal"});
         return graph.finish();
     }
     const auto edge = vision::edge_of_town_button();

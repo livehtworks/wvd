@@ -23,6 +23,8 @@ enum class ActionKind {
 struct Command {
     ActionKind kind{ActionKind::Click};
     int x{}, y{}, x2{}, y2{}, duration{}, contact{}, pressure{}, key{};
+    // A bounded pair of taps on one control; zero keeps ordinary single-click semantics.
+    int click_pair_interval_ms{};
     std::string text;
     bool operator==(const Command &) const = default;
 };

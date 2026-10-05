@@ -27,7 +27,9 @@ J point_confirmation(const MapTarget &target, const J &map) {
         if (target.target == "mark_auto" || target.target == "chest_auto") {
             auto focus = C::image(target.target);
             focus["mode"] = "focus_cursor";
-            return C::any({unavailable, C::all({map, C::image(target.target), C::absent(focus)})});
+            return C::any({unavailable, C::all({J{{"mode", "auto_route_moving"}},
+                J{{"mode", "navigation_resume_unavailable"}}}),
+                C::all({map, C::image(target.target), C::absent(focus)})});
         }
         return unavailable;
     }
@@ -186,7 +188,21 @@ CompiledWorkflow traverse_dungeon(const WvdTaskPlan &plan, const J &profile,
         J normal{{"encounter", {"Dispatch"}}, {"blocked", {"Dispatch"}}};
         if (automatic) {
             normal["stopped"] = {"Dispatch"};
-            if (target.target == "mark_auto" || target.target == "chest_auto") {
+            if (target.shortcut_battle_wait_ms) {
+                // 此标记路线不靠地图坐标证明完成；目标战斗复用同一Battle定义，
+                // 仅成功返回后等待，再以副本新帧确认。普通停止仍重新导航，不冒充击杀。
+                graph.route("TargetEncounter" + suffix, {"TargetCombat" + suffix, "Chest", "Revive", "Dispatch"});
+                graph.observe("TargetCombat" + suffix, combat, {"FightTarget" + suffix});
+                graph.call_child("FightTarget" + suffix, battle, {"AfterTargetBattle" + suffix},
+                    {{"blocked", {"Dispatch"}}, {"revive", {"Dispatch"}}, {"chest", {"Dispatch"}}});
+                graph.wait("AfterTargetBattle" + suffix, *target.shortcut_battle_wait_ms,
+                    {"Confirm" + suffix, "AfterTargetResult" + suffix});
+                // 战后可以立即出现宝箱或另一场遭遇；已成功的目标战斗不能因此
+                // 丢回未完成的导航点。未知/加载页只重观测，事件仍由原处理器接管。
+                graph.poll("AfterTargetResult" + suffix, 250,
+                    {"Confirm" + suffix, "Outside", "AfterTargetResult" + suffix});
+                normal["encounter"] = {"TargetEncounter" + suffix};
+            } else if (target.target == "mark_auto" || target.target == "chest_auto") {
                 // 旧 startAuto 在停止后仍会打开地图并执行 StateMapSearch。
                 // 不能只回 Dispatch 再点同一自动按钮，否则到达标记后永远不推进。
                 J exits{{"encounter", {"Dispatch"}}, {"blocked", {"Dispatch"}}};
@@ -203,12 +219,13 @@ CompiledWorkflow traverse_dungeon(const WvdTaskPlan &plan, const J &profile,
             normal["floor"] = {"Retreat"};
         const auto route_definition = graph.define_child("Route" + suffix, child);
         const auto route = "CallRoute" + suffix;
-        graph.call_child(route, route_definition, candidates({"Outside", "Confirm" + suffix}), normal);
+        graph.call_child(route, route_definition,
+            candidates({"Outside", "Confirm" + suffix}), normal);
         graph.observe_business("Point" + suffix, C::business("/task_step", i), {route});
         graph.confirm("Confirm" + suffix, "point." + suffix, "target_completed",
             // 确认动作另取新帧。基础弹窗探针沿用已有并行实现，避免串行扫描耗尽
             // 观察有效期；仍检查全部原有弹窗，不复用子图的旧帧或放宽TTL。
-            C::all({J{{"mode", "input_clear"}}, point_confirmation(target, map)}), {"Dispatch"}, i);
+            C::all({J{{"mode", "input_clear"}}, target.shortcut_battle_wait_ms ? inside : point_confirmation(target, map)}), {"Dispatch"}, i);
     }
     if (plan.floor()) {
         const auto retreat = graph.define_child("WrongFloor", navigation::auto_route("dungFlag"));

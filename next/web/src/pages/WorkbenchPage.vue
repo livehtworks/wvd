@@ -1,17 +1,20 @@
 <script setup lang="ts">
 
-import { computed, ref, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import {
-  Camera, ChevronDown, FolderOpen, Link, Link2Off, Play, Plus, RefreshCw, Save, Trash2, Undo2,
+  ArrowDown, ArrowUp, Bug, Camera, Check, ChevronDown, Copy, FolderOpen, GripVertical, Link, Link2Off, Pencil, Play, Plus, RefreshCw, ScanFace, Square, Trash2, Undo2, X,
 } from "@lucide/vue";
 import { useWorkbench } from "../stores/useWorkbench";
+import ProfileSaveBar from "../components/ProfileSaveBar.vue";
+import EnemyRulesEditor from "../components/EnemyRulesEditor.vue";
+import { useSortableList } from "../composables/useSortableList";
 import { resourceLocaleOptions } from "../api/types";
 import type { CatalogOption, SkillSetting, StrategyGroup } from "../api/types";
 
 const state = useWorkbench();
 const emit = defineEmits<{ dirty: [value: boolean] }>();
-watch(() => state.dirty, (value) => emit("dirty", value), { immediate: true });
-const tab = ref("common");
+const tab = ref<"common" | "advanced">("common");
+const combatSection = ref<HTMLDetailsElement>();
 const previewDialog = ref<HTMLDialogElement>();
 const previewButton = ref<HTMLButtonElement>();
 function closePreview() { previewDialog.value?.close(); previewButton.value?.focus(); }
@@ -19,10 +22,23 @@ const taskCategory = ref("");
 const taskSelectVersion = ref(0);
 const strategyQuery = ref("");
 const selectedStrategyIndex = ref(0);
+const renamingStrategy = ref(false);
+const strategyNameDraft = ref("");
+const strategyNameError = ref("");
+const strategyNameInput = ref<HTMLInputElement>();
+const renameButton = ref<HTMLButtonElement>();
+const schemeList = ref<HTMLElement>();
+const actionList = ref<HTMLElement>();
+const monsterSection = ref<HTMLElement>();
+const objectIds = new WeakMap<object, number>();
+let nextObjectId = 0;
+function rowKey(value: object) { if (!objectIds.has(value)) objectIds.set(value, ++nextObjectId); return objectIds.get(value)!; }
 
 const tasks = computed(() => (state.catalog.tasks ?? []).filter((task) => !taskCategory.value || task.category === taskCategory.value));
 const strategyNames = computed(() => state.strategies.map((item) => item.group_name));
 const selectedStrategy = computed(() => state.strategies[selectedStrategyIndex.value]);
+const pendingStrategyName = computed(() => renamingStrategy.value && strategyNameDraft.value.trim() !== selectedStrategy.value?.group_name);
+watch(() => state.dirty || pendingStrategyName.value, (value) => emit("dirty", value), { immediate: true });
 const filteredStrategies = computed(() => {
   const query = strategyQuery.value.trim().toLocaleLowerCase();
   return state.strategies
@@ -30,6 +46,30 @@ const filteredStrategies = computed(() => {
     .filter(({ group }) => !query || group.group_name.toLocaleLowerCase().includes(query));
 });
 const taskPoints = computed(() => state.selectedTask?.task_points ?? []);
+useSortableList(schemeList, () => state.editLocked || renamingStrategy.value, '.strategy-item', (from, to) => {
+  const source = filteredStrategies.value[from]?.group, target = filteredStrategies.value[to]?.group;
+  const selected = selectedStrategy.value;
+  if (!source || !target) return;
+  const targetIndex = state.strategies.indexOf(target);
+  state.strategies.splice(state.strategies.indexOf(source), 1);
+  state.strategies.splice(targetIndex, 0, source);
+  selectedStrategyIndex.value = selected ? state.strategies.indexOf(selected) : 0;
+});
+useSortableList(actionList, () => state.editLocked || renamingStrategy.value, '.skill-row', (from, to) => {
+  const rows = selectedStrategy.value?.skill_settings;
+  if (!rows) return;
+  const [row] = rows.splice(from, 1); rows.splice(to, 0, row);
+});
+async function showMonsters() {
+  tab.value = 'common';
+  await nextTick();
+  if (combatSection.value) combatSection.value.open = true;
+  monsterSection.value?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+}
+watch(selectedStrategy, () => {
+  renamingStrategy.value = false;
+  strategyNameError.value = "";
+});
 
 watch(() => state.strategies.length, (length) => {
   if (!length) selectedStrategyIndex.value = 0;
@@ -85,6 +125,28 @@ function addStrategy() {
   selectedStrategyIndex.value = state.strategies.length - 1;
   strategyQuery.value = "";
 }
+function copyStrategy() {
+  const group = selectedStrategy.value;
+  if (state.editLocked || !group) return;
+  const base = `${group.group_name} 副本`;
+  let name = base, suffix = 2;
+  while (strategyNames.value.includes(name)) name = `${base} ${suffix++}`;
+  // 配置是 JSON 数据；深复制避免新方案与原方案共用动作行，不改原方案的名称引用。
+  const copy: StrategyGroup = JSON.parse(JSON.stringify(group));
+  copy.group_name = name;
+  const index = selectedStrategyIndex.value + 1;
+  state.strategies.splice(index, 0, copy);
+  selectedStrategyIndex.value = index;
+  strategyQuery.value = "";
+}
+function moveStrategy(offset: -1 | 1) {
+  const index = selectedStrategyIndex.value, target = index + offset;
+  if (state.editLocked || !selectedStrategy.value || target < 0 || target >= state.strategies.length) return;
+  const [group] = state.strategies.splice(index, 1);
+  state.strategies.splice(target, 0, group);
+  selectedStrategyIndex.value = target;
+  strategyQuery.value = "";
+}
 function renameStrategy(group: StrategyGroup, value: string) {
   if (state.editLocked) return;
   const old = group.group_name;
@@ -96,9 +158,38 @@ function renameStrategy(group: StrategyGroup, value: string) {
   if (state.draft.DEFAULT_OVERALL_STRATEGY === old) state.draft.DEFAULT_OVERALL_STRATEGY = name;
   if (state.draft.TASK_POINT_STRATEGY?.special_combat?.normal_strategy === old) state.draft.TASK_POINT_STRATEGY.special_combat.normal_strategy = name;
   if (state.draft.TASK_POINT_STRATEGY?.special_combat?.special_strategy === old) state.draft.TASK_POINT_STRATEGY.special_combat.special_strategy = name;
+  for (const rule of state.draft.TASK_POINT_STRATEGY?.special_combat?.rules ?? []) if (rule.strategy === old) rule.strategy = name;
   if (state.draft.TASK_POINT_STRATEGY?.overall_strategy === old) state.draft.TASK_POINT_STRATEGY.overall_strategy = name;
   const bindings = pointBindings();
   for (const point of Object.keys(bindings)) if (bindings[point] === old) bindings[point] = name;
+}
+async function beginStrategyRename() {
+  if (state.editLocked || !selectedStrategy.value) return;
+  strategyNameDraft.value = selectedStrategy.value.group_name;
+  strategyNameError.value = "";
+  renamingStrategy.value = true;
+  await nextTick();
+  strategyNameInput.value?.focus();
+  strategyNameInput.value?.select();
+}
+async function cancelStrategyRename() {
+  renamingStrategy.value = false;
+  strategyNameError.value = "";
+  await nextTick();
+  renameButton.value?.focus();
+}
+function confirmStrategyRename() {
+  const group = selectedStrategy.value, name = strategyNameDraft.value.trim();
+  if (state.editLocked || !group) return;
+  if (!name) { strategyNameError.value = "请输入方案名称"; return; }
+  if (name !== group.group_name && strategyNames.value.includes(name)) {
+    strategyNameError.value = "已有同名方案，请使用其它名称";
+    return;
+  }
+  // 仅确认后更新名称和全部引用，输入中或取消时保留原配置。
+  if (name !== group.group_name) renameStrategy(group, name);
+  strategyQuery.value = "";
+  void cancelStrategyRename();
 }
 function strategyReferences(name: string) {
   if (!state.draft) return [];
@@ -106,6 +197,7 @@ function strategyReferences(name: string) {
   if (state.draft.DEFAULT_OVERALL_STRATEGY === name) result.push("全程策略");
   if (state.draft.TASK_POINT_STRATEGY?.special_combat?.normal_strategy === name) result.push("普通敌人方案");
   if (state.draft.TASK_POINT_STRATEGY?.special_combat?.special_strategy === name) result.push("特殊敌人方案");
+  for (const rule of state.draft.TASK_POINT_STRATEGY?.special_combat?.rules ?? []) if (rule.strategy === name) result.push(`怪物：${rule.name}`);
   if (state.draft.TASK_POINT_STRATEGY?.overall_strategy === name) result.push("任务覆盖策略");
   const bindings = pointBindings();
   for (const [point, strategy] of Object.entries(bindings)) if (strategy === name) result.push(`任务点：${point}`);
@@ -132,6 +224,16 @@ function addSkill(group: StrategyGroup) {
   if (state.editLocked) return;
   group.skill_settings.push({ role_var: "", skill_var: "", target_var: "左上角色", skill_lvl: 1, freq_var: "用完后移除" });
 }
+function copySkill(group: StrategyGroup, index: number) {
+  if (state.editLocked || !group.skill_settings[index]) return;
+  group.skill_settings.splice(index + 1, 0, JSON.parse(JSON.stringify(group.skill_settings[index])));
+}
+function moveSkill(group: StrategyGroup, index: number, offset: -1 | 1) {
+  const target = index + offset;
+  if (state.editLocked || !group.skill_settings[index] || target < 0 || target >= group.skill_settings.length) return;
+  const [skill] = group.skill_settings.splice(index, 1);
+  group.skill_settings.splice(target, 0, skill);
+}
 function removeSkill(group: StrategyGroup, index: number) {
   if (state.editLocked) return; group.skill_settings.splice(index, 1); }
 function updateSkill(skill: SkillSetting, key: keyof SkillSetting, event: Event) {
@@ -145,14 +247,10 @@ function updateSkill(skill: SkillSetting, key: keyof SkillSetting, event: Event)
   <main class="app-main workbench-page">
     <header class="page-heading">
       <div><h1>工作台</h1></div>
-      <div class="command-row">
-        <span v-if="state.dirty" class="status-chip warning">有未保存更改</span>
-        <button class="button secondary" :disabled="!state.dirty || state.editLocked" @click="state.revert"><Undo2 :size="16" />重载</button>
-        <button class="button primary" :disabled="!state.dirty || state.editLocked" @click="state.save"><Save :size="16" />保存配置</button>
-      </div>
+      <button class="button secondary" :disabled="state.editLocked" @click="reloadProfile"><Undo2 :size="16" />重新读取配置</button>
     </header>
-    <div v-if="state.error" class="notice error" role="alert">{{ state.error }}<button v-if="/PROFILE_.*CONFLICT/.test(state.error)" class="button secondary" :disabled="state.editLocked" @click="reloadProfile">重新读取配置</button></div>
-    <div v-if="state.notice" class="notice success" role="status">{{ state.notice }}</div>
+    <div v-if="state.error && !state.feedbackScope" class="notice error" role="alert">{{ state.error }}<button v-if="/PROFILE_.*CONFLICT/.test(state.error)" class="button secondary" :disabled="state.editLocked" @click="reloadProfile">重新读取配置</button></div>
+    <div v-if="state.notice && !state.feedbackScope" class="notice success" role="status">{{ state.notice }}</div>
     <div v-if="state.loading" class="loading-line"><RefreshCw :size="16" class="spinning" />正在读取服务端配置</div>
 
     <template v-if="state.draft">
@@ -163,7 +261,7 @@ function updateSkill(skill: SkillSetting, key: keyof SkillSetting, event: Event)
 
           <label class="check-field"><input v-model="state.draft.TASK_SPECIFIC_CONFIG" :disabled="state.editLocked" type="checkbox" />使用任务专用配置</label>
           <button class="button danger-inline" type="button" :disabled="!state.draft.TASK_SPECIFIC_CONFIG || state.editLocked" @click="state.clearTaskOverride"><Trash2 :size="15" />清除当前任务覆盖</button>
-        <div v-if="state.draft?.FARM_TARGET === 'Scorpionesses'" class="command-row">
+        <div v-if="state.draft?.FARM_TARGET === 'Scorpionesses' || state.draft?.FARM_TARGET === 'GiantBounty'" class="command-row">
           <label class="field"><span>循环模式</span><select v-model="state.repeatMode" :disabled="state.editLocked || state.runActive"><option value="forever">一直循环</option><option value="count">指定次数</option></select></label>
           <label v-if="state.repeatMode === 'count'" class="field"><span>循环次数</span><input v-model.number="state.repeatCount" type="number" min="1" max="1000000" :disabled="state.editLocked || state.runActive" /></label>
         </div>
@@ -171,9 +269,10 @@ function updateSkill(skill: SkillSetting, key: keyof SkillSetting, event: Event)
           <span class="source-line span-2">当前来源：{{ state.envelope?.effective_source ?? (state.draft.TASK_SPECIFIC_CONFIG ? '任务覆盖' : '默认配置') }}</span>
           <details v-if="state.selectedTask?.description" class="task-description"><summary>任务说明</summary><p>{{ state.selectedTask.description }}</p></details>
         </div>
+        <ProfileSaveBar label="任务设置" :dirty="state.scopeDirty.task" :saving="state.saveScope === 'task'" :locked="state.editLocked" :error="state.feedbackScope === 'task' ? state.error : ''" :notice="state.feedbackScope === 'task' ? state.notice : ''" @save="state.save('task')" @reload="reloadProfile" />
       </section>
       <nav class="config-tabs" aria-label="工作台设置">
-        <button v-for="item in [{id:'common',name:'常用参数'},{id:'combat',name:'战斗方案'},{id:'advanced',name:'设备与高级'}]" :key="item.id" :aria-pressed="tab === item.id" @click="tab = item.id">{{ item.name }}</button>
+        <button v-for="item in [{id:'common',name:'常用参数'},{id:'advanced',name:'设备与高级'}] as const" :key="item.id" :aria-label="item.name" :aria-pressed="tab === item.id" @click="tab = item.id">{{ item.name }}<span v-if="state.scopeDirty[item.id] || (item.id === 'common' && state.scopeDirty.combat)" class="dirty-dot" title="有未保存更改" aria-hidden="true" /></button>
       </nav>
       <fieldset class="editor-fields" :disabled="state.editLocked" :inert="state.editLocked">
       <details v-show="tab === 'advanced'" class="config-section" open>
@@ -217,7 +316,7 @@ function updateSkill(skill: SkillSetting, key: keyof SkillSetting, event: Event)
         </div>
       </details>
 
-      <details v-show="tab === 'common'" class="config-section" open>
+      <details v-show="tab === 'common'" class="config-section exploration-section" open>
         <summary><span>探索</span><ChevronDown :size="17" /></summary>
         <div class="section-body form-grid">
           <label class="field"><span>开箱人选</span><select v-model="state.draft.WHO_WILL_OPEN_IT"><option v-for="item in optionsWithCurrent(state.catalog.chest_openers, state.draft.WHO_WILL_OPEN_IT)" :key="optionValue(item)" :value="item.value">{{ item.label }}</option></select></label>
@@ -232,7 +331,7 @@ function updateSkill(skill: SkillSetting, key: keyof SkillSetting, event: Event)
         </div>
       </details>
 
-      <details v-show="tab === 'common'" class="config-section" open>
+      <details ref="combatSection" v-show="tab === 'common'" class="config-section battle-section" open>
         <summary><span>战斗</span><ChevronDown :size="17" /></summary>
         <div class="section-body form-grid">
           <label class="field"><span>全程策略</span><select v-model="state.draft.DEFAULT_OVERALL_STRATEGY"><option v-if="!strategyNames.includes('全自动战斗')" value="全自动战斗">全自动战斗</option><option v-for="name in strategyNames" :key="name" :value="name">{{ name }}</option></select></label>
@@ -241,41 +340,70 @@ function updateSkill(skill: SkillSetting, key: keyof SkillSetting, event: Event)
           <label class="check-field"><input v-model="state.draft.TASK_POINT_STRATEGY!.special_combat!.skull" type="checkbox" />红骷髅识别特殊敌人</label>
           <label class="check-field"><input v-model="state.draft.TASK_POINT_STRATEGY!.special_combat!.portrait" type="checkbox" />行动栏头像识别特殊敌人</label>
           <label v-if="state.draft.TASK_POINT_STRATEGY!.special_combat!.skull || state.draft.TASK_POINT_STRATEGY!.special_combat!.portrait" class="field"><span>普通敌人方案</span><select v-model="state.draft.TASK_POINT_STRATEGY!.special_combat!.normal_strategy"><option value="">请选择</option><option v-for="name in strategyNames" :key="name" :value="name">{{ name }}</option></select></label>
-          <label v-if="state.draft.TASK_POINT_STRATEGY!.special_combat!.skull || state.draft.TASK_POINT_STRATEGY!.special_combat!.portrait" class="field"><span>特殊敌人方案</span><select v-model="state.draft.TASK_POINT_STRATEGY!.special_combat!.special_strategy"><option value="">请选择</option><option v-for="name in strategyNames" :key="name" :value="name">{{ name }}</option></select></label>
-          <label v-if="state.draft.TASK_POINT_STRATEGY!.special_combat!.portrait" class="field"><span>头像模板</span><select v-model="state.draft.TASK_POINT_STRATEGY!.special_combat!.portrait_image"><option value="combat_scorpion_portrait">蝎女头像</option><option v-if="state.draft.TASK_POINT_STRATEGY!.special_combat!.portrait_image && state.draft.TASK_POINT_STRATEGY!.special_combat!.portrait_image !== 'combat_scorpion_portrait'" :value="state.draft.TASK_POINT_STRATEGY!.special_combat!.portrait_image">{{ state.draft.TASK_POINT_STRATEGY!.special_combat!.portrait_image }}</option></select></label>
+          <label v-if="state.draft.TASK_POINT_STRATEGY!.special_combat!.skull || (state.draft.TASK_POINT_STRATEGY!.special_combat!.portrait && !state.draft.TASK_POINT_STRATEGY!.special_combat!.rules?.length)" class="field"><span>特殊敌人方案</span><select v-model="state.draft.TASK_POINT_STRATEGY!.special_combat!.special_strategy"><option value="">请选择</option><option v-for="name in strategyNames" :key="name" :value="name">{{ name }}</option></select></label>
+          <label v-if="state.draft.TASK_POINT_STRATEGY!.special_combat!.portrait && !state.draft.TASK_POINT_STRATEGY!.special_combat!.rules?.length" class="field"><span>头像模板</span><select v-model="state.draft.TASK_POINT_STRATEGY!.special_combat!.portrait_image"><option value="combat_scorpion_portrait">蝎女头像</option><option v-if="state.draft.TASK_POINT_STRATEGY!.special_combat!.portrait_image && state.draft.TASK_POINT_STRATEGY!.special_combat!.portrait_image !== 'combat_scorpion_portrait'" :value="state.draft.TASK_POINT_STRATEGY!.special_combat!.portrait_image">{{ state.draft.TASK_POINT_STRATEGY!.special_combat!.portrait_image }}</option></select></label>
+          <div ref="monsterSection" class="span-2"><EnemyRulesEditor :model="state.draft.TASK_POINT_STRATEGY!.special_combat!" :strategies="strategyNames" :locked="state.editLocked" :capture="state.captureForMonster" :capture-disabled="state.runActive || !state.device?.connected" :initial-strategy="selectedStrategy?.group_name || ''" :normal-strategy="String(state.draft.DEFAULT_OVERALL_STRATEGY || '')" /></div>
         </div>
-      </details>
+        <ProfileSaveBar class="common-preferences-savebar" label="常用参数" :dirty="state.scopeDirty.common" :saving="state.saveScope === 'common'" :locked="state.editLocked" :error="state.feedbackScope === 'common' ? state.error : ''" :notice="state.feedbackScope === 'common' ? state.notice : ''" @save="state.save('common')" @reload="reloadProfile" />
 
-      <details v-show="tab === 'combat'" class="config-section" open>
-        <summary><span>战斗方案</span><ChevronDown :size="17" /></summary>
+      <section class="combat-section" aria-label="战斗方案编辑">
         <div class="section-body strategy-editor">
-          <div class="section-commands strategy-commands"><label class="field compact"><span>额外重置时机</span><select v-model="state.draft.RELOAD_STRATEGY_WHEN"><option v-for="item in optionsWithCurrent(state.catalog.strategy_reload_timings, state.draft.RELOAD_STRATEGY_WHEN)" :key="optionValue(item)" :value="item.value">{{ item.label }}</option></select></label></div>
+          <div class="section-commands strategy-commands"><h3>战斗方案</h3><button class="button secondary" @click="showMonsters"><ScanFace :size="16" />怪物配置</button><label class="field compact"><span>额外重置时机</span><select v-model="state.draft.RELOAD_STRATEGY_WHEN"><option v-for="item in optionsWithCurrent(state.catalog.strategy_reload_timings, state.draft.RELOAD_STRATEGY_WHEN)" :key="optionValue(item)" :value="item.value">{{ item.label }}</option></select></label></div>
           <div class="strategy-workspace">
             <aside class="strategy-sidebar" aria-label="战斗方案列表">
               <button class="button secondary strategy-create" @click="addStrategy"><Plus :size="16" />新建方案</button>
               <label class="field strategy-search"><span>查找方案</span><input v-model="strategyQuery" type="search" placeholder="输入方案名称" /></label>
-              <div class="strategy-list" role="listbox" aria-label="选择战斗方案">
-                <button v-for="item in filteredStrategies" :key="item.index" type="button" role="option" :aria-selected="item.index === selectedStrategyIndex" @click="selectedStrategyIndex = item.index">
+              <div ref="schemeList" class="strategy-list" role="listbox" aria-label="选择战斗方案">
+                <div v-for="item in filteredStrategies" :key="rowKey(item.group)" class="strategy-item" role="option" tabindex="0" :aria-label="`${item.group.group_name} ${item.group.skill_settings.length} 项`" :aria-selected="item.index === selectedStrategyIndex" @click="selectedStrategyIndex = item.index" @keydown.enter.prevent="selectedStrategyIndex = item.index" @keydown.space.prevent="selectedStrategyIndex = item.index">
+                  <button class="icon-button drag-handle" :disabled="state.editLocked || renamingStrategy" :aria-label="`拖动方案 ${item.group.group_name}`" title="拖动排序" @click.stop><GripVertical :size="15" /></button><span class="row-number" aria-hidden="true">{{ item.index + 1 }}</span>
                   <span>{{ item.group.group_name }}</span><small>{{ item.group.skill_settings.length }} 项</small>
-                </button>
+                </div>
                 <p v-if="!filteredStrategies.length" class="strategy-list-empty">{{ state.strategies.length ? '没有匹配方案' : '尚无方案' }}</p>
               </div>
             </aside>
             <article v-if="selectedStrategy" class="strategy-group">
-              <header><input class="strategy-name" :value="selectedStrategy.group_name" aria-label="方案名称" @input="renameStrategy(selectedStrategy, ($event.target as HTMLInputElement).value)" /><label class="check-field" title="完成任一动作后清空本轮方案，优先于单行的重复设置"><input v-model="selectedStrategy.complete_one_as_all" type="checkbox" />任一完成即结束方案（优先于重复）</label><button class="icon-button danger" title="删除方案" :aria-label="`删除方案 ${selectedStrategy.group_name}`" @click="removeStrategy(selectedStrategyIndex)"><Trash2 :size="16" /></button></header>
-              <div class="skill-table"><div class="skill-head"><span>角色</span><span>技能</span><span>等级</span><span>目标</span><span>频次</span><span></span></div><div v-for="(skill, skillIndex) in selectedStrategy.skill_settings" :key="skillIndex" class="skill-row">
+              <header>
+                <form v-if="renamingStrategy" class="strategy-rename" @submit.prevent="confirmStrategyRename" @keydown.esc.prevent="cancelStrategyRename">
+                  <input ref="strategyNameInput" v-model="strategyNameDraft" class="strategy-name" aria-label="方案名称" :aria-invalid="!!strategyNameError" :aria-describedby="strategyNameError ? 'strategy-name-error' : undefined" @input="strategyNameError = ''" />
+                  <button class="icon-button" type="submit" title="确认重命名" aria-label="确认重命名"><Check :size="16" /></button>
+                  <button class="icon-button" type="button" title="取消重命名" aria-label="取消重命名" @click="cancelStrategyRename"><X :size="16" /></button>
+                  <p v-if="strategyNameError" id="strategy-name-error" class="strategy-name-error" role="alert">{{ strategyNameError }}</p>
+                </form>
+                <div v-else class="strategy-title-row">
+                  <span class="strategy-title">{{ selectedStrategy.group_name }}</span>
+                  <button ref="renameButton" class="button secondary" type="button" @click="beginStrategyRename"><Pencil :size="15" />重命名</button>
+                </div>
+                <div class="strategy-actions" role="group" aria-label="方案操作">
+                  <button v-if="!state.debugActive" class="button secondary" :disabled="state.editLocked || state.runActive || renamingStrategy" @click="state.debugStrategy(selectedStrategy.group_name)"><Bug :size="16" />开始调试</button>
+                  <button v-else class="button danger-inline" @click="state.requestStop"><Square :size="15" />停止调试</button>
+                  <button class="icon-button" title="复制方案" aria-label="复制方案" @click="copyStrategy"><Copy :size="16" /></button>
+                  <button class="icon-button" title="上移方案" aria-label="上移方案" :disabled="selectedStrategyIndex === 0" @click="moveStrategy(-1)"><ArrowUp :size="16" /></button>
+                  <button class="icon-button" title="下移方案" aria-label="下移方案" :disabled="selectedStrategyIndex === state.strategies.length - 1" @click="moveStrategy(1)"><ArrowDown :size="16" /></button>
+                  <button class="icon-button danger" title="删除方案" :aria-label="`删除方案 ${selectedStrategy.group_name}`" @click="removeStrategy(selectedStrategyIndex)"><Trash2 :size="16" /></button>
+                </div>
+                <label class="check-field strategy-completion" title="完成任一动作后清空本轮方案，优先于单行的重复设置"><input v-model="selectedStrategy.complete_one_as_all" type="checkbox" />任一完成即结束方案（优先于重复）</label>
+              </header>
+              <div class="skill-table"><div class="skill-head"><span>序号</span><span>角色</span><span>技能</span><span>等级</span><span>目标</span><span>频次</span><span>操作</span></div><div ref="actionList" class="skill-rows"><div v-for="(skill, skillIndex) in selectedStrategy.skill_settings" :key="rowKey(skill)" class="skill-row">
+                <div class="row-order"><button class="icon-button drag-handle" :disabled="state.editLocked || renamingStrategy" :aria-label="`拖动第${skillIndex + 1}行`" title="拖动排序"><GripVertical :size="15" /></button><span class="row-number">{{ skillIndex + 1 }}</span></div>
                 <select :value="skill.role_var" aria-label="角色" @change="updateSkill(skill, 'role_var', $event)"><option value="">默认行为</option><option v-for="item in optionsWithCurrent(state.catalog.roles, skill.role_var)" :key="optionValue(item)" :value="item.value">{{ item.label }}</option></select>
                 <select :value="skill.skill_var" aria-label="技能" @change="updateSkill(skill, 'skill_var', $event)"><option value="">自动战斗</option><option v-for="item in optionsWithCurrent(state.catalog.skills, skill.skill_var)" :key="optionValue(item)" :value="item.value">{{ item.label }}</option></select>
                 <select :value="skill.skill_lvl" aria-label="技能等级" @change="updateSkill(skill, 'skill_lvl', $event)"><option v-for="item in optionsWithCurrent(state.catalog.skill_levels, skill.skill_lvl)" :key="optionValue(item)" :value="item.value">{{ item.label }}</option></select>
                 <select :value="skill.target_var ?? '左上角色'" aria-label="技能目标" title="友方技能的队伍位置；不改变敌方选敌" @change="updateSkill(skill, 'target_var', $event)"><option v-for="item in state.catalog.skill_targets" :key="optionValue(item)" :value="item.value">{{ item.label }}</option></select>
                 <select :value="skill.freq_var ?? '用完后移除'" aria-label="技能频次" title="重复行在角色下次行动时继续使用；一次性技能应排在重复行前" @change="updateSkill(skill, 'freq_var', $event)"><option v-for="item in state.catalog.skill_frequencies" :key="optionValue(item)" :value="item.value">{{ item.label }}</option></select>
-                <button class="icon-button danger" title="删除技能行" aria-label="删除技能行" @click="removeSkill(selectedStrategy, skillIndex)"><Trash2 :size="15" /></button>
-              </div></div>
+                <div class="skill-actions" role="group" :aria-label="`第${skillIndex + 1}行操作`">
+                  <button class="icon-button" title="复制角色配置" aria-label="复制角色配置" @click="copySkill(selectedStrategy, skillIndex)"><Copy :size="15" /></button>
+                  <button class="icon-button" title="上移角色配置" aria-label="上移角色配置" :disabled="skillIndex === 0" @click="moveSkill(selectedStrategy, skillIndex, -1)"><ArrowUp :size="15" /></button>
+                  <button class="icon-button" title="下移角色配置" aria-label="下移角色配置" :disabled="skillIndex === selectedStrategy.skill_settings.length - 1" @click="moveSkill(selectedStrategy, skillIndex, 1)"><ArrowDown :size="15" /></button>
+                  <button class="icon-button danger" title="删除技能行" aria-label="删除技能行" @click="removeSkill(selectedStrategy, skillIndex)"><Trash2 :size="15" /></button>
+                </div>
+              </div></div></div>
               <button class="text-command" @click="addSkill(selectedStrategy)"><Plus :size="15" />新增角色技能</button>
             </article>
             <div v-else class="strategy-empty"><p>尚无战斗方案</p><button class="button secondary" @click="addStrategy"><Plus :size="16" />新建方案</button></div>
           </div>
+          <ProfileSaveBar label="战斗方案" :dirty="state.scopeDirty.combat" :saving="state.saveScope === 'combat'" :locked="state.editLocked || renamingStrategy" :pending-name="pendingStrategyName" :error="state.feedbackScope === 'combat' ? state.error : ''" :notice="state.feedbackScope === 'combat' ? state.notice : ''" @save="state.save('combat')" @reload="reloadProfile" />
         </div>
+      </section>
       </details>
 
       <details v-show="tab === 'advanced'" class="config-section" open>
@@ -302,6 +430,7 @@ function updateSkill(skill: SkillSetting, key: keyof SkillSetting, event: Event)
 
 
       </fieldset>
+      <ProfileSaveBar v-if="tab === 'advanced'" label="设备与高级" :dirty="state.scopeDirty.advanced" :saving="state.saveScope === 'advanced'" :locked="state.editLocked" :error="state.feedbackScope === 'advanced' ? state.error : ''" :notice="state.feedbackScope === 'advanced' ? state.notice : ''" @save="state.save('advanced')" @reload="reloadProfile" />
     </template>
   </main>
 </template>

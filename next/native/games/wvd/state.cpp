@@ -1,6 +1,7 @@
 #include "state.hpp"
 #include "tasks/handoff_provenance.hpp"
 #include <algorithm>
+#include <cmath>
 
 namespace wvd::games {
 using J = nlohmann::json;
@@ -118,6 +119,7 @@ void WvdRunState::on_segment(contracts::SegmentBoundary boundary, std::uint64_t 
     unit_index_ = unit;
     prepared_.reset();
     prepared_portrait_.clear();
+    combat_actor_recognized_ = false;
     chest_selection_.clear_intent();
     healing_active_ = false;
     // 普通恢复不等于重启游戏。系统生命周期恢复按旧 restartGame 在首次请求时
@@ -147,12 +149,12 @@ void WvdRunState::target_point_completed() {
     if (strategy_.uses_task_points())
         strategy_.reload(task_step_);
 }
-void WvdRunState::observe_combat(bool special) {
+void WvdRunState::observe_combat(bool special, const std::string &enemy_rule) {
     if (!pending_combat_) {
         ++combat_sequence_;
         last_encounter_ = Encounter::Combat;
         healing_active_ = false;
-        strategy_.begin_encounter(special);
+        strategy_.begin_encounter(special, enemy_rule);
     }
     if (!combat_started_)
         combat_started_ = clock_->now();
@@ -278,6 +280,9 @@ bool WvdRunState::confirm_skill(const SkillSelection &selection, SkillOutcome ou
 void WvdRunState::prepare_skill(const std::vector<PortraitScore> &scores, const J &catalog) {
     if (!catalog.is_array() || catalog.size() > 128)
         throw std::runtime_error("COMBAT_SKILL_CATALOG_INVALID");
+    combat_actor_recognized_ = std::any_of(scores.begin(), scores.end(), [](const auto &score) {
+        return std::isfinite(score.score) && score.score >= .80;
+    });
     auto selected = select_skill(scores);
     prepared_.reset();
     prepared_portrait_.clear();
@@ -391,17 +396,22 @@ std::string WvdRunState::confirmation_id(const std::string &operation, const std
         id += ":sleep:" + std::to_string(sleep_.completed() + (event == "sleep_visit_started" || sleep_.active() ? 1 : 0));
     if (event.starts_with("bounty_cycle_") || event.starts_with("bounty_leap_") || event.starts_with("bounty_travel_") ||
         event == "bounty_route_completed" || event == "bounty_return_completed" ||
-        event == "scorpion_started" || event == "scorpion_hands_started" || event == "jier_started")
+        event == "scorpion_started" || event == "scorpion_hands_started" || event == "jier_started" || event == "giant_bounty_started")
         id += ":bounty_cycle:" + std::to_string(bounty_cycle_.sequence() +
-            ((event == "scorpion_started" || event == "scorpion_hands_started" || event == "jier_started") && !bounty_cycle_.active() ? 1 : 0));
+            ((event == "scorpion_started" || event == "scorpion_hands_started" || event == "jier_started" || event == "giant_bounty_started") && !bounty_cycle_.active() ? 1 : 0));
     return id;
 }
 bool WvdRunState::confirm_event(const std::string &operation, const std::string &event,
                                  std::uint64_t generation, std::uint64_t frame_id,
-                                 std::optional<std::size_t> expected_step, std::optional<std::size_t> reward_index) {
+                                 std::optional<std::size_t> expected_step, std::optional<std::size_t> reward_index,
+                                 const std::string &enemy_rule) {
     if (operation.empty() || operation.size() > 256 || generation != generation_ || !frame_id)
         throw std::runtime_error("BUSINESS_CONFIRMATION_IDENTITY_INVALID");
     J effect{{"event", event}, {"expected_step", expected_step ? J(*expected_step) : J(nullptr)}};
+    if (!enemy_rule.empty()) {
+        if (event != "combat_special_observed") throw std::runtime_error("ENEMY_RULE_EVENT_INVALID");
+        effect["enemy_rule"] = enemy_rule;
+    }
     if (reward_index) {
         if (event != "mining_reward_observed" && event != "fishing_reward_prepared") throw std::runtime_error("MINING_REWARD_EVENT_INVALID");
         effect["reward_index"] = *reward_index;
@@ -665,7 +675,7 @@ bool WvdRunState::confirm_event(const std::string &operation, const std::string 
         fishing_.prepare(*reward_index);
     } else if (event == "fishing_reward_completed") {
         fishing_.complete();
-    } else if (event == "scorpion_started" || event == "scorpion_hands_started" || event == "jier_started") {
+    } else if (event == "scorpion_started" || event == "scorpion_hands_started" || event == "jier_started" || event == "giant_bounty_started") {
         if (inn_payment_pending_ || bounty_report_pending_) throw std::runtime_error("BOUNTY_SIDE_EFFECT_PENDING");
         const auto interval = profile_.at("REST_INTERVEL").get<std::int64_t>();
         if (interval < 0) throw std::runtime_error("BOUNTY_REST_INTERVAL_INVALID");
@@ -687,7 +697,8 @@ bool WvdRunState::confirm_event(const std::string &operation, const std::string 
     } else if (event == "bounty_cycle_revealed") {
         bounty_cycle_.revealed(unit_index_, bounty_reveals_);
     } else if (event == "bounty_travel_skipped") {
-        if (!profile_.at("ACTIVE_BEAUTIFUL_ORE").get<bool>()) throw std::runtime_error("BOUNTY_TRAVEL_REQUIRED");
+        if (!profile_.at("ACTIVE_BEAUTIFUL_ORE").get<bool>() && profile_.at("FARM_TARGET") != "GiantBounty")
+            throw std::runtime_error("BOUNTY_TRAVEL_REQUIRED");
         bounty_cycle_.skip_travel(unit_index_);
     } else if (event == "bounty_route_completed") {
         bounty_cycle_.route_completed(unit_index_, task_step_);
@@ -815,7 +826,7 @@ bool WvdRunState::confirm_event(const std::string &operation, const std::string 
     else if (event == "combat_observed")
         observe_combat();
     else if (event == "combat_special_observed")
-        observe_combat(true);
+        observe_combat(true, enemy_rule);
     else if (event == "chest_observed")
         observe_chest();
     else if (event == "chest_character_attempted") {
@@ -950,6 +961,7 @@ J WvdRunState::summarize() const {
             {"task_step", task_step_},
             {"strategy", std::move(strategy)},
             {"has_prepared_skill", prepared_.has_value()},
+            {"combat_actor_recognized", combat_actor_recognized_},
             {"prepared_skill_index", prepared_ ? J(prepared_index_) : J(nullptr)},
             {"prepared_portrait", prepared_ ? prepared_portrait_ : ""},
             {"dungeons", dungeons_},

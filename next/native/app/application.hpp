@@ -38,6 +38,14 @@ class Application {
                 std::function<J()> prepare);
     games::tasks::CompiledWorkflow compile_task_graph(const J &request,
         const games::WvdQuestDefinition &task, const J &values) const;
+    struct PreparedWorkflow {
+        games::tasks::CompiledWorkflow executable;
+        J values, document;
+        std::map<std::string, std::string> pipeline_to_node;
+        std::string locale;
+    };
+    PreparedWorkflow compile_workflow_graph(const J &request, const J &stored, J document,
+                                           const J &library_snapshot);
     runtime::NativeRunDefinition assemble_task(const J &request, const J &stored,
                                          const devices::LifecycleTarget &target,
                                          std::optional<J> frozen_values = std::nullopt,
@@ -47,7 +55,8 @@ class Application {
                                              const devices::LifecycleTarget &target,
                                              std::map<std::string, std::string> *pipeline_to_node = nullptr,
                                              const J &library_snapshot = J::object(),
-                                             J *source_paths = nullptr);
+                                             J *source_paths = nullptr,
+                                             std::optional<PreparedWorkflow> prepared = std::nullopt);
     friend struct ApplicationAssemblyTestAccess;
     J prepare_task(const J &request, const J &stored,
                    std::shared_ptr<devices::DeviceConnection> backend,
@@ -59,7 +68,8 @@ class Application {
                             std::string request_id);
     J prepare_workflow(const std::string &flow_id, const J &request, const J &stored,
                        J document, std::shared_ptr<devices::DeviceConnection> backend,
-                       const J &library_snapshot);
+                       const J &library_snapshot,
+                       std::optional<PreparedWorkflow> prepared = std::nullopt);
     J profile_for_task(const std::string &task_id) const;
     J catalog() const;
     J device_status() const;
@@ -74,6 +84,8 @@ class Application {
     J disconnect_device();
     J capture_device();
     J start_task(const J &request);
+    J start_combat_debug(const J &request);
+    std::optional<recognition::Bundle> portrait_bundle(const J &values, bool persist = true) const;
     J list_workflows() const;
     J inspect_builtin(const std::string &flow_id) const;
     J sync_builtin(const std::string &flow_id, const J &request);

@@ -20,15 +20,16 @@ inline nlohmann::json harken_buff_menu() {
 inline nlohmann::json harken_floor_menu() {
     using C = tasks::PipelineCompiler;
     auto move = C::image("harken_floor_move_zh_hant");
-    move["roi"] = {0, 230, 250, 170};
+    // 标题和归还行会随迷宫可选楼层数量上下移动，不能沿用奈落单帧行高。
+    move["roi"] = {0, 100, 250, 400};
     auto back = C::image("harken_floor_return_zh_hant");
-    back["roi"] = {200, 920, 500, 250};
+    back["roi"] = {200, 400, 500, 1000};
     return C::all({move, back});
 }
 
 inline nlohmann::json harken_return_button() {
     auto back = tasks::PipelineCompiler::image("harken_floor_return_zh_hant");
-    back["roi"] = {200, 920, 500, 250};
+    back["roi"] = {200, 400, 500, 1000};
     return back;
 }
 

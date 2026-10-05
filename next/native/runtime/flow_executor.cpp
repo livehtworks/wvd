@@ -207,12 +207,7 @@ TickResult FlowExecutor::route_error(Frame &frame, const workflow::Step &current
         if (auto event = check_unexpected(frame, current, image, code, true)) return *event;
         if (auto scene = reclassify_timeout(frame, current, code)) return *scene;
     }
-    // 局部等待到期不结束整轮：已进入异常恢复窗口时，由连续60秒门槛升级重启。
-    // 不重置提交时间，不把错误当完成，也不吞配置/识别Error或送达未知。
-    if (exception_since_ && (code == "FLOW_STAGE_TIMEOUT" || code == "AWAIT_RESULT_TIMEOUT" ||
-        code == "EVENT_RESUME_UNCONFIRMED" || code == "FLOW_HIT_LIMIT_EXHAUSTED"))
-        return waiting(250ms);
-    if (frame.pending && !frame.pending->delivery_unknown && frame.pending->attempts > 1 &&
+    if (!current.on_error.empty() && frame.pending && !frame.pending->delivery_unknown && frame.pending->attempts > 1 &&
         (code == "FLOW_STAGE_TIMEOUT" || code == "AWAIT_RESULT_TIMEOUT")) {
         const auto &source = program_.definitions.at(frame.definition).steps.at(frame.pending->submitted_step);
         const auto &input = std::get<workflow::Input>(source.data);
@@ -230,9 +225,15 @@ TickResult FlowExecutor::route_error(Frame &frame, const workflow::Step &current
                     {"frame_id", image.identity.frame_id}};
                 report_input_result(*frame.pending, "no_progress", image.identity.frame_id, code);
                 frame.pending.reset();
+                exception_since_.reset(); // An explicit guarded business failure edge now owns this known menu.
             }
         }
     }
+    // Unknown scenes and unconfirmed effects retain the continuous recovery path.
+    // Only the explicit, fresh same-menu failure route above can terminate its input.
+    if (exception_since_ && (code == "FLOW_STAGE_TIMEOUT" || code == "AWAIT_RESULT_TIMEOUT" ||
+        code == "EVENT_RESUME_UNCONFIRMED" || code == "FLOW_HIT_LIMIT_EXHAUSTED"))
+        return waiting(250ms);
     if (frame.pending) return blocked("INPUT_RESULT_UNCONFIRMED:" + code);
     if (frame.error_pending || current.on_error.empty()) return fail(std::move(code));
     frame.next_pending = frame.error_pending = true;
@@ -343,7 +344,13 @@ TickResult FlowExecutor::tick() {
         }
         ports_.observation_window(read_recovery_ ? std::min(deadline_,
             read_recovery_->started + read_recovery_->outage_limit) : deadline_);
-        for (const auto &frame : stack_) {
+        // A restart handler owns its own budget. Expired suspended calls must not
+        // kill Boot, or prevent its explicit replan from discarding stale menus.
+        if (stack_.back().resume) return resume_event(stack_.back(), step());
+        for (std::size_t i = 0; i < stack_.size(); ++i) {
+            const auto &frame = stack_[i];
+            if (std::any_of(stack_.begin() + i + 1, stack_.end(),
+                    [](const Frame &child) { return child.event.has_value(); })) continue;
             if (!exception_since_ && frame.invocation_deadline && Clock::now() >= *frame.invocation_deadline)
                 return fail("FLOW_INVOCATION_TIMEOUT:" + frame.definition);
             for (const auto &[name, deadline] : frame.phase_deadlines)
@@ -598,6 +605,7 @@ contracts::Command FlowExecutor::command(const workflow::Input &input,
     value.x = input.command.value("x", 0); value.y = input.command.value("y", 0);
     value.x2 = input.command.value("x2", 0); value.y2 = input.command.value("y2", 0);
     value.duration = input.command.value("duration", 0); value.key = input.command.value("key", 0);
+    value.click_pair_interval_ms = input.command.value("click_pair_interval_ms", 0);
     if (input.use_target_center && (value.kind == contracts::ActionKind::Click ||
                                    value.kind == contracts::ActionKind::Swipe)) {
         require(target.center.has_value(), "FLOW_TARGET_NOT_POSITIONAL");
@@ -1027,7 +1035,10 @@ TickResult FlowExecutor::execute_step(Frame &frame, const workflow::Step &curren
         account_event_time();
         const auto ended = std::move(stack_.back());
         stack_.pop_back();
-        invalidate_observation();
+        // A normal return sends no input. Preserve the child's result frame so
+        // the caller can consume transient outcomes. Reuse still checks device,
+        // generation, action epoch and age; event returns must reobserve.
+        if (ended.event) invalidate_observation();
         auto &parent = stack_.back();
         parent.selected_frame.reset(); parent.selected_observation.reset();
         if (ended.event) {

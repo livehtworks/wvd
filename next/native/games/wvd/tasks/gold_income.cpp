@@ -120,7 +120,6 @@ CompiledWorkflow gold_income_cycle(const WvdQuestDefinition &definition, bool al
         const auto child = graph.define_child("Step" + n, steps[i]);
         graph.call_child("Execute" + n, child, {"Confirmed" + n});
         graph.confirm("Confirmed" + n, "gold.done." + n, "gold_income_advanced", scenes[i + 1], i + 1 == steps.size() ? J{"Terminal"} : J{"Stage"});
-        if (i == 0) graph.delay_after("Confirmed" + n, 10000);
     }
     graph.route("Stage", stages);
     // 十个真实业务阶段共用此路由；默认五次节点命中不能截断第六阶段。

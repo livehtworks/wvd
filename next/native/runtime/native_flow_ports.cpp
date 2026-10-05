@@ -68,6 +68,8 @@ Submission NativeFlowPorts::submit(const contracts::Command &command,
         try {
             auto event = nlohmann::json{{"sequence", sequence}, {"source_path", source_path},
                          {"command_kind", static_cast<int>(command.kind)},
+                         {"click_count", command.click_pair_interval_ms ? 2 : 1},
+                         {"click_pair_interval_ms", command.click_pair_interval_ms},
                          {"position", {command.x, command.y}},
                          {"end_position", {command.x2, command.y2}}, {"key", command.key},
                          {"target_center", target.center ? nlohmann::json::array({target.center->x, target.center->y}) : nlohmann::json(nullptr)},

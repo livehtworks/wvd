@@ -27,6 +27,8 @@ struct CompiledWorkflow {
     nlohmann::json definition_checks = nlohmann::json::object();
     std::set<std::string> handoffs;
     recovery::DialoguePolicy dialogue_policy{recovery::DialoguePolicy::Default};
+    // Bounty routes do not traverse the optional full-maze dialogue encounters.
+    bool random_maze_events{true};
     // 作者定义和资源选择在编译后封存。
     nlohmann::json authoring = nlohmann::json::object();
     void refresh_images();
@@ -63,6 +65,8 @@ class PipelineCompiler {
               nlohmann::json next);
     void fixed_click(const std::string &name, const nlohmann::json &scene,
                      const nlohmann::json &post, nlohmann::json position, nlohmann::json next);
+    void click_pair(const std::string &name, const nlohmann::json &scene, const nlohmann::json &target,
+                    const nlohmann::json &post, nlohmann::json next);
     void swipe(const std::string &name, const nlohmann::json &scene,
                const nlohmann::json &post, nlohmann::json coordinates, nlohmann::json next, int duration = 400);
     // 内联子图的终点只能进入调用者指定后继。
@@ -83,7 +87,7 @@ class PipelineCompiler {
                       nlohmann::json extra_known = nlohmann::json::array(), bool classified = false);
     void confirm(const std::string &name, const std::string &operation, const std::string &event,
                  const nlohmann::json &condition, nlohmann::json next,
-                 nlohmann::json expected_step = nullptr);
+                 nlohmann::json expected_step = nullptr, const std::string &enemy_rule = {});
     // 输入默认限制连续未确认尝试；作者显式业务循环可选择整次调用计数。
     void hit_limit(const std::string &name, int limit, bool invocation_count = false);
     void event_scope(const std::string &name, nlohmann::json rules);

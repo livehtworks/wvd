@@ -20,7 +20,10 @@ tasks::CompiledWorkflow auto_route(const std::string &target) {
                                 vision::outskirts_return_button()});
     const auto retreated = target == "dungFlag" ? C::any({outside, harken}) : outside;
     const J moving{{"mode", "auto_route_moving"}};
-    const auto no_target = C::any({C::image("NoChestCanBeFound"), C::image("theRouteToTheDestinationCannotBeFound")});
+    const J resume_unavailable{{"mode", "navigation_resume_unavailable"}};
+    const auto no_route = C::image("theRouteToTheDestinationCannotBeFound");
+    const auto no_target = target == "chest_auto"
+        ? C::any({C::image("NoChestCanBeFound"), no_route}) : no_route;
     const J post = target == "dungFlag" ? C::any({J{{"mode", "auto_route_post"}}, harken})
                                           : J{{"mode", "auto_route_post"}};
     graph.observe("Encounter", encounter, {"EncounterExit"});
@@ -42,9 +45,13 @@ tasks::CompiledWorkflow auto_route(const std::string &target) {
                           {"preprocess", {{"operation", "subtract"}, {"rgb", {90, 90, 90}}}}});
             available = C::all({button, minus});
         }
-        graph.route("Entry", {"Encounter", "Retreated", "Done", "CloseMap", "Ready", "Expand"});
+        graph.route("Entry", {"Done", "Encounter", "Retreated", "CloseMap", "Ready", "Expand"});
         graph.observe("Retreated", retreated, {"Terminal"});
-        graph.observe("Done", C::all({no_target, C::absent(encounter)}), {"Terminal"});
+        // No route completes a search target, but never proves arrival at Harken.
+        graph.observe("Done", no_target, {target == "dungFlag" ? "StoppedExit" : "Terminal"});
+        // 初始黑色按钮不证明到达；只有已提交导航之后才检查此终点。
+        graph.observe("Arrived", target == "dungFlag" ? retreated :
+            C::all({moving, resume_unavailable, J{{"mode", "movement_stopped"}}}), {"Terminal"});
         graph.back("CloseMap", C::all({map, C::absent(encounter)}), post, {"Entry"});
         graph.observe("Ready", C::all({moving, button}), {"Choose", "Unavailable"});
         graph.fixed_click("Expand", C::all({moving, C::absent(button)}),
@@ -52,7 +59,7 @@ tasks::CompiledWorkflow auto_route(const std::string &target) {
         graph.retry_menu_input("Expand", C::all({moving, C::absent(button)}), 3000);
         graph.hit_limit("Expand", 1);
         graph.click("Choose", C::all({moving, available}), button, post,
-                    {"Encounter", "Retreated", "Done", "Resume", "Moving"});
+                    {"Done", "Encounter", "Retreated", "Arrived", "Resume", "Moving"});
         graph.hit_limit("Choose", 1);
         if (target == "chest_auto") {
             graph.click("Unavailable", C::all({moving, button, C::absent(available)}), button, post,
@@ -60,9 +67,9 @@ tasks::CompiledWorkflow auto_route(const std::string &target) {
             graph.handoff("UnavailableExit", "unavailable");
         } else
             graph.observe("Unavailable", C::all({moving, C::absent(button)}), {"StoppedExit"});
-        graph.public_step("Resume", "navigation-resume", J::object(), {"Encounter", "Retreated", "Done", "Moving"}, J::object(), C::all({moving, C::image("resume")}));
+        graph.public_step("Resume", "navigation-resume", J::object(), {"Done", "Encounter", "Retreated", "Arrived", "Moving"}, J::object(), C::all({moving, C::image("resume"), C::absent(resume_unavailable)}));
         graph.hit_limit("Resume", 1);
-        graph.poll("Moving", 250, {"Encounter", "Retreated", "Done", "Stopped", "Moving"}, moving,
+        graph.poll("Moving", 250, {"Done", "Encounter", "Retreated", "Arrived", "Stopped", "Moving"}, moving,
             J{{"mode", "region_changed"}, {"channel", "navigation"}, {"roi", {650, 25, 225, 225}}});
         graph.failure_route("Moving", {"StalledExit"});
         graph.recovery("StalledExit", "navigation.input_no_progress");

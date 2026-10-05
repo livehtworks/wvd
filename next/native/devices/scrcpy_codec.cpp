@@ -45,10 +45,20 @@ std::vector<std::vector<std::uint8_t>> encode(const contracts::Command &command,
                                                int width, int height) {
     constexpr std::uint64_t finger = UINT64_MAX - 1;
     using contracts::ActionKind;
+    if (command.click_pair_interval_ms != 0 &&
+        (command.kind != ActionKind::Click || command.click_pair_interval_ms != 100))
+        throw std::runtime_error("SCRCPY_CLICK_PAIR_INVALID");
     switch (command.kind) {
-    case ActionKind::Click:
-        return {touch(0, finger, command.x, command.y, width, height, true),
-                touch(1, finger, command.x, command.y, width, height, false)};
+    case ActionKind::Click: {
+        std::vector<std::vector<std::uint8_t>> messages{
+            touch(0, finger, command.x, command.y, width, height, true),
+            touch(1, finger, command.x, command.y, width, height, false)};
+        if (command.click_pair_interval_ms) {
+            messages.push_back(messages[0]);
+            messages.push_back(messages[1]);
+        }
+        return messages;
+    }
     case ActionKind::TouchDown:
         return {touch(0, finger, command.x, command.y, width, height, true)};
     case ActionKind::TouchMove:

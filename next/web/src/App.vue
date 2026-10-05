@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { onBeforeUnmount, onMounted, ref } from "vue";
 import { LayoutDashboard, Network, RefreshCw, Power } from "@lucide/vue";
 import { formatApiError, readVersion, readService, shutdownService, type ServiceIdentity } from "./api/client";
 import type { Version } from "./api/types";
@@ -59,7 +59,16 @@ function navigate(target: PageId) {
   currentPage.value = target;
 }
 function updateDirty(page: PageId, value: boolean) { dirty.value[page] = value; }
-onMounted(loadService);
+function protectUnsavedChanges(event: BeforeUnloadEvent) {
+  if (!dirty.value.workbench && !dirty.value.workflow && !session.writing.workbench && !session.writing.workflow) return;
+  event.preventDefault();
+  event.returnValue = "";
+}
+onMounted(() => {
+  void loadService();
+  window.addEventListener("beforeunload", protectUnsavedChanges);
+});
+onBeforeUnmount(() => window.removeEventListener("beforeunload", protectUnsavedChanges));
 </script>
 
 <template>

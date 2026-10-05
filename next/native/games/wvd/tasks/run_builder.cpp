@@ -29,7 +29,7 @@ CompiledWorkflow build_task_workflow(const WvdQuestDefinition &task, const J &va
     const auto &id = task.id;
     const auto plan = WvdTaskPlan::parse(task);
     if (task.type == "dungeon") return dungeon_iteration(plan, values, images);
-    if (id == "Scorpionesses" || id == "Scorpionesses_plus_6_hands" || id == "jier") {
+    if (id == "Scorpionesses" || id == "Scorpionesses_plus_6_hands" || id == "jier" || id == "GiantBounty") {
         if (!bounty) throw std::runtime_error("BOUNTY_PUBLIC_LIBRARY_MISSING");
         return bounty(task, values, images);
     }
@@ -51,7 +51,7 @@ CompiledWorkflow build_task_workflow(const WvdQuestDefinition &task, const J &va
 
 std::size_t task_unit_count(const std::string &id, const J &values) {
     if (id == "Scorpionesses_plus_6_hands") return 4;
-    if (id == "Scorpionesses" || id == "jier") return 3;
+    if (id == "Scorpionesses" || id == "jier" || id == "GiantBounty") return 3;
     if (id == "SSC-goldenchest" || id == "sandman" || id == "manualSepDemon") return 2;
     if (id == "LBC-oneGorgon") return values.at("ACTIVE_REST").get<bool>() ? 3 : 2;
     if (id == "repelEnemyForces") return quests::RepelForces::rounds(values) + 2;

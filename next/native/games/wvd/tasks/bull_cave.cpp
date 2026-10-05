@@ -49,7 +49,6 @@ CompiledWorkflow bull_cave_cycle(const WvdQuestDefinition &definition, const J &
         : navigation::time_leap_without_causality("GhostsOfYore", "cursedwheel_impregnableFortress", allow_download));
     graph.call_child("Leap", leap, {"Leaped"});
     graph.confirm("Leaped", "bull.leap", "bull_cave_leaped", outside, {"FortressPhase"});
-    graph.delay_after("Leaped", 10000);
     graph.observe("FortressPhase", phase(Phase::Fortress), {"Fortress"});
     const auto fortress = graph.define_child("ReturnFortress", navigation::return_to_fortress());
     graph.call_child("Fortress", fortress, {"AtFortress"});

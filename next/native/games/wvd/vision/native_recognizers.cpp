@@ -3,7 +3,9 @@
 #include "dialogue_probes.hpp"
 #include "native_asset_resolver.hpp"
 #include "template_language.hpp"
+#include "games/wvd/tasks/locale_assets.hpp"
 #include "search_regions.hpp"
+#include "support_cards.hpp"
 #include "bobber.hpp"
 #include "games/wvd/fishing/unknown_window.hpp"
 #include "boot_probes.hpp"
@@ -32,6 +34,8 @@ struct UnknownObservationWindow {
 struct MovementSample {
     cv::Mat gray;
     std::chrono::steady_clock::time_point at;
+    std::string evaluated_frame;
+    J result;
 };
 struct CausalityScrollSample {
     cv::Mat bgr;
@@ -78,12 +82,14 @@ J dungeon_map_probe(const J &bound) {
 J combat_detail_probe(const J &bound) {
     if (bound.value("resource_locale", std::string{}) == "zh-Hant")
         return resource("combat.skill.detail", "zh-Hant");
-    return {{"mode", "template"}, {"image", "spellskill/skillDetail"}, {"threshold", 0.8}};
+    return {{"mode", "template"}, {"image", "spellskill/skillDetail"}, {"threshold", 0.8},
+            {"roi", {0, 600, 900, 1000}}};
 }
 J combat_confirm_probe(const J &bound) {
     if (bound.value("resource_locale", std::string{}) == "zh-Hant")
         return resource("combat.skill.confirm", "zh-Hant");
-    return {{"mode", "template"}, {"image", "OK"}, {"threshold", 0.8}};
+    return {{"mode", "template"}, {"image", "OK"}, {"threshold", 0.8},
+            {"roi", {0, 600, 900, 1000}}};
 }
 J character_panel_probe(const J &bound) {
     if (bound.value("resource_locale", std::string{}) == "zh-Hant")
@@ -94,6 +100,11 @@ J recovery_panel_probe(const J &bound) {
     if (bound.value("resource_locale", std::string{}) == "zh-Hant")
         return resource("dungeon.recovery.panel", "zh-Hant");
     return {{"mode", "template"}, {"image", "recover"}, {"threshold", 0.8}};
+}
+J revival_probe(const J &bound) {
+    if (bound.value("resource_locale", std::string{}) == "zh-Hant")
+        return J{{"mode", "revival_prompt"}};
+    return {{"mode", "template"}, {"image", "RiseAgain"}, {"threshold", 0.8}};
 }
 J match(const cv::Mat &source, cv::Mat templ, J p, recognition::Cache &cache,
         const std::string &key) {
@@ -305,6 +316,11 @@ J evaluate_impl(const recognition::Bundle &bundle, recognition::Pixels pixels, c
                 const J &bound, const recognition::Scope &scope,
                 recognition::Cache &cache, unsigned depth, EvaluationMemo &memo) {
     check(depth <= 8, "WVD_CONDITION_DEPTH");
+    // Resolve aliases before choosing a cache contract: a legacy template may
+    // now be an OCR/composite probe with no template score at all.
+    const auto localized = tasks::localize_implicit_probe(p, bound.value("resource_locale", ""));
+    if (localized != p)
+        return evaluate_impl(bundle, pixels, localized, bound, scope, cache, depth, memo);
     auto identity = p;
     // 普通单最佳匹配的测量值与最终阈值无关。复用 score/box，不能复用旧 Hit/NoHit。
     // ROI、预处理、缩放、遮罩和其它参数仍全部参与身份；multiple 不进入此路径。
@@ -321,7 +337,7 @@ J evaluate_impl(const recognition::Bundle &bundle, recognition::Pixels pixels, c
         auto reused = *measured;
         // 语言排除没有像素测量值，阈值变化也不能把它重新判成命中。
         // 保留原NoHit及原因，不伪造best_score来迎合测量缓存。
-        if (single_template && reused.at("evidence").value("reason", "") != "template_language_excluded") {
+        if (single_template && reused.at("evidence").contains("best_score")) {
             auto &evidence = reused.at("evidence");
             const bool hit = evidence.at("best_score").get<double>() >= threshold;
             reused["outcome"] = hit ? "Hit" : "NoHit";
@@ -332,7 +348,9 @@ J evaluate_impl(const recognition::Bundle &bundle, recognition::Pixels pixels, c
     }
     auto result = evaluate_uncached(bundle, pixels, p, bound, scope, cache, depth, memo);
     // 只缓存小型、无时序副作用的叶子证据；多框 JSON 不能变成第二份无界帧缓存。
-    if (p.value("mode", "") == "template" && memo.values.size() < 256 &&
+    const bool measured_template = single_template && result.at("evidence").contains("best_score") &&
+        result.at("evidence").at("best_score").is_number() && result.at("evidence").contains("best_box");
+    if ((measured_template || p.value("mode", "") == "support_selection") && memo.values.size() < 256 &&
         !p.value("multiple", false) && result.dump().size() <= 8192)
         memo.values.emplace(key, result);
     return result;
@@ -464,6 +482,13 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
         check((explicit_roi & allowed_rect) == explicit_roi, "WVD_ROI_OUTSIDE_SCOPE");
     }
     auto mode = p.at("mode").get<std::string>();
+    const auto locale = bound.value("resource_locale", std::string{});
+    const bool random_maze_events = bound.value("random_maze_events", true);
+    if (p.contains("locale_only") && !bound.value("resource_locale", std::string{}).empty() &&
+        p.at("locale_only") != bound.at("resource_locale"))
+        return decision(false, {}, {{"reason", "inactive_language_variant"}}, false);
+    if (!random_maze_events && tasks::random_maze_probe(p))
+        return decision(false, {}, {{"reason", "outside_task_event_scope"}}, false);
     if ((mode == "template" || mode == "bright_mask" || mode == "multiple" ||
          mode == "harken_stair" || mode == "focus_cursor" || mode == "through_stair" || mode == "portrait") &&
         !template_language_enabled(p.at("image").get<std::string>(), bound.value("resource_locale", ""))) {
@@ -475,6 +500,40 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
     if (mode == "ocr") {
         check(!p.contains("preprocess"), "WVD_OCR_PREPROCESS_UNSUPPORTED");
         return scope.recognize_ocr(p);
+    }
+    if (mode == "revival_prompt") {
+        check(p.size() == 1, "WVD_REVIVAL_PARAMETERS_INVALID");
+        // A live ACTIVE HUD proves this is not the post-defeat revival menu.
+        // Keep this gate local: generic all/any must still propagate leaf errors.
+        const auto active = evaluate_impl(bundle, pixels, {{"mode", "combat_active"}},
+            bound, scope, cache, depth + 1, memo);
+        if (active.at("outcome") == "Hit")
+            return decision(false, {}, {{"reason", "active_combat_excludes_revival"}, {"ocr_skipped", true}}, false);
+        return evaluate_impl(bundle, pixels, resource("party.revival.action", "zh-Hant"),
+            bound, scope, cache, depth + 1, memo);
+    }
+    if (mode == "combat_resource_error") {
+        check(p.size() == 1, "WVD_RESOURCE_ERROR_PARAMETERS_INVALID");
+        const auto active = evaluate_impl(bundle, pixels, {{"mode", "combat_active"}},
+            bound, scope, cache, depth + 1, memo);
+        if (active.at("outcome") != "Hit")
+            return decision(false, {}, {{"reason", "not_combat"}, {"ocr_skipped", true}}, false);
+        // Normal menu/detail frames cannot be resource-error modals. Avoid OCR
+        // on every cast; only a blocked battle candidate needs text confirmation.
+        for (const auto &normal : {resource("combat.menu.flee", "zh-Hant"), combat_detail_probe(bound)}) {
+            const auto result = evaluate_impl(bundle, pixels, normal, bound, scope, cache, depth + 1, memo);
+            if (result.at("outcome") == "Hit")
+                return decision(false, {}, {{"reason", "normal_combat_page"}, {"ocr_skipped", true}}, false);
+        }
+        // Attack/defend animation hides NEXT without being an error dialog.
+        // Only an idle targeting HUD can lead to the resource-modal OCR branch.
+        const auto idle = evaluate_impl(bundle, pixels,
+            {{"mode", "template"}, {"image", "next"}, {"threshold", .8}, {"roi", {0, 80, 900, 700}}},
+            bound, scope, cache, depth + 1, memo);
+        if (idle.at("outcome") != "Hit")
+            return decision(false, {}, {{"reason", "combat_animation"}, {"ocr_skipped", true}}, false);
+        return scope.recognize_ocr({{"mode", "ocr"}, {"language", "zh-Hant"}, {"expected", {"SP不足", "MP不足", "SP 不足", "MP 不足", "SP不夠", "MP不夠"}},
+            {"match", "contains"}, {"unique", false}, {"threshold", .9}, {"roi", {0, 600, 900, 1000}}});
     }
     if (mode == "task_stop") {
         check(p.size() == 1, "WVD_TASK_STOP_PARAMETERS_INVALID");
@@ -529,7 +588,7 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
     if (mode == "blocking_screen" && p.value("parallel_basic", false)) {
         check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");
         // 基础探针按优先级逐项识别；已命中时不再启动无关尾项。
-        const auto probes = blocking_probes(false);
+        const auto probes = blocking_probes(false, locale, random_maze_events);
         const auto matches = evaluate_batch(bundle, pixels, probes, bound, scope, cache, depth, memo, 4, BatchUse::OrderedFirst);
         for (std::size_t i = 0; i < probes.size(); ++i) {
             const auto &result = matches.at(i);
@@ -547,7 +606,7 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
     }
     if (mode == "boot_ready" && p.value("parallel_basic", false)) {
         check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");
-        const auto probes = boot_probes(false);
+        const auto probes = boot_probes(false, locale, random_maze_events);
         const auto matches = evaluate_batch(bundle, pixels, probes, bound, scope, cache, depth, memo, 4, BatchUse::OrderedFirst);
         // 按原稳定页优先级逐项计算；首项命中后不再安排尾项。
         for (std::size_t i = 0; i < probes.size(); ++i) {
@@ -705,7 +764,7 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
         check(stage == "open" || stage == "confirm", "WVD_DARK_LIGHT_STAGE_INVALID");
         auto image_probe = [](const char *name) { return J{{"mode", "template"}, {"image", name}}; };
         J conditions = J::array({image_probe(stage == "open" ? "darklight" : "darklight_lightIt")});
-        J excluded = J::array({J{{"mode", "combat_active"}}, image_probe("RiseAgain")});
+        J excluded = J::array({J{{"mode", "combat_active"}}, revival_probe(bound)});
         for (const auto &probe : chest_stage_probes()) excluded.push_back(probe);
         if (stage == "open") {
             conditions.push_back(image_probe("dungFlag"));
@@ -720,7 +779,7 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
         if (scene.at("outcome") != "Hit") return scene;
         // 基础覆盖层可同帧四路扫描，仍按原优先级消费结果/错误。
         // 打开灯已证明Dungeon；按旧分类顺序，死亡和默认对话不能抢占正常Dungeon。
-        const auto probes = blocking_probes(false);
+        const auto probes = blocking_probes(false, locale, random_maze_events);
         const auto matches = evaluate_batch(bundle, pixels, probes, bound, scope, cache, depth, memo, 4, BatchUse::OrderedFirst);
         for (std::size_t i = 0; i < probes.size(); ++i) {
             const auto &result = matches.at(i);
@@ -812,11 +871,18 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
         check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");
         // 保持旧 IdentifyState 的正常状态优先级。先排除无死亡模板的绝大多数帧；
         // 命中后才核对正常场景与 Pause/角色详情，不能仅凭一个骷髅授权点击。
-        auto marker = evaluate_impl(bundle, pixels, {{"mode", "template"},
-            {"image", mode == "party_death" ? "someonedead" : "multipeopledead"}}, bound, scope, cache, depth + 1, memo);
+        const bool stop_only_selection = mode == "party_defeat" && locale == "zh-Hant";
+        const J marker_probe = stop_only_selection
+            ? J{{"mode", "multiple"}, {"image", "skull"}, {"roi", {0, 300, 900, 1300}}}
+            : J{{"mode", "template"}, {"image", mode == "party_death" ? "someonedead" : "multipeopledead"}};
+        auto marker = evaluate_impl(bundle, pixels, marker_probe, bound, scope, cache, depth + 1, memo);
         check(marker.at("outcome") != "Error", "WVD_DEATH_RECOGNITION_ERROR");
         if (marker.at("outcome") != "Hit")
             return decision(false, {}, {{"reason", "no_death_marker"}});
+        // Without a captured Chinese selection page, multiple death icons only
+        // authorize stopping for the user, never choosing or restarting.
+        if (stop_only_selection && marker.at("evidence").at("boxes").size() < 2)
+            return decision(false, {}, {{"reason", "multiple_death_icons_not_confirmed"}});
         if (mode == "party_defeat") {
             auto single = evaluate_impl(bundle, pixels, {{"mode", "party_death"}}, bound, scope, cache, depth + 1, memo);
             check(single.at("outcome") != "Error", "WVD_DEATH_RECOGNITION_ERROR");
@@ -830,7 +896,7 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
         for (const auto &probe : chest_stage_probes()) guards.push_back(probe);
         guards.push_back({{"mode", "combat_active"}});
         guards.push_back({{"mode", "pause_negative"}});
-        for (const auto &probe : blocking_probes(false))
+        for (const auto &probe : blocking_probes(false, locale, random_maze_events))
             guards.push_back(probe);
         for (const auto &guard : guards) {
             auto result = evaluate_impl(bundle, pixels, guard, bound, scope, cache, depth + 1, memo);
@@ -845,7 +911,7 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
         // 连续死亡页优先返回自身的完整场景判断，不再跑一遍通用启动候选；
         // 离开死亡页后再按原通用顺序分派。这里不是改变 any/all 的求值契约。
         for (const auto &probe : J::array({J{{"mode", "party_death"}}, J{{"mode", "party_defeat"}},
-                J{{"mode", "template"}, {"image", "RiseAgain"}, {"threshold", .8}}, J{{"mode", "boot_post"}}})) {
+                revival_probe(bound), J{{"mode", "boot_post"}}})) {
             auto result = evaluate_impl(bundle, pixels, probe, bound, scope, cache, depth + 1, memo);
             check(result.at("outcome") != "Error", "WVD_DEATH_RECOGNITION_ERROR");
             if (result.at("outcome") == "Hit")
@@ -888,13 +954,17 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
             check(result.at("outcome") != "Error", "WVD_NAVIGATION_RECOGNITION_ERROR");
             return result.at("outcome") == "Hit";
         };
+        // The toast may vanish before the caller resumes. Classify it on the
+        // input-result frame before accepting the persistent dungeon background.
+        if (observe(navigation_no_route_probe(bound.value("resource_locale", ""))))
+            return decision(true, allowed_rect, {{"stage", "navigation_no_route"}});
         const bool map = observe(dungeon_map_probe(bound));
         // 原式 moving|encounter|outside|no_target 中，!map && dungFlag 足以证明结果；
         // 即使同时出现遭遇/退场图标也属于允许返回状态，不必重算所有排除条件。
         // 这里只作后置分类，绝不授权下一次输入；通用 any/all 的 Error 传播不变。
         if (!map && observe({{"mode", "template"}, {"image", "dungFlag"}, {"threshold", .8}}))
             return decision(true, allowed_rect, {{"stage", "dungeon"}});
-        for (const auto &probe : auto_route_probes())
+        for (const auto &probe : auto_route_probes(bound.value("resource_locale", "")))
             if (observe(probe))
                 return decision(true, allowed_rect, {{"stage", probe.value("image", "combat_active")}});
         if (!map)
@@ -969,7 +1039,7 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
             return decision(false, {}, {{"reason", "option_changed"}, {"selected", selected}});
         // 旧 IdentifyState 的专用选项先于善恶/祝福/沙人兜底，晚于正常场景、启动阻塞和死亡提示。
         auto guards = default_dialogue_normal_probes();
-        for (const auto &probe : blocking_probes(false)) {
+        for (const auto &probe : blocking_probes(false, locale, random_maze_events)) {
             const auto image_name = probe.value("image", "");
             if (image_name != "ambush" && image_name != "ignore" && image_name != "blessing" && image_name != "sandman_recover")
                 guards.push_back(probe);
@@ -1011,7 +1081,7 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
             return decision(false, {}, {{"reason", "no_default_option"}});
         auto guards = default_dialogue_normal_probes();
         const auto normal_count = guards.size();
-        for (const auto &probe : blocking_probes(false))
+        for (const auto &probe : blocking_probes(false, locale, random_maze_events))
             guards.push_back(probe);
         guards.push_back({{"mode", "party_death"}});
         const auto guarded = evaluate_batch(bundle, pixels, guards, bound, scope, cache, depth, memo, 4, BatchUse::OrderedFirst);
@@ -1104,7 +1174,7 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
             {"changed_fraction", changed}, {"settle_ms", settle_ms}});
     }
     if (mode == "input_clear") {
-        for (const auto &probe : input_blockers(p.value("phase", ""))) {
+        for (const auto &probe : input_blockers(p.value("phase", ""), locale, random_maze_events)) {
             const auto result = evaluate_impl(bundle, pixels, probe, bound, scope, cache, depth + 1, memo);
             check(result.at("outcome") != "Error", "WVD_INPUT_GUARD_ERROR");
             if (result.at("outcome") == "Hit") return decision(false, {}, {{"reason", "local_overlay"}});
@@ -1113,7 +1183,7 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
     }
     if (mode == "exception_screen" || mode == "special_screen") {
         check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");
-        auto probes = mode == "exception_screen" ? exception_probes() : special_screen_probes();
+        auto probes = mode == "exception_screen" ? exception_probes(locale) : special_screen_probes(locale, random_maze_events);
         if (mode == "special_screen") probes.push_back(ordinary_story_page());
         // 分组内按已知优先级顺序判断；命中后不再穷举其余页面，实际 Error 仍传播。
         for (const auto &probe : probes) {
@@ -1129,7 +1199,7 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
         if (mode == "boot_post") {
             // 后置只证明进入已知页，不选择输入目标。先查正常页，避免下载已返回游戏后
             // 仍扫描全部默认对话/死亡候选而超过2秒帧龄；输入前的覆盖层优先级不变。
-            for (const auto &probe : boot_probes(false)) {
+            for (const auto &probe : boot_probes(false, locale, random_maze_events)) {
                 const auto result = evaluate_impl(bundle, pixels, probe, bound, scope, cache, depth + 1, memo);
                 check(result.at("outcome") != "Error", "WVD_BOOT_RECOGNITION_ERROR");
                 if (result.at("outcome") == "Hit")
@@ -1138,7 +1208,7 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
         }
         // 旧 WaitGameBootReady 是顺序候选，不是把全部条件都求完的 boolean any。
         // 只省去命中后的无关检查；实际执行探针的 Error 仍直接传播，未知仍 NoHit。
-        for (const auto &probe : mode == "blocking_screen" ? blocking_probes() : boot_probes(mode == "boot_post")) {
+        for (const auto &probe : mode == "blocking_screen" ? blocking_probes(true, locale, random_maze_events) : boot_probes(mode == "boot_post", locale, random_maze_events)) {
             auto result = evaluate_impl(bundle, pixels, probe, bound, scope, cache, depth + 1, memo);
             check(result.at("outcome") != "Error", "WVD_BOOT_RECOGNITION_ERROR");
             if (result.at("outcome") == "Hit")
@@ -1198,6 +1268,14 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
             std::hash<std::string>{}(assets.canonical_key("fishing/bobber")));
     }
     auto one = [&](const std::string &name, J parameters) {
+        auto probe = parameters;
+        probe["mode"] = parameters.value("mode", "template");
+        probe["image"] = name;
+        const auto resolved = tasks::localize_implicit_probe(probe, locale);
+        if (resolved != probe)
+            return evaluate_impl(bundle, pixels, resolved, bound, scope, cache, depth + 1, memo);
+        if (!template_language_enabled(name, locale))
+            return decision(false, {}, {{"reason", "template_language_excluded"}, {"image", name}}, false);
         const bool has_roi = parameters.contains("roi");
         auto effective = has_roi ? rect(parameters.at("roi"), image.size()) : allowed_rect;
         check((effective & allowed_rect) == effective, "WVD_ROI_OUTSIDE_SCOPE");
@@ -1208,6 +1286,25 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
         result["roi_source"] = parameters.value("roi_source", has_roi ? "explicit" : "scope");
         return result;
     };
+    if (mode == "navigation_resume_unavailable") {
+        // 先匹配循环箭头轮廓，再检测字形自身的亮度，不把深色背景当按钮。
+        auto result = one("resume", {{"roi", {680, 220, 135, 150}}, {"threshold", .8}});
+        if (result.at("outcome") != "Hit") return result;
+        const auto area = rect(result.at("box"), image.size());
+        auto templ = assets.load("resume");
+        cv::Mat template_gray, glyph_mask, gray, bright;
+        cv::cvtColor(templ, template_gray, cv::COLOR_BGR2GRAY);
+        cv::threshold(template_gray, glyph_mask, 80, 255, cv::THRESH_BINARY);
+        const int glyph_pixels = cv::countNonZero(glyph_mask);
+        check(glyph_pixels > 0, "WVD_RESUME_GLYPH_INVALID");
+        cv::cvtColor(image(area), gray, cv::COLOR_BGR2GRAY);
+        cv::threshold(gray, bright, 99, 255, cv::THRESH_BINARY);
+        cv::bitwise_and(bright, glyph_mask, bright);
+        const double fraction = double(cv::countNonZero(bright)) / glyph_pixels;
+        return decision(fraction < .1, area, {{"glyph_bright_fraction", fraction},
+            {"brightness_threshold", 100}, {"max_bright_fraction", .1},
+            {"template_evidence", result}}, false);
+    }
     if (mode == "movement_stopped") {
         // 沿用旧移动检查的 3 秒间隔和小地图 ROI，只保存一个 Session 内的灰度副本。
         // Hit 仅表示需要重新打开地图检查，不表示目标完成或整局游戏卡死。
@@ -1229,17 +1326,26 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
         auto found = cache.assets.find(key);
         if (found == cache.assets.end()) {
             check(cache.assets.size() < 2048, "WVD_SESSION_ASSET_CAPACITY");
-            cache.assets.emplace(key, MovementSample{gray, now});
-            return decision(false, {}, {{"reason", "first_sample"}});
+            auto result = decision(false, {}, {{"reason", "first_sample"}});
+            cache.assets.emplace(key, MovementSample{gray, now, cache.frame_key, result});
+            return result;
         }
         auto &previous = std::any_cast<MovementSample &>(found->second);
-        if (now - previous.at < std::chrono::seconds(3))
-            return decision(false, {}, {{"reason", "sample_interval"}});
+        // Arrived and Stopped can inspect the same frame through different composites.
+        // Sampling once must not consume the evidence needed by the next branch.
+        if (previous.evaluated_frame == cache.frame_key) return previous.result;
+        previous.evaluated_frame = cache.frame_key;
+        if (now - previous.at < std::chrono::seconds(3)) {
+            previous.result = decision(false, {}, {{"reason", "sample_interval"}});
+            return previous.result;
+        }
         cv::Mat difference;
         cv::absdiff(gray, previous.gray, difference);
         const double mean = cv::mean(difference)[0] / 255;
-        previous = {gray, now};
-        return decision(mean < 0.1, area, {{"mean_difference", mean}, {"threshold", 0.1}}, false);
+        previous.gray = std::move(gray);
+        previous.at = now;
+        previous.result = decision(mean < 0.1, area, {{"mean_difference", mean}, {"threshold", 0.1}}, false);
+        return previous.result;
     }
     if (mode == "template" || mode == "bright_mask" || mode == "multiple") {
         auto parameters = p;
@@ -1332,8 +1438,11 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
         if (mode == "pause" && !(dark > 0.65 && white > 0.015 && white < 0.09 && maximum > 135))
             return decision(false, {}, detail);
         J negative_probes = J::array({character_panel_probe(bound), recovery_panel_probe(bound),
-            combat_detail_probe(bound), J{{"mode", "template"}, {"image", "close"},
-                {"roi", {120, 1330, 740, 270}}}});
+            combat_detail_probe(bound)});
+        // A shared X rules out Pause, but does not prove a normal panel: rescue
+        // also has this control. Only identified panels may veto death handling.
+        if (mode == "pause") negative_probes.push_back(J{{"mode", "template"}, {"image", "close"},
+            {"roi", {0, 600, 900, 1000}}});
         for (const auto &probe : negative_probes) {
             const auto name = probe.at("image").get<std::string>();
             auto evidence = evaluate_impl(bundle, pixels, probe, bound, scope, cache, depth + 1, memo);
@@ -1360,7 +1469,71 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
                 return result;
             }
         }
+        if (bound.value("resource_locale", std::string{}) == "zh-Hant") {
+            // Masked text alone can match bright scenery; require an independent battle HUD anchor.
+            auto active = one("combat_active_zh_hant", {{"roi", {0, 0, 210, 105}},
+                {"bright_mask", true}, {"threshold", .95}});
+            if (active.at("outcome") == "Hit") {
+                for (const auto *name : {"combat_speed_off_zh_hant", "combat_speed_on_zh_hant"}) {
+                    auto hud = one(name, {{"roi", {0, 930, 120, 210}}, {"threshold", .9}});
+                    if (hud.at("outcome") == "Hit") {
+                        active["battle_hud"] = std::move(hud);
+                        active["attempts"] = std::move(attempts);
+                        return active;
+                    }
+                }
+                // Skill overlays dim the speed HUD, but retain their independent detail button.
+                auto detail = one("combat_skill_detail_zh_hant", {{"roi", {0, 600, 900, 1000}},
+                    {"threshold", .82}});
+                if (detail.at("outcome") == "Hit") {
+                    active["battle_hud"] = std::move(detail);
+                    active["attempts"] = std::move(attempts);
+                    return active;
+                }
+            }
+        }
         return decision(false, {}, {{"attempts", attempts}});
+    }
+    if (mode == "support_selection") {
+        const auto expected = p.value("expect", "present");
+        const int slot = p.value("slot", -1);
+        check((expected == "present" || expected == "absent") && slot >= -1 && slot < 6 &&
+              (expected == "present" || slot == -1), "SUPPORT_SELECTION_PARAMETERS_INVALID");
+        // 敌我分支与六个选位复用同一帧的测量，不重复提取轮廓。
+        const std::string key = "support_cards_measurement";
+        J measured;
+        if (const auto *prior = memo.find(key)) measured = *prior;
+        else {
+            const auto detail = evaluate_impl(bundle, pixels, combat_detail_probe(bound), bound, scope, cache, depth + 1, memo);
+            // 旧close素材含英文Close；只匹配共有叉号，避免正文语言影响，阈值保持0.8。
+            const auto close = one("close", {{"roi", {0, 600, 900, 1000}}, {"crop", {18, 12, 40, 40}}});
+            measured = {{"state", "unknown"}, {"cards", J::array()}, {"detail", detail}, {"close", close}};
+            if (detail.at("outcome") == "Hit" && close.at("outcome") == "Hit") {
+                const auto d = rect(detail.at("box"), image.size()), c = rect(close.at("box"), image.size());
+                const int top = std::max(image.rows / 2, d.y + d.height), bottom = c.y - 8;
+                if (bottom > top) {
+                    const cv::Rect area(0, top, image.cols, bottom - top);
+                    check((area & allowed_rect) == area, "WVD_ROI_OUTSIDE_SCOPE");
+                    const auto start = std::chrono::steady_clock::now();
+                    const auto found = detect_support_cards(image, area);
+                    measured["card_detection_ms"] = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+                    measured["roi"] = box(area);
+                    measured["candidate_count"] = found.candidates.size();
+                    measured["candidate_boxes"] = J::array();
+                    for (const auto r : found.candidates) measured["candidate_boxes"].push_back(box(r));
+                    measured["state"] = found.cards.size() == 6 ? "present" : found.candidates.empty() ? "absent" : "ambiguous";
+                    for (const auto r : found.cards) measured["cards"].push_back(box(r));
+                }
+            }
+            if (memo.values.size() < 256) memo.values.emplace(key, measured);
+        }
+        const bool hit = measured.at("state") == expected;
+        cv::Rect area = expected == "absent" ? allowed_rect : cv::Rect{};
+        if (hit && expected == "present") {
+            if (slot >= 0) area = rect(measured.at("cards").at(slot), image.size());
+            else for (const auto &card : measured.at("cards")) area |= rect(card, image.size());
+        }
+        return decision(hit, area, measured, slot >= 0);
     }
     if (mode == "prepared_actor" || mode == "skill_target") {
         const auto summary = scope.business_summary();
@@ -1382,14 +1555,39 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
             bound, scope, cache, depth + 1, memo);
         auto ok = evaluate_impl(bundle, pixels, combat_confirm_probe(bound),
             bound, scope, cache, depth + 1, memo);
-        auto support = one("supportSkillCheck", {{"roi", {580, 1350, 320, 250}}});
-        if (detail.at("outcome") != "Hit" || ok.at("outcome") == "Hit" || support.at("outcome") == "Hit")
+        auto no_support = evaluate_impl(bundle, pixels, {{"mode", "support_selection"}, {"expect", "absent"}},
+            bound, scope, cache, depth + 1, memo);
+        if (detail.at("outcome") != "Hit" || ok.at("outcome") == "Hit" || no_support.at("outcome") != "Hit")
             return decision(false, {}, {{"reason", "not_enemy_selection"}});
+        const int index = p.value("candidate_index", 0);
+        check(index >= 0 && index < 24, "COMBAT_TARGET_INDEX_INVALID");
+        const auto detail_box = rect(detail.at("box"), image.size());
+        const int bottom = std::min(900, detail_box.y - 60);
+        if (bottom < 300) return decision(false, {}, {{"reason", "enemy_area_occluded"}});
+        // Search can include the action bar; inputs cannot. Keep every point above the live popup.
+        const cv::Rect safe(220, 180, 620, bottom - 180);
+        check((safe & allowed_rect) == safe, "WVD_ROI_OUTSIDE_SCOPE");
         J attempts = J::array();
-        for (const auto &candidate : {std::pair{"next", .86}, std::pair{"combatTarget", .86}, std::pair{"next", .60}}) {
-            auto result = one(candidate.first, {{"roi", combat_target_search_roi()}, {"threshold", candidate.second}});
+        // 红色目标箭头与白色箭头轮廓相同；只在上述敌方详情门禁内使用灰度形状匹配。
+        // 不把该容错推广到人物头像，也不降低三角的原阈值。
+        const J candidates = J::array({
+            {{"image", "next"}, {"threshold", .86}},
+            {{"image", "combatTarget"}, {"threshold", .86}},
+            {{"image", "combatTarget"}, {"threshold", .86}, {"grayscale", true}},
+            {{"image", "next"}, {"threshold", .60}}});
+        for (auto candidate : candidates) {
+            const auto image_name = candidate.at("image").get<std::string>();
+            candidate.erase("image");
+            candidate["roi"] = combat_target_search_roi();
+            auto result = one(image_name, candidate);
             attempts.push_back(result);
-            if (result.at("outcome") == "Hit") {
+            if (result.at("outcome") == "Hit" && index < 4) {
+                const auto marker = rect(result.at("box"), image.size());
+                const int dx[] = {0, -90, 90, 0};
+                const int dy[] = {100, 170, 170, 260};
+                const int x = std::clamp(marker.x + marker.width / 2 + dx[index], safe.x, safe.br().x - 2);
+                const int y = std::clamp(marker.y + marker.height / 2 + dy[index], safe.y, safe.br().y - 2);
+                result = decision(true, {x, y, 2, 2}, {{"basis", "marker_body_point"}, {"marker", result}}, true);
                 result["evidence"]["attempts"] = attempts;
                 result["evidence"]["selection_index"] = summary.at("prepared_skill_index");
                 result["evidence"]["actor"] = actor;
@@ -1397,36 +1595,32 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
                 return result;
             }
         }
-        return decision(false, {}, {{"attempts", attempts}});
+        // A missed marker does not mean there is no enemy. The prepared actor/detail/friendly
+        // exclusions above authorize one spatial attempt, not a detected enemy or a successful cast.
+        const int point = index < 4 ? index : index - 4;
+        const int columns[] = {2, 1, 3, 0, 4};
+        const int x = safe.x + 20 + columns[point % 5] * (safe.width - 40) / 4;
+        const int y = safe.y + 20 + (point / 5) * (safe.height - 40) / 3;
+        return decision(true, {x, y, 2, 2}, {{"basis", "enemy_area_attempt"},
+            {"candidate_index", index}, {"safe_area", box(safe)}, {"attempts", attempts},
+            {"selection_index", summary.at("prepared_skill_index")}, {"actor", actor}}, true);
     }
     if (mode == "portrait") {
         auto name = p.at("image").get<std::string>();
         auto templ = assets.load(name);
         int w = templ.cols, h = templ.rows;
-        // 裁片选择负责避开等级/姓名；搜索范围负责位置容差，二者不能相等。
-        // 旧实现ROI恰好等于裁片大小，每个猜测坐标只做一次像素对齐比较。
+        // 头像素材已裁掉姓名/等级；保留完整身份特征，并允许头像在当前行动位内平移。
+        // 局部裁片独立取最高分会把别人的半张脸认成当前角色，不能用于输入授权。
         auto search_roi = active_actor_search_roi();
         if (p.contains("active")) search_roi[1] = p.at("active").at(1).get<int>() + 15;
         const auto search_area = rect(search_roi, image.size());
         check((search_area & allowed_rect) == search_area, "WVD_ROI_OUTSIDE_SCOPE");
-        std::vector<cv::Rect> crops{{0, 0, w, h},
-                                    {w * 40 / 100, 0, w - w * 40 / 100, h},
-                                    {w * 33 / 100, 0, w - w * 33 / 100, h * 80 / 100},
-                                    {0, 0, w, h * 70 / 100}};
-        J best;
-        double score = -2;
-        for (auto crop : crops) {
-            auto result = match(image, templ,
-                {{"roi", box(search_area)}, {"crop", box(crop)},
-                 {"threshold", p.value("threshold", 0.8)}},
-                cache, assets.canonical_key(name));
-            if (result["evidence"]["best_score"].get<double>() > score) {
-                score = result["evidence"]["best_score"];
-                best = result;
-                best["evidence"]["crop"] = box(crop);
-            }
-        }
-        return best;
+        auto result = match(image, templ,
+            {{"roi", box(search_area)}, {"threshold", p.value("threshold", 0.8)}},
+            cache, assets.canonical_key(name));
+        result["evidence"]["crop"] = {0, 0, w, h};
+        result["evidence"]["identity_basis"] = "full_portrait";
+        return result;
     }
     if (mode == "skill_level") {
         int level = p.at("level");
@@ -1532,16 +1726,16 @@ J evaluate(const recognition::Bundle &bundle, recognition::Pixels pixels, const 
 }
 } // namespace
 recognition::Handlers native_handlers(const J &aliases, const std::string &resource_locale,
-                                      recovery::DialoguePolicy dialogue_policy) {
+                                      recovery::DialoguePolicy dialogue_policy, bool random_maze_events) {
     // 仅从冻结编译结果接收；运行期间不重读活动配置，也不根据任务名猜测策略。
     const auto dialogue_task = recovery::dialogue_policy_name(dialogue_policy);
-    return {{"WvdVision", [aliases, resource_locale, dialogue_task](const recognition::Bundle &bundle,
+    return {{"WvdVision", [aliases, resource_locale, dialogue_task, random_maze_events](const recognition::Bundle &bundle,
                                      recognition::Pixels pixels, const J &parameters,
                                      const recognition::Scope &scope,
                                      recognition::Cache &cache) {
         return evaluate(bundle, pixels, parameters,
             {{"aliases", aliases}, {"resource_locale", resource_locale},
-             {"dialogue_task", dialogue_task}}, scope, cache);
+             {"dialogue_task", dialogue_task}, {"random_maze_events", random_maze_events}}, scope, cache);
     }}};
 }
 } // namespace wvd::games::vision

@@ -186,6 +186,12 @@ WvdTaskPlan WvdTaskPlan::parse(const WvdQuestDefinition &definition) {
     };
     plan.pre_entry_ = optional_pattern("_preEOTcheck");
     plan.floor_ = optional_pattern("_FloorCheck");
+    if (source.contains("_TIME_LEAP")) {
+        const auto &leap = source.at("_TIME_LEAP");
+        if (!leap.is_object() || leap.size() != 2 || !leap.contains("target") || !leap.contains("chapter"))
+            throw std::runtime_error("TASK_TIME_LEAP_INVALID");
+        plan.time_leap_ = TaskTimeLeap{pattern(leap.at("target")), pattern(leap.at("chapter"))};
+    }
     if (source.contains("_TARGETINFOLIST") && !source.at("_TARGETINFOLIST").is_null())
         for (const auto &target : source.at("_TARGETINFOLIST"))
             plan.route_.push_back(map_target(target));
@@ -248,6 +254,13 @@ WvdTaskPlan WvdTaskPlan::with_floor(const std::string &image) const {
     plan.floor_ = pattern(image);
     return plan;
 }
+WvdTaskPlan WvdTaskPlan::with_shortcut_battle(int wait_ms) const {
+    if (route_.empty() || route_.front().target != "mark_auto" || wait_ms < 1 || wait_ms > 10000)
+        throw std::runtime_error("TASK_SHORTCUT_BATTLE_INVALID");
+    auto plan = *this;
+    plan.route_.front().shortcut_battle_wait_ms = wait_ms;
+    return plan;
+}
 nlohmann::json WvdTaskPlan::inspect() const {
     J entries = J::array(), targets = J::array();
     for (const auto &step : entry_)
@@ -273,7 +286,8 @@ nlohmann::json WvdTaskPlan::inspect() const {
              {"position", target.position ? J(*target.position) : J(nullptr)},
              {"stair_reference", target.stair_reference},
              {"regions", target.regions},
-             {"harken_arrival", target.harken_arrival}});
+             {"harken_arrival", target.harken_arrival},
+             {"shortcut_battle_wait_ms", target.shortcut_battle_wait_ms ? J(*target.shortcut_battle_wait_ms) : J(nullptr)}});
     }
     // 解析产物不是可运行 Pipeline。特别是 quest 的代码分支不能由这里伪造成功入口。
     return {{"task_id", definition_.id},
@@ -284,6 +298,7 @@ nlohmann::json WvdTaskPlan::inspect() const {
             {"pre_entry", pre_entry_ ? J(*pre_entry_) : J(nullptr)},
             {"floor", floor_ ? J(*floor_) : J(nullptr)},
             {"return", return_ ? world_json(*return_) : J(nullptr)},
+            {"time_leap", time_leap_ ? J{{"target", time_leap_->target}, {"chapter", time_leap_->chapter}} : J(nullptr)},
             {"requires_special_case", definition_.type == "quest"},
             {"pipeline_available", false},
             {"remaining", "BUSINESS_ACTIONS_AND_PIPELINE_COMPILER_REQUIRED"}};

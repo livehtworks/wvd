@@ -97,7 +97,6 @@ CompiledWorkflow preparation(const WvdQuestDefinition &definition, const J &prof
         navigation::time_leap_without_causality("GhostsOfYore", "cursedwheel_impregnableFortress", download));
     graph.call_child("Leap", leap, {"Leaped"});
     graph.confirm("Leaped", "cos.leaped", "cos_leaped", outside, {"Stage"});
-    graph.delay_after("Leaped", 10000);
     graph.observe("FortressPhase", phase(Phase::Fortress), {"Fortress"});
     const auto fortress = graph.define_child("ReturnFortress", navigation::return_to_fortress());
     graph.call_child("Fortress", fortress, {"AtFortress"});

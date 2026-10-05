@@ -1,4 +1,5 @@
 #include "encounter.hpp"
+#include "enemy_rules.hpp"
 
 namespace wvd::games::combat {
 tasks::CompiledWorkflow fight_encounter(const nlohmann::json &profile,
@@ -7,7 +8,7 @@ tasks::CompiledWorkflow fight_encounter(const nlohmann::json &profile,
     using C = tasks::PipelineCompiler;
     using J = nlohmann::json;
     C graph("combat.encounter");
-    graph.check_policy("combat", {"wvd-network-retry", "wvd-pause", "wvd-download", "wvd-party-death"});
+    graph.check_policy("combat", {"wvd-network-retry", "wvd-pause", "wvd-download", "wvd-party-death", "wvd-party-defeat"});
     const J battle{{"mode", "combat_active"}};
     const J progress{{"mode", "region_changed"}, {"channel", "combat"}, {"roi", {15, 40, 145, 800}}};
     auto baseline = progress, stalled = progress;
@@ -26,24 +27,39 @@ tasks::CompiledWorkflow fight_encounter(const nlohmann::json &profile,
         flee["roi"] = {660, 1080, 240, 220};
         const auto ready = C::all({battle, flee});
         J detectors = J::array();
+        J prior = J::array(), branches = J::array();
+        const auto rules = enemy_rules(profile);
+        if (detect_portrait) for (std::size_t i = 0; i < rules.size(); ++i) {
+            auto portrait = C::image(rules[i].image);
+            portrait.update({{"roi", {20, 45, 160, 855}}, {"grayscale", true}, {"threshold", 0.88}});
+            const auto name = "Enemy" + std::to_string(i);
+            auto condition = C::all({ready, portrait});
+            if (!prior.empty()) condition = C::all({condition, C::absent(C::any(prior))});
+            graph.confirm(name, "combat.begin", "combat_special_observed", condition, {"StartProgress"}, nullptr, rules[i].id);
+            branches.push_back(name);
+            prior.push_back(portrait);
+            detectors.push_back(portrait);
+        }
         if (detect_skull) {
             auto skull = C::image("combat_special_skull");
             skull.update({{"roi", {160, 100, 740, 800}}, {"grayscale", true}, {"threshold", 0.84}});
             detectors.push_back(skull);
         }
-        if (detect_portrait) {
+        if (detect_portrait && rules.empty()) {
             auto portrait = C::image(special.at("portrait_image").get<std::string>());
             portrait.update({{"roi", {20, 45, 160, 855}}, {"grayscale", true}, {"threshold", 0.88}});
             detectors.push_back(portrait);
         }
         const auto match = C::any(detectors);
-        graph.route("Entry", {"Special", "Ordinary", "Dungeon", "Chest", "Revive", "WaitingForMenu"});
-        graph.confirm("Special", "combat.begin", "combat_special_observed",
-                      C::all({ready, match}), {"StartProgress"});
+        for (const auto *branch : {"Special", "Ordinary", "Dungeon", "Chest", "Revive", "WaitingForMenu"}) branches.push_back(branch);
+        graph.route("Entry", branches);
+        auto fallback = C::all({ready, match});
+        if (!prior.empty()) fallback = C::all({fallback, C::absent(C::any(prior))});
+        graph.confirm("Special", "combat.begin", "combat_special_observed", fallback, {"StartProgress"});
         graph.confirm("Ordinary", "combat.begin", "combat_observed",
                       C::all({ready, C::absent(match)}), {"StartProgress"});
         graph.poll("WaitingForMenu", 500,
-            {"Special", "Ordinary", "Dungeon", "Chest", "Revive", "WaitingForMenu"},
+            branches,
             C::all({battle, C::absent(flee)}),
             J{{"mode", "region_changed"}, {"channel", "combat"}, {"roi", {15, 40, 145, 800}}});
         graph.failure_route("WaitingForMenu", {"AutoTimeout"});

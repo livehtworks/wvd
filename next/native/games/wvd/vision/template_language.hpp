@@ -8,7 +8,7 @@
 namespace wvd::games::vision {
 // 语言属于素材内容，不属于文件名。优先使用语义目录的变体标记；旧模板和
 // 跨语言共用的文字/图标由同一目录显式声明，不根据英文文件名或后缀猜测。
-inline bool template_language_enabled(const std::string &image, const std::string &locale) {
+inline const std::map<std::string, std::set<std::string>> &template_language_index() {
     using J = nlohmann::json;
     static const auto languages = [] {
         const auto catalogue = J::parse(wvd_semantic_catalogue);
@@ -32,6 +32,10 @@ inline bool template_language_enabled(const std::string &image, const std::strin
             for (const auto &name : images) index[name.get<std::string>()] = {language};
         return index;
     }();
+    return languages;
+}
+inline bool template_language_enabled(const std::string &image, const std::string &locale) {
+    const auto &languages = template_language_index();
     // 未选择语言沿用既有作者探针语义；正式任务使用冻结的resource_locale。
     if (locale.empty()) return true;
     // 与AssetResolver一致：Stay和Stay.png是同一素材，不能借扩展名绕过语言选择。

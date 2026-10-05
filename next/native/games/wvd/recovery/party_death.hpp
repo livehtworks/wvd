@@ -2,7 +2,7 @@
 #include "games/wvd/tasks/pipeline_compiler.hpp"
 
 namespace wvd::games::recovery {
-// someonedead 提示的有限消费者，不承担 RiseAgain、全队死亡或住宿。
+// 救人页的新帧门控中心连点；退出后由原再起/全队死亡处理器继续。
 tasks::CompiledWorkflow dismiss_party_death();
 tasks::CompiledWorkflow acknowledge_party_defeat();
 }

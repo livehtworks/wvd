@@ -1,6 +1,6 @@
 import type {
   ApiErrorBody, Capabilities, Catalog, DeviceState, JsonObject,
-  ProfileEnvelope, RecognitionProbeResult, RunState, SubmissionReceipt, Version, WorkflowDefinition,
+  ProfileEnvelope, RecognitionProbeResult, ResourceLocale, RunState, SubmissionReceipt, Version, WorkflowDefinition,
 } from "./types";
 
 export class ApiError extends Error {
@@ -70,6 +70,9 @@ export const stopRun = (id?: string | number, requestId?: string) => send<RunSta
   "POST", requestId ? { request_id: requestId } : {},
 );
 export const readCurrentRun = () => get<RunState>("/api/v1/runs/current");
+export const startCombatDebug = (strategyName: string, requestId: string, revision: string, locale: ResourceLocale) =>
+  send<SubmissionReceipt>("/api/v1/combat/debug", "POST", { strategy_name: strategyName,
+    request_id: requestId, profile_revision: revision, resource_locale: locale });
 export const startTask = (taskId: string, requestId: string, profileRevision: string | undefined, resourceLocale: import("./types").ResourceLocale, repeat = false, repeatCount?: number) =>
   send<SubmissionReceipt>("/api/v1/runs/start", "POST", {
     task_id: taskId, request_id: requestId, resource_locale: resourceLocale, repeat,

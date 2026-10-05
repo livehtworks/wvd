@@ -30,7 +30,7 @@ J any_chunked(J conditions) {
     return any_chunked(std::move(groups));
 }
 }
-tasks::CompiledWorkflow enter_dungeon(const WvdTaskPlan &plan) {
+tasks::CompiledWorkflow enter_dungeon(const WvdTaskPlan &plan, bool direct_floor_entry) {
     const auto &steps = plan.entry_steps();
     if (steps.empty() || steps.size() > 64)
         throw std::runtime_error("DUNGEON_ENTRY_STEPS_INVALID");
@@ -38,7 +38,9 @@ tasks::CompiledWorkflow enter_dungeon(const WvdTaskPlan &plan) {
     graph.check_policy("navigation", {"wvd-network-retry", "wvd-download", "wvd-story", "wvd-dialogue"});
     const auto inside = C::any({C::image("dungFlag"), C::image("mapFlag"), C::image("chestFlag"), J{{"mode", "combat_active"}}});
     const auto enter = C::image("GotoDung");
-    J anchors{vision::city_screen(), C::image("openworldmap"), C::image("returntoTown"), enter};
+    J anchors{vision::city_screen(), C::image("openworldmap"), C::image("returntoTown")};
+    if (!direct_floor_entry) anchors.push_back(enter);
+    const auto entry_candidates = [&] { return direct_floor_entry ? J{"Entered"} : J{"Entered", "EnterNow"}; };
     for (const auto &step : steps) {
         if (step.kind != EntryStep::Kind::WorldMap)
             anchors.push_back(C::image(step.target));
@@ -57,7 +59,8 @@ tasks::CompiledWorkflow enter_dungeon(const WvdTaskPlan &plan) {
     // fallback 的确认仅表示本次输入后能重新寻找当前目标，不推进 entry 的步骤号。
     const auto fallback_observed = C::any({known, inside, C::image("worldmapflag")});
     const auto successor_result = [&](std::size_t index) {
-        J expected{inside, enter};
+        J expected = J::array({inside});
+        if (!direct_floor_entry) expected.push_back(enter);
         if (index + 1 < steps.size()) {
             const auto &next_step = steps[index + 1];
             // WorldMap由独立导航块确认目的地；EVENT的后继是活动二级页，
@@ -71,7 +74,7 @@ tasks::CompiledWorkflow enter_dungeon(const WvdTaskPlan &plan) {
         return C::any(std::move(expected));
     };
     // 页面优先于旧步骤号。只观察可命名的后继页，不用known宣布前一步完成。
-    J convergence{"Entered", "EnterNow"};
+    J convergence = entry_candidates();
     for (std::size_t i = steps.size(); i-- > 0;)
         if (steps[i].kind == EntryStep::Kind::FindAndPress)
             convergence.push_back("Step" + std::to_string(i) + "Found");
@@ -81,11 +84,14 @@ tasks::CompiledWorkflow enter_dungeon(const WvdTaskPlan &plan) {
     else convergence.push_back("Step0");
     graph.route("Entry", convergence);
     graph.observe("Entered", inside, {"Terminal"});
-    graph.click("EnterNow", located_selection(enter), enter, inside, {"Entered"});
-    graph.retry_menu_input("EnterNow", vision::menu_retry_ready(C::all({located_selection(enter), C::absent(inside)})));
+    if (!direct_floor_entry) {
+        graph.click("EnterNow", located_selection(enter), enter, inside, {"Entered"});
+        graph.retry_menu_input("EnterNow", vision::menu_retry_ready(C::all({located_selection(enter), C::absent(inside)})));
+    }
     if (plan.pre_entry()) {
         const auto pre_target = C::image(*plan.pre_entry());
-        J pre_expected{inside, enter};
+        J pre_expected = J::array({inside});
+        if (!direct_floor_entry) pre_expected.push_back(enter);
         if (steps.front().kind == EntryStep::Kind::WorldMap) {
             // preEOT是当前位置的可选直接入口，不要求先倒退回城市地图按钮。
             pre_expected.push_back(C::image("openworldmap"));
@@ -106,7 +112,7 @@ tasks::CompiledWorkflow enter_dungeon(const WvdTaskPlan &plan) {
         if (!std::isfinite(step.interval_seconds) || step.interval_seconds <= 0 || step.interval_seconds > 10)
             throw std::runtime_error("DUNGEON_ENTRY_INTERVAL_INVALID");
         const auto s = "Step" + std::to_string(i);
-        const J next = i + 1 < steps.size() ? J{"Step" + std::to_string(i + 1)} : J{"Entered", "EnterNow"};
+        const J next = i + 1 < steps.size() ? J{"Step" + std::to_string(i + 1)} : entry_candidates();
         if (i + 1 < steps.size() && step.target == steps[i + 1].target)
             throw std::runtime_error("DUNGEON_ENTRY_IDENTICAL_PAGE_NEEDS_CONTRACT:" + step.target);
         if (step.kind == EntryStep::Kind::WorldMap) {
@@ -128,7 +134,7 @@ tasks::CompiledWorkflow enter_dungeon(const WvdTaskPlan &plan) {
         append_fallback = [&](const TaskAction &action, const J &after) -> std::string {
             const auto name = s + "Fallback" + std::to_string(fallback_index++);
             const auto operation = name + "Action";
-            J choices{"Entered", "EnterNow"};
+            J choices = entry_candidates();
             for (std::size_t later = steps.size(); later-- > i + 1;)
                 if (steps[later].kind == EntryStep::Kind::FindAndPress)
                     choices.push_back("Step" + std::to_string(later) + "Found");
@@ -163,7 +169,7 @@ tasks::CompiledWorkflow enter_dungeon(const WvdTaskPlan &plan) {
             graph.route(s, {"Entered", s + "EventReady", s + "Find"});
             graph.observe(s + "EventReady", C::image("openworldmap"), next);
         } else {
-            J choices{"Entered", "EnterNow"};
+            J choices = entry_candidates();
             for (std::size_t later = steps.size(); later-- > i;)
                 if (steps[later].kind == EntryStep::Kind::FindAndPress)
                     choices.push_back("Step" + std::to_string(later) + "Found");

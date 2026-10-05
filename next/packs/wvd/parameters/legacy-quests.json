@@ -876,6 +876,21 @@
         "_TYPE":"quest"
     },
 
+    "GiantBounty":{
+        "questName":"[悬赏]巨人",
+        "questName_en_US": "[Bounty] Giant",
+        "questCategory": "主线前三章",
+        "questCategory_en_US": "Chapter 1,2 and 3",
+        "_TYPE":"quest",
+        "_TIME_LEAP": {"target": "Triumph", "chapter": "cursedwheel_impregnableFortress"},
+        "_EOT": [
+            ["press", "impregnableFortress", ["EdgeOfTown", [1,1]], 1],
+            ["press", "fortressb10f", [[1,1]], 1]
+        ],
+        "_TARGETINFOLIST": [["mark_auto"], ["dungFlag"]],
+        "_TIPS": "第三章要塞城市出发：凯旋跳轮→悬赏页刷新→郊外→不落的要塞→第十区-要塞3F领主室→标记快捷键导航→战斗结束等待3秒→快捷返哈肯→要塞提交达成报告→按配置住宿。请先在目标位置保留唯一地图标记。任务内凯旋跳轮优先于外部默认跳轮。"
+    },
+
     "gaintKiller":{
         "questName":"[刷怪]要塞7f刷巨人",
         "questName_en_US": "[Farm] Fortress Zone 7 Giant",

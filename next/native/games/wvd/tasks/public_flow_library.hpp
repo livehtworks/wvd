@@ -128,6 +128,7 @@ class PublicFlowLibrary {
         result.workflow.authoring = {{"schema", 1}, {"format", "public-flow-1"},
             {"root", root.at("flow").at("id")}, {"arguments", args}, {"resource_locale", locale},
             {"documents", used}, {"resources", resources}, {"source_paths", result.source_paths}};
+        result.workflow.refresh_images();
         return result;
     }
   private:

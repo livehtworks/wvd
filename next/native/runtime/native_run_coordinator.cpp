@@ -2,6 +2,7 @@
 #include "devices/lifecycle_execution.hpp"
 #include "platform/windows/memory_diagnostics.hpp"
 #include "platform/windows/file_digest.hpp"
+#include "platform/windows/path_utf8.hpp"
 #include <algorithm>
 #include <functional>
 #include <iterator>
@@ -36,7 +37,31 @@ nlohmann::json memory_record(const platform::MemorySample &memory) {
             {"process_memory_available", memory.process_ok},
             {"private_bytes", memory.process_ok ? nlohmann::json(memory.private_bytes) : nullptr},
             {"working_set_bytes", memory.process_ok ? nlohmann::json(memory.working_set_bytes) : nullptr},
-            {"handle_count", memory.handle_count}};
+            {"handle_count", memory.handle_count},
+            {"system_memory_available", memory.system_ok},
+            {"system_commit_bytes", memory.system_ok ? nlohmann::json(memory.commit_total_pages * memory.page_size) : nullptr},
+            {"system_commit_limit_bytes", memory.system_ok ? nlohmann::json(memory.commit_limit_pages * memory.page_size) : nullptr},
+            {"system_physical_available_bytes", memory.system_ok ? nlohmann::json(memory.physical_available_pages * memory.page_size) : nullptr}};
+}
+
+nlohmann::json memory_owners_record(const platform::MemorySample &memory) {
+    const auto sample = platform::sample_memory_owners();
+    auto result = memory_record(memory);
+    result["owners_available"] = sample.available;
+    result["owners_truncated"] = sample.truncated;
+    result["owners_examined"] = sample.examined;
+    result["owners_unreadable"] = sample.unreadable;
+    result["owners_elapsed_ms"] = sample.elapsed_ms;
+    // This is only the readable process subset, not a reconciliation of system commit.
+    result["readable_process_private_bytes"] = sample.readable_private_bytes;
+    result["top_private_processes"] = nlohmann::json::array();
+    for (unsigned i = 0; i < sample.count; ++i) {
+        const auto &owner = sample.top[i];
+        result["top_private_processes"].push_back({{"pid", owner.process_id},
+            {"created_100ns", owner.created_100ns}, {"name", platform::utf8(owner.name.data())},
+            {"private_bytes", owner.private_bytes}, {"working_set_bytes", owner.working_set_bytes}});
+    }
+    return result;
 }
 
 void require(bool value, const char *code) {
@@ -304,7 +329,16 @@ void NativeRunCoordinator::drive(const NativeRunDefinition &definition,
                     definition.logging);
                 weak_recognizer = recognizer;
                 bool checkpoint_seen = false;
-                auto event = [this, generation](const std::string &type, const nlohmann::json &data) {
+                auto recovery_frame = std::make_shared<std::optional<contracts::FrameEnvelope>>();
+                auto capture_after_input = std::make_shared<std::uint64_t>(0);
+                auto event = [this, generation, recovery_frame](const std::string &type, const nlohmann::json &data) {
+                    if (type == "combat" && recovery_frame->has_value() &&
+                        data.value("frame_id", 0ULL) == (**recovery_frame).identity.frame_id) {
+                        const auto &frame = **recovery_frame;
+                        journal_->emit(generation, "recent_frame.action", {
+                            {"frame_id", frame.identity.frame_id}, {"stage", data.value("operation", "")},
+                            {"queued", store_->save_recent_frame(frame, true)}});
+                    }
                     journal_->emit(generation, type, data);
                 };
                 auto checkpoint = [this, &checkpoint_seen, &unit, generation](const std::string &source) {
@@ -315,7 +349,6 @@ void NativeRunCoordinator::drive(const NativeRunDefinition &definition,
                 };
                 auto factory = definition.operations(*business, event, checkpoint);
                 // 共享最后一帧的既有缓冲，不额外取图/解码；只供同一工作线程重启前落盘。
-                auto recovery_frame = std::make_shared<std::optional<contracts::FrameEnvelope>>();
                 auto session = std::make_shared<NativeExecutionSession>(unit.program,
                     *backend, recognizer, *business, definition.policy, generation,
                     std::min(unit.time_limit, remaining), std::move(factory),
@@ -367,15 +400,41 @@ void NativeRunCoordinator::drive(const NativeRunDefinition &definition,
                         // 只在值改变时发一条轻量事实；不含帧字节与识别矩阵。
                         if (!step_changed) journal_->emit(generation, "execution.changed", progress);
                     },
-                    [this, generation](const nlohmann::json &input) {
+                    [this, generation, recovery_frame, capture_after_input](const nlohmann::json &input) {
                         const auto type = input.value("state", "") == "result" ? "input.result" : "input.attempt";
                         store_->append_timing(generation, type, input);
                         journal_->emit(generation, type, input);
+                        const auto state = input.value("state", "");
+                        if (state == "attempted" || state == "result") {
+                            const auto wanted = input.value(state == "result" ? "observed_frame" : "basis_frame", 0ULL);
+                            const bool available = recovery_frame->has_value() &&
+                                (**recovery_frame).identity.frame_id == wanted;
+                            journal_->emit(generation, "recent_frame.action", {
+                                {"frame_id", wanted}, {"stage", state}, {"available", available},
+                                {"queued", available && store_->save_recent_frame(**recovery_frame, true)}});
+                        }
+                        if (state == "accepted") *capture_after_input = input.value("basis_frame", 0ULL);
                     },
-                    [this, generation, index, event, recovery_frame, application = definition.policy.application_id,
-                     logging = definition.logging, warned = false]
+                    [this, generation, index, event, recovery_frame, capture_after_input, application = definition.policy.application_id,
+                     logging = definition.logging, warned = false, next_memory_sample = std::chrono::steady_clock::time_point{}]
                     (const contracts::FrameEnvelope &frame) mutable {
                         *recovery_frame = frame;
+                        // Outside the matcher: at most one bounded process scan per 30s,
+                        // only at session start or high commit pressure. No extra screenshots.
+                        if (logging.memory && logging.accepts(storage::LogLevel::Info) &&
+                            std::chrono::steady_clock::now() >= next_memory_sample) {
+                            const bool first = next_memory_sample == std::chrono::steady_clock::time_point{};
+                            next_memory_sample = std::chrono::steady_clock::now() + 30s;
+                            try {
+                                const auto sample = platform::sample_memory();
+                                const bool pressure = sample.system_ok && sample.commit_limit_pages &&
+                                    static_cast<double>(sample.commit_total_pages) / sample.commit_limit_pages >= .90;
+                                auto detail = first || pressure ? memory_owners_record(sample) : memory_record(sample);
+                                detail["frame_id"] = frame.identity.frame_id;
+                                store_->append_log(generation, pressure ? storage::LogLevel::Warn : storage::LogLevel::Info,
+                                    "memory", pressure ? "system_pressure" : "runtime_sample", detail);
+                            } catch (...) { store_->note_diagnostic_hook_failure(); }
+                        }
                         if (logging.performance && logging.accepts(storage::LogLevel::Trace)) {
                             const auto capture_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
                                 frame.identity.capture_finished_at - frame.identity.captured_at).count();
@@ -395,7 +454,15 @@ void NativeRunCoordinator::drive(const NativeRunDefinition &definition,
                                 const contracts::DiagnosticPixels pixels{frame.identity.raw_size, frame.raw_bgr,
                                     frame.identity.captured_at, frame.identity.device_id, frame.identity.backend};
                                 event("diagnostic.foreground_lost", store_->save_diagnostic(nullptr, request, &pixels));
-                            } else store_->save_recent_frame(frame);
+                            } else {
+                                const bool after_input = *capture_after_input && frame.identity.frame_id > *capture_after_input;
+                                const bool queued = store_->save_recent_frame(frame, after_input);
+                                if (after_input) {
+                                    journal_->emit(generation, "recent_frame.action", {
+                                        {"frame_id", frame.identity.frame_id}, {"stage", "first_after_input"}, {"queued", queued}});
+                                    *capture_after_input = 0;
+                                }
+                            }
                         }
                         catch (const std::exception &error) {
                             if (!warned) {
@@ -435,6 +502,11 @@ void NativeRunCoordinator::drive(const NativeRunDefinition &definition,
                 // 这里保存的是“失败前最后有效帧”，不是故障瞬间画面，更不是当前现场。
                 if (result.flow.state != TickState::Completed && result.flow.state != TickState::Cancelled) {
                     try {
+                        if (definition.logging.memory && definition.logging.accepts(storage::LogLevel::Info)) {
+                            auto memory = memory_owners_record(platform::sample_memory());
+                            memory["flow_code"] = result.flow.code;
+                            store_->append_log(generation, storage::LogLevel::Warn, "memory", "failure_snapshot", memory);
+                        }
                         storage::DiagnosticRequest request;
                         { std::lock_guard lock(mutex_); request.run_id = snapshot_.run_id; }
                         request.generation = generation;

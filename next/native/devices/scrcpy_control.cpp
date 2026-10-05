@@ -217,6 +217,12 @@ void ScrcpyControlClient::submit(const contracts::Command &command, int width, i
                 if (message[1] == 0) held_keys_.insert(command.key);
                 else held_keys_.erase(command.key);
             }
+            // Keep the bounded Auto pulse inside one serialized submission:
+            // no screenshot/recognition round trip between the two taps.
+            if (command.click_pair_interval_ms && i == 1) {
+                const auto until = Clock::now() + std::chrono::milliseconds{command.click_pair_interval_ms};
+                while (Clock::now() < until) { check_cancel(stop, cancelled); std::this_thread::sleep_for(5ms); }
+            }
             if (command.kind == contracts::ActionKind::Swipe && i + 1 < messages.size()) {
                 const auto until = Clock::now() + std::chrono::milliseconds{
                     command.duration / static_cast<int>(messages.size() - 1)};

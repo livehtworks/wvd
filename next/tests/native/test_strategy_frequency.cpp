@@ -1,4 +1,7 @@
 #include "games/wvd/combat/strategy.hpp"
+#include "games/wvd/combat/selection_diagnostics.hpp"
+#include "games/wvd/state.hpp"
+#include "games/wvd/business_condition.hpp"
 #include "storage/profile_store.hpp"
 #include "platform/windows/file_digest.hpp"
 #include <fstream>
@@ -23,6 +26,11 @@ int main(int argc, char **argv) {
         auto first = *strategy.select({{"actor", .95}});
         check(!strategy.consume(first, games::SkillOutcome::TargetFailed), "FAILED_ACTION_REMOVED");
         check(!strategy.consume(first, games::SkillOutcome::AutoFallback), "UNCONFIRMED_FALLBACK_REMOVED");
+        check(strategy.consume(first, games::SkillOutcome::AutoFallbackConfirmed), "FALLBACK_NOT_SETTLED");
+        auto retried = *strategy.select({{"actor", .95}});
+        check(retried.skill == once && retried.strategy_epoch != first.strategy_epoch,
+            "FALLBACK_CONSUMED_UNCAST_SKILL");
+        first = retried;
         check(strategy.consume(first, games::SkillOutcome::Succeeded), "ONCE_NOT_CONFIRMED");
         auto next = *strategy.select({{"actor", .95}});
         check(next.skill == repeat, "ONCE_DID_NOT_ADVANCE");
@@ -40,10 +48,60 @@ int main(int argc, char **argv) {
         profile["STRATEGY"][0]["complete_one_as_all"] = true;
         profile["STRATEGY"][0]["skill_settings"] = J::array({repeat});
         games::CombatStrategy whole(profile); whole.reload(0);
+        whole.consume(*whole.select({{"actor", .95}}), games::SkillOutcome::AutoFallbackConfirmed);
+        check(!whole.automatic(), "FALLBACK_COMPLETED_GROUP");
         whole.consume(*whole.select({{"actor", .95}}), games::SkillOutcome::Succeeded);
         check(whole.automatic(), "GROUP_COMPLETION_NOT_APPLIED");
+        // The incident had a 0.97351 portrait hit after its once-only row was consumed.
+        auto other = repeat; other["role_var"] = "other";
+        profile["STRATEGY"][0]["complete_one_as_all"] = false;
+        profile["STRATEGY"][0]["skill_settings"] = J::array({once, other});
+        games::CombatStrategy diagnostic_strategy(profile); diagnostic_strategy.reload(0);
+        diagnostic_strategy.consume(*diagnostic_strategy.select({{"actor", .97351}}), games::SkillOutcome::Succeeded);
+        const J summary{{"strategy", diagnostic_strategy.summary()}, {"has_prepared_skill", false},
+            {"prepared_portrait", ""}, {"prepared_skill_index", nullptr}};
+        const auto diagnosed = games::combat::selection_diagnostics(summary, {{"actor", .97351}, {"other", .31}});
+        check(diagnosed.at("reason") == "recognized_actor_no_remaining_action" &&
+              diagnosed.at("portrait") == "actor" && diagnosed.at("portrait_recognized") == true &&
+              diagnosed.at("remaining_actor_actions") == 0, "CONSUMED_ACTION_MISREPORTED_AS_VISION_FAILURE");
+        check(games::combat::selection_diagnostics(summary, {{"actor", .60}}).at("reason") == "portrait_unrecognized",
+              "LOW_SCORE_MISREPORTED_AS_EXHAUSTED_ACTION");
+        auto exhausted = summary; exhausted["strategy"] = whole.summary();
+        check(games::combat::selection_diagnostics(exhausted, {{"actor", .97}}).at("reason") == "strategy_actions_exhausted",
+              "EXHAUSTED_STRATEGY_MISREPORTED_AS_EXPLICIT_AUTO");
+        games::WvdRunState actor_state(profile, {"portrait-transition", 1,
+            std::make_shared<contracts::SteadyClock>()});
+        actor_state.enter_segment(contracts::SegmentBoundary::Initial, 1, 0);
+        const auto catalog = profile["STRATEGY"][0]["skill_settings"];
+        const J actor_condition{{"mode", "business"}, {"field", "/combat_actor_recognized"},
+            {"value", true}, {"comparison", "eq"}};
+        actor_state.prepare_skill({{"actor", .6379926}}, catalog);
+        check(actor_state.summary().at("combat_actor_recognized") == false &&
+              actor_state.summary().at("has_prepared_skill") == false, "TRANSITION_FRAME_AUTHORIZED_FALLBACK");
+        check(!games::business_condition(actor_state.summary(), actor_condition), "TRANSITION_FRAME_CONDITION_HIT");
+        actor_state.prepare_skill({{"actor", .9735101}}, catalog);
+        check(actor_state.summary().at("combat_actor_recognized") == true &&
+              actor_state.summary().at("has_prepared_skill") == true, "STABLE_FRAME_NOT_RESELECTED");
+        check(games::business_condition(actor_state.summary(), actor_condition), "STABLE_FRAME_CONDITION_MISSED");
+        if (std::string(argv[1]) == "--semantics") {
+            std::cout << "PASS: once/repeat, fallback preservation, group precedence, epoch invalidation. No profile writes or device input.\n";
+            return 0;
+        }
 
         // 从正式数据只读复制，全部迁移写入新建可丢弃目录，不碰原配置。
+        if (std::string(argv[1]) == "--fallback-contract") {
+            strategy.reload(0);
+            const auto selected = *strategy.select({{"actor", .95}});
+            check(strategy.consume(selected, games::SkillOutcome::DefendFallbackConfirmed), "DEFEND_FALLBACK_NOT_SETTLED");
+            const auto preserved = *strategy.select({{"actor", .95}});
+            check(preserved.skill == once && preserved.strategy_epoch != selected.strategy_epoch,
+                "DEFEND_FALLBACK_CONSUMED_UNCAST_SKILL");
+            games::CombatStrategy group(profile); group.reload(0);
+            group.consume(*group.select({{"actor", .95}}), games::SkillOutcome::DefendFallbackConfirmed);
+            check(!group.automatic(), "DEFEND_FALLBACK_COMPLETED_GROUP");
+            std::cout << "PASS: manual defend confirms action, preserves uncast skill and advances epoch; no profile IO.\n";
+            return 0;
+        }
         const std::filesystem::path source = argv[1];
         const auto before = platform::file_sha256(source);
         const auto root = std::filesystem::absolute(".local") /

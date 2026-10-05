@@ -63,7 +63,7 @@ class RunStore {
     nlohmann::json save_diagnostic(const contracts::FrameEnvelope *frame,
                                   const DiagnosticRequest &request,
                                   const contracts::DiagnosticPixels *pixels = nullptr);
-    bool save_recent_frame(const contracts::FrameEnvelope &frame) noexcept;
+    bool save_recent_frame(const contracts::FrameEnvelope &frame, bool action_evidence = false) noexcept;
     void finish_recent_frames() noexcept;
     nlohmann::json diagnostic_summary() const;
     void note_diagnostic_hook_failure() noexcept;
@@ -117,15 +117,17 @@ class RunStore {
     nlohmann::json memory_boundaries_ = nlohmann::json::object();
     std::uint64_t memory_boundary_failed_{};
     unsigned long diagnostic_volume_{};
-    // RunStore 唯一所有者：最多一个待处理帧和一个在途帧，丢弃仅影响辅助历史图。
+    // 同一个历史图线程：最多四张待处理原帧；动作证据不受周期采样间隔限制。
     std::mutex recent_mutex_;
     std::condition_variable recent_wake_;
-    std::optional<contracts::FrameEnvelope> recent_pending_;
+    struct RecentFrame { contracts::FrameEnvelope frame; bool action_evidence{}; };
+    std::deque<RecentFrame> recent_pending_;
+    std::uint64_t recent_action_generation_{}, recent_action_frame_{};
     bool recent_closed_{};
     std::atomic<std::uint64_t> recent_saved_{}, recent_dropped_{}, recent_failed_{}, recent_work_ns_{};
     std::jthread recent_worker_;
     void recent_loop() noexcept;
-    bool write_recent_frame(const contracts::FrameEnvelope &frame);
+    bool write_recent_frame(const contracts::FrameEnvelope &frame, bool action_evidence);
 };
 nlohmann::json snapshot_json(const contracts::RunSnapshot &snapshot);
 } // namespace wvd::storage

@@ -258,23 +258,29 @@ void RunStore::finish_recent_frames() noexcept {
         if (recent_worker_.joinable()) recent_worker_.join();
     } catch (...) { ++recent_failed_; }
 }
-bool RunStore::save_recent_frame(const contracts::FrameEnvelope &frame) noexcept {
+bool RunStore::save_recent_frame(const contracts::FrameEnvelope &frame, bool action_evidence) noexcept {
     try {
         std::unique_lock lock(recent_mutex_, std::try_to_lock);
         if (!lock.owns_lock()) { ++recent_dropped_; return false; }
         if (recent_closed_) return false;
         const auto now = diagnostic_clock_->now();
-        if (recent_last_ != contracts::MonotonicClock::TimePoint{} &&
+        if (action_evidence && recent_action_generation_ == frame.identity.generation &&
+            recent_action_frame_ == frame.identity.frame_id) return true;
+        if (!action_evidence && recent_last_ != contracts::MonotonicClock::TimePoint{} &&
             now - recent_last_ < std::chrono::seconds{15}) return false;
-        recent_last_ = now;
-        if (recent_pending_) { ++recent_dropped_; return false; }
+        if (recent_pending_.size() >= 4) { ++recent_dropped_; return false; }
         // 原生识别帧已有不可变 BGR 所有权，不在生产者端复制/压缩整图。
         if (!frame.raw_bgr || frame.raw_bgr->size() != 900ULL * 1600 * 3) {
             ++recent_failed_; return false;
         }
-        recent_pending_.emplace();
-        recent_pending_->identity = frame.identity;
-        recent_pending_->raw_bgr = frame.raw_bgr;
+        recent_pending_.emplace_back();
+        recent_pending_.back().frame.identity = frame.identity;
+        recent_pending_.back().frame.raw_bgr = frame.raw_bgr;
+        recent_pending_.back().action_evidence = action_evidence;
+        if (action_evidence) {
+            recent_action_generation_ = frame.identity.generation;
+            recent_action_frame_ = frame.identity.frame_id;
+        } else recent_last_ = now;
         lock.unlock();
         recent_wake_.notify_one();
         return true;
@@ -283,23 +289,23 @@ bool RunStore::save_recent_frame(const contracts::FrameEnvelope &frame) noexcept
 void RunStore::recent_loop() noexcept {
     for (;;) {
         try {
-            contracts::FrameEnvelope frame;
+            RecentFrame pending;
             {
                 std::unique_lock lock(recent_mutex_);
-                recent_wake_.wait(lock, [this] { return recent_closed_ || recent_pending_.has_value(); });
-                if (!recent_pending_) return;
-                frame = std::move(*recent_pending_);
-                recent_pending_.reset();
+                recent_wake_.wait(lock, [this] { return recent_closed_ || !recent_pending_.empty(); });
+                if (recent_pending_.empty()) return;
+                pending = std::move(recent_pending_.front());
+                recent_pending_.pop_front();
             }
             const auto started = std::chrono::steady_clock::now();
-            try { if (write_recent_frame(frame)) ++recent_saved_; }
+            try { if (write_recent_frame(pending.frame, pending.action_evidence)) ++recent_saved_; }
             catch (...) { ++recent_failed_; }
             recent_work_ns_ += std::chrono::duration_cast<std::chrono::nanoseconds>(
                 std::chrono::steady_clock::now() - started).count();
         } catch (...) { ++recent_failed_; return; }
     }
 }
-bool RunStore::write_recent_frame(const contracts::FrameEnvelope &frame) {
+bool RunStore::write_recent_frame(const contracts::FrameEnvelope &frame, bool action_evidence) {
     const auto size = frame.identity.recognition_size;
     if (size.width != 900 || size.height != 1600) return false;
     cv::Mat image;
@@ -310,26 +316,30 @@ bool RunStore::write_recent_frame(const contracts::FrameEnvelope &frame) {
         image = cv::imdecode(frame.encoded_image, cv::IMREAD_COLOR);
     if (image.empty() || image.cols != size.width || image.rows != size.height)
         throw std::runtime_error("RECENT_FRAME_INVALID");
-    std::vector<std::uint8_t> jpeg;
-    if (!cv::imencode(".jpg", image, jpeg, {cv::IMWRITE_JPEG_QUALITY, 72}))
+    std::vector<std::uint8_t> encoded;
+    const auto extension = action_evidence ? ".png" : ".jpg";
+    if (!cv::imencode(extension, image, encoded, action_evidence
+        ? std::vector<int>{cv::IMWRITE_PNG_COMPRESSION, 1}
+        : std::vector<int>{cv::IMWRITE_JPEG_QUALITY, 72}))
         throw std::runtime_error("RECENT_FRAME_ENCODE_FAILED");
-    if (jpeg.size() > 2 * 1024 * 1024) throw std::runtime_error("RECENT_FRAME_TOO_LARGE");
+    if (encoded.size() > 8 * 1024 * 1024) throw std::runtime_error("RECENT_FRAME_TOO_LARGE");
     std::filesystem::create_directories(recent_directory_);
     if (std::filesystem::is_symlink(recent_directory_))
         throw std::runtime_error("RECENT_FRAME_DIRECTORY_LINK");
     SYSTEMTIME utc{};
     GetSystemTime(&utc);
     char name[100]{};
-    std::snprintf(name, sizeof(name), "%04u%02u%02uT%02u%02u%02u%03u_r%llu_f%llu.jpg",
+    std::snprintf(name, sizeof(name), "%04u%02u%02uT%02u%02u%02u%03u_r%llu_f%llu%s",
         utc.wYear, utc.wMonth, utc.wDay, utc.wHour, utc.wMinute, utc.wSecond,
         utc.wMilliseconds, static_cast<unsigned long long>(run_),
-        static_cast<unsigned long long>(frame.identity.frame_id));
+        static_cast<unsigned long long>(frame.identity.frame_id), extension);
     platform::atomic_write(recent_directory_ / name,
-        std::string(reinterpret_cast<const char *>(jpeg.data()), jpeg.size()), false);
+        std::string(reinterpret_cast<const char *>(encoded.data()), encoded.size()), false);
     std::vector<std::filesystem::directory_entry> files;
     std::uintmax_t total_bytes = 0;
     for (const auto &entry : std::filesystem::directory_iterator(recent_directory_)) {
-        if (!entry.is_regular_file() || entry.path().extension() != ".jpg") continue;
+        if (!entry.is_regular_file() ||
+            (entry.path().extension() != ".jpg" && entry.path().extension() != ".png")) continue;
         total_bytes += entry.file_size();
         files.push_back(entry);
     }
@@ -497,7 +507,7 @@ J RunStore::diagnostic_summary() const {
             {"complete", timing_failed_ == 0 && timing_dropped_ == 0}}},
         {"recent_frames", {{"saved", recent_saved_.load()}, {"dropped", recent_dropped_.load()},
             {"failed", recent_failed_.load()}, {"worker_ns", recent_work_ns_.load()},
-            {"pending_limit", 1}, {"inflight_limit", 1}}},
+            {"pending_limit", 4}, {"inflight_limit", 1}, {"action_format", "png"}}},
         {"reserved_bytes", (diagnostic_rewards_ + diagnostic_failures_) * diagnostic_limits_.frame_bytes},
         {"reward_attempts", diagnostic_rewards_}, {"failure_attempts", diagnostic_failures_},
         {"failed", diagnostic_failed_}, {"unavailable", diagnostic_unavailable_},

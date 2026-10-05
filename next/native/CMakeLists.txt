@@ -132,7 +132,7 @@ target_sources(wvd_native_games PRIVATE
   games/wvd/navigation/wall_bypass.cpp games/wvd/karma.cpp
   games/wvd/tasks/fortress_trap.cpp games/wvd/tasks/giant.cpp
   games/wvd/tasks/dark_light.cpp games/wvd/recovery/karma_prompt.cpp
-  storage/karma_writer.cpp games/wvd/combat/strategy.cpp
+  storage/karma_writer.cpp games/wvd/combat/strategy.cpp games/wvd/combat/enemy_rules.cpp
   storage/legacy_import.cpp storage/profile_store.cpp)
 target_link_libraries(wvd_native_games PUBLIC wvd_native_workflow wvd_native_platform wvd_native_recognition psapi)
 target_include_directories(wvd_native_games SYSTEM PRIVATE "${BOOST_ROOT}")
@@ -174,6 +174,9 @@ add_executable(test_recognition_methods EXCLUDE_FROM_ALL ../tests/native/test_re
 target_link_libraries(test_recognition_methods PRIVATE wvd_native_games wvd_native_runtime)
 target_compile_options(test_recognition_methods PRIVATE /utf-8 /W4 /EHsc)
 add_executable(test_strategy_frequency EXCLUDE_FROM_ALL ../tests/native/test_strategy_frequency.cpp)
+add_executable(test_support_selection EXCLUDE_FROM_ALL ../tests/native/test_support_selection.cpp)
+target_link_libraries(test_support_selection PRIVATE wvd_native_games wvd_native_runtime)
+target_compile_options(test_support_selection PRIVATE /utf-8 /W4 /EHsc)
 target_link_libraries(test_strategy_frequency PRIVATE wvd_native_games wvd_native_runtime)
 target_compile_options(test_strategy_frequency PRIVATE /utf-8 /W4 /EHsc)
 add_executable(test_native_coordinator EXCLUDE_FROM_ALL

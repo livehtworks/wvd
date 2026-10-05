@@ -11,15 +11,15 @@ inline nlohmann::json resource(const char *id, const char *locale = "") {
     static const auto recipes = [] {
         authoring::SemanticAssets assets(nlohmann::json::parse(wvd_semantic_catalogue));
         std::map<std::string, nlohmann::json> values;
-        for (const char *name : {"boot.announcement.page", "city.royal.identity", "city.fortress.identity", "city.inn.entry", "city.temple.entry",
+        for (const char *name : {"boot.announcement.page", "boot.announcement.close", "city.royal.identity", "city.fortress.identity", "city.inn.entry", "city.temple.entry",
             "city.blacksmith.entry", "city.ruins.entry", "city.guild.entry",
             "city.ore_merchant.entry", "city.item_shop.entry", "city.edge.entry", "city.any"})
             values.emplace(name, assets.condition(name, ""));
         for (const char *name : {"guild.commissions.page", "guild.bounties.page", "guild.bounty.reveal.close",
             "chest.open.option", "chest.choose.page", "inn.stay.option", "inn.standard.gold.confirmation", "purchase.premium.button",
-            "combat.skill.detail", "combat.skill.confirm", "character.panel", "dungeon.recovery.panel", "dungeon.map.open"})
+            "combat.skill.detail", "combat.skill.confirm", "combat.menu.flee", "party.revival.action", "character.panel", "dungeon.recovery.panel", "dungeon.map.open", "navigation.no_route"})
             values.emplace(std::string(name) + "|zh-Hant", assets.condition(name, "zh-Hant"));
-        for (const char *name : {"chest.open.option", "chest.choose.page", "inn.stay.option"})
+        for (const char *name : {"chest.open.option", "chest.choose.page", "inn.stay.option", "navigation.no_route"})
             values.emplace(std::string(name) + "|en", assets.condition(name, "en"));
         values.emplace("chest.reward.page", assets.condition("chest.reward.page", ""));
         return values;

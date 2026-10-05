@@ -76,7 +76,6 @@ CompiledWorkflow sandman_cycle(const WvdQuestDefinition &definition, const J &pr
         graph.call_child("Leap" + name, leap, {name + "Leaped"});
         graph.confirm(name + "Leaped", "sandman.leap." + name, triumph ? "sandman_completed" : "sandman_duke_leaped",
             triumph ? outside : city, triumph ? J{"Terminal"} : J{"RestTriumphPhase"});
-        if (!triumph) graph.delay_after(name + "Leaped", 10000);
     }
     graph.interrupt_on({{"mode", "blocking_screen"}, {"parallel_basic", true}}, "quest.sandman_common_screen_requires_dispatch");
     return graph.finish();
