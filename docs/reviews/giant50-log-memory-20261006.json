@@ -1,0 +1,1395 @@
+{
+  "schema": 1,
+  "scope": "50 completed real-game rounds; no reruns or product changes during analysis",
+  "memory_status": "RESOURCE_UNRESOLVED",
+  "units": {
+    "memory": "MiB",
+    "slope": "KiB/round",
+    "duration": "seconds"
+  },
+  "measurement_rules": [
+    "Different candidates/processes are separate groups",
+    "OCR deltas are process observations, not exclusive allocations",
+    "Completed rounds do not imply absence of recovered exceptions"
+  ],
+  "source_analysis_sha256": {
+    "review-summary.json": "3c53c62281249427e753775cfcbba932bfe3aad0112167251541c0e8c2a78b97",
+    "combat-review.json": "79254943c72b5908a5b5596767423c243ba716b8a9ae0899293b1c0ad7254e51",
+    "timing117/run-timing-analysis.json": "0731b347e5837ad88df59a4bcb91c218a1b257cfeb2aa24b519bb9a234b652ee",
+    "timing119/run-timing-analysis.json": "dd43c2c9f2cb05c970b5109c8cc2ac86cf5a62b5e9196440c737e2bede79da45"
+  },
+  "groups": [
+    {
+      "label": "candidate117",
+      "namespace": "57479A08-CE93-4390-A8F2-66EE8BB5AB65",
+      "completed_runs": 16,
+      "duration_seconds": {
+        "min": 318.831,
+        "median": 370.69,
+        "mean": 382.003,
+        "max": 447.358
+      },
+      "peak_sample_mib": {
+        "min": 720.879,
+        "median": 813.301,
+        "mean": 804.178,
+        "max": 858.621
+      },
+      "worker_joined_mib": {
+        "min": 70.047,
+        "median": 86.248,
+        "mean": 85.056,
+        "max": 98.449
+      },
+      "joined_first_mib": 70.046875,
+      "joined_last_mib": 93.78515625,
+      "joined_slope_kib_per_round": 1485.4411764705883,
+      "first5_joined_median": 78.08203125,
+      "last5_joined_median": 91.734375,
+      "joined_handles": {
+        "min": 361,
+        "median": 363.0,
+        "mean": 363.25,
+        "max": 365
+      },
+      "ocr_init_private_delta_mib": {
+        "min": 126.273,
+        "median": 143.859,
+        "mean": 148.354,
+        "max": 178.574
+      },
+      "ocr_destroy_private_delta_mib": {
+        "min": -445.504,
+        "median": -352.209,
+        "mean": -344.019,
+        "max": -270.992
+      },
+      "ocr_init_ms": {
+        "min": 250,
+        "median": 335.5,
+        "mean": 343.312,
+        "max": 515
+      },
+      "ocr_destroy_ms": {
+        "min": 15,
+        "median": 23.5,
+        "mean": 23.5,
+        "max": 32
+      },
+      "ocr_count": 32,
+      "lease_file_mib": {
+        "min": 135.529,
+        "median": 135.529,
+        "mean": 135.529,
+        "max": 135.529
+      },
+      "decoded_cache_mib": {
+        "min": 2.58,
+        "median": 2.945,
+        "mean": 2.887,
+        "max": 3.172
+      },
+      "pressure_samples": 32,
+      "commit_ratio": {
+        "min": 0.9,
+        "median": 0.905,
+        "mean": 0.906,
+        "max": 0.915
+      },
+      "available_physical_gib": {
+        "min": 3.616,
+        "median": 4.189,
+        "mean": 4.273,
+        "max": 5.031
+      },
+      "exclusive_seconds_per_round": {
+        "archive_submit": 0.11773495,
+        "budget_queue": 0.0009090125,
+        "capture_metadata": 42.00183401875,
+        "explicit_wait": 76.92520616875,
+        "input_delivery": 0.42617873125,
+        "input_validation": 32.4117791625,
+        "json_events": 0.69124388125,
+        "match": 122.71113721875,
+        "parallel_wait": 52.7941550875,
+        "pixel_capture": 7.899360975,
+        "pixel_convert": 0.57691865,
+        "recognition_other": 40.72835824375
+      },
+      "counts_per_round": {
+        "actual_matches": 20146.375,
+        "adb_clients": 399.75,
+        "business_predicates": 200.0,
+        "captures": 660.125,
+        "context_transactions": 106.875,
+        "frame_reuse": 779.9375,
+        "leaf_cache_hits": 11199.3125,
+        "overlay_checks": 506.125,
+        "overlay_reuse": 300.1875
+      },
+      "runs": [
+        {
+          "run": 1,
+          "elapsed_s": 425.0797987,
+          "binary": "cf181d0740c892b17ed853c96a958a92efb870bfbfdf28b3d22269ce79904639",
+          "peak_sample_mib": 720.87890625,
+          "lifecycle": {
+            "worker_definition_released": {
+              "private_mib": 70.4023,
+              "handles": 370,
+              "objects_all_released": true
+            },
+            "worker_joined": {
+              "private_mib": 70.0469,
+              "handles": 363,
+              "objects_all_released": true
+            }
+          },
+          "recoveries": {}
+        },
+        {
+          "run": 2,
+          "elapsed_s": 340.8802522,
+          "binary": "cf181d0740c892b17ed853c96a958a92efb870bfbfdf28b3d22269ce79904639",
+          "peak_sample_mib": 726.65234375,
+          "lifecycle": {
+            "worker_definition_released": {
+              "private_mib": 71.7617,
+              "handles": 366,
+              "objects_all_released": true
+            },
+            "worker_joined": {
+              "private_mib": 71.4023,
+              "handles": 363,
+              "objects_all_released": true
+            }
+          },
+          "recoveries": {}
+        },
+        {
+          "run": 3,
+          "elapsed_s": 350.4852661,
+          "binary": "cf181d0740c892b17ed853c96a958a92efb870bfbfdf28b3d22269ce79904639",
+          "peak_sample_mib": 777.08984375,
+          "lifecycle": {
+            "worker_definition_released": {
+              "private_mib": 77.9336,
+              "handles": 366,
+              "objects_all_released": true
+            },
+            "worker_joined": {
+              "private_mib": 78.082,
+              "handles": 363,
+              "objects_all_released": true
+            }
+          },
+          "recoveries": {}
+        },
+        {
+          "run": 4,
+          "elapsed_s": 439.9758587,
+          "binary": "cf181d0740c892b17ed853c96a958a92efb870bfbfdf28b3d22269ce79904639",
+          "peak_sample_mib": 781.14453125,
+          "lifecycle": {
+            "worker_definition_released": {
+              "private_mib": 84.2695,
+              "handles": 366,
+              "objects_all_released": true
+            },
+            "worker_joined": {
+              "private_mib": 84.4219,
+              "handles": 363,
+              "objects_all_released": true
+            }
+          },
+          "recoveries": {}
+        },
+        {
+          "run": 5,
+          "elapsed_s": 341.7228227,
+          "binary": "cf181d0740c892b17ed853c96a958a92efb870bfbfdf28b3d22269ce79904639",
+          "peak_sample_mib": 753.49609375,
+          "lifecycle": {
+            "worker_definition_released": {
+              "private_mib": 80.5156,
+              "handles": 366,
+              "objects_all_released": true
+            },
+            "worker_joined": {
+              "private_mib": 80.6992,
+              "handles": 363,
+              "objects_all_released": true
+            }
+          },
+          "recoveries": {}
+        },
+        {
+          "run": 6,
+          "elapsed_s": 447.3578774,
+          "binary": "cf181d0740c892b17ed853c96a958a92efb870bfbfdf28b3d22269ce79904639",
+          "peak_sample_mib": 850.6484375,
+          "lifecycle": {
+            "worker_definition_released": {
+              "private_mib": 80.8984,
+              "handles": 366,
+              "objects_all_released": true
+            },
+            "worker_joined": {
+              "private_mib": 81.7227,
+              "handles": 363,
+              "objects_all_released": true
+            }
+          },
+          "recoveries": {}
+        },
+        {
+          "run": 7,
+          "elapsed_s": 363.8458108,
+          "binary": "cf181d0740c892b17ed853c96a958a92efb870bfbfdf28b3d22269ce79904639",
+          "peak_sample_mib": 854.41015625,
+          "lifecycle": {
+            "worker_definition_released": {
+              "private_mib": 80.0625,
+              "handles": 366,
+              "objects_all_released": true
+            },
+            "worker_joined": {
+              "private_mib": 79.7539,
+              "handles": 363,
+              "objects_all_released": true
+            }
+          },
+          "recoveries": {}
+        },
+        {
+          "run": 8,
+          "elapsed_s": 403.6218197,
+          "binary": "cf181d0740c892b17ed853c96a958a92efb870bfbfdf28b3d22269ce79904639",
+          "peak_sample_mib": 809.0859375,
+          "lifecycle": {
+            "worker_definition_released": {
+              "private_mib": 87.4805,
+              "handles": 368,
+              "objects_all_released": true
+            },
+            "worker_joined": {
+              "private_mib": 88.0742,
+              "handles": 365,
+              "objects_all_released": true
+            }
+          },
+          "recoveries": {}
+        },
+        {
+          "run": 9,
+          "elapsed_s": 374.7724001,
+          "binary": "cf181d0740c892b17ed853c96a958a92efb870bfbfdf28b3d22269ce79904639",
+          "peak_sample_mib": 756.046875,
+          "lifecycle": {
+            "worker_definition_released": {
+              "private_mib": 90.1953,
+              "handles": 368,
+              "objects_all_released": true
+            },
+            "worker_joined": {
+              "private_mib": 90.5039,
+              "handles": 365,
+              "objects_all_released": true
+            }
+          },
+          "recoveries": {}
+        },
+        {
+          "run": 10,
+          "elapsed_s": 366.6084384,
+          "binary": "cf181d0740c892b17ed853c96a958a92efb870bfbfdf28b3d22269ce79904639",
+          "peak_sample_mib": 802.0,
+          "lifecycle": {
+            "worker_definition_released": {
+              "private_mib": 92.0195,
+              "handles": 366,
+              "objects_all_released": true
+            },
+            "worker_joined": {
+              "private_mib": 80.9297,
+              "handles": 363,
+              "objects_all_released": true
+            }
+          },
+          "recoveries": {}
+        },
+        {
+          "run": 11,
+          "elapsed_s": 391.5271997,
+          "binary": "cf181d0740c892b17ed853c96a958a92efb870bfbfdf28b3d22269ce79904639",
+          "peak_sample_mib": 853.38671875,
+          "lifecycle": {
+            "worker_definition_released": {
+              "private_mib": 91.6406,
+              "handles": 366,
+              "objects_all_released": true
+            },
+            "worker_joined": {
+              "private_mib": 90.4141,
+              "handles": 363,
+              "objects_all_released": true
+            }
+          },
+          "recoveries": {}
+        },
+        {
+          "run": 12,
+          "elapsed_s": 358.0777765,
+          "binary": "cf181d0740c892b17ed853c96a958a92efb870bfbfdf28b3d22269ce79904639",
+          "peak_sample_mib": 857.953125,
+          "lifecycle": {
+            "worker_definition_released": {
+              "private_mib": 98.0508,
+              "handles": 368,
+              "objects_all_released": true
+            },
+            "worker_joined": {
+              "private_mib": 98.4492,
+              "handles": 365,
+              "objects_all_released": true
+            }
+          },
+          "recoveries": {}
+        },
+        {
+          "run": 13,
+          "elapsed_s": 319.3818202,
+          "binary": "cf181d0740c892b17ed853c96a958a92efb870bfbfdf28b3d22269ce79904639",
+          "peak_sample_mib": 817.515625,
+          "lifecycle": {
+            "worker_definition_released": {
+              "private_mib": 89.4688,
+              "handles": 366,
+              "objects_all_released": true
+            },
+            "worker_joined": {
+              "private_mib": 89.2344,
+              "handles": 363,
+              "objects_all_released": true
+            }
+          },
+          "recoveries": {}
+        },
+        {
+          "run": 14,
+          "elapsed_s": 441.4521359,
+          "binary": "cf181d0740c892b17ed853c96a958a92efb870bfbfdf28b3d22269ce79904639",
+          "peak_sample_mib": 818.9921875,
+          "lifecycle": {
+            "worker_definition_released": {
+              "private_mib": 92.1055,
+              "handles": 366,
+              "objects_all_released": true
+            },
+            "worker_joined": {
+              "private_mib": 91.7344,
+              "handles": 363,
+              "objects_all_released": true
+            }
+          },
+          "recoveries": {}
+        },
+        {
+          "run": 15,
+          "elapsed_s": 428.4238027,
+          "binary": "cf181d0740c892b17ed853c96a958a92efb870bfbfdf28b3d22269ce79904639",
+          "peak_sample_mib": 858.62109375,
+          "lifecycle": {
+            "worker_definition_released": {
+              "private_mib": 91.1211,
+              "handles": 366,
+              "objects_all_released": true
+            },
+            "worker_joined": {
+              "private_mib": 91.6484,
+              "handles": 363,
+              "objects_all_released": true
+            }
+          },
+          "recoveries": {}
+        },
+        {
+          "run": 16,
+          "elapsed_s": 318.8309978,
+          "binary": "cf181d0740c892b17ed853c96a958a92efb870bfbfdf28b3d22269ce79904639",
+          "peak_sample_mib": 828.92578125,
+          "lifecycle": {
+            "worker_definition_released": {
+              "private_mib": 94.1367,
+              "handles": 364,
+              "objects_all_released": true
+            },
+            "worker_joined": {
+              "private_mib": 93.7852,
+              "handles": 361,
+              "objects_all_released": true
+            }
+          },
+          "recoveries": {}
+        }
+      ],
+      "process_identity": {
+        "pid": 28944,
+        "created_100ns": 134357038333217208
+      },
+      "final_object_lifetimes": {
+        "execution_sessions": {
+          "created": 48,
+          "destroyed": 48,
+          "live": 0,
+          "ready": 0
+        },
+        "ocr_engines": {
+          "created": 32,
+          "destroyed": 32,
+          "live": 0,
+          "ready": 0
+        },
+        "recognizers": {
+          "created": 48,
+          "destroyed": 48,
+          "live": 0,
+          "ready": 0
+        }
+      }
+    },
+    {
+      "label": "candidate119",
+      "namespace": "6F203752-F7C8-4956-8020-80566D1AD79B",
+      "completed_runs": 34,
+      "duration_seconds": {
+        "min": 361.517,
+        "median": 411.293,
+        "mean": 445.948,
+        "max": 707.14
+      },
+      "peak_sample_mib": {
+        "min": 740.742,
+        "median": 847.883,
+        "mean": 839.868,
+        "max": 882.004
+      },
+      "worker_joined_mib": {
+        "min": 73.234,
+        "median": 97.271,
+        "mean": 98.74,
+        "max": 119.387
+      },
+      "joined_first_mib": 73.234375,
+      "joined_last_mib": 118.34765625,
+      "joined_slope_kib_per_round": 1184.455309396486,
+      "first5_joined_median": 80.2265625,
+      "last5_joined_median": 117.96484375,
+      "joined_handles": {
+        "min": 362,
+        "median": 365.0,
+        "mean": 364.088,
+        "max": 365
+      },
+      "ocr_init_private_delta_mib": {
+        "min": 34.656,
+        "median": 145.547,
+        "mean": 147.092,
+        "max": 182.238
+      },
+      "ocr_destroy_private_delta_mib": {
+        "min": -413.512,
+        "median": -277.232,
+        "mean": -322.059,
+        "max": -272.91
+      },
+      "ocr_init_ms": {
+        "min": 313,
+        "median": 453.0,
+        "mean": 512.598,
+        "max": 1000
+      },
+      "ocr_destroy_ms": {
+        "min": 15,
+        "median": 31.0,
+        "mean": 32.235,
+        "max": 63
+      },
+      "ocr_count": 102,
+      "lease_file_mib": {
+        "min": 135.529,
+        "median": 135.529,
+        "mean": 135.529,
+        "max": 135.529
+      },
+      "decoded_cache_mib": {
+        "min": 2.656,
+        "median": 2.945,
+        "mean": 2.9,
+        "max": 3.63
+      },
+      "pressure_samples": 544,
+      "commit_ratio": {
+        "min": 0.902,
+        "median": 0.95,
+        "mean": 0.95,
+        "max": 0.993
+      },
+      "available_physical_gib": {
+        "min": 2.008,
+        "median": 3.725,
+        "mean": 3.736,
+        "max": 5.371
+      },
+      "exclusive_seconds_per_round": {
+        "archive_submit": 0.3853575705882353,
+        "budget_queue": 0.0013800176470588235,
+        "capture_metadata": 48.18647289705882,
+        "explicit_wait": 79.89506597058823,
+        "input_delivery": 0.4332085235294118,
+        "input_validation": 31.395231608823533,
+        "json_events": 0.6521666470588235,
+        "match": 154.93424560882355,
+        "parallel_wait": 65.04655496764705,
+        "pixel_capture": 9.130403152941177,
+        "pixel_convert": 0.7739841088235294,
+        "recognition_other": 48.690004238235296
+      },
+      "counts_per_round": {
+        "actual_matches": 20510.176470588234,
+        "adb_clients": 430.2647058823529,
+        "business_predicates": 205.8235294117647,
+        "captures": 650.3823529411765,
+        "context_transactions": 109.02941176470588,
+        "frame_reuse": 799.0882352941177,
+        "leaf_cache_hits": 10975.64705882353,
+        "overlay_checks": 551.7941176470588,
+        "overlay_reuse": 307.1470588235294
+      },
+      "runs": [
+        {
+          "run": 2,
+          "elapsed_s": 707.1400659,
+          "binary": "9ee2e139968647200ffda649c17d0dc5576f95bf70e9e25fda636c55287c88a4",
+          "peak_sample_mib": 740.7421875,
+          "lifecycle": {
+            "worker_definition_released": {
+              "private_mib": 72.9297,
+              "handles": 366,
+              "objects_all_released": true
+            },
+            "worker_joined": {
+              "private_mib": 73.2344,
+              "handles": 363,
+              "objects_all_released": true
+            }
+          },
+          "recoveries": {}
+        },
+        {
+          "run": 3,
+          "elapsed_s": 388.6392644,
+          "binary": "9ee2e139968647200ffda649c17d0dc5576f95bf70e9e25fda636c55287c88a4",
+          "peak_sample_mib": 762.23046875,
+          "lifecycle": {
+            "worker_definition_released": {
+              "private_mib": 77.5938,
+              "handles": 368,
+              "objects_all_released": true
+            },
+            "worker_joined": {
+              "private_mib": 77.4766,
+              "handles": 365,
+              "objects_all_released": true
+            }
+          },
+          "recoveries": {}
+        },
+        {
+          "run": 4,
+          "elapsed_s": 399.3599576,
+          "binary": "9ee2e139968647200ffda649c17d0dc5576f95bf70e9e25fda636c55287c88a4",
+          "peak_sample_mib": 789.70703125,
+          "lifecycle": {
+            "worker_definition_released": {
+              "private_mib": 79.8516,
+              "handles": 366,
+              "objects_all_released": true
+            },
+            "worker_joined": {
+              "private_mib": 80.2266,
+              "handles": 363,
+              "objects_all_released": true
+            }
+          },
+          "recoveries": {}
+        },
+        {
+          "run": 5,
+          "elapsed_s": 410.3655644,
+          "binary": "9ee2e139968647200ffda649c17d0dc5576f95bf70e9e25fda636c55287c88a4",
+          "peak_sample_mib": 799.30859375,
+          "lifecycle": {
+            "worker_definition_released": {
+              "private_mib": 82.043,
+              "handles": 368,
+              "objects_all_released": true
+            },
+            "worker_joined": {
+              "private_mib": 82.5352,
+              "handles": 365,
+              "objects_all_released": true
+            }
+          },
+          "recoveries": {}
+        },
+        {
+          "run": 6,
+          "elapsed_s": 604.0292182,
+          "binary": "9ee2e139968647200ffda649c17d0dc5576f95bf70e9e25fda636c55287c88a4",
+          "peak_sample_mib": 798.9921875,
+          "lifecycle": {
+            "worker_definition_released": {
+              "private_mib": 84.1094,
+              "handles": 368,
+              "objects_all_released": true
+            },
+            "worker_joined": {
+              "private_mib": 83.7422,
+              "handles": 365,
+              "objects_all_released": true
+            }
+          },
+          "recoveries": {}
+        },
+        {
+          "run": 7,
+          "elapsed_s": 372.9842673,
+          "binary": "9ee2e139968647200ffda649c17d0dc5576f95bf70e9e25fda636c55287c88a4",
+          "peak_sample_mib": 797.10546875,
+          "lifecycle": {
+            "worker_definition_released": {
+              "private_mib": 86.1875,
+              "handles": 366,
+              "objects_all_released": true
+            },
+            "worker_joined": {
+              "private_mib": 85.6953,
+              "handles": 363,
+              "objects_all_released": true
+            }
+          },
+          "recoveries": {}
+        },
+        {
+          "run": 8,
+          "elapsed_s": 381.3194131,
+          "binary": "9ee2e139968647200ffda649c17d0dc5576f95bf70e9e25fda636c55287c88a4",
+          "peak_sample_mib": 847.12109375,
+          "lifecycle": {
+            "worker_definition_released": {
+              "private_mib": 93.3008,
+              "handles": 366,
+              "objects_all_released": true
+            },
+            "worker_joined": {
+              "private_mib": 93.5938,
+              "handles": 363,
+              "objects_all_released": true
+            }
+          },
+          "recoveries": {}
+        },
+        {
+          "run": 9,
+          "elapsed_s": 384.4317807,
+          "binary": "9ee2e139968647200ffda649c17d0dc5576f95bf70e9e25fda636c55287c88a4",
+          "peak_sample_mib": 852.45703125,
+          "lifecycle": {
+            "worker_definition_released": {
+              "private_mib": 84.1172,
+              "handles": 366,
+              "objects_all_released": true
+            },
+            "worker_joined": {
+              "private_mib": 84.5117,
+              "handles": 363,
+              "objects_all_released": true
+            }
+          },
+          "recoveries": {}
+        },
+        {
+          "run": 10,
+          "elapsed_s": 399.3707471,
+          "binary": "9ee2e139968647200ffda649c17d0dc5576f95bf70e9e25fda636c55287c88a4",
+          "peak_sample_mib": 860.5078125,
+          "lifecycle": {
+            "worker_definition_released": {
+              "private_mib": 89.7773,
+              "handles": 368,
+              "objects_all_released": true
+            },
+            "worker_joined": {
+              "private_mib": 89.6211,
+              "handles": 365,
+              "objects_all_released": true
+            }
+          },
+          "recoveries": {}
+        },
+        {
+          "run": 11,
+          "elapsed_s": 518.0605956,
+          "binary": "9ee2e139968647200ffda649c17d0dc5576f95bf70e9e25fda636c55287c88a4",
+          "peak_sample_mib": 863.16015625,
+          "lifecycle": {
+            "worker_definition_released": {
+              "private_mib": 97.6445,
+              "handles": 366,
+              "objects_all_released": true
+            },
+            "worker_joined": {
+              "private_mib": 97.1445,
+              "handles": 363,
+              "objects_all_released": true
+            }
+          },
+          "recoveries": {}
+        },
+        {
+          "run": 12,
+          "elapsed_s": 556.7885446,
+          "binary": "9ee2e139968647200ffda649c17d0dc5576f95bf70e9e25fda636c55287c88a4",
+          "peak_sample_mib": 866.90625,
+          "lifecycle": {
+            "worker_definition_released": {
+              "private_mib": 97.3633,
+              "handles": 368,
+              "objects_all_released": true
+            },
+            "worker_joined": {
+              "private_mib": 97.3164,
+              "handles": 365,
+              "objects_all_released": true
+            }
+          },
+          "recoveries": {}
+        },
+        {
+          "run": 13,
+          "elapsed_s": 377.8394469,
+          "binary": "9ee2e139968647200ffda649c17d0dc5576f95bf70e9e25fda636c55287c88a4",
+          "peak_sample_mib": 863.0546875,
+          "lifecycle": {
+            "worker_definition_released": {
+              "private_mib": 89.2109,
+              "handles": 366,
+              "objects_all_released": true
+            },
+            "worker_joined": {
+              "private_mib": 88.7266,
+              "handles": 362,
+              "objects_all_released": true
+            }
+          },
+          "recoveries": {}
+        },
+        {
+          "run": 14,
+          "elapsed_s": 407.2252557,
+          "binary": "9ee2e139968647200ffda649c17d0dc5576f95bf70e9e25fda636c55287c88a4",
+          "peak_sample_mib": 829.8828125,
+          "lifecycle": {
+            "worker_definition_released": {
+              "private_mib": 94.1641,
+              "handles": 366,
+              "objects_all_released": true
+            },
+            "worker_joined": {
+              "private_mib": 93.7852,
+              "handles": 363,
+              "objects_all_released": true
+            }
+          },
+          "recoveries": {}
+        },
+        {
+          "run": 15,
+          "elapsed_s": 396.6920912,
+          "binary": "9ee2e139968647200ffda649c17d0dc5576f95bf70e9e25fda636c55287c88a4",
+          "peak_sample_mib": 826.19921875,
+          "lifecycle": {
+            "worker_definition_released": {
+              "private_mib": 92.5469,
+              "handles": 368,
+              "objects_all_released": true
+            },
+            "worker_joined": {
+              "private_mib": 92.2539,
+              "handles": 365,
+              "objects_all_released": true
+            }
+          },
+          "recoveries": {}
+        },
+        {
+          "run": 16,
+          "elapsed_s": 579.3566598,
+          "binary": "9ee2e139968647200ffda649c17d0dc5576f95bf70e9e25fda636c55287c88a4",
+          "peak_sample_mib": 870.35546875,
+          "lifecycle": {
+            "worker_definition_released": {
+              "private_mib": 99.418,
+              "handles": 368,
+              "objects_all_released": true
+            },
+            "worker_joined": {
+              "private_mib": 99.8555,
+              "handles": 365,
+              "objects_all_released": true
+            }
+          },
+          "recoveries": {}
+        },
+        {
+          "run": 17,
+          "elapsed_s": 412.7937525,
+          "binary": "9ee2e139968647200ffda649c17d0dc5576f95bf70e9e25fda636c55287c88a4",
+          "peak_sample_mib": 862.62890625,
+          "lifecycle": {
+            "worker_definition_released": {
+              "private_mib": 94.5898,
+              "handles": 368,
+              "objects_all_released": true
+            },
+            "worker_joined": {
+              "private_mib": 94.0977,
+              "handles": 365,
+              "objects_all_released": true
+            }
+          },
+          "recoveries": {}
+        },
+        {
+          "run": 18,
+          "elapsed_s": 410.5742364,
+          "binary": "9ee2e139968647200ffda649c17d0dc5576f95bf70e9e25fda636c55287c88a4",
+          "peak_sample_mib": 869.8203125,
+          "lifecycle": {
+            "worker_definition_released": {
+              "private_mib": 108.3398,
+              "handles": 368,
+              "objects_all_released": true
+            },
+            "worker_joined": {
+              "private_mib": 107.8828,
+              "handles": 365,
+              "objects_all_released": true
+            }
+          },
+          "recoveries": {}
+        },
+        {
+          "run": 19,
+          "elapsed_s": 366.2538652,
+          "binary": "9ee2e139968647200ffda649c17d0dc5576f95bf70e9e25fda636c55287c88a4",
+          "peak_sample_mib": 873.6640625,
+          "lifecycle": {
+            "worker_definition_released": {
+              "private_mib": 91.5195,
+              "handles": 366,
+              "objects_all_released": true
+            },
+            "worker_joined": {
+              "private_mib": 91.0273,
+              "handles": 363,
+              "objects_all_released": true
+            }
+          },
+          "recoveries": {}
+        },
+        {
+          "run": 20,
+          "elapsed_s": 361.5169922,
+          "binary": "9ee2e139968647200ffda649c17d0dc5576f95bf70e9e25fda636c55287c88a4",
+          "peak_sample_mib": 871.26953125,
+          "lifecycle": {
+            "worker_definition_released": {
+              "private_mib": 93.1094,
+              "handles": 366,
+              "objects_all_released": true
+            },
+            "worker_joined": {
+              "private_mib": 93.4961,
+              "handles": 363,
+              "objects_all_released": true
+            }
+          },
+          "recoveries": {}
+        },
+        {
+          "run": 21,
+          "elapsed_s": 544.1224861,
+          "binary": "9ee2e139968647200ffda649c17d0dc5576f95bf70e9e25fda636c55287c88a4",
+          "peak_sample_mib": 876.41015625,
+          "lifecycle": {
+            "worker_definition_released": {
+              "private_mib": 106.3906,
+              "handles": 368,
+              "objects_all_released": true
+            },
+            "worker_joined": {
+              "private_mib": 108.0039,
+              "handles": 365,
+              "objects_all_released": true
+            }
+          },
+          "recoveries": {}
+        },
+        {
+          "run": 22,
+          "elapsed_s": 472.209071,
+          "binary": "9ee2e139968647200ffda649c17d0dc5576f95bf70e9e25fda636c55287c88a4",
+          "peak_sample_mib": 876.0,
+          "lifecycle": {
+            "worker_definition_released": {
+              "private_mib": 105.3125,
+              "handles": 366,
+              "objects_all_released": true
+            },
+            "worker_joined": {
+              "private_mib": 105.4297,
+              "handles": 363,
+              "objects_all_released": true
+            }
+          },
+          "recoveries": {}
+        },
+        {
+          "run": 23,
+          "elapsed_s": 412.012198,
+          "binary": "9ee2e139968647200ffda649c17d0dc5576f95bf70e9e25fda636c55287c88a4",
+          "peak_sample_mib": 868.921875,
+          "lifecycle": {
+            "worker_definition_released": {
+              "private_mib": 108.4922,
+              "handles": 366,
+              "objects_all_released": true
+            },
+            "worker_joined": {
+              "private_mib": 109.6445,
+              "handles": 363,
+              "objects_all_released": true
+            }
+          },
+          "recoveries": {}
+        },
+        {
+          "run": 24,
+          "elapsed_s": 428.8633636,
+          "binary": "9ee2e139968647200ffda649c17d0dc5576f95bf70e9e25fda636c55287c88a4",
+          "peak_sample_mib": 848.2265625,
+          "lifecycle": {
+            "worker_definition_released": {
+              "private_mib": 106.5273,
+              "handles": 368,
+              "objects_all_released": true
+            },
+            "worker_joined": {
+              "private_mib": 106.2656,
+              "handles": 365,
+              "objects_all_released": true
+            }
+          },
+          "recoveries": {}
+        },
+        {
+          "run": 25,
+          "elapsed_s": 419.2290655,
+          "binary": "9ee2e139968647200ffda649c17d0dc5576f95bf70e9e25fda636c55287c88a4",
+          "peak_sample_mib": 801.85546875,
+          "lifecycle": {
+            "worker_definition_released": {
+              "private_mib": 97.7188,
+              "handles": 368,
+              "objects_all_released": true
+            },
+            "worker_joined": {
+              "private_mib": 97.2266,
+              "handles": 365,
+              "objects_all_released": true
+            }
+          },
+          "recoveries": {}
+        },
+        {
+          "run": 26,
+          "elapsed_s": 398.7401411,
+          "binary": "9ee2e139968647200ffda649c17d0dc5576f95bf70e9e25fda636c55287c88a4",
+          "peak_sample_mib": 872.40234375,
+          "lifecycle": {
+            "worker_definition_released": {
+              "private_mib": 109.6758,
+              "handles": 368,
+              "objects_all_released": true
+            },
+            "worker_joined": {
+              "private_mib": 109.2891,
+              "handles": 365,
+              "objects_all_released": true
+            }
+          },
+          "recoveries": {}
+        },
+        {
+          "run": 27,
+          "elapsed_s": 414.1005948,
+          "binary": "9ee2e139968647200ffda649c17d0dc5576f95bf70e9e25fda636c55287c88a4",
+          "peak_sample_mib": 829.68359375,
+          "lifecycle": {
+            "worker_definition_released": {
+              "private_mib": 111.1758,
+              "handles": 368,
+              "objects_all_released": true
+            },
+            "worker_joined": {
+              "private_mib": 110.7227,
+              "handles": 365,
+              "objects_all_released": true
+            }
+          },
+          "recoveries": {}
+        },
+        {
+          "run": 28,
+          "elapsed_s": 516.4737309,
+          "binary": "9ee2e139968647200ffda649c17d0dc5576f95bf70e9e25fda636c55287c88a4",
+          "peak_sample_mib": 835.02734375,
+          "lifecycle": {
+            "worker_definition_released": {
+              "private_mib": 108.4648,
+              "handles": 368,
+              "objects_all_released": true
+            },
+            "worker_joined": {
+              "private_mib": 108.3555,
+              "handles": 365,
+              "objects_all_released": true
+            }
+          },
+          "recoveries": {}
+        },
+        {
+          "run": 29,
+          "elapsed_s": 420.577843,
+          "binary": "9ee2e139968647200ffda649c17d0dc5576f95bf70e9e25fda636c55287c88a4",
+          "peak_sample_mib": 839.078125,
+          "lifecycle": {
+            "worker_definition_released": {
+              "private_mib": 113.2344,
+              "handles": 368,
+              "objects_all_released": true
+            },
+            "worker_joined": {
+              "private_mib": 113.4688,
+              "handles": 365,
+              "objects_all_released": true
+            }
+          },
+          "recoveries": {}
+        },
+        {
+          "run": 30,
+          "elapsed_s": 414.7031593,
+          "binary": "9ee2e139968647200ffda649c17d0dc5576f95bf70e9e25fda636c55287c88a4",
+          "peak_sample_mib": 835.1953125,
+          "lifecycle": {
+            "worker_definition_released": {
+              "private_mib": 108.7969,
+              "handles": 366,
+              "objects_all_released": true
+            },
+            "worker_joined": {
+              "private_mib": 108.3008,
+              "handles": 363,
+              "objects_all_released": true
+            }
+          },
+          "recoveries": {}
+        },
+        {
+          "run": 31,
+          "elapsed_s": 470.6058445,
+          "binary": "9ee2e139968647200ffda649c17d0dc5576f95bf70e9e25fda636c55287c88a4",
+          "peak_sample_mib": 882.00390625,
+          "lifecycle": {
+            "worker_definition_released": {
+              "private_mib": 111.4531,
+              "handles": 368,
+              "objects_all_released": true
+            },
+            "worker_joined": {
+              "private_mib": 111.125,
+              "handles": 365,
+              "objects_all_released": true
+            }
+          },
+          "recoveries": {}
+        },
+        {
+          "run": 32,
+          "elapsed_s": 410.3203555,
+          "binary": "9ee2e139968647200ffda649c17d0dc5576f95bf70e9e25fda636c55287c88a4",
+          "peak_sample_mib": 839.140625,
+          "lifecycle": {
+            "worker_definition_released": {
+              "private_mib": 119.7852,
+              "handles": 366,
+              "objects_all_released": true
+            },
+            "worker_joined": {
+              "private_mib": 119.3867,
+              "handles": 363,
+              "objects_all_released": true
+            }
+          },
+          "recoveries": {}
+        },
+        {
+          "run": 33,
+          "elapsed_s": 399.8038787,
+          "binary": "9ee2e139968647200ffda649c17d0dc5576f95bf70e9e25fda636c55287c88a4",
+          "peak_sample_mib": 879.9765625,
+          "lifecycle": {
+            "worker_definition_released": {
+              "private_mib": 118.4531,
+              "handles": 368,
+              "objects_all_released": true
+            },
+            "worker_joined": {
+              "private_mib": 117.9648,
+              "handles": 365,
+              "objects_all_released": true
+            }
+          },
+          "recoveries": {}
+        },
+        {
+          "run": 34,
+          "elapsed_s": 606.7913644,
+          "binary": "9ee2e139968647200ffda649c17d0dc5576f95bf70e9e25fda636c55287c88a4",
+          "peak_sample_mib": 847.5390625,
+          "lifecycle": {
+            "worker_definition_released": {
+              "private_mib": 107.8984,
+              "handles": 368,
+              "objects_all_released": true
+            },
+            "worker_joined": {
+              "private_mib": 107.4062,
+              "handles": 365,
+              "objects_all_released": true
+            }
+          },
+          "recoveries": {
+            "ADB_TIMEOUT": 1,
+            "ADB_TRANSPORT_FAILED": 1,
+            "DEVICE_INSTANCE_RESTART_REQUIRED": 1,
+            "DEVICE_INSTANCE_STARTING": 8,
+            "CONTINUOUS_EXCEPTION_TIMEOUT": 1,
+            "DEVICE_RECONNECT_WAIT": 3
+          }
+        },
+        {
+          "run": 35,
+          "elapsed_s": 398.9234959,
+          "binary": "9ee2e139968647200ffda649c17d0dc5576f95bf70e9e25fda636c55287c88a4",
+          "peak_sample_mib": 778.93359375,
+          "lifecycle": {
+            "batch_payloads_released": {
+              "private_mib": 124.6719,
+              "handles": 312,
+              "objects_all_released": true
+            },
+            "worker_definition_released": {
+              "private_mib": 118.8398,
+              "handles": 366,
+              "objects_all_released": true
+            },
+            "worker_joined": {
+              "private_mib": 118.3477,
+              "handles": 363,
+              "objects_all_released": true
+            }
+          },
+          "recoveries": {}
+        }
+      ],
+      "process_identity": {
+        "pid": 39784,
+        "created_100ns": 134357395800155052
+      },
+      "final_object_lifetimes": {
+        "execution_sessions": {
+          "created": 103,
+          "destroyed": 103,
+          "live": 0,
+          "ready": 0
+        },
+        "ocr_engines": {
+          "created": 103,
+          "destroyed": 103,
+          "live": 0,
+          "ready": 0
+        },
+        "recognizers": {
+          "created": 103,
+          "destroyed": 103,
+          "live": 0,
+          "ready": 0
+        }
+      }
+    }
+  ],
+  "failed_attempts": [
+    {
+      "label": "candidate117",
+      "run": 17,
+      "state": "Failed",
+      "reason": "party.death_interrupted"
+    },
+    {
+      "label": "candidate119",
+      "run": 1,
+      "state": "Interrupted",
+      "reason": "revival.outcome_unconfirmed"
+    }
+  ],
+  "combat119": {
+    "prepare_reasons": {
+      "selected": 861,
+      "portrait_unrecognized": 23
+    },
+    "input_states": {
+      "attempted": 3707,
+      "accepted": 3707
+    },
+    "auto_input_count": 0,
+    "skill_open_no_progress": [
+      {
+        "run": 6,
+        "seq": 2900,
+        "path": "[{\"flow_id\":\"combat-open-detail\",\"node_id\":\"open\"}]",
+        "attempts": 9,
+        "outcome": "no_progress",
+        "seconds": 21.1331188,
+        "last_actor": {
+          "portrait": "0 面具",
+          "skill_index": 0,
+          "strategy_name": "悬赏巨人",
+          "best_score": 0.9735095500946045
+        }
+      },
+      {
+        "run": 11,
+        "seq": 2546,
+        "path": "[{\"flow_id\":\"combat-open-detail\",\"node_id\":\"open\"}]",
+        "attempts": 9,
+        "outcome": "no_progress",
+        "seconds": 21.2492445,
+        "last_actor": {
+          "portrait": "0 面具",
+          "skill_index": 0,
+          "strategy_name": "悬赏巨人",
+          "best_score": 0.9600720405578613
+        }
+      },
+      {
+        "run": 12,
+        "seq": 2601,
+        "path": "[{\"flow_id\":\"combat-open-detail\",\"node_id\":\"open\"}]",
+        "attempts": 10,
+        "outcome": "no_progress",
+        "seconds": 20.9741374,
+        "last_actor": {
+          "portrait": "0 面具",
+          "skill_index": 0,
+          "strategy_name": "悬赏巨人",
+          "best_score": 0.9241998195648193
+        }
+      },
+      {
+        "run": 16,
+        "seq": 2682,
+        "path": "[{\"flow_id\":\"combat-open-detail\",\"node_id\":\"open\"}]",
+        "attempts": 10,
+        "outcome": "no_progress",
+        "seconds": 21.4221187,
+        "last_actor": {
+          "portrait": "0 面具",
+          "skill_index": 0,
+          "strategy_name": "悬赏巨人",
+          "best_score": 0.9735095500946045
+        }
+      },
+      {
+        "run": 16,
+        "seq": 3213,
+        "path": "[{\"flow_id\":\"combat-open-detail\",\"node_id\":\"open\"}]",
+        "attempts": 9,
+        "outcome": "no_progress",
+        "seconds": 20.7900608,
+        "last_actor": {
+          "portrait": "0 面具",
+          "skill_index": 0,
+          "strategy_name": "悬赏巨人",
+          "best_score": 0.9735106825828552
+        }
+      },
+      {
+        "run": 21,
+        "seq": 2586,
+        "path": "[{\"flow_id\":\"combat-open-detail\",\"node_id\":\"open\"}]",
+        "attempts": 10,
+        "outcome": "no_progress",
+        "seconds": 20.9639885,
+        "last_actor": {
+          "portrait": "0 面具",
+          "skill_index": 0,
+          "strategy_name": "悬赏巨人",
+          "best_score": 0.9652952551841736
+        }
+      },
+      {
+        "run": 21,
+        "seq": 3152,
+        "path": "[{\"flow_id\":\"combat-open-detail\",\"node_id\":\"open\"}]",
+        "attempts": 10,
+        "outcome": "no_progress",
+        "seconds": 21.0648702,
+        "last_actor": {
+          "portrait": "0 面具",
+          "skill_index": 0,
+          "strategy_name": "悬赏巨人",
+          "best_score": 0.9735095500946045
+        }
+      },
+      {
+        "run": 31,
+        "seq": 2174,
+        "path": "[{\"flow_id\":\"combat-open-detail\",\"node_id\":\"open\"}]",
+        "attempts": 9,
+        "outcome": "no_progress",
+        "seconds": 21.2660153,
+        "last_actor": {
+          "portrait": "0 面具",
+          "skill_index": 0,
+          "strategy_name": "悬赏巨人",
+          "best_score": 0.9735780954360962
+        }
+      }
+    ],
+    "gold_submission_record_count": 35
+  }
+}

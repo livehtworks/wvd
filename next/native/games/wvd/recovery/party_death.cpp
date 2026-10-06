@@ -21,7 +21,10 @@ tasks::CompiledWorkflow dismiss_party_death() {
     graph.delay_after("Dismiss", 100);
     graph.postcondition_budget("Dismiss", 10000);
     graph.confirm("Cleared", "party.death.clear", "party_death_cleared", cleared, {"Terminal"});
-    graph.observe("OtherBlocking", C::all({C::absent(J{{"mode", "input_clear"}}), C::absent(dead)}), {"BlockedExit"});
+    // The death notice can resemble Pause before the revival choices appear.
+    // Reobserve within the existing handler deadline; only Dismiss authorizes input.
+    graph.poll("OtherBlocking", 250, {"Dismiss", "Cleared", "OtherBlocking"});
+    graph.failure_route("OtherBlocking", {"BlockedExit"});
     graph.recovery("BlockedExit", "party.death_interrupted");
     return graph.finish();
 }

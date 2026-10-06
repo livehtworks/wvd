@@ -318,6 +318,44 @@ int main(int argc, char **argv) {
         if (argc == 4 && std::string(argv[1]) == "--giant-linkage") return closure::giant_linkage(argv[2], argv[3]);
         if (argc == 4 && std::string(argv[1]) == "--memory-owners") return closure::memory_owner_census(argv[2], argv[3]);
         using J = nlohmann::json;
+        if (argc == 2 && std::string(argv[1]) == "--death-transition") {
+            using namespace closure;
+            auto graph = games::recovery::dismiss_party_death();
+            games::tasks::localize_task_assets(graph, read("resources/authoring/semantic-assets.json"), "zh-Hant");
+            for (const auto &outcome : {std::string("revival"), std::string("battle"), std::string("cancel")}) {
+                Driver d(graph);
+                d.ports.conditions[J{{"mode", "party_death"}}.dump()] = true;
+                d.ports.conditions[J{{"mode", "party_death_post"}}.dump()] = true;
+                d.ports.after_input = [&](const auto &) {
+                    d.ports.conditions[J{{"mode", "party_death"}}.dump()] = false;
+                    d.ports.blocker = true; // Actual notice frame was misclassified as Pause.
+                };
+                d.until([&] { return d.executor.current_step_id() == "OtherBlocking"; });
+                const auto reads = d.ports.recognitions;
+                d.until([&] { return d.ports.recognitions >= reads + 3; });
+                check(!d.terminal() && d.ports.commands.size() == 1 &&
+                    d.ports.business.summary().at("death_prompt_pending") == true,
+                    "DEATH_NOTICE_FAILED_OR_AUTHORIZED_EXTRA_INPUT");
+                if (outcome == "cancel") {
+                    d.ports.stop = true;
+                    d.finish();
+                    check(d.last.state == runtime::TickState::Cancelled && d.ports.commands.size() == 1,
+                        "DEATH_NOTICE_IGNORED_CANCEL");
+                } else {
+                    d.ports.blocker = false;
+                    d.ports.combat = outcome == "battle";
+                    d.ports.conditions[J{{"mode", "revival_prompt"}}.dump()] = outcome == "revival";
+                    d.finish();
+                    check(d.last.state == runtime::TickState::Completed && d.ports.commands.size() == 1 &&
+                        !d.executor.has_unresolved_input() &&
+                        d.ports.business.summary().at("death_prompt_pending") == false &&
+                        d.ports.business.summary().at("revivals") == 0,
+                        "DEATH_NOTICE_DID_NOT_HAND_BACK_OR_FALSE_REVIVAL");
+                }
+                d.evidence(("death-transition-" + outcome).c_str());
+            }
+            return 0;
+        }
         if (argc == 2 && std::string(argv[1]) == "--locale-coverage") {
             using namespace closure;
             using C = games::tasks::PipelineCompiler;
@@ -979,6 +1017,30 @@ int main(int argc, char **argv) {
             return 0;
         }
         if (argc == 2 && std::string(argv[1]) == "--inn-transitions") return closure::inn_transitions();
+        if (argc == 2 && std::string(argv[1]) == "--boot-revival") {
+            using namespace wvd;
+            const auto assets = closure::read("resources/authoring/semantic-assets.json");
+            const auto flows = closure::read("resources/authoring/public-flows.json");
+            J documents = J::object();
+            for (const auto &doc : flows) documents[doc.at("flow").at("id").get<std::string>()] = doc;
+            const games::tasks::PublicFlowLibrary library(documents, assets);
+            const games::tasks::PublicStepScope public_steps([&](const std::string &id, const J &args) {
+                return library.compile_step(id, args, "zh-Hant");
+            });
+            auto flow = games::recovery::wait_boot_ready(true);
+            games::tasks::localize_task_assets(flow, assets, "zh-Hant");
+            closure::Driver d(flow);
+            d.ports.scene("black");
+            d.ports.semantic_leaf = [](const closure::J &p) -> std::optional<bool> {
+                if (p.value("mode", "") == "revival_prompt") return true;
+                return std::nullopt;
+            };
+            d.finish();
+            closure::check(d.last.state == wvd::runtime::TickState::Completed && d.ports.inputs.empty(),
+                "BOOT_REVIVAL_NOT_HANDED_TO_CALLER");
+            d.evidence("BOOT-revival-handoff");
+            return 0;
+        }
         if (argc == 2 && std::string(argv[1]) == "--boot-progress") {
             using namespace wvd;
             using namespace std::chrono_literals;

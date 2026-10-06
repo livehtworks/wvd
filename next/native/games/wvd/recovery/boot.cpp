@@ -96,8 +96,9 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, Dialogue
     const auto story = vision::ordinary_story_page();
     // 选择加护后会先到哈肯楼层菜单；交还调用者决定是否“歸還”，
     // 通用弹窗层不能把稳定菜单继续当作未处理的阻塞页轮询。
+    // A restarted task may begin at revival choices; its caller owns revival.
     const J ready = C::all({common ? C::any({J{{"mode", "boot_ready"}}, panel, C::image("RiseAgain"),
-        vision::harken_floor_menu()}) : J{{"mode", "boot_ready"}},
+        vision::harken_floor_menu()}) : C::any({J{{"mode", "boot_ready"}}, C::image("RiseAgain")}),
                            C::absent(J{{"mode", "blocking_screen"}}), C::absent(story)});
     const auto title = scoped("boot_title_logo", {100, 300, 700, 470}, .86);
     const auto announcement = vision::resource("boot.announcement.page");
