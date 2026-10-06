@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<WpaProfileContainer xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" Version="2" xmlns="http://tempuri.org/SerializableElement.xsd">
+  <Content xsi:type="WpaProfile2">
+    <Sessions><Session Index="0"><FileReferences/></Session></Sessions>
+    <Views>
+      <View Guid="463048cb-2f2b-480d-8e94-a54f3fd88080" Title="HeapSnapshot" IsVisible="true">
+        <Graphs>
+          <Graph Guid="463048cb-2f2b-480d-8e94-a54f3fd88080" LayoutStyle="DataTable" Color="#FF0000FF" GraphHeight="125" IsShown="true">
+            <Preset Name="WvdHeapSnapshot" GraphColumnCount="9" LeftFrozenColumnCount="4" RightFrozenColumnCount="7">
+              <MetadataEntries/><HighlightEntries/>
+              <Columns>
+                <Column Guid="c636d2f3-9150-4f99-8f85-a42047541ed0" Name="Process" Width="140" IsVisible="true"/>
+                <Column Guid="991604fa-45ec-45c8-825d-0504766a93ad" Name="PID" Width="80" IsVisible="true"/>
+                <Column Guid="bd2378bf-dd18-4d0a-9678-ca787e1299f9" Name="Instance" Width="80" IsVisible="true"/>
+                <Column Guid="555b3fb9-3e48-442c-a1f6-53cd48fcecf5" Name="Snap Time" Width="120" CellFormat="sN" IsVisible="true"/>
+                <Column Guid="e33da178-a863-4a38-975e-2562eccb8656" Name="Stack" Width="320" IsVisible="true"/>
+                <Column Guid="33021112-f392-4640-abe8-92e47804554e" Name="Allocation Address" Width="130" CellFormat="x" IsVisible="true"/>
+                <Column Guid="cea6c387-e307-4b03-83e7-0ba97cc74336" Name="Heap Handle" Width="130" CellFormat="x" IsVisible="true"/>
+                <Column Guid="0bde4a08-6a88-4562-bd65-390626884bf7" Name="Count" Width="100" IsVisible="true"/>
+                <Column Guid="fdb0371a-7d64-47e7-8012-12d41db815eb" Name="Size" Width="100" CellFormat="B" IsVisible="true"/>
+              </Columns>
+            </Preset>
+          </Graph>
+        </Graphs>
+        <SessionIndices><SessionIndex>0</SessionIndex></SessionIndices>
+      </View>
+      <View Guid="757a84bc-8362-4f35-9ae9-196b8a86f1e8" Title="VirtualAllocCommitLifeTimes" IsVisible="true">
+        <Graphs>
+          <Graph Guid="e6a4a964-3a87-46ef-9762-f9d9b9208051" LayoutStyle="DataTable" Color="#FF0000FF" GraphHeight="125" IsShown="true">
+            <Preset Name="WvdVirtualAlloc" GraphColumnCount="11" LeftFrozenColumnCount="3" RightFrozenColumnCount="9">
+              <MetadataEntries>
+                <MetadataEntry Guid="e35ae2d1-6370-4e17-a79d-eada8afa60f6" Name="Commit Time" ColumnMetadata="StartTime"/>
+                <MetadataEntry Guid="093b4056-cb58-4209-90b9-29cdbb8ca214" Name="Decommit Time" ColumnMetadata="EndTime"/>
+              </MetadataEntries>
+              <HighlightEntries/>
+              <Columns>
+                <Column Guid="cfe19628-6612-4e45-ad6e-84b7423c8132" Name="Process" Width="140" IsVisible="true"/>
+                <Column Guid="8e0f7d59-37d1-4191-9c30-625cbacbc04f" Name="Impacting Type" Width="100" IsVisible="true"/>
+                <Column Guid="ae3e0b03-508c-48bf-a974-d6d1934258c2" Name="Impacting Stack" Width="320" IsVisible="true"/>
+                <Column Guid="f3e2404e-9274-48de-ba7a-81b10ac0d8e3" Name="Type" Width="60" IsVisible="true"/>
+                <Column Guid="9298a5c9-42e9-42d0-b069-f211906a4078" Name="Commit Stack" Width="320" IsVisible="true"/>
+                <Column Guid="7f60a51c-b867-4365-9201-6465fc23a978" Name="Decommit Stack" Width="320" IsVisible="true"/>
+                <Column Guid="e35ae2d1-6370-4e17-a79d-eada8afa60f6" Name="Commit Time" Width="120" CellFormat="sN" IsVisible="true"/>
+                <Column Guid="093b4056-cb58-4209-90b9-29cdbb8ca214" Name="Decommit Time" Width="120" CellFormat="sN" IsVisible="true"/>
+                <Column Guid="801c4ec2-9d52-42fb-b3bb-a06e4d5a70a5" Name="Address" Width="130" CellFormat="x" IsVisible="true"/>
+                <Column Guid="191711d7-f84c-4936-93b7-e2793639cdd1" Name="Impacting Size" Width="120" IsVisible="true"/>
+                <Column Guid="355d0688-9ebd-41af-b2c4-0dc0f4294eaa" Name="Size" Width="120" IsVisible="true"/>
+              </Columns>
+            </Preset>
+          </Graph>
+        </Graphs>
+        <SessionIndices><SessionIndex>0</SessionIndex></SessionIndices>
+      </View>
+    </Views>
+  </Content>
+</WpaProfileContainer>

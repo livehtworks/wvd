@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<WindowsPerformanceRecorder Version="1.0" Author="WVD">
+  <Profiles>
+    <SystemCollector Id="Kernel" Name="WvdMemory-Kernel">
+      <BufferSize Value="256"/>
+      <Buffers Value="128"/>
+      <StackCaching BucketCount="8192" CacheSize="16384"/>
+      <MaximumFileSize Value="96" FileMode="Sequential"/>
+    </SystemCollector>
+    <EventCollector Id="Snapshot" Name="WvdMemory-Snapshot">
+      <BufferSize Value="512"/>
+      <Buffers Value="128"/>
+      <MaximumFileSize Value="64" FileMode="Sequential"/>
+    </EventCollector>
+    <SystemProvider Id="KernelMemory" SuppressHighVolume="true">
+      <Keywords>
+        <Keyword Value="ProcessThread"/>
+        <Keyword Value="Loader"/>
+        <Keyword Value="VirtualAllocation"/>
+      </Keywords>
+      <Stacks><Stack Value="VirtualAllocation"/></Stacks>
+    </SystemProvider>
+    <EventProvider Id="HeapSnapshots" Name="901d2afa-4ff6-46d7-8d0e-53645e1a47f5"/>
+    <Profile Id="WvdMemoryStacks.Verbose.File" Name="WvdMemoryStacks"
+             Description="PID heap snapshots and minimal VirtualAlloc stacks"
+             DetailLevel="Verbose" LoggingMode="File">
+      <Collectors>
+        <SystemCollectorId Value="Kernel">
+          <SystemProviderId Value="KernelMemory"/>
+        </SystemCollectorId>
+        <EventCollectorId Value="Snapshot">
+          <EventProviders><EventProviderId Value="HeapSnapshots"/></EventProviders>
+        </EventCollectorId>
+      </Collectors>
+    </Profile>
+  </Profiles>
+</WindowsPerformanceRecorder>

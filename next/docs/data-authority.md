@@ -20,6 +20,7 @@
 | `runs/.../memory-lifecycle.json` | 终态之后的内存诊断，按运行定义释放、worker join、整批配置释放分别保存；最多三个具名快照，按run/instance关联，附进程范围Service/OCR/Session创建/销毁/live/ready标量。会话持有阶段的diagnostics另记租约ID/共享引用/原文件缓冲和程序参数容器估算。受内存开关与info级别控制，不回写终态、不作为业务成功条件；失败计数可由当前diagnostics读取。 | `NativeRunCoordinator`经`RunStore`；整批释放由唯一Application调用 | 只读分析器、资源归因 |
 | `recent-frames/*.jpg`、`*.png` | 同一辅助滚动历史，不授权输入、不证明业务完成；周期JPEG至多每15秒一张，选人/输入前后/确认关键帧以无损PNG绕过周期限制并同帧去重。共用240张/128MiB上限，pending四张、in-flight一张，共享不可变BGR；`recent_frame.action`记录frame_id、阶段、是否入队，实际落盘仍须核对文件及失败/丢弃计数。 | `NativeRunCoordinator`提交，唯一`RunStore`线程写入 | 用户与诊断 |
 | `runs/.../recognition-memory.log`及运行诊断文件 | 资源调查标量及必要故障证据；原memory/debug开关下附OCR owner ID及初始化/销毁begin/end私有内存/句柄配对，按run/generation关联，无新日志权威。配对差为进程观察差，非独占分配栈；普通采样限频，故障即时。只读归因工具的输出是独立诊断报告，不回写运行文件。 | Recognition/MemoryDiagnostics | 用户与诊断 |
+| 显式独立证据目录中的`allocations.etl`、`identity.json`、`checkpoints.json`、`collector-health.json`、`analysis/`及摘要 | 有限WPR取证及派生分配栈差分，不是正式业务数据。绑定PID/创建时间/instance/EXE/PDB，冻结采集与导出profile；PID快照只覆盖启用后栈。HeapAndVirtualAlloc模式为全系统VA后筛目标；用户明确指定的HeapSnapshots模式不采VA、不导出VA表。Collect要求空闲并显式提交有限任务；Monitor只读观察既有batch及真实worker_joined，不拥有或停止游戏，中途接入的首轮单列partial。最多2轮/20分钟/512MiB跟踪，导出另限120秒/128MiB；缺栈/丢失/容量/身份变化明确失败，归因未完成保留UNRESOLVED。证据目录必须在正式data之外，不写profile、workflows、RunStore表或日志结构。 | 显式调用`collect_memory_stacks.ps1`，WPR保存；`export_memory_stacks.ps1`只读派生 | 用户、WPA及故障报告 |
 | `legacy-import/` | 首次导入时对旧配置的私有副本，不回写源 `config.json`。 | 显式初次导入 | `ProfileStore` 初始化 |
 | 源码 `resources/authoring/semantic-assets.json` | 素材语言、默认 condition 和显式 alternatives 的唯一人工配方源；流程只持有资源ID及可选method。 | 源码维护 | 作者目录、编译期展开、包同步 |
 | 源码 `resources/recognition/ocr-models.json` | OCR来源、语言、SHA256、包路径的唯一锁；`.local/native-deps/ocr-zh-Hant`仅为可重建下载缓存。发布的`pack/model/ocr`为只读模型。 | 源码维护；prepare工具写缓存 | 构建、打包、发布器、识别Service |
@@ -28,3 +29,5 @@
 候选目录的 `pack/`、`data/quest.json`、`web/` 是构建产物和只读输入，不能拿运行数据覆盖。历史 Maa 发布包及其诊断保留在旧目录或 Git 归档，只读展示，不作为新运行入口。当前结构以 `Application`、`ProfileStore`、`WorkflowRepository` 和 `RunStore` 的实际路径为准；旧阶段数据说明见 `archive/data-authority-maa-20260924.md`。
 
 战斗调试文档仅在请求内存中生成，不写入`workflows/`。运行冻结指定已保存方案，不修改profile，也不接启动、重启或副本循环；调试回执、停止和诊断复用原协调器及RunStore。
+
+2026-10-07的仅堆窗口`memory-monitor-heap-two-cbdf2cc6-4ba7-43d7-8013-8088c8d32eab`已关闭，receipt因缺第二个join保持不完整。其`partial-analysis/`是另外标注范围的只读探索，未改原冻结profile、ETL或receipt；CSV实际2.071GiB超出128MiB导出目标，failure-summary和首行样本保留，不能作为完整差分或内存归因权威。工具保护的改动不回写这个失败结果，也不代表已证明硬容量约束。

@@ -1,6 +1,10 @@
 # 当前执行注意项
 
-- 有限WPR Heap/VirtualAllocation取证须在目标进程创建前配置，记录IFEO原状态、会话名及匹配EXE/PDB，用实际文件流长度监测临时文件并预留stop合并空间。本轮128MiB临时保护最终生成437MiB ETL、丢136897事件，WPA拒绝处理；不能绕过丢失警告声称栈归因或追加轮数。仅结束本次会话、还原本次堆配置；没有worker_joined边界时明确不足以归因。见`reviews/critical-fixes-20261006.md`。
+- UI设备connected=true仅说明backend对象仍存在，不能证明已关闭模拟器存活。candidate121冷启动复用旧backend时，初始EnsureVpn遇instance_exited/connected=false报PRECONDITION_MISSING，根任务NATIVE_INITIAL_LIFECYCLE_UNCONFIRMED且输入0；该源码缺口尚未修。用户授权拉起时可在quiescent且device lease可释放后，通过正式disconnect完成→connect原实例重新绑定，不关闭其他实例、不并行开启旧脚本；运行中的设备故障仍由原恢复链承接，不能在busy时强行重连。见`reviews/giant121-50-start-20261007.md`。
+- 内存分配栈当前入口为`collect_memory_stacks.ps1`/`export_memory_stacks.ps1`：PID Heap Snapshot只覆盖启用后栈。Collect显式提交两个各1轮任务；Monitor只读附着已运行批次，不提交或停止游戏。`MonitorCurrentRound`将首个收尾标为部分采样，下一轮才是完整窗口。独立证据目录、20分钟/512MiB和目标身份约束仍有效；跟踪结束只清理本次PID/会话。
+- VirtualAlloc仍是全系统记录后筛PID，不存在已验证的录制进程过滤。空闲probe通过不证明游戏中吞吐可控：首次实跑Monitor的内核文件在96MiB封顶，提前保存仍因rundown写入失败；该回执失败、未获得收尾边界，不能归因。用户另行授权的新窗口明确采用`CaptureKind=HeapSnapshots`，移除VirtualAllocation事件与栈及对应导出表，不是偷偷重启采集或隐藏fallback。仅堆窗口不能覆盖VirtualAlloc、启用前堆块或解释全部进程私有提交增长。旧437MiB/136897丢事件和新96MiB失败均保留。详见`reviews/memory-collection-repair-20261006.md`。
+- WPA exporter11.7的`-symbols`属于`-processor 'Event Tracing for Windows'`的输入参数；只设置_NT_SYMBOL_PATH时会导出Symbols disabled。退出0可能仍包含局部表导出错误，必须核对CSV、目标PID、快照数及非空栈/应用符号。源码定位的Heap Snapshot表GUID/列GUID已按本机SDK元数据核对，不能拿Heap Allocations表冒充快照。缺系统DLL/CRT符号单列missing，不隐式批量下载所有进程PDB。
+- 实跑Heap-only在20分钟内仅取得一个部分轮join；轮间prepare至少约8分钟，不能据active预报下一轮及时收尾。部分WPA导出去掉地址列后仍膨胀到2.071GiB，不能把视图列当实际按栈聚合。输出保护也要用共享打开文件流的Length而非FileInfo缓存，并在子进程结束后核对；轮询保护不是硬磁盘配额，新版本尚未重跑活动写入验证。保留超限CSV和失败索引，勿把2GiB残缺CSV整份Import-Csv进内存。详见`reviews/memory-monitor-two-20261007.md`。
 - Release分配栈候选需真实`/Zi`与链接`/DEBUG`，按DbgHelp核对EXE/PDB GUID及Age；同名重新构建PDB不能解释历史候选。PDB文件匹配不等于WPA实际符号加载。本轮原119符号只读保留，121匹配符号另组，candidate120未部署。
 - 英文OCR字典的锁定哈希对应原CRLF字节，Git checkout的LF副本可能不匹配；先比对已验证运行资源，复制同一锁定字节，不修改manifest/依赖锁绕过。ONNX租约只按原HANDLE流式验摘要，真实OCR及`bytes()`路径须分别检查；所有者断言应区分全部哈希字节与常驻非模型字节。
 - 原生author恢复夹具须推进新的连接代次并装配原PublicStepScope；输入保护夹具使用当前任务配置和六角色目标，不能因旧`next`值失败而删断言。MSVC JSON与string比较用显式`get<std::string>()`。初次失败日志保留，最终修正不得改变生产输入门禁。
