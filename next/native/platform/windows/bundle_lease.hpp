@@ -26,6 +26,9 @@ class BundleLease final {
     BundleLease &operator=(const BundleLease &) = delete;
     void verify_members() const;
     void require_member(const std::string &relative) const;
+    // ONNX is verified without retaining its source buffer. An explicit bytes()
+    // request loads it once from the same locked handle; the returned reference
+    // remains immutable and valid until this lease is destroyed.
     const std::vector<std::uint8_t> &bytes(const std::string &relative) const;
     const std::string &hash(const std::string &relative) const;
     const std::filesystem::path &root() const;
@@ -33,6 +36,7 @@ class BundleLease final {
     const std::string &identity() const;
     std::uint64_t hash_bytes() const;
     struct StorageStats {
+        // Retained source buffers only; hash_bytes() includes streamed models.
         std::uint64_t size_bytes{}, capacity_bytes{}, model_bytes{}, image_bytes{}, json_bytes{}, other_bytes{};
     };
     StorageStats storage_stats() const;

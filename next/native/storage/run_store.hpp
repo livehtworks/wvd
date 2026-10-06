@@ -23,6 +23,9 @@ struct DiagnosticRequest {
     int depth{};
     std::string node, reason, stage, operation_id, error;
     std::string evidence_kind{"captured_frame"};
+    // 有界动作证据按同一操作去重/节流；不同操作仍共享原失败数量和单帧预算。
+    bool operation_scoped{};
+    nlohmann::json context = nlohmann::json::object();
 };
 struct DiagnosticLimits {
     std::size_t rewards{128}, failures{32}, frame_bytes{8 * 1024 * 1024};
@@ -97,6 +100,7 @@ class RunStore {
     mutable std::mutex diagnostic_mutex_;
     std::map<std::string, contracts::MonotonicClock::TimePoint> diagnostic_times_;
     std::set<std::string> diagnostic_operations_;
+    std::set<std::string> diagnostic_scoped_operations_;
     nlohmann::json diagnostic_entries_ = nlohmann::json::array();
     std::uint64_t diagnostic_rewards_{}, diagnostic_failures_{}, diagnostic_bytes_{},
         diagnostic_failed_{}, diagnostic_throttled_{}, diagnostic_duplicates_{}, diagnostic_quota_{},

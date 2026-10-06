@@ -1,5 +1,11 @@
 # 当前执行注意项
 
+- 有限WPR Heap/VirtualAllocation取证须在目标进程创建前配置，记录IFEO原状态、会话名及匹配EXE/PDB，用实际文件流长度监测临时文件并预留stop合并空间。本轮128MiB临时保护最终生成437MiB ETL、丢136897事件，WPA拒绝处理；不能绕过丢失警告声称栈归因或追加轮数。仅结束本次会话、还原本次堆配置；没有worker_joined边界时明确不足以归因。见`reviews/critical-fixes-20261006.md`。
+- Release分配栈候选需真实`/Zi`与链接`/DEBUG`，按DbgHelp核对EXE/PDB GUID及Age；同名重新构建PDB不能解释历史候选。PDB文件匹配不等于WPA实际符号加载。本轮原119符号只读保留，121匹配符号另组，candidate120未部署。
+- 英文OCR字典的锁定哈希对应原CRLF字节，Git checkout的LF副本可能不匹配；先比对已验证运行资源，复制同一锁定字节，不修改manifest/依赖锁绕过。ONNX租约只按原HANDLE流式验摘要，真实OCR及`bytes()`路径须分别检查；所有者断言应区分全部哈希字节与常驻非模型字节。
+- 原生author恢复夹具须推进新的连接代次并装配原PublicStepScope；输入保护夹具使用当前任务配置和六角色目标，不能因旧`next`值失败而删断言。MSVC JSON与string比较用显式`get<std::string>()`。初次失败日志保留，最终修正不得改变生产输入门禁。
+- 本次managed worktree完成checkout但ignored AGENTS.override扫描挂起；只结束本次可验证只读扫描，不杀其他Git/应用。attach归属验证失败时保留已核对的独立checkout，不声称应用已附着；构建/补丁证据按实际路径记录。
+
 - movement_stopped嵌入多个all条件时，外层请求缓存不能保证子采样一致；静止结论按完整帧身份保存，跨新帧续读须复核场景、小地图及输入epoch/设备/连接/视口/导航作用域。初次采样和等待旧帧不证明静止，反证立即失效，3秒周期/ROI/阈值不变。`--movement-frame <900x1600 PNG> <完整冻结包>`须包含实际OCR模型；源码pack子集缺模型时报真实missing_resource，不允许跳过Error。真实auto_route回放记录38次识别约25秒，原15秒测试墙钟不足，独立测试窗口35秒不改变生产预算或TTL。见`reviews/linkage-aa0957a-20261006.md`。
 - 目标战的再起/宝箱/阻断必须回原目标处理上下文，不能返回普通Dispatch丢失战后链；原目标身份不明时保留未完成，不把任意新遭遇结算为目标。短暂无路线提示通过当前调用帧的ConfirmedInputResult交接，消费一次；历史结果无点击资格，实际新输入/另一调用清除，祖先pending和身份/epoch检查继续有效。超时known_scene只能复核当时声明的合法候选，不能扫描整个Definition跳阶段。
 - 内存仅有工作区估算和释放后OS数字不足以归因。现沿释放边界记录Service/OCR/Session活对象、资源租约ID/共享引用及Held::content原文件缓冲、程序参数容器规模；OCR初始化/销毁配对记录受原memory/debug开关控制，不每帧扫描。相同租约去重，容器容量估算不当作常驻分配；释放后余量仍unknown。`analyze_memory_owners.py`只读输入、输出独立，旧日志缺字段标missing，不补造对象计数。

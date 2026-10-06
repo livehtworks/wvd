@@ -1,5 +1,6 @@
 #include "recognition/service.hpp"
 #include "platform/windows/file_digest.hpp"
+#include "bundle_lease_cases.hpp"
 #include <opencv2/imgcodecs.hpp>
 #include <iostream>
 #include <cstring>
@@ -11,6 +12,11 @@ int main(int argc, char **argv) {
     namespace fs = std::filesystem;
     fs::path directory;
     try {
+        if (argc == 2 && std::string(argv[1]) == "--bundle-lease") {
+            wvd::tests::bundle_lease_cases::check();
+            std::cout << "bundle lease streamed models, lazy bytes and freeze protection verified\n";
+            return 0;
+        }
         if (argc != 2) throw std::runtime_error("SAMPLE_PATH_REQUIRED");
         const fs::path sample(std::u8string(
             reinterpret_cast<const char8_t *>(argv[1]),

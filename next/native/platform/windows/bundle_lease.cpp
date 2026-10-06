@@ -4,6 +4,7 @@
 #include "path_utf8.hpp"
 #include <algorithm>
 #include <cwctype>
+#include <mutex>
 #include <set>
 #include <windows.h>
 
@@ -17,7 +18,9 @@ struct Held {
     HANDLE handle{INVALID_HANDLE_VALUE};
     std::filesystem::path path;
     BY_HANDLE_FILE_INFORMATION info{};
+    mutable std::mutex content_mutex;
     std::vector<std::uint8_t> content;
+    bool content_loaded{};
     explicit Held(std::filesystem::path p, bool directory) : path(std::move(p)) {
         handle = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
                              directory ? FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT
@@ -36,20 +39,46 @@ struct Held {
             CloseHandle(handle);
     }
     Held(const Held &) = delete;
-    void read() {
-        auto length = (std::uint64_t(info.nFileSizeHigh) << 32) | info.nFileSizeLow;
+    std::uint64_t checked_size() const {
+        const auto length = (std::uint64_t(info.nFileSizeHigh) << 32) | info.nFileSizeLow;
         require(length <= 256 * 1024 * 1024, "INTEGRITY_FILE_TOO_LARGE");
-        content.resize(static_cast<std::size_t>(length));
-        for (std::size_t offset = 0; offset < content.size();) {
+        return length;
+    }
+    void verify_streamed(const std::string &expected_hash) {
+        std::lock_guard lock(content_mutex);
+        const auto length = checked_size();
+        verify_identity();
+        const auto digest = handle_sha256(handle, length);
+        verify_identity();
+        require(digest == expected_hash, "RESOURCE_HASH_MISMATCH");
+    }
+    const std::vector<std::uint8_t> &verified_bytes(const std::string &expected_hash) {
+        std::lock_guard lock(content_mutex);
+        if (content_loaded) return content;
+        const auto length = checked_size();
+        verify_identity();
+        // Stream verification leaves this handle at EOF. Every first load or
+        // failed-load retry must seek on the SAME frozen handle before reading.
+        require(SetFilePointerEx(handle, LARGE_INTEGER{}, nullptr, FILE_BEGIN),
+                "INTEGRITY_SEEK_FAILED");
+        std::vector<std::uint8_t> loaded(static_cast<std::size_t>(length));
+        for (std::size_t offset = 0; offset < loaded.size();) {
             DWORD count{};
             require(
-                ReadFile(handle, content.data() + offset,
-                         static_cast<DWORD>(std::min<std::size_t>(65536, content.size() - offset)),
+                ReadFile(handle, loaded.data() + offset,
+                         static_cast<DWORD>(std::min<std::size_t>(65536, loaded.size() - offset)),
                          &count, nullptr) &&
                     count,
                 "INTEGRITY_READ_FAILED");
             offset += count;
         }
+        verify_identity();
+        require(bytes_sha256(loaded) == expected_hash, "RESOURCE_HASH_MISMATCH");
+        // Publish only a fully verified buffer. On any failure, the local buffer
+        // is released and the next caller retries from offset 0 under this mutex.
+        content.swap(loaded);
+        content_loaded = true;
+        return content;
     }
     void verify_identity() const {
         auto attributes = GetFileAttributesW(path.c_str());
@@ -159,10 +188,12 @@ BundleLease::BundleLease(std::filesystem::path root, std::string revision, Manif
     }
     // 全部文件锁定后才读取同一对象的内容，不重新按路径打开另一个文件计算哈希。
     for (auto &[relative, file] : s.files) {
-        file->read();
-        file->verify_identity();
-        s.hashed_bytes += file->content.size();
-        require(bytes_sha256(file->content) == s.manifest.at(relative), "RESOURCE_HASH_MISMATCH");
+        const auto &hash = s.manifest.at(relative);
+        // OCR consumes locked model paths. Avoid retaining a second whole copy
+        // of each ONNX file; templates and other bytes() consumers stay eager.
+        if (relative.ends_with(".onnx")) file->verify_streamed(hash);
+        else (void)file->verified_bytes(hash);
+        s.hashed_bytes += file->checked_size();
     }
     verify_members();
 }
@@ -187,7 +218,7 @@ void BundleLease::require_member(const std::string &relative) const {
 }
 const std::vector<std::uint8_t> &BundleLease::bytes(const std::string &relative) const {
     require_member(relative);
-    return impl_->files.at(relative)->content;
+    return impl_->files.at(relative)->verified_bytes(impl_->manifest.at(relative));
 }
 const std::string &BundleLease::hash(const std::string &relative) const {
     require_member(relative);
@@ -200,6 +231,7 @@ std::uint64_t BundleLease::hash_bytes() const { return impl_->hashed_bytes; }
 BundleLease::StorageStats BundleLease::storage_stats() const {
     StorageStats result;
     for (const auto &[name, file] : impl_->files) {
+        std::lock_guard lock(file->content_mutex);
         const auto size = file->content.size();
         result.size_bytes += size;
         result.capacity_bytes += file->content.capacity();

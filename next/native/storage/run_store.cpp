@@ -365,13 +365,18 @@ J RunStore::save_diagnostic(const contracts::FrameEnvelope *frame, const Diagnos
         (request.task_id == 0 && !native) || request.depth < 0 ||
         request.node.empty() || request.node.size() > 256 || request.reason.empty() ||
         request.reason.size() > 256 || request.operation_id.size() > 512 || request.error.size() > 256 ||
+        !request.context.is_object() || request.context.dump().size() > 16 * 1024 ||
+        (request.operation_scoped && (reward || request.operation_id.empty())) ||
         (reward && request.operation_id.empty()) ||
         (request.stage != "reward" && request.stage != "pre_action" &&
          request.stage != "postcondition" && request.stage != "recovery_entry")) {
         ++diagnostic_unrecorded_;
         return skipped("invalid_request");
     }
-    if (reward && diagnostic_operations_.contains(request.operation_id)) {
+    const auto throttle_key = request.reason + ":" + request.evidence_kind +
+        (request.operation_scoped ? ":" + request.operation_id : "");
+    if ((reward && diagnostic_operations_.contains(request.operation_id)) ||
+        (request.operation_scoped && diagnostic_scoped_operations_.contains(throttle_key))) {
         ++diagnostic_duplicates_;
         return skipped("duplicate");
     }
@@ -379,7 +384,7 @@ J RunStore::save_diagnostic(const contracts::FrameEnvelope *frame, const Diagnos
     const auto interval = std::chrono::seconds(request.reason.find("pause") != std::string::npos ? 120 : 60);
     bool clock_backwards = false;
     if (!reward) {
-        const auto found = diagnostic_times_.find(request.reason + ":" + request.evidence_kind);
+        const auto found = diagnostic_times_.find(throttle_key);
         clock_backwards = found != diagnostic_times_.end() && now < found->second;
         if (found != diagnostic_times_.end() && now >= found->second && now - found->second < interval) {
             ++diagnostic_throttled_;
@@ -394,12 +399,14 @@ J RunStore::save_diagnostic(const contracts::FrameEnvelope *frame, const Diagnos
     // 失败/tmp也占一次完整单帧预算，不自动重试，不让失败绕过数量/字节上限。
     ++attempts;
     if (reward) diagnostic_operations_.insert(request.operation_id);
-    else diagnostic_times_[request.reason + ":" + request.evidence_kind] = now;
+    else diagnostic_times_[throttle_key] = now;
+    if (request.operation_scoped) diagnostic_scoped_operations_.insert(throttle_key);
     J entry{{"id", diagnostic_rewards_ + diagnostic_failures_}, {"status", "failed"},
         {"instance", instance_}, {"run_id", run_}, {"generation", request.generation},
         {"unit_index", request.unit_index}, {"task_id", request.task_id}, {"depth", request.depth},
         {"node", request.node}, {"reason", request.reason}, {"stage", request.stage},
         {"operation_id", request.operation_id}, {"evidence_kind", request.evidence_kind}};
+    if (!request.context.empty()) entry["context"] = request.context;
     try {
         diagnostic_require(!clock_backwards, "DIAGNOSTIC_CLOCK_MOVED_BACKWARD");
         diagnostic_require(request.error.empty(), request.error.c_str());

@@ -25,6 +25,7 @@
 #include "games/wvd/supply/inn.hpp"
 #include "games/wvd/recovery/boot.hpp"
 #include "games/wvd/recovery/party_death.hpp"
+#include "games/wvd/recovery/revival.hpp"
 #include "games/wvd/vision/boot_probes.hpp"
 #include "games/wvd/vision/native_recognizers.hpp"
 #include "games/wvd/vision/native_asset_resolver.hpp"
@@ -66,7 +67,10 @@ struct Ports final : runtime::FlowPorts {
     std::set<std::string> images;
     std::map<std::string, bool> conditions;
     std::function<void(const std::string &)> after_input;
+    std::function<void()> before_capture;
+    std::function<contracts::ObservationRecovery(bool)> observation_recovery;
     std::function<std::optional<bool>(const J &)> semantic_leaf;
+    runtime::SubmissionState submission_state{runtime::SubmissionState::Accepted};
     std::vector<std::string> inputs;
     std::vector<contracts::Command> commands;
     std::uint64_t epoch{}, captures{}, recognitions{};
@@ -82,6 +86,7 @@ struct Ports final : runtime::FlowPorts {
         business.enter_segment(contracts::SegmentBoundary::Initial, 1, 0);
     }
     contracts::FrameEnvelope capture() override {
+        if (before_capture) before_capture();
         contracts::FrameEnvelope frame;
         frame.identity.device_id = "closure"; frame.identity.game_id = "wvd";
         frame.identity.pack_revision = "closure"; frame.identity.viewport_id = "900x1600";
@@ -90,6 +95,9 @@ struct Ports final : runtime::FlowPorts {
         frame.identity.raw_size = frame.identity.recognition_size = {900, 1600};
         frame.identity.captured_at = std::chrono::steady_clock::now(); current = frame.identity;
         return frame;
+    }
+    contracts::ObservationRecovery recover_observation(bool restart_application = false) override {
+        return observation_recovery ? observation_recovery(restart_application) : contracts::ObservationRecovery{};
     }
     bool evaluate(const J &p) {
         if (const auto it = conditions.find(p.dump()); it != conditions.end()) return it->second;
@@ -122,7 +130,7 @@ struct Ports final : runtime::FlowPorts {
                                contracts::Box, const std::string &path) override {
         inputs.push_back(path); commands.push_back(command); ++epoch;
         if (after_input) after_input(path);
-        return {runtime::SubmissionState::Accepted, epoch, std::chrono::steady_clock::now(), {}};
+        return {submission_state, epoch, std::chrono::steady_clock::now(), {}};
     }
     runtime::OperationResult operate(const std::string &binding, const J &p,
         const std::optional<contracts::FrameEnvelope> &frame, const std::optional<contracts::Observation> &observation,
@@ -312,8 +320,14 @@ int transitions() {
 
 #include "giant_linkage_cases.hpp"
 #include "memory_owner_cases.hpp"
+#include "combat_diagnostic_drive.hpp"
 int main(int argc, char **argv) {
     try {
+        if (argc == 2 && std::string(argv[1]) == "--combat-diagnostic-drive") {
+            const auto *root = std::getenv("WVD_CLOSURE_ROOT");
+            closure::check(root && *root, "WVD_CLOSURE_ROOT_REQUIRED");
+            return combat_diagnostic_drive(std::filesystem::path(root) / "combat-drive");
+        }
         if (argc == 3 && std::string(argv[1]) == "--giant-linkage") return closure::giant_linkage(argv[2]);
         if (argc == 4 && std::string(argv[1]) == "--giant-linkage") return closure::giant_linkage(argv[2], argv[3]);
         if (argc == 4 && std::string(argv[1]) == "--memory-owners") return closure::memory_owner_census(argv[2], argv[3]);
@@ -934,11 +948,15 @@ int main(int argc, char **argv) {
             games::tasks::PublicStepScope public_steps([&](const std::string &id, const J &args) {
                 return library.compile_step(id, args, "zh-Hant");
             });
-            const J profile{{"STRATEGY", J::array({J{{"skill_settings", J::array({
-                J{{"role_var", ""}, {"skill_var", "Top-Left Skill"}, {"skill_lvl", 1}, {"target_var", "next"}},
-                J{{"role_var", ""}, {"skill_var", "defend"}, {"skill_lvl", 1}, {"target_var", "next"}},
+            auto profile = storage::LegacyConfigImporter(
+                closure::read("packs/wvd/parameters/legacy-config-fields.json"))
+                .parse({{"GENERAL", J::object()}}).values;
+            profile["DEFAULT_OVERALL_STRATEGY"] = "input-protection";
+            profile["STRATEGY"] = J::array({J{{"group_name", "input-protection"}, {"skill_settings", J::array({
+                J{{"role_var", ""}, {"skill_var", "Top-Left Skill"}, {"skill_lvl", 1}, {"target_var", "左上角色"}},
+                J{{"role_var", ""}, {"skill_var", "defend"}, {"skill_lvl", 1}, {"target_var", "左上角色"}},
                 J{{"role_var", ""}, {"skill_var", "Bottom-Left Skill"}, {"skill_lvl", 1}, {"target_var", "左上角色"}}
-            })}}})}};
+            })}}});
             const auto turn = games::combat::take_turn(profile, {});
             const auto native_turn = games::tasks::compile_native_program(turn, J::object(), "critical-real-turn");
             const auto serialized_turn = workflow::serialize(native_turn);
@@ -1019,6 +1037,9 @@ int main(int argc, char **argv) {
         if (argc == 2 && std::string(argv[1]) == "--inn-transitions") return closure::inn_transitions();
         if (argc == 2 && std::string(argv[1]) == "--boot-revival") {
             using namespace wvd;
+            using closure::Driver;
+            using closure::check;
+            using C = games::tasks::PipelineCompiler;
             const auto assets = closure::read("resources/authoring/semantic-assets.json");
             const auto flows = closure::read("resources/authoring/public-flows.json");
             J documents = J::object();
@@ -1027,23 +1048,176 @@ int main(int argc, char **argv) {
             const games::tasks::PublicStepScope public_steps([&](const std::string &id, const J &args) {
                 return library.compile_step(id, args, "zh-Hant");
             });
-            auto flow = games::recovery::wait_boot_ready(true);
-            games::tasks::localize_task_assets(flow, assets, "zh-Hant");
-            closure::Driver d(flow);
-            d.ports.scene("black");
-            d.ports.semantic_leaf = [](const closure::J &p) -> std::optional<bool> {
-                if (p.value("mode", "") == "revival_prompt") return true;
-                return std::nullopt;
+            const auto localized = [&](games::tasks::CompiledWorkflow flow) {
+                games::tasks::localize_task_assets(flow, assets, "zh-Hant");
+                return flow;
             };
-            d.finish();
-            closure::check(d.last.state == wvd::runtime::TickState::Completed && d.ports.inputs.empty(),
-                "BOOT_REVIVAL_NOT_HANDED_TO_CALLER");
-            d.evidence("BOOT-revival-handoff");
+            const auto show_revival = [](closure::Ports &ports) {
+                ports.scene("black");
+                ports.conditions[J{{"mode", "revival_prompt"}}.dump()] = true;
+            };
+            const auto begin_recovery = [](closure::Ports &ports) {
+                ++ports.generation;
+                ports.business.enter_segment(contracts::SegmentBoundary::LifecycleRecovery,
+                    ports.generation, 0);
+            };
+            const auto saw = [](const Driver &d, const std::string &prefix) {
+                return std::any_of(d.trace.begin(), d.trace.end(), [&](const auto &step) {
+                    return step.starts_with(prefix);
+                });
+            };
+            {
+                Driver d(localized(games::recovery::wait_boot_ready(true)));
+                show_revival(d.ports); d.finish();
+                check(d.last.state == runtime::TickState::Completed && d.ports.inputs.empty(),
+                    "BOOT_REVIVAL_NOT_HANDED_TO_CALLER");
+                d.evidence("BOOT-revival-handoff");
+            }
+            // The caller only observes the returned page. No test-only revival input
+            // replaces the real wrapper, restart confirmation or reconnect handler.
+            C caller("closure.boot_revival_caller");
+            caller.route("Entry", {"Revival"});
+            caller.observe("Revival", C::image("RiseAgain"), {"Terminal"});
+            const auto wrapped = localized(games::recovery::with_boot_recovery(caller.finish(), true));
+            for (const bool recovering : {false, true}) {
+                Driver d(wrapped); show_revival(d.ports);
+                if (recovering)
+                    begin_recovery(d.ports);
+                d.finish();
+                const auto facts = d.ports.business.summary();
+                check(d.last.state == runtime::TickState::Completed && d.ports.inputs.empty() &&
+                    !d.executor.has_unresolved_input() && saw(d, "Task_Revival") &&
+                    saw(d, "RestartConfirmed") == recovering &&
+                    facts.at("lifecycle_recovery_active") == false && facts.at("revivals") == 0 &&
+                    facts.at("lifecycle_recovery_sequence") == (recovering ? 1 : 0),
+                    "BOOT_WRAPPER_REVIVAL_HANDOFF_OR_FALSE_RECOVERY");
+                d.evidence(recovering ? "BOOT-wrapper-revival-recovery" : "BOOT-wrapper-revival-initial");
+            }
+            // The page may change after inner Boot returns. Recheck the complete
+            // guarded readiness at the outer confirmation, not only in inner Ready.
+            for (const std::string scene : {"unknown", "blocker", "story", "error"}) {
+                Driver d(wrapped); show_revival(d.ports);
+                begin_recovery(d.ports);
+                d.until([&] { return d.executor.current_step_id() == "RecoveredBoot"; });
+                if (scene == "unknown") d.ports.scene("black");
+                else if (scene == "blocker") d.ports.blocker = true;
+                else if (scene == "story")
+                    d.ports.conditions[games::vision::ordinary_story_page().dump()] = true;
+                else {
+                    d.ports.ready = true;
+                    d.ports.conditions.erase(J{{"mode", "revival_prompt"}}.dump());
+                    d.ports.semantic_leaf = [](const J &p) -> std::optional<bool> {
+                        if (p.value("mode", "") == "revival_prompt")
+                            throw std::runtime_error("TEST_REVIVAL_RECOGNITION_ERROR");
+                        return std::nullopt;
+                    };
+                }
+                if (scene == "error") {
+                    d.finish();
+                    check(d.last.state == runtime::TickState::Failed &&
+                        d.last.code == "TEST_REVIVAL_RECOGNITION_ERROR", "BOOT_READY_SWALLOWED_REVIVAL_ERROR");
+                } else {
+                    const auto reads = d.ports.recognitions;
+                    d.until([&] { return d.ports.recognitions >= reads + 8; });
+                    check(!d.terminal(), "BOOT_WRAPPER_UNSAFE_SCENE_COMPLETED");
+                    d.ports.stop = true; d.finish();
+                    check(d.last.state == runtime::TickState::Cancelled, "BOOT_WRAPPER_IGNORED_STOP");
+                }
+                check(!saw(d, "Task_Entry") && d.ports.inputs.empty() &&
+                    d.ports.business.summary().at("lifecycle_recovery_active") == true &&
+                    d.ports.business.summary().at("revivals") == 0, "BOOT_WRAPPER_FALSE_READY_CONFIRMATION");
+                d.evidence(("BOOT-wrapper-revival-negative-" + scene).c_str());
+            }
+            for (const std::string gate : {"ready", "blocker", "story", "unknown"}) {
+                Driver d(wrapped); d.ports.scene("city");
+                d.until([&] { return d.executor.current_step_id() == "Task_Entry"; });
+                bool fault = true;
+                int recoveries = 0;
+                d.ports.before_capture = [&] {
+                    if (!fault) return;
+                    fault = false;
+                    throw contracts::ObservationUnavailable({contracts::ReadFaultKind::TransportUnavailable,
+                        contracts::ReadFaultStage::Capture, "ADB_OFFLINE", "test.revival.capture", {}, {}});
+                };
+                d.ports.observation_recovery = [&](bool) {
+                    check(++recoveries == 1, "BOOT_REVIVAL_RESTART_LOOP");
+                    begin_recovery(d.ports);
+                    show_revival(d.ports);
+                    return contracts::ObservationRecovery{{}, true, true};
+                };
+                // Stop after the actual ReconnectBoot handler returns, before its
+                // replan guard consumes the next frame. Keep the full production graph.
+                d.until([&] { return recoveries == 1 && saw(d, "ReconnectBoot_") &&
+                    d.executor.progress_snapshot().at("active_event").is_null(); });
+                const auto root_entries = std::count(d.trace.begin(), d.trace.end(), "Entry");
+                if (gate == "blocker") d.ports.blocker = true;
+                else if (gate == "story")
+                    d.ports.conditions[games::vision::ordinary_story_page().dump()] = true;
+                else if (gate == "unknown") d.ports.scene("black");
+                if (gate != "ready") {
+                    const auto reads = d.ports.recognitions;
+                    d.until([&] { return d.ports.recognitions >= reads + 8; });
+                    check(!d.terminal() && std::count(d.trace.begin(), d.trace.end(), "Entry") == root_entries &&
+                        !saw(d, "RestartConfirmed") && d.ports.inputs.empty(), "BOOT_RECONNECT_UNSAFE_REPLAN");
+                    show_revival(d.ports);
+                }
+                d.finish();
+                check(d.last.state == runtime::TickState::Completed && recoveries == 1 &&
+                    d.ports.inputs.empty() && !d.executor.has_unresolved_input() && saw(d, "RestartConfirmed") &&
+                    d.ports.business.summary().at("lifecycle_recovery_active") == false &&
+                    d.ports.business.summary().at("revivals") == 0, "BOOT_RECONNECT_REVIVAL_HANDOFF_FAILED");
+                d.evidence(("BOOT-reconnect-revival-" + gate).c_str());
+            }
+            // A recognized post-restart revival page must never settle/replay an
+            // already submitted Accept, including unknown delivery. Exercise the
+            // real revival factory and its protected input within the full wrapper.
+            const auto revival = localized(games::recovery::with_boot_recovery(
+                games::recovery::revive_after_defeat(), true));
+            for (const bool unknown : {false, true}) {
+                Driver d(revival); show_revival(d.ports);
+                d.ports.conditions[library.resource_condition("party.revival.action", "zh-Hant",
+                    authoring::ResourceUse::Position).dump()] = true;
+                d.ports.submission_state = unknown ? runtime::SubmissionState::Unresolved : runtime::SubmissionState::Accepted;
+                bool fault = false;
+                int recoveries = 0;
+                d.ports.after_input = [&](const auto &) { d.ports.scene("black"); fault = true; };
+                d.ports.before_capture = [&] {
+                    if (!fault) return;
+                    fault = false;
+                    throw contracts::ObservationUnavailable({contracts::ReadFaultKind::ApplicationUnavailable,
+                        contracts::ReadFaultStage::Capture, "GAME_NOT_FOREGROUND", "test.revival.capture", {}, {}});
+                };
+                d.ports.observation_recovery = [&](bool) {
+                    check(++recoveries == 1, "BOOT_PROTECTED_REVIVAL_RESTART_LOOP");
+                    begin_recovery(d.ports);
+                    show_revival(d.ports);
+                    return contracts::ObservationRecovery{{}, true, true};
+                };
+                d.until([&] { return d.ports.inputs.size() == 1; });
+                const auto pending = d.executor.progress_snapshot().at("pending_inputs");
+                d.finish();
+                check(d.last.state == runtime::TickState::ExternalBlocked &&
+                    d.last.code == "revival.outcome_unconfirmed" && recoveries == 1 &&
+                    d.ports.inputs.size() == 1 && !saw(d, "ReconnectBoot_") &&
+                    d.executor.progress_snapshot().at("pending_inputs") == pending &&
+                    pending.size() == 1 && pending.at(0).at("delivery_unknown") == unknown &&
+                    d.ports.business.summary().at("revival_pending") == true &&
+                    d.ports.business.summary().at("revivals") == 0, "BOOT_PROTECTED_REVIVAL_INPUT_REPLAYED_OR_CLEARED");
+                d.evidence(unknown ? "BOOT-revival-unknown-protected" : "BOOT-revival-accepted-protected");
+            }
             return 0;
         }
         if (argc == 2 && std::string(argv[1]) == "--boot-progress") {
             using namespace wvd;
             using namespace std::chrono_literals;
+            const auto assets = closure::read("resources/authoring/semantic-assets.json");
+            J documents = J::object();
+            for (const auto &doc : closure::read("resources/authoring/public-flows.json"))
+                documents[doc.at("flow").at("id").get<std::string>()] = doc;
+            const games::tasks::PublicFlowLibrary library(documents, assets);
+            const games::tasks::PublicStepScope public_steps([&](const std::string &id, const J &args) {
+                return library.compile_step(id, args, "zh-Hant");
+            });
             auto flow = games::recovery::wait_boot_ready(true);
             closure::check(!flow.declared_budget, "BOOT_CUMULATIVE_BUDGET_REMAINS");
             closure::check(flow.nodes.at("TitleObservationEnd").at("observation_args") ==

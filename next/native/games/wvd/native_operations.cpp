@@ -204,6 +204,9 @@ Result NativeOperations::execute(const std::string &binding, const J &parameters
             if (operation == "prepare") {
                 const auto summary = state.summary();
                 receipt["selection"] = combat::selection_diagnostics(summary, scores);
+                if (summary.at("has_prepared_skill").get<bool>())
+                    receipt["selection"]["configured_skill"] = parameters.at("catalog").at(
+                        summary.at("prepared_skill_index").get<std::size_t>());
                 receipt["portrait_scores"] = J::array();
                 for (const auto &score : scores)
                     receipt["portrait_scores"].push_back({{"portrait", score.portrait}, {"score", score.score}});

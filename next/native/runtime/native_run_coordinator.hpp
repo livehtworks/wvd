@@ -73,6 +73,15 @@ class NativeRunCoordinator final {
 
   private:
     friend struct NativeCoordinatorTestAccess;
+    // 每个Session只保留当前动作的小型元数据；不持有历史帧或业务对象。
+    struct CombatDiagnosticState {
+        nlohmann::json selection = nlohmann::json::object();
+        nlohmann::json submission = nullptr;
+        nlohmann::json opening = nullptr;
+    };
+    void record_combat_diagnostic(std::uint64_t generation, std::size_t index,
+        const std::string &type, const nlohmann::json &data,
+        const contracts::FrameEnvelope *frame, CombatDiagnosticState &state) noexcept;
     void save_application_restart_diagnostic(std::uint64_t generation, std::size_t index,
         const nlohmann::json &progress, const contracts::FrameEnvelope *frame) noexcept;
     // definition 由线程闭包拥有，drive 只借用；严禁在线程入口再复制整图。

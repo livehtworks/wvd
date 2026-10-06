@@ -8,14 +8,34 @@
 
 namespace wvd::runtime {
 struct NativeCoordinatorTestAccess {
-    static void initialize(NativeRunCoordinator &coordinator, const nlohmann::json &definition) {
+    using CombatState = NativeRunCoordinator::CombatDiagnosticState;
+    static void initialize(NativeRunCoordinator &coordinator, const nlohmann::json &definition,
+        storage::DiagnosticLimits limits = {}, storage::LoggingPolicy logging = {},
+        std::shared_ptr<const contracts::MonotonicClock> clock = std::make_shared<contracts::SteadyClock>()) {
         coordinator.snapshot_.run_id = 1;
         coordinator.snapshot_.reason = "ORIGINAL_BUSINESS_FAILURE";
-        coordinator.journal_ = std::make_shared<storage::EventJournal>(coordinator.instance_id_, 1);
-        coordinator.store_ = std::make_unique<storage::RunStore>(coordinator.data_root_, coordinator.instance_id_, 1, definition);
+        coordinator.store_ = std::make_unique<storage::RunStore>(coordinator.data_root_, coordinator.instance_id_, 1,
+            definition, std::move(clock), limits, logging);
+        coordinator.journal_ = std::make_shared<storage::EventJournal>(coordinator.instance_id_, 1, 256,
+            [&coordinator](const auto &event) { coordinator.store_->append_event(event); });
     }
     static void save(NativeRunCoordinator &coordinator, const contracts::FrameEnvelope *frame) {
         coordinator.save_application_restart_diagnostic(1, 0, {{"step_id", "test-await"}}, frame);
+    }
+    static void combat(NativeRunCoordinator &coordinator, CombatState &state, const std::string &type,
+        const nlohmann::json &data, const contracts::FrameEnvelope *frame) {
+        coordinator.record_combat_diagnostic(1, 2, type, data, frame, state);
+    }
+    static nlohmann::json save(NativeRunCoordinator &coordinator, const contracts::FrameEnvelope *frame,
+        const storage::DiagnosticRequest &request) {
+        return coordinator.store_->save_diagnostic(frame, request);
+    }
+    static void complete(NativeRunCoordinator &coordinator) {
+        auto snapshot = coordinator.snapshot_;
+        snapshot.state = contracts::RunState::Completed;
+        contracts::SessionResult session;
+        session.end = contracts::SessionEnd::Completed;
+        coordinator.store_->save_terminal(snapshot, session, coordinator.journal_->read());
     }
 };
 }
@@ -71,6 +91,198 @@ int main(int argc, char **argv) {
         const auto data_root = std::filesystem::temp_directory_path() /
             ("wvd-native-coordinator-" + wvd::platform::unique_id());
         std::filesystem::create_directories(data_root);
+        if (argc == 2 && std::string(argv[1]) == "--combat-diagnostic") {
+            using A = runtime::NativeCoordinatorTestAccess;
+            using J = nlohmann::json;
+            const auto check = [](bool value, const char *code) {
+                if (!value) throw std::runtime_error(code);
+            };
+            const J definition{{"engine_kind", "wvd_native"}, {"device_id", "native-test"},
+                {"game_id", "wvd"}, {"pack_revision", "native-test"}, {"viewport", "900x1600"}};
+            const J skill{{"role_var", "0 面具"}, {"skill_var", "左上技能"},
+                {"skill_lvl", 2}, {"target_var", "next"}};
+            const J prepare{{"operation", "prepare"}, {"generation", 1}, {"frame_id", 8},
+                {"selection", {{"portrait", "0 面具"}, {"skill_index", 0}, {"strategy_epoch", 3},
+                    {"strategy_name", "悬赏巨人"}, {"configured_skill", skill}}}};
+            const std::string source = R"([{"flow_id":"combat-open-detail","node_id":"open"}])";
+            const auto receipt = [&](std::uint64_t frame, std::uint64_t epoch) {
+                return J{{"state", "result"}, {"source_path", source}, {"outcome", "no_progress"},
+                    {"reason", "INPUT_RESULT_TIMEOUT"}, {"basis_frame", frame - 1},
+                    {"observed_frame", frame}, {"action_epoch", epoch}, {"attempts", 9},
+                    {"delivery_unknown", false}, {"result_wait_ns", 21000000000ULL}};
+            };
+            const auto pixels = [](std::uint64_t id, std::uint64_t epoch) {
+                contracts::FrameEnvelope frame;
+                frame.identity.device_id = "native-test"; frame.identity.game_id = "wvd";
+                frame.identity.pack_revision = "native-test"; frame.identity.viewport_id = "900x1600";
+                frame.identity.generation = frame.identity.connection_generation = 1;
+                frame.identity.frame_id = id; frame.identity.action_epoch = epoch;
+                frame.identity.raw_size = frame.identity.recognition_size = {900, 1600};
+                frame.identity.captured_at = std::chrono::steady_clock::now();
+                frame.identity.backend = "synthetic-diagnostic";
+                frame.raw_bgr = std::make_shared<const std::vector<std::uint8_t>>(900 * 1600 * 3,
+                    static_cast<std::uint8_t>(id));
+                return frame;
+            };
+            const auto defended = [](std::uint64_t frame) {
+                return J{{"operation", "defend_fallback_confirmed"}, {"generation", 1}, {"frame_id", frame},
+                    {"action_confirmed", true}, {"skill_confirmed", false}, {"consumed", false}};
+            };
+            storage::LoggingPolicy logging;
+            logging.level = storage::LogLevel::Off;
+            logging.performance = false;
+            {
+                runtime::NativeRunCoordinator coordinator(data_root / "combat-pair");
+                A::initialize(coordinator, definition, {}, logging);
+                A::CombatState state;
+                auto opening = pixels(10, 9), result = pixels(11, 10);
+                A::combat(coordinator, state, "combat", prepare, &opening);
+                A::combat(coordinator, state, "input", {{"state", "accepted"}, {"source_path", source},
+                    {"action_epoch", 9}, {"basis_frame", 9}, {"position", {266, 965}}}, &opening);
+                A::combat(coordinator, state, "input", receipt(10, 9), &opening);
+                check(coordinator.diagnostics().at("entries").size() == 1,
+                    "COMBAT_OPEN_FRAME_NOT_DURABLE_BEFORE_COMPLETION");
+                A::combat(coordinator, state, "input", receipt(10, 9), &opening);
+                A::combat(coordinator, state, "combat", defended(11), &result);
+                A::combat(coordinator, state, "combat", defended(11), &result);
+                auto summary = coordinator.diagnostics();
+                const auto entries = summary.at("entries");
+                check(entries.size() == 2 && entries.at(0).at("operation_id") == entries.at(1).at("operation_id") &&
+                    entries.at(0).at("evidence_kind") == "combat_open_no_progress" &&
+                    entries.at(1).at("evidence_kind") == "combat_defend_fallback" &&
+                    entries.at(0).at("context").at("selection").at("configured_skill") == skill &&
+                    entries.at(0).at("context").at("submission").at("position") == J::array({266, 965}) &&
+                    entries.at(1).at("context").at("defend_result").at("skill_confirmed") == false &&
+                    entries.at(1).at("context").at("defend_result").at("consumed") == false,
+                    "COMBAT_PAIR_CONTEXT_OR_DEDUP");
+                for (const auto &entry : entries) {
+                    const auto path = coordinator.run_directory() / entry.at("path").get<std::string>();
+                    const auto image = cv::imread(path.string());
+                    const auto color = entry.at("frame").at("frame_id").get<std::uint8_t>();
+                    check(entry.at("status") == "saved" && entry.at("unit_index") == 2 &&
+                        entry.at("frame").at("input_authorization") == false && image.rows == 1600 && image.cols == 900 &&
+                        image.at<cv::Vec3b>(0, 0) == cv::Vec3b{color, color, color} &&
+                        platform::file_sha256(path) == entry.at("sha256").get<std::string>(), "COMBAT_PAIR_PIXELS_OR_OWNERSHIP");
+                }
+                // A second real action within 60 seconds has its own bounded evidence pair.
+                opening = pixels(20, 19); result = pixels(21, 20);
+                A::combat(coordinator, state, "combat", prepare, &opening);
+                A::combat(coordinator, state, "input", receipt(20, 19), &opening);
+                A::combat(coordinator, state, "combat", defended(21), &result);
+                check(coordinator.diagnostics().at("entries").size() == 4 &&
+                    coordinator.diagnostics().at("throttled") == 0 &&
+                    coordinator.snapshot().reason == "ORIGINAL_BUSINESS_FAILURE", "COMBAT_DISTINCT_ACTION_ORIGINAL_RESULT");
+                A::complete(coordinator);
+                J saved;
+                { std::ifstream file(coordinator.run_directory() / "result.json"); file >> saved; }
+                check(saved.at("state") == "Completed" && saved.at("diagnostics").at("entries").size() == 4 &&
+                    saved.at("diagnostics").at("event_history").at("rows") == 4 &&
+                    saved.at("diagnostics").at("logs").at("rows") == 0,
+                    "COMBAT_COMPLETED_OR_LOGGING_OFF_LOST_EVIDENCE");
+                std::cout << "combat diagnostic: paired original PNGs, exact context, duplicate suppression, Completed and logging off\n";
+            }
+            {
+                runtime::NativeRunCoordinator coordinator(data_root / "combat-ignore");
+                A::initialize(coordinator, definition);
+                A::CombatState state;
+                auto frame = pixels(10, 9);
+                A::combat(coordinator, state, "combat", prepare, &frame);
+                for (const auto *mode : {"other-flow", "malformed", "unknown", "confirmed"}) {
+                    auto input = receipt(10, 9);
+                    if (std::string(mode) == "other-flow") input["source_path"] = R"([{"flow_id":"combat-open-detail-other","node_id":"open"}])";
+                    if (std::string(mode) == "malformed") input["source_path"] = "combat-open-detail/open";
+                    if (std::string(mode) == "unknown") input["delivery_unknown"] = true;
+                    if (std::string(mode) == "confirmed") input["outcome"] = "confirmed";
+                    A::combat(coordinator, state, "input", input, &frame);
+                }
+                A::combat(coordinator, state, "combat", defended(11), &frame);
+                check(coordinator.diagnostics().at("entries").empty(), "COMBAT_UNRELATED_OR_UNKNOWN_CAPTURED");
+                A::combat(coordinator, state, "input", receipt(10, 9), &frame);
+                A::combat(coordinator, state, "combat", prepare, &frame);
+                frame = pixels(11, 10);
+                A::combat(coordinator, state, "combat", defended(11), &frame);
+                check(coordinator.diagnostics().at("entries").size() == 1, "COMBAT_PREPARE_CARRIED_STALE_PAIR");
+                std::cout << "combat diagnostic: unrelated, malformed, unknown delivery and stale action excluded\n";
+            }
+            for (const auto *mode : {"missing", "stale-generation", "wrong-frame", "wrong-epoch", "write-failed"}) {
+                runtime::NativeRunCoordinator coordinator(data_root / mode);
+                A::initialize(coordinator, definition);
+                A::CombatState state;
+                auto frame = pixels(10, 9);
+                A::combat(coordinator, state, "combat", prepare, &frame);
+                if (std::string(mode) == "stale-generation") frame.identity.generation = 2;
+                if (std::string(mode) == "wrong-frame") frame.identity.frame_id = 9;
+                if (std::string(mode) == "wrong-epoch") frame.identity.action_epoch = 8;
+                if (std::string(mode) == "write-failed")
+                    std::ofstream(coordinator.run_directory() / "diagnostics") << "isolated obstruction";
+                A::combat(coordinator, state, "input", receipt(10, 9),
+                    std::string(mode) == "missing" ? nullptr : &frame);
+                const auto summary = coordinator.diagnostics();
+                check(summary.at("entries").size() == 1 && summary.at("entries").at(0).at("status") == "failed" &&
+                    !summary.at("entries").at(0).contains("path") && !summary.at("complete").get<bool>() &&
+                    coordinator.snapshot().reason == "ORIGINAL_BUSINESS_FAILURE", "COMBAT_MISSING_FRAME_OR_SAVE_FAILURE_HIDDEN");
+            }
+            {
+                runtime::NativeRunCoordinator coordinator(data_root / "combat-reconnected");
+                A::initialize(coordinator, definition);
+                A::CombatState state;
+                auto frame = pixels(10, 9);
+                A::combat(coordinator, state, "combat", prepare, &frame);
+                A::combat(coordinator, state, "input", receipt(10, 9), &frame);
+                frame = pixels(11, 10); frame.identity.connection_generation = 2;
+                A::combat(coordinator, state, "combat", defended(11), &frame);
+                const auto entry = coordinator.diagnostics().at("entries").at(1);
+                check(entry.at("status") == "failed" && !entry.at("context").at("frame_available").get<bool>(),
+                    "COMBAT_CROSS_CONNECTION_FRAME_PAIRED");
+            }
+            {
+                runtime::NativeRunCoordinator coordinator(data_root / "combat-opening-unavailable");
+                A::initialize(coordinator, definition);
+                A::CombatState state;
+                A::combat(coordinator, state, "combat", prepare, nullptr);
+                A::combat(coordinator, state, "input", receipt(10, 9), nullptr);
+                auto frame = pixels(11, 10);
+                A::combat(coordinator, state, "combat", defended(11), &frame);
+                const auto summary = coordinator.diagnostics();
+                const auto entry = summary.at("entries").at(1);
+                check(summary.at("entries").at(0).at("status") == "failed" && entry.at("status") == "saved" &&
+                    entry.at("context").at("opening_frame_available") == false &&
+                    entry.at("context").at("same_connection_as_opening").is_null() &&
+                    !summary.at("complete").get<bool>(), "COMBAT_MISSING_OPENING_IDENTITY_ASSUMED");
+            }
+            {
+                struct Clock final : contracts::MonotonicClock {
+                    TimePoint value = std::chrono::steady_clock::now();
+                    TimePoint now() const noexcept override { return value; }
+                };
+                auto clock = std::make_shared<Clock>();
+                runtime::NativeRunCoordinator coordinator(data_root / "combat-quota");
+                storage::DiagnosticLimits limits; limits.failures = 2;
+                A::initialize(coordinator, definition, limits, {}, clock);
+                auto frame = pixels(10, 9);
+                storage::DiagnosticRequest request;
+                request.run_id = request.generation = 1; request.node = "combat-open-detail/open";
+                request.reason = "combat.open_detail_no_progress"; request.stage = "postcondition";
+                request.evidence_kind = "combat_open_no_progress";
+                request.operation_scoped = true; request.operation_id = "same-action";
+                check(A::save(coordinator, &frame, request).at("status") == "saved", "COMBAT_QUOTA_FIRST");
+                clock->value += 120s;
+                check(A::save(coordinator, &frame, request).at("status") == "duplicate", "COMBAT_DUPLICATE_AFTER_INTERVAL");
+                request.evidence_kind = "combat_defend_fallback";
+                check(A::save(coordinator, &frame, request).at("status") == "saved", "COMBAT_QUOTA_PAIR");
+                request.operation_id = "next-action";
+                check(A::save(coordinator, &frame, request).at("status") == "quota_exceeded" &&
+                    coordinator.diagnostics().at("failure_attempts") == 2 &&
+                    !coordinator.diagnostics().at("complete").get<bool>(), "COMBAT_FAILURE_QUOTA_BYPASSED");
+                request.context = J::array();
+                check(A::save(coordinator, &frame, request).at("status") == "invalid_request", "COMBAT_CONTEXT_TYPE_UNBOUNDED");
+                request.context = {{"oversize", std::string(16 * 1024, 'x')}};
+                check(A::save(coordinator, &frame, request).at("status") == "invalid_request", "COMBAT_CONTEXT_BYTES_UNBOUNDED");
+            }
+            std::cout << "combat diagnostic: unavailable/write errors remain visible, connection identity and original quotas preserved\n";
+            std::cout << "Evidence: " << data_root.string() << '\n';
+            return 0;
+        }
         if (argc == 2 && std::string(argv[1]) == "--event-history") {
             storage::LoggingPolicy policy;
             policy.level = storage::LogLevel::Off;

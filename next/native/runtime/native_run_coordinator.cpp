@@ -337,7 +337,11 @@ void NativeRunCoordinator::drive(const NativeRunDefinition &definition,
                 bool checkpoint_seen = false;
                 auto recovery_frame = std::make_shared<std::optional<contracts::FrameEnvelope>>();
                 auto capture_after_input = std::make_shared<std::uint64_t>(0);
-                auto event = [this, generation, recovery_frame](const std::string &type, const nlohmann::json &data) {
+                auto combat_diagnostic = std::make_shared<CombatDiagnosticState>();
+                auto event = [this, generation, index, recovery_frame, combat_diagnostic]
+                    (const std::string &type, const nlohmann::json &data) {
+                    record_combat_diagnostic(generation, index, type, data,
+                        recovery_frame->has_value() ? &**recovery_frame : nullptr, *combat_diagnostic);
                     if (type == "combat" && recovery_frame->has_value() &&
                         data.value("frame_id", 0ULL) == (**recovery_frame).identity.frame_id) {
                         const auto &frame = **recovery_frame;
@@ -406,7 +410,10 @@ void NativeRunCoordinator::drive(const NativeRunDefinition &definition,
                         // 只在值改变时发一条轻量事实；不含帧字节与识别矩阵。
                         if (!step_changed) journal_->emit(generation, "execution.changed", progress);
                     },
-                    [this, generation, recovery_frame, capture_after_input](const nlohmann::json &input) {
+                    [this, generation, index, recovery_frame, capture_after_input, combat_diagnostic]
+                    (const nlohmann::json &input) {
+                        record_combat_diagnostic(generation, index, "input", input,
+                            recovery_frame->has_value() ? &**recovery_frame : nullptr, *combat_diagnostic);
                         const auto type = input.value("state", "") == "result" ? "input.result" : "input.attempt";
                         store_->append_timing(generation, type, input);
                         journal_->emit(generation, type, input);
@@ -799,6 +806,118 @@ void NativeRunCoordinator::drive(const NativeRunDefinition &definition,
         terminal_recorded_ = true;
     }
     complete_.notify_all();
+}
+
+void NativeRunCoordinator::record_combat_diagnostic(std::uint64_t generation, std::size_t index,
+    const std::string &type, const nlohmann::json &data, const contracts::FrameEnvelope *frame,
+    CombatDiagnosticState &state) noexcept {
+    try {
+        using J = nlohmann::json;
+        const auto open_detail = [](const J &value) {
+            const auto source = value.value("source_path", "");
+            if (source.size() > 4096) return false;
+            const auto path = J::parse(source, nullptr, false);
+            return path.is_array() && !path.empty() && path.back().is_object() &&
+                path.back().value("flow_id", "") == "combat-open-detail" &&
+                path.back().value("node_id", "") == "open";
+        };
+        bool defended = false;
+        if (type == "combat") {
+            const auto operation = data.value("operation", "");
+            if (operation == "prepare") {
+                state = CombatDiagnosticState{};
+                if (data.value("generation", 0ULL) != generation) return;
+                state.selection = data.value("selection", J::object());
+                if (!state.selection.is_object() || state.selection.dump().size() > 4096) {
+                    state.selection = {{"error", "COMBAT_SELECTION_CONTEXT_UNAVAILABLE"}};
+                    store_->note_diagnostic_hook_failure();
+                }
+                return;
+            }
+            if (state.opening.is_null()) return;
+            if (operation != "defend_fallback_confirmed" ||
+                data.value("generation", 0ULL) != generation ||
+                !data.value("action_confirmed", false) || data.value("skill_confirmed", true) ||
+                data.value("consumed", true)) {
+                state.opening = nullptr;
+                return;
+            }
+            defended = true;
+        } else if (type == "input" && open_detail(data)) {
+            if (data.value("state", "") == "accepted") {
+                state.submission = J::object();
+                for (const auto *key : {"sequence", "action_epoch", "basis_frame", "position", "target_center"})
+                    if (data.contains(key)) state.submission[key] = data.at(key);
+                return;
+            }
+            if (data.value("state", "") != "result") return;
+            if (data.value("outcome", "") != "no_progress" ||
+                data.value("delivery_unknown", true)) {
+                state.opening = nullptr;
+                return;
+            }
+            const auto operation = "combat-open-detail:" + std::to_string(generation) + ":" +
+                std::to_string(data.value("action_epoch", 0ULL)) + ":" +
+                std::to_string(data.value("observed_frame", 0ULL));
+            if (state.opening.is_object() && state.opening.value("operation_id", "") == operation) return;
+            state.opening = {{"operation_id", operation}, {"selection", state.selection},
+                {"input_result", data}, {"submission", nullptr}};
+            if (state.submission.is_object() &&
+                state.submission.value("action_epoch", 0ULL) == data.value("action_epoch", 0ULL))
+                state.opening["submission"] = state.submission;
+        } else return;
+
+        storage::DiagnosticRequest request;
+        { std::lock_guard lock(mutex_); request.run_id = snapshot_.run_id; }
+        request.generation = generation; request.unit_index = index;
+        request.node = defended ? "combat.defend_fallback_confirmed" : "combat-open-detail/open";
+        request.reason = "combat.open_detail_no_progress";
+        request.stage = "postcondition";
+        request.evidence_kind = defended ? "combat_defend_fallback" : "combat_open_no_progress";
+        request.operation_id = state.opening.at("operation_id").get<std::string>();
+        request.operation_scoped = true;
+        const auto wanted = data.value(defended ? "frame_id" : "observed_frame", 0ULL);
+        const auto epoch = state.opening.at("input_result").value("action_epoch", 0ULL);
+        const auto opening_frame = state.opening.at("input_result").value("observed_frame", 0ULL);
+        const auto connection = state.opening.value("connection_generation", 0ULL);
+        const bool available = frame && wanted && epoch && frame->identity.generation == generation &&
+            frame->identity.frame_id == wanted &&
+            (defended ? wanted > opening_frame && frame->identity.action_epoch > epoch &&
+                (!connection || frame->identity.connection_generation == connection)
+                : frame->identity.action_epoch == epoch);
+        if (!defended) {
+            state.opening["connection_generation"] = available ? frame->identity.connection_generation : 0ULL;
+            state.opening["opening_frame_available"] = available;
+        }
+        request.context = state.opening;
+        if (defended) {
+            request.context["defend_result"] = data;
+            request.context["same_connection_as_opening"] = connection && frame
+                ? J(frame->identity.connection_generation == connection) : J(nullptr);
+        }
+        // 只保存回执所属的原帧。缺图/错代次按缺失记录，不补拍另一张冒充失败现场。
+        request.context["expected_frame_id"] = wanted;
+        request.context["frame_available"] = available;
+        if (request.context.dump().size() > 16 * 1024) {
+            request.context = {{"error", "COMBAT_DIAGNOSTIC_CONTEXT_TOO_LARGE"},
+                {"expected_frame_id", wanted}, {"frame_available", available}};
+            store_->note_diagnostic_hook_failure();
+        }
+        // 清除关联后才做I/O；落盘失败不能把下一行动串成同一次防御，也不能重试输入。
+        if (defended) state.opening = nullptr;
+        auto saved = store_->save_diagnostic(available ? frame : nullptr, request);
+        saved["operation_id"] = request.operation_id;
+        saved["unit_index"] = request.unit_index;
+        saved["node"] = request.node;
+        saved["reason"] = request.reason;
+        saved["stage"] = request.stage;
+        saved["evidence_kind"] = request.evidence_kind;
+        saved["context"] = request.context;
+        journal_->emit(generation, "diagnostic.combat_no_progress", std::move(saved));
+    } catch (...) {
+        state.opening = nullptr;
+        store_->note_diagnostic_hook_failure();
+    }
 }
 
 void NativeRunCoordinator::save_application_restart_diagnostic(std::uint64_t generation,

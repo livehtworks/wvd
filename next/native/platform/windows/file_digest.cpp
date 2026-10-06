@@ -1,4 +1,5 @@
 #include "file_digest.hpp"
+#include <algorithm>
 #include <array>
 #include <fstream>
 #include <stdexcept>
@@ -8,6 +9,44 @@
 #include <bcrypt.h>
 
 namespace wvd::platform {
+std::string handle_sha256(void *handle, std::uint64_t byte_count) {
+    if (!SetFilePointerEx(handle, LARGE_INTEGER{}, nullptr, FILE_BEGIN))
+        throw std::runtime_error("INTEGRITY_SEEK_FAILED");
+    struct Hash {
+        BCRYPT_ALG_HANDLE algorithm{};
+        BCRYPT_HASH_HANDLE value{};
+        ~Hash() {
+            if (value)
+                BCryptDestroyHash(value);
+            if (algorithm)
+                BCryptCloseAlgorithmProvider(algorithm, 0);
+        }
+    } hash;
+    if (BCryptOpenAlgorithmProvider(&hash.algorithm, BCRYPT_SHA256_ALGORITHM, nullptr, 0) < 0 ||
+        BCryptCreateHash(hash.algorithm, &hash.value, nullptr, 0, nullptr, 0, 0) < 0)
+        throw std::runtime_error("HASH_INITIALIZATION_FAILED");
+    std::array<unsigned char, 65536> bytes{};
+    for (std::uint64_t offset = 0; offset < byte_count;) {
+        const auto requested = static_cast<DWORD>(
+            std::min<std::uint64_t>(bytes.size(), byte_count - offset));
+        DWORD count{};
+        if (!ReadFile(handle, bytes.data(), requested, &count, nullptr) || !count)
+            throw std::runtime_error("INTEGRITY_READ_FAILED");
+        if (BCryptHashData(hash.value, bytes.data(), count, 0) < 0)
+            throw std::runtime_error("HASH_UPDATE_FAILED");
+        offset += count;
+    }
+    std::array<unsigned char, 32> digest{};
+    if (BCryptFinishHash(hash.value, digest.data(), static_cast<ULONG>(digest.size()), 0) < 0)
+        throw std::runtime_error("HASH_FINISH_FAILED");
+    constexpr char hex[] = "0123456789abcdef";
+    std::string result;
+    for (auto byte : digest) {
+        result += hex[byte >> 4];
+        result += hex[byte & 15];
+    }
+    return result;
+}
 std::string bytes_sha256(std::span<const std::uint8_t> bytes) {
     BCRYPT_ALG_HANDLE algorithm{};
     BCRYPT_HASH_HANDLE hash{};

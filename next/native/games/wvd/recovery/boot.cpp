@@ -27,6 +27,12 @@ J english_image(const char *name) {
     result["locale_only"] = "en";
     return result;
 }
+J ready_to_resume_task() {
+    // Revival belongs to the task. Use the same guarded handoff at cold boot,
+    // restart confirmation and reconnect resume; it does not confirm any old input.
+    return C::all({C::any({J{{"mode", "boot_ready"}}, C::image("RiseAgain")}),
+        C::absent(J{{"mode", "blocking_screen"}}), C::absent(vision::ordinary_story_page())});
+}
 J task_stop_condition(DialoguePolicy policy) {
     J stops = J::array();
     for (auto name : dialogue_task_stops(policy))
@@ -97,9 +103,9 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, Dialogue
     // 选择加护后会先到哈肯楼层菜单；交还调用者决定是否“歸還”，
     // 通用弹窗层不能把稳定菜单继续当作未处理的阻塞页轮询。
     // A restarted task may begin at revival choices; its caller owns revival.
-    const J ready = C::all({common ? C::any({J{{"mode", "boot_ready"}}, panel, C::image("RiseAgain"),
-        vision::harken_floor_menu()}) : C::any({J{{"mode", "boot_ready"}}, C::image("RiseAgain")}),
-                           C::absent(J{{"mode", "blocking_screen"}}), C::absent(story)});
+    const J ready = common ? C::all({C::any({J{{"mode", "boot_ready"}}, panel, C::image("RiseAgain"),
+        vision::harken_floor_menu()}), C::absent(J{{"mode", "blocking_screen"}}), C::absent(story)})
+        : ready_to_resume_task();
     const auto title = scoped("boot_title_logo", {100, 300, 700, 470}, .86);
     const auto announcement = vision::resource("boot.announcement.page");
     const auto announcement_close = vision::resource("boot.announcement.close");
@@ -413,6 +419,7 @@ tasks::CompiledWorkflow with_boot_recovery(const tasks::CompiledWorkflow &task, 
     graph.use_dialogue(task.dialogue_policy);
     const auto task_entry = graph.append("Task", task, {"Terminal"});
     const auto stop = task_stop_condition(task.dialogue_policy);
+    const auto ready = ready_to_resume_task();
     // Boot停点证明回到该任务的稳定游戏页；仍须回任务入口，由任务自身确认阶段终点。
     // 停点的boot_ready是boolean-only NoHit，不能与图片放进any后当作确认许可。
     J confirmed{"RecoveredBoot", task_entry};
@@ -423,7 +430,7 @@ tasks::CompiledWorkflow with_boot_recovery(const tasks::CompiledWorkflow &task, 
                       C::all({C::business("/lifecycle_recovery_active", true), stop}), {task_entry});
         confirmed.insert(confirmed.begin(), "RestartAtTaskStop");
     }
-    graph.confirm("RestartConfirmed", "game.restart", "game_restarted", {{"mode", "boot_ready"}}, {task_entry});
+    graph.confirm("RestartConfirmed", "game.restart", "game_restarted", ready, {task_entry});
     const auto boot = graph.append("Boot", boot_workflow(allow_download, false, task.dialogue_policy, task.random_maze_events), confirmed);
     // 正常首段也必须先处理启动页。Task_Entry 常为 DirectHit，放在前面会使 Boot 永远不可达。
     // 非恢复首段不执行 game_restarted，避免把首次进入误记成崩溃/重置策略。
@@ -440,7 +447,7 @@ tasks::CompiledWorkflow with_boot_recovery(const tasks::CompiledWorkflow &task, 
         {"priority", 1000}, {"detect", J{{"mode", "boot_ready"}}}, {"source_node", "Entry"},
         {"entry", reconnect_boot}, {"on_device_restart", true},
         {"resume", {{"mode", "replan"}, {"node_id", "Entry"},
-            {"guard", stop.is_null() ? J{{"mode", "boot_ready"}} : C::any({stop, J{{"mode", "boot_ready"}}})}}}});
+            {"guard", stop.is_null() ? ready : C::any({stop, ready})}}}});
     const auto add = [&](const std::string &id, const std::string &category, int priority,
                          const J &detect, const tasks::CompiledWorkflow &handler) {
         // 公共规则 ID 不参与内部节点命名；运行权限仍只由显式策略决定。

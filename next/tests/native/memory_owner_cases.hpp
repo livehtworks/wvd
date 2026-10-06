@@ -1,5 +1,7 @@
 #pragma once
 
+#include "platform/windows/bundle_lease.hpp"
+
 namespace closure {
 inline int memory_owner_census(const char *source_path, const char *frame_path) {
     const auto *output = std::getenv("WVD_CLOSURE_ROOT");
@@ -8,7 +10,7 @@ inline int memory_owner_census(const char *source_path, const char *frame_path) 
     check(!std::filesystem::exists(directory), "OWNERSHIP_OUTPUT_ALREADY_EXISTS");
     const auto source = std::filesystem::absolute(source_path);
     recognition::Bundle bundle{directory, "ownership-census", {}};
-    std::uint64_t copied_bytes{};
+    std::uint64_t copied_bytes{}, model_bytes{};
     for (const auto &file : std::filesystem::recursive_directory_iterator(source)) {
         if (!file.is_regular_file()) continue;
         const auto relative = std::filesystem::relative(file.path(), source);
@@ -16,6 +18,7 @@ inline int memory_owner_census(const char *source_path, const char *frame_path) 
         std::filesystem::create_directories(target.parent_path());
         std::filesystem::copy_file(file.path(), target);
         copied_bytes += file.file_size();
+        if (relative.extension() == ".onnx") model_bytes += file.file_size();
         const auto encoded = relative.generic_u8string();
         const std::string name(reinterpret_cast<const char *>(encoded.data()), encoded.size());
         bundle.files.push_back({name, platform::file_sha256(target)});
@@ -33,7 +36,7 @@ inline int memory_owner_census(const char *source_path, const char *frame_path) 
     };
     J report{{"scope", "one real OCR initialization/inference/destruction; isolated copy; no device"},
         {"source_pack", source.generic_string()}, {"source_frame_sha256", platform::file_sha256(frame_path)},
-        {"copied_file_bytes", copied_bytes}, {"samples", J::array()}};
+        {"copied_file_bytes", copied_bytes}, {"streamed_model_file_bytes", model_bytes}, {"samples", J::array()}};
     report["samples"].push_back({{"phase", "before_service"}, {"memory", sample()}});
     storage::LoggingPolicy logging;
     logging.level = storage::LogLevel::Debug;
@@ -56,8 +59,11 @@ inline int memory_owner_census(const char *source_path, const char *frame_path) 
     const auto observed = service->evaluate(frame, frame.identity, request);
     check(observed.outcome != contracts::RecognitionOutcome::Error, "OWNERSHIP_OCR:" + observed.error_code);
     report["samples"].push_back({{"phase", "ocr_ready"}, {"memory", sample()}, {"owners", service->ownership_snapshot()}});
-    check(service->ownership_snapshot().at("bundle_lease").at("held_file_bytes") == copied_bytes,
-        "OWNERSHIP_PINNED_FILES_MUST_ACCOUNT_EXACTLY");
+    // Path-based OCR keeps the original files locked, not a duplicate model buffer.
+    const auto held = service->bundle().lease->storage_stats();
+    check(model_bytes > 0 && service->bundle().lease->hash_bytes() == copied_bytes &&
+        held.size_bytes == copied_bytes - model_bytes && held.model_bytes == 0,
+        "OWNERSHIP_STREAMED_MODELS_AND_RETAINED_FILES_MUST_ACCOUNT_EXACTLY");
     const auto live_before = platform::MemoryOwnerLifetime::counts();
     service.reset();
     const auto after = platform::MemoryOwnerLifetime::counts();
