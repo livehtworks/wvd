@@ -2,7 +2,7 @@
 
 ## 当前内存整改与部署
 
-- 用户要求修复网络误判后commit/push/部署，明确先不开循环。修复已完成并通过原生针对性验证：未知技能弹窗需战斗加明细证据；异常处理后条件失败节点重查，错误消失回本作用域观察入口，仍存在/Error则失败，不重放输入。真实网络/连接中/技能原图经生产Service通过，事件返回、未确认输入保护及完整巨人/共享蝎女图验证通过。当前130仍停止，待提交部署131；本轮不操作游戏。详见[弹窗与恢复修复](reviews/combat-popup-recovery-repair-20261007.md)。
+- 用户要求的网络误判修复已提交a5463be并部署candidate131：PID51060/服务4900EBEB-1912-4A83-B622-CD9BCF3585EA，原17654/原data，Idle/busy=false/quiescent=true/repeat=null，未开循环、未操作游戏，正式profile哈希不变。未知技能弹窗需战斗加明细证据；异常处理后条件失败节点重查，错误消失回本作用域观察入口，仍存在/Error则失败，不重放输入。真实网络/连接中/技能原图经生产Service通过，事件返回、未确认输入保护及完整巨人/共享蝎女图验证通过。截至23:14普通push被GitHub接收端持续500拒绝，远端仍ea5495f，推送尚未确认成功；不强推。详见[弹窗与恢复修复](reviews/combat-popup-recovery-repair-20261007.md)。
 
 - 最新30轮巨人已在首轮停止：candidate130/PID43136服务仍在，run1于515.349秒Failed/combat.unowned_skill_detail，完成0/30、repeat inactive、quiescent/details_complete。请求d599b18c-7a3d-4448-82a7-f95678588fe6、协调器1ABAA4DD-74A9-4C18-A262-A3B0F72497F7不变。真实网络“重试”图被技能确认模板匹配0.899671(阈值0.82)，网络事件处理成功后仍继续UnownedDetail旧错误节点；停止图实际为战斗连接中，不是技能详情。更早设备退出已被恢复链处理，不是最终停止原因。收尾私有提交36.54MiB、批次释放36.88MiB，5堆完整记录，单失败轮不证明长期稳定。本轮只读核查并更新报告，未改产品或恢复循环。详见[首轮停止核查](reviews/giant130-first-round-stop-20261007.md)。源码abb4f6c及启动记录ea5495f已推送；原部署/采集范围见[30轮内存调查](reviews/giant130-memory-investigation-20261007.md)。
 

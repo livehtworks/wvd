@@ -24,3 +24,12 @@
 - automationd、test_native_flow、test_native_author、test_support_selection均构建完成。首次命令误用不存在的test_flow_executor目标，产品已构建但该命令失败；改为CMake实际test_native_flow目标后成功，不记为首次通过。
 
 日志位于next/.local/popup131-*.log（build、check-build、real-frames、recheck、protected-input、selection、combat-open、giant-graph）。实际部署身份在执行后补记。长期内存结论仍为RESOURCE_UNRESOLVED，本次不增加内存采集或擅自重开30轮。
+
+## 实际部署
+
+- 源码提交a5463be1d1fe2ec8572e21e15b63e92bf2034f5b，candidate131以worktree_dirty=false、untracked_source_count=0构建身份冻结。
+- EXE SHA256：8B2F33AD9F78B16A9DE4F6CC3BDC020A88150E6B777139F0A0A32A50F9DE0EC9。
+- manage_service正常退出旧PID43136，启动新PID51060/服务4900EBEB-1912-4A83-B622-CD9BCF3585EA、进程创建134358596346005613；原17654/原data不变，回执next/.local/popup131-deploy.log。
+- 部署后Idle、busy=false、quiescent=true、run_id=0、repeat=null；设备未连接、operation idle，没有恢复任务、模拟器或游戏操作。
+- 正式profile SHA256仍为3E873D08FB9135F558C3E3348B3BFFFFF3B73555C63A9176CC75CFF274CCB87C。用户.vscode未动、未提交。
+- 截至2026-10-07 23:14北京时间，普通push及单次HTTP/1.1重试均被GitHub接收端Internal Server Error拒绝。远端读取得到ea5495f，不能宣称推送完成；本地提交和已部署候选不受影响。最近请求ID A46A:37EA37:A0CAEB:D549DA:6AC661DB。本报告只记录该时点事实，后续推送需以远端SHA核对为准，禁止强推或改写远端历史。
