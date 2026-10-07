@@ -9,7 +9,9 @@
 #include <bcrypt.h>
 
 namespace wvd::platform {
-std::string handle_sha256(void *handle, std::uint64_t byte_count) {
+namespace {
+std::string transfer_digest(void *handle, void *target, std::uint64_t byte_count,
+                            const std::function<void()> &check_cancel) {
     if (!SetFilePointerEx(handle, LARGE_INTEGER{}, nullptr, FILE_BEGIN))
         throw std::runtime_error("INTEGRITY_SEEK_FAILED");
     struct Hash {
@@ -27,6 +29,7 @@ std::string handle_sha256(void *handle, std::uint64_t byte_count) {
         throw std::runtime_error("HASH_INITIALIZATION_FAILED");
     std::array<unsigned char, 65536> bytes{};
     for (std::uint64_t offset = 0; offset < byte_count;) {
+        if (check_cancel) check_cancel();
         const auto requested = static_cast<DWORD>(
             std::min<std::uint64_t>(bytes.size(), byte_count - offset));
         DWORD count{};
@@ -34,6 +37,15 @@ std::string handle_sha256(void *handle, std::uint64_t byte_count) {
             throw std::runtime_error("INTEGRITY_READ_FAILED");
         if (BCryptHashData(hash.value, bytes.data(), count, 0) < 0)
             throw std::runtime_error("HASH_UPDATE_FAILED");
+        if (target) {
+            for (DWORD written = 0; written < count;) {
+                if (check_cancel) check_cancel();
+                DWORD step{};
+                if (!WriteFile(target, bytes.data() + written, count - written, &step, nullptr) || !step)
+                    throw std::runtime_error("NATIVE_BUNDLE_WRITE_FAILED");
+                written += step;
+            }
+        }
         offset += count;
     }
     std::array<unsigned char, 32> digest{};
@@ -46,6 +58,15 @@ std::string handle_sha256(void *handle, std::uint64_t byte_count) {
         result += hex[byte & 15];
     }
     return result;
+}
+} // namespace
+std::string handle_sha256(void *handle, std::uint64_t byte_count,
+                          const std::function<void()> &check_cancel) {
+    return transfer_digest(handle, nullptr, byte_count, check_cancel);
+}
+std::string copy_handle_sha256(void *source, void *target, std::uint64_t byte_count,
+                               const std::function<void()> &check_cancel) {
+    return transfer_digest(source, target, byte_count, check_cancel);
 }
 std::string bytes_sha256(std::span<const std::uint8_t> bytes) {
     BCRYPT_ALG_HANDLE algorithm{};

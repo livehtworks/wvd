@@ -42,6 +42,7 @@
 #include "platform/windows/file_digest.hpp"
 #include "platform/windows/mumu_binding.hpp"
 #include "platform/windows/runtime_files.hpp"
+#include "platform/windows/preparation_timer.hpp"
 #include "storage/legacy_import.hpp"
 #include "storage/run_store.hpp"
 #include <algorithm>
@@ -57,6 +58,34 @@ namespace wvd::app {
 using namespace std::chrono_literals;
 namespace {
 using J = nlohmann::json;
+void require(bool condition, const char *code);
+void discard_unstarted_publication(runtime::NativeRunDefinition &definition,
+    recognition::Bundle &publication, const std::filesystem::path &expected) {
+    require(publication.root == expected && publication.lease, "PREPARATION_PUBLICATION_OWNERSHIP_INVALID");
+    publication.lease->verify_members();
+    const auto inspect = [](const std::filesystem::path &path) {
+        HANDLE handle = CreateFileW(path.c_str(), FILE_READ_ATTRIBUTES, FILE_SHARE_READ, nullptr,
+            OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+        if (handle == INVALID_HANDLE_VALUE) throw std::runtime_error("PREPARATION_CLEANUP_IDENTITY_FAILED");
+        BY_HANDLE_FILE_INFORMATION info{};
+        const bool ok = GetFileInformationByHandle(handle, &info);
+        CloseHandle(handle);
+        if (!ok || (info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT))
+            throw std::runtime_error("PREPARATION_CLEANUP_IDENTITY_FAILED");
+        return info;
+    };
+    const auto before = inspect(expected);
+    definition.units.clear();
+    require(publication.lease.use_count() == 1, "PREPARATION_PUBLICATION_STILL_OWNED");
+    publication.lease.reset();
+    const auto after = inspect(expected);
+    require(before.dwVolumeSerialNumber == after.dwVolumeSerialNumber &&
+        before.nFileIndexHigh == after.nFileIndexHigh && before.nFileIndexLow == after.nFileIndexLow,
+        "PREPARATION_CLEANUP_IDENTITY_CHANGED");
+    std::error_code error;
+    std::filesystem::remove_all(expected, error);
+    if (error) throw std::runtime_error("PREPARATION_CLEANUP_FAILED:" + error.message());
+}
 void declare_portrait_assets(games::tasks::CompiledWorkflow &workflow,
                             const std::optional<recognition::Bundle> &validated) {
     auto &images = workflow.authoring["provided_portrait_images"] = J::array();
@@ -864,8 +893,10 @@ void Application::start_device_job(std::string name, std::function<void()> job) 
             } catch (const std::exception &error) { failure = error.what(); }
               catch (...) { failure = "APPLICATION_OPERATION_EXCEPTION"; }
             std::lock_guard finished(mutex_);
+            auto preparation = operation_.value("preparation", J::object());
             operation_ = {{"state", failure.empty() ? "completed" : "failed"},
                           {"name", name}, {"error", failure.empty() ? J(nullptr) : J(failure)}};
+            if (!preparation.empty()) operation_["preparation"] = std::move(preparation);
             if (name == "start_task" || name == "start_workflow" || name == "start_combat_debug") {
                 submission_["state"] = failure.empty() ? "submitted" :
                     failure == "PREPARATION_CANCELLED" ? "cancelled" : "failed";
@@ -1079,7 +1110,8 @@ Application::J Application::start_task(const J &request) {
             const auto task_id = frozen.value("task_id", selected.is_string()
                 ? selected.get<std::string>() : std::string{});
             const auto source_values = effective_profile_values(task_id, stored);
-            auto prepared = compile_task_graph(frozen, catalog_->at(task_id), source_values);
+            auto prepared = compile_task_graph(frozen, catalog_->at(task_id), source_values,
+                                               preparation_observer(stored));
             const auto portraits = portrait_bundle(source_values);
             for (const auto &image : prepared.images) {
                 const auto selected_image = games::vision::resolve_image_source(
@@ -1199,10 +1231,49 @@ std::shared_ptr<devices::DeviceConnection> Application::ensure_connected_for_run
     const auto serial = values.at("ADB_ADRESS").get<std::string>();
     if (backend) {
         require(backend->matches_selection(manager, index, serial), "DEVICE_BINDING_CHANGED_RECONNECT_REQUIRED");
-        return backend;
+        require(coordinator_->snapshot().quiescent && coordinator_->collect_finished_worker(),
+                "DEVICE_PREPARATION_NOT_QUIESCENT");
+        auto *port = backend->lifecycle_port();
+        require(port != nullptr, "DEVICE_START_OBSERVATION_UNAVAILABLE");
+        const auto target = backend->lifecycle_target();
+        const auto observation = [&] {
+            backend->observation_window(std::chrono::steady_clock::now() + 10s, {});
+            try {
+                auto result = port->observe_lifecycle();
+                // Preparation can outlive this read. Do not carry its deadline
+                // into publication, the initial lifecycle plan, or previews.
+                backend->observation_window({}, {});
+                return result;
+            } catch (...) {
+                backend->observation_window({}, {});
+                throw;
+            }
+        }();
+        require(!stopping_ && !cancel_operation_, "PREPARATION_CANCELLED");
+        const auto now = std::chrono::steady_clock::now();
+        require(observation && observation->target.device_id == target.device_id &&
+            observation->target.instance_id == target.instance_id &&
+            observation->target.application_id == target.application_id &&
+            observation->target.vpn_application_id == target.vpn_application_id &&
+            observation->target.vpn_required == target.vpn_required &&
+            observation->observed_at <= now && now - observation->observed_at <= 2s &&
+            (!observation->application_foreground || observation->application_running) &&
+            (!observation->connected || (observation->instance_running && observation->connection_generation)) &&
+            (!observation->instance_exited || (!observation->instance_running && !observation->connected)),
+            "DEVICE_START_OBSERVATION_INVALID");
+        if (!observation->instance_exited) {
+            require(observation->instance_running && observation->connected,
+                    "DEVICE_START_OBSERVATION_UNCONFIRMED");
+            return backend;
+        }
+        // Only explicit manager exit evidence authorizes disposal/reconnection.
+        // ADB offline or a failed observation never enters this branch.
+        disconnect_selected_device(backend);
+        backend.reset();
+        require(!stopping_ && !cancel_operation_, "PREPARATION_CANCELLED");
     }
     // 在现有准备作业中同步调用同一连接实现，不再嵌套第二个作业或第二个控制器。
-    connect_selected_device({{"emulator_path", platform::utf8(path)}, {"emulator_index", index},
+    device_connector_({{"emulator_path", platform::utf8(path)}, {"emulator_index", index},
                              {"adb_address", serial}, {"auto_start_clash", values.at("AUTO_START_CLASH")}});
     require(!stopping_ && !cancel_operation_, "PREPARATION_CANCELLED");
     std::lock_guard lock(mutex_);
@@ -1245,18 +1316,19 @@ Application::J Application::disconnect_device() {
             std::lock_guard lock(mutex_);
             old = backend_;
         }
-        if (old) old->disconnect(); // 失败时 backend_/租约仍由产品持有。
-        {
-            std::lock_guard lock(mutex_);
-            require(backend_ == old, "DEVICE_OWNER_CHANGED");
-            backend_.reset();
-            preview_lease_.reset();
-            frame_png_.clear();
-            frame_info_ = nullptr;
-            frame_captured_at_.reset();
-        }
+        disconnect_selected_device(old);
     });
     return device_status();
+}
+void Application::disconnect_selected_device(const std::shared_ptr<devices::DeviceConnection> &old) {
+    if (old) old->disconnect(); // Failure retains the old owner and lease.
+    std::lock_guard lock(mutex_);
+    require(backend_ == old, "DEVICE_OWNER_CHANGED");
+    backend_.reset();
+    preview_lease_.reset();
+    frame_png_.clear();
+    frame_info_ = nullptr;
+    frame_captured_at_.reset();
 }
 
 Application::J Application::capture_device() {
@@ -1308,8 +1380,8 @@ Application::J Application::device_status() const {
 Application::J Application::run_status() const {
     const auto snapshot = coordinator_->snapshot();
     auto value = storage::snapshot_json(snapshot);
-    const auto event_page = coordinator_->events();
-    value["events"] = event_page;
+    value["events"] = coordinator_->events();
+    const auto &event_page = value.at("events");
     const auto directory = coordinator_->run_directory();
     value["run_directory"] = directory.empty() ? J(nullptr) : J(platform::utf8(directory));
     value["result"] = contracts::name(snapshot.state);
@@ -1328,15 +1400,15 @@ Application::J Application::run_status() const {
         diagnostics.push_back(std::move(item));
     }
     value["diagnostics"] = std::move(diagnostics);
-    std::map<std::string, std::string> mapping;
-    J source_paths = J::object();
     {
         std::lock_guard lock(mutex_);
+        // Status polling only needs the visible nodes. Borrow the immutable
+        // indexes under their existing lock instead of copying the whole graph.
+        const auto &mapping = active_pipeline_to_node_;
+        const auto &source_paths = active_source_paths_;
         value["workflow_id"] = active_workflow_id_.empty() ? J(nullptr) : J(active_workflow_id_);
         value["workflow_revision"] = active_workflow_revision_.empty()
                                          ? J(nullptr) : J(active_workflow_revision_);
-        mapping = active_pipeline_to_node_;
-        source_paths = active_source_paths_;
         value["submission"] = submission_;
         value["busy"] = run_active() || task_session_active_ || operation_.value("state", "idle") == "running";
         value["repeat"] = repeat_status_;
@@ -1346,51 +1418,48 @@ Application::J Application::run_status() const {
             ? std::chrono::duration_cast<std::chrono::seconds>(
                   std::chrono::steady_clock::now() - *active_started_).count()
             : 0;
-    }
-    value["statistics"] = {
-        {"已完成业务段", snapshot.completed_business_units},
-        {"动作尝试", snapshot.inputs.attempted},
-        {"动作执行", snapshot.inputs.backend_called},
-        {"动作拒绝", snapshot.inputs.rejected}};
-    {
-        std::lock_guard lock(mutex_);
+        value["statistics"] = {
+            {"已完成业务段", snapshot.completed_business_units},
+            {"动作尝试", snapshot.inputs.attempted},
+            {"动作执行", snapshot.inputs.backend_called},
+            {"动作拒绝", snapshot.inputs.rejected}};
         value["handoff"] = handoff_status_;
-    }
-    if (event_page.contains("events")) {
-        const auto &events = event_page.at("events");
-        for (auto it = events.rbegin(); it != events.rend(); ++it) {
-            if (!it->contains("node_id") || !it->at("node_id").is_string())
-                continue;
-            const auto pipeline = it->at("node_id").get<std::string>();
-            constexpr std::string_view observer_prefix = "__wvd_observe__";
-            constexpr std::string_view await_suffix = "@await";
-            const bool observing = pipeline.starts_with(observer_prefix) ||
-                pipeline.ends_with(await_suffix);
-            const auto visible = pipeline.starts_with(observer_prefix)
-                ? pipeline.substr(observer_prefix.size())
-                : pipeline.ends_with(await_suffix)
-                    ? pipeline.substr(0, pipeline.size() - await_suffix.size()) : pipeline;
-            // 派生观察节点映射回作者的输入节点；仍显示真实阶段，不能让等待看起来没执行。
-            value["step_name"] = visible + (observing ? "（等待页面结果）" : "");
-            value["execution_stage"] = observing ? "transition_observation" : "pipeline";
-            if (it->contains("source_path")) value["node_path"] = it->at("source_path");
-            else if (source_paths.contains(visible)) value["node_path"] = source_paths.at(visible);
-            if (const auto found = mapping.find(visible); found != mapping.end()) {
-                value["current_node_id"] = found->second;
-                if (snapshot.state == contracts::RunState::Failed)
-                    value["failed_node_id"] = found->second;
-                break;
+        if (event_page.contains("events")) {
+            const auto &events = event_page.at("events");
+            for (auto it = events.rbegin(); it != events.rend(); ++it) {
+                if (!it->contains("node_id") || !it->at("node_id").is_string())
+                    continue;
+                const auto pipeline = it->at("node_id").get<std::string>();
+                constexpr std::string_view observer_prefix = "__wvd_observe__";
+                constexpr std::string_view await_suffix = "@await";
+                const bool observing = pipeline.starts_with(observer_prefix) ||
+                    pipeline.ends_with(await_suffix);
+                const auto visible = pipeline.starts_with(observer_prefix)
+                    ? pipeline.substr(observer_prefix.size())
+                    : pipeline.ends_with(await_suffix)
+                        ? pipeline.substr(0, pipeline.size() - await_suffix.size()) : pipeline;
+                // 派生观察节点映射回作者的输入节点；仍显示真实阶段，不能让等待看起来没执行。
+                value["step_name"] = visible + (observing ? "（等待页面结果）" : "");
+                value["execution_stage"] = observing ? "transition_observation" : "pipeline";
+                if (it->contains("source_path")) value["node_path"] = it->at("source_path");
+                else if (source_paths.contains(visible)) value["node_path"] = source_paths.at(visible);
+                if (const auto found = mapping.find(visible); found != mapping.end()) {
+                    value["current_node_id"] = found->second;
+                    if (snapshot.state == contracts::RunState::Failed)
+                        value["failed_node_id"] = found->second;
+                    break;
+                }
+                if (mapping.empty()) break; // 旧任务没有作者节点映射，也必须显示真实执行步骤。
             }
-            if (mapping.empty()) break; // 旧任务没有作者节点映射，也必须显示真实执行步骤。
         }
-    }
-    if (value.contains("active_event") && value.at("active_event").is_object()) {
-        const auto source = value.at("active_event").value("source_node", std::string{});
-        value["suspended_step"] = {
-            {"pipeline_node", source},
-            {"node_id", mapping.contains(source) ? J(mapping.at(source)) : J(nullptr)},
-            {"node_path", source_paths.value(source, J::array())}
-        };
+        if (value.contains("active_event") && value.at("active_event").is_object()) {
+            const auto source = value.at("active_event").value("source_node", std::string{});
+            value["suspended_step"] = {
+                {"pipeline_node", source},
+                {"node_id", mapping.contains(source) ? J(mapping.at(source)) : J(nullptr)},
+                {"node_path", source_paths.value(source, J::array())}
+            };
+        }
     }
     if (value.contains("execution") && value.at("execution").is_object()) {
         const auto &execution = value.at("execution");
@@ -1407,15 +1476,33 @@ Application::J Application::run_status() const {
     return value;
 }
 
+platform::PreparationObserver Application::preparation_observer(const J &stored) {
+    const auto logging = storage::LoggingPolicy::from_profile(stored);
+    if (!logging.performance || !logging.accepts(storage::LogLevel::Info)) return {};
+    return [this](const char *phase, const char *state, const J &metrics) {
+        std::lock_guard lock(mutex_);
+        auto &entry = operation_["preparation"][phase];
+        entry = metrics;
+        entry["state"] = state;
+        operation_["preparation"]["current_phase"] = phase;
+    };
+}
+
 games::tasks::CompiledWorkflow Application::compile_task_graph(const J &request,
-    const games::WvdQuestDefinition &task, const J &values) const {
+    const games::WvdQuestDefinition &task, const J &values,
+    const platform::PreparationObserver &observer) const {
+    platform::PreparationTimer timer("compile_task_graph", observer);
+    platform::PreparationTimer library_timer("public_library", observer);
+    require(!stopping_ && !cancel_operation_, "PREPARATION_CANCELLED");
     const auto board = workflow_store_->read("guild-open-bounty-page");
     const auto locale = authoring::effective_resource_locale(request, J::object());
     const auto closure = workflow_store_->snapshot_closure(board, games::tasks::native_public_steps);
     const games::tasks::PublicFlowLibrary library(closure, semantic_catalogue_);
+    J preparation{{"public_library", library_timer.sample()}};
     const games::tasks::PublicStepScope steps([&](const std::string &id, const J &arguments) {
         return library.compile_step(id, arguments, locale);
     });
+    platform::PreparationTimer graph_timer("build_task_workflow", observer);
     auto workflow = games::tasks::build_task_workflow(task, values, available_images_,
         [this, &board, &library, &locale](const games::WvdQuestDefinition &selected, const J &profile,
                          const std::set<std::string> &images) {
@@ -1426,18 +1513,29 @@ games::tasks::CompiledWorkflow Application::compile_task_graph(const J &request,
             return games::tasks::bounty_cycle(selected, profile, images, library, board,
                 locale);
         });
+    preparation["build_task_workflow"] = graph_timer.sample();
+    platform::PreparationTimer boot_timer("boot_recovery", observer);
     workflow = games::recovery::with_boot_recovery(workflow, true);
+    preparation["boot_recovery"] = boot_timer.sample();
     require(workflow.nodes.contains("Boot_Entry"), "PRODUCTION_BOOT_ENTRY_MISSING");
+    platform::PreparationTimer assets_timer("locale_assets", observer);
     games::tasks::localize_task_assets(workflow, semantic_catalogue_,
         authoring::effective_resource_locale(request, J::object()));
     declare_portrait_assets(workflow, portrait_bundle(values, false));
     games::tasks::require_locale_asset_coverage(workflow, locale);
+    require(!stopping_ && !cancel_operation_, "PREPARATION_CANCELLED");
+    preparation["locale_assets"] = assets_timer.sample();
+    workflow.preparation = std::move(preparation);
+    workflow.preparation["compile_task_graph"] = timer.sample();
+    workflow.preparation["nodes"] = workflow.nodes.size();
     return workflow;
 }
 
 runtime::NativeRunDefinition Application::assemble_task(const J &request, const J &stored,
     const devices::LifecycleTarget &lifecycle, std::optional<J> frozen_values,
-    bool continuation, std::optional<games::tasks::CompiledWorkflow> prepared) {
+    bool continuation, std::optional<games::tasks::CompiledWorkflow> prepared,
+    const platform::PreparationObserver &diagnostic) {
+    const auto observer = diagnostic ? diagnostic : preparation_observer(stored);
     if (stopping_ || cancel_operation_) throw std::runtime_error("PREPARATION_CANCELLED");
     const auto &stored_values = stored.at("values");
     const auto task_id = request.value("task_id", stored_values.at("FARM_TARGET").is_string()
@@ -1462,13 +1560,14 @@ runtime::NativeRunDefinition Application::assemble_task(const J &request, const 
             {"legacy_passthrough_digest", games::tasks::digest_handoff_json(stored.at("legacy_passthrough"))}};
         handoff_source["digest"] = games::tasks::digest_handoff_json(handoff_source);
     }
-    auto workflow = prepared ? std::move(*prepared) : compile_task_graph(request, task, values);
+    auto workflow = prepared ? std::move(*prepared) : compile_task_graph(request, task, values, observer);
     games::tasks::require_locale_asset_coverage(workflow, resource_locale);
     const auto request_id = checked_request_id(request);
     const auto destination = paths_.data_root / "published" / request_id;
     const auto portraits = portrait_bundle(values);
     auto publication = games::tasks::publish_native(workflow, author_bundle_,
-        destination, aliases_, J::object(), portraits ? &*portraits : nullptr);
+        destination, aliases_, J::object(), portraits ? &*portraits : nullptr,
+        [this] { require(!stopping_ && !cancel_operation_, "PREPARATION_CANCELLED"); }, observer);
     const auto &root = publication.program.definitions.at(publication.program.root_definition);
     require(root.steps.contains(workflow.checkpoint), "NATIVE_CHECKPOINT_MISSING");
     const auto checkpoint_source = root.steps.at(workflow.checkpoint).source_path;
@@ -1481,6 +1580,10 @@ runtime::NativeRunDefinition Application::assemble_task(const J &request, const 
     definition.request_id = request_id;
     definition.match_budget = match_budget_;
     definition.logging = storage::LoggingPolicy::from_profile(stored);
+    if (definition.logging.performance && definition.logging.accepts(storage::LogLevel::Info)) {
+        definition.preparation = std::move(workflow.preparation);
+        definition.preparation.update(publication.preparation);
+    }
     definition.units.assign(count, unit);
     definition.policy = {lifecycle.device_id, "wvd", "jp.co.drecom.wizardry.daphne",
         unit.bundle.revision, "900x1600", {900, 1600},
@@ -1518,6 +1621,33 @@ runtime::NativeRunDefinition Application::assemble_task(const J &request, const 
     }
     return definition;
 }
+contracts::RunSnapshot Application::start_prepared_run(runtime::NativeRunDefinition definition,
+    const std::shared_ptr<devices::DeviceConnection> &backend) {
+    // Called under command_mutex_: both task and authoring entry points share
+    // the final cancellation/ownership gate and unpublished-directory rollback.
+    const auto request_id = definition.request_id;
+    recognition::Bundle unpublished{definition.units.front().bundle.root, "unstarted", {}};
+    unpublished.lease = definition.units.front().bundle.lease;
+    auto preparation = std::move(definition.preparation);
+    platform::PreparationTimer start_timer;
+    contracts::RunSnapshot snapshot;
+    try {
+        require(!stopping_ && !cancel_operation_, "PREPARATION_CANCELLED");
+        { std::lock_guard lock(mutex_); preview_lease_.reset(); }
+        snapshot = coordinator_->start(std::move(definition), backend);
+    } catch (...) {
+        const auto current = coordinator_->request_snapshot(request_id);
+        if (!current || current->quiescent)
+            discard_unstarted_publication(definition, unpublished, paths_.data_root / "published" / request_id);
+        throw;
+    }
+    unpublished.lease.reset();
+    if (!preparation.empty()) {
+        preparation["coordinator_start"] = start_timer.sample();
+        coordinator_->record_preparation(preparation);
+    }
+    return snapshot;
+}
 Application::J Application::prepare_task(const J &request, const J &stored,
     std::shared_ptr<devices::DeviceConnection> backend,
     std::optional<J> frozen_values, J handoff_parent,
@@ -1535,9 +1665,7 @@ Application::J Application::prepare_task(const J &request, const J &stored,
     const auto &task = catalog_->at(task_id);
     const auto request_id = definition.request_id;
     std::lock_guard command(command_mutex_);
-    require(!stopping_ && !cancel_operation_, "PREPARATION_CANCELLED");
-    { std::lock_guard lock(mutex_); preview_lease_.reset(); }
-    const auto snapshot = coordinator_->start(std::move(definition), backend);
+    const auto snapshot = start_prepared_run(std::move(definition), backend);
     {
         std::lock_guard lock(mutex_);
         active_workflow_id_ = "task:" + task_id;
@@ -1834,12 +1962,7 @@ Application::J Application::prepare_workflow(const std::string &flow_id, const J
         backend->lifecycle_target(), &pipeline_to_node, library_snapshot, &source_paths, std::move(prepared));
     const auto request_id = definition.request_id;
     std::lock_guard handoff(command_mutex_);
-    require(!stopping_ && !cancel_operation_, "PREPARATION_CANCELLED");
-    {
-        std::lock_guard lock(mutex_);
-        preview_lease_.reset();
-    }
-    const auto snapshot = coordinator_->start(std::move(definition), backend);
+    const auto snapshot = start_prepared_run(std::move(definition), backend);
     {
         std::lock_guard lock(mutex_);
         active_workflow_id_ = flow_id;
@@ -1927,7 +2050,9 @@ runtime::NativeRunDefinition Application::assemble_workflow(
     const auto provenance = executable.authoring.value("source_paths", J::object());
     const auto portraits = portrait_bundle(values);
     auto publication = games::tasks::publish_native(executable, author_bundle_,
-        destination, aliases_, provenance, portraits ? &*portraits : nullptr);
+        destination, aliases_, provenance, portraits ? &*portraits : nullptr,
+        [this] { require(!stopping_ && !cancel_operation_, "PREPARATION_CANCELLED"); },
+        preparation_observer(stored));
     const auto &root = publication.program.definitions.at(publication.program.root_definition);
     require(root.steps.contains(executable.checkpoint), "NATIVE_CHECKPOINT_MISSING");
     const auto checkpoint_source = root.steps.at(executable.checkpoint).source_path;
@@ -1935,6 +2060,8 @@ runtime::NativeRunDefinition Application::assemble_workflow(
     definition.request_id = request_id;
     definition.match_budget = match_budget_;
     definition.logging = storage::LoggingPolicy::from_profile(stored);
+    if (definition.logging.performance && definition.logging.accepts(storage::LogLevel::Info))
+        definition.preparation = std::move(publication.preparation);
     definition.units.push_back({std::make_shared<const wvd::workflow::FlowProgram>(std::move(publication.program)),
         std::move(publication.bundle), games::vision::native_handlers(aliases_, locale,
             executable.dialogue_policy, executable.random_maze_events),

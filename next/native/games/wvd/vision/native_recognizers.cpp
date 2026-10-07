@@ -321,8 +321,8 @@ J evaluate_impl(const recognition::Bundle &bundle, recognition::Pixels pixels, c
     // Resolve aliases before choosing a cache contract: a legacy template may
     // now be an OCR/composite probe with no template score at all.
     const auto localized = tasks::localize_implicit_probe(p, bound.value("resource_locale", ""));
-    if (localized != p)
-        return evaluate_impl(bundle, pixels, localized, bound, scope, cache, depth, memo);
+    if (localized && *localized != p)
+        return evaluate_impl(bundle, pixels, *localized, bound, scope, cache, depth, memo);
     auto identity = p;
     // 普通单最佳匹配的测量值与最终阈值无关。复用 score/box，不能复用旧 Hit/NoHit。
     // ROI、预处理、缩放、遮罩和其它参数仍全部参与身份；multiple 不进入此路径。
@@ -1278,8 +1278,8 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
         probe["mode"] = parameters.value("mode", "template");
         probe["image"] = name;
         const auto resolved = tasks::localize_implicit_probe(probe, locale);
-        if (resolved != probe)
-            return evaluate_impl(bundle, pixels, resolved, bound, scope, cache, depth + 1, memo);
+        if (resolved && *resolved != probe)
+            return evaluate_impl(bundle, pixels, *resolved, bound, scope, cache, depth + 1, memo);
         if (!template_language_enabled(name, locale))
             return decision(false, {}, {{"reason", "template_language_excluded"}, {"image", name}}, false);
         const bool has_roi = parameters.contains("roi");

@@ -1,121 +1,89 @@
 #requires -Version 7.0
 [CmdletBinding()]
-param([Parameter(Mandatory)][string]$EvidenceRoot,
-      [Parameter(Mandatory)][string]$PdbPath,
-      [string]$WptRoot='C:/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit')
+param([Parameter(Mandatory)][string]$EvidenceRoot,[Parameter(Mandatory)][string]$PdbPath,
+      [ValidateSet('analyze','inspect-incomplete')][string]$Mode='analyze',
+      [string]$AnalyzerPath=(Join-Path $PSScriptRoot 'heap_analyzer/bin/Release/net8.0/HeapAnalyzer.exe'),
+      [ValidatePattern('^[a-zA-Z0-9-]{1,64}$')][string]$OutputName='analysis-direct',
+      [ValidateRange(128,4096)][int]$MemoryMiB=1024)
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
 Import-Module (Join-Path $PSScriptRoot 'memory_trace_support.psm1') -Force
 Initialize-TraceInterop
 $root=[IO.Path]::GetFullPath($EvidenceRoot)
-$identity=Get-Content -Encoding utf8 -Raw -LiteralPath (Join-Path $root 'identity.json') | ConvertFrom-Json
-$receipt=Get-Content -Encoding utf8 -Raw -LiteralPath (Join-Path $root 'receipt.json') | ConvertFrom-Json
-if (-not $receipt.complete -or -not $receipt.cleanup_confirmed -or $receipt.events_lost -ne 0) {
-    throw 'TRACE_CAPTURE_NOT_COMPLETE_OR_CLEAN'
+$identity=Get-Content -Encoding utf8 -Raw (Join-Path $root 'identity.json') | ConvertFrom-Json
+$receipt=Get-Content -Encoding utf8 -Raw (Join-Path $root 'receipt.json') | ConvertFrom-Json
+$data=[IO.Path]::GetFullPath($identity.target.data_root).TrimEnd('\','/')
+if($root -eq $data -or $root.StartsWith($data+[IO.Path]::DirectorySeparatorChar,'OrdinalIgnoreCase')){throw 'ANALYSIS_MUST_NOT_WRITE_AUTHORITY_DATA'}
+if(-not $receipt.cleanup_confirmed){throw 'CAPTURE_CLEANUP_NOT_CONFIRMED'}
+if($Mode -eq 'analyze' -and (-not $receipt.complete -or
+    -not $receipt.PSObject.Properties['final_trace_validated'] -or -not $receipt.final_trace_validated)) {
+    throw 'INCOMPLETE_CAPTURE_REQUIRES_EXPLICIT_INSPECT_MODE'
 }
-$checkpoints=@(Get-Content -Encoding utf8 -Raw -LiteralPath (Join-Path $root 'checkpoints.json') | ConvertFrom-Json)
-if ($checkpoints.Count -lt 2) { throw 'SNAPSHOT_BOUNDARIES_MISSING' }
-$pidValue=[int]$identity.target.pid
+$etl=if(Test-Path (Join-Path $root 'allocations.etl')){Join-Path $root 'allocations.etl'}elseif(Test-Path (Join-Path $root 'incomplete.etl')){Join-Path $root 'incomplete.etl'}else{throw 'ETL_MISSING'}
+$etlHash=(Get-FileHash -LiteralPath $etl).Hash
+if($receipt.PSObject.Properties['final_etl_sha256'] -and $receipt.final_etl_sha256 -ne $etlHash){throw 'FINAL_ETL_HASH_CHANGED'}
+if((Get-FileHash -LiteralPath $identity.target.executable).Hash -ne $identity.exe_sha256){throw 'SOURCE_EXE_CHANGED'}
 $pdb=[IO.Path]::GetFullPath($PdbPath)
 $index=[WvdTraceNative]::Index($pdb)
-if ($index.Guid.ToString() -ne $identity.guid -or $index.Age -ne $identity.age -or
-    (Get-FileHash -LiteralPath $pdb).Hash -ne $identity.pdb_sha256) { throw 'CAPTURE_PDB_MISMATCH' }
-$data=[IO.Path]::GetFullPath($identity.target.data_root).TrimEnd('\','/')
-if ($root.StartsWith($data + [IO.Path]::DirectorySeparatorChar, 'OrdinalIgnoreCase') -or $root -eq $data) {
-    throw 'EXPORT_MUST_NOT_WRITE_AUTHORITY_DATA'
-}
-$out=Join-Path $root 'analysis'
-if (Test-Path -LiteralPath $out) { throw 'ANALYSIS_OUTPUT_ALREADY_EXISTS' }
-New-Item -ItemType Directory -Path $out | Out-Null
-$oldSymbols=$env:_NT_SYMBOL_PATH
-$summary=[ordered]@{complete=$false;attribution='UNRESOLVED';mode=$receipt.mode;target_pid=$pidValue;
-    application_symbols_verified=$false;missing_module_symbols=@();failure=''}
-function Integer([string]$Value) {
-    [long]::Parse($Value, [Globalization.NumberStyles]::AllowThousands, [Globalization.CultureInfo]::InvariantCulture)
-}
+if($index.Guid.ToString() -ne $identity.guid -or $index.Age -ne $identity.age -or
+    (Get-FileHash -LiteralPath $pdb).Hash -ne $identity.pdb_sha256){throw 'CAPTURE_PDB_MISMATCH'}
+if((Get-FileHash -LiteralPath (Join-Path $root 'capture.wprp')).Hash -ne $identity.capture_profile_sha256){throw 'FROZEN_CAPTURE_PROFILE_CHANGED'}
+$analyzer=[IO.Path]::GetFullPath($AnalyzerPath)
+$dll=Join-Path ([IO.Path]::GetDirectoryName($analyzer)) 'HeapAnalyzer.dll'
+if(-not (Test-Path -LiteralPath $analyzer) -or -not (Test-Path -LiteralPath $dll)){throw 'BUILD_HEAP_ANALYZER_FIRST'}
+$out=Join-Path $root $OutputName
+if(Test-Path $out){throw 'ANALYSIS_OUTPUT_ALREADY_EXISTS'}
+$plan=[ordered]@{capture_complete=[bool]$receipt.complete;analysis_complete=$false;comparison_eligible=$false;
+    attribution_complete=$false;mode=$Mode;input_etl_sha256=$etlHash;process_start_filetime=$identity.target.process_start_filetime;
+    target_pid=$identity.target.pid;analyzer_exe_sha256=(Get-FileHash $analyzer).Hash;
+    analyzer_dll_sha256=(Get-FileHash $dll).Hash;package_version='1.12.10';max_private_mib=$MemoryMiB;
+    max_seconds=120;max_output_bytes=128MB;max_system_commit_ratio=0.98;virtual_alloc_analyzed=$false;failure=''}
+$plan | ConvertTo-Json -Depth 6 | Set-Content -Encoding utf8 (Join-Path $root ($OutputName+'-plan.json'))
 try {
-    # Local matching PDB only: do not implicitly download every system/process PDB.
-    $env:_NT_SYMBOL_PATH=[IO.Path]::GetDirectoryName($pdb)
-    $exporter=Join-Path $WptRoot 'wpaexporter.exe'
-    $profile=Join-Path $root 'analysis.wpaProfile'
-    if ((Get-FileHash -LiteralPath $profile).Hash -ne $identity.export_profile_sha256) { throw 'FROZEN_EXPORT_PROFILE_CHANGED' }
-    $text=Invoke-TraceTool -Executable $exporter -Arguments @('-i',(Join-Path $root 'allocations.etl'),
-        '-processor','Event Tracing for Windows','-symbols','-profile',$profile,'-outputfolder',$out) `
-        -Log (Join-Path $root 'wpa-export.log') -TimeoutSeconds 120 -OutputRoot $out
-    if ($text -match 'Lost events detected|Error exporting profile|Unable to export|No data in table') {
-        throw 'WPA_EXPORT_CONTENT_FAILURE'
-    }
-    $heapFile=Join-Path $out 'Heap_Snapshot_WvdHeapSnapshot.csv'
-    $virtualFile=Join-Path $out 'VirtualAlloc_Commit_LifeTimes_WvdVirtualAlloc.csv'
-    $virtualWanted=$receipt.virtual_alloc_scope -ne 'not_collected_heap_snapshot_only'
-    if (-not (Test-Path -LiteralPath $heapFile) -or ($virtualWanted -and -not (Test-Path -LiteralPath $virtualFile))) {
-        throw 'EXPECTED_EXPORT_TABLE_MISSING'
-    }
-    $heap=@(Import-Csv -Encoding utf8 -LiteralPath $heapFile | Where-Object { [int]$_.PID -eq $pidValue })
-    if (-not $heap.Count) { throw 'TARGET_HEAP_ROWS_MISSING' }
-    $instances=@($heap | Group-Object Instance | Sort-Object {
-        [double]::Parse($_.Group[0].'Snap Time (s)', [Globalization.CultureInfo]::InvariantCulture) })
-    if ($instances.Count -ne $checkpoints.Count) { throw 'SNAPSHOT_INSTANCE_COUNT_MISMATCH' }
-    $aggregates=[Collections.Generic.List[object]]::new()
-    $deltas=[Collections.Generic.List[object]]::new()
-    $previous=@{}
-    $boundaryRows=[Collections.Generic.List[object]]::new()
-    for ($i=0;$i -lt $instances.Count;++$i) {
-        $phase=$checkpoints[$i].phase
-        $current=@{}
-        foreach ($row in $instances[$i].Group) {
-            if (-not $row.Stack -or $row.Stack -eq 'n/a' -or $row.Stack -match 'Symbols disabled') {
-                throw 'TARGET_HEAP_STACK_MISSING'
-            }
-            if (-not $current.ContainsKey($row.Stack)) { $current[$row.Stack]=@{blocks=0L;bytes=0L} }
-            $current[$row.Stack].blocks+=Integer $row.Count
-            $current[$row.Stack].bytes+=Integer $row.'Size (B)'
-        }
-        $totalBlocks=0L; $totalBytes=0L
-        foreach ($stack in $current.Keys) {
-            $value=$current[$stack]; $totalBlocks+=$value.blocks; $totalBytes+=$value.bytes
-            $aggregates.Add([pscustomobject]@{phase=$phase;instance=$instances[$i].Name;
-                blocks=$value.blocks;bytes=$value.bytes;stack=$stack})
-        }
-        $boundaryRows.Add(@{phase=$phase;instance=$instances[$i].Name;blocks=$totalBlocks;bytes=$totalBytes})
-        if ($i -gt 0) {
-            $keys=@(@($current.Keys)+@($previous.Keys) | Sort-Object -Unique)
-            foreach ($stack in $keys) {
-                $before=if($previous.ContainsKey($stack)){$previous[$stack]}else{@{blocks=0L;bytes=0L}}
-                $after=if($current.ContainsKey($stack)){$current[$stack]}else{@{blocks=0L;bytes=0L}}
-                $deltas.Add([pscustomobject]@{from=$checkpoints[$i-1].phase;to=$phase;
-                    block_delta=$after.blocks-$before.blocks;byte_delta=$after.bytes-$before.bytes;stack=$stack})
+    Invoke-TraceTool -Executable $analyzer -Arguments @('analyze','--etl',$etl,'--pid',[string]$identity.target.pid,
+        '--target-filetime',$identity.target.process_start_filetime,'--target-image',[IO.Path]::GetFileName($identity.target.executable),
+        '--output',$out,'--pdb-directory',[IO.Path]::GetDirectoryName($pdb),'--memory-mib',[string]$MemoryMiB,
+        '--output-mib','128','--capture-receipt',(Join-Path $root 'receipt.json'),'--checkpoints',(Join-Path $root 'checkpoints.json')) `
+        -Log (Join-Path $root ($OutputName+'.log')) -TimeoutSeconds 120 -OutputRoot $out `
+        -MaxPrivateBytes ($MemoryMiB*1MB) -MaxSystemCommitRatio 0.98 | Out-Null
+    if((Get-FileHash -LiteralPath $etl).Hash -ne $etlHash){throw 'ETL_CHANGED_DURING_ANALYSIS'}
+    $result=Get-Content -Encoding utf8 -Raw (Join-Path $out 'analysis-receipt.json') | ConvertFrom-Json
+    if(-not $result.analysis_complete -or $result.package_version -ne '1.12.10'){throw 'ANALYZER_RESULT_NOT_COMPLETE'}
+    $snapshots=@(Get-Content -Encoding utf8 -Raw (Join-Path $out 'snapshot-map.json') | ConvertFrom-Json)
+    $checkpoints=@(Get-Content -Encoding utf8 -Raw (Join-Path $root 'checkpoints.json') | ConvertFrom-Json)
+    $used=[Collections.Generic.HashSet[string]]::new()
+    foreach($snapshot in $snapshots){
+        $time=[DateTimeOffset]$snapshot.utc
+        $matches=@($checkpoints | Where-Object {$time -ge [DateTimeOffset]$_.began_utc -and $time -le [DateTimeOffset]$_.ended_utc})
+        if($matches.Count -ne 1){throw 'SNAPSHOT_TIMESTAMP_NOT_UNIQUELY_BOUND'}
+        $checkpoint=$matches[0]
+        if($checkpoint.pid -ne $identity.target.pid -or $checkpoint.process_start_filetime -ne $identity.target.process_start_filetime){throw 'CHECKPOINT_PROCESS_IDENTITY_CHANGED'}
+        if(-not $used.Add($snapshot.process_instance+'/'+$snapshot.snapshot_id)){throw 'DUPLICATE_PROCESS_SNAPSHOT'}
+        $valid=$false
+        if($checkpoint.boundary -and $checkpoint.boundary.PSObject.Properties['stage'] -and
+            $checkpoint.boundary.PSObject.Properties['before'] -and $checkpoint.boundary.PSObject.Properties['after']) {
+            Assert-TraceSnapshotBoundary $checkpoint.boundary.before $checkpoint.boundary.after $checkpoint.boundary.stage
+            $valid=$snapshot.creation_verified
+            if($checkpoint.boundary.PSObject.Properties['os_before'] -and $checkpoint.boundary.PSObject.Properties['os_after']) {
+                $a=$checkpoint.boundary.os_before; $b=$checkpoint.boundary.os_after
+                $valid=($a.pid -eq $identity.target.pid -and $b.pid -eq $identity.target.pid -and
+                    $a.process_start_filetime -eq $identity.target.process_start_filetime -and
+                    $b.process_start_filetime -eq $identity.target.process_start_filetime)
             }
         }
-        $previous=$current
+        $snapshot | Add-Member -NotePropertyName boundary_verified -NotePropertyValue $valid
     }
-    $aggregates | Export-Csv -NoTypeInformation -Encoding utf8 -LiteralPath (Join-Path $out 'heap-by-stack.csv')
-    $deltas | Sort-Object byte_delta -Descending | Export-Csv -NoTypeInformation -Encoding utf8 -LiteralPath (Join-Path $out 'heap-diff.csv')
-    $processName='automationd.exe ('+$pidValue+')'
-    $virtual=@()
-    if ($virtualWanted) { $virtual=@(Import-Csv -Encoding utf8 -LiteralPath $virtualFile | Where-Object {$_.Process -eq $processName}) }
-    if ($virtualWanted -and (-not $virtual.Count -or -not @($virtual | Where-Object {$_.'Commit Stack' -ne 'n/a'}).Count)) {
-        throw 'TARGET_VIRTUAL_ALLOC_STACK_MISSING'
-    }
-    if ($virtualWanted) { $virtual | Export-Csv -NoTypeInformation -Encoding utf8 -LiteralPath (Join-Path $out 'virtual-alloc-target.csv') }
-    $allStacks=@($heap.Stack)
-    if ($virtualWanted) { $allStacks+=@($virtual.'Commit Stack') }
-    $summary.virtual_alloc_collected=$virtualWanted
-    $summary.application_symbols_verified=@($allStacks | Where-Object {$_ -match 'automationd.exe!wvd::'}).Count -gt 0
-    $missing=[Collections.Generic.HashSet[string]]::new()
-    foreach ($stack in $allStacks) {
-        foreach ($match in [regex]::Matches($stack,'([^/]+)!<PDB not found>')) { [void]$missing.Add($match.Groups[1].Value) }
-    }
-    $summary.missing_module_symbols=@($missing | Sort-Object)
-    $summary.boundaries=@($boundaryRows); $summary.virtual_alloc_rows=$virtual.Count
-    $summary.heap_and_virtual_alloc_bytes_are_not_added=$true
-    $summary.complete=$true
-    if (-not $summary.application_symbols_verified) { throw 'APPLICATION_SYMBOLS_NOT_VERIFIED' }
-} catch {
-    $summary.complete=$false; $summary.failure=$_.Exception.Message
-} finally {
-    $env:_NT_SYMBOL_PATH=$oldSymbols
-    $summary | ConvertTo-Json -Depth 12 | Set-Content -Encoding utf8 -LiteralPath (Join-Path $root 'analysis-summary.json')
-}
-if (-not $summary.complete) { throw $summary.failure }
-Write-Output "Exported target heap/VirtualAlloc stacks: $out"
+    $snapshots | ConvertTo-Json -Depth 8 | Set-Content -Encoding utf8 (Join-Path $out 'snapshot-map.json')
+    $plan.analysis_complete=$true
+    $plan.peak_private_bytes=$result.peak_private_commit_bytes
+    $plan.elapsed_seconds=$result.elapsed_seconds
+    $plan.output_bytes=Get-TraceFileBytes -Root $out -Filter '*'
+    $plan.snapshot_totals_conserved=$true;$plan.delta_totals_conserved=$true
+    # The early background snapshot is not the main comparison endpoint.
+    $endpoints=@($snapshots | Where-Object {$_.boundary_verified -and $_.phase -match '^batch_payloads_released_[12]$'})
+    $plan.comparison_eligible=($Mode -eq 'analyze' -and $receipt.complete -and $endpoints.Count -eq 2 -and
+        $endpoints[0].process_instance -eq $endpoints[1].process_instance -and $endpoints[0].is_32_bit -eq $endpoints[1].is_32_bit)
+} catch {$plan.failure=$_.Exception.Message}
+finally {$plan | ConvertTo-Json -Depth 8 | Set-Content -Encoding utf8 (Join-Path $root ($OutputName+'-receipt.json'))}
+if($plan.failure){throw $plan.failure}
+Write-Output (Join-Path $root ($OutputName+'-receipt.json'))

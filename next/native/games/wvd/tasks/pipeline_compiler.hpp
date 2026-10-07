@@ -31,6 +31,8 @@ struct CompiledWorkflow {
     bool random_maze_events{true};
     // 作者定义和资源选择在编译后封存。
     nlohmann::json authoring = nlohmann::json::object();
+    // Diagnostic scalars only; excluded from authoring/program identity.
+    nlohmann::json preparation = nlohmann::json::object();
     void refresh_images();
     void validate() const;
 };

@@ -4,11 +4,14 @@
 #include "games/wvd/combat/strategy.hpp"
 #include "platform/windows/file_digest.hpp"
 #include "platform/windows/bundle_lease.hpp"
+#include "platform/windows/memory_diagnostics.hpp"
+#include "devices/lifecycle_execution.hpp"
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
 #include <iostream>
 #include <thread>
 #include <fstream>
+#include <future>
 #include <windows.h>
 #include <dbghelp.h>
 #pragma comment(lib, "dbghelp.lib")
@@ -23,6 +26,48 @@ struct ApplicationAssemblyTestAccess {
         };
     }
     static runtime::NativeRunCoordinator &coordinator(Application &app) { return *app.coordinator_; }
+    static std::shared_ptr<devices::DeviceConnection> ensure(Application &app, const nlohmann::json &stored) {
+        return app.ensure_connected_for_run(stored);
+    }
+    static void connection(Application &app, std::shared_ptr<devices::DeviceConnection> backend,
+                           std::function<void(const nlohmann::json &)> connector) {
+        app.backend_ = std::move(backend); app.device_connector_ = std::move(connector);
+    }
+    static auto backend(Application &app) { return app.backend_; }
+    static void set_backend(Application &app, std::shared_ptr<devices::DeviceConnection> backend) { app.backend_ = std::move(backend); }
+    static void cancel(Application &app, bool value) { app.cancel_operation_ = value; }
+    static nlohmann::json preparation_status(Application &app, nlohmann::json stored, bool enabled,
+                                           storage::LogLevel level = storage::LogLevel::Info) {
+        auto logging = storage::LoggingPolicy::from_profile(stored);
+        logging.performance = enabled;
+        logging.level = level;
+        stored["logging"] = logging.json();
+        {
+            std::lock_guard lock(app.mutex_);
+            app.operation_ = {{"state", "running"}, {"name", "start_task"}};
+        }
+        const auto observer = app.preparation_observer(stored);
+        if (observer) {
+            platform::PreparationTimer timer("compile_task_graph", observer);
+            const auto first = timer.sample();
+            const auto second = timer.sample();
+            (void)first; (void)second;
+        }
+        std::lock_guard lock(app.mutex_);
+        return app.operation_;
+    }
+    static contracts::RunSnapshot commit(Application &app, runtime::NativeRunDefinition definition,
+                                          const std::shared_ptr<devices::DeviceConnection> &backend) {
+        std::lock_guard lock(app.command_mutex_);
+        return app.start_prepared_run(std::move(definition), backend);
+    }
+    static runtime::NativeRunDefinition prepare_giant(Application &app, const nlohmann::json &stored,
+        const platform::PreparationObserver &observer = {}) {
+        return app.assemble_task({{"task_id", "GiantBounty"}, {"resource_locale", "zh-Hant"},
+            {"request_id", "p01-giant-preparation"}}, stored,
+            {"offline-product", "offline-instance", "jp.co.drecom.wizardry.daphne", "", false},
+            std::nullopt, false, std::nullopt, observer);
+    }
     static runtime::NativeRunDefinition prepare_debug(Application &app, nlohmann::json stored, bool force_selected = true) {
         auto &values = stored["values"];
         if (force_selected) {
@@ -124,6 +169,54 @@ class OfflineConnection final : public wvd::devices::DeviceConnection,
     }
   private:
     std::vector<std::uint8_t> pixels_;
+};
+class BindingConnection final : public wvd::devices::DeviceConnection, public wvd::devices::LifecyclePort {
+  public:
+    wvd::devices::LifecycleTarget target{"127.0.0.1:16448", "2", "jp.co.drecom.wizardry.daphne", "vpn", true};
+    bool exited{}, running{true}, connected{true}, game{}, vpn_ready{}, cleanup_fail{}, binding_matches{true}, probe_fail{}, stale{}, mismatch{};
+    int disconnected{}, observed{}, actions{};
+    int bounded_reads{}, cleared_reads{};
+    std::chrono::steady_clock::time_point read_deadline{};
+    void observation_window(std::chrono::steady_clock::time_point deadline, std::stop_token) override {
+        read_deadline = deadline;
+        if (deadline == std::chrono::steady_clock::time_point{}) ++cleared_reads;
+        else ++bounded_reads;
+    }
+    std::function<void()> after_observation;
+    bool offline() const override { return false; }
+    bool verified_access() const override { return true; }
+    bool connect() override { return true; }
+    bool execute(const wvd::contracts::Command &) override { throw std::runtime_error("FIXTURE_INPUT_FORBIDDEN"); }
+    wvd::devices::RawFrame capture() override { throw std::runtime_error("FIXTURE_CAPTURE_FORBIDDEN"); }
+    wvd::devices::LifecycleTarget lifecycle_target() const override { return target; }
+    bool matches_selection(const std::filesystem::path &, int, const std::string &) const override { return binding_matches; }
+    void set_vpn_required(bool value) override { target.vpn_required = value; }
+    J diagnostics() const override { return J::object(); }
+    void disconnect() override {
+        ++disconnected;
+        if (cleanup_fail) throw std::runtime_error("DEVICE_CLEANUP_PENDING");
+        connected = false;
+    }
+    wvd::devices::LifecyclePort *lifecycle_port() override { return this; }
+    std::optional<wvd::devices::LifecycleObservation> observe_lifecycle() override {
+        ++observed;
+        if (probe_fail) throw std::runtime_error("FIXTURE_OBSERVATION_FAILED");
+        auto identity = target; if (mismatch) identity.instance_id = "another-instance";
+        auto at = std::chrono::steady_clock::now(); if (stale) at -= 10s;
+        if (after_observation) after_observation();
+        return wvd::devices::LifecycleObservation{identity, running, connected, game, vpn_ready, 1, at, game, exited};
+    }
+    bool execute_lifecycle(wvd::devices::LifecycleOperation operation,
+        const wvd::devices::LifecycleTarget &identity, const std::function<bool()> &cancelled) override {
+        if (identity.device_id != target.device_id || identity.instance_id != target.instance_id)
+            throw std::runtime_error("FIXTURE_BINDING_CHANGED");
+        if (cancelled()) return false;
+        if (operation == wvd::devices::LifecycleOperation::RestartInstance)
+            throw std::runtime_error("INITIAL_RESTART_FORBIDDEN");
+        if (operation == wvd::devices::LifecycleOperation::EnsureVpn) vpn_ready = true;
+        if (operation == wvd::devices::LifecycleOperation::StartApplication) game = true;
+        ++actions; return true;
+    }
 };
 
 J call(wvd::app::Application &application, wvd::api::http::verb method,
@@ -253,6 +346,211 @@ int closure_application(const std::filesystem::path &pack, const std::filesystem
 
 int main(int argc, char **argv) {
     try {
+        if (argc == 6 && std::string(argv[1]) == "--prepare-device") {
+            const auto root = std::filesystem::absolute(argv[5]);
+            if (std::filesystem::exists(root)) throw std::runtime_error("DEVICE_PREPARATION_ROOT_MUST_BE_FRESH");
+            std::filesystem::create_directories(root);
+            std::filesystem::copy_file(argv[4], root / "profile.json");
+            std::ifstream input(argv[4]); const auto stored = J::parse(input);
+            auto initial = std::make_shared<BindingConnection>();
+            wvd::app::Application app({root, std::filesystem::absolute(argv[2]), {}, std::filesystem::absolute(argv[3])}, initial);
+            J cases = J::array();
+            for (const auto &name : {"alive", "exited", "offline", "observation_failed", "cleanup_failed", "binding_changed", "stale", "identity_changed", "cancelled_after_observation", "cancelled_before_observation"}) {
+                auto old = std::make_shared<BindingConnection>();
+                std::shared_ptr<BindingConnection> next;
+                int connections = 0;
+                const std::string mode(name);
+                if (mode == "exited" || mode == "cleanup_failed") { old->exited = true; old->running = old->connected = false; }
+                if (mode == "offline") old->connected = false;
+                old->cleanup_fail = mode == "cleanup_failed";
+                old->probe_fail = mode == "observation_failed";
+                old->binding_matches = mode != "binding_changed";
+                old->stale = mode == "stale"; old->mismatch = mode == "identity_changed";
+                if (mode == "cancelled_after_observation") old->after_observation = [&] { wvd::app::ApplicationAssemblyTestAccess::cancel(app, true); };
+                wvd::app::ApplicationAssemblyTestAccess::connection(app, old, [&](const J &binding) {
+                    require_closure(old->disconnected == 1 && !wvd::app::ApplicationAssemblyTestAccess::backend(app), "RECONNECT_BEFORE_DISPOSAL");
+                    require_closure(binding.at("emulator_path") == stored.at("values").at("EMU_PATH") &&
+                        binding.at("emulator_index") == stored.at("values").at("EMU_INDEX") &&
+                        binding.at("adb_address") == stored.at("values").at("ADB_ADRESS"), "RECONNECTED_WRONG_BINDING");
+                    ++connections; next = std::make_shared<BindingConnection>();
+                    wvd::app::ApplicationAssemblyTestAccess::set_backend(app, next);
+                });
+                if (mode == "cancelled_before_observation") wvd::app::ApplicationAssemblyTestAccess::cancel(app, true);
+                bool failed = false;
+                try {
+                    const auto result = wvd::app::ApplicationAssemblyTestAccess::ensure(app, stored);
+                    require_closure(mode == "alive" || mode == "exited", "UNCONFIRMED_PREPARATION_SUCCEEDED");
+                    require_closure(result == (mode == "alive" ? old : next), "WRONG_BACKEND_RETURNED");
+                    if (mode == "exited") {
+                        const wvd::devices::LifecyclePlan plan{next->target,
+                            {wvd::devices::LifecycleOperation::EnsureVpn, wvd::devices::LifecycleOperation::StartApplication}, 1};
+                        require_closure(wvd::devices::initial_lifecycle_plan(plan) &&
+                            wvd::devices::execute_lifecycle_plan(plan, *next, [] { return false; }, [](const auto &, const auto &) {}) ==
+                                wvd::devices::LifecycleEnd::ReadyForBoot && next->actions == 2, "EXISTING_STARTUP_CHAIN_NOT_PRESERVED");
+                    }
+                } catch (const std::exception &error) {
+                    if (mode == "alive" || mode == "exited") throw;
+                    const std::map<std::string, std::string> expected{{"offline", "DEVICE_START_OBSERVATION_UNCONFIRMED"},
+                        {"observation_failed", "FIXTURE_OBSERVATION_FAILED"}, {"cleanup_failed", "DEVICE_CLEANUP_PENDING"},
+                        {"binding_changed", "DEVICE_BINDING_CHANGED_RECONNECT_REQUIRED"}, {"stale", "DEVICE_START_OBSERVATION_INVALID"},
+                        {"identity_changed", "DEVICE_START_OBSERVATION_INVALID"}, {"cancelled_after_observation", "PREPARATION_CANCELLED"},
+                        {"cancelled_before_observation", "PREPARATION_CANCELLED"}};
+                    require_closure(error.what() == expected.at(mode), "WRONG_PREPARATION_FAILURE:" + std::string(error.what()));
+                    failed = true;
+                }
+                wvd::app::ApplicationAssemblyTestAccess::cancel(app, false);
+                require_closure(connections == (mode == "exited" ? 1 : 0), "UNAUTHORIZED_RECONNECT");
+                if (mode != "exited") require_closure(wvd::app::ApplicationAssemblyTestAccess::backend(app) == old,
+                    "OLD_OWNER_DROPPED_BEFORE_CONFIRMED_CLEANUP");
+                require_closure((mode == "alive" || mode == "exited") != failed, "PREPARATION_OUTCOME_WRONG");
+                require_closure(old->read_deadline == std::chrono::steady_clock::time_point{} &&
+                    old->bounded_reads == old->cleared_reads && old->bounded_reads == old->observed,
+                    "PREPARATION_READ_WINDOW_ESCAPED");
+                cases.push_back({{"case", mode}, {"passed", true}, {"connections", connections}, {"disconnects", old->disconnected}});
+            }
+            auto offline = std::make_shared<OfflineConnection>(std::filesystem::absolute(argv[2]));
+            auto &coordinator = wvd::app::ApplicationAssemblyTestAccess::coordinator(app);
+            std::promise<void> release; auto allowed = release.get_future().share();
+            auto definition = closure_definition(root / "busy-fixture", "p02-previous-active", [allowed] { allowed.wait(); });
+            coordinator.start(std::move(definition), offline);
+            auto old = std::make_shared<BindingConnection>();
+            wvd::app::ApplicationAssemblyTestAccess::connection(app, old, [](const J &) { throw std::runtime_error("ACTIVE_RECONNECT_FORBIDDEN"); });
+            bool blocked = false;
+            try { (void)wvd::app::ApplicationAssemblyTestAccess::ensure(app, stored); }
+            catch (const std::exception &error) { blocked = std::string(error.what()) == "DEVICE_PREPARATION_NOT_QUIESCENT"; }
+            release.set_value(); coordinator.request_stop();
+            require_closure(coordinator.wait_for_worker(5s), "PREVIOUS_WORKER_NOT_CLEANED");
+            require_closure(blocked && old->disconnected == 0 && old->observed == 0, "ACTIVE_OWNER_TOUCHED");
+            cases.push_back({{"case", "previous_run_active"}, {"passed", true}});
+            for (const bool performance : {true, false}) {
+                const auto id = performance ? "p01-start-log-on" : "p01-start-log-off";
+                auto ready = closure_definition(root / "published" / id, id);
+                auto &bundle = ready.units.front().bundle;
+                bundle.lease = std::make_shared<wvd::platform::BundleLease>(bundle.root, bundle.revision,
+                    wvd::platform::BundleLease::Manifest{{"marker.txt", bundle.files.front().sha256}});
+                ready.logging.performance = performance;
+                ready.preparation = {{"fixture", "logging-switch-only"}};
+                (void)wvd::app::ApplicationAssemblyTestAccess::commit(app, std::move(ready), offline);
+                require_closure(coordinator.wait_for_worker(5s), "START_LOG_WORKER_NOT_JOINED");
+                const auto log = coordinator.run_directory() / "diagnostics.jsonl";
+                int rows = 0;
+                if (std::filesystem::exists(log)) {
+                    std::ifstream stream(log); std::string line;
+                    while (std::getline(stream, line)) {
+                        const auto value = J::parse(line);
+                        if (value.value("type", "") == "preparation.completed") {
+                            ++rows;
+                            require_closure(value.at("payload").at("coordinator_start").at("wall_ms").get<double>() >= 0,
+                                            "START_DURATION_NOT_RECORDED");
+                        }
+                    }
+                }
+                require_closure(rows == (performance ? 1 : 0), "PREPARATION_LOGGING_SWITCH_IGNORED");
+                const auto live = wvd::app::ApplicationAssemblyTestAccess::preparation_status(app, stored, performance);
+                require_closure(live.contains("preparation") == performance, "LIVE_PREPARATION_SWITCH_IGNORED");
+                if (performance) {
+                    const auto &phase = live.at("preparation").at("compile_task_graph");
+                    require_closure(phase.at("state") == "completed" && phase.at("wall_ms").get<double>() >= 0 &&
+                        live.at("preparation").at("current_phase") == "compile_task_graph",
+                        "LIVE_PREPARATION_PHASE_NOT_RECORDED");
+                }
+                cases.push_back({{"case", id}, {"passed", true}, {"preparation_log_rows", rows}});
+            }
+            require_closure(!wvd::app::ApplicationAssemblyTestAccess::preparation_status(
+                app, stored, true, wvd::storage::LogLevel::Warn).contains("preparation"),
+                "LIVE_PREPARATION_LOG_LEVEL_IGNORED");
+            std::ofstream report(root / "result.json"); report << J{{"passed", true}, {"cases", cases},
+                {"external_dependency", "MuMu connection/observation adapter isolated; no real device operations"}}.dump(2);
+            report.close(); require_closure(bool(report), "DEVICE_RESULT_WRITE_FAILED"); app.stop();
+            std::cout << "Application cold preparation: live reuse, explicit exit cleanup/rebinding, unknown/cancel/active ownership guards passed\n";
+            return 0;
+        }
+        if ((argc == 8 || argc == 9) && std::string(argv[1]) == "--publication-prepare") {
+            const bool memory_cycles = argc == 9 && std::string(argv[8]) == "--memory-cycles";
+            require_closure(argc == 8 || memory_cycles, "PREPARATION_OPTION_UNKNOWN");
+            const auto root = std::filesystem::absolute(argv[7]);
+            if (std::filesystem::exists(root)) throw std::runtime_error("PREPARATION_TEST_ROOT_MUST_BE_FRESH");
+            std::filesystem::create_directories(root);
+            std::filesystem::copy_file(argv[4], root / "profile.json");
+            const auto workflows = std::filesystem::path(argv[4]).parent_path() / "workflows";
+            if (std::filesystem::exists(workflows)) std::filesystem::copy(workflows, root / "workflows",
+                std::filesystem::copy_options::recursive);
+            std::ifstream profile(argv[4]); const auto stored = J::parse(profile);
+            auto backend = std::make_shared<OfflineConnection>(std::filesystem::absolute(argv[2]));
+            wvd::app::Application app({root, std::filesystem::absolute(argv[2]), {}, std::filesystem::absolute(argv[3])}, backend);
+            if (std::getenv("WVD_PREPARATION_GATE")) {
+                { std::ofstream ready(root / "capture-ready"); ready << GetCurrentProcessId(); }
+                const auto deadline = std::chrono::steady_clock::now() + 30s;
+                while (!std::filesystem::exists(root / "capture-start")) {
+                    if (std::chrono::steady_clock::now() > deadline) throw std::runtime_error("PREPARATION_CAPTURE_GATE_TIMEOUT");
+                    std::this_thread::sleep_for(20ms);
+                }
+            }
+            std::ofstream phases(root / "phase-events.jsonl");
+            const auto observer = [&](const char *phase, const char *state, const J &metrics) {
+                phases << J{{"phase", phase}, {"state", state}, {"metrics", metrics},
+                    {"pid", GetCurrentProcessId()}, {"steady_ms", std::chrono::duration_cast<std::chrono::milliseconds>(
+                        std::chrono::steady_clock::now().time_since_epoch()).count()}}.dump() << '\n';
+                phases.flush();
+                require_closure(bool(phases), "PREPARATION_PHASE_WRITE_FAILED");
+            };
+            J cycle_reports = J::array();
+            for (int cycle = 0; cycle < (memory_cycles ? 4 : 1); ++cycle) {
+            wvd::app::ApplicationAssemblyTestAccess::cancel(app, false);
+            const auto before = wvd::platform::sample_memory();
+            auto definition = wvd::app::ApplicationAssemblyTestAccess::prepare_giant(app, stored, observer);
+            const auto &bundle = definition.units.front().bundle;
+            { std::ofstream metrics(root / "preparation-metrics.json"); metrics << definition.preparation.dump(2); }
+            const auto baseline = std::filesystem::absolute(argv[5]);
+            {
+                std::ifstream old_identity(baseline / "program/identity.json"), new_identity(bundle.root / "program/identity.json");
+                require_closure(J::parse(old_identity) == J::parse(new_identity), "PREPARATION_BASELINE_IDENTITY_CHANGED");
+            }
+            for (const auto &file : bundle.files)
+                require_closure(wvd::platform::file_sha256(baseline / wvd::platform::BundleLease::checked_relative(file.relative_path)) == file.sha256,
+                                "PREPARATION_BASELINE_FILE_CHANGED:" + file.relative_path);
+            require_closure(definition.preparation.at("source_model_bytes_after_copy") == 0,
+                            "PREPARATION_MODEL_BUFFERS_RETAINED");
+            require_closure(backend->inputs == 0, "PREPARATION_DEVICE_INPUT_OCCURRED");
+            J report_data{{"metrics", definition.preparation},
+                {"program_revision", bundle.revision}, {"game_inputs", backend->inputs.load()},
+                {"tracking", std::getenv("WVD_PREPARATION_GATE") ? "PID HeapSnapshots" : "disabled"},
+                {"comparison", "candidate121 run18 identity and all published hashes"}};
+            const auto path = bundle.root;
+            wvd::app::ApplicationAssemblyTestAccess::cancel(app, true);
+            bool cancelled = false;
+            std::string commit_error;
+            try { (void)wvd::app::ApplicationAssemblyTestAccess::commit(app, std::move(definition), backend); }
+            catch (const std::exception &error) { commit_error = error.what(); cancelled = commit_error == "PREPARATION_CANCELLED"; }
+            { std::ofstream evidence(root / "commit-observed.json"); evidence << J{{"error", commit_error},
+                {"cancelled", cancelled}, {"publication_exists", std::filesystem::exists(path)},
+                {"run_id", wvd::app::ApplicationAssemblyTestAccess::coordinator(app).snapshot().run_id},
+                {"inputs", backend->inputs.load()}}.dump(2); }
+            require_closure(cancelled && !std::filesystem::exists(path) &&
+                wvd::app::ApplicationAssemblyTestAccess::coordinator(app).snapshot().run_id == 0 && backend->inputs == 0,
+                "FINAL_COMMIT_CANCEL_SUBMITTED_OR_LEFT_PUBLICATION");
+            { std::ofstream gate(root / "commit-cancellation.json"); gate << J{{"passed", true},
+                {"run_id", 0}, {"game_inputs", 0}, {"unstarted_publication_removed", true}}.dump(2); }
+            report_data["passed"] = true;
+            report_data["final_commit_cancelled_without_run"] = true;
+            if (memory_cycles) {
+                const auto heap = wvd::platform::optimize_idle_heap();
+                require_closure(before.process_ok && heap.before.process_ok && heap.after.process_ok && heap.succeeded,
+                                "PREPARATION_MEMORY_MEASUREMENT_FAILED");
+                report_data["memory"] = {{"cycle", cycle + 1}, {"before", before.private_bytes},
+                    {"released", heap.before.private_bytes}, {"optimized", heap.after.private_bytes},
+                    {"heap_available", heap.heap_after.available}, {"heap_complete", heap.heap_after.complete},
+                    {"heap_allocated", heap.heap_after.allocated}, {"heap_committed", heap.heap_after.committed},
+                    {"optimize_us", heap.elapsed_us}, {"heap_summary_us", heap.heap_after.elapsed_us}};
+            }
+            cycle_reports.push_back(std::move(report_data));
+            }
+            std::ofstream output(argv[6]); output << (memory_cycles ? cycle_reports : cycle_reports.front()).dump(2);
+            output.close(); require_closure(bool(output), "PREPARATION_RESULT_WRITE_FAILED");
+            app.stop();
+            std::cout << "Frozen Giant preparation identity and all hashes match candidate121; model cache=0; game inputs=0\n";
+            return 0;
+        }
         if (argc == 5 && std::string(argv[1]) == "--combat-editor") {
             const auto isolated = std::getenv("WVD_COMBAT_TEST_ROOT");
             if (!isolated) throw std::runtime_error("WVD_COMBAT_TEST_ROOT_REQUIRED");

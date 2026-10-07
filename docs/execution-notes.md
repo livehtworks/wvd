@@ -1,10 +1,25 @@
 # 当前执行注意项
 
-- UI设备connected=true仅说明backend对象仍存在，不能证明已关闭模拟器存活。candidate121冷启动复用旧backend时，初始EnsureVpn遇instance_exited/connected=false报PRECONDITION_MISSING，根任务NATIVE_INITIAL_LIFECYCLE_UNCONFIRMED且输入0；该源码缺口尚未修。用户授权拉起时可在quiescent且device lease可释放后，通过正式disconnect完成→connect原实例重新绑定，不关闭其他实例、不并行开启旧脚本；运行中的设备故障仍由原恢复链承接，不能在busy时强行重连。见`reviews/giant121-50-start-20261007.md`。
-- 内存分配栈当前入口为`collect_memory_stacks.ps1`/`export_memory_stacks.ps1`：PID Heap Snapshot只覆盖启用后栈。Collect显式提交两个各1轮任务；Monitor只读附着已运行批次，不提交或停止游戏。`MonitorCurrentRound`将首个收尾标为部分采样，下一轮才是完整窗口。独立证据目录、20分钟/512MiB和目标身份约束仍有效；跟踪结束只清理本次PID/会话。
+- P01从同一锁定HANDLE流式复制并逐块检查取消；临时staging租约先释放，再同盘不覆盖rename并重新冻结最终路径。两种入口共用最终门禁，失败/取消只撤回本次未启动目录；外部读句柄阻止清理必须报错。验证自己的JSON输入流须在回滚前关闭。
+- 图片依赖扫描仅模板调用localize_implicit_probe；该函数现以optional返回实际替换，无替换时不复制输入。旧版值返回会在父子递归中重复深复制整棵图。CompiledWorkflow::refresh_images还执行validate，隔离资源扫描夹具也必须构造合法入口/终点。准备稀疏阶段记录沿performance/info门禁，隔离phase-events.jsonl每个开始/完成立即flush；完整计时不能证明跟踪后耗时或泄漏消除。RunAs的用户取消不可当采集已启动，也不绕过UAC。
+- 状态接口查询可见节点时，在已有Application锁内借用映射和source_paths，不因工作台轮询复制整张图；任何新调用不得在该锁内反向获取会话/设备锁。真实接口的额外2561个无关索引不增加分配量检查与原事件顺序、终态提交失败保护共用test_event_page_copy，不将分配流量减少写成泄漏归因。
+- 启动前设备观察的10秒读取窗口必须在正常返回和抛异常两条路径清除，不能带入任务编译/发布/首次生命周期读取。candidate122实机在准备结束后即OBSERVATION_WINDOW_EXHAUSTED，游戏输入0；candidate123清除窗口后已实际确认EnsureVpn及StartApplication。独立适配器验证必须检查窗口设置/清除配对，不能只模拟观察结果。
+- 低扰动堆布局取证使用capture_idle_heap.ps1，仅在busy=false/quiescent及batch_payloads_released后执行CDB -pvr不暂停读取；默认!heap -s，可选大小表使用实际主堆地址（本机-h 0仅重复摘要），30秒/16MiB共享边界。VirtualQueryEx另有5秒/32768区间上限，只读元数据；前后核对进程创建、实例、run和状态，EXE/PDB匹配。禁止产品现场使用-pv：本轮!address读取超时并终止调试器后曾遗留线程暂停，已核对PID/创建时间后用-pvr和~*m恢复，服务未重启。CDB即使exit=0仍可能拒绝附着、缺符号或未产出请求的表，必须检查正文；符号缓存路径使用Windows反斜杠，普通进程不能读取提升后的目标。堆Commit/Free不是PrivateUsage或全部LFH空槽，不能混减推导泄漏。
+- HeapOptimizeResources是Windows对空闲LFH缓存页的回收提示，不销毁仍存活对象，也不保证每次都归还内存。仅在唯一worker已join之后调用一次；原worker_joined样本保留，heap_resources_optimized另记API结果、错误码、耗时及调用前后私有提交。不得以API成功或提交降低替代存活分配归因。
+- HeapSummary按动态API存在性记录available，逐堆失败/堆表超限明确complete=false；实际allocated与堆内部committed/reserved分别记录，不与PrivateUsage混减。固定OCR四次实际分配不变、内部commit变化已有证据；不能把该固定输入结果推广到所有运行负载。具体堆地址的CDB逐块遍历本机仍超30秒，完整PSS克隆离线遍历亦超60秒，不原样重跑。ProcDump -mp -r曾打印完成但只产144618字节不可用转储；-ma -r产200748774字节可读摘要不代表分配表完成。转储含潜在用户数据，只在忽略目录本地保存。
+- analyze_memory_owners的--compare-run-directory指定较早轮，--run-directory指定较晚轮，只比较同PID/创建/协调器及同heap_resources_optimized边界；整批中间轮没有batch_payloads_released不能补0。实际allocated差与PrivateUsage差分别输出；缺采样不完整，跨进程/倒序拒绝，不因complete=true就把PARTIAL_ATTRIBUTION改为全归因。
+- 独立准备采集使用短的`next/.local/p01t-<id>`根；测试EXE不带正式longPathAware清单，长根叠加asset-cache哈希/temp UUID会造成目标copy_file失败。先核目标路径长度，不重收源图。跟踪120秒隔离超时仅是负证据，不能用无跟踪耗时放行M04。
+- 发布盘点只读正式published/runs，输出位于权威data外。GetCompressedFileSizeW对未压缩/非稀疏文件返回逻辑长度，不是簇舍入或去重独占占用。续采保留各目录观察窗口，不宣称原子快照；未知不写0。
+
+- 当前堆分析入口是独立x64 `next/tools/heap_analyzer`（TraceProcessor 1.12.10锁定）及export包装，不是WPA先明细后聚合。默认SDK会缓冲；1024MiB私有提交Job限额、120秒、128MiB输出和98%系统提交门禁分开记录。自有UTF-8写入前限额/partial发布有实测；原生符号缓存与目录监控不能称硬磁盘配额。已有部分ETL只能显式inspect-incomplete，不能据analysis完成改原capture回执或授权完整轮比较。
+- NuGet全局只有Visual Studio离线源时，用本项目命令显式`--source https://api.nuget.org/v3/index.json`，不改用户全局源。SDK与实际API按1.12.10核对，HeapSnapshots没有流式实现。夹具`noinline`仍可能尾调用抹掉分配函数，须后置volatile使用且保留/释放字节标准不变。PowerShell JSON日期可能已为DateTime，UTC比较用保留Kind的DateTimeOffset转换，不能再先字符串化Parse丢偏移。
+- Collect空闲终点实际是batch_payloads_released，不是worker_joined；Monitor中busy=true可正常waiting。快照前后必须维持同批次/run/generation/waiting及OS创建身份，starting即拒绝。命令attempt与实际资源归属分开，最终数据检查在清理后、未知丢失不写0；180秒收口预留和所有子命令共享截止，不重复两个120秒stop。实际start生效后包装超时清理已在用户授权重试后通过，见`reviews/memory-review-1c89a08-20261007.md`。身份Preflight成功不代表两轮时间预算通过；EstimatedRoundSeconds必须包含准备及执行，不能只填业务elapsed_seconds。
+
+- UI设备connected=true仅说明backend对象仍存在，不能证明已关闭模拟器存活。candidate121的EnsureVpn前冷启动失败是历史现场；P02承接明确instance_exited→同步清理→重连同一绑定，并已部署。candidate122暴露观察期限未复位而在首个输入前失败，candidate123修复后已实机启用VPN、启动游戏并完成两轮。未知/离线/身份不符不释放旧owner，busy不能强行重连；运行中故障仍由原恢复链承接。见`reviews/memory-resolution-20261007.md`，旧报告保留历史状态。
+- PID HeapSnapshot只覆盖启用后栈；Collect最多两个各1轮请求，Monitor仅附着既有批次、不提交或停止游戏。中途首轮单列partial。独立证据目录、20分钟/512MiB及同一PID创建身份约束不变，完整数据校验前不放行比较。
 - VirtualAlloc仍是全系统记录后筛PID，不存在已验证的录制进程过滤。空闲probe通过不证明游戏中吞吐可控：首次实跑Monitor的内核文件在96MiB封顶，提前保存仍因rundown写入失败；该回执失败、未获得收尾边界，不能归因。用户另行授权的新窗口明确采用`CaptureKind=HeapSnapshots`，移除VirtualAllocation事件与栈及对应导出表，不是偷偷重启采集或隐藏fallback。仅堆窗口不能覆盖VirtualAlloc、启用前堆块或解释全部进程私有提交增长。旧437MiB/136897丢事件和新96MiB失败均保留。详见`reviews/memory-collection-repair-20261006.md`。
 - WPA exporter11.7的`-symbols`属于`-processor 'Event Tracing for Windows'`的输入参数；只设置_NT_SYMBOL_PATH时会导出Symbols disabled。退出0可能仍包含局部表导出错误，必须核对CSV、目标PID、快照数及非空栈/应用符号。源码定位的Heap Snapshot表GUID/列GUID已按本机SDK元数据核对，不能拿Heap Allocations表冒充快照。缺系统DLL/CRT符号单列missing，不隐式批量下载所有进程PDB。
-- 实跑Heap-only在20分钟内仅取得一个部分轮join；轮间prepare至少约8分钟，不能据active预报下一轮及时收尾。部分WPA导出去掉地址列后仍膨胀到2.071GiB，不能把视图列当实际按栈聚合。输出保护也要用共享打开文件流的Length而非FileInfo缓存，并在子进程结束后核对；轮询保护不是硬磁盘配额，新版本尚未重跑活动写入验证。保留超限CSV和失败索引，勿把2GiB残缺CSV整份Import-Csv进内存。详见`reviews/memory-monitor-two-20261007.md`。
+- 历史Heap-only因20分钟缺第二个join、WPA明细2.071GiB超限均保留失败，不能把旧CSV整份Import-Csv进内存或据active预报收尾。当前FileStream长度门禁已经做活动写入实测，目录轮询仍不是硬磁盘配额；真正自有输出上限由新分析器写前UTF-8字节检查承担。旧失败索引在`reviews/memory-monitor-two-20261007.md`，当前结果以上述1c89a08报告为准。
 - Release分配栈候选需真实`/Zi`与链接`/DEBUG`，按DbgHelp核对EXE/PDB GUID及Age；同名重新构建PDB不能解释历史候选。PDB文件匹配不等于WPA实际符号加载。本轮原119符号只读保留，121匹配符号另组，candidate120未部署。
 - 英文OCR字典的锁定哈希对应原CRLF字节，Git checkout的LF副本可能不匹配；先比对已验证运行资源，复制同一锁定字节，不修改manifest/依赖锁绕过。ONNX租约只按原HANDLE流式验摘要，真实OCR及`bytes()`路径须分别检查；所有者断言应区分全部哈希字节与常驻非模型字节。
 - 原生author恢复夹具须推进新的连接代次并装配原PublicStepScope；输入保护夹具使用当前任务配置和六角色目标，不能因旧`next`值失败而删断言。MSVC JSON与string比较用显式`get<std::string>()`。初次失败日志保留，最终修正不得改变生产输入门禁。

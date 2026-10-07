@@ -1,5 +1,6 @@
 #include "runtime/native_run_coordinator.hpp"
 #include "platform/windows/file_digest.hpp"
+#include <algorithm>
 #include <atomic>
 #include <fstream>
 #include <iostream>
@@ -516,16 +517,37 @@ int main(int argc, char **argv) {
             throw std::runtime_error("COORDINATOR_TERMINAL_INVALID:" + ended.reason +
                 ":" + ended.storage_error);
         if (argc == 2 && std::string(argv[1]) == "--logging-boundary") {
+            const std::vector<unsigned char> live_allocation(65536, 0x5a);
             if (!coordinator.collect_finished_worker()) throw std::runtime_error("MEMORY_WORKER_NOT_JOINED");
+            if (!std::all_of(live_allocation.begin(), live_allocation.end(), [](auto value) { return value == 0x5a; }))
+                throw std::runtime_error("MEMORY_HEAP_MAINTENANCE_CHANGED_LIVE_ALLOCATION");
             coordinator.record_batch_release();
             nlohmann::json boundaries;
             { std::ifstream file(coordinator.run_directory() / "memory-lifecycle.json"); file >> boundaries; }
-            for (const auto *phase : {"worker_definition_released", "worker_joined", "batch_payloads_released"}) {
+            for (const auto *phase : {"worker_definition_released", "worker_joined", "heap_resources_optimized", "batch_payloads_released"}) {
                 if (!boundaries.at("samples").at(phase).at("process_memory_available").get<bool>())
                     throw std::runtime_error("MEMORY_POST_WORKER_SAMPLE_MISSING");
             }
             if (boundaries.at("failed") != 0 || boundaries.at("run_id") != ended.run_id)
                 throw std::runtime_error("MEMORY_POST_WORKER_IDENTITY");
+            const auto &maintenance = boundaries.at("samples").at("heap_resources_optimized").at("heap_maintenance");
+            if (!maintenance.at("succeeded").get<bool>() || maintenance.at("win32_error") != 0 ||
+                !maintenance.at("before_process_ok").get<bool>())
+                throw std::runtime_error("MEMORY_HEAP_MAINTENANCE_FAILED");
+            for (const auto *name : {"heap_summary_before", "heap_summary_after"}) {
+                const auto &heap = maintenance.at(name);
+                const bool supported = GetProcAddress(GetModuleHandleW(L"kernel32.dll"), "HeapSummary") != nullptr;
+                if (heap.at("available").get<bool>() != supported ||
+                    (supported && (!heap.at("complete").get<bool>() || heap.at("failed") != 0 ||
+                        heap.at("heaps").get<unsigned>() == 0 || heap.at("allocated_bytes").get<std::uint64_t>() < live_allocation.size())))
+                    throw std::runtime_error("MEMORY_HEAP_SUMMARY_INVALID");
+            }
+            coordinator.collect_finished_worker();
+            coordinator.record_batch_release();
+            nlohmann::json repeated;
+            { std::ifstream file(coordinator.run_directory() / "memory-lifecycle.json"); file >> repeated; }
+            if (repeated.at("samples").at("heap_resources_optimized") != boundaries.at("samples").at("heap_resources_optimized"))
+                throw std::runtime_error("MEMORY_HEAP_MAINTENANCE_REPEATED_WITHOUT_WORKER");
             nlohmann::json saved;
             { std::ifstream file(coordinator.run_directory() / "result.json"); file >> saved; }
             std::ifstream history(coordinator.run_directory() / "execution-events.jsonl");
@@ -546,6 +568,16 @@ int main(int argc, char **argv) {
                 const auto row = nlohmann::json::parse(line);
                 if (row.at("category") == "memory") {
                     phases.push_back(row.at("type").get<std::string>());
+                    if (phases.back() == "runtime_sample" || phases.back() == "system_pressure") {
+                        const auto &sample = row.at("payload");
+                        const auto limit = sample.at("system_commit_limit_bytes").get<std::uint64_t>();
+                        const bool pressure = sample.at("system_memory_available").get<bool>() && limit &&
+                            static_cast<double>(sample.at("system_commit_bytes").get<std::uint64_t>()) / limit >= .90;
+                        if (phases.back() != (pressure ? "system_pressure" : "runtime_sample") ||
+                            row.at("level") != (pressure ? "warn" : "info"))
+                            throw std::runtime_error("LOGGING_MEMORY_PRESSURE_CLASSIFICATION");
+                        phases.back() = "runtime_sample";
+                    }
                     const auto &owners = row.at("payload").at("object_lifetimes");
                     if (phases.back() == "session_owners_alive" &&
                         (owners.at("recognizers").at("live") == 0 || owners.at("execution_sessions").at("live") == 0 ||

@@ -33,8 +33,8 @@ bool random_maze_events{true};
 void add_image(std::string name, std::set<std::string> &images, std::set<std::string> &expanded_modes) {
     if (name.ends_with(".png")) name.resize(name.size() - 4);
     const auto probe = localize_implicit_probe(J{{"mode", "template"}, {"image", name}}, locale);
-    if (probe.value("mode", "") != "template" || probe.value("image", "") != name) {
-        collect_images(probe, images, expanded_modes);
+    if (probe && (probe->value("mode", "") != "template" || probe->value("image", "") != name)) {
+        collect_images(*probe, images, expanded_modes);
         return;
     }
     images.insert(name + ".png");
@@ -43,13 +43,17 @@ void collect_images(const J &value, std::set<std::string> &images, std::set<std:
     if (value.is_object()) {
         if (!locale.empty() && value.contains("locale_only") && value.at("locale_only") != locale) return;
         if (!random_maze_events && random_maze_probe(value)) return;
-        const auto localized = localize_implicit_probe(value, locale);
-        if (localized != value) {
-            collect_images(localized, images, expanded_modes);
-            return;
+        const auto mode = value.value("mode", "");
+        // Only templates can be localized. Copying every parent subtree here
+        // repeats allocations for all descendants before the recursive scan.
+        if (mode == "template") {
+            const auto localized = localize_implicit_probe(value, locale);
+            if (localized && *localized != value) {
+                collect_images(*localized, images, expanded_modes);
+                return;
+            }
         }
         // 专用识别器内部加载的资源也必须进入发布清单，不能等运行才发现缺图。
-        const auto mode = value.value("mode", "");
         // 常量隐式依赖在本次收集内只展开一次；显式 image/动态参数仍逐项收集。
         // 不缓存整份图或跨编译共享结果，validate 仍独立重算完整资源集合。
         const bool expand = expanded_modes.insert(mode + ":" + value.value("classification", "legacy") + ":" + value.value("phase", "")).second;
@@ -392,9 +396,10 @@ void CompiledWorkflow::validate() const {
         if (node.value("binding", "") != "Call")
             continue;
         const auto &p = node.at("operation_args");
+        const auto &child_entry = p.at("entry").get_ref<const std::string &>();
         std::vector<std::string> expected;
         for (const auto &[name, scope] : owners)
-            if (scope == p.at("entry").get<std::string>())
+            if (scope == child_entry)
                 expected.push_back(name);
         require(p.at("local_counters") == expected, "COMPILE_CHILD_RESET_SCOPE_INVALID");
     }

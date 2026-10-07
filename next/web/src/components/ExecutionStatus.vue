@@ -9,7 +9,7 @@ const recoveryLabels:Record<string,string>={retrying_observation:'正在恢复�
  failed:'观察恢复失败或已耗尽',cancelled:'恢复已停止',action_no_longer_needed:'原动作已不再需要',device_reconnected:'设备已重连，正在恢复游戏'};
 const elapsed=ref(0);
 let recoveryStarted=0;
-watch(()=>[props.run?.run_id,recovery.value?.active],()=>{
+watch([()=>props.run?.run_id,()=>recovery.value?.active],()=>{
  recoveryStarted=Date.now(); elapsed.value=0;
 },{immediate:true});
 const timer=setInterval(()=>{if(recovery.value?.active) elapsed.value=Math.floor((Date.now()-recoveryStarted)/1000);},1000);

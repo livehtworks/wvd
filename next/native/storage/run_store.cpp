@@ -155,12 +155,12 @@ std::uint64_t EventJournal::emit(std::uint64_t generation, std::string type, J p
 }
 J EventJournal::read(std::uint64_t after) const {
     std::lock_guard lock(mutex_);
-    J rows = J::array();
+    J page = {{"last_seq", sequence_}, {"resync_required", after < dropped_through_}, {"events", J::array()}};
+    auto &rows = page.at("events");
     for (const auto &event : events_)
         if (event.seq > after)
             rows.push_back(event.value);
-    return {
-        {"last_seq", sequence_}, {"resync_required", after < dropped_through_}, {"events", rows}};
+    return page;
 }
 void EventJournal::commit_terminal(std::uint64_t generation, J payload,
                                    const std::function<void(const J &)> &persist) {
@@ -546,7 +546,8 @@ void RunStore::record_memory_boundary(const std::string &phase, const J &sample)
     if (!logging_.memory || !logging_.accepts(LogLevel::Info)) return;
     std::lock_guard lock(diagnostic_mutex_);
     try {
-        if (phase != "worker_definition_released" && phase != "worker_joined" && phase != "batch_payloads_released")
+        if (phase != "worker_definition_released" && phase != "worker_joined" &&
+            phase != "heap_resources_optimized" && phase != "batch_payloads_released")
             throw std::runtime_error("MEMORY_BOUNDARY_INVALID");
         auto row = sample;
         row["utc_ms"] = std::chrono::duration_cast<std::chrono::milliseconds>(

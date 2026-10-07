@@ -197,6 +197,19 @@ target_link_libraries(wvd_native_application PUBLIC wvd_http wvd_native_runtime
 target_compile_options(wvd_native_application PRIVATE /utf-8 /W4 /EHsc)
 target_compile_definitions(wvd_native_application PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
 
+add_executable(test_event_page_copy EXCLUDE_FROM_ALL ../tests/native/test_event_page_copy.cpp)
+add_executable(test_native_publication EXCLUDE_FROM_ALL ../tests/native/test_native_publication.cpp)
+target_link_libraries(test_native_publication PRIVATE wvd_native_games wvd_native_runtime)
+target_compile_options(test_native_publication PRIVATE /utf-8 /W4 /EHsc)
+add_executable(heap_fixture EXCLUDE_FROM_ALL ../tests/tools/heap_fixture.cpp)
+target_compile_options(heap_fixture PRIVATE /utf-8 /EHsc /Zi)
+target_link_options(heap_fixture PRIVATE /DEBUG /OPT:NOICF)
+target_link_libraries(test_event_page_copy PRIVATE wvd_native_application)
+target_compile_options(test_event_page_copy PRIVATE /utf-8 /W4 /EHsc)
+add_custom_command(TARGET test_event_page_copy POST_BUILD
+  COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${WVD_ORT}/lib/onnxruntime.dll" "$<TARGET_FILE_DIR:test_event_page_copy>"
+  COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${WVD_OPENCV}/x64/vc16/bin/opencv_world4120.dll" "$<TARGET_FILE_DIR:test_event_page_copy>")
+
 add_executable(test_native_application EXCLUDE_FROM_ALL
   ../tests/native/test_native_application.cpp)
 target_link_libraries(test_native_application PRIVATE wvd_native_application)

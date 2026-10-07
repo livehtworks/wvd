@@ -7,6 +7,7 @@
 #include "runtime/native_run_coordinator.hpp"
 #include "storage/profile_store.hpp"
 #include "storage/workflow_repository.hpp"
+#include "platform/windows/preparation_timer.hpp"
 #include <map>
 #include <mutex>
 #include <optional>
@@ -37,7 +38,9 @@ class Application {
     J queue_run(const std::string &kind, const J &request, const J &identity,
                 std::function<J()> prepare);
     games::tasks::CompiledWorkflow compile_task_graph(const J &request,
-        const games::WvdQuestDefinition &task, const J &values) const;
+        const games::WvdQuestDefinition &task, const J &values,
+        const platform::PreparationObserver &observer = {}) const;
+    platform::PreparationObserver preparation_observer(const J &stored);
     struct PreparedWorkflow {
         games::tasks::CompiledWorkflow executable;
         J values, document;
@@ -50,7 +53,8 @@ class Application {
                                          const devices::LifecycleTarget &target,
                                          std::optional<J> frozen_values = std::nullopt,
                                          bool continuation = false,
-                                         std::optional<games::tasks::CompiledWorkflow> prepared = std::nullopt);
+                                         std::optional<games::tasks::CompiledWorkflow> prepared = std::nullopt,
+                                         const platform::PreparationObserver &observer = {});
     runtime::NativeRunDefinition assemble_workflow(const J &request, const J &stored, J document,
                                              const devices::LifecycleTarget &target,
                                              std::map<std::string, std::string> *pipeline_to_node = nullptr,
@@ -58,6 +62,8 @@ class Application {
                                              J *source_paths = nullptr,
                                              std::optional<PreparedWorkflow> prepared = std::nullopt);
     friend struct ApplicationAssemblyTestAccess;
+    contracts::RunSnapshot start_prepared_run(runtime::NativeRunDefinition definition,
+                                             const std::shared_ptr<devices::DeviceConnection> &backend);
     J prepare_task(const J &request, const J &stored,
                    std::shared_ptr<devices::DeviceConnection> backend,
                    std::optional<J> frozen_values = std::nullopt,
@@ -80,6 +86,7 @@ class Application {
     J connect_device(const J &request);
     // 仅在既有设备作业线程调用，同一实现服务于手动连接和开始任务的自动准备。
     void connect_selected_device(const J &request);
+    void disconnect_selected_device(const std::shared_ptr<devices::DeviceConnection> &old);
     std::shared_ptr<devices::DeviceConnection> ensure_connected_for_run(const J &stored);
     J disconnect_device();
     J capture_device();
@@ -105,6 +112,10 @@ class Application {
     // 窄依赖便于隔离验收；正式实例只调用标准库，不创建容量监控线程。
     std::function<std::filesystem::space_info(const std::filesystem::path &)> space_query_ =
         [](const auto &path) { return std::filesystem::space(path); };
+    // SDK connection is an external dependency; preparation still owns the
+    // observation, binding validation and synchronous disposal sequence.
+    std::function<void(const J &)> device_connector_ =
+        [this](const J &request) { connect_selected_device(request); };
     J descriptor_, manifest_, aliases_, operation_;
     J semantic_catalogue_ = J::object();
     J builtin_documents_ = J::object();

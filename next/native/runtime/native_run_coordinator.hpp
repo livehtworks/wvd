@@ -38,6 +38,7 @@ struct NativeRunDefinition {
     std::vector<NativeUnit> units;
     std::shared_ptr<recognition::MatchBudget> match_budget;
     storage::LoggingPolicy logging;
+    nlohmann::json preparation = nlohmann::json::object();
     std::optional<devices::LifecyclePlan> startup;
     std::chrono::milliseconds total_time_limit{std::chrono::minutes{30}};
     std::function<std::unique_ptr<contracts::BusinessRunState>(
@@ -67,6 +68,7 @@ class NativeRunCoordinator final {
     bool wait_for_worker(std::chrono::milliseconds duration);
     bool collect_finished_worker();
     void record_batch_release();
+    void record_preparation(const nlohmann::json &metrics);
     nlohmann::json events(std::uint64_t after = 0) const;
     nlohmann::json diagnostics() const;
     std::filesystem::path run_directory() const;

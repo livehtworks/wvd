@@ -163,10 +163,10 @@ bool random_maze_probe(const J &condition) {
         image == "ignore" || image == "sandman_recover" || image.starts_with("dialogueChoices/");
 }
 
-J localize_implicit_probe(const J &condition, const std::string &locale) {
+std::optional<J> localize_implicit_probe(const J &condition, const std::string &locale) {
     if (locale != "zh-Hant" || condition.value("mode", "") != "template" ||
         !condition.contains("image") || (condition.contains("locale_only") && condition.at("locale_only") != locale))
-        return condition;
+        return std::nullopt;
     static const auto recipes = [] {
         authoring::SemanticAssets assets(J::parse(wvd_semantic_catalogue));
         std::unordered_map<std::string, J> result;
@@ -178,7 +178,7 @@ J localize_implicit_probe(const J &condition, const std::string &locale) {
     }();
     const auto image = condition.at("image").get<std::string>();
     const auto found = recipes.find(image);
-    if (found == recipes.end()) return condition;
+    if (found == recipes.end()) return std::nullopt;
     auto resolved = found->second;
     if (resolved.value("mode", "") != "template") return resolved;
     for (const auto &[key, value] : condition.items()) {

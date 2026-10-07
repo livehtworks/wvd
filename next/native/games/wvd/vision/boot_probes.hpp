@@ -21,7 +21,8 @@ inline nlohmann::json task_probes(nlohmann::json probes, const std::string &loca
         if (image == "retry" || image == "totitle" || image == "boot_attention" || image == "blessing")
             probe["locale_only"] = "en";
         if (!locale.empty() && probe.contains("locale_only") && probe.at("locale_only") != locale) continue;
-        selected.push_back(tasks::localize_implicit_probe(probe, locale));
+        auto localized = tasks::localize_implicit_probe(probe, locale);
+        selected.push_back(localized ? std::move(*localized) : std::move(probe));
     }
     return selected;
 }

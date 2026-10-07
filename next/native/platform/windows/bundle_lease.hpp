@@ -7,6 +7,7 @@
 #include <vector>
 #include <cstdint>
 #include <stdexcept>
+#include <functional>
 
 namespace wvd::platform {
 class MissingBundleMember final : public std::runtime_error {
@@ -20,7 +21,8 @@ class MissingBundleMember final : public std::runtime_error {
 class BundleLease final {
   public:
     using Manifest = std::map<std::string, std::string>;
-    BundleLease(std::filesystem::path root, std::string revision, Manifest manifest);
+    BundleLease(std::filesystem::path root, std::string revision, Manifest manifest,
+                const std::function<void()> &check_cancel = {});
     ~BundleLease();
     BundleLease(const BundleLease &) = delete;
     BundleLease &operator=(const BundleLease &) = delete;
@@ -30,6 +32,8 @@ class BundleLease final {
     // request loads it once from the same locked handle; the returned reference
     // remains immutable and valid until this lease is destroyed.
     const std::vector<std::uint8_t> &bytes(const std::string &relative) const;
+    void copy_member(const std::string &relative, const std::filesystem::path &destination,
+                     const std::function<void()> &check_cancel = {}) const;
     const std::string &hash(const std::string &relative) const;
     const std::filesystem::path &root() const;
     const std::string &revision() const;

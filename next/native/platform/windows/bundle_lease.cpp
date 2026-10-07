@@ -44,15 +44,17 @@ struct Held {
         require(length <= 256 * 1024 * 1024, "INTEGRITY_FILE_TOO_LARGE");
         return length;
     }
-    void verify_streamed(const std::string &expected_hash) {
+    void verify_streamed(const std::string &expected_hash,
+                         const std::function<void()> &check_cancel = {}) {
         std::lock_guard lock(content_mutex);
         const auto length = checked_size();
         verify_identity();
-        const auto digest = handle_sha256(handle, length);
+        const auto digest = handle_sha256(handle, length, check_cancel);
         verify_identity();
         require(digest == expected_hash, "RESOURCE_HASH_MISMATCH");
     }
-    const std::vector<std::uint8_t> &verified_bytes(const std::string &expected_hash) {
+    const std::vector<std::uint8_t> &verified_bytes(const std::string &expected_hash,
+                                                  const std::function<void()> &check_cancel = {}) {
         std::lock_guard lock(content_mutex);
         if (content_loaded) return content;
         const auto length = checked_size();
@@ -63,6 +65,7 @@ struct Held {
                 "INTEGRITY_SEEK_FAILED");
         std::vector<std::uint8_t> loaded(static_cast<std::size_t>(length));
         for (std::size_t offset = 0; offset < loaded.size();) {
+            if (check_cancel) check_cancel();
             DWORD count{};
             require(
                 ReadFile(handle, loaded.data() + offset,
@@ -152,7 +155,8 @@ std::filesystem::path BundleLease::checked_relative(const std::string &value) {
     }
     return path;
 }
-BundleLease::BundleLease(std::filesystem::path root, std::string revision, Manifest manifest)
+BundleLease::BundleLease(std::filesystem::path root, std::string revision, Manifest manifest,
+                         const std::function<void()> &check_cancel)
     : impl_(std::make_unique<Impl>()) {
     auto &s = *impl_;
     require(!revision.empty() && !manifest.empty(), "BUNDLE_MANIFEST_INVALID");
@@ -176,6 +180,7 @@ BundleLease::BundleLease(std::filesystem::path root, std::string revision, Manif
     }
     std::set<std::wstring> names;
     for (const auto &[relative, hash] : s.manifest) {
+        if (check_cancel) check_cancel();
         auto path = checked_relative(relative);
         require(names.insert(fold(path)).second, "BUNDLE_CASE_COLLISION");
         require(hash.size() == 64 && std::all_of(hash.begin(), hash.end(),
@@ -188,11 +193,12 @@ BundleLease::BundleLease(std::filesystem::path root, std::string revision, Manif
     }
     // 全部文件锁定后才读取同一对象的内容，不重新按路径打开另一个文件计算哈希。
     for (auto &[relative, file] : s.files) {
+        if (check_cancel) check_cancel();
         const auto &hash = s.manifest.at(relative);
         // OCR consumes locked model paths. Avoid retaining a second whole copy
         // of each ONNX file; templates and other bytes() consumers stay eager.
-        if (relative.ends_with(".onnx")) file->verify_streamed(hash);
-        else (void)file->verified_bytes(hash);
+        if (relative.ends_with(".onnx")) file->verify_streamed(hash, check_cancel);
+        else (void)file->verified_bytes(hash, check_cancel);
         s.hashed_bytes += file->checked_size();
     }
     verify_members();
@@ -219,6 +225,37 @@ void BundleLease::require_member(const std::string &relative) const {
 const std::vector<std::uint8_t> &BundleLease::bytes(const std::string &relative) const {
     require_member(relative);
     return impl_->files.at(relative)->verified_bytes(impl_->manifest.at(relative));
+}
+void BundleLease::copy_member(const std::string &relative,
+    const std::filesystem::path &destination, const std::function<void()> &check_cancel) const {
+    require_member(relative);
+    require(destination.is_absolute(), "NATIVE_BUNDLE_DESTINATION_INVALID");
+    if (check_cancel) check_cancel();
+    // Freeze the target ancestor chain as well as the source; do not follow a
+    // junction or permit a parent rename during the synchronous copy.
+    std::vector<std::unique_ptr<Held>> parents;
+    for (auto p = destination.parent_path(); !p.empty() && p != p.parent_path(); p = p.parent_path())
+        parents.push_back(std::make_unique<Held>(p, true));
+    auto &file = *impl_->files.at(relative);
+    std::lock_guard lock(file.content_mutex);
+    const auto length = file.checked_size();
+    file.verify_identity();
+    struct Output {
+        HANDLE handle{INVALID_HANDLE_VALUE};
+        ~Output() { if (handle != INVALID_HANDLE_VALUE) CloseHandle(handle); }
+    } output;
+    output.handle = CreateFileW(destination.c_str(), GENERIC_READ | GENERIC_WRITE, 0,
+        nullptr, CREATE_NEW, FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+    require(output.handle != INVALID_HANDLE_VALUE, "NATIVE_BUNDLE_CREATE_FAILED");
+    const auto digest = copy_handle_sha256(file.handle, output.handle, length, check_cancel);
+    file.verify_identity();
+    require(digest == impl_->manifest.at(relative), "RESOURCE_HASH_MISMATCH");
+    LARGE_INTEGER written{};
+    require(GetFileSizeEx(output.handle, &written) && written.QuadPart == static_cast<LONGLONG>(length),
+            "NATIVE_BUNDLE_SIZE_MISMATCH");
+    require(FlushFileBuffers(output.handle), "NATIVE_BUNDLE_FLUSH_FAILED");
+    require(handle_sha256(output.handle, length, check_cancel) == digest, "RESOURCE_HASH_MISMATCH");
+    if (check_cancel) check_cancel();
 }
 const std::string &BundleLease::hash(const std::string &relative) const {
     require_member(relative);

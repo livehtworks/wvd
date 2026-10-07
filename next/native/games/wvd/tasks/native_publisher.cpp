@@ -5,6 +5,8 @@
 #include "platform/windows/bundle_lease.hpp"
 #include "platform/windows/file_digest.hpp"
 #include "platform/windows/path_utf8.hpp"
+#include "platform/windows/runtime_files.hpp"
+#include "platform/windows/preparation_timer.hpp"
 #include "workflow/serialization.hpp"
 #include <fstream>
 #include <set>
@@ -32,7 +34,11 @@ void write_bytes(const std::filesystem::path &root, const std::string &relative,
 
 NativePublication publish_native(const CompiledWorkflow &workflow,
     const recognition::Bundle &baseline, const std::filesystem::path &destination,
-    const J &aliases, const J &source_paths, const recognition::Bundle *mod) {
+    const J &aliases, const J &source_paths, const recognition::Bundle *mod,
+    const std::function<void()> &check_cancel, const platform::PreparationObserver &observer) {
+    platform::PreparationTimer total_timer("publish_native", observer);
+    platform::PreparationTimer input_timer("publisher_inputs", observer);
+    if (check_cancel) check_cancel();
     workflow.validate();
     if (!destination.is_absolute() || std::filesystem::exists(destination) ||
         !aliases.is_object() || !source_paths.is_object())
@@ -59,7 +65,11 @@ NativePublication publish_native(const CompiledWorkflow &workflow,
     }
     J all_paths = workflow.authoring.value("source_paths", J::object());
     all_paths.update(source_paths);
+    J preparation{{"publisher_inputs", input_timer.sample()}};
+    platform::PreparationTimer lowering_timer("compile_native_program", observer);
     auto program = compile_native_program(workflow, all_paths, "pending");
+    preparation["compile_native_program"] = lowering_timer.sample();
+    platform::PreparationTimer model_timer("model_contract", observer);
     // 发布前验证实际使用的语言模型，防止作者预览能运行而发布包缺模型。
     const auto serialized = workflow::serialize(program);
     const auto models = J::parse(wvd_ocr_models).at("models");
@@ -80,6 +90,8 @@ NativePublication publish_native(const CompiledWorkflow &workflow,
                 throw std::runtime_error("NATIVE_OCR_MODEL_MISSING_OR_UNLOCKED:" + relative);
         }
     }
+    preparation["model_contract"] = model_timer.sample();
+    platform::PreparationTimer identity_timer("publication_identity", observer);
     J identity{{"engine_kind", "wvd_native"},
                {"program_schema", workflow::FlowProgram::schema},
                {"source_revision", baseline.revision},
@@ -96,10 +108,13 @@ NativePublication publish_native(const CompiledWorkflow &workflow,
     const auto revision = platform::bytes_sha256(
         {reinterpret_cast<const std::uint8_t *>(material.data()), material.size()});
     program.revision = revision;
+    preparation["publication_identity"] = identity_timer.sample();
     auto published_manifest = base_manifest;
-    platform::BundleLease origin(baseline.root, baseline.revision, base_manifest);
+    platform::PreparationTimer source_timer("source_validation", observer);
+    platform::BundleLease origin(baseline.root, baseline.revision, base_manifest, check_cancel);
     std::unique_ptr<platform::BundleLease> mod_origin;
-    if (mod) mod_origin = std::make_unique<platform::BundleLease>(mod->root, mod->revision, mod_manifest);
+    if (mod) mod_origin = std::make_unique<platform::BundleLease>(mod->root, mod->revision, mod_manifest, check_cancel);
+    preparation["source_validation"] = source_timer.sample();
     std::set<std::string> selected_mod_paths;
     for (const auto &[name, source] : image_sources.items()) {
         (void)name;
@@ -109,35 +124,110 @@ NativePublication publish_native(const CompiledWorkflow &workflow,
             selected_mod_paths.insert(relative);
         }
     }
-    if (!std::filesystem::create_directories(destination))
+    if (check_cancel) check_cancel();
+    std::filesystem::create_directories(destination.parent_path());
+    const auto staging = destination.parent_path() /
+        (destination.filename().wstring() + L".staging-" + platform::path_from_utf8(platform::unique_id()).wstring());
+    if (!std::filesystem::create_directory(staging))
         throw std::runtime_error("NATIVE_PUBLICATION_CREATE_FAILED");
-    recognition::Bundle bundle{destination, revision, {}};
+    bool renamed = false;
+    // Cleanup only this invocation's exclusive directory, never older published
+    // revisions. All temporary leases must be destroyed before rename/rollback.
+    struct OwnedPublication {
+        const std::filesystem::path &staging, &destination;
+        bool &renamed;
+        BY_HANDLE_FILE_INFORMATION identity{};
+        static BY_HANDLE_FILE_INFORMATION inspect(const std::filesystem::path &path) {
+            auto handle = CreateFileW(path.c_str(), FILE_READ_ATTRIBUTES, FILE_SHARE_READ,
+                nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+            if (handle == INVALID_HANDLE_VALUE) throw std::runtime_error("NATIVE_PUBLICATION_IDENTITY_FAILED");
+            BY_HANDLE_FILE_INFORMATION info{};
+            const bool ok = GetFileInformationByHandle(handle, &info);
+            CloseHandle(handle);
+            if (!ok || (info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT))
+                throw std::runtime_error("NATIVE_PUBLICATION_IDENTITY_FAILED");
+            return info;
+        }
+        void rollback() const {
+            const auto &path = renamed ? destination : staging;
+            const auto now = inspect(path);
+            if (now.dwVolumeSerialNumber != identity.dwVolumeSerialNumber ||
+                now.nFileIndexHigh != identity.nFileIndexHigh || now.nFileIndexLow != identity.nFileIndexLow)
+                throw std::runtime_error("NATIVE_PUBLICATION_CLEANUP_IDENTITY_CHANGED");
+            std::error_code error;
+            std::filesystem::remove_all(path, error);
+            if (error) throw std::runtime_error("NATIVE_PUBLICATION_CLEANUP_FAILED:" + error.message());
+        }
+    } owned{staging, destination, renamed, OwnedPublication::inspect(staging)};
+    recognition::Bundle bundle{staging, revision, {}};
+    try {
+    platform::PreparationTimer copy_timer("file_copy", observer);
     for (const auto &[relative, hash] : published_manifest) {
-        const auto &bytes = selected_mod_paths.contains(relative)
-            ? mod_origin->bytes(relative) : origin.bytes(relative);
-        write_bytes(destination, relative, bytes.data(), bytes.size());
+        if (check_cancel) check_cancel();
+        const auto path = staging / platform::BundleLease::checked_relative(relative);
+        std::filesystem::create_directories(path.parent_path());
+        const auto &source = selected_mod_paths.contains(relative) ? *mod_origin : origin;
+        source.copy_member(relative, path, check_cancel);
         bundle.files.push_back({relative, hash});
     }
+    preparation["file_copy"] = copy_timer.sample();
+    preparation["source_model_bytes_after_copy"] =
+        origin.storage_stats().model_bytes +
+        (mod_origin ? mod_origin->storage_stats().model_bytes : 0);
+    preparation["source_bytes"] = origin.hash_bytes() + (mod_origin ? mod_origin->hash_bytes() : 0);
+    preparation["copy_buffer_bytes"] = 65536;
     const auto program_text = workflow::serialize(program).dump(2);
-    write_bytes(destination, "program/flow.json",
-        reinterpret_cast<const std::uint8_t *>(program_text.data()), program_text.size());
-    bundle.files.push_back({"program/flow.json",
-        platform::file_sha256(destination / "program" / "flow.json")});
+    write_bytes(staging, "program/flow.json",
+                reinterpret_cast<const std::uint8_t *>(program_text.data()), program_text.size());
+    bundle.files.push_back(
+        {"program/flow.json", platform::file_sha256(staging / "program" / "flow.json")});
     const auto identity_text = identity.dump(2);
-    write_bytes(destination, "program/identity.json",
-        reinterpret_cast<const std::uint8_t *>(identity_text.data()), identity_text.size());
-    bundle.files.push_back({"program/identity.json",
-        platform::file_sha256(destination / "program" / "identity.json")});
+    write_bytes(staging, "program/identity.json",
+                reinterpret_cast<const std::uint8_t *>(identity_text.data()), identity_text.size());
+    bundle.files.push_back(
+        {"program/identity.json", platform::file_sha256(staging / "program" / "identity.json")});
     if (mod) {
         const auto provenance = image_sources.dump(2);
-        write_bytes(destination, "parameters/image-sources.json",
-            reinterpret_cast<const std::uint8_t *>(provenance.data()), provenance.size());
-        bundle.files.push_back({"parameters/image-sources.json",
-            platform::file_sha256(destination / "parameters" / "image-sources.json")});
+        write_bytes(staging, "parameters/image-sources.json",
+                    reinterpret_cast<const std::uint8_t *>(provenance.data()), provenance.size());
+        bundle.files.push_back(
+            {"parameters/image-sources.json",
+             platform::file_sha256(staging / "parameters" / "image-sources.json")});
     }
+    preparation["files"] = bundle.files.size();
+    if (check_cancel)
+        check_cancel();
+    platform::PreparationTimer validation_timer("staging_validation", observer);
+    {
+        platform::BundleLease staged(staging, revision, manifest(bundle), check_cancel);
+        staged.verify_members();
+    }
+    preparation["staging_validation"] = validation_timer.sample();
+    if (check_cancel)
+        check_cancel();
+    // No FILE_SHARE_DELETE relaxation: the staging lease above is gone. This
+    // same-volume rename never replaces a concurrently created destination.
+    if (!MoveFileExW(staging.c_str(), destination.c_str(), MOVEFILE_WRITE_THROUGH))
+        throw std::runtime_error("NATIVE_PUBLICATION_RENAME_FAILED");
+    renamed = true;
+    if (check_cancel)
+        check_cancel();
+    bundle.root = destination;
     bundle.snapshot_parent = destination.parent_path() / "active-snapshots";
-    bundle.lease = std::make_shared<platform::BundleLease>(destination, revision, manifest(bundle));
+    platform::PreparationTimer final_timer("target_validation", observer);
+    bundle.lease = std::make_shared<platform::BundleLease>(destination, revision, manifest(bundle),
+                                                           check_cancel);
     bundle.lease->verify_members();
-    return {std::move(program), std::move(bundle), std::move(identity)};
+    if (check_cancel)
+        check_cancel();
+    preparation["target_validation"] = final_timer.sample();
+    preparation["publish_native"] = total_timer.sample();
+    return {std::move(program), std::move(bundle), std::move(identity), std::move(preparation)};
+    } catch (...) {
+        const auto failure = std::current_exception();
+        bundle.lease.reset();
+        owned.rollback();
+        std::rethrow_exception(failure);
+    }
 }
 } // namespace wvd::games::tasks

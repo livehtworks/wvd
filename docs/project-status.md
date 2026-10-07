@@ -1,8 +1,24 @@
 # 项目当前事实
 
-## 巨人新50轮运行
+## 当前内存整改与部署
 
-- 2026-10-07按用户要求启动新批次50轮，不续算此前50轮。candidate121仍为原17654/PID38436、服务实例`6DD72FBD-D995-4900-9370-19EECB401B7B`及原data；模拟器实例2已由正式连接入口前台拉起（MuMu安卓设备0/PID33772/窗口响应正常）。VPN就绪、游戏进程及前台已获原生命周期确认；新请求`01a4410d-4c24-4cc4-9ad1-3bcaeedb8193`，协调器`8A830897-80B1-4F54-A1DF-BDFED9A2D0D6`。本次采集收口只读核对run2–8已完成7/50、run9 Running、repeat仍active；不提前声称50轮完成。实际冷启动、第三章要塞跳轮、战斗、报告及住宿由原正式链执行。
+- 当前候选为candidate127，原17654/原data，PID28728、服务CDA71E2A-D0EA-475E-BCE0-12C66EC7D12E，Idle/不busy/静止。准备链的锁定句柄流式复制、取消回滚、语言无替换不复制、退出实例重连及观察期限清除均已部署；新增状态接口锁内借用索引，额外2561个无关索引不增加分配，真实接口结果不变。正式profile哈希未变。candidate123已实际打开VPN/启动游戏并完成两轮，旧“尚未部署/管理员取消”不是当前阻断。
+- candidate123基线两轮收尾PrivateUsage为57139200/66756608字节。candidate125加入worker join后的HeapOptimizeResources，两轮均Completed、耗时360.671/407.037秒；API窗口各回收15036416/31694848字节，耗时3581/6296微秒；收尾43110400/47423488字节。仍有4313088字节差，历史增长保留RESOURCE_UNRESOLVED，不宣称全部泄漏已解决。
+- candidate126两轮有限实机请求f88d0433-5091-4359-b15f-f77e85c56970已Completed/2次，合计891.786秒；同worker维护后实际堆分配17313175→17362545（+49370），PrivateUsage43036672→45932544（+2895872）。回收前后allocated各自不变，API窗口各下降12439552/18710528字节；累计6个识别服务/OCR/会话均销毁、live=0。由此确认空闲堆页滞留可实际回收，但不覆盖全部非堆所有权或解释历史全部45.11MiB。现有analyze_memory_owners自动同进程/同边界差分，缺字段不补0。真实OCR四次实际分配完全相同、独立四次完整准备身份/599哈希/取消保护通过。最终127只改状态索引查询，同回收逻辑，未额外跑游戏；没有50/100轮。
+- 不再原样重试失败采集：持续WPR使准备超过120秒；CDB实时逐块堆遍历和完整克隆的离线遍历分别超30/60秒。PSS完整转储仅本地忽略目录保存，不能将摘要/无效mini转储称为有效分配栈。整机另有MuMu实例0的多GiB占用，与本任务实例2及WVD分别记录，不结束用户其他应用。
+- 计划、改动、原始失败及有效证据见[执行计划](reviews/memory-resolution-plan-20261007.md)和[内存整改报告](reviews/memory-resolution-20261007.md)。用户已授权本轮commit/push/部署并继续巨人50轮；当前正在提交并从提交版本重新打包，尚未启动新批次。日志为debug，memory/performance/recognition开启、内存间隔1000ms，MuMu实例2/繁中/AUTO_START_CLASH=true；近期帧最多240张且128MiB，异常永久图另列。用户.vscode修改不纳入提交，不启用高开销WPR/CDB跟踪。
+
+## 1c89a08审查整改背景
+
+- 本轮按下载工作包先实施M01–M03：独立x64 TraceProcessor 1.12.10直接堆聚合、快照阶段/attempt清理/最终ETL统计/共享期限修正、两个事件页深复制移除。M01精确HeapAlloc正负/稳定/churn及现有41.814MiB ETL有界分析通过；最终7.747秒、私有峰值约846MiB、输出109.54MiB，原capture仍false、comparison仍false。M03实际API与1024事件定向验收通过，响应装配片段分配字节下降66.4%，不等于泄漏修复。
+- M02的15项纯状态/真实子进程guard、旧ETL136897丢失拒绝已有证据；用户授权重试后，实际enable/start生效后日志失败、start生效后包装超时及外部会话/PID创建保护四项均通过，session/堆配置清理confirmed，助手退出。此前管理员取消为历史，不再是当前缺项。M01–M03定向验收完成。
+- P01已接入锁定句柄64KiB复制、staging完整校验/释放锁/同盘rename、取消及未启动目录回滚。续修去掉ImageCollector对非模板父子树的重复深复制及子流程校验中重复复制入口名；本次无跟踪完整编译3.249秒/线程CPU3.141秒，发布11.819秒。599文件及程序身份仍与旧candidate121一致，模型缓存0、最终取消未创建Run且目录已撤回。准备阶段开始/完成可在operation读出，沿performance/info门禁、完成后仍由原RunStore写一次摘要；不保存图像或整图副本。嵌套资源扫描分配、日志开关及发布保护定向检查通过，原生服务构建通过、未部署。真实繁中OCR的既有证据保留。
+- P02新鲜观察旧backend，只有明确绑定实例退出才同步清理并重连同一绑定。实际Application准入/清理/原启动计划定向验收通过，外部MuMu适配器隔离，不冒充真实退出验收。P03多源watch及6秒轮询/切换/卸载通过。P04只读盘点672发布目录、392816文件、逻辑63460141750B（59.102GiB）、670份历史引用；簇占用/去重共享/全部活动租约仍unknown，不删除。
+- M04历史授权/采集失败按原回执保留；本轮重试中管理员助手已实际启用跟踪，失败原因转为准备在120秒内未结束，自有会话与助手已清理。随后使用上节的有限实跑与低扰动统计，不把旧失败改成PASS。历史见[准备链闭环及剩余边界](reviews/memory-preparation-closure-20261007.md)。
+
+## 历史巨人50轮（已中断，非当前运行）
+
+- 2026-10-07当前50轮已中断：candidate121仍为原17654/PID38436、服务实例`6DD72FBD-D995-4900-9370-19EECB401B7B`及原data，请求`01a4410d-4c24-4cc4-9ad1-3bcaeedb8193`，协调器`8A830897-80B1-4F54-A1DF-BDFED9A2D0D6`。run2–18已完成17/50，run19 Interrupted/EVENT_PARENT_RESULT_TIMEOUT、quiescent/details_complete并落盘，repeat inactive/failed。此次只读记录，不恢复循环或把停止归因于离线分析。旧7/50正在运行是上一轮记录，不作为当前状态。
 - 沿用正式巨人方案、繁中及AUTO_START_CLASH=true；debug/memory/performance/recognition已开启，事件、耗时、内存及关键帧已落盘，profile哈希未变。新永久技能失败配对取证由candidate121承接；历史资源增长仍未归因。本批请求/状态/要塞原帧保存在`next/.local/giant121-50-01a4410d-4c24-4cc4-9ad1-3bcaeedb8193/`。
 - 用户随后要求只监控两轮并关闭采集。全系统VA Monitor因96MiB内核文件封顶失败，0个收尾窗口；用户另行授权最多20分钟/512MiB的HeapSnapshots新窗口，于01:34附着run7、01:41取得worker_joined_1_partial（循环6/50），1196.967秒内因时间窗口结束，缺第二个join；41.814MiB ETL保存、586次健康采样丢失均0、堆配置关闭/helper退出。没有额外提交或停止游戏，采集后原run8继续Running。部分解析又因CSV2.071GiB违反128MiB输出保护失败，残缺数据不算归因；活动文件长度保护已改为FileStream及退出复核，仅只读/语法核对、不追加采集。轮间prepare至少约8分钟的现象记录但未归因。历史增长仍RESOURCE_UNRESOLVED，见[真实结果及剩余缺口](reviews/memory-monitor-two-20261007.md)。
 - 首次请求`ab43bdf6-0046-4d7b-9e49-739a74cd906d`/run1因已退出模拟器的旧backend仍被复用，初始EnsureVpn前置缺失而Failed/NATIVE_INITIAL_LIFECYCLE_UNCONFIRMED，游戏输入0、不计成功。经正式disconnect完成，再connect同一实例后启动上述新请求；未改源码或重启工具。该自动冷启动入口缺口保留待修，不能把人工正式重连写成产品已自动恢复。见[启动记录](reviews/giant121-50-start-20261007.md)。
@@ -11,7 +27,7 @@
 
 - 2026-10-06已接入C01启动/再起交接、C02锁定模型流式摘要/惰性原字节、C03技能打开no_progress与防御配对永久PNG。Windows规定10项、正式协调器drive整链及一次真实繁中OCR加载/推理/释放定向检查通过，保护/文件锁/取消/未知送达语义保留；不以离线取证证明实机技能原因。
 - candidate121已部署原17654/原data，PID38436、实例`6DD72FBD-D995-4900-9370-19EECB401B7B`，Idle/quiescent。EXE/PDB对应已核对，旧119正常退出。用户授权最多2轮/20分钟/512MiB采集，实际因WPR临时容量保护及136897丢事件，在准备阶段取消请求`6ac382d1-214b-4b2a-b11c-6d1425f2eaf9`，新轮数0；没有循环运行，不自动追加采集。
-- 采集整改已落地`next/tools/collect_memory_stacks.ps1`及`export_memory_stacks.ps1`：PID存活堆快照、最小VirtualAlloc栈/缓存、实时ETW丢失检查、Sequential逐采集器上限、匹配应用符号和按栈差分。空闲probe4实际ETL约10.26MiB、无丢事件，2个快照和目标17条VAlloc栈已解析，应用源码符号有效；当时没有游戏输入或新轮次，不把空闲+1358字节差分当泄漏。新Collect需显式任务授权，固定两个各1轮的提交并在worker_joined停稳取样。采集结束时Idle、所有跟踪已清理；新50轮以顶节为准，不扩展WPR窗口。正式产品不变，新工具尚未提交。见[采集方案整改](reviews/memory-collection-repair-20261006.md)。
+- 旧采集工具基线已随1c89a08提交推送；空闲probe4的10.26MiB/两个快照/17条VA栈属于历史证据，不预报实跑通过。本次当前堆分析入口已切到独立TraceProcessor，不再调用WPA明细CSV；Collect阶段修正为batch_payloads_released，最终统计须结构化核验。具体当前验收以上节为准，不沿用旧“worker_joined单轮终点”或“新工具未提交”描述。历史失败与原文件保留。
 - W01完成；W02分配栈实验失败、437MiB原ETL保留，缺worker_joined窗口及可信栈差分，历史45.11MiB仍`RESOURCE_UNRESOLVED`；W03取证链完成但8次真实技能失败原因未确认。W04只提交Entry单点分析建议、不改战斗图；W05取消/所有权已审查、不做跨会话OCR复用；W06已对齐run34的ADB故障和内存窗口，不能证明内存因果。正式profile哈希未变。用户后续授权将本轮源码和报告提交并推送个人fork；候选历史构建身份不回写，不恢复循环。见[交付及未闭合项](reviews/critical-fixes-20261006.md)。
 
 ## aa0957a工作包历史收束

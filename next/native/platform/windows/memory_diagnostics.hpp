@@ -20,6 +20,21 @@ struct MemorySample {
     std::uint64_t physical_available_pages{}, page_size{};
 };
 MemorySample sample_memory() noexcept;
+struct HeapMaintenance {
+    bool succeeded{};
+    std::uint32_t error{};
+    std::uint64_t elapsed_us{};
+    MemorySample before, after;
+    struct Usage {
+        bool available{}, complete{};
+        std::uint32_t heaps{}, failed{};
+        std::uint64_t allocated{}, committed{}, reserved{}, elapsed_us{};
+    };
+    Usage heap_before, heap_after;
+};
+// Call only at an idle ownership boundary, not from the recognition hot path.
+// Windows may decommit free LFH pages; live allocations remain owned by callers.
+HeapMaintenance optimize_idle_heap() noexcept;
 enum class MemoryOwnerKind { RecognitionService, OcrEngine, ExecutionSession };
 struct LifetimeCounts { std::uint64_t created{}, destroyed{}, live{}, ready{}; };
 class MemoryOwnerLifetime final {

@@ -122,6 +122,26 @@ void NativeRunCoordinator::join_worker() {
     if (!worker_.joinable()) return;
     worker_.join();
     record_memory_boundary("worker_joined");
+    // The definition and all session owners have already been destroyed. Keep
+    // the original pre-maintenance sample so reclamation cannot hide growth.
+    const auto heap = platform::optimize_idle_heap();
+    try {
+        auto sample = memory_record(heap.after);
+        const auto usage = [](const platform::HeapMaintenance::Usage &value) {
+            return nlohmann::json{{"available", value.available}, {"complete", value.complete},
+                {"heaps", value.heaps}, {"failed", value.failed}, {"allocated_bytes", value.allocated},
+                {"committed_bytes", value.committed}, {"reserved_bytes", value.reserved},
+                {"elapsed_us", value.elapsed_us}};
+        };
+        sample["heap_maintenance"] = {{"api", "HeapOptimizeResources"},
+            {"succeeded", heap.succeeded}, {"win32_error", heap.error},
+            {"elapsed_us", heap.elapsed_us}, {"before_process_ok", heap.before.process_ok},
+            {"before_private_bytes", heap.before.private_bytes},
+            {"heap_summary_before", usage(heap.heap_before)}, {"heap_summary_after", usage(heap.heap_after)}};
+        if (store_) store_->record_memory_boundary("heap_resources_optimized", sample);
+    } catch (...) {
+        if (store_) store_->note_diagnostic_hook_failure();
+    }
 }
 
 void NativeRunCoordinator::record_memory_boundary(const char *phase) noexcept {
@@ -146,6 +166,12 @@ void NativeRunCoordinator::record_batch_release() {
     { std::lock_guard lock(mutex_); if (!terminal_recorded_ || active_) return; }
     join_worker();
     record_memory_boundary("batch_payloads_released");
+}
+
+void NativeRunCoordinator::record_preparation(const nlohmann::json &metrics) {
+    std::lock_guard lock(mutex_);
+    if (store_) store_->append_log(snapshot_.generation, storage::LogLevel::Info,
+                                  "performance", "preparation.completed", metrics);
 }
 
 contracts::RunSnapshot NativeRunCoordinator::start(

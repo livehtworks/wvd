@@ -104,6 +104,52 @@ MemorySample sample_memory() noexcept {
     }
     return result;
 }
+HeapMaintenance optimize_idle_heap() noexcept {
+    HeapMaintenance result;
+    const auto heap_usage = []() noexcept {
+        HeapMaintenance::Usage usage;
+        // Resolve dynamically: older supported Windows builds lack this
+        // diagnostic API. Absence is unavailable, never a zero-byte result.
+        using Summary = BOOL(WINAPI *)(HANDLE, DWORD, LPHEAP_SUMMARY);
+        const auto summary = reinterpret_cast<Summary>(GetProcAddress(GetModuleHandleW(L"kernel32.dll"), "HeapSummary"));
+        if (!summary) return usage;
+        usage.available = true;
+        LARGE_INTEGER frequency{}, started{}, ended{};
+        QueryPerformanceFrequency(&frequency);
+        QueryPerformanceCounter(&started);
+        std::array<HANDLE, 64> heaps{};
+        const auto count = GetProcessHeaps(static_cast<DWORD>(heaps.size()), heaps.data());
+        if (!count || count > heaps.size()) { usage.failed = 1; return usage; }
+        usage.heaps = count;
+        for (DWORD index = 0; index < count; ++index) {
+            HEAP_SUMMARY value{};
+            value.cb = sizeof(value);
+            if (!summary(heaps[index], 0, &value)) { ++usage.failed; continue; }
+            usage.allocated += value.cbAllocated;
+            usage.committed += value.cbCommitted;
+            usage.reserved += value.cbReserved;
+        }
+        QueryPerformanceCounter(&ended);
+        if (frequency.QuadPart > 0)
+            usage.elapsed_us = static_cast<std::uint64_t>((ended.QuadPart - started.QuadPart) * 1000000 / frequency.QuadPart);
+        usage.complete = usage.failed == 0;
+        return usage;
+    };
+    result.heap_before = heap_usage();
+    result.before = sample_memory();
+    LARGE_INTEGER frequency{}, started{}, ended{};
+    QueryPerformanceFrequency(&frequency);
+    QueryPerformanceCounter(&started);
+    HEAP_OPTIMIZE_RESOURCES_INFORMATION options{HEAP_OPTIMIZE_RESOURCES_CURRENT_VERSION, 0};
+    result.succeeded = HeapSetInformation(nullptr, HeapOptimizeResources, &options, sizeof(options)) != FALSE;
+    if (!result.succeeded) result.error = GetLastError();
+    QueryPerformanceCounter(&ended);
+    if (frequency.QuadPart > 0)
+        result.elapsed_us = static_cast<std::uint64_t>((ended.QuadPart - started.QuadPart) * 1000000 / frequency.QuadPart);
+    result.after = sample_memory();
+    result.heap_after = heap_usage();
+    return result;
+}
 MemoryDiagnostics::MemoryDiagnostics(const std::filesystem::path &path,
                                      std::uint64_t run_id,
                                      std::uint64_t generation, bool periodic_enabled,

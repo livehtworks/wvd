@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="zh-Hans">
+<head><meta charset="utf-8"><title>Recovery Timer Fixture</title></head>
+<body><main id="fixture"></main>
+<script type="module">
+import { createApp, h, reactive, nextTick } from 'vue';
+import ExecutionStatus from '/src/components/ExecutionStatus.vue';
+const intervals = new Set();
+const set = window.setInterval;
+const clear = window.clearInterval;
+window.setInterval = (...args) => { const id = set(...args); if (args[1] === 1000) intervals.add(id); return id; };
+window.clearInterval = id => { intervals.delete(id); clear(id); };
+const state = reactive({ run: { run_id: 1, execution: { observation_recovery: { active: true, state: 'retrying_observation', failures: 1 } } } });
+const app = createApp({ render: () => h(ExecutionStatus, { run: state.run }) });
+app.mount('#fixture');
+window.timerFixture = {
+  update(id, active) { state.run = { run_id: id, execution: { observation_recovery: { active, state: 'retrying_observation', failures: 1 } } }; },
+  unmount() { app.unmount(); return nextTick(); },
+  intervals() { return intervals.size; },
+};
+</script>
+</body></html>
