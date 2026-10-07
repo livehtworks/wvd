@@ -101,8 +101,12 @@ tasks::CompiledWorkflow take_turn(const J &profile, const std::set<std::string> 
     graph.observe("Ended", ended, {"Terminal"});
     graph.observe("ActorChanged", C::all({battle, C::absent(actor)}), {"Terminal"});
     graph.observe("Automatic", C::all({battle, C::business("/strategy/automatic", true)}), {full_auto});
-    graph.observe("UnexpectedPopup", C::all({battle, popup}), {"UnownedDetail"});
-    graph.recovery("UnownedDetail", "combat.unowned_skill_detail");
+    // Generic gold buttons can be network Retry, not a skill confirmation.
+    // Keep broad popup exclusion for input safety, but require skill-specific
+    // detail evidence before classifying an unowned skill dialog.
+    const auto unowned_detail = C::all({battle, detail});
+    graph.observe("UnexpectedPopup", unowned_detail, {"UnownedDetail", "Entry"});
+    graph.recovery("UnownedDetail", "combat.unowned_skill_detail", unowned_detail, {"Entry"});
     const auto recognized_actor = C::business("/combat_actor_recognized", true);
     J choices = {"UnknownActor", "NoSelection"};
     for (std::size_t index = 0; index < catalog.size(); ++index)

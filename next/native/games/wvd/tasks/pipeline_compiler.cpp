@@ -355,8 +355,8 @@ void CompiledWorkflow::validate() const {
                 return;
             const auto &node = nodes.at(name);
             const auto action = node.value("binding", "");
-            // RequireRecovery 只关闭整个 Session，没有正常返回边，可以共享失败出口。
-            if (action == "RequireRecovery")
+            // Only unconditional terminal failures may be shared across scopes.
+            if (action == "RequireRecovery" && node.value("next", J::array()).empty())
                 return;
             const auto [owner, inserted] = owners.emplace(name, scope);
             require(inserted || owner->second == scope, "COMPILE_CHILD_BOUNDARY_CROSSED");
@@ -885,7 +885,7 @@ void PipelineCompiler::call_child(const std::string &name, const std::string &en
             return;
         require(workflow_.nodes.contains(n), "COMPILE_CHILD_ENTRY_INVALID");
         const auto &node = workflow_.nodes.at(n);
-        if (node.value("binding", "") == "RequireRecovery" || !local.insert(n).second)
+        if ((node.value("binding", "") == "RequireRecovery" && node.value("next", J::array()).empty()) || !local.insert(n).second)
             return;
         for (const auto *key : {"next", "on_error"})
             for (const auto &edge : node.value(key, J::array()))
@@ -899,10 +899,19 @@ void PipelineCompiler::call_child(const std::string &name, const std::string &en
                {"operation_args", {{"entry", entry}, {"clone", false}, {"local_counters", local}, {"handoffs", handoffs}}},
                {"next", std::move(next)}});
 }
-void PipelineCompiler::recovery(const std::string &name, const std::string &reason) {
+void PipelineCompiler::recovery(const std::string &name, const std::string &reason,
+                                J still_present, J cleared_next) {
     require(!reason.empty(), "COMPILE_RECOVERY_REASON_EMPTY");
-    add(name, {{"operation", "Registered"}, {"binding", "RequireRecovery"},
-               {"operation_args", {{"reason", reason}}}});
+    require(cleared_next.is_array() && (still_present.is_null() == cleared_next.empty()),
+            "COMPILE_RECOVERY_RECHECK_INVALID");
+    J node{{"operation", "Registered"}, {"binding", "RequireRecovery"},
+           {"operation_args", {{"reason", reason}}}};
+    if (!still_present.is_null()) {
+        node.update({{"observation", "Registered"}, {"recognizer", "WvdVision"},
+            {"observation_args", std::move(still_present)}, {"roi", {0, 0, 900, 1600}},
+            {"next", std::move(cleared_next)}});
+    }
+    add(name, std::move(node));
 }
 void PipelineCompiler::public_step(const std::string &name, const std::string &flow_id,
                                   const J &arguments, J next, J handoffs, J condition) {

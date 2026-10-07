@@ -2,7 +2,9 @@
 
 ## 当前内存整改与部署
 
-- 用户最新授权的30轮巨人已启动：源码abb4f6c提交并推送个人fork后，candidate130以干净源码身份构建部署原17654/原data，PID43136/服务31B4D601-16B9-43D5-9196-E74A932843FB。请求d599b18c-7a3d-4448-82a7-f95678588fe6，协调器1ABAA4DD-74A9-4C18-A262-A3B0F72497F7，run1实际Running、repeat active/目标30，记录时完成0轮；旧28轮不累计。EnsureVpn/StartApplication均确认，沿用debug、memory/performance/recognition及1000ms采样，新补逐堆差分分析，缺失/失败/地址变化不补0；不启用WPR或运行中CDB，profile哈希未变。调查结论、采集范围及启动证据见[30轮内存调查](reviews/giant130-memory-investigation-20261007.md)。
+- 用户要求修复网络误判后commit/push/部署，明确先不开循环。修复已完成并通过原生针对性验证：未知技能弹窗需战斗加明细证据；异常处理后条件失败节点重查，错误消失回本作用域观察入口，仍存在/Error则失败，不重放输入。真实网络/连接中/技能原图经生产Service通过，事件返回、未确认输入保护及完整巨人/共享蝎女图验证通过。当前130仍停止，待提交部署131；本轮不操作游戏。详见[弹窗与恢复修复](reviews/combat-popup-recovery-repair-20261007.md)。
+
+- 最新30轮巨人已在首轮停止：candidate130/PID43136服务仍在，run1于515.349秒Failed/combat.unowned_skill_detail，完成0/30、repeat inactive、quiescent/details_complete。请求d599b18c-7a3d-4448-82a7-f95678588fe6、协调器1ABAA4DD-74A9-4C18-A262-A3B0F72497F7不变。真实网络“重试”图被技能确认模板匹配0.899671(阈值0.82)，网络事件处理成功后仍继续UnownedDetail旧错误节点；停止图实际为战斗连接中，不是技能详情。更早设备退出已被恢复链处理，不是最终停止原因。收尾私有提交36.54MiB、批次释放36.88MiB，5堆完整记录，单失败轮不证明长期稳定。本轮只读核查并更新报告，未改产品或恢复循环。详见[首轮停止核查](reviews/giant130-first-round-stop-20261007.md)。源码abb4f6c及启动记录ea5495f已推送；原部署/采集范围见[30轮内存调查](reviews/giant130-memory-investigation-20261007.md)。
 
 - 上一轮暂停修复现已包含在abb4f6c：28/50完成、第29轮UserStopped。candidate129原PID32648已通过部署管理器正常退出，由130承接。修复停止监视线程提前退出导致漏join/漏堆回收、灰色不可用技能反复补点；新增逐堆证据及关闭日志时跳过堆统计。完整任务准备的同EXE堆策略A/B第四次私有提交62.4→47.1MiB、存活分配基本不变，产品采用Windows SegmentHeap；停止接口、原技能开启契约、三张真实技能图经生产识别服务及真实繁中OCR验证通过。长期资源稳定性仍未证明，后续按上条新30轮采集，不将历史50轮写成完成。详见[暂停修复报告](reviews/paused-loop-memory-repair-20261007.md)。
 

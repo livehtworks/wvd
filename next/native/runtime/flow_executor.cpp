@@ -1043,7 +1043,7 @@ TickResult FlowExecutor::execute_step(Frame &frame, const workflow::Step &curren
         if (predicate.state == OperationState::Waiting) return waiting(50ms);
         if (predicate.state != OperationState::Done) return fail("BUSINESS_GUARD_ERROR:" + predicate.detail);
     }
-    if (current.guard && !frame.selected_observation) {
+    if (current.guard && !frame.selected_observation && !std::holds_alternative<workflow::Fail>(current.data)) {
         const auto image = observation_frame();
         if (auto event = check_events(frame, current, image, workflow::EventClass::Overlay)) return *event;
         auto observed = recognize_result(image, *current.guard);
@@ -1300,6 +1300,21 @@ TickResult FlowExecutor::execute_step(Frame &frame, const workflow::Step &curren
         // 业务显式转交恢复时先辨认现场；配置/资源/识别异常仍从其原错误入口终止。
         const auto image = observation_frame();
         if (auto event = check_unexpected(frame, current, image, value->reason, true)) return *event;
+        if (current.guard) {
+            // Event return invalidates the old failure evidence. Recheck even
+            // when selection had a Hit; only declared edges may resume work.
+            const auto observed = recognize_result(image, *current.guard);
+            if (observed.outcome == contracts::RecognitionOutcome::Error)
+                return fail(observed.error_code.empty() ? "RECOGNITION_ERROR" : observed.error_code);
+            if (observed.outcome == contracts::RecognitionOutcome::NoHit) {
+                if (has_unresolved_input()) return blocked("RECOVERY_RECHECK_INPUT_UNRESOLVED");
+                last_diagnostic_ = {{"reason", "recovery_condition_cleared"},
+                    {"original_reason", value->reason}, {"source_path", current.source_path},
+                    {"frame_id", image.identity.frame_id}};
+                advance(frame, false);
+                return progress();
+            }
+        }
         return fail(value->reason);
     }
     return fail("FLOW_STEP_UNKNOWN");

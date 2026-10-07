@@ -68,7 +68,8 @@ int main(int argc, char **argv) {
             std::cout << "PASS real buff-obscured contour and hidden-card exclusion\n";
             return 0;
         }
-        check(argc == 4, "PASS_TWO_FRIEND_FRAMES_AND_ONE_ENEMY_FRAME");
+        const bool popup_frames = argc == 5 && std::string(argv[1]) == "--popup-frames";
+        check(argc == 4 || popup_frames, "PASS_TWO_FRIEND_FRAMES_AND_ONE_ENEMY_FRAME");
         auto profile = storage::LegacyConfigImporter(read("packs/wvd/parameters/legacy-config-fields.json"))
             .parse({{"GENERAL", J::object()}}).values;
         J rows = J::array();
@@ -128,6 +129,22 @@ int main(int argc, char **argv) {
             check(r.outcome != O::Error, r.error_code);
             return r;
         };
+        if (popup_frames) {
+            const auto &unexpected = flow.nodes.at("UnexpectedPopup").at("observation_args");
+            const auto &recovery = flow.nodes.at("UnownedDetail");
+            check(recovery.at("observation_args") == unexpected && recovery.at("next") == J::array({"Entry"}),
+                  "RECOVERY_RECHECK_NOT_WIRED");
+            set_frame(cv::imread(argv[2]));
+            const auto confirm = observe(library.resource_condition("combat.skill.confirm", "zh-Hant", authoring::ResourceUse::Observation));
+            check(confirm.outcome == O::Hit, "NETWORK_BUTTON_FALSE_MATCH_NOT_REPRODUCED");
+            check(observe(unexpected).outcome == O::NoHit, "NETWORK_RETRY_CLASSIFIED_AS_SKILL");
+            set_frame(cv::imread(argv[3]));
+            check(observe(unexpected).outcome == O::NoHit, "CONNECTING_CLASSIFIED_AS_SKILL");
+            set_frame(cv::imread(argv[4]));
+            check(observe(unexpected).outcome == O::Hit, "REAL_SKILL_DETAIL_NOT_PROTECTED");
+            std::cout << "PASS network Retry false match excluded, connecting excluded, real skill protected; evidence " << root << '\n';
+            return 0;
+        }
         const J support{{"mode", "support_selection"}}, absent{{"mode", "support_selection"}, {"expect", "absent"}};
         for (int i = 1; i <= 2; ++i) {
             set_frame(cv::imread(argv[i]));

@@ -45,6 +45,9 @@ void FlowProgram::validate() const {
             for (const auto &successor : step.on_error)
                 if (!definition.steps.contains(successor))
                     throw std::runtime_error("FLOW_ERROR_SUCCESSOR_MISSING");
+            if (std::holds_alternative<Fail>(step.data) &&
+                (step.guard.has_value() == step.next.empty()))
+                throw std::runtime_error("FLOW_RECOVERY_RECHECK_INVALID");
             if (const auto *call = std::get_if<Call>(&step.data)) {
                 if (!definitions.contains(call->definition))
                     throw std::runtime_error("FLOW_CALL_TARGET_MISSING");

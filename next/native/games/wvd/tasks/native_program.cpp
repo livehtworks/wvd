@@ -223,7 +223,7 @@ workflow::FlowProgram compile_native_program(const CompiledWorkflow &source,
         std::function<void(const std::string &)> visit = [&](const std::string &id) {
             if (!seen.insert(id).second) return;
             const auto &node = source.nodes.at(id);
-            if (node.value("binding", "") != "RequireRecovery") {
+            if (node.value("binding", "") != "RequireRecovery" || !edges(node, "next").empty()) {
                 const auto [it, inserted] = owner.emplace(id, root);
                 if (!inserted && it->second != root)
                     throw std::runtime_error("NATIVE_SCOPE_OVERLAP:" + id);

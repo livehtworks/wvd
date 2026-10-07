@@ -196,6 +196,81 @@ workflow::Step step(std::string id, workflow::StepData data,
 
 int main(int argc, char **argv) {
     try {
+        if (argc == 2 && std::string(argv[1]) == "--recovery-recheck") {
+            for (const std::string mode : {"cleared", "still_present", "recognition_error", "unconditional"}) {
+                struct RecoveryPorts final : Ports {
+                    bool handled{}, still_present{}, recognition_error{};
+                    int handler_calls{}, fresh_checks{};
+                    contracts::Observation recognize(const contracts::FrameEnvelope &frame,
+                        const recognition::Request &request) override {
+                        auto result = Ports::recognize(frame, request);
+                        if (request.recognizer_id == "network" && handled)
+                            result.outcome = contracts::RecognitionOutcome::NoHit;
+                        if (request.recognizer_id == "failure" && handled) {
+                            ++fresh_checks;
+                            result.outcome = recognition_error ? contracts::RecognitionOutcome::Error :
+                                still_present ? contracts::RecognitionOutcome::Hit : contracts::RecognitionOutcome::NoHit;
+                            if (recognition_error) result.error_code = "RECHECK_BROKEN";
+                        }
+                        return result;
+                    }
+                    runtime::OperationResult operate(const std::string &, const nlohmann::json &,
+                        const std::optional<contracts::FrameEnvelope> &, const std::optional<contracts::Observation> &,
+                        const std::string &) override {
+                        handled = true; ++handler_calls;
+                        return {runtime::OperationState::Done};
+                    }
+                } ports;
+                ports.still_present = mode == "still_present";
+                ports.recognition_error = mode == "recognition_error";
+                recognition::Request guard{"failure", "1", {0,0,900,1600},
+                    recognition::CustomParameters{"WvdVision", nlohmann::json::object()}};
+                workflow::FlowProgram program; program.revision = "recovery-recheck"; program.root_definition = "root";
+                workflow::Definition root; root.id = "root"; root.entry = "failure";
+                auto failure = step("failure", workflow::Fail{"ORIGINAL_FAILURE"});
+                if (mode != "unconditional") { failure.guard = guard; failure.next = {"done"}; }
+                workflow::EventRule event;
+                event.id = "network"; event.category = workflow::EventClass::Exception;
+                event.detect = guard; event.detect.recognizer_id = "network";
+                event.handler_definition = "handler"; event.resume = workflow::ResumeMode::Reobserve;
+                failure.event_policy.push_back(event);
+                root.steps.emplace("failure", std::move(failure));
+                root.steps.emplace("done", step("done", workflow::Finish{}));
+                program.definitions.emplace("root", std::move(root));
+                workflow::Definition handler; handler.id = "handler"; handler.entry = "handle";
+                handler.steps.emplace("handle", step("handle", workflow::RegisteredOperation{"NetworkRetry", nlohmann::json::object()}, {"return"}));
+                handler.steps.emplace("return", step("return", workflow::Return{"completed"}));
+                program.definitions.emplace("handler", std::move(handler));
+                program.validate();
+                if (mode == "cleared") {
+                    for (const bool remove_guard : {false, true}) {
+                        auto invalid = program;
+                        auto &bad = invalid.definitions.at("root").steps.at("failure");
+                        if (remove_guard) bad.guard.reset(); else bad.next.clear();
+                        bool rejected = false;
+                        try { invalid.validate(); } catch (const std::exception &error) {
+                            rejected = std::string(error.what()) == "FLOW_RECOVERY_RECHECK_INVALID";
+                        }
+                        if (!rejected) throw std::runtime_error("INCOMPLETE_RECOVERY_CONTRACT_ACCEPTED");
+                    }
+                }
+                runtime::FlowExecutor executor(program, ports, 3s);
+                runtime::TickResult result;
+                for (int i = 0; i < 100; ++i) {
+                    result = executor.tick();
+                    if (result.state == runtime::TickState::Waiting) std::this_thread::sleep_until(result.wake_at);
+                    if (result.state != runtime::TickState::Progress && result.state != runtime::TickState::Waiting) break;
+                }
+                const auto expected = mode == "cleared" ? runtime::TickState::Completed : runtime::TickState::Failed;
+                if (result.state != expected || ports.handler_calls != 1 ||
+                    (mode != "unconditional" && ports.fresh_checks == 0) || executor.has_unresolved_input() ||
+                    (mode == "recognition_error" && result.code != "RECHECK_BROKEN") ||
+                    ((mode == "still_present" || mode == "unconditional") && result.code != "ORIGINAL_FAILURE"))
+                    throw std::runtime_error("RECOVERY_RECHECK_FAILED:" + mode + ":" + result.code);
+            }
+            std::cout << "PASS event-return recheck: cleared resumes, persistent/error/unconditional fail, no input\n";
+            return 0;
+        }
         if (argc == 2 && std::string(argv[1]) == "--linkage-closure") {
             // Uses the production FlowExecutor. Only pixels, device and recognition leaves
             // are replaced; no real game input or service is opened by this entry.

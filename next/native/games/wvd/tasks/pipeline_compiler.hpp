@@ -83,7 +83,11 @@ class PipelineCompiler {
                      const nlohmann::json &arguments, nlohmann::json next,
                      nlohmann::json handoffs = nlohmann::json::object(),
                      nlohmann::json condition = nullptr);
-    void recovery(const std::string &name, const std::string &reason);
+    // A conditional failure must reobserve before failing; cleared_next stays
+    // within this business scope and cannot authorize replay of pending input.
+    void recovery(const std::string &name, const std::string &reason,
+                  nlohmann::json still_present = nullptr,
+                  nlohmann::json cleared_next = nlohmann::json::array());
     // 已知分类失败后的第五次未知观察才允许生成跳跃等待/转交意图，不发送输入。
     void unknown_leap(const std::string &name, nlohmann::json next,
                       nlohmann::json extra_known = nlohmann::json::array(), bool classified = false);
