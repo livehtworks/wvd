@@ -42,3 +42,16 @@
 ## 交付顺序
 
 先提交源码、调查报告和修复证据索引，推送个人fork/agent/local-stability-notes；不提交用户.vscode或本地游戏配置。之后基于已提交源码构建candidate130并通过原manage_service整体部署。正式profile哈希、实际服务身份、请求和30轮启动回执在执行后补记，不预填成功。
+
+## 实际部署与启动
+
+- 修复及分析器提交abb4f6c8fad2cd9abe55637af68675b0d140a331，已推送fork/agent/local-stability-notes。candidate130构建回执worktree_dirty=false、untracked_source_count=0。
+- EXE SHA256：A0F5C96AD3334870EA488C91F33702D26E364382A663FF35B8458C60533DB3CB。与129已验证二进制一致；130冻结新提交/工具/报告，不改写129历史身份。
+- 原129/PID32648正常退出；130/PID43136、服务31B4D601-16B9-43D5-9196-E74A932843FB、进程创建134358470585895056，仍为17654/原data。
+- 正式profile SHA256仍为3E873D08FB9135F558C3E3348B3BFFFFF3B73555C63A9176CC75CFF274CCB87C。未改战斗方案或设备配置。
+- 新请求d599b18c-7a3d-4448-82a7-f95678588fe6，任务GiantBounty、zh-Hant、repeat_count=30。协调器1ABAA4DD-74A9-4C18-A262-A3B0F72497F7/run1实际Running，repeat.active=true、target_cycles=30；记录时完成0轮，未宣称30轮结果。
+- 启动链EnsureVpn与StartApplication均有已确认事件；观察application_running/application_foreground/vpn_ready为true，已运行则保持，不重复切换。内存runtime_sample、preparation.completed和对象live记录均已在正式日志写入。
+- 完整任务编译3.286秒，发布21.986秒（包含源验证8.849秒、复制11.276秒），599文件；分段不是互斥时间，不将它们叠加成总耗时。初始系统提交约83%，不等于内存长期问题已经解决。
+- 原始请求/回执、日志开关与冻结PDB在next/.local/giant130-30；构建、stage、部署日志分别为next/.local/giant130-build.log、giant130-stage.log、giant130-deploy.log。每轮正式目录为next/.local/c11-flow-product/data/runs/1ABAA4DD-74A9-4C18-A262-A3B0F72497F7/<run_id>/。原始日志不上传。
+
+启动后的事实更新单独提交，仅更新本报告及当前状态，不改变已部署产品源码和构建身份。

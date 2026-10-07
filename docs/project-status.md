@@ -2,9 +2,9 @@
 
 ## 当前内存整改与部署
 
-- 用户最新授权：提交/推送/部署后启动全新30轮巨人循环，旧28轮不累计。当前仍为candidate129空闲，待完成上述顺序再启动。沿用debug、memory/performance/recognition及1000ms采样，新补逐堆差分分析，缺失/失败/地址变化不补0；不启用WPR或运行中CDB，不更改战斗/VPN配置。调查结论、采集范围及后续核查方法见[30轮内存调查](reviews/giant130-memory-investigation-20261007.md)。
+- 用户最新授权的30轮巨人已启动：源码abb4f6c提交并推送个人fork后，candidate130以干净源码身份构建部署原17654/原data，PID43136/服务31B4D601-16B9-43D5-9196-E74A932843FB。请求d599b18c-7a3d-4448-82a7-f95678588fe6，协调器1ABAA4DD-74A9-4C18-A262-A3B0F72497F7，run1实际Running、repeat active/目标30，记录时完成0轮；旧28轮不累计。EnsureVpn/StartApplication均确认，沿用debug、memory/performance/recognition及1000ms采样，新补逐堆差分分析，缺失/失败/地址变化不补0；不启用WPR或运行中CDB，profile哈希未变。调查结论、采集范围及启动证据见[30轮内存调查](reviews/giant130-memory-investigation-20261007.md)。
 
-- 用户已暂停巨人循环：28/50完成，第29轮UserStopped，游戏现场保留、不自动恢复。candidate129已部署原17654/原data，PID32648、服务231488BA-8C24-4330-AD99-4D5E170EF228，Idle/busy=false/quiescent=true，正式profile哈希未变；本轮源码未提交。此次修复停止监视线程提前退出导致漏join/漏堆回收、灰色不可用技能反复补点；新增逐堆证据及关闭日志时跳过堆统计。完整任务准备的同EXE堆策略A/B第四次私有提交62.4→47.1MiB、存活分配基本不变，产品采用Windows SegmentHeap；停止接口、原技能开启契约、三张真实技能图经生产识别服务及真实繁中OCR验证通过。长期资源稳定性仍未证明，不恢复50轮验证。详见[暂停修复报告](reviews/paused-loop-memory-repair-20261007.md)。
+- 上一轮暂停修复现已包含在abb4f6c：28/50完成、第29轮UserStopped。candidate129原PID32648已通过部署管理器正常退出，由130承接。修复停止监视线程提前退出导致漏join/漏堆回收、灰色不可用技能反复补点；新增逐堆证据及关闭日志时跳过堆统计。完整任务准备的同EXE堆策略A/B第四次私有提交62.4→47.1MiB、存活分配基本不变，产品采用Windows SegmentHeap；停止接口、原技能开启契约、三张真实技能图经生产识别服务及真实繁中OCR验证通过。长期资源稳定性仍未证明，后续按上条新30轮采集，不将历史50轮写成完成。详见[暂停修复报告](reviews/paused-loop-memory-repair-20261007.md)。
 
 - 上一候选candidate128的50轮批次已停止，28轮Completed，每轮提交/住宿各1次，第29轮按用户要求取消；协调器097D793A-C476-4B88-B5B6-5034808C4236、请求32fc1ee2-c7b5-4494-a8b2-4eeec5755ba6。前27轮无重启操作记录，日志/截图失败与丢弃0；第3/5/24轮面具低SP、技能灰色仍重试约21秒后防御。收尾私有提交38.65→63.28MiB，实际堆分配仅+179.88KiB，总占用仍未稳定。系统提交压力最高99.01%。历史核查见[27轮只读核查](reviews/giant128-round27-review-20261007.md)，不能把该旧候选结果当作129实机验收。
 - candidate123基线两轮收尾PrivateUsage为57139200/66756608字节。candidate125加入worker join后的HeapOptimizeResources，两轮均Completed、耗时360.671/407.037秒；API窗口各回收15036416/31694848字节，耗时3581/6296微秒；收尾43110400/47423488字节。仍有4313088字节差，历史增长保留RESOURCE_UNRESOLVED，不宣称全部泄漏已解决。
