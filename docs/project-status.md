@@ -2,11 +2,11 @@
 
 ## 当前内存整改与部署
 
-- 当前候选为candidate127，原17654/原data，PID28728、服务CDA71E2A-D0EA-475E-BCE0-12C66EC7D12E，Idle/不busy/静止。准备链的锁定句柄流式复制、取消回滚、语言无替换不复制、退出实例重连及观察期限清除均已部署；新增状态接口锁内借用索引，额外2561个无关索引不增加分配，真实接口结果不变。正式profile哈希未变。candidate123已实际打开VPN/启动游戏并完成两轮，旧“尚未部署/管理员取消”不是当前阻断。
+- 当前候选为candidate128，由已推送个人fork的修复提交1c8c72365696964f66d4381c30ca4ac0264519a5构建（干净源码、无未跟踪源码），已部署原17654/原data。PID36736、服务86FCDDF2-FB64-4DCA-9832-555BE93888C6。巨人50轮已实际启动，首轮Running，协调器097D793A-C476-4B88-B5B6-5034808C4236、请求32fc1ee2-c7b5-4494-a8b2-4eeec5755ba6。VPN及游戏前台已由正式生命周期确认；日志和近期帧已产生。不能把开始运行写成50轮完成，后续状态以当前服务及逐轮result.json为准。
 - candidate123基线两轮收尾PrivateUsage为57139200/66756608字节。candidate125加入worker join后的HeapOptimizeResources，两轮均Completed、耗时360.671/407.037秒；API窗口各回收15036416/31694848字节，耗时3581/6296微秒；收尾43110400/47423488字节。仍有4313088字节差，历史增长保留RESOURCE_UNRESOLVED，不宣称全部泄漏已解决。
 - candidate126两轮有限实机请求f88d0433-5091-4359-b15f-f77e85c56970已Completed/2次，合计891.786秒；同worker维护后实际堆分配17313175→17362545（+49370），PrivateUsage43036672→45932544（+2895872）。回收前后allocated各自不变，API窗口各下降12439552/18710528字节；累计6个识别服务/OCR/会话均销毁、live=0。由此确认空闲堆页滞留可实际回收，但不覆盖全部非堆所有权或解释历史全部45.11MiB。现有analyze_memory_owners自动同进程/同边界差分，缺字段不补0。真实OCR四次实际分配完全相同、独立四次完整准备身份/599哈希/取消保护通过。最终127只改状态索引查询，同回收逻辑，未额外跑游戏；没有50/100轮。
 - 不再原样重试失败采集：持续WPR使准备超过120秒；CDB实时逐块堆遍历和完整克隆的离线遍历分别超30/60秒。PSS完整转储仅本地忽略目录保存，不能将摘要/无效mini转储称为有效分配栈。整机另有MuMu实例0的多GiB占用，与本任务实例2及WVD分别记录，不结束用户其他应用。
-- 计划、改动、原始失败及有效证据见[执行计划](reviews/memory-resolution-plan-20261007.md)和[内存整改报告](reviews/memory-resolution-20261007.md)。用户已授权本轮commit/push/部署并继续巨人50轮；当前正在提交并从提交版本重新打包，尚未启动新批次。日志为debug，memory/performance/recognition开启、内存间隔1000ms，MuMu实例2/繁中/AUTO_START_CLASH=true；近期帧最多240张且128MiB，异常永久图另列。用户.vscode修改不纳入提交，不启用高开销WPR/CDB跟踪。
+- 计划、改动、原始失败及有效证据见[执行计划](reviews/memory-resolution-plan-20261007.md)和[内存整改报告](reviews/memory-resolution-20261007.md)。本轮按用户授权完成源码提交推送、部署及50轮启动；身份与证据目录见[启动记录](reviews/giant128-50-start-20261007.md)。日志为debug，memory/performance/recognition开启、内存间隔1000ms，MuMu实例2/繁中/AUTO_START_CLASH=true；近期帧最多240张且128MiB，异常永久图另列。用户.vscode修改未纳入提交，不启用高开销WPR/CDB跟踪。
 
 ## 1c89a08审查整改背景
 
