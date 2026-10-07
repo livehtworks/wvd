@@ -1,8 +1,8 @@
 # 当前数据权威
 
-收尾堆诊断的heap_summary_before/after记录HeapSummary可用性、完整性、堆数、失败数、allocated/committed/reserved及微秒耗时，仍由原RunStore按memory/info写入同一固定生命周期槽；不增加配置或另一运行所有者，不将堆内部提交当进程PrivateUsage。独立ProcDump诊断转储可能含用户配置/进程内容，仅保留在忽略的next/.local，禁止当普通报告提交或上传；无效小转储及超时原始日志保留负证据，不改变正式结果。
+收尾堆诊断的heap_summary_before/after记录HeapSummary可用性、完整性、堆数、失败数、allocated/committed/reserved及微秒耗时；per_heap以同进程堆地址区分主堆与其它堆，最多64条，包含各自API失败和耗时，失败的字节数为null。仍由原RunStore按memory/info写入同一固定生命周期槽；关闭采集时跳过逐堆查询，空闲页回收仍执行。不增加配置或另一运行所有者，不将堆内部提交当进程PrivateUsage。停止请求不等于收尾完成，原Application监视线程必须等任务线程终态、join及批次释放后才结束。独立ProcDump诊断转储可能含用户配置/进程内容，仅保留在忽略的next/.local，禁止当普通报告提交或上传；无效小转储及超时原始日志保留负证据，不改变正式结果。
 
-现有analyze_memory_owners可读取--run-directory与较早的--compare-run-directory，在权威数据外输出同进程/同维护边界的heap_comparison派生数字；输入只读，禁止在任一输入目录写报告。PID/创建/协调器/run顺序与采样完整性共同门控，比较成功不修改业务结果或宣称全部分配栈已归因。
+现有analyze_memory_owners可读取--run-directory与较早的--compare-run-directory，在权威数据外输出同进程/同维护边界的heap_comparison派生数字；输入只读，禁止在任一输入目录写报告。PID/创建/协调器/run顺序与采样完整性共同门控，比较成功不修改业务结果或宣称全部分配栈已归因。per_heap_comparison另核每侧最多64个唯一地址、主堆身份、逐堆成功和总量一致；记录存活分配/内部提交/保留量差及原统计耗时。新出现/消失地址单列，缺失侧保留null，不补0；同地址也可能已被复用，不等于同一分配所有者。旧日志缺逐堆记录时明确该部分不完整，不影响独立核验已有总量。
 
 独立堆布局取证由`capture_idle_heap.ps1`在权威data外写`cdb.log`、`regions.json`及`receipt.json`，使用CDB -pvr不暂停进程，只读同一进程的堆摘要、正式终态和batch_payloads_released；VirtualQueryEx另读提交区间元数据，不读内存内容、不更改profile、结果或业务状态。私有/映射/映像区间不是分配栈或对象所有权。可选分配大小表必须指定实际主堆地址且验证表存在，不能把摘要冒充大小表。缺符号/附着失败/期间发生运行切换必须标记不完整。工作线程收尾新增`heap_resources_optimized`诊断阶段，与原三个阶段并存，共四个固定槽；包含Windows空闲堆页回收前后私有提交、API错误和耗时，原worker_joined不被覆盖。该运行维护不受日志开关影响，样本落盘仍受memory/info门禁控制。
 

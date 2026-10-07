@@ -541,7 +541,18 @@ int main(int argc, char **argv) {
                     (supported && (!heap.at("complete").get<bool>() || heap.at("failed") != 0 ||
                         heap.at("heaps").get<unsigned>() == 0 || heap.at("allocated_bytes").get<std::uint64_t>() < live_allocation.size())))
                     throw std::runtime_error("MEMORY_HEAP_SUMMARY_INVALID");
+                std::uint64_t allocated = 0;
+                for (const auto &entry : heap.at("per_heap")) {
+                    if (!entry.at("complete").get<bool>() || entry.at("address") == 0)
+                        throw std::runtime_error("MEMORY_PER_HEAP_INCOMPLETE");
+                    allocated += entry.at("allocated_bytes").get<std::uint64_t>();
+                }
+                if (allocated != heap.at("allocated_bytes").get<std::uint64_t>())
+                    throw std::runtime_error("MEMORY_PER_HEAP_TOTAL_MISMATCH");
             }
+            const auto silent = platform::optimize_idle_heap(false);
+            if (!silent.succeeded || silent.heap_before.available || silent.heap_after.available)
+                throw std::runtime_error("MEMORY_DISABLED_STILL_ENUMERATES_HEAPS");
             coordinator.collect_finished_worker();
             coordinator.record_batch_release();
             nlohmann::json repeated;

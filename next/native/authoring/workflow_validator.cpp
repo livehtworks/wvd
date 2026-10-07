@@ -207,6 +207,11 @@ void validate_condition(const J &condition, const std::string &node_id,
         if (condition.contains("selected") && !condition.at("selected").is_boolean()) fail("AUTHOR_CONDITION_INVALID", node_id);
         return;
     }
+    if (mode == "combat_skill_disabled") {
+        exact_object(condition, {"mode", "slot"}, {}, "AUTHOR_CONDITION_INVALID", node_id);
+        integer(condition.at("slot"), 0, 3, "AUTHOR_CONDITION_INVALID", node_id);
+        return;
+    }
     if (mode == "support_selection") {
         exact_object(condition, {"mode"}, {"expect", "slot"}, "AUTHOR_CONDITION_INVALID", node_id);
         const auto expected = condition.value("expect", "present");

@@ -346,6 +346,52 @@ int closure_application(const std::filesystem::path &pack, const std::filesystem
 
 int main(int argc, char **argv) {
     try {
+        if (argc == 5 && std::string(argv[1]) == "--stop-release") {
+            using A = wvd::app::ApplicationAssemblyTestAccess;
+            const auto root = std::filesystem::absolute(argv[4]);
+            require_closure(!std::filesystem::exists(root), "STOP_RELEASE_ROOT_MUST_BE_FRESH");
+            std::filesystem::create_directories(root);
+            auto backend = std::make_shared<OfflineConnection>(std::filesystem::absolute(argv[2]));
+            wvd::app::Application app({root / "data", std::filesystem::absolute(argv[2]), {}, std::filesystem::absolute(argv[3])}, backend);
+            auto &coordinator = A::coordinator(app);
+            std::atomic<bool> entered{false}, release{false};
+            auto definition = closure_definition(root / "bundle", "stop-release", [&] {
+                entered = true;
+                while (!release) std::this_thread::sleep_for(5ms);
+            });
+            definition.logging.memory = true;
+            definition.logging.level = wvd::storage::LogLevel::Info;
+            coordinator.start(std::move(definition), backend);
+            // Always release the isolated worker if an assertion throws.
+            struct Release { std::atomic<bool> &flag; ~Release() { flag = true; } } cleanup{release};
+            const auto deadline = std::chrono::steady_clock::now() + 5s;
+            while (!entered && std::chrono::steady_clock::now() < deadline) std::this_thread::sleep_for(5ms);
+            require_closure(entered, "STOP_WORKER_NOT_ENTERED");
+            A::watch(app, backend, "stop-release");
+            call(app, wvd::api::http::verb::post,
+                "/api/v1/runs/" + std::to_string(coordinator.snapshot().run_id) + "/stop");
+            std::this_thread::sleep_for(350ms);
+            const auto pending = call(app, wvd::api::http::verb::get, "/api/v1/runs/current");
+            require_closure(pending.at("repeat").at("active") == true && pending.at("busy") == true,
+                            "STOP_RELEASE_WATCHER_EXITED_BEFORE_WORKER");
+            release = true;
+            J ended;
+            do {
+                std::this_thread::sleep_for(20ms);
+                ended = call(app, wvd::api::http::verb::get, "/api/v1/runs/current");
+            } while (ended.at("busy") == true && std::chrono::steady_clock::now() < deadline);
+            require_closure(ended.at("busy") == false && ended.at("state") == "UserStopped" &&
+                ended.at("repeat").at("completed_cycles") == 0 && backend->inputs == 0, "STOP_RELEASE_TERMINAL_INVALID");
+            std::ifstream memory(coordinator.run_directory() / "memory-lifecycle.json");
+            const auto boundaries = J::parse(memory);
+            for (const auto *phase : {"worker_definition_released", "worker_joined", "heap_resources_optimized", "batch_payloads_released"})
+                require_closure(boundaries.at("samples").contains(phase), "STOP_RELEASE_BOUNDARY_MISSING");
+            std::ofstream(root / "result.json") << J{{"passed", true}, {"pending", pending},
+                {"ended", ended}, {"memory", boundaries}, {"game_inputs", 0}}.dump(2);
+            app.stop();
+            std::cout << "Stop waits for actual worker release without blocking the control API; all four boundaries recorded\n";
+            return 0;
+        }
         if (argc == 6 && std::string(argv[1]) == "--prepare-device") {
             const auto root = std::filesystem::absolute(argv[5]);
             if (std::filesystem::exists(root)) throw std::runtime_error("DEVICE_PREPARATION_ROOT_MUST_BE_FRESH");
@@ -466,7 +512,8 @@ int main(int argc, char **argv) {
             return 0;
         }
         if ((argc == 8 || argc == 9) && std::string(argv[1]) == "--publication-prepare") {
-            const bool memory_cycles = argc == 9 && std::string(argv[8]) == "--memory-cycles";
+            const bool current_memory = argc == 9 && std::string(argv[8]) == "--current-memory";
+            const bool memory_cycles = current_memory || (argc == 9 && std::string(argv[8]) == "--memory-cycles");
             require_closure(argc == 8 || memory_cycles, "PREPARATION_OPTION_UNKNOWN");
             const auto root = std::filesystem::absolute(argv[7]);
             if (std::filesystem::exists(root)) throw std::runtime_error("PREPARATION_TEST_ROOT_MUST_BE_FRESH");
@@ -495,6 +542,8 @@ int main(int argc, char **argv) {
                 require_closure(bool(phases), "PREPARATION_PHASE_WRITE_FAILED");
             };
             J cycle_reports = J::array();
+            J first_identity;
+            std::map<std::string, std::string> first_files;
             for (int cycle = 0; cycle < (memory_cycles ? 4 : 1); ++cycle) {
             wvd::app::ApplicationAssemblyTestAccess::cancel(app, false);
             const auto before = wvd::platform::sample_memory();
@@ -502,11 +551,22 @@ int main(int argc, char **argv) {
             const auto &bundle = definition.units.front().bundle;
             { std::ofstream metrics(root / "preparation-metrics.json"); metrics << definition.preparation.dump(2); }
             const auto baseline = std::filesystem::absolute(argv[5]);
-            {
+            if (current_memory) {
+                std::ifstream identity(bundle.root / "program/identity.json");
+                const auto value = J::parse(identity);
+                std::map<std::string, std::string> files;
+                for (const auto &file : bundle.files) {
+                    require_closure(wvd::platform::file_sha256(bundle.root / wvd::platform::BundleLease::checked_relative(file.relative_path)) == file.sha256,
+                                    "CURRENT_PUBLISHED_HASH_INVALID");
+                    files.emplace(file.relative_path, file.sha256);
+                }
+                if (!cycle) { first_identity = value; first_files = files; }
+                require_closure(value == first_identity && files == first_files, "REPEATED_PREPARATION_CHANGED");
+            } else {
                 std::ifstream old_identity(baseline / "program/identity.json"), new_identity(bundle.root / "program/identity.json");
                 require_closure(J::parse(old_identity) == J::parse(new_identity), "PREPARATION_BASELINE_IDENTITY_CHANGED");
             }
-            for (const auto &file : bundle.files)
+            if (!current_memory) for (const auto &file : bundle.files)
                 require_closure(wvd::platform::file_sha256(baseline / wvd::platform::BundleLease::checked_relative(file.relative_path)) == file.sha256,
                                 "PREPARATION_BASELINE_FILE_CHANGED:" + file.relative_path);
             require_closure(definition.preparation.at("source_model_bytes_after_copy") == 0,
@@ -515,7 +575,7 @@ int main(int argc, char **argv) {
             J report_data{{"metrics", definition.preparation},
                 {"program_revision", bundle.revision}, {"game_inputs", backend->inputs.load()},
                 {"tracking", std::getenv("WVD_PREPARATION_GATE") ? "PID HeapSnapshots" : "disabled"},
-                {"comparison", "candidate121 run18 identity and all published hashes"}};
+                {"comparison", current_memory ? "same current workflow identity and all hashes across four preparations" : "candidate121 run18 identity and all published hashes"}};
             const auto path = bundle.root;
             wvd::app::ApplicationAssemblyTestAccess::cancel(app, true);
             bool cancelled = false;
@@ -548,7 +608,8 @@ int main(int argc, char **argv) {
             std::ofstream output(argv[6]); output << (memory_cycles ? cycle_reports : cycle_reports.front()).dump(2);
             output.close(); require_closure(bool(output), "PREPARATION_RESULT_WRITE_FAILED");
             app.stop();
-            std::cout << "Frozen Giant preparation identity and all hashes match candidate121; model cache=0; game inputs=0\n";
+            std::cout << (current_memory ? "Current Giant preparation repeated with identical identity/hashes" : "Frozen Giant preparation identity and all hashes match candidate121")
+                      << "; model cache=0; game inputs=0\n";
             return 0;
         }
         if (argc == 5 && std::string(argv[1]) == "--combat-editor") {

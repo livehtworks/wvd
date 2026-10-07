@@ -84,6 +84,9 @@ class RunStore {
     const std::filesystem::path &directory() const {
         return directory_;
     }
+    bool memory_logging_enabled() const noexcept {
+        return logging_.memory && logging_.accepts(LogLevel::Info);
+    }
     static nlohmann::json read_summary(const std::filesystem::path &directory);
 
   private:

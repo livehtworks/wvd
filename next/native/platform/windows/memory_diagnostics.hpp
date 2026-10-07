@@ -26,15 +26,21 @@ struct HeapMaintenance {
     std::uint64_t elapsed_us{};
     MemorySample before, after;
     struct Usage {
+        struct Heap {
+            std::uint64_t address{}, allocated{}, committed{}, reserved{}, elapsed_us{};
+            std::uint32_t error{};
+            bool process_heap{}, complete{};
+        };
         bool available{}, complete{};
         std::uint32_t heaps{}, failed{};
         std::uint64_t allocated{}, committed{}, reserved{}, elapsed_us{};
+        std::array<Heap, 64> detail{};
     };
     Usage heap_before, heap_after;
 };
 // Call only at an idle ownership boundary, not from the recognition hot path.
 // Windows may decommit free LFH pages; live allocations remain owned by callers.
-HeapMaintenance optimize_idle_heap() noexcept;
+HeapMaintenance optimize_idle_heap(bool measure = true) noexcept;
 enum class MemoryOwnerKind { RecognitionService, OcrEngine, ExecutionSession };
 struct LifetimeCounts { std::uint64_t created{}, destroyed{}, live{}, ready{}; };
 class MemoryOwnerLifetime final {

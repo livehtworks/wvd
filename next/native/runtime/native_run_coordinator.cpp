@@ -124,11 +124,22 @@ void NativeRunCoordinator::join_worker() {
     record_memory_boundary("worker_joined");
     // The definition and all session owners have already been destroyed. Keep
     // the original pre-maintenance sample so reclamation cannot hide growth.
-    const auto heap = platform::optimize_idle_heap();
+    const bool measure = store_ && store_->memory_logging_enabled();
+    const auto heap = platform::optimize_idle_heap(measure);
+    if (!measure) return;
     try {
         auto sample = memory_record(heap.after);
         const auto usage = [](const platform::HeapMaintenance::Usage &value) {
-            return nlohmann::json{{"available", value.available}, {"complete", value.complete},
+            auto heaps = nlohmann::json::array();
+            for (std::size_t i = 0; i < std::min<std::size_t>(value.heaps, value.detail.size()); ++i) {
+                const auto &entry = value.detail[i];
+                heaps.push_back({{"address", entry.address}, {"process_heap", entry.process_heap},
+                    {"complete", entry.complete}, {"win32_error", entry.error}, {"elapsed_us", entry.elapsed_us},
+                    {"allocated_bytes", entry.complete ? nlohmann::json(entry.allocated) : nullptr},
+                    {"committed_bytes", entry.complete ? nlohmann::json(entry.committed) : nullptr},
+                    {"reserved_bytes", entry.complete ? nlohmann::json(entry.reserved) : nullptr}});
+            }
+            return nlohmann::json{{"available", value.available}, {"complete", value.complete}, {"per_heap", std::move(heaps)},
                 {"heaps", value.heaps}, {"failed", value.failed}, {"allocated_bytes", value.allocated},
                 {"committed_bytes", value.committed}, {"reserved_bytes", value.reserved},
                 {"elapsed_us", value.elapsed_us}};

@@ -47,6 +47,39 @@ def ownership_boundaries(path: Path) -> dict:
             "missing": [] if owners else ["object initialization/destruction boundaries"]}
 
 
+def compare_heap_details(before: dict, after: dict) -> dict:
+    fields = ("allocated_bytes", "committed_bytes", "reserved_bytes")
+    tables = []
+    for summary in (before, after):
+        entries = summary.get("per_heap")
+        if not isinstance(entries, list) or not 1 <= len(entries) <= 64 or len(entries) != summary.get("heaps"):
+            return {"complete": False, "missing": ["bounded per_heap inventory"]}
+        table = {}
+        for entry in entries:
+            if (not isinstance(entry, dict) or entry.get("complete") is not True or
+                    entry.get("win32_error") != 0 or type(entry.get("process_heap")) is not bool or
+                    any(type(entry.get(key)) is not int or entry[key] < 0 for key in (*fields, "elapsed_us")) or
+                    type(entry.get("address")) is not int or entry["address"] <= 0 or entry["address"] in table):
+                return {"complete": False, "missing": ["valid unique per_heap observations"]}
+            table[entry["address"]] = entry
+        if (sum(entry["process_heap"] for entry in entries) != 1 or
+                any(sum(entry[key] for entry in entries) != summary.get(key) for key in fields)):
+            return {"complete": False, "missing": ["per_heap totals/main heap agreement"]}
+        tables.append(table)
+    first, last = tables
+    if next(key for key, row in first.items() if row["process_heap"]) != next(
+            key for key, row in last.items() if row["process_heap"]):
+        return {"complete": False, "missing": ["stable process heap address"]}
+    rows = []
+    for address in sorted(first.keys() | last.keys()):
+        old, new = first.get(address), last.get(address)
+        rows.append({"address": address, "before": old, "after": new,
+            "presence": "both" if old and new else "appeared" if new else "disappeared",
+            "change_bytes": {key: new[key] - old[key] for key in fields} if old and new else None})
+    return {"complete": True, "heaps": rows,
+        "interpretation": "same-process address observations; addresses can be reused, not allocation ownership or stacks"}
+
+
 def compare_heap_boundaries(before: dict, after: dict) -> dict:
     phase = "heap_resources_optimized"
     samples = [item.get("samples", {}).get(phase) for item in (before, after)]
@@ -82,6 +115,8 @@ def compare_heap_boundaries(before: dict, after: dict) -> dict:
         "before_run": before["run_id"], "after_run": after["run_id"], "samples": rows,
         "allocated_change_bytes": rows[1]["allocated_bytes"] - rows[0]["allocated_bytes"],
         "private_change_bytes": rows[1]["private_bytes"] - rows[0]["private_bytes"],
+        "per_heap_comparison": compare_heap_details(*[
+            sample["heap_maintenance"]["heap_summary_after"] for sample in samples]),
         "interpretation": "same-process heap totals; not allocation stacks or all VirtualAlloc ownership"}
 
 
@@ -130,6 +165,7 @@ def main() -> None:
             if earlier.exists() and "lifecycle" in report:
                 report["heap_comparison"] = compare_heap_boundaries(read_json(earlier), report["lifecycle"])
                 report["missing"].extend(report["heap_comparison"].get("missing", []))
+                report["missing"].extend(report["heap_comparison"].get("per_heap_comparison", {}).get("missing", []))
             else:
                 report["missing"].append("comparison memory-lifecycle.json")
     if args.census:

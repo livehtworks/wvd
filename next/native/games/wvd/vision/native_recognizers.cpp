@@ -6,6 +6,7 @@
 #include "games/wvd/tasks/locale_assets.hpp"
 #include "search_regions.hpp"
 #include "support_cards.hpp"
+#include "skill_availability.hpp"
 #include "bobber.hpp"
 #include "games/wvd/fishing/unknown_window.hpp"
 #include "boot_probes.hpp"
@@ -1525,6 +1526,15 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
             }
         }
         return decision(false, {}, {{"attempts", attempts}});
+    }
+    if (mode == "combat_skill_disabled") {
+        const int slot = p.at("slot").get<int>();
+        check(slot >= 0 && slot < 4 && p.size() == 2, "COMBAT_SKILL_SLOT_INVALID");
+        check((cv::Rect(0, 930, 820, 180) & allowed_rect) == cv::Rect(0, 930, 820, 180), "WVD_ROI_OUTSIDE_SCOPE");
+        const auto measured = measure_skill_availability(image, slot);
+        const cv::Rect label(slot % 2 ? 520 : 145, slot / 2 ? 1040 : 950, 230, 40);
+        return decision(measured.disabled, label, {{"slot", slot}, {"bright_pixels", measured.bright_pixels},
+            {"text_edges", measured.text_edges}, {"reason", measured.disabled ? "disabled_menu_label" : "not_proven_disabled"}}, false);
     }
     if (mode == "support_selection") {
         const auto expected = p.value("expect", "present");

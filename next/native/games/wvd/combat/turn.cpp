@@ -156,7 +156,12 @@ tasks::CompiledWorkflow take_turn(const J &profile, const std::set<std::string> 
             const int use_level = attempt ? 1 : level;
             const J target_choices{s + "Support", s + "Confirm", s + "Enemy0",
                 "ActorChanged", "Ended", s + "ResourceError", s + "DetailClosed"};
-            graph.route(prefix + "Open" + std::to_string(attempt), {s + "Open0"});
+            const int slot_index = (position[1].get<int>() > 1000 ? 2 : 0) + (position[0].get<int>() > 450 ? 1 : 0);
+            const auto unavailable = C::all({menu, actor, J{{"mode", "combat_skill_disabled"}, {"slot", slot_index}}});
+            graph.route(prefix + "Open" + std::to_string(attempt), {s + "Disabled", s + "Open0"});
+            graph.observe(s + "Disabled", unavailable, {s + "DisabledAgain", s + "Open0"});
+            graph.delay_after(s + "Disabled", 250);
+            graph.observe(s + "DisabledAgain", unavailable, {prefix + "UnavailableDefend"});
             // 详情打开由同一次公共调用等待并补点，原菜单不能充当成功回执。
             graph.public_step(s + "Open0", "combat-open-detail", {{"x", position[0]}, {"y", position[1]}},
                               {s + "Detail", s + "ResourceError", "Ended", "ActorChanged"},

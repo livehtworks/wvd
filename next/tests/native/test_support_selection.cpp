@@ -6,9 +6,11 @@
 #include "games/wvd/vision/native_recognizers.hpp"
 #include "games/wvd/vision/native_asset_resolver.hpp"
 #include "games/wvd/vision/support_cards.hpp"
+#include "games/wvd/vision/skill_availability.hpp"
 #include "recognition/service.hpp"
 #include "storage/legacy_import.hpp"
 #include "platform/windows/file_digest.hpp"
+#include "platform/windows/runtime_files.hpp"
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
 #include <fstream>
@@ -20,6 +22,40 @@ void check(bool ok, const std::string &reason) { if (!ok) throw std::runtime_err
 J read(const char *file) { std::ifstream in(file); return J::parse(in); }
 int main(int argc, char **argv) {
     try {
+        if (argc == 5 && std::string(argv[1]) == "--disabled-skills") {
+            const auto root = std::filesystem::temp_directory_path() / ("wvd-skill-" + platform::unique_id());
+            std::filesystem::create_directories(root);
+            std::filesystem::copy_file(argv[2], root / "frame.png");
+            recognition::Service service({root, "recorded-menu", {{"frame.png", platform::file_sha256(root / "frame.png")}}},
+                games::vision::native_handlers(J::object(), "zh-Hant"));
+            contracts::FrameEnvelope frame;
+            frame.identity.device_id = "recorded"; frame.identity.game_id = "wvd";
+            frame.identity.pack_revision = "recorded-menu"; frame.identity.viewport_id = "900x1600";
+            frame.identity.generation = 1; frame.identity.raw_size = frame.identity.recognition_size = {900, 1600};
+            for (int i = 2; i < 5; ++i) {
+                const auto pixels = cv::imread(argv[i]);
+                check(pixels.size() == cv::Size(900, 1600), "REAL_MENU_FRAME_INVALID");
+                const auto disabled = games::vision::measure_skill_availability(pixels, 0);
+                check(disabled.disabled, "REAL_DISABLED_SKILL_MISSED");
+                check(!games::vision::measure_skill_availability(pixels, 1).disabled, "BRIGHT_PEER_SKILL_REJECTED");
+                cv::Mat dim; pixels.convertTo(dim, -1, .35);
+                check(!games::vision::measure_skill_availability(dim, 0).disabled, "DIM_PAGE_IS_NOT_DISABLED_PROOF");
+                auto blank = pixels.clone(); blank(cv::Rect(145, 950, 230, 40)).setTo(cv::Scalar(65, 65, 65));
+                check(!games::vision::measure_skill_availability(blank, 0).disabled, "BLANK_LABEL_IS_NOT_DISABLED_PROOF");
+                ++frame.identity.frame_id;
+                frame.identity.captured_at = frame.identity.capture_finished_at = std::chrono::steady_clock::now();
+                frame.raw_bgr = std::make_shared<const std::vector<std::uint8_t>>(pixels.data, pixels.data + pixels.total() * pixels.elemSize());
+                for (int slot = 0; slot < 2; ++slot) {
+                    const auto result = service.evaluate(frame, frame.identity, {"disabled-skill", "1", {0, 0, 900, 1600},
+                        recognition::CustomParameters{"WvdVision", {{"mode", "combat_skill_disabled"}, {"slot", slot}}}});
+                    check(result.outcome == (slot == 0 ? O::Hit : O::NoHit), "REAL_SERVICE_AVAILABILITY:" + result.error_code);
+                    check(!result.center.has_value(), "GRAY_OBSERVATION_GRANTED_CLICK_TARGET");
+                }
+                std::cout << J{{"file", argv[i]}, {"bright_pixels", disabled.bright_pixels},
+                    {"text_edges", disabled.text_edges}, {"disabled", true}}.dump() << '\n';
+            }
+            return 0;
+        }
         if (argc == 3 && std::string(argv[1]) == "--buff-frame") {
             auto pixels = cv::imread(argv[2]);
             check(pixels.cols == 900 && pixels.rows == 1600, "FRAME_INVALID");

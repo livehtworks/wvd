@@ -613,6 +613,21 @@ int main(int argc, char **argv) {
                 ports.conditions[J{{"mode", "prepared_actor"}}.dump()] = true;
                 ports.conditions[flee.dump()] = true;
             };
+            const games::tasks::PublicStepScope public_steps([&](const std::string &id, const J &arguments) {
+                return library.compile_step(id, arguments, "zh-Hant");
+            });
+            auto profile = storage::LegacyConfigImporter(read("packs/wvd/parameters/legacy-config-fields.json"))
+                .parse({{"GENERAL", J::object()}}).values;
+            profile["STRATEGY"] = J::array({{{"group_name", "disabled-check"}, {"skill_settings", J::array({{
+                {"role_var", "0 面具"}, {"skill_var", "左上技能"}, {"skill_lvl", 2},
+                {"target_var", "左上角色"}, {"freq_var", "重复"}}})}}});
+            profile["DEFAULT_OVERALL_STRATEGY"] = "disabled-check";
+            const auto turn = games::combat::take_turn(profile, {});
+            check(turn.nodes.at("Skill0Open0").at("next").at(0) == "Skill0Try0Disabled" &&
+                turn.nodes.at("Skill0Try0Disabled").at("post_delay") == 250 &&
+                turn.nodes.at("Skill0Try0DisabledAgain").at("next").at(0) == "Skill0UnavailableDefend" &&
+                turn.nodes.at("Skill0DefendFallbackDone").at("operation_args").at("operation") == "defend_fallback_confirmed",
+                "DISABLED_SKILL_NOT_CONNECTED_TO_UNCONSUMED_DEFEND");
             // 帧语义由受控端口提供；公共定义、重试门禁和回执来自生产执行器。
             Driver d(graph);
             setup(d.ports);

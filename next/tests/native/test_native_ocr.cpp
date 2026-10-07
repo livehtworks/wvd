@@ -2,12 +2,14 @@
 #include "platform/windows/bundle_lease.hpp"
 #include "platform/windows/file_digest.hpp"
 #include <opencv2/imgproc.hpp>
+#include <opencv2/imgcodecs.hpp>
 #include <iostream>
 
 int main(int argc, char **argv) {
     try {
-        if (argc != 2 && argc != 3) throw std::runtime_error("OCR_MODEL_PATH_REQUIRED");
-        const bool memory_cycles = argc == 3 && std::string(argv[2]) == "--memory-cycles";
+        const bool real_frame = argc == 4 && std::string(argv[2]) == "--real-memory-frame";
+        if (argc != 2 && argc != 3 && !real_frame) throw std::runtime_error("OCR_MODEL_PATH_REQUIRED");
+        const bool memory_cycles = real_frame || (argc == 3 && std::string(argv[2]) == "--memory-cycles");
         if (argc == 3 && !memory_cycles) throw std::runtime_error("OCR_OPTION_UNKNOWN");
         const auto root = std::filesystem::path(argv[1]);
         wvd::platform::BundleLease::Manifest manifest;
@@ -19,6 +21,16 @@ int main(int argc, char **argv) {
         const auto before = wvd::platform::sample_memory();
         {
         wvd::recognition::OcrEngine engine{root};
+        if (real_frame) {
+            const auto image = cv::imread(argv[3]);
+            if (image.size() != cv::Size(900, 1600)) throw std::runtime_error("REAL_FRAME_INVALID");
+            // Reuse real pixels at the production skill/modal/card ROI sizes.
+            for (const cv::Rect roi : {cv::Rect{0,600,900,1000}, {0,1150,900,450}, {0,930,450,180}}) {
+                const auto matches = engine.recognize(image(roi));
+                std::cout << "real_roi=" << roi << " matches=" << matches.size() << '\n';
+                if (matches.empty()) throw std::runtime_error("REAL_OCR_MATCHES_MISSING");
+            }
+        } else {
         cv::Mat image(180, 600, CV_8UC3, cv::Scalar(255, 255, 255));
         cv::putText(image, "NEXT", {45, 125}, cv::FONT_HERSHEY_SIMPLEX,
                     2.8, cv::Scalar(0, 0, 0), 5, cv::LINE_AA);
@@ -29,6 +41,7 @@ int main(int argc, char **argv) {
             if (match.text.find("NEXT") != std::string::npos) found = true;
         }
         if (!found) throw std::runtime_error("OCR_EXPECTED_TEXT_MISSING");
+        }
         engine.cancel();
         }
         if (memory_cycles) {

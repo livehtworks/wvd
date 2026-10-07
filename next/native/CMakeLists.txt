@@ -29,6 +29,7 @@ foreach(INDEX RANGE 0 ${WVD_RESOURCE_LAST})
   string(APPEND WVD_SEMANTIC_LITERAL "\nR\"wvd(${WVD_RESOURCE_SEPARATOR}\"${ID}\":${ENTRY})wvd\"")
   set(WVD_RESOURCE_SEPARATOR ",")
 endforeach()
+
 string(APPEND WVD_SEMANTIC_LITERAL "\nR\"wvd(}})wvd\"")
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/games/wvd/vision/semantic_catalogue.hpp.in"
   "${PROJECT_BINARY_DIR}/generated/semantic_catalogue.hpp" @ONLY)
@@ -232,4 +233,11 @@ foreach(TEST_TARGET IN ITEMS test_native_recognition test_native_ocr)
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different
       "${WVD_OPENCV}/x64/vc16/bin/opencv_world4120.dll"
       "$<TARGET_FILE_DIR:${TEST_TARGET}>")
+endforeach()
+
+# Memory/lifecycle checks use the same Windows heap policy as the product.
+foreach(TEST_TARGET IN ITEMS test_native_application test_native_coordinator
+    test_native_ocr test_native_author test_support_selection test_event_page_copy)
+  target_link_options(${TEST_TARGET} PRIVATE "/MANIFEST:EMBED"
+    "/MANIFESTINPUT:${CMAKE_CURRENT_SOURCE_DIR}/platform/windows/app.manifest")
 endforeach()

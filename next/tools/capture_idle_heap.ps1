@@ -61,7 +61,7 @@ try {
     # -pvr does not suspend the target, including if the bounded helper is killed.
     # !address may spend a long time loading symbols/classifying regions; keep
     # it out of this short live-service observation.
-    $command='.echo WVD_LAYOUT_BEGIN;!heap -s;.echo WVD_LAYOUT_END;qd'
+    $command='.echo WVD_INVENTORY_BEGIN;!heap;.echo WVD_INVENTORY_END;.echo WVD_LAYOUT_BEGIN;!heap -s;.echo WVD_LAYOUT_END;qd'
     $receipt.allocation_sizes_requested=[bool]$AllocationSizes
     $log=Join-Path $root 'cdb.log'
     $null=Invoke-TraceTool -Executable ([IO.Path]::GetFullPath($Cdb)) -Arguments @('-pvr','-p',[string]$before.service.pid,'-y',$symbols,'-c',$command) `
@@ -71,6 +71,23 @@ try {
         $text -notmatch '(?m)^WVD_LAYOUT_END\s*$' -or $text -notmatch 'NT HEAP STATS|SEGMENT HEAP STATS'){
         throw 'HEAP_LAYOUT_DEBUGGER_OUTPUT_INCOMPLETE'
     }
+    # Some debugger versions omit Segment Heaps from !heap -s without errors.
+    # Require an actual summary row for every independently enumerated heap.
+    $inventory=[regex]::Match($text,'(?ms)^WVD_INVENTORY_BEGIN\s*\r?\n(.*?)^WVD_INVENTORY_END\s*$')
+    $summary=[regex]::Match($text,'(?ms)^WVD_LAYOUT_BEGIN\s*\r?\n(.*?)^WVD_LAYOUT_END\s*$')
+    $heaps=@([regex]::Matches($inventory.Groups[1].Value,'(?im)^\s*([0-9a-f]{16})\s+(NT|Segment) Heap\s*$') | ForEach-Object {
+        @{address=$_.Groups[1].Value;kind=$_.Groups[2].Value}
+    })
+    if(-not $inventory.Success -or -not $summary.Success -or $heaps.Count -eq 0){
+        throw 'HEAP_LAYOUT_INVENTORY_MISSING'
+    }
+    $receipt.heap_inventory=$heaps
+    $missing=@($heaps | Where-Object {
+        $summary.Groups[1].Value -notmatch ('(?im)^\s*'+[regex]::Escape($_.address)+'\s+[0-9a-f]+\s+\d+')
+    })
+    $receipt.heap_summary_complete=($missing.Count -eq 0)
+    $receipt.missing_heap_summaries=$missing
+    if($missing.Count -gt 0){throw 'HEAP_LAYOUT_HEAP_SUMMARIES_MISSING'}
     if($AllocationSizes){
         # This debugger prints only heap summaries for -h 0, despite accepting it.
         # Request the concrete process heap and validate the allocation table.

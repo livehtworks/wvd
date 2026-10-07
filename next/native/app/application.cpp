@@ -1835,6 +1835,14 @@ void Application::watch_task_session(const J &request, const J &stored, J source
         }
         };
         work();
+        // Cancellation ends scheduling, not ownership. The input worker may
+        // still be saving its terminal result; keep this watcher alive until
+        // it can join and record the release boundary (including failed cleanup).
+        if ((stop.stop_requested() || stopping_ || cancel_operation_) && coordinator_->snapshot().run_id) {
+            coordinator_->request_stop();
+            while (!coordinator_->wait_for_worker(250ms)) {}
+            coordinator_->collect_finished_worker();
+        }
         const bool repeating = request.value("repeat", false);
         request = J();
         stored = J();

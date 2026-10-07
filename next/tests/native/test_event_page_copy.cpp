@@ -1,4 +1,5 @@
 #include "app/application.hpp"
+#include "platform/windows/memory_diagnostics.hpp"
 #include <atomic>
 #include <cstdlib>
 #include <fstream>
@@ -84,6 +85,46 @@ void ordered(const J &page) {
 }
 int main(int argc, char **argv) {
     try {
+        if (argc == 4 && std::string(argv[1]) == "--replay-memory") {
+            const auto output = std::filesystem::absolute(argv[3]);
+            require(!std::filesystem::exists(output), "ISOLATED_RESULT_ALREADY_EXISTS");
+            require(std::filesystem::file_size(argv[2]) <= 128 * 1024 * 1024, "REPLAY_INPUT_TOO_LARGE");
+            std::ofstream report(output);
+            for (int cycle = 0; cycle < 6; ++cycle) {
+                std::uint64_t events = 0, queries = 0;
+                {
+                    wvd::storage::EventJournal journal("recorded-replay", cycle + 1, 1024);
+                    std::ifstream input(argv[2]);
+                    require(bool(input), "REPLAY_INPUT_MISSING");
+                    std::string line;
+                    while (std::getline(input, line)) {
+                        const auto row = J::parse(line);
+                        if (row.at("type") == "run.terminal") continue;
+                        journal.emit(row.at("session_generation"), row.at("type"), row.at("payload"));
+                        if (++events % 32 == 0) {
+                            const auto page = journal.read();
+                            require(!page.dump().empty(), "REPLAY_RESPONSE_EMPTY");
+                            ++queries;
+                        }
+                    }
+                    require(input.eof() && events > 1024, "REPLAY_INPUT_INCOMPLETE");
+                    journal.commit_terminal(1, {{"state", "Completed"}}, [](const J &page) {
+                        require(!page.dump().empty(), "REPLAY_TERMINAL_EMPTY");
+                    });
+                }
+                const auto heap = wvd::platform::optimize_idle_heap();
+                require(heap.succeeded && heap.heap_after.complete && heap.after.process_ok, "REPLAY_MEMORY_UNAVAILABLE");
+                const auto after_summary = wvd::platform::sample_memory();
+                report << J{{"cycle", cycle + 1}, {"events", events}, {"queries", queries},
+                    {"private_bytes", heap.after.private_bytes}, {"allocated_bytes", heap.heap_after.allocated},
+                    {"private_after_summary", after_summary.private_bytes},
+                    {"committed_bytes", heap.heap_after.committed}, {"summary_us", heap.heap_after.elapsed_us},
+                    {"scope", "real recorded event payloads through production journal, no device or OCR"}}.dump() << '\n';
+                report.flush();
+                require(bool(report), "REPLAY_REPORT_WRITE_FAILED");
+            }
+            return 0;
+        }
         if (argc == 3 && std::string(argv[1]) == "--image-index") {
             const auto output = std::filesystem::absolute(argv[2]);
             require(!std::filesystem::exists(output), "ISOLATED_RESULT_ALREADY_EXISTS");

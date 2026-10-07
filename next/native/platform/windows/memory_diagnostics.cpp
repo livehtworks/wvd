@@ -104,7 +104,7 @@ MemorySample sample_memory() noexcept {
     }
     return result;
 }
-HeapMaintenance optimize_idle_heap() noexcept {
+HeapMaintenance optimize_idle_heap(bool measure) noexcept {
     HeapMaintenance result;
     const auto heap_usage = []() noexcept {
         HeapMaintenance::Usage usage;
@@ -122,9 +122,22 @@ HeapMaintenance optimize_idle_heap() noexcept {
         if (!count || count > heaps.size()) { usage.failed = 1; return usage; }
         usage.heaps = count;
         for (DWORD index = 0; index < count; ++index) {
+            auto &entry = usage.detail[index];
+            entry.address = reinterpret_cast<std::uintptr_t>(heaps[index]);
+            entry.process_heap = heaps[index] == GetProcessHeap();
+            LARGE_INTEGER begin{}, end{};
+            QueryPerformanceCounter(&begin);
             HEAP_SUMMARY value{};
             value.cb = sizeof(value);
-            if (!summary(heaps[index], 0, &value)) { ++usage.failed; continue; }
+            entry.complete = summary(heaps[index], 0, &value) != FALSE;
+            if (!entry.complete) entry.error = GetLastError();
+            QueryPerformanceCounter(&end);
+            if (frequency.QuadPart > 0)
+                entry.elapsed_us = static_cast<std::uint64_t>((end.QuadPart - begin.QuadPart) * 1000000 / frequency.QuadPart);
+            if (!entry.complete) { ++usage.failed; continue; }
+            entry.allocated = value.cbAllocated;
+            entry.committed = value.cbCommitted;
+            entry.reserved = value.cbReserved;
             usage.allocated += value.cbAllocated;
             usage.committed += value.cbCommitted;
             usage.reserved += value.cbReserved;
@@ -135,7 +148,7 @@ HeapMaintenance optimize_idle_heap() noexcept {
         usage.complete = usage.failed == 0;
         return usage;
     };
-    result.heap_before = heap_usage();
+    if (measure) result.heap_before = heap_usage();
     result.before = sample_memory();
     LARGE_INTEGER frequency{}, started{}, ended{};
     QueryPerformanceFrequency(&frequency);
@@ -147,7 +160,7 @@ HeapMaintenance optimize_idle_heap() noexcept {
     if (frequency.QuadPart > 0)
         result.elapsed_us = static_cast<std::uint64_t>((ended.QuadPart - started.QuadPart) * 1000000 / frequency.QuadPart);
     result.after = sample_memory();
-    result.heap_after = heap_usage();
+    if (measure) result.heap_after = heap_usage();
     return result;
 }
 MemoryDiagnostics::MemoryDiagnostics(const std::filesystem::path &path,

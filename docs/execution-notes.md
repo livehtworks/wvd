@@ -1,10 +1,14 @@
 # 当前执行注意项
 
+- 用户暂停后，watch_task_session不能因cancel先退出而遗漏尚未terminal的worker；保留原监视线程等待并join，控制API不等待此过程。正式29轮停止现场曾仅有worker_definition_released、PrivateUsage约267.6MiB。停止时的busy要覆盖收尾窗口，不能用输入已静止冒充线程及堆页已回收。
+- Windows SegmentHeap由产品manifest声明（Windows 10 2004起支持），不是替换C++/OpenCV或注入第三方分配器。隔离内存/生命周期测试需同一manifest；短期准备A/B不证明完整游戏长期稳定。复制诊断EXE必须放独立目录并配原锁定DLL，不能直接放.local：该目录有旧onnxruntime.dll会优先加载，出现API22/17冲突须拒绝该结果。mt资源写入复制EXE在原同源EXE仍运行时本机曾报共享冲突，原进程结束后才成功，不杀产品进程绕过。
+- 技能灰态只在同一行动角色、无弹窗的正常菜单下连续两帧确认；量四个技能标签内部，不含边框/图标，必须有亮字同伴和真实暗字边缘。全屏暗、空字、其它不确定状态仍沿原开启等待，不以SP数字猜技能成本，不消费未施放动作，不启用Auto。
+
 - P01从同一锁定HANDLE流式复制并逐块检查取消；临时staging租约先释放，再同盘不覆盖rename并重新冻结最终路径。两种入口共用最终门禁，失败/取消只撤回本次未启动目录；外部读句柄阻止清理必须报错。验证自己的JSON输入流须在回滚前关闭。
 - 图片依赖扫描仅模板调用localize_implicit_probe；该函数现以optional返回实际替换，无替换时不复制输入。旧版值返回会在父子递归中重复深复制整棵图。CompiledWorkflow::refresh_images还执行validate，隔离资源扫描夹具也必须构造合法入口/终点。准备稀疏阶段记录沿performance/info门禁，隔离phase-events.jsonl每个开始/完成立即flush；完整计时不能证明跟踪后耗时或泄漏消除。RunAs的用户取消不可当采集已启动，也不绕过UAC。
 - 状态接口查询可见节点时，在已有Application锁内借用映射和source_paths，不因工作台轮询复制整张图；任何新调用不得在该锁内反向获取会话/设备锁。真实接口的额外2561个无关索引不增加分配量检查与原事件顺序、终态提交失败保护共用test_event_page_copy，不将分配流量减少写成泄漏归因。
 - 启动前设备观察的10秒读取窗口必须在正常返回和抛异常两条路径清除，不能带入任务编译/发布/首次生命周期读取。candidate122实机在准备结束后即OBSERVATION_WINDOW_EXHAUSTED，游戏输入0；candidate123清除窗口后已实际确认EnsureVpn及StartApplication。独立适配器验证必须检查窗口设置/清除配对，不能只模拟观察结果。
-- 低扰动堆布局取证使用capture_idle_heap.ps1，仅在busy=false/quiescent及batch_payloads_released后执行CDB -pvr不暂停读取；默认!heap -s，可选大小表使用实际主堆地址（本机-h 0仅重复摘要），30秒/16MiB共享边界。VirtualQueryEx另有5秒/32768区间上限，只读元数据；前后核对进程创建、实例、run和状态，EXE/PDB匹配。禁止产品现场使用-pv：本轮!address读取超时并终止调试器后曾遗留线程暂停，已核对PID/创建时间后用-pvr和~*m恢复，服务未重启。CDB即使exit=0仍可能拒绝附着、缺符号或未产出请求的表，必须检查正文；符号缓存路径使用Windows反斜杠，普通进程不能读取提升后的目标。堆Commit/Free不是PrivateUsage或全部LFH空槽，不能混减推导泄漏。
+- 低扰动堆布局取证使用capture_idle_heap.ps1，仅在busy=false/quiescent及batch_payloads_released后执行CDB -pvr不暂停读取；先!heap枚举地址/类型，再与!heap -s逐地址核对。WinDbg 10.0.29617本机只输出辅助NT堆统计、静默漏掉4个Segment Heap，!heap -i也仅设置上下文，不能当成完整摘要；脚本必须记录缺失地址并失败，后续使用产品per_heap诊断而非此调试器摘要做全堆对比。可选大小表使用实际主堆地址（本机-h 0仅重复摘要），30秒/16MiB共享边界。VirtualQueryEx另有5秒/32768区间上限，只读元数据；前后核对进程创建、实例、run和状态，EXE/PDB匹配。禁止产品现场使用-pv：本轮!address读取超时并终止调试器后曾遗留线程暂停，已核对PID/创建时间后用-pvr和~*m恢复，服务未重启。CDB即使exit=0仍可能拒绝附着、缺符号或未产出请求的表，必须检查正文；符号缓存路径使用Windows反斜杠，普通进程不能读取提升后的目标。堆Commit/Free不是PrivateUsage或全部LFH空槽，不能混减推导泄漏。
 - HeapOptimizeResources是Windows对空闲LFH缓存页的回收提示，不销毁仍存活对象，也不保证每次都归还内存。仅在唯一worker已join之后调用一次；原worker_joined样本保留，heap_resources_optimized另记API结果、错误码、耗时及调用前后私有提交。不得以API成功或提交降低替代存活分配归因。
 - HeapSummary按动态API存在性记录available，逐堆失败/堆表超限明确complete=false；实际allocated与堆内部committed/reserved分别记录，不与PrivateUsage混减。固定OCR四次实际分配不变、内部commit变化已有证据；不能把该固定输入结果推广到所有运行负载。具体堆地址的CDB逐块遍历本机仍超30秒，完整PSS克隆离线遍历亦超60秒，不原样重跑。ProcDump -mp -r曾打印完成但只产144618字节不可用转储；-ma -r产200748774字节可读摘要不代表分配表完成。转储含潜在用户数据，只在忽略目录本地保存。
 - analyze_memory_owners的--compare-run-directory指定较早轮，--run-directory指定较晚轮，只比较同PID/创建/协调器及同heap_resources_optimized边界；整批中间轮没有batch_payloads_released不能补0。实际allocated差与PrivateUsage差分别输出；缺采样不完整，跨进程/倒序拒绝，不因complete=true就把PARTIAL_ATTRIBUTION改为全归因。
