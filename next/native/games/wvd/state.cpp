@@ -987,8 +987,8 @@ bool WvdRunState::confirm_event(const std::string &operation, const std::string 
     } else if (event == "healing_completed") {
         if (!healing_active_)
             throw std::runtime_error("HEALING_NOT_STARTED");
-        healing_active_ = false;
-        healing_pending_ = false;
+        // Returning to a dungeon proves a page transition, not restored HP/MP.
+        throw std::runtime_error("HEALING_EFFECT_PROOF_REQUIRED");
     }
     else if (event == "game_restarted") {
         if (!lifecycle_recovery_active_)
@@ -1017,6 +1017,67 @@ bool WvdRunState::confirm_event(const std::string &operation, const std::string 
         }
     }
     return true;
+}
+J WvdRunState::summarize_field(const std::string &name) const {
+    // Read only the requested owner. No frame cache, parallel business copy,
+    // or timer cache is introduced; clock-dependent facts stay live.
+    if (name == "task_step") return task_step_;
+    if (name == "pending_combat") return pending_combat_;
+    if (name == "pending_chest") return pending_chest_;
+    if (name == "need_initial_recover") return need_initial_recover_;
+    if (name == "lifecycle_recovery_active") return lifecycle_recovery_active_;
+    if (name == "recover_after_rez") return recover_after_rez_;
+    if (name == "met_encounter") return met_encounter_;
+    if (name == "dungeons") return dungeons_;
+    if (name == "combats") return combats_;
+    if (name == "chests") return chests_;
+    if (name == "has_prepared_skill") return prepared_.has_value();
+    if (name == "combat_actor_recognized") return combat_actor_recognized_;
+    if (name == "prepared_skill_index") return prepared_ ? J(prepared_index_) : J(nullptr);
+    if (name == "prepared_portrait") return prepared_ ? prepared_portrait_ : "";
+    if (name == "healing_required") return healing_required();
+    if (name == "chest_has_character") return chest_selection_.selected().has_value();
+    if (name == "chest_character") return chest_selection_.selected() ? J(*chest_selection_.selected()) : J(nullptr);
+    if (name == "inn_rest_completed") return inn_rest_completed_;
+    if (name == "inn_payment_pending") return inn_payment_pending_;
+    if (name == "inn_payment") return J{{"submitted",inn_payment_submissions_ > 0}};
+    if (name == "death_prompt_pending") return death_prompt_pending_;
+    if (name == "wall_bypass_step") return wall_bypass_step_;
+    if (name == "giant_route_completed") return giant_route_completed_;
+    if (name == "giant_rest_due") return giant_rest_due();
+    if (name == "giant_cycle_active") return giant_unit_.has_value();
+    if (name == "dark_light_active") return dark_light_active_;
+    if (name == "encounter_timed_out") return encounter_timed_out();
+    if (name == "unit_index") return unit_index_;
+    if (name == "bounty_report_pending") return bounty_report_pending_;
+    if (name == "special_dialogue_pending") return special_dialogue_pending_;
+    if (name == "karma_ambush") return karma_choice_ && karma_choice_->ambush;
+    if (name == "karma_pending") return karma_choice_.has_value();
+    if (name == "strategy") { auto value=strategy_.summary(); value["automatic"]=fordraig_.force_automatic() || value.at("automatic").get<bool>(); return value; }
+    if (name == "manual_separation") return manual_separation_.summary();
+    if (name == "featured_visit") return featured_visit_.summary();
+    if (name == "golden_chest") return golden_chest_.summary(unit_index_);
+    if (name == "sandman") return sandman_.summary(unit_index_);
+    if (name == "gold_income") return gold_income_.summary(unit_index_);
+    if (name == "bull_cave") return bull_cave_.summary(unit_index_);
+    if (name == "steel_trial") return steel_trial_.summary(unit_index_);
+    if (name == "repel_forces") return repel_forces_.summary(unit_index_);
+    if (name == "fordraig") return fordraig_.summary(unit_index_);
+    if (name == "cave_of_separation") return cave_of_separation_.summary(unit_index_);
+    if (name == "fishing") return fishing_.summary(clock_->now());
+    if (name == "sleep") return sleep_.summary(unit_index_);
+    if (name == "bounty_cycle") return bounty_cycle_.summary(unit_index_, bounty_reports_);
+    if (name == "mining") return mining_.summary();
+    if (name == "target_encounter") return J{{"active",target_encounter_.phase > 0 && target_encounter_.phase < 4},
+        {"phase",target_encounter_.phase},{"unit_matches",target_encounter_.unit==unit_index_},
+        {"point",target_encounter_.point},{"resume_authorized",target_encounter_.resume_authorized}};
+    if (name == "ordinary_rest_due" || name == "party_refresh_due" || name == "city_supply_due") {
+        const supply::SupplyFacts facts{dungeons_,met_encounter_,total_seconds_,last_bag_clear_};
+        const bool ordinary=!inn_rest_completed_ && supply::ordinary_rest_due(profile_,facts);
+        const bool party=supply::decide_rest(profile_,facts).reassemble;
+        return name=="ordinary_rest_due" ? ordinary : name=="party_refresh_due" ? party : ordinary || party;
+    }
+    throw std::runtime_error("BUSINESS_FIELD_NOT_QUERYABLE:" + name);
 }
 J WvdRunState::summarize() const {
     const supply::SupplyFacts facts{dungeons_, met_encounter_, total_seconds_, last_bag_clear_};

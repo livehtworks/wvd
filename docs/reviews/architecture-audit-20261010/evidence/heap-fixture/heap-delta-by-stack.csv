@@ -1,0 +1,4 @@
+from_snapshot,to_snapshot,phase,stack_key,before_blocks,after_blocks,delta_blocks,before_bytes,after_bytes,delta_bytes
+1/64,2/64,"unbound->unbound",known-A,1,1,0,4194304,2097152,-2097152
+1/64,2/64,"unbound->unbound",known-B,0,1,1,0,3145728,3145728
+1/64,2/64,"unbound->unbound",unknown-stack,100001,100001,0,800008,800008,0

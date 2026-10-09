@@ -7,6 +7,8 @@
 #include <mutex>
 #include <set>
 #include <windows.h>
+#include <winternl.h>
+#include <cstring>
 
 namespace wvd::platform {
 namespace {
@@ -21,8 +23,9 @@ struct Held {
     mutable std::mutex content_mutex;
     std::vector<std::uint8_t> content;
     bool content_loaded{};
-    explicit Held(std::filesystem::path p, bool directory) : path(std::move(p)) {
-        handle = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
+    explicit Held(std::filesystem::path p, bool directory, DWORD extra_access = 0) : path(std::move(p)) {
+        const auto sharing = FILE_SHARE_READ | (extra_access ? FILE_SHARE_WRITE : 0);
+        handle = CreateFileW(path.c_str(), GENERIC_READ | extra_access, sharing, nullptr, OPEN_EXISTING,
                              directory ? FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT
                                        : FILE_FLAG_OPEN_REPARSE_POINT,
                              nullptr);
@@ -153,7 +156,7 @@ std::filesystem::path BundleLease::checked_relative(const std::string &value) {
                       stem[3] >= L'0' && stem[3] <= L'9'),
                 "RESOURCE_PATH_INVALID");
     }
-    return path;
+    return path.make_preferred();
 }
 BundleLease::BundleLease(std::filesystem::path root, std::string revision, Manifest manifest,
                          const std::function<void()> &check_cancel)
@@ -260,6 +263,52 @@ void BundleLease::copy_member(const std::string &relative,
 const std::string &BundleLease::hash(const std::string &relative) const {
     require_member(relative);
     return impl_->manifest.at(relative);
+}
+void BundleLease::link_member(const std::string &relative, const std::filesystem::path &destination) const {
+    require_member(relative);
+    require(destination.is_absolute(), "NATIVE_BUNDLE_DESTINATION_INVALID");
+    std::vector<std::unique_ptr<Held>> parents;
+    for (auto p = destination.parent_path(); !p.empty() && p != p.parent_path(); p = p.parent_path())
+        parents.push_back(std::make_unique<Held>(p, true, parents.empty() ? FILE_ADD_FILE : 0));
+    require(!parents.empty(), "NATIVE_BUNDLE_DESTINATION_INVALID");
+    auto &file = *impl_->files.at(relative);
+    std::lock_guard lock(file.content_mutex);
+    file.verify_identity();
+    // FileLinkInformation operates on the frozen handle without reopening it
+    // for DELETE access (CreateHardLink would conflict with the active lease).
+    // This is the NTFS FILE_LINK_INFORMATION ABI, not the wire-format record.
+    struct LinkInformation {
+        BOOLEAN replace;
+        HANDLE root;
+        ULONG length;
+        WCHAR name[1];
+    };
+    using SetInformation = NTSTATUS(NTAPI *)(HANDLE, PIO_STATUS_BLOCK, PVOID, ULONG, ULONG);
+    const auto module = GetModuleHandleW(L"ntdll.dll");
+    const auto set_information = reinterpret_cast<SetInformation>(
+        module ? GetProcAddress(module, "NtSetInformationFile") : nullptr);
+    require(set_information != nullptr, "NATIVE_BUNDLE_LINK_API_UNAVAILABLE");
+    // Only this unpublished staging directory permits adding members. Its
+    // rename remains locked; all source and published file leases stay read-only.
+    // Publication verifies membership and then takes the normal read-only lease.
+    const auto name = destination.filename().native();
+    const auto name_bytes = name.size() * sizeof(WCHAR);
+    const auto length = (std::max)(sizeof(LinkInformation), offsetof(LinkInformation, name) + name_bytes);
+    require(length <= MAXDWORD, "NATIVE_BUNDLE_LINK_PATH_TOO_LARGE");
+    std::vector<std::max_align_t> buffer((length + sizeof(std::max_align_t) - 1) / sizeof(std::max_align_t));
+    auto *info = reinterpret_cast<LinkInformation *>(buffer.data());
+    info->replace = FALSE;
+    info->root = parents.front()->handle;
+    info->length = static_cast<ULONG>(name_bytes);
+    std::memcpy(info->name, name.data(), name_bytes);
+    IO_STATUS_BLOCK result{};
+    constexpr ULONG file_link_information = 11;
+    const auto status = set_information(file.handle, &result, info, static_cast<ULONG>(length),
+        file_link_information);
+    if (status < 0)
+        throw std::runtime_error("NATIVE_BUNDLE_LINK_FAILED:NTSTATUS=" +
+            std::to_string(static_cast<ULONG>(status)));
+    file.verify_identity();
 }
 const std::filesystem::path &BundleLease::root() const { return impl_->root; }
 const std::string &BundleLease::revision() const { return impl_->revision; }

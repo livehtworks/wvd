@@ -18,10 +18,17 @@ std::string unique_id() {
         result += static_cast<char>(*p);
     return result;
 }
+std::filesystem::path extended_path(const std::filesystem::path &path) {
+    auto text=std::filesystem::absolute(path).lexically_normal().make_preferred().native();
+    if(text.starts_with(L"\\\\?\\")) return text;
+    if(text.starts_with(L"\\\\")) return std::wstring(L"\\\\?\\UNC\\")+text.substr(2);
+    return std::wstring(L"\\\\?\\")+text;
+}
 void atomic_write(const std::filesystem::path &target, const std::string &contents, bool replace) {
     auto temporary = target;
     temporary += "." + unique_id() + ".tmp";
-    HANDLE file = CreateFileW(temporary.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW,
+    const auto temporary_path=extended_path(temporary),target_path=extended_path(target);
+    HANDLE file = CreateFileW(temporary_path.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW,
                               FILE_ATTRIBUTE_NORMAL | FILE_FLAG_WRITE_THROUGH, nullptr);
     if (file == INVALID_HANDLE_VALUE)
         throw std::runtime_error("STORAGE_CREATE_FAILED");
@@ -40,7 +47,7 @@ void atomic_write(const std::filesystem::path &target, const std::string &conten
     CloseHandle(file);
     // 失败时保留旧文件和本次 .tmp 证据，不用删除旧结果来伪造原子更新。
     if (!success ||
-        !MoveFileExW(temporary.c_str(), target.c_str(),
+        !MoveFileExW(temporary_path.c_str(), target_path.c_str(),
                      MOVEFILE_WRITE_THROUGH | (replace ? MOVEFILE_REPLACE_EXISTING : 0)))
         throw std::runtime_error("STORAGE_COMMIT_FAILED");
 }

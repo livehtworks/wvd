@@ -32,6 +32,40 @@ MatchBudget::Ticket &MatchBudget::Ticket::operator=(Ticket &&other) noexcept {
     return *this;
 }
 MatchBudget::Ticket::~Ticket() { if (owner_) owner_->release(bytes_); }
+MatchBudget::MatchBudget(std::uint64_t target, PressureReader pressure)
+    : target_(target), pressure_(std::move(pressure)) {
+    if (!target_) throw std::invalid_argument("RESOURCE_BUDGET_INVALID");
+    if (!pressure_) pressure_ = [] {
+        const auto sample = platform::sample_memory();
+        MEMORYSTATUSEX address{}; address.dwLength = sizeof(address);
+        Headroom result;
+        result.system_known = sample.system_ok && sample.page_size;
+        result.process_known = GlobalMemoryStatusEx(&address) != FALSE;
+        if (result.system_known && sample.commit_limit_pages > sample.commit_total_pages)
+            result.system_bytes = (sample.commit_limit_pages - sample.commit_total_pages) * sample.page_size;
+        result.process_bytes = address.ullAvailVirtual;
+        BOOL in_job{};
+        if (!IsProcessInJob(GetCurrentProcess(), nullptr, &in_job)) result.process_known = false;
+        else if (in_job) {
+            JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits{};
+            if (!QueryInformationJobObject(nullptr, JobObjectExtendedLimitInformation,
+                    &limits, sizeof(limits), nullptr)) result.process_known = false;
+            else {
+                if (limits.BasicLimitInformation.LimitFlags & JOB_OBJECT_LIMIT_PROCESS_MEMORY) {
+                    if (!sample.process_ok) result.process_known = false;
+                    else result.process_bytes = std::min<std::uint64_t>(result.process_bytes,
+                        limits.ProcessMemoryLimit > sample.private_bytes ?
+                            limits.ProcessMemoryLimit - sample.private_bytes : 0);
+                }
+                // Extended limits expose a job cap, not current aggregate commit.
+                // Never substitute the notification-time JobMemory or peak for it.
+                if (limits.BasicLimitInformation.LimitFlags & JOB_OBJECT_LIMIT_JOB_MEMORY)
+                    result.process_known = false;
+            }
+        }
+        return result;
+    };
+}
 MatchBudget::Ticket MatchBudget::acquire(std::uint64_t bytes,
                                          const std::atomic<bool> &cancelled) {
     platform::timing::Scope measure(platform::timing::Part::Queue);
@@ -40,14 +74,15 @@ MatchBudget::Ticket MatchBudget::acquire(std::uint64_t bytes,
     while ((bytes > target_ ? active_ != 0 : used_ > target_ - bytes) && !cancelled)
         available_.wait_for(lock, std::chrono::milliseconds(50));
     if (cancelled) throw std::runtime_error("RECOGNITION_CANCELLED");
-    if (bytes > target_) {
-        const auto sample = platform::sample_memory();
-        if (sample.system_ok && sample.page_size &&
-            (sample.commit_limit_pages <= sample.commit_total_pages ||
-             sample.commit_limit_pages - sample.commit_total_pages <
-                 (bytes + sample.page_size - 1) / sample.page_size))
-            throw ResourcePressure("MATCH_SYSTEM_COMMIT_PRESSURE");
-    }
+    const auto headroom = pressure_();
+    if (!headroom.system_known || !headroom.process_known)
+        throw ResourcePressure("RESOURCE_PRESSURE_SAMPLE_UNAVAILABLE");
+    // Keep emergency reporting room independently of the concurrency target.
+    // Virtual address headroom and system commit are different constraints.
+    const auto required = add(bytes, used_);
+    if (headroom.system_bytes < add(required, 32ULL * 1024 * 1024) ||
+        headroom.process_bytes < add(required, 16ULL * 1024 * 1024))
+        throw ResourcePressure("RESOURCE_ALLOCATION_PRESSURE");
     used_ = add(used_, bytes);
     ++active_;
     peak_used_ = std::max(peak_used_, used_);
@@ -127,7 +162,8 @@ void DecodedAssetCache::Lease::release() noexcept {
     owner_.reset();
 }
 const cv::Mat &DecodedAssetCache::Lease::mat() const { return asset_->pixels; }
-DecodedAssetCache::DecodedAssetCache(std::uint64_t target) : target_(target) {}
+DecodedAssetCache::DecodedAssetCache(std::uint64_t target, std::shared_ptr<MatchBudget> budget)
+    : target_(target), budget_(std::move(budget)) {}
 void DecodedAssetCache::trim_after_release() noexcept {
     try {
         std::lock_guard lock(mutex_);
@@ -165,7 +201,8 @@ void DecodedAssetCache::trim_locked() noexcept {
 }
 DecodedAssetCache::Lease DecodedAssetCache::load(const std::string &key,
                                                  const std::function<cv::Mat()> &decode,
-                                                 const std::atomic<bool> *cancelled) {
+                                                 const std::atomic<bool> *cancelled,
+                                                 const MatchBudget::Ticket *workspace) {
     if (maintenance_failed_.load()) throw ResourcePressure("ASSET_CACHE_MAINTENANCE_FAILED");
     std::shared_ptr<Entry> entry;
     bool loader = false;
@@ -193,6 +230,10 @@ DecodedAssetCache::Lease DecodedAssetCache::load(const std::string &key,
         try {
             if (cancelled && cancelled->load())
                 throw std::runtime_error("RECOGNITION_CANCELLED");
+            const std::atomic<bool> not_cancelled{false};
+            // Decoder workspace allowance, not a promise of retained image size.
+            auto ticket = budget_ && !(workspace && workspace->belongs_to(budget_.get())) ? budget_->acquire(64ULL * 1024 * 1024,
+                cancelled ? *cancelled : not_cancelled) : MatchBudget::Ticket{};
             auto pixels = decode();
             if (pixels.empty()) throw std::runtime_error("ASSET_DECODE_EMPTY");
             if (!pixels.isContinuous()) throw std::runtime_error("ASSET_NONCONTIGUOUS");

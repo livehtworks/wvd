@@ -86,6 +86,8 @@ contracts::FrameEnvelope NativeInputGate::capture() {
         last_frame_.foreground_application = raw.foreground_application;
         last_frame_.capture_finished_at = raw.capture_finished_at;
         last_frame_.display_rotation = raw.display_rotation;
+        last_frame_.instance_id = raw.instance_id;
+        last_frame_.instance_created_identity = raw.instance_created_identity;
         result.identity = last_frame_;
     }
     return result;
@@ -149,8 +151,8 @@ InputReceipt NativeInputGate::submit(const contracts::Command &command,
         frame = last_frame_;
         if (stopped() || !frame.frame_id || frame.action_epoch != epoch_ ||
             !same(scene.basis, frame) || !same(target.basis, frame) ||
-            scene.outcome != contracts::RecognitionOutcome::Hit ||
-            target.outcome != contracts::RecognitionOutcome::Hit ||
+            contracts::page_authority(scene) != contracts::PageAuthority::InputEligible ||
+            contracts::page_authority(target) != contracts::PageAuthority::InputEligible ||
             frame.foreground_application != policy_.application_id ||
             frame.display_rotation < 0 || area.width <= 0 || area.height <= 0 ||
             area.x < 0 || area.y < 0 ||

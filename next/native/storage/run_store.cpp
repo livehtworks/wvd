@@ -53,6 +53,23 @@ struct DiagnosticDirectories {
         }
     }
 };
+std::string read_locked_file(const std::filesystem::path &file, std::size_t limit) {
+    const auto handle = CreateFileW(file.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr,
+        OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+    diagnostic_require(handle != INVALID_HANDLE_VALUE, "DIAGNOSTIC_NOT_FOUND");
+    struct Close { HANDLE handle; ~Close() { CloseHandle(handle); } } close{handle};
+    BY_HANDLE_FILE_INFORMATION info{};
+    diagnostic_require(GetFileInformationByHandle(handle, &info) &&
+        !(info.dwFileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)),
+        "DIAGNOSTIC_REPARSE_REJECTED");
+    const auto size = (std::uint64_t(info.nFileSizeHigh) << 32) | info.nFileSizeLow;
+    diagnostic_require(size > 0 && size <= limit, "DIAGNOSTIC_FRAME_BYTES_EXCEEDED");
+    std::string bytes(static_cast<std::size_t>(size), '\0');
+    DWORD received{};
+    diagnostic_require(ReadFile(handle, bytes.data(), static_cast<DWORD>(bytes.size()), &received, nullptr) &&
+        received == bytes.size(), "DIAGNOSTIC_FILE_CHANGED");
+    return bytes;
+}
 std::vector<std::uint8_t> diagnostic_png(const contracts::FrameEnvelope &frame,
                                          std::size_t limit) {
     auto bytes = frame.encoded_image;
@@ -162,6 +179,29 @@ J EventJournal::read(std::uint64_t after) const {
             rows.push_back(event.value);
     return page;
 }
+J EventJournal::read_page(std::uint64_t after, std::size_t limit) const {
+    if (!limit || limit > 256) throw std::runtime_error("EVENT_PAGE_LIMIT_INVALID");
+    std::lock_guard lock(mutex_);
+    J page{{"last_seq", after}, {"head_seq", sequence_},
+        {"resync_required", after < dropped_through_}, {"events", J::array()}};
+    for (const auto &event : events_) {
+        if (event.seq <= after) continue;
+        page["events"].push_back(event.value);
+        page["last_seq"] = event.seq;
+        if (page["events"].size() == limit) break;
+    }
+    return page;
+}
+J EventJournal::latest_node() const {
+    std::lock_guard lock(mutex_);
+    J page{{"last_seq", sequence_}, {"events", J::array()}};
+    for (auto event = events_.rbegin(); event != events_.rend(); ++event)
+        if (event->value.contains("node_id") && event->value.at("node_id").is_string()) {
+            page["events"].push_back(event->value);
+            break;
+        }
+    return page;
+}
 void EventJournal::commit_terminal(std::uint64_t generation, J payload,
                                    const std::function<void(const J &)> &persist) {
     std::unique_lock lock(mutex_);
@@ -228,7 +268,8 @@ RunStore::RunStore(const std::filesystem::path &root, const std::string &instanc
     : instance_(instance), run_(run), definition_(definition),
       diagnostic_clock_(std::move(diagnostic_clock)), diagnostic_limits_(limits), logging_(logging) {
     diagnostic_require(diagnostic_clock_ && limits.rewards > 0 && limits.rewards <= 128 &&
-        limits.failures > 0 && limits.failures <= 32 && limits.frame_bytes > 0 &&
+        limits.failures > 0 && limits.failures <= 32 && limits.critical_failures > 0 &&
+        limits.critical_failures <= 16 && limits.frame_bytes > 0 &&
         limits.frame_bytes <= 8 * 1024 * 1024, "DIAGNOSTIC_LIMITS_INVALID");
     // root 是调用者明确指定的新数据根；只新建本实例/本运行目录，既有同名目录不接管。
     auto parent = root / instance;
@@ -243,7 +284,8 @@ RunStore::RunStore(const std::filesystem::path &root, const std::string &instanc
           {"logging", logging_.json()},
           {"diagnostic_policy", {{"schema", 1}, {"reward_limit", limits.rewards},
               {"failure_limit", limits.failures}, {"frame_bytes_limit", limits.frame_bytes},
-              {"reserved_bytes_limit", std::uint64_t(limits.rewards + limits.failures) * limits.frame_bytes},
+              {"critical_failure_limit", limits.critical_failures},
+              {"reserved_bytes_limit", std::uint64_t(limits.rewards + limits.failures + limits.critical_failures) * limits.frame_bytes},
               {"default_interval_seconds", 60}, {"pause_interval_seconds", 120}}}}.dump(
             2),
         false);
@@ -383,7 +425,7 @@ J RunStore::save_diagnostic(const contracts::FrameEnvelope *frame, const Diagnos
     const auto now = diagnostic_clock_->now();
     const auto interval = std::chrono::seconds(request.reason.find("pause") != std::string::npos ? 120 : 60);
     bool clock_backwards = false;
-    if (!reward) {
+    if (!reward && !request.critical) {
         const auto found = diagnostic_times_.find(throttle_key);
         clock_backwards = found != diagnostic_times_.end() && now < found->second;
         if (found != diagnostic_times_.end() && now >= found->second && now - found->second < interval) {
@@ -391,8 +433,10 @@ J RunStore::save_diagnostic(const contracts::FrameEnvelope *frame, const Diagnos
             return skipped("throttled");
         }
     }
-    auto &attempts = reward ? diagnostic_rewards_ : diagnostic_failures_;
-    if (attempts >= (reward ? diagnostic_limits_.rewards : diagnostic_limits_.failures)) {
+    auto &attempts = request.critical ? diagnostic_critical_ : reward ? diagnostic_rewards_ : diagnostic_failures_;
+    const auto limit = request.critical ? diagnostic_limits_.critical_failures :
+        reward ? diagnostic_limits_.rewards : diagnostic_limits_.failures;
+    if (attempts >= limit) {
         ++diagnostic_quota_;
         return skipped("quota_exceeded");
     }
@@ -401,7 +445,7 @@ J RunStore::save_diagnostic(const contracts::FrameEnvelope *frame, const Diagnos
     if (reward) diagnostic_operations_.insert(request.operation_id);
     else diagnostic_times_[throttle_key] = now;
     if (request.operation_scoped) diagnostic_scoped_operations_.insert(throttle_key);
-    J entry{{"id", diagnostic_rewards_ + diagnostic_failures_}, {"status", "failed"},
+    J entry{{"id", ++diagnostic_sequence_}, {"status", "failed"}, {"critical", request.critical},
         {"instance", instance_}, {"run_id", run_}, {"generation", request.generation},
         {"unit_index", request.unit_index}, {"task_id", request.task_id}, {"depth", request.depth},
         {"node", request.node}, {"reason", request.reason}, {"stage", request.stage},
@@ -494,9 +538,16 @@ J RunStore::save_diagnostic(const contracts::FrameEnvelope *frame, const Diagnos
     diagnostic_entries_.push_back(entry);
     return entry;
 }
-J RunStore::diagnostic_summary() const {
-    std::lock_guard lock(diagnostic_mutex_);
-    return {{"schema", 1}, {"entries", diagnostic_entries_}, {"bytes_saved", diagnostic_bytes_},
+J RunStore::diagnostic_summary(bool wait_for_writer) const {
+    std::unique_lock lock(diagnostic_mutex_, std::defer_lock);
+    if (wait_for_writer) lock.lock();
+    else lock.try_lock();
+    if (!lock.owns_lock()) {
+        auto view = *diagnostic_view_.load();
+        view["update_pending"] = true;
+        return view;
+    }
+    J view{{"schema", 1}, {"entries", diagnostic_entries_}, {"bytes_saved", diagnostic_bytes_},
         {"event_history", {{"path", "execution-events.jsonl"}, {"rows", event_rows_},
             {"bytes", event_bytes_}, {"limit_bytes", 64ULL * 1024 * 1024},
             {"dropped", event_dropped_}, {"failed", event_failed_},
@@ -513,20 +564,28 @@ J RunStore::diagnostic_summary() const {
             {"recognition_collected", logging_.recognition && logging_.accepts(LogLevel::Info)}}},
         {"action_timing", {{"path", "action-timing.jsonl"}, {"rows", timing_rows_},
             {"bytes", timing_bytes_}, {"limit_bytes", 64ULL * 1024 * 1024},
-            {"dropped", timing_dropped_}, {"failed", timing_failed_}, {"write_ns", timing_write_ns_},
+            {"dropped", timing_dropped_}, {"auxiliary_dropped", timing_auxiliary_dropped_},
+            {"input_audit_dropped", timing_input_dropped_},
+            {"input_audit_complete", timing_failed_ == 0 && timing_input_dropped_ == 0},
+            {"failed", timing_failed_}, {"write_ns", timing_write_ns_},
             {"collected", logging_.performance && logging_.accepts(LogLevel::Info)},
-            {"complete", timing_failed_ == 0 && timing_dropped_ == 0}}},
+            {"sampling_complete", timing_failed_ == 0 && timing_auxiliary_dropped_ == 0},
+            {"complete", timing_failed_ == 0 && timing_input_dropped_ == 0}}},
         {"recent_frames", {{"saved", recent_saved_.load()}, {"dropped", recent_dropped_.load()},
             {"failed", recent_failed_.load()}, {"worker_ns", recent_work_ns_.load()},
             {"pending_limit", 4}, {"inflight_limit", 1}, {"action_format", "png"}}},
-        {"reserved_bytes", (diagnostic_rewards_ + diagnostic_failures_) * diagnostic_limits_.frame_bytes},
+        {"reserved_bytes", (diagnostic_rewards_ + diagnostic_failures_ + diagnostic_critical_) * diagnostic_limits_.frame_bytes},
+        {"critical_attempts", diagnostic_critical_}, {"critical_limit", diagnostic_limits_.critical_failures},
         {"reward_attempts", diagnostic_rewards_}, {"failure_attempts", diagnostic_failures_},
         {"failed", diagnostic_failed_}, {"unavailable", diagnostic_unavailable_},
         {"throttled", diagnostic_throttled_}, {"duplicates", diagnostic_duplicates_},
         {"quota_exceeded", diagnostic_quota_}, {"unrecorded", diagnostic_unrecorded_},
         {"complete", diagnostic_failed_ == 0 && diagnostic_quota_ == 0 && diagnostic_unrecorded_ == 0 &&
-            timing_failed_ == 0 && timing_dropped_ == 0 && log_failed_ == 0 && log_dropped_ == 0 &&
+            timing_failed_ == 0 && timing_input_dropped_ == 0 && log_failed_ == 0 && log_dropped_ == 0 &&
             event_failed_ == 0 && event_dropped_ == 0}};
+    view["update_pending"] = false;
+    diagnostic_view_.store(std::make_shared<const J>(view));
+    return view;
 }
 void RunStore::append_event(const J &event) noexcept {
     std::lock_guard lock(diagnostic_mutex_);
@@ -572,21 +631,27 @@ void RunStore::save_events(const EventJournal &events) {
     platform::atomic_write(directory_ / "events.json", events.read().dump(2), true);
 }
 void RunStore::append_timing(std::uint64_t generation, const std::string &type, const J &payload) noexcept {
-    if (type == "timing.segment" &&
-        (!logging_.performance || !logging_.accepts(LogLevel::Info))) return;
+    const bool auxiliary = type == "timing.segment";
+    if (auxiliary && (!logging_.performance || !logging_.accepts(LogLevel::Info))) return;
     const auto started = std::chrono::steady_clock::now();
     std::lock_guard lock(diagnostic_mutex_);
     try {
         constexpr std::uint64_t limit = 64ULL * 1024 * 1024;
-        if (timing_closed_) { ++timing_dropped_; return; }
+        if (timing_closed_) {
+            ++timing_dropped_;
+            if (auxiliary) ++timing_auxiliary_dropped_; else ++timing_input_dropped_;
+            return;
+        }
         auto row = J{{"schema", 1}, {"instance_id", instance_}, {"run_id", run_},
             {"generation", generation}, {"type", type}, {"payload", payload},
             {"level", "info"},
             {"category", type == "timing.segment" ? "performance" : "input_audit"},
             {"utc_ms", std::chrono::duration_cast<std::chrono::milliseconds>(
                 std::chrono::system_clock::now().time_since_epoch()).count()}}.dump();
-        if (timing_bytes_ + row.size() + 1 > limit) {
-            timing_closed_ = true; ++timing_dropped_; return;
+        if (timing_bytes_ + row.size() + 1 > (auxiliary ? limit / 2 : limit)) {
+            if (!auxiliary) timing_closed_ = true;
+            if (auxiliary) ++timing_auxiliary_dropped_; else ++timing_input_dropped_;
+            ++timing_dropped_; return;
         }
         if (!timing_stream_.is_open()) {
             timing_stream_.exceptions(std::ios::failbit | std::ios::badbit);
@@ -638,7 +703,7 @@ void RunStore::save_terminal(const contracts::RunSnapshot &snapshot,
         std::lock_guard lock(diagnostic_mutex_);
         diagnostic_closed_ = true;
     }
-    document["diagnostics"] = diagnostic_summary();
+    document["diagnostics"] = diagnostic_summary(true);
     document["result_saved"] = true;
     document["events"] = events;
     document["root_terminal"] = {{"generation", session.terminal.generation},
@@ -647,19 +712,39 @@ void RunStore::save_terminal(const contracts::RunSnapshot &snapshot,
     saved_ = true;
 }
 J RunStore::read_summary(const std::filesystem::path &directory) {
-    std::ifstream run(directory / "run.json");
-    J definition;
-    if (!run || !(run >> definition) || definition.at("schema") != 1)
+    DiagnosticDirectories held;
+    held.ancestors(directory);
+    const auto definition = J::parse(read_locked_file(directory / "run.json", 16 * 1024 * 1024));
+    if (definition.at("schema") != 1)
         throw std::runtime_error("RUN_RECORD_INVALID");
     if (!std::filesystem::exists(directory / "result.json"))
         return {{"state", "Interrupted"},
                 {"reason", "NO_COMMITTED_TERMINAL"},
                 {"resume_allowed", false}};
-    std::ifstream result(directory / "result.json");
-    J value;
-    result >> value;
+    auto value = J::parse(read_locked_file(directory / "result.json", 16 * 1024 * 1024));
     // 历史结果只读展示未知，不把旧文件没有该字段解释成诊断完整。
     if (!value.contains("details_complete")) value["details_complete"] = nullptr;
     return value;
+}
+std::string RunStore::read_diagnostic(const std::filesystem::path &directory,
+    const J &index, const std::string &instance, std::uint64_t run,
+    std::uint64_t generation, std::uint64_t id) {
+    const auto relative = "diagnostics/" + std::to_string(id) + ".png";
+    for (const auto &entry : index.value("entries", J::array())) {
+        if (entry.value("id", std::uint64_t{}) == id && entry.value("instance", "") == instance &&
+            entry.value("run_id", std::uint64_t{}) == run &&
+            entry.value("generation", std::uint64_t{}) == generation &&
+            entry.value("status", "") == "saved" && entry.value("path", "") == relative) {
+            const auto file = directory / relative;
+            DiagnosticDirectories held;
+            held.ancestors(file.parent_path());
+            auto bytes = read_locked_file(file, 8 * 1024 * 1024);
+            diagnostic_require(platform::bytes_sha256(std::span<const std::uint8_t>(
+                reinterpret_cast<const std::uint8_t *>(bytes.data()), bytes.size())) ==
+                entry.at("sha256").get<std::string>(), "DIAGNOSTIC_HASH_MISMATCH");
+            return bytes;
+        }
+    }
+    throw std::runtime_error("DIAGNOSTIC_NOT_FOUND");
 }
 } // namespace wvd::storage

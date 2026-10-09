@@ -3,10 +3,12 @@
 #include "devices/lifecycle_execution.hpp"
 #include "devices/metadata_read_fault.hpp"
 #include "devices/adb_failure.hpp"
+#include "devices/native_input_gate.hpp"
 #include "platform/windows/memory_diagnostics.hpp"
 #include "platform/windows/mumu_binding.hpp"
 #include <iostream>
 #include <stdexcept>
+#include <thread>
 
 namespace {
 class RecoveryPort final : public wvd::devices::LifecyclePort {
@@ -51,6 +53,74 @@ void rejected(Call call, const char *reason) {
 
 int main(int argc, char **argv) {
     try {
+        if (argc == 2 && std::string(argv[1]) == "--physical-gate-authority") {
+            using namespace wvd;
+            struct Backend final : devices::DeviceBackend {
+                unsigned calls{};
+                bool offline() const override { return true; }
+                bool connect() override { return true; }
+                devices::RawFrame capture() override {
+                    devices::RawFrame frame;
+                    frame.device_id="device";frame.viewport_id="viewport";frame.foreground_application="game";
+                    frame.size={10,10};frame.connection_generation=1;frame.display_rotation=0;
+                    frame.captured_at=std::chrono::steady_clock::now();
+                    frame.raw_bgr=std::make_shared<const std::vector<std::uint8_t>>(300,0);
+                    return frame;
+                }
+                bool execute(const contracts::Command &) override {++calls;return true;}
+            } backend;
+            contracts::InputPolicy policy;
+            policy.device_id="device";policy.game_id="game";policy.application_id="game";
+            policy.pack_revision="pack";policy.recognition_size={10,10};
+            policy.allowed_scenes={"game"};policy.permissions={contracts::ActionKind::Click};
+            policy.capabilities=policy.permissions;
+            devices::NativeInputGate gate(backend,policy,1);
+            contracts::Command command;command.kind=contracts::ActionKind::Click;command.x=5;command.y=5;
+            for (const auto mode : {"scene-readonly","target-readonly","nohit","eligible"}) {
+                const auto frame=gate.capture();
+                contracts::Observation scene,target;
+                scene.basis=target.basis=frame.identity;
+                scene.outcome=target.outcome=contracts::RecognitionOutcome::Hit;
+                scene.action_eligible=std::string(mode)!="scene-readonly";
+                target.action_eligible=std::string(mode)!="target-readonly";
+                if(std::string(mode)=="nohit") target.outcome=contracts::RecognitionOutcome::NoHit;
+                const auto result=gate.submit(command,scene,target,{0,0,10,10});
+                if ((result.disposition==devices::InputDisposition::Submitted) != (std::string(mode)=="eligible"))
+                    throw std::runtime_error("PHYSICAL_GATE_READONLY_AUTHORIZED_INPUT");
+            }
+            if(backend.calls!=1) throw std::runtime_error("PHYSICAL_GATE_CALLED_REJECTED_BACKEND");
+            std::cout<<"PASS real NativeInputGate: readonly scene/target and NoHit reject, one eligible input\n";
+            return 0;
+        }
+        if (argc == 2 && std::string(argv[1]) == "--lifecycle-deadline") {
+            using namespace std::chrono_literals;
+            using Clock = std::chrono::steady_clock;
+            struct SlowPort final : wvd::devices::LifecyclePort {
+                bool stop{}, cancel_on_observe{};
+                unsigned calls{};
+                Clock::time_point window{};
+                wvd::devices::LifecycleTarget target{"device","2","game","",false};
+                void lifecycle_window(Clock::time_point d) noexcept override { window = d; }
+                std::optional<wvd::devices::LifecycleObservation> observe_lifecycle() override {
+                    std::this_thread::sleep_for(20ms); if (cancel_on_observe) stop = true;
+                    return wvd::devices::LifecycleObservation{target,true,true,true,true,1,Clock::now(),true,false};
+                }
+                bool execute_lifecycle(wvd::devices::LifecycleOperation,const wvd::devices::LifecycleTarget &,
+                    const std::function<bool()> &) override { ++calls; return true; }
+            };
+            for (const auto mode : {"step", "total", "cancel"}) {
+                SlowPort port; port.cancel_on_observe = std::string(mode) == "cancel";
+                wvd::devices::LifecyclePlan plan{port.target,{wvd::devices::LifecycleOperation::StartApplication},1};
+                plan.step_timeout = std::string(mode) == "step" ? 1ms : 1s;
+                const auto total = Clock::now() + (std::string(mode) == "total" ? 1ms : 1s);
+                const auto end = wvd::devices::execute_lifecycle_plan(plan,port,[&]{return port.stop;},[](const auto &,const auto &){},total);
+                if (end == wvd::devices::LifecycleEnd::ReadyForBoot || port.calls || port.window != Clock::time_point{} ||
+                    (port.stop && end != wvd::devices::LifecycleEnd::Cancelled))
+                    throw std::runtime_error("LATE_OBSERVATION_AUTHORIZED_LIFECYCLE");
+                std::cout << "lifecycle-deadline " << mode << " passed\n";
+            }
+            return 0;
+        }
         namespace d = wvd::devices;
         if (argc == 2 && std::string(argv[1]) == "--closure-metadata") {
             using J = nlohmann::json;

@@ -1,0 +1,257 @@
+{
+  "source": {
+    "source_commit": "4c466e14fa514fa177380e902afe373c8f20c3b2",
+    "product_inputs_sha256": "f9de3bdf7095b7a0752db36944a9e0bdb678e2bbbbc8f35db1d481dae2b7931c",
+    "product_input_count": 1289,
+    "documentation_sha256": "3fe7f7e2dad8e728494520e33a4f4b0cf80c0b37a0c9f973e34c899f5c3c8bef"
+  },
+  "binaries": {
+    "test_native_application": "49f1a0a98d508d9019f0d2f91658e85a258f68d07a5dcd6a61562bc1f5e9cf5e",
+    "test_native_author": "c389d45d2f5ffb4e63181cf4923ce590b60820c83f04f4f0f3fc3e326c2b4f58",
+    "test_native_coordinator": "b262db96ffcfb461e495b42dcd69d21f86bb698da27016226ad2d3727d66678b",
+    "test_native_devices": "8a90b486ea876fcdd9c0cb9fafc9fe59a3cff91f47a10a81dd780dc57ef96362",
+    "test_native_flow": "d37bd5ac2b4da3ebecc7c99a95a5c3dd720ec8a438edcf7aa18b4a97aaa517b5",
+    "test_native_ocr": "e4414829da4ac7a7d49d937f73137650d899f82827973193bb152cfab020c7ba",
+    "test_native_publication": "262f7bc8336c988835e34a99e10c5f46191af5ddc20654cc32af3c55d1db5f00",
+    "test_strategy_frequency": "0d27005c3c04cd75fb54b78dc1af79a9271f8a458efe7f0766b04685808a78f1",
+    "automationd": "a0ed003f5b6365ffac1f2ee7edbd31e47e785f056924a6f6a69dd977cd14bd4f",
+    "test_head_response": "88ac1fe931df80fca635c20a997da4355eb302d650f25a28e3a770f729c513d5"
+  },
+  "modules": [
+    "app",
+    "devices",
+    "recognition",
+    "runtime",
+    "tools",
+    "web"
+  ],
+  "passed": [
+    [
+      "runtime",
+      "test_native_flow",
+      "--recovery-recheck"
+    ],
+    [
+      "runtime",
+      "test_native_flow",
+      "--linkage-closure"
+    ],
+    [
+      "runtime",
+      "test_native_flow",
+      "--positive-loop-frame"
+    ],
+    [
+      "runtime",
+      "test_native_flow",
+      "--child-result-frame"
+    ],
+    [
+      "runtime",
+      "test_native_flow",
+      "--late-receipt"
+    ],
+    [
+      "runtime",
+      "test_native_flow",
+      "--restored-context-timer"
+    ],
+    [
+      "runtime",
+      "test_native_flow",
+      "--critical-recovery"
+    ],
+    [
+      "runtime",
+      "test_native_flow",
+      "--confirmed-result"
+    ],
+    [
+      "runtime",
+      "test_native_flow",
+      "--timeout-reclassification"
+    ],
+    [
+      "runtime",
+      "test_native_flow",
+      "--selection-race"
+    ],
+    [
+      "runtime",
+      "test_native_flow",
+      "--restart-during-boot"
+    ],
+    [
+      "runtime",
+      "test_native_flow",
+      "--tolerance"
+    ],
+    [
+      "runtime",
+      "test_native_flow",
+      "--receipt-exception-safety"
+    ],
+    [
+      "runtime",
+      "test_native_flow",
+      "--exit-proof-causality"
+    ],
+    [
+      "runtime",
+      "test_native_flow",
+      "--input-effect-contract"
+    ],
+    [
+      "runtime",
+      "test_native_flow",
+      "--progress-contract"
+    ],
+    [
+      "devices",
+      "test_native_devices",
+      "base"
+    ],
+    [
+      "devices",
+      "test_native_devices",
+      "--physical-gate-authority"
+    ],
+    [
+      "devices",
+      "test_native_devices",
+      "--lifecycle-deadline"
+    ],
+    [
+      "recognition",
+      "test_native_author",
+      "--pressure-contract"
+    ],
+    [
+      "recognition",
+      "test_native_author",
+      "--builtin-resource-closure"
+    ],
+    [
+      "recognition",
+      "test_native_author",
+      "--healing-effect-contract"
+    ],
+    [
+      "recognition",
+      "test_native_ocr",
+      "--ctc-contract"
+    ],
+    [
+      "recognition",
+      "test_native_ocr",
+      "--result-contract"
+    ],
+    [
+      "recognition",
+      "test_native_ocr",
+      "--run-model-contract"
+    ],
+    [
+      "recognition",
+      "test_strategy_frequency",
+      "--configuration-contract"
+    ],
+    [
+      "recognition",
+      "test_strategy_frequency",
+      "--semantics"
+    ],
+    [
+      "recognition",
+      "test_strategy_frequency",
+      "--fallback-contract"
+    ],
+    [
+      "recognition",
+      "test_native_author",
+      "--leaf-plan-contract"
+    ],
+    [
+      "recognition",
+      "test_native_author",
+      "--supply-plan-contract"
+    ],
+    [
+      "app",
+      "test_native_application",
+      "--measurement-contract"
+    ],
+    [
+      "app",
+      "test_native_application",
+      "--builtin-transaction"
+    ],
+    [
+      "app",
+      "test_native_application",
+      "--submission-history"
+    ],
+    [
+      "app",
+      "test_native_application",
+      "--control-contract"
+    ],
+    [
+      "app",
+      "test_native_publication",
+      "base"
+    ],
+    [
+      "app",
+      "test_native_coordinator",
+      "--combat-diagnostic"
+    ],
+    [
+      "app",
+      "test_native_coordinator",
+      "--instance-exit"
+    ],
+    [
+      "app",
+      "test_native_coordinator",
+      "--timing-quota"
+    ],
+    [
+      "app",
+      "test_native_coordinator",
+      "--event-history"
+    ],
+    [
+      "tool-or-web",
+      "tools"
+    ],
+    [
+      "tool-or-web",
+      "resource-tools"
+    ],
+    [
+      "tool-or-web",
+      "test_diagnostic_io.py"
+    ],
+    [
+      "tool-or-web",
+      "test_crash_plan_contract.py"
+    ],
+    [
+      "tool-or-web",
+      "verify_bounded_trace_input.ps1"
+    ],
+    [
+      "tool-or-web",
+      "verify_measurement_endpoints.ps1"
+    ],
+    [
+      "tool-or-web",
+      "verify_trace_guards.ps1"
+    ]
+  ],
+  "data_root": "D:\\programcode\\python\\wvd\\next\\.local\\architecture-audit-20261010\\final-contracts-11",
+  "device_actions": false,
+  "complete": false,
+  "validation_error": "contract-heap-restore \u5931\u8d25 (exit=1)\uff0c\u5b8c\u6574\u65e5\u5fd7: D:\\programcode\\python\\wvd\\next\\.local\\logs\\contract-heap-restore-20261009T195509639460.log"
+}

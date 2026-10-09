@@ -32,21 +32,30 @@ struct ResourceStats {
 // 不宣称覆盖 OpenCV 内部所有分配。
 class MatchBudget {
   public:
+    struct Headroom {
+        bool system_known{}, process_known{};
+        std::uint64_t system_bytes{}, process_bytes{};
+    };
+    using PressureReader = std::function<Headroom()>;
     class Ticket {
       public:
         Ticket() = default;
-        Ticket(MatchBudget *owner, std::uint64_t bytes) : owner_(owner), bytes_(bytes) {}
         Ticket(const Ticket &) = delete;
         Ticket &operator=(const Ticket &) = delete;
         Ticket(Ticket &&other) noexcept;
         Ticket &operator=(Ticket &&other) noexcept;
         ~Ticket();
+      private:
+        friend class MatchBudget;
+        Ticket(MatchBudget *owner, std::uint64_t bytes) : owner_(owner), bytes_(bytes) {}
+      public:
         bool oversized_single() const { return owner_ && bytes_ > owner_->target_; }
+        bool belongs_to(const MatchBudget *owner) const noexcept { return owner_ == owner; }
       private:
         MatchBudget *owner_{};
         std::uint64_t bytes_{};
     };
-    explicit MatchBudget(std::uint64_t target = 256ULL * 1024 * 1024) : target_(target) {}
+    explicit MatchBudget(std::uint64_t target = 256ULL * 1024 * 1024, PressureReader pressure = {});
     Ticket acquire(std::uint64_t bytes, const std::atomic<bool> &cancelled);
     void wake() noexcept { available_.notify_all(); }
     ResourceStats stats() const;
@@ -54,6 +63,7 @@ class MatchBudget {
     friend class Ticket;
     void release(std::uint64_t bytes) noexcept;
     const std::uint64_t target_;
+    PressureReader pressure_;
     mutable std::mutex mutex_;
     std::condition_variable available_;
     std::uint64_t used_{}, peak_used_{}, peak_active_{};
@@ -85,9 +95,11 @@ class DecodedAssetCache : public std::enable_shared_from_this<DecodedAssetCache>
         std::shared_ptr<Asset> asset_;
         std::weak_ptr<DecodedAssetCache> owner_;
     };
-    explicit DecodedAssetCache(std::uint64_t target = 128ULL * 1024 * 1024);
+    explicit DecodedAssetCache(std::uint64_t target = 128ULL * 1024 * 1024,
+                              std::shared_ptr<MatchBudget> budget = {});
     Lease load(const std::string &key, const std::function<cv::Mat()> &decode,
-               const std::atomic<bool> *cancelled = nullptr);
+               const std::atomic<bool> *cancelled = nullptr,
+               const MatchBudget::Ticket *workspace = nullptr);
     ResourceStats stats() const;
   private:
     struct SharedCounters {
@@ -111,6 +123,7 @@ class DecodedAssetCache : public std::enable_shared_from_this<DecodedAssetCache>
     void trim_locked() noexcept;
     void trim_after_release() noexcept;
     const std::uint64_t target_;
+    std::shared_ptr<MatchBudget> budget_;
     std::shared_ptr<SharedCounters> counters_ = std::make_shared<SharedCounters>();
     mutable std::mutex mutex_;
     std::map<std::string, std::shared_ptr<Entry>> entries_;

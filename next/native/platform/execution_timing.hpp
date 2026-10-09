@@ -10,12 +10,13 @@ namespace wvd::platform::timing {
 enum class Part { Capture, Convert, Metadata, InputValidation, Queue, Match,
     ParallelWait, Recognition, JsonEvents, ExplicitWait, ArchiveSubmit, InputDelivery, Count };
 enum class Counter { Captures, Matches, CacheHits, AdbClients, ContextTransactions,
-    OverlayChecks, OverlayReuse, FrameReuse, BusinessPredicates, Count };
+    OverlayChecks, OverlayReuse, FrameReuse, BusinessPredicates, ConditionVisits, UniqueLeaves, OcrCalls, Count };
 inline constexpr std::array names{"pixel_capture", "pixel_convert", "capture_metadata", "input_validation",
     "budget_queue", "match", "parallel_wait", "recognition_other", "json_events", "explicit_wait",
     "archive_submit", "input_delivery"};
 inline constexpr std::array counter_names{"captures", "actual_matches", "leaf_cache_hits", "adb_clients",
-    "context_transactions", "overlay_checks", "overlay_reuse", "frame_reuse", "business_predicates"};
+    "context_transactions", "overlay_checks", "overlay_reuse", "frame_reuse", "business_predicates",
+    "condition_visits", "unique_leaves", "ocr_calls"};
 struct Sample {
     std::array<std::uint64_t, names.size()> wall{}, workers{};
     std::array<std::uint64_t, counter_names.size()> counts{};

@@ -15,7 +15,8 @@ void require(bool condition, const char *code) {
 bool same_device(const contracts::FrameIdentity &a, const contracts::FrameIdentity &b) {
     return a.device_id == b.device_id && a.game_id == b.game_id &&
         a.pack_revision == b.pack_revision && a.generation == b.generation &&
-        a.connection_generation == b.connection_generation && a.viewport_id == b.viewport_id &&
+        a.connection_generation == b.connection_generation && a.instance_id == b.instance_id &&
+        a.instance_created_identity == b.instance_created_identity && a.viewport_id == b.viewport_id &&
         a.raw_size == b.raw_size && a.recognition_size == b.recognition_size &&
         a.display_rotation == b.display_rotation;
 }
@@ -57,6 +58,62 @@ const std::string &FlowExecutor::current_source_path() const {
 std::string FlowExecutor::current_step_id() const {
     return stack_.empty() ? std::string{} : stack_.back().current;
 }
+bool FlowExecutor::progress_changed() {
+    std::array<ProgressRow, 8> rows{};
+    bool changed = reported_depth_ != stack_.size() || reported_terminal_ != terminal_.state;
+    static const std::string empty;
+    for (std::size_t i = 0; i < stack_.size(); ++i) {
+        const auto &frame = stack_[i];
+        auto &row = rows[i];
+        row.step = &program_.definitions.at(frame.definition).steps.at(frame.current);
+        row.flags = frame.next_pending | (frame.error_pending << 1) | (frame.operation_started << 2) |
+            (frame.known_wait << 3) | (frame.diagnostic_checked << 4);
+        row.exits = static_cast<unsigned>(frame.event_exits.size());
+        row.event_owner = frame.event ? frame.event->owner : stack_.size();
+        if (frame.pending) {
+            row.epoch = frame.pending->action_epoch;
+            row.connection = frame.pending->before.connection_generation;
+            row.attempts = frame.pending->attempts;
+            row.delivery = static_cast<int>(frame.pending->delivery);
+            row.flags |= frame.pending->delivery_unknown << 5;
+        }
+        const auto &event = frame.event ? frame.event->rule.id : empty;
+        changed = changed || reported_events_[i] != event || reported_targets_[i] != frame.returned_targets;
+    }
+    const auto text = [&](const char *key) -> const std::string & {
+        if (!last_diagnostic_.is_object()) return empty;
+        const auto found = last_diagnostic_.find(key);
+        return found != last_diagnostic_.end() && found->is_string() ? found->get_ref<const std::string &>() : empty;
+    };
+    constexpr const char *keys[]{"reason", "outcome", "selected_event", "final_scene_recheck", "interruption_reason"};
+    for (std::size_t i = 0; i < std::size(keys); ++i)
+        changed = changed || reported_diagnostic_[i] != text(keys[i]);
+    const unsigned flags = (exception_since_ ? 1U : 0U) | (read_recovery_ ? 2U : 0U) |
+        (read_recovery_ && read_recovery_->suspended ? 4U : 0U) |
+        (read_recovery_ && read_recovery_->awaiting_input_validation ? 8U : 0U) |
+        (read_recovery_ && read_recovery_->device_checked ? 16U : 0U) |
+        (read_recovery_ && read_recovery_->application_restarted_in_window ? 32U : 0U) |
+        (read_recovery_ && read_recovery_->instance_restarted_in_window ? 64U : 0U);
+    const auto &recovery_code = read_recovery_ ? read_recovery_->last.code : empty;
+    const auto failures = read_recovery_ ? read_recovery_->failures : 0U;
+    changed = changed || rows != reported_rows_ || flags != reported_recovery_flags_ ||
+        failures != reported_recovery_failures_ || recovery_code != reported_recovery_code_;
+    if (!changed) return false;
+    // Rich progress is published only on semantic transitions. Time alone is
+    // handled by a separate small heartbeat and cannot create full-JSON churn.
+    for (std::size_t i = 0; i < stack_.size(); ++i) {
+        reported_events_[i] = stack_[i].event ? stack_[i].event->rule.id : empty;
+        reported_targets_[i] = stack_[i].returned_targets;
+    }
+    for (std::size_t i = 0; i < std::size(keys); ++i) reported_diagnostic_[i] = text(keys[i]);
+    reported_rows_ = rows;
+    reported_depth_ = stack_.size();
+    reported_terminal_ = terminal_.state;
+    reported_recovery_flags_ = flags;
+    reported_recovery_failures_ = failures;
+    reported_recovery_code_ = recovery_code;
+    return true;
+}
 nlohmann::json FlowExecutor::progress_snapshot() const {
     nlohmann::json call_stack = nlohmann::json::array();
     nlohmann::json pending = nlohmann::json::array();
@@ -76,7 +133,17 @@ nlohmann::json FlowExecutor::progress_snapshot() const {
                                {"basis_epoch", input.before.action_epoch},
                                {"action_epoch", input.action_epoch},
                                {"attempts", input.attempts},
-                               {"delivery_unknown", input.delivery_unknown}});
+                               {"delivery_unknown", input.delivery_unknown},
+                               {"connection_generation", input.before.connection_generation},
+                               {"device_id", input.before.device_id},
+                               {"instance_id", input.before.instance_id},
+                               {"instance_created_identity", input.before.instance_created_identity},
+                               {"captured_at_ns", std::chrono::duration_cast<std::chrono::nanoseconds>(input.before.captured_at.time_since_epoch()).count()},
+                               {"submitted_at_ns", std::chrono::duration_cast<std::chrono::nanoseconds>(input.submitted_at.time_since_epoch()).count()},
+                               {"delivery_state", input.delivery == PendingInput::Delivery::Prepared ? "Prepared" :
+                                   input.delivery == PendingInput::Delivery::Attempted ? "Attempted" :
+                                   input.delivery == PendingInput::Delivery::DeliveryUnknown ? "DeliveryUnknown" :
+                                   input.delivery == PendingInput::Delivery::Confirmed ? "Confirmed" : "Sent"}});
         }
         if (frame.event) {
             const auto &rule = frame.event->rule;
@@ -112,7 +179,9 @@ nlohmann::json FlowExecutor::progress_snapshot() const {
 }
 bool FlowExecutor::has_unresolved_input() const {
     return std::any_of(stack_.begin(), stack_.end(),
-                       [](const Frame &f) { return f.pending.has_value(); });
+                       [](const Frame &f) { return f.pending &&
+                           f.pending->delivery != PendingInput::Delivery::Prepared &&
+                           f.pending->delivery != PendingInput::Delivery::Confirmed; });
 }
 void FlowExecutor::report_input_result(const PendingInput &input, const char *outcome,
     std::uint64_t observed_frame, const std::string &reason) noexcept {
@@ -739,7 +808,7 @@ std::optional<TickResult> FlowExecutor::retry_pending_input(Frame &frame,
         target.outcome == contracts::RecognitionOutcome::NoHit) return waiting(250ms);
     require_hit(scene, "RETRY_SCENE_ERROR");
     require_hit(target, "RETRY_TARGET_ERROR");
-    require((!input.use_target_center || target.action_eligible) &&
+    require(target.action_eligible &&
         same_device(scene.basis, image.identity) && same_device(target.basis, image.identity) &&
         scene.basis.frame_id == image.identity.frame_id &&
         target.basis.frame_id == image.identity.frame_id, "RETRY_INPUT_EVIDENCE_INVALID");
@@ -756,7 +825,23 @@ std::optional<TickResult> FlowExecutor::retry_pending_input(Frame &frame,
     }
     const auto action = command(input, target);
     account_event_time(); // 下一段读取耗时只能记一次。
+    const auto prior_delivery = pending.delivery;
+    const auto prior_unknown = pending.delivery_unknown;
+    pending.delivery = PendingInput::Delivery::Attempted;
+    pending.delivery_unknown = true;
     const auto receipt = ports_.submit(action, scene, target, input.allowed_area, source.source_path);
+    if (receipt.state == SubmissionState::Rejected) {
+        pending.delivery = prior_delivery;
+        pending.delivery_unknown = prior_unknown;
+    } else {
+        pending.action_epoch = receipt.action_epoch;
+        pending.submitted_at = receipt.submitted_at;
+        pending.delay_pause_base = pending.event_pause;
+        pending.animation_pause = {};
+        pending.delivery_unknown = receipt.state == SubmissionState::Unresolved;
+        pending.delivery = pending.delivery_unknown ? PendingInput::Delivery::DeliveryUnknown : PendingInput::Delivery::Sent;
+        ++pending.attempts;
+    }
     invalidate_observation();
     if (receipt.state == SubmissionState::Rejected && receipt.read_fault) {
         begin_observation_recovery(*receipt.read_fault);
@@ -771,12 +856,6 @@ std::optional<TickResult> FlowExecutor::retry_pending_input(Frame &frame,
     }
     // 保留首次提交/事件暂停/结果预算，重试不能无限续命，也不冒充输入成功。
     // before保存首次输入依据；每次补点只更新最后提交时间/epoch和实际次数。
-    pending.action_epoch = receipt.action_epoch;
-    pending.submitted_at = receipt.submitted_at;
-    pending.delay_pause_base = pending.event_pause;
-    pending.animation_pause = {};
-    pending.delivery_unknown = receipt.state == SubmissionState::Unresolved;
-    ++pending.attempts;
     if (!input.effect_binding.empty())
         ports_.operate(input.effect_binding, {{"phase", "submitted"}, {"delivery_unknown", pending.delivery_unknown}},
             std::nullopt, std::nullopt, source.source_path);
@@ -954,6 +1033,18 @@ std::optional<TickResult> FlowExecutor::recheck_normal_observation(Frame &frame,
             evidence = verify(observe->request);
             if (evidence->outcome != contracts::RecognitionOutcome::Hit) return std::nullopt;
         }
+        if (const auto *input = std::get_if<workflow::Input>(&candidate.data)) {
+            const auto scene = verify(input->scene);
+            const auto target = verify(input->target);
+            if (scene.outcome != contracts::RecognitionOutcome::Hit ||
+                target.outcome != contracts::RecognitionOutcome::Hit || !target.action_eligible)
+                return std::nullopt;
+            evidence = target;
+        }
+        if (const auto *confirm = std::get_if<workflow::BusinessConfirm>(&candidate.data)) {
+            evidence = verify(confirm->condition);
+            if (evidence->outcome != contracts::RecognitionOutcome::Hit) return std::nullopt;
+        }
         // Only a fresh positive scene may reopen a local branch. This selects
         // but never executes an input, operation, or child during recovery.
         if (evidence && !std::holds_alternative<workflow::Poll>(candidate.data) &&
@@ -977,7 +1068,7 @@ std::optional<TickResult> FlowExecutor::recheck_normal_observation(Frame &frame,
             frame.current = candidate.id;
             frame.next_pending = false;
             frame.returned_targets.reset();
-            if (entering || Clock::now() - frame.entered_at >= current.time_limit)
+            if (entering)
                 frame.entered_at = Clock::now();
             frame.delay_until.reset();
             frame.poll_until.reset();
@@ -1125,7 +1216,7 @@ TickResult FlowExecutor::execute_step(Frame &frame, const workflow::Step &curren
             return reconsider_uncommitted_selection(frame);
         }
         require_hit(target, "TARGET_NOT_FOUND");
-        require((!input->use_target_center || target.action_eligible) &&
+        require(target.action_eligible &&
             same_device(scene.basis, target.basis) && scene.basis.frame_id == target.basis.frame_id,
             "INPUT_EVIDENCE_INVALID");
         std::optional<recognition::Request> expected;
@@ -1145,8 +1236,27 @@ TickResult FlowExecutor::execute_step(Frame &frame, const workflow::Step &curren
             if (allowed.state != OperationState::Done) return blocked(allowed.detail);
         }
         account_event_time(); // 输入前元数据读失败可恢复，但输入本身绝不整体重放。
-        const auto submitted = ports_.submit(command(*input, target), scene, target,
+        const auto action = command(*input, target);
+        PendingInput prepared{current.source_path, image.identity, image.identity.action_epoch,
+            Clock::now(), {}, std::move(expected), result_budget, true, current.id, Clock::now()};
+        prepared.selection_origin = frame.selection_origin;
+        prepared.delivery = PendingInput::Delivery::Prepared;
+        frame.pending.emplace(std::move(prepared));
+        // No owning-field allocation is allowed between possible delivery and
+        // recording its result. A throwing transport leaves Attempted unresolved.
+        frame.pending->delivery = PendingInput::Delivery::Attempted;
+        const auto submitted = ports_.submit(action, scene, target,
                                               input->allowed_area, current.source_path);
+        if (submitted.state != SubmissionState::Rejected) {
+            frame.pending->action_epoch = submitted.action_epoch;
+            frame.pending->submitted_at = frame.pending->result_started_at = submitted.submitted_at;
+            frame.pending->delivery_unknown = submitted.state == SubmissionState::Unresolved;
+            frame.pending->delivery = frame.pending->delivery_unknown
+                ? PendingInput::Delivery::DeliveryUnknown : PendingInput::Delivery::Sent;
+        } else {
+            report_input_result(*frame.pending, "rejected_before_effect", 0, submitted.detail);
+            frame.pending.reset();
+        }
         invalidate_observation(); // 包括拒绝/送达未知；绝不再使用提交前的像素授权下一次输入。
         if (submitted.state == SubmissionState::Rejected && submitted.read_fault) {
             begin_observation_recovery(*submitted.read_fault);
@@ -1164,10 +1274,6 @@ TickResult FlowExecutor::execute_step(Frame &frame, const workflow::Step &curren
         }
         // 先留下实际副作用事实，再验证回执；任何后续失败都不能丢掉它。
         for (auto &scope : stack_) scope.confirmed_result.reset();
-        frame.pending = PendingInput{current.source_path, image.identity, submitted.action_epoch,
-            submitted.submitted_at, {}, std::move(expected), result_budget,
-            submitted.state == SubmissionState::Unresolved, current.id, submitted.submitted_at};
-        frame.pending->selection_origin = frame.selection_origin;
         if (!input->effect_binding.empty())
             ports_.operate(input->effect_binding, {{"phase", "submitted"},
                 {"delivery_unknown", frame.pending->delivery_unknown}}, std::nullopt, std::nullopt, current.source_path);
@@ -1291,6 +1397,20 @@ TickResult FlowExecutor::execute_step(Frame &frame, const workflow::Step &curren
         const auto &parameters = business ? business->parameters : operation->parameters;
         const auto image = observation_frame();
         if (auto event = check_events(frame, current, image, workflow::EventClass::Overlay)) return *event;
+        if (business) {
+            const auto confirmed = recognize_result(image, business->condition);
+            if (confirmed.outcome == contracts::RecognitionOutcome::NoHit) {
+                frame.selected_frame.reset(); frame.selected_observation.reset();
+                if (auto event = check_unexpected(frame, current, image, "business_condition_not_confirmed")) return *event;
+                if (!frame.operation_started) return reconsider_uncommitted_selection(frame);
+                invalidate_observation();
+                return waiting(50ms);
+            }
+            require_hit(confirmed, "BUSINESS_CONFIRMATION_ERROR");
+            require(same_device(confirmed.basis, image.identity) &&
+                confirmed.basis.frame_id == image.identity.frame_id &&
+                confirmed.basis.action_epoch == image.identity.action_epoch, "BUSINESS_CONFIRMATION_STALE");
+        }
         const auto result = ports_.operate(binding, parameters, image, frame.selected_observation, current.source_path);
         if (result.state == OperationState::Done) {
             if (business) consume_result(business->condition);
@@ -1361,6 +1481,7 @@ nlohmann::json FlowExecutor::observation_recovery_snapshot() const {
         {"context_recovery", read.context_recovery},
         {"application_restarted_in_window", read.application_restarted_in_window},
         {"instance_restarted_in_window", read.instance_restarted_in_window},
+        {"instance_exit_proof", instance_exit_proof_ ? contracts::instance_exit_json(*instance_exit_proof_) : nlohmann::json(nullptr)},
         {"reconnect_count", reconnects_.size()},
         {"source_path", current_source_path()}, {"input_replayed", false}};
 }
@@ -1426,8 +1547,17 @@ TickResult FlowExecutor::retry_observation() {
             // 不因设备适配层已释放本轮标志而重复 force-stop 刚刚拉起的应用。
             if (recovery.application_restarted) read_recovery_->restart_application = false;
             read_recovery_->application_restarted_in_window |= recovery.application_restarted;
-            require(!recovery.instance_restarted || (recovery.application_restarted && recovery.reconnect),
+            require(!recovery.instance_restarted || (recovery.application_restarted && recovery.reconnect && recovery.instance_exit),
                     "INSTANCE_RESTART_PROOF_MISSING");
+            if (recovery.instance_restarted) {
+                const auto &exit = *recovery.instance_exit;
+                const auto &reconnect = *recovery.reconnect;
+                require(exit.transaction && exit.device_id == reconnect.device_id &&
+                    exit.instance_id == reconnect.instance_id && exit.created_identity == reconnect.created_identity &&
+                    exit.invalidated_connection == reconnect.before && exit.restored_connection == reconnect.after &&
+                    reconnect.after > reconnect.before && exit.observed_at <= Clock::now(), "INSTANCE_EXIT_PROOF_INVALID");
+                instance_exit_proof_ = exit;
+            }
             read_recovery_->instance_restarted_in_window |= recovery.instance_restarted;
             if (const auto &proof = recovery.reconnect) {
                 require(proof->after > proof->before && !proof->created_identity.empty(), "RECONNECT_PROOF_INVALID");
@@ -1462,7 +1592,8 @@ TickResult FlowExecutor::retry_observation() {
             const auto &source = program_.definitions.at(active.definition).steps.at(active.pending->submitted_step);
             const auto &input = std::get<workflow::Input>(source.data);
             if (input.interruption_reason.empty()) continue;
-            if (read_recovery_->instance_restarted_in_window && input.instance_exit_discardable) {
+            if (instance_exit_proof_ && input.instance_exit_discardable &&
+                contracts::exit_covers_input(*instance_exit_proof_,active.pending->before,active.pending->submitted_at)) {
                 read_recovery_->awaiting_input_validation = false;
                 finish_observation_recovery("instance_restarted_action_interrupted");
                 restart_handler_pending_ = false;

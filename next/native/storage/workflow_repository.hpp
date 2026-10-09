@@ -35,6 +35,7 @@ class WorkflowRepository {
     std::filesystem::path path_for(const std::string &flow_id) const;
     std::filesystem::path builtin_path_for(const std::string &flow_id) const;
     nlohmann::json read_unlocked(const std::string &flow_id) const;
+    void recover_builtin_unlocked(const std::string &flow_id) const;
 };
 
 } // namespace wvd::storage

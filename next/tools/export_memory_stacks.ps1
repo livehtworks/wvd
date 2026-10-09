@@ -8,10 +8,16 @@ param([Parameter(Mandatory)][string]$EvidenceRoot,[Parameter(Mandatory)][string]
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
 Import-Module (Join-Path $PSScriptRoot 'memory_trace_support.psm1') -Force
+Import-Module (Join-Path $PSScriptRoot 'measurement_endpoint.psm1') -Force
 Initialize-TraceInterop
 $root=[IO.Path]::GetFullPath($EvidenceRoot)
-$identity=Get-Content -Encoding utf8 -Raw (Join-Path $root 'identity.json') | ConvertFrom-Json
-$receipt=Get-Content -Encoding utf8 -Raw (Join-Path $root 'receipt.json') | ConvertFrom-Json
+$identity=Read-TraceJson (Join-Path $root 'identity.json')
+$receipt=Read-TraceJson (Join-Path $root 'receipt.json')
+$completionPath=Join-Path $root 'receipt-completion.json'
+$completion=if(Test-Path -LiteralPath $completionPath){Read-TraceJson $completionPath}else{$null}
+if($Mode -eq 'analyze' -and (-not $completion -or -not $completion.complete -or -not $completion.primary_receipt_deadline_met)) {
+    throw 'CAPTURE_PRIMARY_RECEIPT_DEADLINE_NOT_MET'
+}
 $data=[IO.Path]::GetFullPath($identity.target.data_root).TrimEnd('\','/')
 if($root -eq $data -or $root.StartsWith($data+[IO.Path]::DirectorySeparatorChar,'OrdinalIgnoreCase')){throw 'ANALYSIS_MUST_NOT_WRITE_AUTHORITY_DATA'}
 if(-not $receipt.cleanup_confirmed){throw 'CAPTURE_CLEANUP_NOT_CONFIRMED'}
@@ -47,10 +53,11 @@ try {
         -Log (Join-Path $root ($OutputName+'.log')) -TimeoutSeconds 120 -OutputRoot $out `
         -MaxPrivateBytes ($MemoryMiB*1MB) -MaxSystemCommitRatio 0.98 | Out-Null
     if((Get-FileHash -LiteralPath $etl).Hash -ne $etlHash){throw 'ETL_CHANGED_DURING_ANALYSIS'}
-    $result=Get-Content -Encoding utf8 -Raw (Join-Path $out 'analysis-receipt.json') | ConvertFrom-Json
+    $result=Read-TraceJson (Join-Path $out 'analysis-receipt.json')
     if(-not $result.analysis_complete -or $result.package_version -ne '1.12.10'){throw 'ANALYZER_RESULT_NOT_COMPLETE'}
-    $snapshots=@(Get-Content -Encoding utf8 -Raw (Join-Path $out 'snapshot-map.json') | ConvertFrom-Json)
-    $checkpoints=@(Get-Content -Encoding utf8 -Raw (Join-Path $root 'checkpoints.json') | ConvertFrom-Json)
+    $snapshots=Read-TraceJson (Join-Path $out 'snapshot-map.json')
+    $checkpoints=Read-TraceJson (Join-Path $root 'checkpoints.json')
+    if($snapshots.Count -gt 256 -or $checkpoints.Count -gt 256){throw 'TRACE_CHECKPOINT_RECORD_BUDGET_EXCEEDED'}
     $used=[Collections.Generic.HashSet[string]]::new()
     foreach($snapshot in $snapshots){
         $time=[DateTimeOffset]$snapshot.utc
@@ -64,9 +71,20 @@ try {
             $checkpoint.boundary.PSObject.Properties['before'] -and $checkpoint.boundary.PSObject.Properties['after']) {
             Assert-TraceSnapshotBoundary $checkpoint.boundary.before $checkpoint.boundary.after $checkpoint.boundary.stage
             $valid=$snapshot.creation_verified
+            if($checkpoint.phase -match '^worker_joined_[12]$') {
+                Assert-MeasurementEndpoint $checkpoint.boundary.measurement $identity.target
+                Assert-MeasurementEndpoint $checkpoint.boundary.measurement_after $identity.target
+                Assert-MeasurementEndpoint $checkpoint.boundary.measurement_ack $identity.target
+                if(-not $checkpoint.boundary.measurement_ack.acknowledged -or
+                    $checkpoint.boundary.measurement.sequence -ne $checkpoint.boundary.measurement_after.sequence -or
+                    $checkpoint.boundary.measurement.sequence -ne $checkpoint.boundary.measurement_ack.sequence) {
+                    throw 'MEASUREMENT_CAPTURE_NOT_HELD_AND_ACKNOWLEDGED'
+                }
+                $snapshot|Add-Member -NotePropertyName measurement -NotePropertyValue $checkpoint.boundary.measurement
+            }
             if($checkpoint.boundary.PSObject.Properties['os_before'] -and $checkpoint.boundary.PSObject.Properties['os_after']) {
                 $a=$checkpoint.boundary.os_before; $b=$checkpoint.boundary.os_after
-                $valid=($a.pid -eq $identity.target.pid -and $b.pid -eq $identity.target.pid -and
+                $valid=($valid -and $a.pid -eq $identity.target.pid -and $b.pid -eq $identity.target.pid -and
                     $a.process_start_filetime -eq $identity.target.process_start_filetime -and
                     $b.process_start_filetime -eq $identity.target.process_start_filetime)
             }
@@ -80,7 +98,12 @@ try {
     $plan.output_bytes=Get-TraceFileBytes -Root $out -Filter '*'
     $plan.snapshot_totals_conserved=$true;$plan.delta_totals_conserved=$true
     # The early background snapshot is not the main comparison endpoint.
-    $endpoints=@($snapshots | Where-Object {$_.boundary_verified -and $_.phase -match '^batch_payloads_released_[12]$'})
+    $joined=@($snapshots | Where-Object {$_.boundary_verified -and $_.phase -match '^worker_joined_[12]$'})
+    $released=@($snapshots | Where-Object {$_.boundary_verified -and $_.phase -match '^batch_payloads_released_[12]$'})
+    if($joined.Count -gt 0 -and $released.Count -gt 0){throw 'MIXED_MEASUREMENT_RELEASE_SCOPES'}
+    $endpoints=if($joined.Count){$joined}else{$released}
+    if($joined.Count -eq 2){Assert-MeasurementPair $joined[0].measurement $joined[1].measurement $identity.target}
+    $plan.comparison_phase=if($joined.Count){'worker_joined'}else{'batch_payloads_released'}
     $plan.comparison_eligible=($Mode -eq 'analyze' -and $receipt.complete -and $endpoints.Count -eq 2 -and
         $endpoints[0].process_instance -eq $endpoints[1].process_instance -and $endpoints[0].is_32_bit -eq $endpoints[1].is_32_bit)
 } catch {$plan.failure=$_.Exception.Message}

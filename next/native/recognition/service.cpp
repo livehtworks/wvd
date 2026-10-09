@@ -49,10 +49,11 @@ bool bounded_json(const nlohmann::json &value, std::size_t &remaining) {
 Service::Service(Bundle bundle, Handlers handlers, std::shared_ptr<MatchBudget> budget,
                  std::filesystem::path diagnostics_path,
                  std::uint64_t run_id, std::uint64_t generation,
-                 storage::LoggingPolicy logging)
-    : bundle_(std::move(bundle)), handlers_(std::move(handlers)) {
-    cache_.decoded = std::make_shared<DecodedAssetCache>();
+                 storage::LoggingPolicy logging, std::shared_ptr<RunOcrModels> models)
+    : bundle_(std::move(bundle)), handlers_(std::move(handlers)),
+      models_(models ? std::move(models) : std::make_shared<RunOcrModels>()) {
     cache_.match_budget = budget ? std::move(budget) : std::make_shared<MatchBudget>();
+    cache_.decoded = std::make_shared<DecodedAssetCache>(128ULL * 1024 * 1024, cache_.match_budget);
     cache_.cancelled = &cancelled_;
     cache_.diagnostics = std::make_shared<platform::MemoryDiagnostics>(
         diagnostics_path, run_id, generation,
@@ -94,7 +95,12 @@ contracts::Observation Service::evaluate(const contracts::FrameEnvelope &frame,
                 frame.encoded_image.size(), frame.identity.raw_size.width,
                 frame.identity.raw_size.height, 0, 0, 0, 0, 3, -3,
                 false, false, false, 0, 0});
-            try { frame_pixels_ = std::make_unique<FramePixels>(frame, current, bundle_.revision); }
+            try {
+                auto ticket = cache_.match_budget->acquire(
+                    std::uint64_t(frame.identity.recognition_size.width) * frame.identity.recognition_size.height * 12,
+                    cancelled_);
+                frame_pixels_ = std::make_unique<FramePixels>(frame, current, bundle_.revision);
+            }
             catch (const std::bad_alloc &) { diagnostic.failure(-1); throw; }
             catch (const cv::Exception &error) {
                 if (error.code == cv::Error::StsNoMem) diagnostic.failure(error.code);
@@ -321,7 +327,11 @@ contracts::Observation Service::recognize_ocr(const FramePixels &pixels,
             require(bundle_.lease->hash(relative) == spec.at("sha256").get<std::string>(), "OCR_MODEL_NOT_LOCKED");
         }
         require(!cancelled_.load(), "RECOGNITION_CANCELLED");
-        engine = std::make_shared<OcrEngine>(bundle_.root / model.at("bundle_directory").get<std::string>(), cache_.diagnostics);
+        engine = models_->acquire(parameters.language == "en" ? 0 : 1, model.dump(), [&] {
+            auto ticket = cache_.match_budget->acquire(192ULL * 1024 * 1024, cancelled_);
+            return std::make_shared<OcrEngine>(bundle_.root / model.at("bundle_directory").get<std::string>(),
+                cache_.diagnostics, bundle_.lease);
+        });
         slot.store(engine);
     }
     // 发布前发生的取消由该检查承接；发布后发生的取消直接命中同一引擎。
@@ -334,7 +344,13 @@ contracts::Observation Service::recognize_ocr(const FramePixels &pixels,
         request.roi.y, request.roi.width, request.roi.height}).dump();
     const auto cached = ocr_frame_results_.find(key);
     const bool cache_hit = cached != ocr_frame_results_.end();
-    auto found = cache_hit ? cached->second : engine->recognize(pixels.mat()(rect(request.roi)));
+    std::vector<contracts::RecognitionMatch> found;
+    if (cache_hit) found = cached->second;
+    else {
+        auto ticket = cache_.match_budget->acquire(
+            std::uint64_t(request.roi.width) * request.roi.height * 64 + 32ULL * 1024 * 1024, cancelled_);
+        found = engine->recognize(pixels.mat()(rect(request.roi)));
+    }
     if (!cache_hit) {
         std::size_t bytes = 0;
         for (const auto &candidate : found) bytes += candidate.text.size() + sizeof(candidate);

@@ -1,0 +1,6 @@
+process_instance,snapshot_id,phase,timestamp,stack_key,live_blocks,live_bytes
+"fixture",1/64,"unbound","2026-01-01T00:00:00Z",known-A,1,4194304
+"fixture",1/64,"unbound","2026-01-01T00:00:00Z",unknown-stack,100001,800008
+"fixture",2/64,"unbound","2026-01-01T00:00:01Z",known-B,1,3145728
+"fixture",2/64,"unbound","2026-01-01T00:00:01Z",known-A,1,2097152
+"fixture",2/64,"unbound","2026-01-01T00:00:01Z",unknown-stack,100001,800008

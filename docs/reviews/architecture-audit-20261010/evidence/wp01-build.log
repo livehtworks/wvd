@@ -1,0 +1,50 @@
+适用于 .NET Framework MSBuild 版本 17.14.40+3e7442088
+
+  1>Checking Build System
+  wvd_native_platform.vcxproj -> D:\programcode\python\wvd\next\build\native\Release\wvd_native_platform.lib
+  wvd_native_rapid.vcxproj -> D:\programcode\python\wvd\next\build\native\Release\wvd_native_rapid.lib
+  wvd_native_recognition.vcxproj -> D:\programcode\python\wvd\next\build\native\Release\wvd_native_recognition.lib
+  wvd_native_devices.vcxproj -> D:\programcode\python\wvd\next\build\native\Release\wvd_native_devices.lib
+  wvd_native_workflow.vcxproj -> D:\programcode\python\wvd\next\build\native\Release\wvd_native_workflow.lib
+  flow_executor.cpp
+D:\programcode\python\wvd\next\native\runtime\flow_executor.hpp(38,69): warning C4100: 'restart_application': 未引用的参数 [D:\programcode\python\wvd\next\build\native\wvd_native_runtime.vcxproj]
+  (编译源文件“../../native/runtime/flow_executor.cpp”)
+  
+  flow_executor_events.cpp
+D:\programcode\python\wvd\next\native\runtime\flow_executor.hpp(38,69): warning C4100: 'restart_application': 未引用的参数 [D:\programcode\python\wvd\next\build\native\wvd_native_runtime.vcxproj]
+  (编译源文件“../../native/runtime/flow_executor_events.cpp”)
+  
+  native_execution_session.cpp
+D:\programcode\python\wvd\next\native\devices\backend.hpp(33,69): warning C4100: 'restart_application': 未引用的参数 [D:\programcode\python\wvd\next\build\native\wvd_native_runtime.vcxproj]
+  (编译源文件“../../native/runtime/native_execution_session.cpp”)
+  
+D:\programcode\python\wvd\next\native\runtime\flow_executor.hpp(38,69): warning C4100: 'restart_application': 未引用的参数 [D:\programcode\python\wvd\next\build\native\wvd_native_runtime.vcxproj]
+  (编译源文件“../../native/runtime/native_execution_session.cpp”)
+  
+  native_flow_ports.cpp
+D:\programcode\python\wvd\next\native\devices\backend.hpp(33,69): warning C4100: 'restart_application': 未引用的参数 [D:\programcode\python\wvd\next\build\native\wvd_native_runtime.vcxproj]
+  (编译源文件“../../native/runtime/native_flow_ports.cpp”)
+  
+D:\programcode\python\wvd\next\native\runtime\flow_executor.hpp(38,69): warning C4100: 'restart_application': 未引用的参数 [D:\programcode\python\wvd\next\build\native\wvd_native_runtime.vcxproj]
+  (编译源文件“../../native/runtime/native_flow_ports.cpp”)
+  
+  native_run_coordinator.cpp
+D:\programcode\python\wvd\next\native\devices\backend.hpp(33,69): warning C4100: 'restart_application': 未引用的参数 [D:\programcode\python\wvd\next\build\native\wvd_native_runtime.vcxproj]
+  (编译源文件“../../native/runtime/native_run_coordinator.cpp”)
+  
+D:\programcode\python\wvd\next\native\runtime\flow_executor.hpp(38,69): warning C4100: 'restart_application': 未引用的参数 [D:\programcode\python\wvd\next\build\native\wvd_native_runtime.vcxproj]
+  (编译源文件“../../native/runtime/native_run_coordinator.cpp”)
+  
+  正在生成代码...
+  wvd_native_runtime.vcxproj -> D:\programcode\python\wvd\next\build\native\Release\wvd_native_runtime.lib
+  test_flow_executor.cpp
+D:\programcode\python\wvd\next\native\runtime\flow_executor.hpp(38,69): warning C4100: 'restart_application': 未引用的参数 [D:\programcode\python\wvd\next\build\native\test_native_flow.vcxproj]
+  (编译源文件“../../tests/native/test_flow_executor.cpp”)
+  
+D:\programcode\python\wvd\next\tests\native\test_flow_executor.cpp(1229,73): warning C4100: 'restart_application': 未引用的参数 [D:\programcode\python\wvd\next\build\native\test_native_flow.vcxproj]
+D:\programcode\python\wvd\next\tests\native\test_flow_executor.cpp(1585,73): warning C4100: 'restart_application': 未引用的参数 [D:\programcode\python\wvd\next\build\native\test_native_flow.vcxproj]
+D:\programcode\python\wvd\next\tests\native\test_flow_executor.cpp(2122,23): warning C4456: “root”的声明隐藏了上一个本地声明 [D:\programcode\python\wvd\next\build\native\test_native_flow.vcxproj]
+      D:\programcode\python\wvd\next\tests\native\test_flow_executor.cpp(1804,30):
+      参见“root”的声明
+  
+  test_native_flow.vcxproj -> D:\programcode\python\wvd\next\build\native\Release\test_native_flow.exe

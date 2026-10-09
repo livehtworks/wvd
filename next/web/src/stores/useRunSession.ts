@@ -1,5 +1,5 @@
 import { computed, inject, onBeforeUnmount, onMounted, provide, reactive, ref, type InjectionKey } from "vue";
-import { ApiError, formatApiError, readCurrentRun, readDevice, stopRun } from "../api/client";
+import { ApiError, formatApiError, readCurrentRun, readRunEvents, readDevice, stopRun } from "../api/client";
 import type { DeviceState, RunState, SubmissionReceipt } from "../api/types";
 import { displayRunState, runBusy } from "./runStatus";
 
@@ -14,6 +14,7 @@ function createSession() {
   const linkError = ref("");
   const deviceError = ref("");
   const commandError = ref("");
+  const eventError = ref("");
   const writing = reactive({ workbench: false, workflow: false });
   const intent = ref<{ id: string; fingerprint: string; target: string; uncertain: boolean }>();
   let alive = true;
@@ -22,6 +23,8 @@ function createSession() {
   let runFlight: Promise<void> | undefined;
   let deviceFlight: Promise<void> | undefined;
   let timer: number | undefined;
+  let eventOwner = "", eventCursor = 0;
+  let eventWindow: import("../api/types").JsonObject[] = [];
   const fresh = computed(() => !serviceClosing.value && !linkError.value && lastSuccess.value > 0 && now.value - lastSuccess.value <= 5000);
   const busy = computed(() => starting.value || runBusy(run.value));
   const canStart = computed(() => fresh.value && !busy.value && !stopping.value);
@@ -39,7 +42,22 @@ function createSession() {
       try {
         const value = await readCurrentRun();
         if (!alive || epoch !== generation) return;
+        if (value.coherent === false) return;
         run.value = value; lastSuccess.value = Date.now(); now.value = Date.now(); linkError.value = "";
+        const owner = `${value.instance_id}:${value.run_id}`;
+        if (owner !== eventOwner) { eventOwner = owner; eventCursor = 0; eventWindow = []; }
+        try {
+          const page = await readRunEvents(eventCursor);
+          if (alive && epoch === generation && `${page.instance_id}:${page.run_id}` === owner) {
+            if (page.resync_required) eventWindow = [];
+            eventWindow = [...eventWindow, ...page.events].slice(-256);
+            eventCursor = page.last_seq;
+            if (run.value === value) value.events = { ...page, events: eventWindow };
+            eventError.value = "";
+          }
+        } catch (reason) {
+          if (alive && epoch === generation) eventError.value = formatApiError(reason);
+        }
         if (intent.value && value.submission?.request_id === intent.value.id &&
             ["submitted", "failed", "cancelled"].includes(value.submission.state ?? "")) intent.value.uncertain = false;
       } catch (reason) {
@@ -110,7 +128,7 @@ function createSession() {
   onMounted(() => { void refresh(); timer = window.setInterval(() => { now.value = Date.now(); void refresh(); }, 1500); });
   onBeforeUnmount(() => { alive = false; ++generation; ++deviceGeneration; window.clearInterval(timer); });
   return reactive({ run, device, starting, stopping, fresh, busy, canStart, label, error, deviceError,
-    lastSuccess, intent, writing, refresh, submit, requestStop, deviceCommand, closeServiceSession });
+    lastSuccess, intent, writing, eventError, refresh, submit, requestStop, deviceCommand, closeServiceSession });
 }
 type Session = ReturnType<typeof createSession>;
 const key: InjectionKey<Session> = Symbol("run-session");

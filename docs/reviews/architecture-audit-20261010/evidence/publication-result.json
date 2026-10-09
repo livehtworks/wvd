@@ -1,0 +1,84 @@
+{
+  "cases": [
+    {
+      "case": "immutable_content_object_shared_not_mutable_source",
+      "passed": true
+    },
+    {
+      "case": "identity_manifest_streaming_rename_and_lock",
+      "metrics": {
+        "compile_native_program": {
+          "thread_cpu_ms": 0.0,
+          "wall_ms": 0.0292
+        },
+        "copy_buffer_bytes": 65536,
+        "file_copy": {
+          "thread_cpu_ms": 15.625,
+          "wall_ms": 97.1582
+        },
+        "files": 4,
+        "model_contract": {
+          "thread_cpu_ms": 0.0,
+          "wall_ms": 0.0722
+        },
+        "publication_identity": {
+          "thread_cpu_ms": 0.0,
+          "wall_ms": 0.0523
+        },
+        "publish_native": {
+          "thread_cpu_ms": 31.25,
+          "wall_ms": 134.2385
+        },
+        "publisher_inputs": {
+          "thread_cpu_ms": 0.0,
+          "wall_ms": 0.0331
+        },
+        "source_bytes": 8388637,
+        "source_model_bytes_after_copy": 0,
+        "source_validation": {
+          "thread_cpu_ms": 15.625,
+          "wall_ms": 6.3149
+        },
+        "staging_validation": {
+          "thread_cpu_ms": 0.0,
+          "wall_ms": 9.1134
+        },
+        "target_validation": {
+          "thread_cpu_ms": 0.0,
+          "wall_ms": 8.7974
+        }
+      },
+      "passed": true
+    },
+    {
+      "case": "copy_cancel_rewind_and_no_overwrite",
+      "passed": true
+    },
+    {
+      "case": "publication_cancel_before_copy",
+      "passed": true
+    },
+    {
+      "case": "publication_cancel_during_copy",
+      "passed": true
+    },
+    {
+      "case": "publication_cancel_before_rename",
+      "passed": true
+    },
+    {
+      "case": "publication_cancel_after_rename",
+      "passed": true
+    },
+    {
+      "case": "hash_mismatch_rejected",
+      "passed": true
+    },
+    {
+      "case": "real_short_read_and_readonly_write_failure",
+      "passed": true
+    }
+  ],
+  "game_inputs": 0,
+  "passed": true
+}

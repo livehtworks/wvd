@@ -1,0 +1,1552 @@
+{
+  "baseline": "4c466e14fa514fa177380e902afe373c8f20c3b2",
+  "unique_findings": 43,
+  "priorities": {
+    "P0": 2,
+    "P1": 22,
+    "P2": 15,
+    "P3": 4
+  },
+  "deduplicated_aliases": {
+    "EX09": "MP04"
+  },
+  "evidence_legend": {
+    "X": "同源隔离反例已运行；具体层级见每项限制",
+    "S": "当前源码可确定的结构或行为",
+    "C": "可构造故障/交错/合法图路径，非现场已发生",
+    "D": "设计或维护债",
+    "U": "现场根因尚未获得必要证据"
+  },
+  "issues": [
+    {
+      "id": "EX01",
+      "priority": "P0",
+      "evidence": "X",
+      "title": "输入已发送后分配失败，未决回执消失",
+      "work_package": "WP01",
+      "status": "source_repaired_targeted_verified",
+      "fixed_by_this_audit": false,
+      "sources": [
+        {
+          "path": "next/native/runtime/flow_executor.cpp",
+          "line_hint": "1148-1169",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/native/runtime/flow_executor.cpp#L1148"
+        }
+      ],
+      "evidence_limits": "当前真实执行器：sends=1、std::bad_alloc、pending=[]、unresolved=false；设备为替身。",
+      "baseline_status": "open_at_audited_baseline",
+      "current_sources": [
+        "next/native/runtime/flow_executor.cpp",
+        "next/native/runtime/flow_executor.hpp"
+      ],
+      "result": "work-packages/WP01-result.json",
+      "deployed": false,
+      "live_verified": false,
+      "closed": false,
+      "remaining_risks": []
+    },
+    {
+      "id": "EX02",
+      "priority": "P0",
+      "evidence": "X+C",
+      "title": "历史重启布尔可被用来放行后来产生的未决输入",
+      "work_package": "WP02",
+      "status": "source_repaired_targeted_verified",
+      "fixed_by_this_audit": false,
+      "sources": [
+        {
+          "path": "next/native/runtime/flow_executor.cpp",
+          "line_hint": "1353-1406",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/native/runtime/flow_executor.cpp#L1353"
+        },
+        {
+          "path": "next/native/runtime/native_run_coordinator.cpp",
+          "line_hint": "714-749",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/native/runtime/native_run_coordinator.cpp#L714"
+        }
+      ],
+      "evidence_limits": "执行器输出已复现；最终协调器处分由源码分支核对，未运行完整Windows协调器。",
+      "baseline_status": "open_at_audited_baseline",
+      "current_sources": [
+        "next/native/contracts/observation_fault.hpp",
+        "next/native/devices/device_session.cpp",
+        "next/native/devices/lifecycle_execution.cpp",
+        "next/native/runtime/native_run_coordinator.cpp"
+      ],
+      "result": "work-packages/WP02-result.json",
+      "deployed": false,
+      "live_verified": false,
+      "closed": false,
+      "remaining_risks": []
+    },
+    {
+      "id": "EX03",
+      "priority": "P1",
+      "evidence": "C",
+      "title": "scrcpy资源在命令已生效但返回失败时可能失去清理归属",
+      "work_package": "WP03",
+      "status": "source_repaired_acceptance_partial",
+      "fixed_by_this_audit": false,
+      "sources": [
+        {
+          "path": "next/native/devices/scrcpy_control.cpp",
+          "line_hint": "112-118,264-283",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/native/devices/scrcpy_control.cpp#L112"
+        }
+      ],
+      "evidence_limits": "push/forward成功返回后才设置拥有标志；副作用与响应之间故障可构造。",
+      "baseline_status": "open_at_audited_baseline",
+      "current_sources": [
+        "next/native/devices/scrcpy_control.cpp",
+        "next/native/devices/scrcpy_codec.cpp",
+        "next/native/devices/mumu_capture.cpp",
+        "next/native/devices/capture_host.cpp",
+        "next/native/platform/windows/metadata_query.cpp",
+        "next/native/app/application.cpp"
+      ],
+      "result": "work-packages/WP03-result.json",
+      "deployed": false,
+      "live_verified": false,
+      "closed": false,
+      "remaining_risks": [
+        "每个SDK HANDLE取得后/所有权转移前逐点bad_alloc、真实forward成功但响应超时，未逐一注入验证；源码RAII修正不能替代这些断言。"
+      ]
+    },
+    {
+      "id": "EX04",
+      "priority": "P1",
+      "evidence": "X+C",
+      "title": "生命周期读取不共享完整绝对期限，超时/取消后仍可返回就绪",
+      "work_package": "WP02",
+      "status": "source_repaired_targeted_verified",
+      "fixed_by_this_audit": false,
+      "sources": [
+        {
+          "path": "next/native/devices/lifecycle_execution.cpp",
+          "line_hint": "101-144",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/native/devices/lifecycle_execution.cpp#L101"
+        },
+        {
+          "path": "next/native/runtime/native_run_coordinator.cpp",
+          "line_hint": "344-421,778",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/native/runtime/native_run_coordinator.cpp#L344"
+        }
+      ],
+      "evidence_limits": "真实execute_lifecycle_plan的20ms观察超过1ms步预算仍ReadyForBoot；取消例未执行实际生命周期操作。",
+      "baseline_status": "open_at_audited_baseline",
+      "current_sources": [
+        "next/native/contracts/observation_fault.hpp",
+        "next/native/devices/device_session.cpp",
+        "next/native/devices/lifecycle_execution.cpp",
+        "next/native/runtime/native_run_coordinator.cpp"
+      ],
+      "result": "work-packages/WP02-result.json",
+      "deployed": false,
+      "live_verified": false,
+      "closed": false,
+      "remaining_risks": []
+    },
+    {
+      "id": "EX05",
+      "priority": "P1",
+      "evidence": "S",
+      "title": "有效事件规则在热路径反复复制、排序与序列化",
+      "work_package": "WP08",
+      "status": "source_repaired_acceptance_partial",
+      "fixed_by_this_audit": false,
+      "sources": [
+        {
+          "path": "next/native/runtime/flow_executor_events.cpp",
+          "line_hint": "55-77,136-156",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/native/runtime/flow_executor_events.cpp#L55"
+        }
+      ],
+      "evidence_limits": "复制先于overlay缓存命中判断；确认分配流量，尚未分摊现场耗时。",
+      "baseline_status": "open_at_audited_baseline",
+      "current_sources": [
+        "next/native/games/wvd/vision/native_recognizers.cpp",
+        "next/native/games/wvd/vision/supply_scene_plan.hpp",
+        "next/native/runtime/flow_executor_events.cpp",
+        "next/native/runtime/native_execution_session.cpp",
+        "next/native/games/wvd/state.cpp"
+      ],
+      "result": "work-packages/WP08-result.json",
+      "deployed": false,
+      "live_verified": false,
+      "closed": false,
+      "remaining_risks": [
+        "不能把限定量化推广为原46.352秒/1199次现场已修复；繁中真实补给完整流程与语言切换尚未实测。"
+      ]
+    },
+    {
+      "id": "EX06",
+      "priority": "P1",
+      "evidence": "S",
+      "title": "每次tick构造完整进度，elapsed变化使去重失效",
+      "work_package": "WP08",
+      "status": "source_repaired_acceptance_partial",
+      "fixed_by_this_audit": false,
+      "sources": [
+        {
+          "path": "next/native/runtime/native_execution_session.cpp",
+          "line_hint": "148-163",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/native/runtime/native_execution_session.cpp#L148"
+        },
+        {
+          "path": "next/native/runtime/flow_executor.cpp",
+          "line_hint": "108",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/native/runtime/flow_executor.cpp#L108"
+        },
+        {
+          "path": "next/native/runtime/native_run_coordinator.cpp",
+          "line_hint": "427-468",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/native/runtime/native_run_coordinator.cpp#L427"
+        }
+      ],
+      "evidence_limits": "无业务进展时仍生成execution.changed及完整JSON。",
+      "baseline_status": "open_at_audited_baseline",
+      "current_sources": [
+        "next/native/games/wvd/vision/native_recognizers.cpp",
+        "next/native/games/wvd/vision/supply_scene_plan.hpp",
+        "next/native/runtime/flow_executor_events.cpp",
+        "next/native/runtime/native_execution_session.cpp",
+        "next/native/games/wvd/state.cpp"
+      ],
+      "result": "work-packages/WP08-result.json",
+      "deployed": false,
+      "live_verified": false,
+      "closed": false,
+      "remaining_risks": [
+        "不能把限定量化推广为原46.352秒/1199次现场已修复；繁中真实补给完整流程与语言切换尚未实测。"
+      ]
+    },
+    {
+      "id": "EX07",
+      "priority": "P2",
+      "evidence": "X",
+      "title": "中立BusinessConfirm的condition不是执行器独立确认条件",
+      "work_package": "WP05",
+      "status": "source_repaired_targeted_verified",
+      "fixed_by_this_audit": false,
+      "sources": [
+        {
+          "path": "next/native/runtime/flow_executor.cpp",
+          "line_hint": "1296",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/native/runtime/flow_executor.cpp#L1296"
+        },
+        {
+          "path": "next/native/games/wvd/native_operations.cpp",
+          "line_hint": "121-129",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/native/games/wvd/native_operations.cpp#L121"
+        }
+      ],
+      "evidence_limits": "真实执行器反例condition调用0、binding调用1；当前WVD binding另做确认，不能称全产品盲成功。",
+      "baseline_status": "open_at_audited_baseline",
+      "current_sources": [
+        "next/native/devices/native_input_gate.cpp",
+        "next/native/runtime/flow_executor.cpp",
+        "next/native/games/wvd/supply/dungeon_recover.cpp",
+        "next/native/games/wvd/state.cpp"
+      ],
+      "result": "work-packages/WP05-result.json",
+      "deployed": false,
+      "live_verified": false,
+      "closed": false,
+      "remaining_risks": [
+        "没有有效专属疗效素材时，治疗结果仍Unconfirmed，保持healing_required；不能声明治疗功能已实机闭环。"
+      ]
+    },
+    {
+      "id": "EX08",
+      "priority": "P2",
+      "evidence": "C",
+      "title": "一般重查只认guard且重置计时，IR未强制完整输入前提",
+      "work_package": "WP05",
+      "status": "source_repaired_targeted_verified",
+      "fixed_by_this_audit": false,
+      "sources": [
+        {
+          "path": "next/native/runtime/flow_executor.cpp",
+          "line_hint": "936-990",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/native/runtime/flow_executor.cpp#L936"
+        },
+        {
+          "path": "next/native/games/wvd/tasks/pipeline_compiler.cpp",
+          "line_hint": "568-584",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/native/games/wvd/tasks/pipeline_compiler.cpp#L568"
+        }
+      ],
+      "evidence_limits": "当前编译器通常将场景/目标并入guard；独立IR存在契约空洞，尚未绑定具体现网任务。",
+      "baseline_status": "open_at_audited_baseline",
+      "current_sources": [
+        "next/native/devices/native_input_gate.cpp",
+        "next/native/runtime/flow_executor.cpp",
+        "next/native/games/wvd/supply/dungeon_recover.cpp",
+        "next/native/games/wvd/state.cpp"
+      ],
+      "result": "work-packages/WP05-result.json",
+      "deployed": false,
+      "live_verified": false,
+      "closed": false,
+      "remaining_risks": [
+        "没有有效专属疗效素材时，治疗结果仍Unconfirmed，保持healing_required；不能声明治疗功能已实机闭环。"
+      ]
+    },
+    {
+      "id": "AP01",
+      "priority": "P1",
+      "evidence": "S+C",
+      "title": "内置流程同步没有UI承诺的备份，两文件提交可失配",
+      "work_package": "WP12",
+      "status": "source_repaired_targeted_verified",
+      "fixed_by_this_audit": false,
+      "sources": [
+        {
+          "path": "next/native/storage/workflow_repository.cpp",
+          "line_hint": "386-439",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/native/storage/workflow_repository.cpp#L386"
+        },
+        {
+          "path": "next/native/platform/windows/runtime_files.cpp",
+          "line_hint": "21-45",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/native/platform/windows/runtime_files.cpp#L21"
+        }
+      ],
+      "evidence_limits": "先正文后元数据；中间失败既无备份又可能卡住后续同步。",
+      "baseline_status": "open_at_audited_baseline",
+      "current_sources": [
+        "next/native/storage/workflow_repository.cpp",
+        "next/native/storage/submission_store.hpp",
+        "next/native/app/application.cpp"
+      ],
+      "result": "work-packages/WP12-result.json",
+      "deployed": false,
+      "live_verified": false,
+      "closed": false,
+      "remaining_risks": []
+    },
+    {
+      "id": "AP02",
+      "priority": "P1",
+      "evidence": "C",
+      "title": "诊断图片地址和前端key不含运行身份，可能串轮",
+      "work_package": "WP11",
+      "status": "source_repaired_acceptance_partial",
+      "fixed_by_this_audit": false,
+      "sources": [
+        {
+          "path": "next/native/app/application.cpp",
+          "line_hint": "1380-1402,2143-2163",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/native/app/application.cpp#L1380"
+        },
+        {
+          "path": "next/native/storage/run_store.cpp",
+          "line_hint": "404-406",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/native/storage/run_store.cpp#L404"
+        }
+      ],
+      "evidence_limits": "每run重复id=1与current路由组合；浏览器未必重新请求相同src。",
+      "baseline_status": "open_at_audited_baseline",
+      "current_sources": [
+        "next/native/app/application.cpp",
+        "next/native/runtime/native_run_coordinator.cpp",
+        "next/native/storage/run_store.cpp",
+        "next/native/api/http_server.cpp",
+        "next/web/src/stores/useRunSession.ts"
+      ],
+      "result": "work-packages/WP11-result.json",
+      "deployed": false,
+      "live_verified": false,
+      "closed": false,
+      "remaining_risks": [
+        "并发换轮穷尽交错、两个run同id=1延迟PNG/前端复用的端到端回归未执行；身份绑定已实现但不宣称实机/浏览器压力通过。"
+      ]
+    },
+    {
+      "id": "AP03",
+      "priority": "P1",
+      "evidence": "C",
+      "title": "current响应拼接多个独立快照，换轮可混合运行身份",
+      "work_package": "WP11",
+      "status": "source_repaired_acceptance_partial",
+      "fixed_by_this_audit": false,
+      "sources": [
+        {
+          "path": "next/native/app/application.cpp",
+          "line_hint": "1380-1477",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/native/app/application.cpp#L1380"
+        },
+        {
+          "path": "next/native/runtime/native_run_coordinator.cpp",
+          "line_hint": "1032-1064",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/native/runtime/native_run_coordinator.cpp#L1032"
+        }
+      ],
+      "evidence_limits": "各getter线程安全，组合响应缺共同版本。",
+      "baseline_status": "open_at_audited_baseline",
+      "current_sources": [
+        "next/native/app/application.cpp",
+        "next/native/runtime/native_run_coordinator.cpp",
+        "next/native/storage/run_store.cpp",
+        "next/native/api/http_server.cpp",
+        "next/web/src/stores/useRunSession.ts"
+      ],
+      "result": "work-packages/WP11-result.json",
+      "deployed": false,
+      "live_verified": false,
+      "closed": false,
+      "remaining_risks": [
+        "并发换轮穷尽交错、两个run同id=1延迟PNG/前端复用的端到端回归未执行；身份绑定已实现但不宣称实机/浏览器压力通过。"
+      ]
+    },
+    {
+      "id": "AP04",
+      "priority": "P1",
+      "evidence": "C",
+      "title": "状态读取与诊断I/O可能拖住停止准入或停止HTTP回执",
+      "work_package": "WP11",
+      "status": "source_repaired_acceptance_partial",
+      "fixed_by_this_audit": false,
+      "sources": [
+        {
+          "path": "next/native/api/http_server.cpp",
+          "line_hint": "21-38,77-94",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/native/api/http_server.cpp#L21"
+        },
+        {
+          "path": "next/native/storage/run_store.cpp",
+          "line_hint": "357-548",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/native/storage/run_store.cpp#L357"
+        },
+        {
+          "path": "next/native/runtime/native_run_coordinator.cpp",
+          "line_hint": "1017-1060",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/native/runtime/native_run_coordinator.cpp#L1017"
+        }
+      ],
+      "evidence_limits": "单controls线程与coordinator/diagnostic锁链；stop也可能已发取消后慢在自身run_status，不能从202迟到推定未取消。",
+      "baseline_status": "open_at_audited_baseline",
+      "current_sources": [
+        "next/native/app/application.cpp",
+        "next/native/runtime/native_run_coordinator.cpp",
+        "next/native/storage/run_store.cpp",
+        "next/native/api/http_server.cpp",
+        "next/web/src/stores/useRunSession.ts"
+      ],
+      "result": "work-packages/WP11-result.json",
+      "deployed": false,
+      "live_verified": false,
+      "closed": false,
+      "remaining_risks": [
+        "并发换轮穷尽交错、两个run同id=1延迟PNG/前端复用的端到端回归未执行；身份绑定已实现但不宣称实机/浏览器压力通过。"
+      ]
+    },
+    {
+      "id": "AP05",
+      "priority": "P2",
+      "evidence": "S",
+      "title": "current轮询仍读取和传输整个有界事件环",
+      "work_package": "WP11",
+      "status": "source_repaired_acceptance_partial",
+      "fixed_by_this_audit": false,
+      "sources": [
+        {
+          "path": "next/native/app/application.cpp",
+          "line_hint": "1383,2312-2313",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/native/app/application.cpp#L1383"
+        },
+        {
+          "path": "next/native/storage/run_store.cpp",
+          "line_hint": "156-162",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/native/storage/run_store.cpp#L156"
+        }
+      ],
+      "evidence_limits": "旧额外副本已修；公开轮询未使用现有after游标，最多1024条仍重复序列化。",
+      "baseline_status": "open_at_audited_baseline",
+      "current_sources": [
+        "next/native/app/application.cpp",
+        "next/native/runtime/native_run_coordinator.cpp",
+        "next/native/storage/run_store.cpp",
+        "next/native/api/http_server.cpp",
+        "next/web/src/stores/useRunSession.ts"
+      ],
+      "result": "work-packages/WP11-result.json",
+      "deployed": false,
+      "live_verified": false,
+      "closed": false,
+      "remaining_risks": [
+        "并发换轮穷尽交错、两个run同id=1延迟PNG/前端复用的端到端回归未执行；身份绑定已实现但不宣称实机/浏览器压力通过。"
+      ]
+    },
+    {
+      "id": "AP06",
+      "priority": "P1",
+      "evidence": "C",
+      "title": "Application线程的收尾发布可抛出到jthread边界外",
+      "work_package": "WP03",
+      "status": "source_repaired_acceptance_partial",
+      "fixed_by_this_audit": false,
+      "sources": [
+        {
+          "path": "next/native/app/application.cpp",
+          "line_hint": "888-906,1698-1860",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/native/app/application.cpp#L888"
+        }
+      ],
+      "evidence_limits": "外围catch未包住最后JSON/状态发布；可能terminate，不是本次MuMu崩溃归因。",
+      "baseline_status": "open_at_audited_baseline",
+      "current_sources": [
+        "next/native/devices/scrcpy_control.cpp",
+        "next/native/devices/scrcpy_codec.cpp",
+        "next/native/devices/mumu_capture.cpp",
+        "next/native/devices/capture_host.cpp",
+        "next/native/platform/windows/metadata_query.cpp",
+        "next/native/app/application.cpp"
+      ],
+      "result": "work-packages/WP03-result.json",
+      "deployed": false,
+      "live_verified": false,
+      "closed": false,
+      "remaining_risks": [
+        "每个SDK HANDLE取得后/所有权转移前逐点bad_alloc、真实forward成功但响应超时，未逐一注入验证；源码RAII修正不能替代这些断言。"
+      ]
+    },
+    {
+      "id": "AP07",
+      "priority": "P2",
+      "evidence": "C",
+      "title": "启动已交给协调器，watcher注册前仍有取消空窗",
+      "work_package": "WP03",
+      "status": "source_repaired_acceptance_partial",
+      "fixed_by_this_audit": false,
+      "sources": [
+        {
+          "path": "next/native/app/application.cpp",
+          "line_hint": "1119-1125,1651-1690",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/native/app/application.cpp#L1119"
+        }
+      ],
+      "evidence_limits": "构造交错可能取消submission而遗漏本次watcher/join/batch_release责任。",
+      "baseline_status": "open_at_audited_baseline",
+      "current_sources": [
+        "next/native/devices/scrcpy_control.cpp",
+        "next/native/devices/scrcpy_codec.cpp",
+        "next/native/devices/mumu_capture.cpp",
+        "next/native/devices/capture_host.cpp",
+        "next/native/platform/windows/metadata_query.cpp",
+        "next/native/app/application.cpp"
+      ],
+      "result": "work-packages/WP03-result.json",
+      "deployed": false,
+      "live_verified": false,
+      "closed": false,
+      "remaining_risks": [
+        "每个SDK HANDLE取得后/所有权转移前逐点bad_alloc、真实forward成功但响应超时，未逐一注入验证；源码RAII修正不能替代这些断言。"
+      ]
+    },
+    {
+      "id": "AP08",
+      "priority": "P2",
+      "evidence": "S+C",
+      "title": "幂等查询晚于可变版本检查，256条历史又成为准入上限",
+      "work_package": "WP12",
+      "status": "source_repaired_targeted_verified",
+      "fixed_by_this_audit": false,
+      "sources": [
+        {
+          "path": "next/native/app/application.cpp",
+          "line_hint": "925-967,1087-1107,1130-1147",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/native/app/application.cpp#L925"
+        }
+      ],
+      "evidence_limits": "旧请求重放受新profile/flow影响；满256新顶层请求被拒，非重复轮数上限。",
+      "baseline_status": "open_at_audited_baseline",
+      "current_sources": [
+        "next/native/storage/workflow_repository.cpp",
+        "next/native/storage/submission_store.hpp",
+        "next/native/app/application.cpp"
+      ],
+      "result": "work-packages/WP12-result.json",
+      "deployed": false,
+      "live_verified": false,
+      "closed": false,
+      "remaining_risks": []
+    },
+    {
+      "id": "AP09",
+      "priority": "P2",
+      "evidence": "S",
+      "title": "每轮与每文件配额没有组成发布/整批磁盘预算",
+      "work_package": "WP13",
+      "status": "source_repaired_acceptance_partial",
+      "fixed_by_this_audit": false,
+      "sources": [
+        {
+          "path": "next/native/app/application.cpp",
+          "line_hint": "914-922,1565-1569,1755-1763",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/native/app/application.cpp#L914"
+        },
+        {
+          "path": "next/native/storage/run_store.cpp",
+          "line_hint": "",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/native/storage/run_store.cpp"
+        }
+      ],
+      "evidence_limits": "无限repeat可累积派生历史；1GiB门槛未为终态留空间，不据此擅删历史。",
+      "baseline_status": "open_at_audited_baseline",
+      "current_sources": [
+        "next/native/games/wvd/tasks/native_publisher.cpp",
+        "next/native/platform/windows/bundle_lease.cpp",
+        "next/native/storage/run_store.cpp",
+        "next/native/app/application.cpp"
+      ],
+      "result": "work-packages/WP13-result.json",
+      "deployed": false,
+      "live_verified": false,
+      "closed": false,
+      "remaining_risks": [
+        "整批16GiB准入边界尚未用最终候选完整故障夹具覆盖；额度源码已实现。32MiB采样上限后最后输入保留已用实际RunStore文件验证。",
+        "2GiB是准入检查/预留政策，不是磁盘物理预分配；外部抢占磁盘仍可失败。"
+      ]
+    },
+    {
+      "id": "AP10",
+      "priority": "P2",
+      "evidence": "D",
+      "title": "辅助性能日志与关键输入/故障证据共享串行I/O和预算影响面",
+      "work_package": "WP13",
+      "status": "source_repaired_acceptance_partial",
+      "fixed_by_this_audit": false,
+      "sources": [
+        {
+          "path": "next/native/storage/run_store.cpp",
+          "line_hint": "497-631",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/native/storage/run_store.cpp#L497"
+        },
+        {
+          "path": "next/native/app/application.cpp",
+          "line_hint": "1729-1740",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/native/app/application.cpp#L1729"
+        }
+      ],
+      "evidence_limits": "现有纯图片不完整续轮已修；仍缺关键性分级和关键失败图保留额度。",
+      "baseline_status": "open_at_audited_baseline",
+      "current_sources": [
+        "next/native/games/wvd/tasks/native_publisher.cpp",
+        "next/native/platform/windows/bundle_lease.cpp",
+        "next/native/storage/run_store.cpp",
+        "next/native/app/application.cpp"
+      ],
+      "result": "work-packages/WP13-result.json",
+      "deployed": false,
+      "live_verified": false,
+      "closed": false,
+      "remaining_risks": [
+        "整批16GiB准入边界尚未用最终候选完整故障夹具覆盖；额度源码已实现。32MiB采样上限后最后输入保留已用实际RunStore文件验证。",
+        "2GiB是准入检查/预留政策，不是磁盘物理预分配；外部抢占磁盘仍可失败。"
+      ]
+    },
+    {
+      "id": "AP11",
+      "priority": "P2",
+      "evidence": "S+D",
+      "title": "CI和统一验收入口未覆盖当前原生产品的新增契约测试",
+      "work_package": "WP15",
+      "status": "source_repaired_acceptance_partial",
+      "fixed_by_this_audit": false,
+      "sources": [
+        {
+          "path": "next/native/CMakeLists.txt",
+          "line_hint": "156-239",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/native/CMakeLists.txt#L156"
+        }
+      ],
+      "evidence_limits": "唯一仓库workflow构建旧Python；build不测、EXCLUDE_FROM_ALL与静态validate清单脱节。",
+      "baseline_status": "open_at_audited_baseline",
+      "current_sources": [
+        ".github/workflows/native-contracts.yml",
+        "next/tools/run_contracts.py",
+        "next/docs/core-contracts.md",
+        "next/docs/public-task-scope.md",
+        "AGENTS.md",
+        "docs/project-status.md"
+      ],
+      "result": "work-packages/WP15-result.json",
+      "deployed": false,
+      "live_verified": false,
+      "closed": false,
+      "remaining_risks": [
+        "没有覆盖所有源码可构造风险的逐点故障注入；未将43项批量改为closed。"
+      ]
+    },
+    {
+      "id": "AP12",
+      "priority": "P2",
+      "evidence": "D",
+      "title": "关键协议分散在JSON、字符串、编译展开和手工文档中",
+      "work_package": "WP15",
+      "status": "source_repaired_acceptance_partial",
+      "fixed_by_this_audit": false,
+      "sources": [
+        {
+          "path": "next/native/app/application.cpp",
+          "line_hint": "",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/native/app/application.cpp"
+        },
+        {
+          "path": "next/native/runtime/flow_executor.cpp",
+          "line_hint": "",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/native/runtime/flow_executor.cpp"
+        },
+        {
+          "path": "next/native/games/wvd/state.cpp",
+          "line_hint": "",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/native/games/wvd/state.cpp"
+        },
+        {
+          "path": "next/native/games/wvd/tasks/pipeline_compiler.cpp",
+          "line_hint": "",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/native/games/wvd/tasks/pipeline_compiler.cpp"
+        }
+      ],
+      "evidence_limits": "已有模块边界；债在输入事实、页面事实、策略、恢复证明、资源闭包缺唯一强类型解释。",
+      "baseline_status": "open_at_audited_baseline",
+      "current_sources": [
+        ".github/workflows/native-contracts.yml",
+        "next/tools/run_contracts.py",
+        "next/docs/core-contracts.md",
+        "next/docs/public-task-scope.md",
+        "AGENTS.md",
+        "docs/project-status.md"
+      ],
+      "result": "work-packages/WP15-result.json",
+      "deployed": false,
+      "live_verified": false,
+      "closed": false,
+      "remaining_risks": [
+        "没有覆盖所有源码可构造风险的逐点故障注入；未将43项批量改为closed。"
+      ]
+    },
+    {
+      "id": "AP13",
+      "priority": "P3",
+      "evidence": "S+D",
+      "title": "能力元数据与当前文档入口保留旧阶段常量",
+      "work_package": "WP15",
+      "status": "source_repaired_acceptance_partial",
+      "fixed_by_this_audit": false,
+      "sources": [
+        {
+          "path": "next/native/api/routes.cpp",
+          "line_hint": "75-91",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/native/api/routes.cpp#L75"
+        }
+      ],
+      "evidence_limits": "源码能力、构建身份、部署、现场验证应分开，不能把verified粗暴设true。",
+      "baseline_status": "open_at_audited_baseline",
+      "current_sources": [
+        ".github/workflows/native-contracts.yml",
+        "next/tools/run_contracts.py",
+        "next/docs/core-contracts.md",
+        "next/docs/public-task-scope.md",
+        "AGENTS.md",
+        "docs/project-status.md"
+      ],
+      "result": "work-packages/WP15-result.json",
+      "deployed": false,
+      "live_verified": false,
+      "closed": false,
+      "remaining_risks": [
+        "没有覆盖所有源码可构造风险的逐点故障注入；未将43项批量改为closed。"
+      ]
+    },
+    {
+      "id": "MP01",
+      "priority": "P1",
+      "evidence": "S",
+      "title": "连续批次采集的端点与导出器资格条件不兼容",
+      "work_package": "WP06",
+      "status": "source_repaired_targeted_verified",
+      "fixed_by_this_audit": false,
+      "sources": [
+        {
+          "path": "next/tools/collect_memory_stacks.ps1",
+          "line_hint": "336-379",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/tools/collect_memory_stacks.ps1#L336"
+        },
+        {
+          "path": "next/tools/export_memory_stacks.ps1",
+          "line_hint": "82-85",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/tools/export_memory_stacks.ps1#L82"
+        }
+      ],
+      "evidence_limits": "Monitor输出worker_joined_*，正式export只收batch_payloads_released_[12]；不是导出假绿，而是无法取得目标资格。",
+      "baseline_status": "open_at_audited_baseline",
+      "current_sources": [
+        "next/native/runtime/measurement_barrier.hpp",
+        "next/native/app/application.cpp",
+        "next/tools/measurement_endpoint.psm1",
+        "next/tools/collect_memory_stacks.ps1",
+        "next/tools/export_memory_stacks.ps1"
+      ],
+      "result": "work-packages/WP06-result.json",
+      "deployed": false,
+      "live_verified": false,
+      "closed": false,
+      "remaining_risks": [
+        "真实负载短预检未执行；measurement comparison_eligible在本次真实采集维度仍false。"
+      ]
+    },
+    {
+      "id": "MP02",
+      "priority": "P1",
+      "evidence": "S+D",
+      "title": "分析器不能提供当前承诺的free位置/VA，unknown栈还按地址膨胀",
+      "work_package": "WP07",
+      "status": "tooling_repaired_live_allocation_attribution_unresolved",
+      "fixed_by_this_audit": false,
+      "sources": [
+        {
+          "path": "next/tools/heap_analyzer/HeapAggregation.cs",
+          "line_hint": "38-128",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/tools/heap_analyzer/HeapAggregation.cs#L38"
+        }
+      ],
+      "evidence_limits": "快照只证明端点存活与分配栈净差；缺释放事件流与VA，不能期待一个导出完成所有归因。",
+      "baseline_status": "open_at_audited_baseline",
+      "current_sources": [
+        "next/tools/heap_analyzer/HeapAggregation.cs",
+        "next/tools/heap_analyzer/ReportFiles.cs",
+        "next/tools/owned_trace_process.cs",
+        "next/tools/diagnostic_io.py",
+        "next/tools/bounded_trace_input.cs",
+        "next/tools/memory_trace_support.psm1"
+      ],
+      "result": "work-packages/WP07-result.json",
+      "deployed": false,
+      "live_verified": false,
+      "closed": false,
+      "remaining_risks": [
+        "RESOURCE_UNRESOLVED：缺同阶段真实allocation-stack净增表，尚不能锁定实际owner/释放位置；free/VA快照不提供。",
+        "真实符号化ETL的投影、地址复用/不同堆/ASLR与覆盖链未重跑。"
+      ]
+    },
+    {
+      "id": "MP03",
+      "priority": "P1",
+      "evidence": "S+C",
+      "title": "采集父进程stdout/stderr仍无界ReadToEndAsync",
+      "work_package": "WP07",
+      "status": "source_repaired_acceptance_partial",
+      "fixed_by_this_audit": false,
+      "sources": [
+        {
+          "path": "next/tools/memory_trace_support.psm1",
+          "line_hint": "119-152",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/tools/memory_trace_support.psm1#L119"
+        }
+      ],
+      "evidence_limits": "分析器Job和目录字节限额不限制PowerShell内尚未落盘的字符串。",
+      "baseline_status": "open_at_audited_baseline",
+      "current_sources": [
+        "next/tools/heap_analyzer/HeapAggregation.cs",
+        "next/tools/heap_analyzer/ReportFiles.cs",
+        "next/tools/owned_trace_process.cs",
+        "next/tools/diagnostic_io.py",
+        "next/tools/bounded_trace_input.cs",
+        "next/tools/memory_trace_support.psm1"
+      ],
+      "result": "work-packages/WP07-result.json",
+      "deployed": false,
+      "live_verified": false,
+      "closed": false,
+      "remaining_risks": [
+        "RESOURCE_UNRESOLVED：缺同阶段真实allocation-stack净增表，尚不能锁定实际owner/释放位置；free/VA快照不提供。",
+        "真实符号化ETL的投影、地址复用/不同堆/ASLR与覆盖链未重跑。"
+      ]
+    },
+    {
+      "id": "MP04",
+      "priority": "P1",
+      "evidence": "C",
+      "title": "低内存清理路径还会分配，局部句柄未即时RAII",
+      "work_package": "WP03",
+      "status": "source_repaired_acceptance_partial",
+      "fixed_by_this_audit": false,
+      "sources": [
+        {
+          "path": "next/native/platform/windows/metadata_query.cpp",
+          "line_hint": "196-200,230-234",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/native/platform/windows/metadata_query.cpp#L196"
+        },
+        {
+          "path": "next/native/platform/windows/process.cpp",
+          "line_hint": "233-243",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/native/platform/windows/process.cpp#L233"
+        },
+        {
+          "path": "next/native/devices/mumu_capture.cpp",
+          "line_hint": "50-92",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/native/devices/mumu_capture.cpp#L50"
+        }
+      ],
+      "evidence_limits": "包含EX09同一capture句柄窗口，去重；正常关闭已有退出确认，不应一概说清理全坏。",
+      "baseline_status": "open_at_audited_baseline",
+      "current_sources": [
+        "next/native/devices/scrcpy_control.cpp",
+        "next/native/devices/scrcpy_codec.cpp",
+        "next/native/devices/mumu_capture.cpp",
+        "next/native/devices/capture_host.cpp",
+        "next/native/platform/windows/metadata_query.cpp",
+        "next/native/app/application.cpp"
+      ],
+      "result": "work-packages/WP03-result.json",
+      "deployed": false,
+      "live_verified": false,
+      "closed": false,
+      "remaining_risks": [
+        "每个SDK HANDLE取得后/所有权转移前逐点bad_alloc、真实forward成功但响应超时，未逐一注入验证；源码RAII修正不能替代这些断言。"
+      ]
+    },
+    {
+      "id": "MP05",
+      "priority": "P1",
+      "evidence": "S",
+      "title": "OCR每个文字框复制整图，并构造未消费的绘图和字符串",
+      "work_package": "WP09",
+      "status": "source_repaired_acceptance_partial",
+      "fixed_by_this_audit": false,
+      "sources": [
+        {
+          "path": "next/third_party/rapidocr_core/src/OcrUtils.cpp",
+          "line_hint": "126-139",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/third_party/rapidocr_core/src/OcrUtils.cpp#L126"
+        },
+        {
+          "path": "next/third_party/rapidocr_core/src/OcrLiteImpl.cpp",
+          "line_hint": "174-271",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/third_party/rapidocr_core/src/OcrLiteImpl.cpp#L174"
+        }
+      ],
+      "evidence_limits": "N个框对应N次整ROI复制流量，不等于同时N份常驻；长期增长未归因。",
+      "baseline_status": "open_at_audited_baseline",
+      "current_sources": [
+        "next/native/recognition/ocr.cpp",
+        "next/native/recognition/ocr.hpp",
+        "next/third_party/rapidocr_core/src/CrnnNet.cpp",
+        "next/third_party/rapidocr_core/src/OcrLiteImpl.cpp"
+      ],
+      "result": "work-packages/WP09-result.json",
+      "deployed": false,
+      "live_verified": false,
+      "closed": false,
+      "remaining_risks": [
+        "未量化真实复杂页面多文本框的全部分配成本；模型复用不证明长期PrivateUsage稳定。"
+      ]
+    },
+    {
+      "id": "MP06",
+      "priority": "P2",
+      "evidence": "X",
+      "title": "OCR CTC末时间步漏掉最后类别，能误选成另一字符",
+      "work_package": "WP09",
+      "status": "source_repaired_acceptance_partial",
+      "fixed_by_this_audit": false,
+      "sources": [
+        {
+          "path": "next/third_party/rapidocr_core/src/CrnnNet.cpp",
+          "line_hint": "111-118",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/third_party/rapidocr_core/src/CrnnNet.cpp#L111"
+        }
+      ],
+      "evidence_limits": "抽取当前原函数反例：应为空格0.9，实际A0.2；不据此追认面具故障。",
+      "baseline_status": "open_at_audited_baseline",
+      "current_sources": [
+        "next/native/recognition/ocr.cpp",
+        "next/native/recognition/ocr.hpp",
+        "next/third_party/rapidocr_core/src/CrnnNet.cpp",
+        "next/third_party/rapidocr_core/src/OcrLiteImpl.cpp"
+      ],
+      "result": "work-packages/WP09-result.json",
+      "deployed": false,
+      "live_verified": false,
+      "closed": false,
+      "remaining_risks": [
+        "未量化真实复杂页面多文本框的全部分配成本；模型复用不证明长期PrivateUsage稳定。"
+      ]
+    },
+    {
+      "id": "MP07",
+      "priority": "P1",
+      "evidence": "X",
+      "title": "依赖归档锁定没有约束实际被构建消费的解压文件",
+      "work_package": "WP14",
+      "status": "source_repaired_acceptance_partial",
+      "fixed_by_this_audit": false,
+      "sources": [
+        {
+          "path": "next/tools/prepare_native.py",
+          "line_hint": "53-88",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/tools/prepare_native.py#L53"
+        }
+      ],
+      "evidence_limits": "真实prepare函数隔离反例：有效锁定ZIP与不同已解压DLL共存仍Ready。",
+      "baseline_status": "open_at_audited_baseline",
+      "current_sources": [
+        "next/tools/dependency_tree.py",
+        "next/tools/prepare_native.py",
+        "next/tools/resource_generation.py",
+        "next/tools/package_functional.py",
+        "next/native/games/wvd/vision/builtin_probes.hpp",
+        "next/native/games/wvd/tasks/pipeline_compiler.cpp"
+      ],
+      "result": "work-packages/WP14-result.json",
+      "deployed": false,
+      "live_verified": false,
+      "closed": false,
+      "remaining_risks": [
+        "所有获准builtin的最小发布包动态运行未穷尽；本次覆盖审核指出的隐式模式/模型拒绝，不用全包存在替代每模式证明。"
+      ]
+    },
+    {
+      "id": "MP08",
+      "priority": "P2",
+      "evidence": "S+D",
+      "title": "每unit/recovery新建OCR所有者，常规每轮三次初始化仍在",
+      "work_package": "WP09",
+      "status": "source_repaired_acceptance_partial",
+      "fixed_by_this_audit": false,
+      "sources": [
+        {
+          "path": "next/native/runtime/native_run_coordinator.cpp",
+          "line_hint": "362-392",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/native/runtime/native_run_coordinator.cpp#L362"
+        },
+        {
+          "path": "next/native/recognition/service.cpp",
+          "line_hint": "314-325",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/native/recognition/service.cpp#L314"
+        }
+      ],
+      "evidence_limits": "先建立可比较测量，再限于run lease复用模型；不可加无限跨版本全局单例。",
+      "baseline_status": "open_at_audited_baseline",
+      "current_sources": [
+        "next/native/recognition/ocr.cpp",
+        "next/native/recognition/ocr.hpp",
+        "next/third_party/rapidocr_core/src/CrnnNet.cpp",
+        "next/third_party/rapidocr_core/src/OcrLiteImpl.cpp"
+      ],
+      "result": "work-packages/WP09-result.json",
+      "deployed": false,
+      "live_verified": false,
+      "closed": false,
+      "remaining_risks": [
+        "未量化真实复杂页面多文本框的全部分配成本；模型复用不证明长期PrivateUsage稳定。"
+      ]
+    },
+    {
+      "id": "MP09",
+      "priority": "P2",
+      "evidence": "S",
+      "title": "采集总期限未覆盖最后完整性检查/哈希，耗时报告失真",
+      "work_package": "WP06",
+      "status": "source_repaired_targeted_verified",
+      "fixed_by_this_audit": false,
+      "sources": [
+        {
+          "path": "next/tools/collect_memory_stacks.ps1",
+          "line_hint": "439-457",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/tools/collect_memory_stacks.ps1#L439"
+        }
+      ],
+      "evidence_limits": "末段独立30秒检查在先前elapsed/deadline之后；清理超时另列。",
+      "baseline_status": "open_at_audited_baseline",
+      "current_sources": [
+        "next/native/runtime/measurement_barrier.hpp",
+        "next/native/app/application.cpp",
+        "next/tools/measurement_endpoint.psm1",
+        "next/tools/collect_memory_stacks.ps1",
+        "next/tools/export_memory_stacks.ps1"
+      ],
+      "result": "work-packages/WP06-result.json",
+      "deployed": false,
+      "live_verified": false,
+      "closed": false,
+      "remaining_risks": [
+        "真实负载短预检未执行；measurement comparison_eligible在本次真实采集维度仍false。"
+      ]
+    },
+    {
+      "id": "MP10",
+      "priority": "P2",
+      "evidence": "S+U",
+      "title": "每帧SDK尺寸查询与缓冲重建存在差异，渲染崩溃仍缺dump",
+      "work_package": "WP16",
+      "status": "unarmed_plan_delivered_external_crash_root_unresolved",
+      "fixed_by_this_audit": false,
+      "sources": [
+        {
+          "path": "next/native/devices/capture_host.cpp",
+          "line_hint": "82-96",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/native/devices/capture_host.cpp#L82"
+        },
+        {
+          "path": "src/script.py",
+          "line_hint": "486-535",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/src/script.py#L486"
+        }
+      ],
+      "evidence_limits": "新旧ABI一致；额外SDK调用是待评估差异，非libRenderer故障因果证据。",
+      "baseline_status": "open_at_audited_baseline",
+      "current_sources": [
+        "next/tools/prepare_natural_crash_plan.py",
+        "next/tests/test_crash_plan_contract.py"
+      ],
+      "result": "work-packages/WP16-result.json",
+      "deployed": false,
+      "live_verified": false,
+      "closed": false,
+      "remaining_risks": [
+        "libRenderer自然崩溃缺dump/符号化fault栈与厂商尺寸/线程/缓冲契约，root_cause=UNRESOLVED。"
+      ]
+    },
+    {
+      "id": "MP11",
+      "priority": "P3",
+      "evidence": "S+D",
+      "title": "其它诊断脚本仍有整文件读取、逐行无字节界限或局部期限",
+      "work_package": "WP07",
+      "status": "source_repaired_acceptance_partial",
+      "fixed_by_this_audit": false,
+      "sources": [
+        {
+          "path": "next/tools/analyze_run_timing.py",
+          "line_hint": "",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/tools/analyze_run_timing.py"
+        },
+        {
+          "path": "next/tools/analyze_memory_owners.py",
+          "line_hint": "",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/tools/analyze_memory_owners.py"
+        },
+        {
+          "path": "next/tools/inventory_publications.ps1",
+          "line_hint": "",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/tools/inventory_publications.ps1"
+        }
+      ],
+      "evidence_limits": "unknown/partial必须明确；现有盘点只读，不能称已有误删。",
+      "baseline_status": "open_at_audited_baseline",
+      "current_sources": [
+        "next/tools/heap_analyzer/HeapAggregation.cs",
+        "next/tools/heap_analyzer/ReportFiles.cs",
+        "next/tools/owned_trace_process.cs",
+        "next/tools/diagnostic_io.py",
+        "next/tools/bounded_trace_input.cs",
+        "next/tools/memory_trace_support.psm1"
+      ],
+      "result": "work-packages/WP07-result.json",
+      "deployed": false,
+      "live_verified": false,
+      "closed": false,
+      "remaining_risks": [
+        "RESOURCE_UNRESOLVED：缺同阶段真实allocation-stack净增表，尚不能锁定实际owner/释放位置；free/VA快照不提供。",
+        "真实符号化ETL的投影、地址复用/不同堆/ASLR与覆盖链未重跑。"
+      ]
+    },
+    {
+      "id": "MP12",
+      "priority": "P3",
+      "evidence": "S+D",
+      "title": "打包生成阶段会先改资源源文件，多文件输出未成事务",
+      "work_package": "WP14",
+      "status": "source_repaired_acceptance_partial",
+      "fixed_by_this_audit": false,
+      "sources": [
+        {
+          "path": "next/tools/package_functional.py",
+          "line_hint": "33-68,202",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/tools/package_functional.py#L33"
+        }
+      ],
+      "evidence_limits": "明确资源生成与冻结打包边界；文档身份与产品输入身份分开，保留现有运行身份门禁。",
+      "baseline_status": "open_at_audited_baseline",
+      "current_sources": [
+        "next/tools/dependency_tree.py",
+        "next/tools/prepare_native.py",
+        "next/tools/resource_generation.py",
+        "next/tools/package_functional.py",
+        "next/native/games/wvd/vision/builtin_probes.hpp",
+        "next/native/games/wvd/tasks/pipeline_compiler.cpp"
+      ],
+      "result": "work-packages/WP14-result.json",
+      "deployed": false,
+      "live_verified": false,
+      "closed": false,
+      "remaining_risks": [
+        "所有获准builtin的最小发布包动态运行未穷尽；本次覆盖审核指出的隐式模式/模型拒绝，不用全包存在替代每模式证明。"
+      ]
+    },
+    {
+      "id": "MP13",
+      "priority": "P1",
+      "evidence": "S+D",
+      "title": "匹配并发预算不是全局内存准入，OCR/解码绕过压力护栏",
+      "work_package": "WP10",
+      "status": "source_repaired_targeted_verified",
+      "fixed_by_this_audit": false,
+      "sources": [
+        {
+          "path": "next/native/recognition/resources.hpp",
+          "line_hint": "31-32",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/native/recognition/resources.hpp#L31"
+        },
+        {
+          "path": "next/native/recognition/resources.cpp",
+          "line_hint": "43-49",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/native/recognition/resources.cpp#L43"
+        }
+      ],
+      "evidence_limits": "256MiB为并发估算，90%主要记诊断；不得把RESOURCE_PRESSURE升级为实例崩溃证据。",
+      "baseline_status": "open_at_audited_baseline",
+      "current_sources": [
+        "next/native/recognition/resources.cpp",
+        "next/native/recognition/resources.hpp",
+        "next/native/recognition/service.cpp"
+      ],
+      "result": "work-packages/WP10-result.json",
+      "deployed": false,
+      "live_verified": false,
+      "closed": false,
+      "remaining_risks": [
+        "估算票据不等于RSS或整个第三方分配器成本；实际Job总余量不可查询时拒绝，不用峰值猜。"
+      ]
+    },
+    {
+      "id": "R01",
+      "priority": "P1",
+      "evidence": "X",
+      "title": "界面承诺的空配置继承变为Auto，未知组也自动化",
+      "work_package": "WP04",
+      "status": "source_repaired_targeted_verified",
+      "fixed_by_this_audit": false,
+      "sources": [
+        {
+          "path": "next/native/games/wvd/combat/strategy.cpp",
+          "line_hint": "8-28,61-99",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/native/games/wvd/combat/strategy.cpp#L8"
+        }
+      ],
+      "evidence_limits": "运行解析和可达资源组均受影响；标准全局manual控制组正常。",
+      "baseline_status": "open_at_audited_baseline",
+      "current_sources": [
+        "next/native/games/wvd/combat/strategy.cpp",
+        "next/native/games/wvd/tasks/pipeline_compiler.cpp",
+        "next/native/games/wvd/karma.cpp",
+        "next/native/storage/legacy_import.cpp"
+      ],
+      "result": "work-packages/WP04-result.json",
+      "deployed": false,
+      "live_verified": false,
+      "closed": false,
+      "remaining_risks": []
+    },
+    {
+      "id": "R02",
+      "priority": "P1",
+      "evidence": "X",
+      "title": "先过滤剩余动作再识别角色，会选择次高分的错误角色",
+      "work_package": "WP04",
+      "status": "source_repaired_targeted_verified",
+      "fixed_by_this_audit": false,
+      "sources": [
+        {
+          "path": "next/native/games/wvd/combat/strategy.cpp",
+          "line_hint": "101-123",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/native/games/wvd/combat/strategy.cpp#L101"
+        },
+        {
+          "path": "next/native/games/wvd/state.cpp",
+          "line_hint": "295-318",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/native/games/wvd/state.cpp#L295"
+        }
+      ],
+      "evidence_limits": "真实策略反例A已消费且A=.97/B=.81时返回B；未接真实图像。",
+      "baseline_status": "open_at_audited_baseline",
+      "current_sources": [
+        "next/native/games/wvd/combat/strategy.cpp",
+        "next/native/games/wvd/tasks/pipeline_compiler.cpp",
+        "next/native/games/wvd/karma.cpp",
+        "next/native/storage/legacy_import.cpp"
+      ],
+      "result": "work-packages/WP04-result.json",
+      "deployed": false,
+      "live_verified": false,
+      "closed": false,
+      "remaining_risks": []
+    },
+    {
+      "id": "R03",
+      "priority": "P1",
+      "evidence": "X+C",
+      "title": "恢复输入未生效，返回迷宫也能确认healing_completed",
+      "work_package": "WP05",
+      "status": "contract_repaired_healing_effect_material_unresolved",
+      "fixed_by_this_audit": false,
+      "sources": [
+        {
+          "path": "next/native/games/wvd/supply/dungeon_recover.cpp",
+          "line_hint": "15-19,51-66",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/native/games/wvd/supply/dungeon_recover.cpp#L15"
+        },
+        {
+          "path": "next/native/games/wvd/state.cpp",
+          "line_hint": "987-991",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/native/games/wvd/state.cpp#L987"
+        }
+      ],
+      "evidence_limits": "当前实际工厂图的布尔可达证明；非完整执行器/设备运行，更未绑定46秒现场。",
+      "baseline_status": "open_at_audited_baseline",
+      "current_sources": [
+        "next/native/devices/native_input_gate.cpp",
+        "next/native/runtime/flow_executor.cpp",
+        "next/native/games/wvd/supply/dungeon_recover.cpp",
+        "next/native/games/wvd/state.cpp"
+      ],
+      "result": "work-packages/WP05-result.json",
+      "deployed": false,
+      "live_verified": false,
+      "closed": false,
+      "remaining_risks": [
+        "没有有效专属疗效素材时，治疗结果仍Unconfirmed，保持healing_required；不能声明治疗功能已实机闭环。"
+      ]
+    },
+    {
+      "id": "R04",
+      "priority": "P1",
+      "evidence": "S",
+      "title": "补给图重复展开宽泛场景/反证/后置，缺阶段识别计划",
+      "work_package": "WP08",
+      "status": "source_repaired_acceptance_partial",
+      "fixed_by_this_audit": false,
+      "sources": [
+        {
+          "path": "next/native/games/wvd/supply/dungeon_recover.cpp",
+          "line_hint": "12-60",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/native/games/wvd/supply/dungeon_recover.cpp#L12"
+        },
+        {
+          "path": "next/native/games/wvd/tasks/pipeline_compiler.cpp",
+          "line_hint": "565-585",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/native/games/wvd/tasks/pipeline_compiler.cpp#L565"
+        },
+        {
+          "path": "next/native/games/wvd/vision/native_recognizers.cpp",
+          "line_hint": "1226-1259",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/native/games/wvd/vision/native_recognizers.cpp#L1226"
+        }
+      ],
+      "evidence_limits": "报告1199次计数吻合机制；各子项墙钟贡献仍未逐项归因，不能直接全局短路。",
+      "baseline_status": "open_at_audited_baseline",
+      "current_sources": [
+        "next/native/games/wvd/vision/native_recognizers.cpp",
+        "next/native/games/wvd/vision/supply_scene_plan.hpp",
+        "next/native/runtime/flow_executor_events.cpp",
+        "next/native/runtime/native_execution_session.cpp",
+        "next/native/games/wvd/state.cpp"
+      ],
+      "result": "work-packages/WP08-result.json",
+      "deployed": false,
+      "live_verified": false,
+      "closed": false,
+      "remaining_risks": [
+        "不能把限定量化推广为原46.352秒/1199次现场已修复；繁中真实补给完整流程与语言切换尚未实测。"
+      ]
+    },
+    {
+      "id": "R05",
+      "priority": "P1",
+      "evidence": "S",
+      "title": "递归识别复制条件树、aliases、business summary和嵌套证据",
+      "work_package": "WP08",
+      "status": "source_repaired_acceptance_partial",
+      "fixed_by_this_audit": false,
+      "sources": [
+        {
+          "path": "next/native/games/wvd/vision/native_recognizers.cpp",
+          "line_hint": "325-337,479,1234-1258,1777-1780",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/native/games/wvd/vision/native_recognizers.cpp#L325"
+        }
+      ],
+      "evidence_limits": "可确认高频分配；没有据此将PrivateUsage增长命名为JSON泄漏。",
+      "baseline_status": "open_at_audited_baseline",
+      "current_sources": [
+        "next/native/games/wvd/vision/native_recognizers.cpp",
+        "next/native/games/wvd/vision/supply_scene_plan.hpp",
+        "next/native/runtime/flow_executor_events.cpp",
+        "next/native/runtime/native_execution_session.cpp",
+        "next/native/games/wvd/state.cpp"
+      ],
+      "result": "work-packages/WP08-result.json",
+      "deployed": false,
+      "live_verified": false,
+      "closed": false,
+      "remaining_risks": [
+        "不能把限定量化推广为原46.352秒/1199次现场已修复；繁中真实补给完整流程与语言切换尚未实测。"
+      ]
+    },
+    {
+      "id": "R06",
+      "priority": "P2",
+      "evidence": "X",
+      "title": "获准builtin的资源依赖闭包遗漏，完整基础包掩盖漏项",
+      "work_package": "WP14",
+      "status": "source_repaired_acceptance_partial",
+      "fixed_by_this_audit": false,
+      "sources": [
+        {
+          "path": "next/native/authoring/workflow_validator.cpp",
+          "line_hint": "231-240",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/native/authoring/workflow_validator.cpp#L231"
+        },
+        {
+          "path": "next/native/games/wvd/tasks/pipeline_compiler.cpp",
+          "line_hint": "30-205",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/native/games/wvd/tasks/pipeline_compiler.cpp#L30"
+        }
+      ],
+      "evidence_limits": "当前编译器对fast_forward_off/target_marker/next_low_confidence输出空images；movement_stopped亦不全。",
+      "baseline_status": "open_at_audited_baseline",
+      "current_sources": [
+        "next/tools/dependency_tree.py",
+        "next/tools/prepare_native.py",
+        "next/tools/resource_generation.py",
+        "next/tools/package_functional.py",
+        "next/native/games/wvd/vision/builtin_probes.hpp",
+        "next/native/games/wvd/tasks/pipeline_compiler.cpp"
+      ],
+      "result": "work-packages/WP14-result.json",
+      "deployed": false,
+      "live_verified": false,
+      "closed": false,
+      "remaining_risks": [
+        "所有获准builtin的最小发布包动态运行未穷尽；本次覆盖审核指出的隐式模式/模型拒绝，不用全包存在替代每模式证明。"
+      ]
+    },
+    {
+      "id": "R07",
+      "priority": "P1",
+      "evidence": "X+C",
+      "title": "action_eligible=false没有统一禁止固定点/back/swipe输入",
+      "work_package": "WP05",
+      "status": "source_repaired_targeted_verified",
+      "fixed_by_this_audit": false,
+      "sources": [
+        {
+          "path": "next/native/runtime/flow_executor.cpp",
+          "line_hint": "",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/native/runtime/flow_executor.cpp"
+        },
+        {
+          "path": "next/native/authoring/workflow_validator.cpp",
+          "line_hint": "290-295",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/native/authoring/workflow_validator.cpp#L290"
+        },
+        {
+          "path": "next/native/games/wvd/tasks/pipeline_compiler.cpp",
+          "line_hint": "598-606",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/native/games/wvd/tasks/pipeline_compiler.cpp#L598"
+        }
+      ],
+      "evidence_limits": "真实FlowExecutor固定点反例sends=1且Completed；合法作者输入可达，尚无现网误点记录。",
+      "baseline_status": "open_at_audited_baseline",
+      "current_sources": [
+        "next/native/devices/native_input_gate.cpp",
+        "next/native/runtime/flow_executor.cpp",
+        "next/native/games/wvd/supply/dungeon_recover.cpp",
+        "next/native/games/wvd/state.cpp"
+      ],
+      "result": "work-packages/WP05-result.json",
+      "deployed": false,
+      "live_verified": false,
+      "closed": false,
+      "remaining_risks": [
+        "没有有效专属疗效素材时，治疗结果仍Unconfirmed，保持healing_required；不能声明治疗功能已实机闭环。"
+      ]
+    },
+    {
+      "id": "R08",
+      "priority": "P2",
+      "evidence": "S+C",
+      "title": "Karma解析与分支使用不同字符串规范，空白负值能写坏后续值",
+      "work_package": "WP04",
+      "status": "source_repaired_targeted_verified",
+      "fixed_by_this_audit": false,
+      "sources": [
+        {
+          "path": "next/native/games/wvd/karma.cpp",
+          "line_hint": "6-39",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/native/games/wvd/karma.cpp#L6"
+        },
+        {
+          "path": "next/native/storage/legacy_import.cpp",
+          "line_hint": "27-35",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/native/storage/legacy_import.cpp#L27"
+        }
+      ],
+      "evidence_limits": "标准下拉不产生前导空白；旧配置/API允许字符串。缺Boost未运行C++，失败日志随包保留。",
+      "baseline_status": "open_at_audited_baseline",
+      "current_sources": [
+        "next/native/games/wvd/combat/strategy.cpp",
+        "next/native/games/wvd/tasks/pipeline_compiler.cpp",
+        "next/native/games/wvd/karma.cpp",
+        "next/native/storage/legacy_import.cpp"
+      ],
+      "result": "work-packages/WP04-result.json",
+      "deployed": false,
+      "live_verified": false,
+      "closed": false,
+      "remaining_risks": []
+    },
+    {
+      "id": "R09",
+      "priority": "P3",
+      "evidence": "D",
+      "title": "编入产品的Fordraig/Cave工厂没有公开任务入口",
+      "work_package": "WP15",
+      "status": "source_repaired_acceptance_partial",
+      "fixed_by_this_audit": false,
+      "sources": [
+        {
+          "path": "next/native/games/wvd/tasks/run_builder.cpp",
+          "line_hint": "",
+          "url": "https://github.com/livehtworks/wvd/blob/4c466e14fa514fa177380e902afe373c8f20c3b2/next/native/games/wvd/tasks/run_builder.cpp"
+        }
+      ],
+      "evidence_limits": "59个现有目录项均有处理；这是休眠实现/维护范围债，不是公开任务无法启动。",
+      "baseline_status": "open_at_audited_baseline",
+      "current_sources": [
+        ".github/workflows/native-contracts.yml",
+        "next/tools/run_contracts.py",
+        "next/docs/core-contracts.md",
+        "next/docs/public-task-scope.md",
+        "AGENTS.md",
+        "docs/project-status.md"
+      ],
+      "result": "work-packages/WP15-result.json",
+      "deployed": false,
+      "live_verified": false,
+      "closed": false,
+      "remaining_risks": [
+        "没有覆盖所有源码可构造风险的逐点故障注入；未将43项批量改为closed。"
+      ]
+    }
+  ],
+  "audited_base_commit": "4c466e14fa514fa177380e902afe373c8f20c3b2",
+  "implementation_commit": null,
+  "product_inputs_sha256": "56a9ac97f30875dfd18931f573d2fe57d0616f60f29924111796a1e3a36d242e",
+  "final_receipt": "evidence/final-contracts-receipt.json",
+  "deployment_executed": false,
+  "live_run_executed": false,
+  "memory_attributed": false
+}

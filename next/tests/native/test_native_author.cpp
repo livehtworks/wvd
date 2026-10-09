@@ -1,6 +1,8 @@
 #include "games/wvd/tasks/author_workflow.hpp"
 #include "games/wvd/tasks/native_program.hpp"
 #include "workflow/serialization.hpp"
+#include "platform/execution_timing.hpp"
+#include "games/wvd/vision/supply_scene_plan.hpp"
 #include "games/wvd/tasks/public_flow_library.hpp"
 #include "games/wvd/tasks/public_step_scope.hpp"
 #include "games/wvd/tasks/bounty_visit.hpp"
@@ -47,9 +49,26 @@
 #include "games/wvd/native_operations.hpp"
 #include "games/wvd/vision/dialogue_probes.hpp"
 #include "games/wvd/vision/network_probes.hpp"
+#include "games/wvd/supply/dungeon_recover.hpp"
 #include "games/wvd/vision/inn_leave_probes.hpp"
 #include "storage/legacy_import.hpp"
 #include "storage/run_store.hpp"
+
+namespace audit_allocation {
+inline std::atomic<bool> enabled{};
+inline std::atomic<std::uint64_t> count{}, bytes{};
+}
+void *operator new(std::size_t size) {
+    auto *value=std::malloc(size ? size : 1);
+    if(!value) throw std::bad_alloc();
+    if(audit_allocation::enabled) { ++audit_allocation::count; audit_allocation::bytes+=size; }
+    return value;
+}
+void operator delete(void *value) noexcept { std::free(value); }
+void operator delete(void *value,std::size_t) noexcept { std::free(value); }
+void *operator new[](std::size_t size) { return ::operator new(size); }
+void operator delete[](void *value) noexcept { std::free(value); }
+void operator delete[](void *value,std::size_t) noexcept { std::free(value); }
 
 namespace closure {
 using namespace wvd;
@@ -107,6 +126,9 @@ struct Ports final : runtime::FlowPorts {
             for (const auto &child : p.at("conditions")) { const bool hit = evaluate(child); all &= hit; any |= hit; }
             return mode == "any" ? any : mode == "all" ? all : !any;
         }
+        if (mode == "supply_context") return games::vision::supply_phase_matches(
+            games::vision::classify_supply_page([&](const J &probe){return evaluate(probe);}),
+            p.at("phase").get<std::string>());
         if (mode == "business") return games::business_condition(business.summary(), p);
         if (semantic_leaf) if (const auto supplied = semantic_leaf(p)) return *supplied;
         if (mode == "template") return images.contains(p.at("image").get<std::string>());
@@ -323,6 +345,233 @@ int transitions() {
 #include "combat_diagnostic_drive.hpp"
 int main(int argc, char **argv) {
     try {
+        if(argc==4 && std::string(argv[1])=="--supply-plan-contract") {
+            using namespace closure;
+            const auto root=std::filesystem::absolute(argv[3]);
+            check(!std::filesystem::exists(root),"NEW_ISOLATED_ROOT_REQUIRED");
+            std::filesystem::create_directories(root);
+            const auto pack=std::filesystem::absolute(argv[2]);
+            const auto manifest=J::parse(std::ifstream(pack/"manifest.json"));
+            recognition::Bundle bundle{root/"bundle","supply-plan-fixture",{}};
+            for(const auto &row:manifest.at("files")) {
+                const auto relative=platform::BundleLease::checked_relative(row.at("path").get<std::string>());
+                const auto destination=bundle.root/relative;
+                std::filesystem::create_directories(destination.parent_path());
+                std::filesystem::copy_file(pack/relative,destination);
+                bundle.files.push_back({row.at("path"),row.at("sha256")});
+            }
+            const auto trait=cv::imread((pack/"image/trait.png").string());
+            check(!trait.empty(),"REAL_TRAIT_TEMPLATE_MISSING");
+            cv::Mat image(1600,900,CV_8UC3,cv::Scalar(34,47,63));
+            check(trait.cols<900 && trait.rows<1600,"TRAIT_TEMPLATE_TOO_LARGE");
+            trait.copyTo(image(cv::Rect(10,1100,trait.cols,trait.rows)));
+            contracts::FrameEnvelope frame;
+            frame.identity.device_id="fixture"; frame.identity.game_id="wvd";
+            frame.identity.pack_revision=bundle.revision; frame.identity.viewport_id="900x1600";
+            frame.identity.generation=frame.identity.connection_generation=frame.identity.frame_id=1;
+            frame.identity.raw_size=frame.identity.recognition_size={900,1600};
+            frame.raw_bgr=std::make_shared<const std::vector<std::uint8_t>>(image.data,image.data+image.total()*3);
+            const auto &p=games::vision::supply_scene_probes();
+            const auto interrupted=C::any({p[0],C::any({p[1],p[2],p[3]}),p[4]});
+            const auto dungeon=C::all({p[7],C::absent(p[8]),C::absent(p[5]),C::absent(p[6]),C::absent(interrupted)});
+            const auto panel=C::all({C::any({p[5],p[6]}),C::absent(interrupted)});
+            const auto context=C::any({dungeon,panel});
+            const std::vector<J> old{context,panel,C::any({context,interrupted}),context};
+            const std::vector<J> planned{{{"mode","supply_context"},{"phase","context"}},
+                {{"mode","supply_context"},{"phase","panel"}},{{"mode","supply_context"},{"phase","post"}},
+                {{"mode","supply_context"},{"phase","context"}}};
+            auto measure=[&](const std::vector<J> &conditions) {
+                recognition::Service service(bundle,games::vision::native_handlers(manifest.value("aliases",J::object()),"en"));
+                platform::timing::Totals totals; platform::timing::Bind bind(&totals);
+                frame.identity.captured_at=frame.identity.capture_finished_at=std::chrono::steady_clock::now();
+                const auto began=std::chrono::steady_clock::now();
+                audit_allocation::count=0; audit_allocation::bytes=0; audit_allocation::enabled=true;
+                try {
+                    for(const auto &condition:conditions) {
+                        const auto result=service.evaluate(frame,frame.identity,{"supply-plan","1",{0,0,900,1600},
+                            recognition::CustomParameters{"WvdVision",condition}});
+                        check(result.outcome==contracts::RecognitionOutcome::Hit,"SUPPLY_PLAN_RESULT_CHANGED");
+                    }
+                } catch(...) { audit_allocation::enabled=false; throw; }
+                audit_allocation::enabled=false;
+                const auto count=audit_allocation::count.load(),bytes=audit_allocation::bytes.load();
+                auto result=platform::timing::report(totals.sample(),std::chrono::duration_cast<std::chrono::nanoseconds>(
+                    std::chrono::steady_clock::now()-began).count());
+                result["cpp_new_calls"]=count; result["cpp_new_bytes"]=bytes;
+                return result;
+            };
+            const auto before=measure(old),after=measure(planned);
+            check(after.at("counts").at("condition_visits")<before.at("counts").at("condition_visits"),"STAGE_PLAN_REPEATS_CONDITIONS");
+            check(after.at("cpp_new_bytes")<before.at("cpp_new_bytes"),"STAGE_PLAN_ALLOCATION_NOT_REDUCED");
+            std::ofstream report(root/"metrics.json");
+            report<<J{{"passed",true},{"frame_kind","synthetic 900x1600 containing real English trait template, not live capture"},
+                {"template_sha256",platform::file_sha256(pack/"image/trait.png")},
+                {"baseline_kind","former context/panel/post recipes through current production Service; not a pre-fix binary"},
+                {"allocation_scope","C++ new/new[] all evaluation threads; excludes malloc/OpenCV/ORT internal allocation"},
+                {"before",before},{"after",after},{"progress_events",0},{"ocr_expected",0}}.dump(2);
+            report.close(); check(bool(report),"METRIC_WRITE_FAILED");
+            std::cout<<"PASS supply stage plan: fixed synthetic frame, actual Service, same four positive stages, metrics saved\n";
+            return 0;
+        }
+        if (argc == 3 && std::string(argv[1]) == "--leaf-plan-contract") {
+            using J = nlohmann::json;
+            const auto root = std::filesystem::absolute(argv[2]);
+            closure::check(!std::filesystem::exists(root), "NEW_ISOLATED_ROOT_REQUIRED");
+            std::filesystem::create_directories(root / "image");
+            cv::Mat marker(12, 12, CV_8UC3);
+            cv::RNG random(42); random.fill(marker, cv::RNG::UNIFORM, 0, 255);
+            closure::check(cv::imwrite((root / "image/probe.png").string(), marker), "FIXTURE_WRITE_FAILED");
+            recognition::Bundle bundle{root, "leaf-contract", {{"image/probe.png", platform::file_sha256(root / "image/probe.png")}}};
+            recognition::Service service(bundle, games::vision::native_handlers(J::object(), "en"));
+            cv::Mat image(1600, 900, CV_8UC3, cv::Scalar(34, 47, 63));
+            marker.copyTo(image(cv::Rect(10, 10, 12, 12)));
+            contracts::FrameEnvelope frame;
+            frame.identity.device_id = "fixture"; frame.identity.game_id = "wvd";
+            frame.identity.pack_revision = bundle.revision; frame.identity.viewport_id = "900x1600";
+            frame.identity.generation = frame.identity.connection_generation = frame.identity.frame_id = 1;
+            frame.identity.raw_size = frame.identity.recognition_size = {900, 1600};
+            frame.identity.captured_at = frame.identity.capture_finished_at = std::chrono::steady_clock::now();
+            frame.raw_bgr = std::make_shared<const std::vector<std::uint8_t>>(image.data, image.data + image.total()*3);
+            const J leaf{{"mode","template"},{"image","probe"},{"roi",{0,0,60,60}},{"threshold",.9}};
+            const auto evaluate = [&](const J &condition, contracts::Box allowed = {0,0,900,1600}) {
+                return service.evaluate(frame, frame.identity, {"leaf-plan", "1", allowed,
+                    recognition::CustomParameters{"WvdVision", condition}});
+            };
+            platform::timing::Totals totals; platform::timing::Bind bind(&totals);
+            J repeated=J::array(); for(unsigned i=0;i<16;++i) repeated.push_back(leaf);
+            auto composite=J{{"mode","all"},{"conditions",repeated}};
+            closure::check(evaluate(composite).outcome==contracts::RecognitionOutcome::Hit, "LEAF_PLAN_RESULT_CHANGED");
+            closure::check(totals.sample().counts[static_cast<unsigned>(platform::timing::Counter::Matches)]==1,
+                "PARALLEL_DUPLICATE_LEAF_MATCHED_MORE_THAN_ONCE");
+            closure::check(evaluate(composite).outcome==contracts::RecognitionOutcome::Hit &&
+                totals.sample().counts[static_cast<unsigned>(platform::timing::Counter::Matches)]==1,
+                "SAME_FRAME_STAGE_LEAF_NOT_SHARED");
+            ++frame.identity.action_epoch;
+            frame.identity.captured_at = frame.identity.capture_finished_at = std::chrono::steady_clock::now();
+            closure::check(evaluate(composite).outcome==contracts::RecognitionOutcome::Hit &&
+                totals.sample().counts[static_cast<unsigned>(platform::timing::Counter::Matches)]==2,
+                "ACTION_EPOCH_CACHE_NOT_INVALIDATED");
+            auto changed_roi=leaf; changed_roi["roi"]={0,0,70,70};
+            closure::check(evaluate(changed_roi).outcome==contracts::RecognitionOutcome::Hit &&
+                totals.sample().counts[static_cast<unsigned>(platform::timing::Counter::Matches)]==3,
+                "ROI_CACHE_NOT_INVALIDATED");
+            ++frame.identity.frame_id;
+            frame.identity.captured_at = frame.identity.capture_finished_at = std::chrono::steady_clock::now();
+            closure::check(evaluate(leaf).outcome==contracts::RecognitionOutcome::Hit &&
+                totals.sample().counts[static_cast<unsigned>(platform::timing::Counter::Matches)]==4,
+                "NEW_FRAME_CACHE_NOT_INVALIDATED");
+            closure::check(evaluate(leaf,{0,0,30,30}).outcome==contracts::RecognitionOutcome::Error,
+                "SHARED_LEAF_BYPASSED_NEW_SCOPE");
+            auto masked=leaf; masked["mode"]="bright_mask";
+            J masks=J::array(); for(unsigned i=0;i<16;++i) masks.push_back(masked);
+            closure::check(evaluate(J{{"mode","all"},{"conditions",masks}}).outcome==contracts::RecognitionOutcome::Hit &&
+                totals.sample().counts[static_cast<unsigned>(platform::timing::Counter::Matches)]==5,
+                "MASKED_LEAF_NOT_SHARED");
+            auto missing=leaf; missing["image"]="missing";
+            closure::check(evaluate(J{{"mode","any"},{"conditions",J::array({leaf,missing})}}).outcome==
+                contracts::RecognitionOutcome::Error, "LEAF_ERROR_HIDDEN_BY_HIT");
+            service.cancel();
+            closure::check(evaluate(leaf).outcome==contracts::RecognitionOutcome::Error, "CANCELLED_CACHE_RETURNED_HIT");
+            std::cout << "PASS production leaf plan: 16 duplicate parallel leaves -> one match, cross-stage sharing, ROI/frame/epoch invalidation, Error and cancellation\n";
+            return 0;
+        }
+        if (argc == 2 && std::string(argv[1]) == "--pressure-contract") {
+            using namespace recognition;
+            std::atomic<bool> cancelled{false};
+            MatchBudget::Headroom headroom{true,true,1024ULL*1024*1024,1024ULL*1024*1024};
+            auto budget = std::make_shared<MatchBudget>(128ULL*1024*1024,[&]{return headroom;});
+            {
+                auto ticket = budget->acquire(4*1024*1024,cancelled);
+                if (budget->stats().estimated_workspace_bytes != 4*1024*1024)
+                    throw std::runtime_error("PRESSURE_TICKET_NOT_ACCOUNTED");
+            }
+            if (budget->stats().estimated_workspace_bytes || budget->stats().active_matches)
+                throw std::runtime_error("PRESSURE_TICKET_NOT_RELEASED");
+            for (unsigned mode=0; mode<3; ++mode) {
+                headroom={true,true,1024ULL*1024*1024,1024ULL*1024*1024};
+                if (mode==0) headroom.system_bytes=1;
+                if (mode==1) headroom.process_bytes=1;
+                if (mode==2) headroom.system_known=false;
+                unsigned decoded{};
+                auto cache=std::make_shared<DecodedAssetCache>(8*1024*1024,budget);
+                bool rejected{};
+                try { (void)cache->load("image",[&]{++decoded;return cv::Mat(32,32,CV_8UC3);},&cancelled); }
+                catch(const ResourcePressure &) { rejected=true; }
+                if(!rejected || decoded || budget->stats().active_matches)
+                    throw std::runtime_error("PRESSURE_ADMISSION_AFTER_DECODE");
+            }
+            cancelled=true;
+            bool cancelled_rejected{};
+            try { (void)budget->acquire(1,cancelled); }
+            catch(const std::exception &e) {cancelled_rejected=std::string(e.what())=="RECOGNITION_CANCELLED";}
+            if(!cancelled_rejected) throw std::runtime_error("PRESSURE_CANCEL_IGNORED");
+            std::cout << "PASS actual decode admission: system/process/unknown pressure before allocation; exact ticket release and cancellation\n";
+            return 0;
+        }
+        if (argc == 2 && std::string(argv[1]) == "--builtin-resource-closure") {
+            using namespace closure;
+            C graph("builtin-closure");
+            graph.observe("Entry", C::any({J{{"mode","fast_forward_off"}},J{{"mode","target_marker"}},
+                J{{"mode","next_low_confidence"}},J{{"mode","movement_stopped"}},
+                J{{"mode","combat_resource_error"}}}),{"Terminal"});
+            const auto compiled=graph.finish();
+            for (const auto *image : {"fastforward_off","combatTarget","next","dungFlag","mapFlag"})
+                if (std::find(compiled.images.begin(),compiled.images.end(),std::string(image)+".png")==compiled.images.end())
+                    throw std::runtime_error(std::string("BUILTIN_IMAGE_MISSING:")+image);
+            const auto manifest=read("packs/wvd/manifest.json");
+            recognition::Bundle bundle{std::filesystem::absolute("packs/wvd"),"no-model-fixture",{}};
+            for(const auto &file:manifest.at("files")) bundle.files.push_back({file.at("path"),file.at("sha256")});
+            C ocr_graph("implicit-ocr-closure");
+            ocr_graph.observe("Entry",J{{"mode","combat_resource_error"}},{"Terminal"});
+            const auto ocr_compiled=ocr_graph.finish();
+            bool missing=false;
+            try { (void)games::tasks::publish_native(ocr_compiled,bundle,std::filesystem::absolute(".local")/
+                ("implicit-model-reject-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count())),J::object(),J::object()); }
+            catch(const std::exception &error) {
+                missing=std::string(error.what()).starts_with("NATIVE_OCR_MODEL_MISSING_OR_UNLOCKED:");
+                if(!missing) std::cerr << "publication rejection=" << error.what() << '\n';
+            }
+            if(!missing) throw std::runtime_error("IMPLICIT_OCR_MODEL_NOT_ENFORCED");
+            std::cout << "PASS builtin closure: runtime recipes included, implicit OCR missing model rejected before publication\n";
+            return 0;
+        }
+        if (argc == 2 && std::string(argv[1]) == "--healing-effect-contract") {
+            using namespace closure;
+            const auto graph=games::supply::recover_in_dungeon();
+            graph.validate();
+            for (const auto *phase : {"dungeon","panel","context","post"}) {
+                const auto page=games::vision::classify_supply_page([](const J &probe) {
+                    return probe.value("image","")=="recover";
+                });
+                const bool hit=games::vision::supply_phase_matches(page,phase);
+                check(hit==(std::string(phase)!="dungeon"),"SUPPLY_PHASE_DISPATCH_CHANGED");
+            }
+            const auto &handoff=graph.nodes.at("Recovered");
+            if(handoff.value("action","")=="Custom" && handoff.dump().find("healing_completed")!=std::string::npos)
+                throw std::runtime_error("HEAL_PAGE_HANDOFF_CLEARS_DEMAND");
+            if(graph.nodes.at("Unconfirmed").dump().find("supply.healing_outcome_unconfirmed")==std::string::npos)
+                throw std::runtime_error("HEAL_EFFECT_GAP_HIDDEN");
+            auto profile=storage::LegacyConfigImporter(read("packs/wvd/parameters/legacy-config-fields.json"))
+                .parse({{"GENERAL",J::object()}}).values;
+            profile["RECOVER_WHEN_BEGINNING"]=true;
+            Driver driver(graph,profile);
+            driver.ports.business.enter_dungeon();
+            driver.ports.images={"recover"};
+            driver.ports.after_input=[&](const auto &){driver.ports.images={"dungFlag"};};
+            driver.until([&]{return driver.terminal();},4s);
+            const auto before=driver.ports.business.summary();
+            if(!before.at("healing_required").get<bool>()) throw std::runtime_error("HEAL_DEMAND_MISSING");
+            if(driver.ports.commands.size()!=1 || driver.last.state==runtime::TickState::Completed ||
+                driver.last.code.find("supply.healing_outcome_unconfirmed")==std::string::npos)
+                throw std::runtime_error("HEAL_NO_OP_FALSE_COMPLETION:"+driver.last.code);
+            bool forged_completed{};
+            try { driver.ports.business.confirm_event("heal-forged", "healing_completed", 1, 900); }
+            catch(const std::exception &e) { forged_completed=std::string(e.what())=="HEALING_EFFECT_PROOF_REQUIRED"; }
+            if(!forged_completed || !driver.ports.business.summary().at("healing_required").get<bool>())
+                throw std::runtime_error("HEAL_GENERIC_COMPLETION_BYPASS");
+            std::cout << "PASS actual heal graph, executor and state: one no-op heal, page returned, demand retained, unconfirmed result\n";
+            return 0;
+        }
         if (argc == 2 && std::string(argv[1]) == "--combat-diagnostic-drive") {
             const auto *root = std::getenv("WVD_CLOSURE_ROOT");
             closure::check(root && *root, "WVD_CLOSURE_ROOT_REQUIRED");

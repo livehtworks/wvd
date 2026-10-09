@@ -419,7 +419,7 @@ std::filesystem::path freeze_manifest_members(const std::filesystem::path &pack_
                             {"files", manifest.at("files")}}.dump();
     const auto digest = platform::bytes_sha256(
         {reinterpret_cast<const std::uint8_t *>(identity.data()), identity.size()});
-    const auto cache_root = data_root / "asset-cache";
+    const auto cache_root = platform::extended_path(data_root / "asset-cache");
     const auto destination = cache_root / digest;
     if (std::filesystem::is_directory(destination))
         return destination;
@@ -484,6 +484,7 @@ Application::Application(ApplicationPaths paths,
     const auto profile_path = paths_.data_root / "profile.json";
     profile_store_ = std::make_unique<storage::ProfileStore>(profile_path, descriptor_);
     workflow_store_ = std::make_unique<storage::WorkflowRepository>(paths_.data_root / "workflows");
+    submission_store_ = std::make_unique<storage::SubmissionStore>(paths_.data_root / "requests");
     // 首次引入公共定义；已有同 ID 的用户编辑版本绝不覆盖。公共定义仍存于同一 WorkflowRepository。
     const auto semantic_path = author_bundle_.root / "parameters/semantic-assets.json";
     if (std::filesystem::is_regular_file(semantic_path)) semantic_catalogue_ = load_json(semantic_path);
@@ -517,7 +518,8 @@ Application::Application(ApplicationPaths paths,
             initial = importer.parse({{"GENERAL", J::object()}});
         profile_store_->create(initial);
     }
-    coordinator_ = std::make_unique<runtime::NativeRunCoordinator>(paths_.data_root / "runs", 1024);
+    coordinator_ = std::make_unique<runtime::NativeRunCoordinator>(paths_.data_root / "runs", 1024,
+        paths_.service_instance_id);
     operation_ = {{"state", "idle"}, {"name", nullptr}, {"error", nullptr}};
 }
 
@@ -880,29 +882,47 @@ void Application::start_device_job(std::string name, std::function<void()> job) 
     }
     if (device_worker_.joinable()) device_worker_.join();
     cancel_operation_ = false;
+    worker_publication_failed_ = false;
     {
         std::lock_guard lock(mutex_);
         operation_ = {{"state", "running"}, {"name", name}, {"error", nullptr}};
     }
     try {
-        device_worker_ = std::jthread([this, name = std::move(name), job = std::move(job)] {
+        device_worker_ = std::jthread([this, name = std::move(name), job = std::move(job)]() noexcept {
+          try {
             std::string failure;
             try {
                 if (stopping_ || cancel_operation_) throw std::runtime_error("PREPARATION_CANCELLED");
                 job();
             } catch (const std::exception &error) { failure = error.what(); }
               catch (...) { failure = "APPLICATION_OPERATION_EXCEPTION"; }
-            std::lock_guard finished(mutex_);
-            auto preparation = operation_.value("preparation", J::object());
-            operation_ = {{"state", failure.empty() ? "completed" : "failed"},
-                          {"name", name}, {"error", failure.empty() ? J(nullptr) : J(failure)}};
-            if (!preparation.empty()) operation_["preparation"] = std::move(preparation);
-            if (name == "start_task" || name == "start_workflow" || name == "start_combat_debug") {
-                submission_["state"] = failure.empty() ? "submitted" :
-                    failure == "PREPARATION_CANCELLED" ? "cancelled" : "failed";
-                submission_["error"] = failure.empty() ? J(nullptr) : J(failure);
-                submissions_.at(submission_.at("request_id").get<std::string>())["receipt"] = submission_;
+            J receipt, intent;
+            {
+                std::lock_guard finished(mutex_);
+                if (name == "start_task" || name == "start_workflow" || name == "start_combat_debug") {
+                    receipt = submission_; intent = submission_intent_;
+                    receipt["state"] = failure.empty() ? "submitted" :
+                        failure == "PREPARATION_CANCELLED" ? "cancelled" : "failed";
+                    receipt["error"] = failure.empty() ? J(nullptr) : J(failure);
+                }
             }
+            // Keep admission busy until the durable receipt exists, but never
+            // hold the status/stop mutex while performing storage I/O.
+            if (!receipt.is_null()) submission_store_->save(receipt.at("request_id"), intent, receipt, true);
+            {
+                std::lock_guard finished(mutex_);
+                auto preparation = operation_.value("preparation", J::object());
+                operation_ = {{"state", failure.empty() ? "completed" : "failed"},
+                              {"name", name}, {"error", failure.empty() ? J(nullptr) : J(failure)}};
+                if (!preparation.empty()) operation_["preparation"] = std::move(preparation);
+                if (!receipt.is_null()) submission_ = std::move(receipt);
+            }
+          } catch (...) {
+            worker_publication_failed_ = true;
+            cancel_operation_ = true;
+            try { coordinator_->request_stop(); } catch (...) {}
+            OutputDebugStringW(L"WVD application worker publication failed; stop requested\n");
+          }
         });
     } catch (...) {
         std::lock_guard lock(mutex_);
@@ -919,49 +939,47 @@ void Application::require_storage_space() const {
         throw std::runtime_error("RUN_STORAGE_SPACE_QUERY_FAILED");
     }
     require(available != static_cast<std::uintmax_t>(-1), "RUN_STORAGE_SPACE_QUERY_FAILED");
-    require(available >= 1073741824ULL, "RUN_STORAGE_SPACE_LOW");
+    // Round ceiling: diagnostics (176 * 8 MiB), recent images (128 MiB),
+    // logs/timing/events (144 MiB), plus 256 MiB terminal/input reserve.
+    require(available >= 2ULL * 1024 * 1024 * 1024, "RUN_STORAGE_SPACE_LOW");
 }
 
 Application::J Application::queue_run(const std::string &kind, const J &request,
-                                      const J &identity, std::function<J()> prepare) {
+                                      const J &identity, std::function<J()> prepare, std::uint64_t stop_epoch) {
     std::lock_guard command(command_mutex_);
     const auto id = checked_request_id(request);
-    const auto signature = identity.dump();
+    if (auto prior = submission_store_->replay(id, identity)) return *prior;
+    require_storage_space();
     {
         std::lock_guard lock(mutex_);
-        if (auto it = submissions_.find(id); it != submissions_.end()) {
-            require(it->second.at("identity") == signature, "IDEMPOTENCY_CONFLICT");
-            auto result = it->second.at("receipt");
-            if (auto known = coordinator_->request_snapshot(id)) {
-                result["run"] = storage::snapshot_json(*known);
-                result["run_id"] = known->run_id;
-            }
-            result["accepted"] = true;
-            result["replayed"] = true;
-            return result;
-        }
         // 已登记请求先返回幂等回执；容量仅阻止新意图，不能阻止读取旧结果。
-        require_storage_space();
         require(!stopping_, "APPLICATION_STOPPING");
+        require(stop_epoch_.load() == stop_epoch, "PREPARATION_CANCELLED");
         require(!run_active(), "RUN_ACTIVE");
         require(operation_.value("state", "idle") != "running", "DEVICE_OPERATION_BUSY");
         require(!task_session_active_, "TASK_SESSION_ACTIVE");
-        require(submissions_.size() < 256, "REQUEST_HISTORY_CAPACITY_EXCEEDED");
         submission_ = {{"request_id", id}, {"kind", kind}, {"state", "preparing"},
                        {"error", nullptr}, {"accepted", true}};
-        submissions_[id] = {{"identity", signature}, {"receipt", submission_}};
+        submission_intent_ = identity;
     }
+    bool registered = false;
     try {
-        start_device_job(kind, [this, id, prepare = std::move(prepare)] {
+        submission_store_->save(id, identity, submission_, false);
+        registered = true;
+        start_device_job(kind, [this, id, stop_epoch, prepare = std::move(prepare)] {
+            require(stop_epoch_.load() == stop_epoch, "PREPARATION_CANCELLED");
             const auto result = prepare();
-            std::lock_guard lock(mutex_);
-            submissions_.at(id)["run_id"] = result.at("run_id");
+            J receipt, intent;
+            { std::lock_guard lock(mutex_);
+              submission_["run_id"] = result.at("run_id");
+              receipt = submission_; intent = submission_intent_; }
+            submission_store_->save(id, intent, receipt, true);
         });
     } catch (const std::exception &error) {
-        std::lock_guard lock(mutex_);
-        submission_["state"] = "failed";
-        submission_["error"] = error.what();
-        submissions_.at(id)["receipt"] = submission_;
+        J receipt;
+        { std::lock_guard lock(mutex_);
+          submission_["state"] = "failed"; submission_["error"] = error.what(); receipt = submission_; }
+        if (registered) submission_store_->save(id, identity, receipt, true);
         throw;
     }
     return {{"accepted", true}, {"request_id", id}, {"submission_state", "preparing"}};
@@ -1031,6 +1049,9 @@ std::optional<recognition::Bundle> Application::portrait_bundle(const J &values,
 
 Application::J Application::start_combat_debug(const J &request) {
     std::lock_guard command(command_mutex_);
+    const auto stop_epoch = stop_epoch_.load();
+    const J intent{{"kind", "combat_debug"}, {"request", request}};
+    if (auto prior = submission_store_->replay(checked_request_id(request), intent)) return *prior;
     const auto stored = profile_store_->load();
     require(request.at("profile_revision") == stored.at("revision"), "PROFILE_REVISION_MISMATCH");
     const auto name = request.at("strategy_name").get<std::string>();
@@ -1051,7 +1072,7 @@ Application::J Application::start_combat_debug(const J &request) {
         workflow_store_->read(games::tasks::native_public_steps.front()), games::tasks::native_public_steps);
     library[document.at("flow").at("id").get<std::string>()] = document;
     return queue_run("start_combat_debug", frozen,
-        {{"kind", "combat_debug"}, {"request", frozen}, {"profile_revision", stored.at("revision")}},
+        intent,
         [this, frozen, stored, debug_stored, document, library] {
             auto prepared = compile_workflow_graph(frozen, debug_stored, document, library);
             std::shared_ptr<devices::DeviceConnection> backend;
@@ -1081,11 +1102,14 @@ Application::J Application::start_combat_debug(const J &request) {
                 {"resource_locale", frozen.at("resource_locale")}});
             require(observed.at("outcome") == "Hit", "COMBAT_DEBUG_NOT_IN_BATTLE");
             return prepare_workflow("combat-debug", frozen, debug_stored, document, backend, library, std::move(prepared));
-        });
+        }, stop_epoch);
 }
 
 Application::J Application::start_task(const J &request) {
     std::lock_guard command(command_mutex_);
+    const auto stop_epoch = stop_epoch_.load();
+    const J intent{{"kind", "task"}, {"request", request}};
+    if (auto prior = submission_store_->replay(checked_request_id(request), intent)) return *prior;
     auto frozen = request;
     frozen["request_id"] = checked_request_id(request);
     const auto stored = profile_store_->load();
@@ -1104,7 +1128,7 @@ Application::J Application::start_task(const J &request) {
     if (request.contains("profile_revision"))
         require(request.at("profile_revision") == stored.at("revision"), "PROFILE_REVISION_MISMATCH");
     return queue_run("start_task", frozen,
-        {{"kind", "task"}, {"request", frozen}, {"profile_revision", stored.at("revision")}},
+        intent,
         [this, frozen, stored] {
             const auto &selected = stored.at("values").at("FARM_TARGET");
             const auto task_id = frozen.value("task_id", selected.is_string()
@@ -1121,14 +1145,22 @@ Application::J Application::start_task(const J &request) {
                     throw std::runtime_error("NATIVE_IMAGE_MISSING:" + selected_image.relative_path);
             }
             const auto backend = ensure_connected_for_run(stored);
-            auto result = prepare_task(frozen, stored, backend, source_values, nullptr,
-                std::move(prepared));
-            watch_task_session(frozen, stored, source_values, backend, frozen.at("request_id"));
-            return result;
-        });
+            auto started = std::make_shared<std::atomic<int>>(0);
+            // Register the sole join/batch owner before coordinator submission.
+            // Cancellation cannot strand a run between start and watcher creation.
+            watch_task_session(frozen, stored, source_values, backend, frozen.at("request_id"), started);
+            try {
+                auto result = prepare_task(frozen, stored, backend, source_values, nullptr, std::move(prepared));
+                started->store(1);
+                return result;
+            } catch (...) { started->store(2); throw; }
+        }, stop_epoch);
 }
 Application::J Application::start_workflow(const std::string &flow_id, const J &request) {
     std::lock_guard command(command_mutex_);
+    const auto stop_epoch = stop_epoch_.load();
+    const J intent{{"kind", "workflow"}, {"flow_id", flow_id}, {"request", request}};
+    if (auto prior = submission_store_->replay(checked_request_id(request), intent)) return *prior;
     require(request.value("mode", "workflow") == "workflow" || request.value("mode", "workflow") == "selected_node", "WORKFLOW_MODE_INVALID");
     auto frozen = request;
     frozen["request_id"] = checked_request_id(request);
@@ -1141,15 +1173,14 @@ Application::J Application::start_workflow(const std::string &flow_id, const J &
     frozen["resource_locale"] = authoring::effective_resource_locale(frozen, document.at("execution"));
     const auto library = workflow_store_->snapshot_closure(document, games::tasks::native_public_steps);
     return queue_run("start_workflow", frozen,
-        {{"kind", "workflow"}, {"flow_id", flow_id}, {"request", frozen},
-         {"profile_revision", stored.at("revision")}, {"library", library}},
+        intent,
         [this, flow_id, frozen, stored, document, library] {
             // 不齐全的语言素材/循环引用在连接和启动模拟器之前暴露。
             auto prepared = compile_workflow_graph(frozen, stored, document, library);
             require(!stopping_ && !cancel_operation_, "PREPARATION_CANCELLED");
             const auto backend = ensure_connected_for_run(stored);
             return prepare_workflow(flow_id, frozen, stored, document, backend, library, std::move(prepared));
-        });
+        }, stop_epoch);
 }
 
 Application::J Application::connect_device(const J &request) {
@@ -1378,22 +1409,28 @@ Application::J Application::device_status() const {
 }
 
 Application::J Application::run_status() const {
-    const auto snapshot = coordinator_->snapshot();
+    const auto view = coordinator_->read_view();
+    const auto &snapshot = view.snapshot;
     auto value = storage::snapshot_json(snapshot);
-    value["events"] = coordinator_->events();
+    value["server_instance_id"] = view.instance_id;
+    value["request_id"] = view.request_id;
+    value["events"] = view.journal ? view.journal->latest_node() : J{{"events", J::array()}};
     const auto &event_page = value.at("events");
-    const auto directory = coordinator_->run_directory();
+    const auto directory = view.store ? view.store->directory() : std::filesystem::path{};
     value["run_directory"] = directory.empty() ? J(nullptr) : J(platform::utf8(directory));
     value["result"] = contracts::name(snapshot.state);
     value["error_code"] = snapshot.reason.empty() ? J(nullptr) : J(snapshot.reason);
     value["message"] = snapshot.reason.empty() ? J(nullptr) : J(snapshot.reason);
-    const auto diagnostic_summary = coordinator_->diagnostics();
+    value["worker_publication_failed"] = worker_publication_failed_.load();
+    const auto diagnostic_summary = view.store ? view.store->diagnostic_summary() : J::object();
     J diagnostics = J::array();
     for (const auto &entry : diagnostic_summary.value("entries", J::array())) {
         auto item = entry;
         item["label"] = entry.value("reason", entry.value("stage", "诊断"));
         if (entry.value("status", "") == "saved" && entry.contains("id"))
-            item["image_url"] = "/api/v1/runs/current/diagnostics/" +
+            item["image_url"] = "/api/v1/diagnostics/" + view.instance_id + "/" +
+                                std::to_string(snapshot.run_id) + "/" +
+                                std::to_string(entry.at("generation").get<std::uint64_t>()) + "/" +
                                 std::to_string(entry.at("id").get<std::uint64_t>()) + ".png";
         if (entry.contains("frame") && entry.at("frame").is_object())
             item["frame_age_ms"] = entry.at("frame").value("age_at_submit_ms", 0);
@@ -1402,6 +1439,8 @@ Application::J Application::run_status() const {
     value["diagnostics"] = std::move(diagnostics);
     {
         std::lock_guard lock(mutex_);
+        value["coherent"] = snapshot.run_id == active_run_id_;
+        if (snapshot.run_id != active_run_id_) return value;
         // Status polling only needs the visible nodes. Borrow the immutable
         // indexes under their existing lock instead of copying the whole graph.
         const auto &mapping = active_pipeline_to_node_;
@@ -1669,6 +1708,7 @@ Application::J Application::prepare_task(const J &request, const J &stored,
     {
         std::lock_guard lock(mutex_);
         active_workflow_id_ = "task:" + task_id;
+        active_run_id_ = snapshot.run_id;
         active_workflow_revision_ = stored.at("revision").get<std::string>();
         active_task_name_ = task.source.value("questName", task_id);
         active_started_ = std::chrono::steady_clock::now();
@@ -1682,7 +1722,8 @@ Application::J Application::prepare_task(const J &request, const J &stored,
 }
 
 void Application::watch_task_session(const J &request, const J &stored, J source_values,
-    std::shared_ptr<devices::DeviceConnection> backend, std::string request_id) {
+    std::shared_ptr<devices::DeviceConnection> backend, std::string request_id,
+    std::shared_ptr<std::atomic<int>> start_signal) {
     if (handoff_worker_.joinable()) handoff_worker_.join();
     require(!stopping_ && !cancel_operation_, "PREPARATION_CANCELLED");
     {
@@ -1696,7 +1737,11 @@ void Application::watch_task_session(const J &request, const J &stored, J source
     }
     try {
     handoff_worker_ = std::jthread([this, request = J(request), stored = J(stored), source_values = std::move(source_values),
-        backend = std::move(backend), request_id = std::move(request_id)](std::stop_token stop) mutable {
+        backend = std::move(backend), request_id = std::move(request_id), start_signal = std::move(start_signal)](std::stop_token stop) mutable noexcept {
+      try {
+        // The preparing worker must resolve submission ownership even on cancel.
+        while (start_signal->load() == 0) std::this_thread::sleep_for(1ms);
+        const bool owns_batch = start_signal->load() == 1 || coordinator_->owns_request(request_id);
         const auto update = [this](const std::string &state, const J &detail) {
             std::lock_guard lock(mutex_);
             handoff_status_ = {{"state", state}, {"detail", detail}};
@@ -1705,6 +1750,8 @@ void Application::watch_task_session(const J &request, const J &stored, J source
         const auto work = [&] {
         try {
           std::uint64_t completed = 0;
+          std::uintmax_t batch_bytes = 0;
+          constexpr std::uintmax_t batch_limit = 16ULL * 1024 * 1024 * 1024;
           const auto session_request_id = request_id;
           while (!stop.stop_requested() && !stopping_ && !cancel_operation_) {
             while (!stop.stop_requested() && !stopping_ && !cancel_operation_) {
@@ -1722,6 +1769,26 @@ void Application::watch_task_session(const J &request, const J &stored, J source
             const auto snapshot = coordinator_->request_snapshot(request_id);
             require(snapshot && snapshot->quiescent && snapshot->result_saved &&
                 snapshot->storage_error.empty(), "HANDOFF_SOURCE_NOT_COMMITTED");
+            // Account retained run facts and resource references, not just one
+            // file's limit. Never delete history to make a new round admissible.
+            for (const auto &directory : {coordinator_->run_directory(), paths_.data_root / "published" / request_id}) {
+                std::size_t entries{};
+                if (!std::filesystem::exists(directory)) continue;
+                for (const auto &entry : std::filesystem::recursive_directory_iterator(directory)) {
+                    require(++entries <= 65536 &&
+                        !(GetFileAttributesW(entry.path().c_str()) & FILE_ATTRIBUTE_REPARSE_POINT), "BATCH_STORAGE_INVENTORY_INVALID");
+                    if (entry.is_regular_file()) {
+                        const auto bytes = entry.file_size();
+                        require(bytes <= batch_limit && batch_bytes <= batch_limit - bytes, "BATCH_STORAGE_LIMIT");
+                        batch_bytes += bytes;
+                    }
+                }
+            }
+            {
+                std::lock_guard lock(mutex_);
+                repeat_status_["retained_reference_bytes"] = batch_bytes;
+                repeat_status_["batch_storage_limit_bytes"] = batch_limit;
+            }
             if (snapshot->outcome_category != "handoff_ready") {
                 if (request.value("repeat", false)) {
                     const auto &business = snapshot->business;
@@ -1738,20 +1805,39 @@ void Application::watch_task_session(const J &request, const J &stored, J source
                         !business.value("bounty_report_pending", true) &&
                         !business.value("inn_payment_pending", true), "REPEAT_CYCLE_NOT_CLEAN");
                     ++completed;
+                    bool batch_complete=false;
                     {
                         std::lock_guard lock(mutex_);
                         repeat_status_["completed_cycles"] = completed;
                         repeat_status_["state"] = "waiting";
                         // 一轮只有三段结算及静止回执全部通过才计数，失败尝试不消费目标轮数。
                         if (request.contains("repeat_count") && completed >= request.at("repeat_count").get<std::uint64_t>()) {
-                            repeat_status_["state"] = "completed";
-                            return;
+                            batch_complete=true;
                         }
+                    }
+                    if(measurement_.armed()) {
+                        const auto view=coordinator_->read_view();
+                        const auto memory=platform::sample_memory();
+                        measurement_.joined_boundary({{"server_instance_id",view.instance_id},
+                            {"process_id",memory.process_id},{"process_created_100ns",memory.process_created_100ns},
+                            {"run_id",snapshot->run_id},{"round",completed},{"generation",snapshot->generation},
+                            {"phase","worker_joined"},{"release_scope","worker"},
+                            {"batch_request_id",session_request_id},{"run_directory",platform::utf8(view.store->directory())},
+                            {"input_clean",snapshot->unresolved_inputs.empty()},
+                            {"cleanup_complete",snapshot->quiescent && view.worker_joined},
+                            {"heap_maintenance_complete",view.heap_maintenance_complete},
+                            {"heap_maintenance_succeeded",view.heap_maintenance_succeeded}},
+                            [&]{return stop.stop_requested() || stopping_ || cancel_operation_;});
+                    }
+                    if(batch_complete) {
+                        std::lock_guard lock(mutex_);repeat_status_["state"]="completed";return;
                     }
                     // 轮间等待可取消，不持有命令锁；停止在下一次 prepare_task 的提交锁内再次核验。
                     for (int i = 0; i < 100 && !stop.stop_requested() && !stopping_ && !cancel_operation_; ++i)
                         std::this_thread::sleep_for(100ms);
                     if (stop.stop_requested() || stopping_ || cancel_operation_) return;
+                    require(batch_bytes <= batch_limit - 2ULL * 1024 * 1024 * 1024,
+                        "BATCH_STORAGE_RESERVE_LOW");
                     auto next_request = request;
                     request_id = "repeat-" + games::tasks::digest_handoff_json(
                         {{"session", session_request_id}, {"cycle", completed + 1}});
@@ -1835,11 +1921,11 @@ void Application::watch_task_session(const J &request, const J &stored, J source
             }
         }
         };
-        work();
+        if (start_signal->load() == 1) work();
         // Cancellation ends scheduling, not ownership. The input worker may
         // still be saving its terminal result; keep this watcher alive until
         // it can join and record the release boundary (including failed cleanup).
-        if ((stop.stop_requested() || stopping_ || cancel_operation_) && coordinator_->snapshot().run_id) {
+        if (owns_batch && (start_signal->load() == 2 || stop.stop_requested() || stopping_ || cancel_operation_)) {
             coordinator_->request_stop();
             while (!coordinator_->wait_for_worker(250ms)) {}
             coordinator_->collect_finished_worker();
@@ -1849,7 +1935,7 @@ void Application::watch_task_session(const J &request, const J &stored, J source
         stored = J();
         source_values = J();
         backend.reset();
-        coordinator_->record_batch_release();
+        if (owns_batch) coordinator_->record_batch_release();
         std::lock_guard lock(mutex_);
         repeat_status_["active"] = false;
         if (repeating && repeat_status_.at("state") != "failed" &&
@@ -1857,6 +1943,16 @@ void Application::watch_task_session(const J &request, const J &stored, J source
         if (handoff_status_.value("state", "") == "watching")
             handoff_status_["state"] = "not_requested";
         task_session_active_ = false;
+      } catch (...) {
+        worker_publication_failed_ = true;
+        cancel_operation_ = true;
+        try {
+            coordinator_->request_stop();
+            while (!coordinator_->wait_for_worker(250ms)) {}
+            if (coordinator_->collect_finished_worker()) task_session_active_ = false;
+        } catch (...) {}
+        OutputDebugStringW(L"WVD task watcher publication failed; cleanup ownership retained\n");
+      }
     });
     } catch (...) {
         std::lock_guard lock(mutex_);
@@ -1975,6 +2071,7 @@ Application::J Application::prepare_workflow(const std::string &flow_id, const J
     {
         std::lock_guard lock(mutex_);
         active_workflow_id_ = flow_id;
+        active_run_id_ = snapshot.run_id;
         active_workflow_revision_ = workflow_revision;
         active_task_name_ = workflow_name;
         active_started_ = std::chrono::steady_clock::now();
@@ -2114,7 +2211,6 @@ runtime::NativeRunDefinition Application::assemble_workflow(
 
 Application::J Application::stop_run(std::optional<std::uint64_t> requested_run_id,
                                     const std::string &requested_submission) {
-    std::lock_guard command(command_mutex_);
     const auto current = coordinator_->snapshot();
     if (requested_run_id)
         require(current.run_id == *requested_run_id, "RUN_ID_MISMATCH");
@@ -2123,8 +2219,9 @@ Application::J Application::stop_run(std::optional<std::uint64_t> requested_run_
         require(submission_.is_object() && submission_.value("request_id", "") == requested_submission,
                 "SUBMISSION_ID_MISMATCH");
     }
+    ++stop_epoch_;
     cancel_operation_ = true;
-    handoff_worker_.request_stop();
+    measurement_.cancel();
     {
         std::lock_guard lock(mutex_);
         if (repeat_status_.is_object() && repeat_status_.value("active", false))
@@ -2135,31 +2232,46 @@ Application::J Application::stop_run(std::optional<std::uint64_t> requested_run_
             handoff_status_["state"] = "cancelled";
     }
     coordinator_->request_stop();
-    auto result = run_status();
-    result["accepted"] = true;
-    return result;
+    return {{"accepted", true}, {"run_id", current.run_id},
+            {"request_id", requested_submission}, {"stop_requested", true},
+            {"quiescent", false}};
 }
 
-api::DynamicReply Application::diagnostic_image(const std::string &name) const {
+api::DynamicReply Application::diagnostic_image(const std::string &identity) const {
+    const auto first = identity.find('/');
+    const auto second = identity.find('/', first == std::string::npos ? first : first + 1);
+    const auto third = identity.find('/', second == std::string::npos ? second : second + 1);
+    require(first != std::string::npos && second != std::string::npos && third != std::string::npos,
+            "DIAGNOSTIC_IDENTITY_INVALID");
+    const auto instance = identity.substr(0, first);
+    require(!instance.empty() && instance.size() <= 64 &&
+        std::all_of(instance.begin(), instance.end(), [](unsigned char c) {
+            return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+                   (c >= '0' && c <= '9') || c == '-';
+        }), "DIAGNOSTIC_IDENTITY_INVALID");
+    const auto number = [](std::string_view text) {
+        std::uint64_t value{};
+        const auto [end, error] = std::from_chars(text.data(), text.data() + text.size(), value);
+        require(error == std::errc{} && end == text.data() + text.size() && value > 0,
+                "DIAGNOSTIC_IDENTITY_INVALID");
+        return value;
+    };
+    const auto run = number(std::string_view(identity).substr(first + 1, second - first - 1));
+    const auto generation = number(std::string_view(identity).substr(second + 1, third - second - 1));
+    const auto name = identity.substr(third + 1);
     require(name.size() > 4 && name.ends_with(".png"), "DIAGNOSTIC_NAME_INVALID");
     std::uint64_t id{};
     const auto digits = std::string_view(name).substr(0, name.size() - 4);
     const auto [end, error] = std::from_chars(digits.data(), digits.data() + digits.size(), id);
     require(error == std::errc{} && end == digits.data() + digits.size(),
             "DIAGNOSTIC_NAME_INVALID");
-    const auto relative = "diagnostics/" + std::to_string(id) + ".png";
-    bool indexed = false;
-    for (const auto &entry : coordinator_->diagnostics().value("entries", J::array()))
-        if (entry.value("status", "") == "saved" && entry.value("path", "") == relative) {
-            indexed = true;
-            break;
-        }
-    require(indexed, "DIAGNOSTIC_NOT_FOUND");
-    const auto file = coordinator_->run_directory() / relative;
-    std::ifstream input(file, std::ios::binary);
-    require(bool(input), "DIAGNOSTIC_NOT_FOUND");
+    const auto view = coordinator_->read_view();
+    const bool current = view.store && view.instance_id == instance && view.snapshot.run_id == run;
+    const auto directory = current ? view.store->directory() : paths_.data_root / "runs" / instance / std::to_string(run);
+    const auto index = current ? view.store->diagnostic_summary() :
+        storage::RunStore::read_summary(directory).at("diagnostics");
     return {api::http::status::ok,
-            std::string(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()),
+            storage::RunStore::read_diagnostic(directory, index, instance, run, generation, id),
             "image/png"};
 }
 
@@ -2309,9 +2421,37 @@ api::DynamicReply Application::handle(const api::Request &request) {
                     std::string(reinterpret_cast<const char *>(frame_png_.data()), frame_png_.size()),
                     "image/png"};
         }
+        constexpr std::string_view event_prefix = "/api/v1/runs/current/events/";
+        if (path.starts_with(event_prefix) && method == api::http::verb::get) {
+            const auto cursor = std::string_view(path).substr(event_prefix.size());
+            std::uint64_t after{};
+            const auto [end, error] = std::from_chars(cursor.data(), cursor.data() + cursor.size(), after);
+            require(error == std::errc{} && end == cursor.data() + cursor.size(), "EVENT_CURSOR_INVALID");
+            const auto view = coordinator_->read_view();
+            auto page = view.journal ? view.journal->read_page(after, 128) :
+                J{{"events", J::array()}, {"last_seq", 0}, {"head_seq", 0}, {"resync_required", false}};
+            page["instance_id"] = view.instance_id; page["run_id"] = view.snapshot.run_id;
+            return json_reply(page);
+        }
         if (path == "/api/v1/runs/current" && (method == api::http::verb::get || method == api::http::verb::head))
             return json_reply(run_status());
-        constexpr std::string_view diagnostic_prefix = "/api/v1/runs/current/diagnostics/";
+        if(path=="/api/v1/runs/measurement" && method==api::http::verb::get)
+            return json_reply(measurement_.status());
+        if(path=="/api/v1/runs/measurement/arm" && method==api::http::verb::post) {
+            const auto body=parse_body(request);
+            std::lock_guard lock(mutex_);
+            require(task_session_active_ && repeat_status_.value("active",false),"MEASUREMENT_BATCH_REQUIRED");
+            measurement_.arm(body.at("controller_id"),body.at("configuration"),body.value("endpoints",2u),
+                std::chrono::milliseconds{body.value("hold_ms",20000)},
+                std::chrono::milliseconds{body.value("total_ms",1200000)});
+            return json_reply(measurement_.status(),api::http::status::accepted);
+        }
+        if(path=="/api/v1/runs/measurement/release" && method==api::http::verb::post) {
+            const auto body=parse_body(request);
+            measurement_.release(body.at("controller_id"),body.at("sequence"));
+            return json_reply(measurement_.status());
+        }
+        constexpr std::string_view diagnostic_prefix = "/api/v1/diagnostics/";
         if (path.starts_with(diagnostic_prefix) &&
             (method == api::http::verb::get || method == api::http::verb::head))
             return diagnostic_image(path.substr(diagnostic_prefix.size()));
@@ -2340,10 +2480,10 @@ api::DynamicReply Application::handle(const api::Request &request) {
 }
 
 void Application::request_shutdown() {
-    std::lock_guard command(command_mutex_);
+    ++stop_epoch_;
     stopping_ = true;
     cancel_operation_ = true;
-    handoff_worker_.request_stop();
+    measurement_.cancel();
     if (coordinator_) coordinator_->request_stop();
 }
 void Application::stop() {

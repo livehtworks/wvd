@@ -4,6 +4,7 @@
 #include "OcrStruct.h"
 #include <onnxruntime_cxx_api.h>
 #include <opencv2/opencv.hpp>
+#include <span>
 
 class CrnnNet {
 public:
@@ -16,8 +17,11 @@ public:
 
     void initModel(const std::string &pathStr, const std::string &keysPath);
     void cancel() { runOptions.SetTerminate(); }
+    void resume() { runOptions.UnsetTerminate(); }
 
     std::vector<TextLine> getTextLines(std::vector<cv::Mat> &partImg, const char *path, const char *imgName);
+    static TextLine decodeScores(const std::vector<float> &data, size_t h, size_t w,
+                                 const std::vector<std::string> &dictionary);
 
 private:
     bool isOutputDebugImg = false;
@@ -35,7 +39,8 @@ private:
 
     std::vector<std::string> keys;
 
-    TextLine scoreToTextLine(const std::vector<float> &outputData, size_t h, size_t w);
+    static TextLine decodeView(std::span<const float> data, size_t h, size_t w,
+                               const std::vector<std::string> &dictionary);
 
     TextLine getTextLine(const cv::Mat &src);
 };

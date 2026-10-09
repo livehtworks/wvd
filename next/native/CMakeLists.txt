@@ -236,6 +236,7 @@ foreach(TEST_TARGET IN ITEMS test_native_recognition test_native_ocr)
 endforeach()
 
 # Memory/lifecycle checks use the same Windows heap policy as the product.
+target_include_directories(test_native_ocr PRIVATE "${WVD_RAPID}/include" "${WVD_ORT}/include")
 foreach(TEST_TARGET IN ITEMS test_native_application test_native_coordinator
     test_native_ocr test_native_author test_support_selection test_event_page_copy)
   target_link_options(${TEST_TARGET} PRIVATE "/MANIFEST:EMBED"

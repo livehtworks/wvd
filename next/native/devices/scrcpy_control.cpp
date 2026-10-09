@@ -77,7 +77,7 @@ void ScrcpyControlClient::connect(std::chrono::milliseconds timeout, std::stop_t
     const Cancellation &cancelled) {
     check_cancel(stop, cancelled);
     if (connected()) return;
-    if (child_ || forward_ || uploaded_ || cleanup_unconfirmed_)
+    if (child_ || forward_ || forward_attempted_ || uploaded_ || cleanup_unconfirmed_)
         throw std::runtime_error("SCRCPY_CLEANUP_PENDING");
     if (timeout < 1000ms || timeout > 60000ms) throw std::runtime_error("SCRCPY_TIMEOUT_INVALID");
     const auto deadline = Clock::now() + timeout;
@@ -109,10 +109,13 @@ void ScrcpyControlClient::connect(std::chrono::milliseconds timeout, std::stop_t
         }
         port_ = ntohs(address.sin_port); closesocket(reservation);
         const auto local = std::string("tcp:") + std::to_string(port_);
+        forward_local_ = local;
+        forward_remote_ = name;
+        uploaded_ = true; // Unique scid path; a lost push reply still leaves cleanup responsibility.
         require_adb(adb_.run({L"push", server_.wstring(), std::wstring(remote_.begin(), remote_.end())},
             remaining(20000ms), stop), "SCRCPY_PUSH_FAILED");
-        uploaded_ = true;
         // 端口释放与 forward 间有竞争窗口；--no-rebind 防止覆盖其他客户端的转发。
+        forward_attempted_ = true;
         require_adb(adb_.run({L"forward", L"--no-rebind", std::wstring(local.begin(), local.end()),
             std::wstring(name.begin(), name.end())}, remaining(5000ms), stop), "SCRCPY_FORWARD_FAILED");
         forward_ = true;
@@ -170,7 +173,7 @@ void ScrcpyControlClient::connect(std::chrono::milliseconds timeout, std::stop_t
         ready_ = true; // socket 建立不等于版本/元数据握手完成。
     } catch (...) { close(); throw; }
 }
-void ScrcpyControlClient::send_bytes(const std::vector<std::uint8_t> &bytes, Clock::time_point deadline,
+void ScrcpyControlClient::send_bytes(std::span<const std::uint8_t> bytes, Clock::time_point deadline,
     std::stop_token stop, const Cancellation &cancelled) {
     std::size_t offset{};
     try {
@@ -196,6 +199,8 @@ void ScrcpyControlClient::submit(const contracts::Command &command, int width, i
     const auto transport_duration = command.kind == contracts::ActionKind::Swipe ? command.duration : 0;
     const auto deadline = Clock::now() + 5000ms + std::chrono::milliseconds{transport_duration};
     bool sent{};
+    if (command.kind == contracts::ActionKind::KeyDown || command.kind == contracts::ActionKind::ClickKey)
+        held_keys_.insert(command.key); // Allocate cleanup ownership before any DOWN can be sent.
     try {
         for (std::size_t i = 0; i < messages.size(); ++i) {
             const auto &message = messages[i];
@@ -214,8 +219,7 @@ void ScrcpyControlClient::submit(const contracts::Command &command, int width, i
                     held_width_ = width; held_height_ = height;
                 }
             } else if (message[0] == 0) {
-                if (message[1] == 0) held_keys_.insert(command.key);
-                else held_keys_.erase(command.key);
+                if (message[1] == 1) held_keys_.erase(command.key);
             }
             // Keep the bounded Auto pulse inside one serialized submission:
             // no screenshot/recognition round trip between the two taps.
@@ -240,13 +244,13 @@ bool ScrcpyControlClient::close() noexcept {
             const auto deadline = Clock::now() + 1000ms;
             try {
                 if (held_) {
-                    send_bytes(scrcpy::touch(1, UINT64_MAX - 1, held_x_, held_y_,
+                    send_bytes(scrcpy::touch_packet(1, UINT64_MAX - 1, held_x_, held_y_,
                         held_width_, held_height_, false), deadline, {}, {});
                     held_ = false;
                 }
                 while (!held_keys_.empty()) {
                     const auto key = *held_keys_.begin();
-                    send_bytes(scrcpy::key(1, key), deadline, {}, {});
+                    send_bytes(scrcpy::key_packet(1, key), deadline, {}, {});
                     held_keys_.erase(key);
                 }
             } catch (...) { cleanup_unconfirmed_ = true; }
@@ -261,12 +265,21 @@ bool ScrcpyControlClient::close() noexcept {
         if (WaitForSingleObject(child_, 1000) == WAIT_OBJECT_0) { CloseHandle(child_); child_ = nullptr; }
         // 未退出时保留 child_，下次显式清理仍可检查它。
     }
-    if (forward_) {
+    if (forward_ || forward_attempted_) {
         try {
-            const auto local = std::string("tcp:") + std::to_string(port_);
-            require_adb(adb_.run({L"forward", L"--remove", std::wstring(local.begin(), local.end())}, 3000ms),
-                        "SCRCPY_FORWARD_REMOVE_FAILED");
-            forward_ = false;
+            const auto listed = adb_.run({L"forward", L"--list"}, 3000ms);
+            require_adb(listed, "SCRCPY_FORWARD_LIST_FAILED");
+            std::istringstream lines(std::string(listed.stdout_bytes.begin(), listed.stdout_bytes.end()));
+            std::string serial, local, remote;
+            bool owned = false;
+            while (lines >> serial >> local >> remote)
+                if (serial == adb_.serial() && local == forward_local_ && remote == forward_remote_) owned = true;
+            // --no-rebind may have failed because another client owns this port.
+            // Only the exact serial/local/scid tuple grants deletion authority.
+            if (owned)
+                require_adb(adb_.run({L"forward", L"--remove", std::wstring(forward_local_.begin(), forward_local_.end())}, 3000ms),
+                            "SCRCPY_FORWARD_REMOVE_FAILED");
+            forward_ = forward_attempted_ = false;
         } catch (...) { /* forward_ 保留，允许再次清理，不伪称已删除。 */ }
     }
     if (uploaded_) {
@@ -280,7 +293,7 @@ bool ScrcpyControlClient::close() noexcept {
     if (winsock_) { WSACleanup(); winsock_ = false; }
     // 远端jar是静态文件，不是活跃输入。离线时保留uploaded_供重连后清理，
     // 不能因rm无法执行就永久占用任务租约；输入、子进程、转发仍须全部释放。
-    return !cleanup_unconfirmed_ && !held_ && held_keys_.empty() && !child_ && !forward_;
+    return !cleanup_unconfirmed_ && !held_ && held_keys_.empty() && !child_ && !forward_ && !forward_attempted_;
 }
 bool ScrcpyControlClient::retire_exited_instance() noexcept {
     close();
@@ -300,11 +313,12 @@ bool ScrcpyControlClient::retire_exited_instance() noexcept {
             }
         } catch (...) {}
     }
-    return !child_ && !forward_ && socket_ == INVALID_SOCKET;
+    return !child_ && !forward_ && !forward_attempted_ && socket_ == INVALID_SOCKET;
 }
 std::string ScrcpyControlClient::cleanup_status() const {
     std::ostringstream out;
     out << "child=" << bool(child_) << ",forward=" << forward_
+        << ",forward_attempted=" << forward_attempted_
         << ",uploaded=" << uploaded_ << ",socket=" << (socket_ != INVALID_SOCKET)
         << ",held=" << held_ << ",keys=" << held_keys_.size()
         << ",partial=" << partial_frame_ << ",unconfirmed=" << cleanup_unconfirmed_

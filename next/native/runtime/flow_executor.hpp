@@ -4,6 +4,7 @@
 #include "contracts/observation_fault.hpp"
 #include "workflow/program.hpp"
 #include <chrono>
+#include <array>
 #include <map>
 #include <optional>
 #include <set>
@@ -76,6 +77,7 @@ class FlowExecutor final {
     const std::string &current_source_path() const;
     std::string current_step_id() const;
     nlohmann::json progress_snapshot() const;
+    bool progress_changed();
     std::size_t invocation_depth() const { return stack_.size(); }
     bool has_unresolved_input() const;
     bool is_operation(const std::string &binding, const std::string &operation) const;
@@ -93,6 +95,7 @@ class FlowExecutor final {
         std::optional<std::vector<std::string>> returned_targets;
     };
     struct PendingInput {
+        enum class Delivery { Prepared, Attempted, Sent, DeliveryUnknown, Confirmed };
         std::string source_path;
         contracts::FrameIdentity before;
         std::uint64_t action_epoch{};
@@ -110,6 +113,7 @@ class FlowExecutor final {
         Clock::duration animation_pause{};
         // 仅用于已声明可重试菜单在应用重启后的重新选路；不重执行前驱动作。
         std::optional<SelectionOrigin> selection_origin;
+        Delivery delivery{Delivery::Sent};
     };
     struct EventExit {
         std::string id;
@@ -179,6 +183,22 @@ class FlowExecutor final {
     std::optional<ObservationCycle> observation_cycle_;
     nlohmann::json last_diagnostic_ = nullptr;
     nlohmann::json last_selection_ = nullptr;
+    struct ProgressRow {
+        const workflow::Step *step{};
+        std::uint64_t epoch{}, connection{};
+        unsigned attempts{}, flags{}, exits{};
+        int delivery{-1};
+        std::size_t event_owner{};
+        bool operator==(const ProgressRow &) const = default;
+    };
+    std::array<ProgressRow, 8> reported_rows_{};
+    std::array<std::string, 8> reported_events_{};
+    std::array<std::optional<std::vector<std::string>>, 8> reported_targets_{};
+    std::array<std::string, 5> reported_diagnostic_{};
+    std::string reported_recovery_code_;
+    std::size_t reported_depth_{9};
+    unsigned reported_recovery_flags_{}, reported_recovery_failures_{};
+    TickState reported_terminal_{TickState::Progress};
     struct ReadRecovery {
         Clock::time_point started, next_attempt;
         unsigned failures{};
@@ -198,6 +218,7 @@ class FlowExecutor final {
     contracts::ObservationRecoveryPolicy observation_policy_;
     std::optional<ReadRecovery> read_recovery_;
     nlohmann::json last_read_recovery_ = nullptr;
+    std::optional<contracts::InstanceExitProof> instance_exit_proof_;
     std::vector<contracts::ObservationReconnect> reconnects_;
     bool restart_handler_pending_{};
     bool exception_restart_supported_{};
@@ -243,7 +264,14 @@ class FlowExecutor final {
     // 仅在当前业务的候选/场景/目标/后置条件不符时调用；不把正常动画当成失败。
     std::optional<TickResult> check_unexpected(Frame &frame, const workflow::Step &current,
         const contracts::FrameEnvelope &image, const std::string &reason, bool force = false);
-    std::vector<ScopedEvent> effective_events(const workflow::Step &current) const;
+    struct EventScopeKey {
+        const workflow::Step *step{};
+        std::string active;
+    };
+    mutable std::vector<EventScopeKey> event_scope_keys_;
+    mutable std::vector<ScopedEvent> event_scope_rules_;
+    mutable std::uint64_t event_scope_version_{};
+    const std::vector<ScopedEvent> &effective_events(const workflow::Step &current) const;
     // 按暂停区间并集记账，嵌套事件不得重复延长期限；覆盖所有祖先帧。
     void account_event_time();
     // observed_progress=false 用于纯控制、等待及阶段标记，不能清除未知现场历史。

@@ -16,6 +16,7 @@ public:
 
     void initModel(const std::string &pathStr);
     void cancel() { runOptions.SetTerminate(); }
+    void resume() { runOptions.UnsetTerminate(); }
 
     std::vector<Angle> getAngles(std::vector<cv::Mat> &partImgs, const char *path,
                                  const char *imgName, bool doAngle, bool mostAngle);

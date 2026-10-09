@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "audited_base_commit": "4c466e14fa514fa177380e902afe373c8f20c3b2",
+  "work_package": "WP13",
+  "issue_ids": [
+    "AP09",
+    "AP10"
+  ],
+  "implementation_commit": null,
+  "source_changed": true,
+  "source_reviewed": true,
+  "counterexample_fails_before_fix": null,
+  "positive_assertions_pass_after_fix": null,
+  "offline_validation": {
+    "executed": true,
+    "commands": [
+      "C:/Python314/python.exe next/tools/run_contracts.py --module runtime --module devices --module recognition --module app --module tools --module web --output next/.local/architecture-audit-20261010/final-contracts-14"
+    ],
+    "evidence_files": [
+      "../evidence/final-contracts-receipt.json",
+      "../evidence/final-contracts.log",
+      "../evidence/publication-result.json"
+    ],
+    "limits": [
+      "Windows真实文件ID/硬链接/锁，模型为明确8MiB测试字节而非可运行模型；关键PNG为合成现场。"
+    ]
+  },
+  "windows_validation": {
+    "executed": true,
+    "build_identity": {
+      "receipt": "../evidence/final-contracts-receipt.json",
+      "source_commit": "4c466e14fa514fa177380e902afe373c8f20c3b2",
+      "product_inputs_sha256": "56a9ac97f30875dfd18931f573d2fe57d0616f60f29924111796a1e3a36d242e"
+    },
+    "evidence_files": [
+      "../evidence/final-contracts-receipt.json"
+    ]
+  },
+  "deployment": {
+    "executed": false,
+    "artifact_identity": null
+  },
+  "live_run": {
+    "executed": false,
+    "authorized_scope": null,
+    "completed_rounds": null,
+    "evidence_files": []
+  },
+  "memory": {
+    "captured": false,
+    "comparison_eligible": false,
+    "analyzed": false,
+    "attributed": false,
+    "phase": null,
+    "release_scope": null,
+    "unknown_bytes": null,
+    "coverage": null,
+    "lost_events": null,
+    "partial": false,
+    "reason": "No real workload ETL/heap snapshot/dump was captured in this scope; synthetic fixtures are not attribution."
+  },
+  "remaining_risks": [
+    "整批16GiB准入边界尚未用最终候选完整故障夹具覆盖；额度源码已实现。32MiB采样上限后最后输入保留已用实际RunStore文件验证。",
+    "2GiB是准入检查/预留政策，不是磁盘物理预分配；外部抢占磁盘仍可失败。"
+  ],
+  "user_data_changed": false,
+  "notes": "Scope is source remediation and named isolated checks only. No production profile/workflow writes, deployment, game input, loops, commit or push. A null positive_assertions_pass_after_fix denotes remaining required coverage, not a failed executed case. Baseline audit counterexamples are source-linked, but only WP01's positive invariant was also rerun to fail on the old binary here.",
+  "acceptance_state": "SOURCE_IMPLEMENTED_TARGETED_PASS_ACCEPTANCE_PARTIAL",
+  "executed_targeted_assertions_passed": true,
+  "targeted_cases": [
+    "test_native_publication",
+    "combat-diagnostic",
+    "timing-quota"
+  ],
+  "implementation_files": [
+    "next/native/games/wvd/tasks/native_publisher.cpp",
+    "next/native/platform/windows/bundle_lease.cpp",
+    "next/native/storage/run_store.cpp",
+    "next/native/app/application.cpp"
+  ]
+}

@@ -11,6 +11,7 @@
 #include "games/wvd/fishing/unknown_window.hpp"
 #include "boot_probes.hpp"
 #include "navigation_probes.hpp"
+#include "builtin_probes.hpp"
 #include "unknown_window.hpp"
 #include "image_ops.hpp"
 #include "games/wvd/business_condition.hpp"
@@ -20,6 +21,8 @@
 #include <chrono>
 #include <exception>
 #include <new>
+#include <condition_variable>
+#include <mutex>
 #include <opencv2/imgproc.hpp>
 #include <opencv2/objdetect.hpp>
 
@@ -170,7 +173,7 @@ J match(const cv::Mat &source, cv::Mat templ, J p, recognition::Cache &cache,
             cv::dilate(mask, mask, cv::Mat::ones(2, 2, CV_8U));
             check(cv::countNonZero(mask) > 0, "WVD_MASK_EMPTY");
             return mask;
-        }, cache.cancelled);
+        }, cache.cancelled, &ticket);
         platform::timing::Scope measure(platform::timing::Part::Match);
         platform::timing::count(platform::timing::Counter::Matches);
         cv::matchTemplate(search, templ, scores, cv::TM_CCORR_NORMED, mask_lease.mat());
@@ -274,12 +277,55 @@ J layout(const cv::Mat &source) {
                      {"text_height", bounds.height}},
                     false);
 }
+struct LeafMeasurements {
+    struct Entry {
+        std::mutex mutex;
+        std::condition_variable ready;
+        bool done{};
+        J value;
+        std::exception_ptr error;
+    };
+    std::mutex mutex;
+    std::map<std::string, std::shared_ptr<Entry>> entries;
+};
+struct LeafIdentities {
+    struct Less {
+        bool operator()(const J &a, const J &b) const {
+            const auto left_mode = a.value("mode", ""), right_mode = b.value("mode", "");
+            if (left_mode != right_mode) return left_mode < right_mode;
+            if (left_mode != "template" && left_mode != "bright_mask") return a < b;
+            auto left = a.begin(), right = b.begin();
+            while (true) {
+                if (left != a.end() && left.key() == "threshold") ++left;
+                if (right != b.end() && right.key() == "threshold") ++right;
+                if (left == a.end() || right == b.end()) return left == a.end() && right != b.end();
+                if (left.key() != right.key()) return left.key() < right.key();
+                if (left.value() != right.value()) return left.value() < right.value();
+                ++left; ++right;
+            }
+        }
+    };
+    std::mutex mutex;
+    std::map<J, std::uint64_t, Less> ids;
+    std::size_t bytes{};
+    std::optional<std::uint64_t> get(const J &condition) {
+        std::lock_guard lock(mutex);
+        if (const auto found = ids.find(condition); found != ids.end()) return found->second;
+        const auto size = condition.dump().size();
+        if (ids.size() >= 4096 || size > 8192 || bytes + size > 2 * 1024 * 1024) return {};
+        const auto id = ids.size() + 1;
+        ids.emplace(condition, id); bytes += size;
+        return id;
+    }
+};
 struct EvaluationMemo {
     // values 只放本轮新增叶子。父 memo/帧缓存始终只读，主线程在 parallel_for_ 返回后合并。
     std::map<std::string, J> values;
     const EvaluationMemo *parent{};
     const std::map<std::string, J> *frame_values{};
     std::string frame_prefix;
+    std::shared_ptr<LeafMeasurements> measurements;
+    std::shared_ptr<LeafIdentities> identities;
     const J *find(const std::string &key) const {
         if (const auto it = values.find(key); it != values.end()) return &it->second;
         if (parent) return parent->find(key);
@@ -318,26 +364,29 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
 J evaluate_impl(const recognition::Bundle &bundle, recognition::Pixels pixels, const J &p,
                 const J &bound, const recognition::Scope &scope,
                 recognition::Cache &cache, unsigned depth, EvaluationMemo &memo) {
+    platform::timing::count(platform::timing::Counter::ConditionVisits);
     check(depth <= 8, "WVD_CONDITION_DEPTH");
     // Resolve aliases before choosing a cache contract: a legacy template may
     // now be an OCR/composite probe with no template score at all.
     const auto localized = tasks::localize_implicit_probe(p, bound.value("resource_locale", ""));
     if (localized && *localized != p)
         return evaluate_impl(bundle, pixels, *localized, bound, scope, cache, depth, memo);
-    auto identity = p;
+    const auto mode = p.value("mode", "");
     // 普通单最佳匹配的测量值与最终阈值无关。复用 score/box，不能复用旧 Hit/NoHit。
     // ROI、预处理、缩放、遮罩和其它参数仍全部参与身份；multiple 不进入此路径。
-    const bool single_template = identity.value("mode", "") == "template" &&
-        !identity.value("multiple", false);
+    const bool single_template = (mode == "template" || mode == "bright_mask") && !p.value("multiple", false);
+    if (!single_template && mode != "support_selection")
+        return evaluate_uncached(bundle, pixels, p, bound, scope, cache, depth, memo);
     const double threshold = single_template ? p.value("threshold", .8) : .8;
     if (single_template) {
         check(std::isfinite(threshold) && threshold >= 0 && threshold <= 1, "THRESHOLD_INVALID");
-        identity.erase("threshold");
     }
-    const auto key = identity.dump();
-    if (const auto *measured = memo.find(key)) {
+    const auto id = memo.identities->get(p);
+    if (!id) return evaluate_uncached(bundle, pixels, p, bound, scope, cache, depth, memo);
+    const auto key = "leaf:" + std::to_string(*id);
+    const auto reuse = [&](const J &measured) {
         platform::timing::count(platform::timing::Counter::CacheHits);
-        auto reused = *measured;
+        auto reused = measured;
         // 语言排除没有像素测量值，阈值变化也不能把它重新判成命中。
         // 保留原NoHit及原因，不伪造best_score来迎合测量缓存。
         if (single_template && reused.at("evidence").contains("best_score")) {
@@ -348,8 +397,48 @@ J evaluate_impl(const recognition::Bundle &bundle, recognition::Pixels pixels, c
             evidence["threshold"] = threshold;
         }
         return reused;
+    };
+    if (const auto *measured = memo.find(key)) return reuse(*measured);
+    std::shared_ptr<LeafMeasurements::Entry> entry;
+    bool producer = false;
+    if (memo.measurements) {
+        std::lock_guard lock(memo.measurements->mutex);
+        const auto found = memo.measurements->entries.find(key);
+        if (found != memo.measurements->entries.end()) entry = found->second;
+        else if (memo.measurements->entries.size() < 256) {
+            entry = std::make_shared<LeafMeasurements::Entry>();
+            memo.measurements->entries.emplace(key, entry);
+            producer = true;
+        }
     }
-    auto result = evaluate_uncached(bundle, pixels, p, bound, scope, cache, depth, memo);
+    if (entry && !producer) {
+        std::unique_lock lock(entry->mutex);
+        while (!entry->done) {
+            check(!scope.cancelled(), "RECOGNITION_CANCELLED");
+            entry->ready.wait_for(lock, std::chrono::milliseconds{10});
+        }
+        if (entry->error) std::rethrow_exception(entry->error);
+        return reuse(entry->value);
+    }
+    J result;
+    try {
+        platform::timing::count(platform::timing::Counter::UniqueLeaves);
+        result = evaluate_uncached(bundle, pixels, p, bound, scope, cache, depth, memo);
+        if (entry) {
+            std::lock_guard lock(entry->mutex);
+            entry->value = result;
+            entry->done = true;
+            entry->ready.notify_all();
+        }
+    } catch (...) {
+        if (entry) {
+            std::lock_guard lock(entry->mutex);
+            entry->error = std::current_exception();
+            entry->done = true;
+            entry->ready.notify_all();
+        }
+        throw;
+    }
     // 只缓存小型、无时序副作用的叶子证据；多框 JSON 不能变成第二份无界帧缓存。
     const bool measured_template = single_template && result.at("evidence").contains("best_score") &&
         result.at("evidence").at("best_score").is_number() && result.at("evidence").contains("best_box");
@@ -389,6 +478,8 @@ ProbeBatch evaluate_batch(const recognition::Bundle &bundle, recognition::Pixels
     for (auto &worker : worker_memos) {
         worker.in_parallel = true;
         worker.parent = &memo; // 外层同步等待期间不修改父 memo，不复制历史 JSON。
+        worker.measurements = memo.measurements;
+        worker.identities = memo.identities;
     }
     for (auto &worker : workers) {
         worker.decoded = cache.decoded;
@@ -476,7 +567,7 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
         } catch (const std::bad_alloc &) { diagnostic.failure(-1); throw; }
         catch (const recognition::ResourcePressure &) { diagnostic.failure(-2); throw; }
     }
-    const J aliases = bound.value("aliases", J::object());
+    const J &aliases = bound.at("aliases");
     AssetResolver assets(bundle, aliases, cache);
     const auto allowed = scope.allowed_roi();
     const auto allowed_rect =
@@ -488,6 +579,36 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
     auto mode = p.at("mode").get<std::string>();
     const auto locale = bound.value("resource_locale", std::string{});
     const bool random_maze_events = bound.value("random_maze_events", true);
+    if (mode == "supply_context") {
+        struct Facts {
+            std::string frame_key, locale;
+            cv::Rect scope;
+            SupplyPage page{SupplyPage::Unknown};
+            bool eligible{true};
+        };
+        check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");
+        auto found = cache.assets.find("supply.scene-plan");
+        if (found == cache.assets.end()) {
+            check(cache.assets.size() < 2048, "WVD_SESSION_ASSET_CAPACITY");
+            found = cache.assets.emplace("supply.scene-plan", Facts{}).first;
+        }
+        auto &facts = std::any_cast<Facts &>(found->second);
+        if (facts.frame_key != cache.frame_key || facts.scope != allowed_rect || facts.locale != locale) {
+            Facts fresh; fresh.frame_key = cache.frame_key; fresh.scope = allowed_rect; fresh.locale = locale;
+            fresh.page = classify_supply_page([&](const J &probe) {
+                const auto result = evaluate_impl(bundle,pixels,probe,bound,scope,cache,depth+1,memo);
+                check(result.at("outcome") != "Error", "WVD_SUPPLY_STAGE_RECOGNITION_ERROR");
+                fresh.eligible = fresh.eligible && result.value("action_eligible",true);
+                return result.at("outcome") == "Hit";
+            });
+            facts = std::move(fresh);
+        }
+        auto result = decision(supply_phase_matches(facts.page,p.at("phase").get<std::string>()),
+            allowed_rect, {{"phase",p.at("phase")},{"classification",static_cast<unsigned>(facts.page)},
+                {"plan","supply-stage-v1"}}, false);
+        result["action_eligible"] = facts.eligible;
+        return result;
+    }
     if (p.contains("locale_only") && !bound.value("resource_locale", std::string{}).empty() &&
         p.at("locale_only") != bound.at("resource_locale"))
         return decision(false, {}, {{"reason", "inactive_language_variant"}}, false);
@@ -502,6 +623,7 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
             {"image", p.at("image")}, {"resource_locale", bound.at("resource_locale")}});
     }
     if (mode == "ocr") {
+        platform::timing::count(platform::timing::Counter::OcrCalls);
         check(!p.contains("preprocess"), "WVD_OCR_PREPROCESS_UNSUPPORTED");
         return scope.recognize_ocr(p);
     }
@@ -513,7 +635,7 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
             bound, scope, cache, depth + 1, memo);
         if (active.at("outcome") == "Hit")
             return decision(false, {}, {{"reason", "active_combat_excludes_revival"}, {"ocr_skipped", true}}, false);
-        return evaluate_impl(bundle, pixels, resource("party.revival.action", "zh-Hant"),
+        return evaluate_impl(bundle, pixels, implicit_ocr_probes(mode).at(0),
             bound, scope, cache, depth + 1, memo);
     }
     if (mode == "combat_resource_error") {
@@ -536,8 +658,7 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
             bound, scope, cache, depth + 1, memo);
         if (idle.at("outcome") != "Hit")
             return decision(false, {}, {{"reason", "combat_animation"}, {"ocr_skipped", true}}, false);
-        return scope.recognize_ocr({{"mode", "ocr"}, {"language", "zh-Hant"}, {"expected", {"SP不足", "MP不足", "SP 不足", "MP 不足", "SP不夠", "MP不夠"}},
-            {"match", "contains"}, {"unique", false}, {"threshold", .9}, {"roi", {0, 600, 900, 1000}}});
+        return scope.recognize_ocr(combat_resource_error_text());
     }
     if (mode == "task_stop") {
         check(p.size() == 1, "WVD_TASK_STOP_PARAMETERS_INVALID");
@@ -583,7 +704,7 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
     }
     if (mode == "business") {
         check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");
-        const auto hit = games::business_condition(scope.business_summary(), p);
+        const auto hit = games::business_condition(scope.business_value(p.at("field")), p, true);
         auto result = decision(hit, allowed_rect, {{"field", p.at("field")},
                                {"comparison", p.value("comparison", "eq")}, {"expected", p.at("value")}}, false);
         result["action_eligible"] = false;
@@ -1322,14 +1443,15 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
         }
         const cv::Rect area(650, 25, 225, 225);
         check((area & allowed_rect) == area, "WVD_ROI_OUTSIDE_SCOPE");
-        const auto dungeon = one("dungFlag", J::object());
-        const auto map = evaluate_impl(bundle, pixels, dungeon_map_probe(bound),
+        const auto probes = movement_page_probes(locale);
+        const auto dungeon = evaluate_impl(bundle, pixels, probes.at(0), bound, scope, cache, depth + 1, memo);
+        const auto map = evaluate_impl(bundle, pixels, probes.at(1),
             bound, scope, cache, depth + 1, memo);
         check(map.at("outcome") != "Error", "WVD_NAVIGATION_RECOGNITION_ERROR");
         const std::string key = "movement.sample";
-        const auto scene = evaluate_impl(bundle, pixels, {{"mode", "auto_route_moving"}},
+        const auto scene = evaluate_impl(bundle, pixels, probes.at(2),
             bound, scope, cache, depth + 1, memo);
-        const auto clear = evaluate_impl(bundle, pixels, {{"mode", "input_clear"}, {"phase", "navigation"}},
+        const auto clear = evaluate_impl(bundle, pixels, probes.at(3),
             bound, scope, cache, depth + 1, memo);
         check(scene.at("outcome") != "Error" && clear.at("outcome") != "Error", "WVD_NAVIGATION_RECOGNITION_ERROR");
         if (dungeon.at("outcome") != "Hit" || map.at("outcome") == "Hit" ||
@@ -1401,7 +1523,7 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
         return one(p.at("image"), parameters);
     }
     if (mode == "fast_forward_off") {
-        auto result = one("fastforward_off", {{"roi", {190, 1440, 100, 100}}});
+        auto result = evaluate_impl(bundle, pixels, *builtin_template_probe(mode), bound, scope, cache, depth + 1, memo);
         const auto &candidate = result["evidence"]["best_box"];
         result["evidence"]["legacy_position"] = {candidate[0], candidate[1]};
         if (result["evidence"]["best_score"].get<double>() <= 0.8)
@@ -1424,9 +1546,7 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
     }
     // 低置信结果只供已限定阶段的调用者判断；本纯识别器从不触发点击/自动战斗。
     if (mode == "next_low_confidence" || mode == "target_marker") {
-        auto result = one(
-            mode == "target_marker" ? "combatTarget" : "next",
-            {{"roi", combat_target_search_roi()}, {"threshold", mode == "target_marker" ? 0.86 : 0.60}});
+        auto result = evaluate_impl(bundle, pixels, *builtin_template_probe(mode), bound, scope, cache, depth + 1, memo);
         result["action_eligible"] = mode != "next_low_confidence";
         return result;
     }
@@ -1578,7 +1698,7 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
         return decision(hit, area, measured, slot >= 0);
     }
     if (mode == "prepared_actor" || mode == "skill_target") {
-        const auto summary = scope.business_summary();
+        const auto summary = scope.business_values({"has_prepared_skill", "prepared_portrait", "prepared_skill_index"});
         if (!summary.at("has_prepared_skill").get<bool>())
             return decision(false, {}, {{"reason", "no_prepared_skill"}});
         const auto name = "spellskill/char/" + summary.at("prepared_portrait").get<std::string>();
@@ -1752,6 +1872,10 @@ J evaluate(const recognition::Bundle &bundle, recognition::Pixels pixels, const 
         bound.value("resource_locale", ""), bound.value("dialogue_task", ""),
         area.x, area.y, area.width, area.height}).dump() + ":";
     EvaluationMemo memo;
+    auto &identities = cache.assets["wvd.leaf-identities"];
+    if (!identities.has_value()) identities = std::make_shared<LeafIdentities>();
+    memo.identities = std::any_cast<std::shared_ptr<LeafIdentities>>(identities);
+    memo.measurements = std::make_shared<LeafMeasurements>();
     memo.frame_values = &cache.template_results;
     memo.frame_prefix = prefix;
     auto result = evaluate_impl(bundle, pixels, p, bound, scope, cache, 0, memo);
@@ -1771,13 +1895,13 @@ recognition::Handlers native_handlers(const J &aliases, const std::string &resou
                                       recovery::DialoguePolicy dialogue_policy, bool random_maze_events) {
     // 仅从冻结编译结果接收；运行期间不重读活动配置，也不根据任务名猜测策略。
     const auto dialogue_task = recovery::dialogue_policy_name(dialogue_policy);
-    return {{"WvdVision", [aliases, resource_locale, dialogue_task, random_maze_events](const recognition::Bundle &bundle,
+    const J frozen{{"aliases", aliases}, {"resource_locale", resource_locale},
+                   {"dialogue_task", dialogue_task}, {"random_maze_events", random_maze_events}};
+    return {{"WvdVision", [frozen](const recognition::Bundle &bundle,
                                      recognition::Pixels pixels, const J &parameters,
                                      const recognition::Scope &scope,
                                      recognition::Cache &cache) {
-        return evaluate(bundle, pixels, parameters,
-            {{"aliases", aliases}, {"resource_locale", resource_locale},
-             {"dialogue_task", dialogue_task}, {"random_maze_events", random_maze_events}}, scope, cache);
+        return evaluate(bundle, pixels, parameters, frozen, scope, cache);
     }}};
 }
 } // namespace wvd::games::vision

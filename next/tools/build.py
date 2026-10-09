@@ -6,6 +6,8 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import base64
+from datetime import datetime, timezone
 import package_functional
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -28,17 +30,39 @@ def cmake_path():
     raise RuntimeError("已安装的 VS 2022 中没有 CMake 组件")
 
 
-def run(name, command, cwd=ROOT):
+def run(name, command, cwd=ROOT, timeout_seconds=1200):
     folder = ROOT / ".local/logs"
     folder.mkdir(parents=True, exist_ok=True)
-    log = folder / (name + ".log")
+    log = folder / (name + "-" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%f") + ".log")
     print(name, flush=True)
-    with log.open("wb") as output:
-        result = subprocess.run(command, cwd=cwd, stdout=output, stderr=subprocess.STDOUT)
+    pwsh = shutil.which("pwsh")
+    if not pwsh:
+        raise RuntimeError("Bounded build ownership requires PowerShell 7")
+    executable, *arguments = [str(item) for item in command]
+    resolved = shutil.which(executable)
+    if not resolved:
+        raise RuntimeError("BUILD_EXECUTABLE_NOT_FOUND:" + executable)
+    executable = str(Path(resolved).absolute())
+    if executable.lower().endswith((".cmd", ".bat")):
+        arguments = ["/d", "/s", "/c", subprocess.list2cmdline([executable, *arguments])]
+        executable = os.environ.get("COMSPEC", "C:/Windows/System32/cmd.exe")
+    payload = base64.b64encode(json.dumps([executable, arguments], ensure_ascii=False).encode("utf-8")).decode("ascii")
+    literal = lambda text: "'" + str(text).replace("'", "''") + "'"
+    script = "$ErrorActionPreference='Stop'; Import-Module " + literal(ROOT / "tools/memory_trace_support.psm1") + "; "
+    script += "$command=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('" + payload + "'))|ConvertFrom-Json; "
+    script += "Invoke-TraceTool -Executable $command[0] -Arguments $command[1] -RecordOnly -Log " + literal(log)
+    script += " -TimeoutSeconds " + str(int(timeout_seconds)) + " -OutputLimit 67108864"
+    encoded = base64.b64encode(script.encode("utf-16-le")).decode("ascii")
+    result = subprocess.run([pwsh, "-NoProfile", "-EncodedCommand", encoded], cwd=cwd,
+                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=timeout_seconds + 15)
     if result.returncode:
-        print(log.read_text(encoding="utf-8", errors="replace")[-4000:])
+        print(result.stdout.decode("utf-8", errors="replace")[-2000:])
+        if log.exists():
+            with log.open("rb") as output:
+                output.seek(max(0, log.stat().st_size - 4000))
+                print(output.read().decode("utf-8", errors="replace"))
         raise RuntimeError(f"{name} 失败 (exit={result.returncode})，完整日志: {log}")
-    print("  OK", flush=True)
+    print("  OK: " + str(log), flush=True)
 
 
 def build():

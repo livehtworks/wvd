@@ -1,0 +1,65 @@
+{
+  "source": {
+    "source_commit": "4c466e14fa514fa177380e902afe373c8f20c3b2",
+    "product_inputs_sha256": "763568f22794ec0f9ff095d4fe0365d5399467865f73403f1d6bd04d76a369c5",
+    "product_input_count": 1289,
+    "documentation_sha256": "a51c797355c037d07d1a783daad45bd41e6b129f2a6fd5cf719c7bd8e3cde82a"
+  },
+  "binaries": {},
+  "modules": [
+    "tools",
+    "web"
+  ],
+  "passed": [
+    [
+      "tool-or-web",
+      "tools"
+    ],
+    [
+      "tool-or-web",
+      "resource-tools"
+    ],
+    [
+      "tool-or-web",
+      "test_diagnostic_io.py"
+    ],
+    [
+      "tool-or-web",
+      "test_crash_plan_contract.py"
+    ],
+    [
+      "tool-or-web",
+      "verify_bounded_trace_input.ps1"
+    ],
+    [
+      "tool-or-web",
+      "verify_measurement_endpoints.ps1"
+    ],
+    [
+      "tool-or-web",
+      "verify_trace_guards.ps1"
+    ],
+    [
+      "tool-or-web",
+      "heap-restore"
+    ],
+    [
+      "tool-or-web",
+      "heap-build"
+    ],
+    [
+      "tool-or-web",
+      "heap-aggregation"
+    ]
+  ],
+  "data_root": "D:\\programcode\\python\\wvd\\next\\.local\\architecture-audit-20261010\\tools-contracts-12",
+  "device_actions": false,
+  "complete": false,
+  "tool_binaries": {
+    "HeapAnalyzer.exe": "d79464d5907107f501314f2fc01e0ce6fbebb59425c566b28665a193b1f47280",
+    "HeapAnalyzer.dll": "9521d2dd521a1fecfc7f26401d403af09b1bd2a94a7ef6a7f766a09f2979c24b",
+    "HeapAnalyzer.deps.json": "d33fb2fe5eccfed01e72fe740d18b1adef1e578c3657422f5734ebb297443241",
+    "HeapAnalyzer.runtimeconfig.json": "28329cf08f6505e73806b17558b187c02f0c1c516fe47ebfb7a013d082aaa306"
+  },
+  "validation_error": "contract-web \u5931\u8d25 (exit=1)\uff0c\u5b8c\u6574\u65e5\u5fd7: D:\\programcode\\python\\wvd\\next\\.local\\logs\\contract-web-20261009T195726066343.log"
+}

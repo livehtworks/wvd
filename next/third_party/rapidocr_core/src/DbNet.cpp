@@ -138,25 +138,26 @@ DbNet::getTextBoxes(cv::Mat &src, ScaleParam &s, float boxScoreThresh, float box
                                      inputNames.size(), outputNames.data(), outputNames.size());
     assert(outputTensor.size() == 1 && outputTensor.front().IsTensor());
     std::vector<int64_t> outputShape = outputTensor[0].GetTensorTypeAndShapeInfo().GetShape();
-    int64_t outputCount = std::accumulate(outputShape.begin(), outputShape.end(), 1,
-                                          std::multiplies<int64_t>());
+    const auto outputCount = outputTensor[0].GetTensorTypeAndShapeInfo().GetElementCount();
     float *floatArray = outputTensor.front().GetTensorMutableData<float>();
-    std::vector<float> outputData(floatArray, floatArray + outputCount);
 
     //-----Data preparation-----
+    if (outputShape.size() != 4 || outputShape[0] != 1 || outputShape[1] != 1 ||
+        outputShape[2] <= 0 || outputShape[3] <= 0 || outputShape[2] > INT_MAX || outputShape[3] > INT_MAX)
+        throw std::runtime_error("OCR_DB_SHAPE_INVALID");
     int outHeight = (int) outputShape[2];
     int outWidth = (int) outputShape[3];
-    size_t area = outHeight * outWidth;
+    const size_t area = static_cast<size_t>(outHeight) * outWidth;
 
-    std::vector<float> predData(area, 0.0);
+    if (outputCount != area || area > INT_MAX) throw std::runtime_error("OCR_DB_SHAPE_INVALID");
     std::vector<unsigned char> cbufData(area, ' ');
 
     for (int i = 0; i < area; i++) {
-        predData[i] = float(outputData[i]);
-        cbufData[i] = (unsigned char) ((outputData[i]) * 255);
+        cbufData[i] = (unsigned char) (floatArray[i] * 255);
     }
 
-    cv::Mat predMat(outHeight, outWidth, CV_32F, (float *) predData.data());
+    // The ORT tensor remains alive until all read-only box scoring finishes.
+    cv::Mat predMat(outHeight, outWidth, CV_32F, floatArray);
     cv::Mat cBufMat(outHeight, outWidth, CV_8UC1, (unsigned char *) cbufData.data());
 
     //-----boxThresh-----

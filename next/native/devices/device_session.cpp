@@ -255,6 +255,8 @@ RawFrame DeviceSession::capture_impl(bool preview, std::stop_token stop) {
     frame.capture_finished_at = finished;
     frame.backend = backend;
     frame.connection_generation = generation_;
+    frame.instance_id = std::to_string(binding_.at("index").get<int>());
+    frame.instance_created_identity = binding_.at("created_timestamp").dump();
     frame.display_rotation = latest_rotation_;
     failed_pixels_.reset();
     return frame;
@@ -432,6 +434,10 @@ contracts::ObservationRecovery DeviceSession::recover_observation(bool restart_a
         if (recovery_launched_) pending();
         if (!recovery_origin_) recovery_origin_ = generation_.load();
         if (!recovery_instance_detected_) {
+            const auto at = std::chrono::steady_clock::now();
+            recovery_exit_ = contracts::InstanceExitProof{target.device_id, target.instance_id,
+                binding_.at("created_timestamp").dump(), generation_.load(), 0, at,
+                static_cast<std::uint64_t>(at.time_since_epoch().count())};
             recovery_instance_detected_ = true;
             pending(); // 先让执行器扩展已证实实例退出的读取窗口，再启动模拟器。
         }
@@ -477,6 +483,11 @@ contracts::ObservationRecovery DeviceSession::recover_observation(bool restart_a
     contracts::ObservationRecovery result;
     result.application_restarted = recovery_launched_ || recovery_application_started_;
     result.instance_restarted = recovery_launched_;
+    if (result.instance_restarted) {
+        require(recovery_exit_.has_value(), "INSTANCE_EXIT_PROOF_MISSING");
+        result.instance_exit = recovery_exit_;
+        result.instance_exit->restored_connection = generation_;
+    }
     result.foreground_restored = restored;
     if (recovery_origin_) {
         result.reconnect = contracts::ObservationReconnect{target.device_id, target.instance_id,
@@ -488,7 +499,7 @@ contracts::ObservationRecovery DeviceSession::recover_observation(bool restart_a
         {"application_restarted", result.application_restarted}, {"foreground_restored", restored},
         {"reconnected", result.reconnect.has_value()},
         {"before", recovery_origin_.value_or(generation_)}, {"after", generation_.load()}});
-    recovery_origin_.reset(); recovery_instance_detected_ = false;
+    recovery_origin_.reset(); recovery_exit_.reset(); recovery_instance_detected_ = false;
     recovery_launched_ = recovery_application_started_ = false;
     return result;
 } catch (const AdbCommandFailure &error) {
@@ -509,7 +520,7 @@ std::optional<LifecycleObservation> DeviceSession::observe_lifecycle() {
     const auto live = instance_metadata();
     const bool instance = live.value("is_process_started", false) &&
                           live.value("is_android_started", false);
-    const bool online = instance && connected_ && adb_.connected();
+    const bool online = instance && connected_ && adb_.connected(read_stop_, read_budget(5000ms));
     bool running{}, focused{}, vpn = !target.vpn_required;
     if (online) {
         running = android::process(query("pidof " + target.application_id)) ==
@@ -517,9 +528,16 @@ std::optional<LifecycleObservation> DeviceSession::observe_lifecycle() {
         focused = foreground() == target.application_id;
         if (target.vpn_required) vpn = vpn_connected();
     }
-    return LifecycleObservation{target, instance, online, running, vpn, generation_,
+    auto observation = LifecycleObservation{target, instance, online, running, vpn, generation_,
                                 std::chrono::steady_clock::now(), focused,
                                 !live.at("is_process_started").get<bool>()};
+    if (observation.instance_exited) {
+        const auto at = observation.observed_at;
+        observation.instance_exit = contracts::InstanceExitProof{target.device_id, target.instance_id,
+            binding_.at("created_timestamp").dump(), generation_.load(), 0, at,
+            static_cast<std::uint64_t>(at.time_since_epoch().count())};
+    }
+    return observation;
 }
 
 bool DeviceSession::vpn_ui_step(const std::string &package, bool &start_clicked,

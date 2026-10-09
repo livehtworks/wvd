@@ -17,7 +17,7 @@ class Service final {
             std::shared_ptr<MatchBudget> budget = {},
             std::filesystem::path diagnostics_path = {},
             std::uint64_t run_id = 0, std::uint64_t generation = 0,
-            storage::LoggingPolicy logging = {});
+            storage::LoggingPolicy logging = {}, std::shared_ptr<RunOcrModels> models = {});
     contracts::Observation evaluate(const contracts::FrameEnvelope &frame,
                                     const contracts::FrameIdentity &current,
                                     const Request &request,
@@ -46,6 +46,7 @@ class Service final {
     std::string known_scene_frame_key_;
     std::mutex mutex_;
     std::array<std::atomic<std::shared_ptr<OcrEngine>>, 2> ocr_;
+    std::shared_ptr<RunOcrModels> models_;
     // 仅保留当前帧至多4个区域的文字框，不持有历史帧像素；不同目标共用检测结果。
     std::map<std::string, std::vector<contracts::RecognitionMatch>> ocr_frame_results_;
     // 粘性取消覆盖首次模型初始化：取消不能因引擎尚未发布而丢失。

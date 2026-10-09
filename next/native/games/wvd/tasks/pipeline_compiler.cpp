@@ -3,6 +3,7 @@
 #include "locale_assets.hpp"
 #include "games/wvd/vision/boot_probes.hpp"
 #include "games/wvd/vision/navigation_probes.hpp"
+#include "games/wvd/vision/builtin_probes.hpp"
 #include "games/wvd/vision/dialogue_probes.hpp"
 #include <algorithm>
 #include <functional>
@@ -16,6 +17,25 @@ namespace {
 void require(bool value, const char *code) {
     if (!value)
         throw std::runtime_error(code);
+}
+// Routing-only business predicates never authorize input. Keep the full
+// predicate in scene/guard; fixed input gets a separate visual region proof.
+std::optional<J> visual_authority(const J &condition) {
+    const auto mode = condition.value("mode", "");
+    if (mode == "business") return std::nullopt;
+    if (mode != "all" && mode != "any" && mode != "not") return condition;
+    J children = J::array();
+    for (const auto &child : condition.at("conditions"))
+        if (auto visual = visual_authority(child)) children.push_back(std::move(*visual));
+    if (children.empty()) return std::nullopt;
+    auto result = condition;
+    result["conditions"] = std::move(children);
+    return result;
+}
+J fixed_authority(const J &scene) {
+    auto visual = visual_authority(scene);
+    require(visual.has_value(), "COMPILE_INPUT_VISUAL_AUTHORITY_REQUIRED");
+    return std::move(*visual);
 }
 const J &scope_rules(const J &scope) {
     if (scope.is_array()) return scope;
@@ -57,6 +77,11 @@ void collect_images(const J &value, std::set<std::string> &images, std::set<std:
         // 常量隐式依赖在本次收集内只展开一次；显式 image/动态参数仍逐项收集。
         // 不缓存整份图或跨编译共享结果，validate 仍独立重算完整资源集合。
         const bool expand = expanded_modes.insert(mode + ":" + value.value("classification", "legacy") + ":" + value.value("phase", "")).second;
+        if (expand) {
+            if (auto probe = vision::builtin_template_probe(mode)) collect_images(*probe, images, expanded_modes);
+            collect_images(vision::implicit_ocr_probes(mode), images, expanded_modes);
+            if (mode == "movement_stopped") collect_images(vision::movement_page_probes(locale), images, expanded_modes);
+        }
         if (expand && mode == "featured_request_accepted") add_image("request_accepted.png", images, expanded_modes);
         if (expand && mode == "fishing_bait_empty") {
             add_image("fishing/nobait.png", images, expanded_modes);
@@ -163,6 +188,8 @@ void collect_images(const J &value, std::set<std::string> &images, std::set<std:
             add_image("combat_flee_zh_hant.png", images, expanded_modes);
             add_image("next.png", images, expanded_modes);
         }
+        if (expand && mode == "supply_context")
+            for (const auto &probe : vision::supply_scene_probes()) collect_images(probe, images, expanded_modes);
         if (mode == "combat_active")
             for (const auto *name : {"combat_active_zh_hant", "combatActive", "combatActive_2", "combatActive_3", "combatActive_4",
                                     "combat_speed_off_zh_hant", "combat_speed_on_zh_hant", "combat_skill_detail_zh_hant"})
@@ -593,7 +620,7 @@ void PipelineCompiler::click(const std::string &name, const J &scene, const J &t
     action(name, scene, target, post, {{"kind", "Click"}}, std::move(next), std::move(offset));
 }
 void PipelineCompiler::back(const std::string &name, const J &scene, const J &post, J next) {
-    action(name, scene, scene, post, {{"kind", "ClickKey"}, {"key", 4}}, std::move(next), nullptr);
+    action(name, scene, fixed_authority(scene), post, {{"kind", "ClickKey"}, {"key", 4}}, std::move(next), nullptr);
 }
 void PipelineCompiler::fixed_click(const std::string &name, const J &scene, const J &post,
                                    J position, J next) {
@@ -602,7 +629,7 @@ void PipelineCompiler::fixed_click(const std::string &name, const J &scene, cons
             "COMPILE_POSITION_INVALID");
     require(position[0] >= 1 && position[0] <= 898 && position[1] >= 1 && position[1] <= 1598,
             "COMPILE_POSITION_INVALID");
-    action(name, scene, scene, post, {{"kind", "Click"}, {"x", position[0]}, {"y", position[1]}},
+    action(name, scene, fixed_authority(scene), post, {{"kind", "Click"}, {"x", position[0]}, {"y", position[1]}},
            std::move(next), nullptr);
 }
 void PipelineCompiler::click_pair(const std::string &name, const J &scene, const J &target,
@@ -747,7 +774,7 @@ void PipelineCompiler::swipe(const std::string &name, const J &scene, const J &p
     for (std::size_t i = 0; i < 4; ++i)
         require(coordinates[i].is_number_integer() && coordinates[i] >= 1 &&
                     coordinates[i] <= (i % 2 == 0 ? 898 : 1598), "COMPILE_SWIPE_INVALID");
-    action(name, scene, scene, post,
+    action(name, scene, fixed_authority(scene), post,
            {{"kind", "Swipe"}, {"x", coordinates[0]}, {"y", coordinates[1]},
             {"x2", coordinates[2]}, {"y2", coordinates[3]}, {"duration", duration}},
            std::move(next), nullptr);

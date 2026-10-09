@@ -1,0 +1,8 @@
+critical protected retry: preserved pending, no replay
+critical protected restart_from: preserved pending, no replay
+critical protected nested: preserved pending, no replay
+critical protected unknown: preserved pending, no replay
+critical protected no_retry: preserved pending, no replay
+critical protected instance-exit: preserved pending, no replay
+critical restart post-fault=foreground: one forced restart, one Boot, one Prepare
+critical restart post-fault=transport: one forced restart, one Boot, one Prepare

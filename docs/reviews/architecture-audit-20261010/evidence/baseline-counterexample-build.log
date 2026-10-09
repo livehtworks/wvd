@@ -1,0 +1,19 @@
+CMake is re-running because D:/programcode/python/wvd/next/.local/architecture-audit-20261010/baseline/build/CMakeFiles/generate.stamp is out-of-date.
+  the file 'D:/programcode/python/wvd/next/.local/architecture-audit-20261010/baseline/CMakeLists.txt'
+  is newer than 'D:/programcode/python/wvd/next/.local/architecture-audit-20261010/baseline/build/CMakeFiles/generate.stamp.depend'
+  result='-1'
+-- Selecting Windows SDK version 10.0.26100.0 to target Windows 10.0.26200.
+-- Configuring done (0.0s)
+-- Generating done (0.1s)
+-- Build files have been written to: D:/programcode/python/wvd/next/.local/architecture-audit-20261010/baseline/build
+适用于 .NET Framework MSBuild 版本 17.14.40+3e7442088
+
+  1>Checking Build System
+  Building Custom Rule D:/programcode/python/wvd/next/.local/architecture-audit-20261010/baseline/CMakeLists.txt
+  runtime_probes.cpp
+  flow_executor.cpp
+  flow_executor_events.cpp
+  program.cpp
+  request.cpp
+  正在生成代码...
+  audit_counterexample.vcxproj -> D:\programcode\python\wvd\next\.local\architecture-audit-20261010\baseline\build\Release\audit_counterexample.exe

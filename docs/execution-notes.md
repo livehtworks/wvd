@@ -1,5 +1,16 @@
 # 当前执行注意项
 
+- OwnedWindowsJob的CreateProcess入口必须收到实际EXE绝对路径；build.run先用PATH解析命令名，再交Job。不把dotnet启动失败误报成restore失败，也不绕过Job归属。
+- cmd /d /s /c的末段是原始shell字符串，不可套CRT的反斜杠引号转义；OwnedWindowsJob只对该明确形式保留shell引号。含空格的批处理/参数及exit41均由同一Job入口验证，不换成无所有者的subprocess启动。
+- HeapAnalyzer还原沿用其README的显式nuget.org源、locked-mode及独立派生包缓存；本机默认源只有VS Offline，省略source会报NU1101。不得改用户NuGet设置或解锁版本来绕过。
+- 不可变文件仍持有拒绝写入/删除的句柄时，按路径CreateHardLink会触发共享冲突。发布只对未公开暂存目录允许成员创建，源文件及已发布租约不放宽；从冻结句柄创建链接后核成员/哈希，再取得正常只读租约。不得释放活跃模型锁后链接可变源。
+- 当前工程画像/验收入口以AGENTS、next/docs/core-contracts、docs/data-authority为准；历史Python测试不是原生产品验收。原生构建运行期间不要改C++/头文件/CMake，避免混合产物身份。
+- `next/tools/run_contracts.py`必须显式模块/基线与全新隔离根；源hash在构建前后/验证末尾核对，EXE hash也复核。旧flag证据只证明对应旧产物，不能覆盖后续源码修改。
+- Windows外部诊断进程使用原子Job归属及固定输出泵；GetProcessById退出码本机不可靠，使用原始HANDLE Wait/ExitCode。父进程退出不表示继承管道的后代退出；返回前只终止本Job后代并核active=0，不杀无关进程。
+- trace JSON/JSONL共享字节/行/记录/深度预算，严格UTF8；末尾无换行标partial，不吞掉。关闭输出后核hash/大小，collector完成标记在实际结果保存后写，deadline包含末段流式哈希。
+- Windows事务备份叠加revision/UUID可超MAX_PATH；atomic_write使用已校验绝对路径的扩展Win32形式，不靠缩短用户路径规避。内置同步四个中断阶段、准确备份/CAS冲突已做隔离验证。
+- 内存端点只能比较同阶段；屏障默认off且绑定创建身份/request/run/gen/config/seq/单调时间。旧MonitorCurrentRound选项明确拒绝，不静默忽略。512MiB/20分钟是未来另行授权的上限，不是本轮已采集事实。
+
 - 排查恢复识别耗时时先分开wall_ns、exclusive_ns与worker_exclusive_ns；worker时间标明不可叠加墙钟。actual_matches是实际比对计数，不是不同模板或测试数量。all/any当前全部评估是既有Error传播契约；未完成受影响链审查不能直接全局短路或靠旧帧长缓存压计数。第8轮Heal约46.35秒/1199次是待整改证据，不是性能通过，详见docs/reviews/runtime-issues-handoff-20261009.md。
 
 - 单击送达不是菜单切页成功。新增/修改菜单入口需声明同页重试，统一复用retry_menu_input；先查结果、同帧重认原页/按钮并排除阻挡，转场后不能沿用旧坐标。公用定义修改须同步发布资源和通过revision比较交换更新正式保存定义；只改工厂或包内JSON不足以修复用户流程。Auto脉冲、技能效果、领奖和物品转移按各自回执约束，不能自动套普通菜单重试。排查见docs/reviews/menu-input-retry-audit-20261009.md。

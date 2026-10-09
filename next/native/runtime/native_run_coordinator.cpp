@@ -126,8 +126,8 @@ bool instance_exit_interruptible(const workflow::FlowProgram &program,
 }
 
 NativeRunCoordinator::NativeRunCoordinator(std::filesystem::path data_root,
-                                           std::size_t event_capacity)
-    : data_root_(std::move(data_root)), instance_id_(platform::unique_id()),
+                                           std::size_t event_capacity, std::string instance_id)
+    : data_root_(std::move(data_root)), instance_id_(instance_id.empty() ? platform::unique_id() : std::move(instance_id)),
       event_capacity_(event_capacity) {
     require(data_root_.is_absolute() && event_capacity_ >= 8 && event_capacity_ <= 65536,
             "NATIVE_COORDINATOR_CONFIG_INVALID");
@@ -146,6 +146,10 @@ void NativeRunCoordinator::join_worker() {
     // the original pre-maintenance sample so reclamation cannot hide growth.
     const bool measure = store_ && store_->memory_logging_enabled();
     const auto heap = platform::optimize_idle_heap(measure);
+    {
+        std::lock_guard lock(mutex_);
+        worker_joined_=true; heap_maintenance_complete_=true; heap_maintenance_succeeded_=heap.succeeded;
+    }
     if (!measure) return;
     try {
         auto sample = memory_record(heap.after);
@@ -255,10 +259,10 @@ contracts::RunSnapshot NativeRunCoordinator::start(
                                 {"logging", definition.logging.json()},
                                 {"viewport", definition.policy.viewport_id},
                                 {"observed_read_only_viewport", definition.policy.observed_read_only_viewport}};
-    auto store = std::make_unique<storage::RunStore>(data_root_, instance_id_, id, frozen,
+    auto store = std::make_shared<storage::RunStore>(data_root_, instance_id_, id, frozen,
         std::make_shared<contracts::SteadyClock>(), storage::DiagnosticLimits{}, definition.logging);
     auto journal = std::make_shared<storage::EventJournal>(instance_id_, id, event_capacity_,
-        [target = store.get()](const nlohmann::json &event) { target->append_event(event); });
+        [target = store](const nlohmann::json &event) { target->append_event(event); });
     {
         std::lock_guard lock(mutex_);
         require(!active_, "NATIVE_RUN_ACTIVE_OR_CLEANUP_PENDING");
@@ -266,6 +270,7 @@ contracts::RunSnapshot NativeRunCoordinator::start(
         active_ = true;
         execution_finished_ = false;
         terminal_recorded_ = false;
+        worker_joined_=false; heap_maintenance_complete_=false; heap_maintenance_succeeded_=false;
         snapshot_ = {};
         snapshot_.run_id = id;
         snapshot_.state = contracts::RunState::Preparing;
@@ -343,6 +348,7 @@ void NativeRunCoordinator::drive(const NativeRunDefinition &definition,
     const auto run_id = snapshot().run_id;
     const auto total_deadline = std::chrono::steady_clock::now() + definition.total_time_limit;
     try {
+        auto models = std::make_shared<recognition::RunOcrModels>();
         business = definition.create_state({instance_id_, run_id,
             std::make_shared<contracts::SteadyClock>()});
         require(bool(business), "NATIVE_BUSINESS_STATE_MISSING");
@@ -354,7 +360,7 @@ void NativeRunCoordinator::drive(const NativeRunDefinition &definition,
                 *lifecycle, [this] { return stop_.load(); },
                 [this](const std::string &type, const nlohmann::json &payload) {
                     journal_->emit(0, type, payload);
-                });
+                }, total_deadline);
             require(outcome == devices::LifecycleEnd::ReadyForBoot || stop_,
                 "NATIVE_INITIAL_LIFECYCLE_UNCONFIRMED");
         }
@@ -389,7 +395,7 @@ void NativeRunCoordinator::drive(const NativeRunDefinition &definition,
                 auto recognizer = std::make_shared<recognition::Service>(
                     unit.bundle, unit.recognizers, definition.match_budget,
                     store_->directory() / "recognition-memory.log", run_id, generation,
-                    definition.logging);
+                    definition.logging, models);
                 weak_recognizer = recognizer;
                 bool checkpoint_seen = false;
                 auto recovery_frame = std::make_shared<std::optional<contracts::FrameEnvelope>>();
@@ -421,6 +427,10 @@ void NativeRunCoordinator::drive(const NativeRunDefinition &definition,
                     std::min(unit.time_limit, remaining), std::move(factory),
                     [this, generation, index, recovery_frame, restart_diagnostic_started = 0ULL]
                     (const nlohmann::json &progress) mutable {
+                        if (progress.value("heartbeat", false)) {
+                            journal_->emit(generation, "execution.heartbeat", progress);
+                            return;
+                        }
                         bool step_changed = false;
                         bool recovery_changed = false;
                         nlohmann::json previous_pending = nlohmann::json::array();
@@ -587,6 +597,10 @@ void NativeRunCoordinator::drive(const NativeRunDefinition &definition,
                         request.reason = (result.flow.code.empty() ? std::string("NATIVE_SESSION_INCOMPLETE") : result.flow.code).substr(0, 256);
                         request.stage = result.unresolved_input ? "postcondition" : "pre_action";
                         request.evidence_kind = "last_valid_before_failure";
+                        request.critical = true;
+                        request.context = {{"flow_code", result.flow.code},
+                            {"source_path", result.flow.source_path}, {"unresolved_input", result.unresolved_input},
+                            {"frame_scope", "last_valid_before_failure"}};
                         const auto &frame = session->last_valid_frame();
                         const auto saved = store_->save_diagnostic(frame ? &*frame : nullptr, request);
                         event("diagnostic.failure_frame", saved);
@@ -711,8 +725,11 @@ void NativeRunCoordinator::drive(const NativeRunDefinition &definition,
                 auto *lifecycle = backend->lifecycle_port();
                 auto recovery_result = last;
                 bool instance_exit_observed = false;
-                const bool instance_restarted = result.observation_recovery.is_object() &&
-                    result.observation_recovery.value("instance_restarted_in_window", false);
+                const auto historical_exit = result.observation_recovery.is_object()
+                    ? result.observation_recovery.value("instance_exit_proof", nlohmann::json(nullptr)) : nlohmann::json(nullptr);
+                const bool instance_restarted = result.unresolved_input &&
+                    contracts::exit_covers_receipts(historical_exit,result.unresolved_inputs);
+                nlohmann::json current_exit = nullptr;
                 // 业务判定与基础设施故障分开：只有实际设备观察能选中重连/实例恢复。
                 // 原始flow_code与session.ended保留，不能用恢复理由覆盖事故证据。
                 // 输入未确认仍可只读记录设备真相；观察不授权重放，也不覆盖原错误。
@@ -723,6 +740,7 @@ void NativeRunCoordinator::drive(const NativeRunDefinition &definition,
                             "NATIVE_RECOVERY_DEVICE_MISMATCH");
                         if (observed->instance_exited) {
                             instance_exit_observed = true;
+                            if (observed->instance_exit) current_exit = contracts::instance_exit_json(*observed->instance_exit);
                             recovery_result.reason = "device.instance_exited";
                         }
                         else if (observed->instance_running && !observed->connected)
@@ -743,7 +761,7 @@ void NativeRunCoordinator::drive(const NativeRunDefinition &definition,
                 // A proven instance exit invalidates session-local actions. Keep
                 // their receipts in history; the new session starts by observing.
                 const bool interrupted_by_exit = result.unresolved_input &&
-                    (instance_exit_observed || instance_restarted) &&
+                    (contracts::exit_covers_receipts(current_exit,result.unresolved_inputs) || instance_restarted) &&
                     instance_exit_interruptible(*unit.program, result.unresolved_inputs);
                 if (instance_restarted && !instance_exit_observed)
                     recovery_result.reason = "device.instance_restarted";
@@ -776,7 +794,7 @@ void NativeRunCoordinator::drive(const NativeRunDefinition &definition,
                 auto executable_plan = *plan;
                 executable_plan.defer_for = 0ms;
                 const auto outcome = devices::execute_lifecycle_plan(executable_plan, *lifecycle,
-                    [this] { return stop_.load(); }, event);
+                    [this] { return stop_.load(); }, event, total_deadline);
                 if (outcome != devices::LifecycleEnd::ReadyForBoot) {
                     failure = "NATIVE_RECOVERY_UNCONFIRMED";
                     break;
@@ -956,6 +974,7 @@ void NativeRunCoordinator::record_combat_diagnostic(std::uint64_t generation, st
         request.evidence_kind = defended ? "combat_defend_fallback" : "combat_open_no_progress";
         request.operation_id = state.opening.at("operation_id").get<std::string>();
         request.operation_scoped = true;
+        request.critical = true;
         const auto wanted = data.value(defended ? "frame_id" : "observed_frame", 0ULL);
         const auto epoch = state.opening.at("input_result").value("action_epoch", 0ULL);
         const auto opening_frame = state.opening.at("input_result").value("observed_frame", 0ULL);
@@ -1008,6 +1027,8 @@ void NativeRunCoordinator::save_application_restart_diagnostic(std::uint64_t gen
         request.generation = generation; request.unit_index = index;
         request.node = progress.value("step_id", ""); request.reason = "CONTINUOUS_EXCEPTION_TIMEOUT";
         request.stage = "recovery_entry"; request.evidence_kind = "before_application_restart";
+        request.critical = true;
+        request.context = {{"progress", progress}, {"input_authorization", false}};
         journal_->emit(generation, "diagnostic.application_restart", store_->save_diagnostic(frame, request));
     } catch (...) { store_->note_diagnostic_hook_failure(); }
 }
@@ -1033,6 +1054,15 @@ contracts::RunSnapshot NativeRunCoordinator::snapshot() const {
     std::lock_guard lock(mutex_);
     return snapshot_;
 }
+NativeRunCoordinator::ReadView NativeRunCoordinator::read_view() const {
+    std::lock_guard lock(mutex_);
+    return {snapshot_, instance_id_, request_id_, journal_, store_,worker_joined_,
+        heap_maintenance_complete_,heap_maintenance_succeeded_};
+}
+bool NativeRunCoordinator::owns_request(const std::string &request_id) const {
+    std::lock_guard lock(mutex_);
+    return snapshot_.run_id && request_id_ == request_id;
+}
 std::optional<contracts::RunSnapshot> NativeRunCoordinator::request_snapshot(
     const std::string &request_id) const {
     std::lock_guard lock(mutex_);
@@ -1050,12 +1080,12 @@ bool NativeRunCoordinator::wait_for_worker(std::chrono::milliseconds duration) {
     });
 }
 nlohmann::json NativeRunCoordinator::events(std::uint64_t after) const {
-    std::lock_guard lock(mutex_);
-    return journal_ ? journal_->read(after) : nlohmann::json{{"events", nlohmann::json::array()}};
+    const auto view = read_view();
+    return view.journal ? view.journal->read(after) : nlohmann::json{{"events", nlohmann::json::array()}};
 }
 nlohmann::json NativeRunCoordinator::diagnostics() const {
-    std::lock_guard lock(mutex_);
-    return store_ ? store_->diagnostic_summary() :
+    const auto view = read_view();
+    return view.store ? view.store->diagnostic_summary() :
         nlohmann::json{{"entries", nlohmann::json::array()}};
 }
 std::filesystem::path NativeRunCoordinator::run_directory() const {

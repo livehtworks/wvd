@@ -5,7 +5,10 @@ export interface Capabilities {
   task_execution: boolean;
   engine: "wvd_native";
   recognition: string[];
-  production_switch: boolean;
+  evidence: {
+    source_support: string; build_identity: string; deployment: string;
+    live_validation: string; memory_attribution: string;
+  };
 }
 export interface ApiErrorBody { error_code: string; message: string; details?: unknown }
 export type JsonObject = Record<string, unknown>;
@@ -107,6 +110,7 @@ export interface BuiltinInspection {
   flow_id: string; status: "current" | "update_available" | "local_modified" | "source_unknown";
   local_revision: string; builtin_revision: string; accepted_builtin?: string;
   current: JsonObject; builtin: JsonObject; affected_references: string[];
+  last_sync?: { backup_path?: string; previous_revision?: string; transaction_id?: string };
 }
 export interface SubmissionReceipt extends JsonObject {
   accepted: boolean; request_id: string; submission_state?: string; replayed?: boolean;

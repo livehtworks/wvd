@@ -59,6 +59,7 @@ class WvdRunState final : public contracts::BusinessRunState {
   protected:
     void on_segment(contracts::SegmentBoundary, std::uint64_t, std::size_t) override;
     nlohmann::json summarize() const override;
+    nlohmann::json summarize_field(const std::string &) const override;
 
   private:
     using TimePoint = contracts::MonotonicClock::TimePoint;

@@ -15,6 +15,7 @@ public:
     void setNumThread(int numOfThread);
 
     void initLogger(bool isConsole, bool isPartImg, bool isResultImg);
+    void setResultOnly(bool enabled);
 
     void enableResultTxt(const char *path, const char *imgName);
 
@@ -23,6 +24,7 @@ public:
     bool initModels(const std::string &detPath, const std::string &clsPath,
                     const std::string &recPath, const std::string &keysPath);
     void cancel();
+    void resume();
 
     void Logger(const char *format, ...);
 

@@ -136,6 +136,13 @@ void require_revision(const std::string &value) {
         }))
         fail("WORKFLOW_REVISION_INVALID");
 }
+void immutable_file(const std::filesystem::path &path, const std::string &text) {
+    verify_plain_directory(path.parent_path());
+    if (std::filesystem::exists(path)) {
+        if (read_plain_file(path, "backup") != text) fail("BUILTIN_BACKUP_CONFLICT");
+    } else platform::atomic_write(path, text, false);
+    if (read_plain_file(path, "backup") != text) fail("BUILTIN_BACKUP_VERIFY_FAILED");
+}
 } // namespace
 
 WorkflowRepository::WorkflowRepository(std::filesystem::path root)
@@ -147,6 +154,18 @@ WorkflowRepository::WorkflowRepository(std::filesystem::path root)
     if (error)
         fail("WORKFLOW_REPOSITORY_CREATE_FAILED");
     verify_plain_directory(root_);
+    RepositoryLock lock(root_);
+    const auto transactions = root_ / ".builtin-transactions";
+    if (std::filesystem::exists(transactions)) {
+        verify_plain_directory(transactions);
+        std::size_t count{};
+        for (const auto &entry : std::filesystem::directory_iterator(transactions)) {
+            if (!entry.path().filename().string().ends_with(".pending.json")) continue;
+            if (++count > 256) fail("BUILTIN_TRANSACTION_BUDGET_EXCEEDED");
+            const auto record = J::parse(read_plain_file(entry.path(), "transaction"));
+            recover_builtin_unlocked(record.at("flow_id"));
+        }
+    }
 }
 
 std::filesystem::path WorkflowRepository::path_for(const std::string &flow_id) const {
@@ -165,6 +184,8 @@ std::filesystem::path WorkflowRepository::builtin_path_for(const std::string &fl
 
 J WorkflowRepository::read_unlocked(const std::string &flow_id) const {
     verify_plain_directory(root_);
+    if (std::filesystem::exists(root_ / ".builtin-transactions" / (flow_id + ".pending.json")))
+        fail("BUILTIN_TRANSACTION_PENDING", flow_id);
     const auto path = path_for(flow_id);
     const auto text = read_plain_file(path, flow_id);
     J document;
@@ -370,6 +391,7 @@ J WorkflowRepository::inspect_builtin(const J &document) const {
         const auto accepted = metadata.at("accepted_builtin").get<std::string>();
         const auto local = metadata.at("local_revision").get<std::string>();
         result["accepted_builtin"] = accepted;
+        result["last_sync"] = metadata.value("last_sync", J(nullptr));
         result["status"] = current.at("revision") == builtin.at("revision") ? "current" :
             current.at("revision") == local && local == accepted ? "update_available" : "local_modified";
     }
@@ -393,6 +415,7 @@ J WorkflowRepository::sync_builtin(const J &document,
         fail("BUILTIN_PACKAGE_CHANGED", id);
     const auto metadata_path = builtin_path_for(id);
     RepositoryLock lock(root_);
+    recover_builtin_unlocked(id);
     const bool tracked = std::filesystem::is_regular_file(metadata_path);
     if (tracked) verify_plain_directory(metadata_path.parent_path());
     auto metadata = tracked ? J::parse(read_plain_file(metadata_path, id)) : J::object();
@@ -408,6 +431,10 @@ J WorkflowRepository::sync_builtin(const J &document,
     if (metadata.value("schema", 0) != 1 || metadata.value("flow_id", "") != id)
         fail("BUILTIN_METADATA_INVALID", id);
     const auto current = read_unlocked(id);
+    if (current.at("revision") == expected_builtin_revision &&
+        metadata.value("last_sync", J::object()).value("previous_revision", "") == expected_local_revision &&
+        metadata.at("accepted_builtin") == expected_builtin_revision)
+        return current;
     if (current.at("revision") != expected_local_revision ||
         metadata.at("local_revision") != expected_local_revision ||
         metadata.at("accepted_builtin") != expected_local_revision)
@@ -429,13 +456,92 @@ J WorkflowRepository::sync_builtin(const J &document,
         if (fixed_ref(fixed_ref, read_unlocked(entry.path().stem().string())))
             fail("BUILTIN_FIXED_REFERENCE_REQUIRES_REVIEW", id);
     }
-    // 两文件无法原子同时替换；内容保留备份，元数据失败时不删除旧资料。
-    platform::atomic_write(path_for(id), builtin.dump(2), true);
-    metadata["accepted_builtin"] = builtin.at("revision");
-    metadata["local_revision"] = builtin.at("revision");
-    if (!tracked) std::filesystem::create_directories(metadata_path.parent_path());
-    platform::atomic_write(metadata_path, metadata.dump(2), tracked);
+    const auto transaction = platform::unique_id();
+    const auto backup_root = root_ / ".builtin-backups";
+    const auto backup_flow = backup_root / id;
+    const auto backup = backup_flow / expected_local_revision;
+    const auto transactions = root_ / ".builtin-transactions";
+    for (const auto &directory : {backup_root, backup_flow, backup, transactions, metadata_path.parent_path()}) {
+        std::filesystem::create_directory(directory);
+        verify_plain_directory(directory);
+    }
+    immutable_file(backup / "document.json", read_plain_file(path_for(id), id));
+    immutable_file(backup / (transaction + ".metadata.json"), metadata.dump(2));
+    immutable_file(transactions / (id + "." + transaction + ".document.json"), builtin.dump(2));
+    auto updated = metadata;
+    updated["accepted_builtin"] = builtin.at("revision");
+    updated["local_revision"] = builtin.at("revision");
+    updated["last_sync"] = {{"transaction_id", transaction}, {"previous_revision", expected_local_revision},
+        {"backup_verified", true}, {"backup_path", ".builtin-backups/" + id + "/" + expected_local_revision}};
+    const J intent{{"schema", 1}, {"flow_id", id}, {"transaction_id", transaction},
+        {"before_revision", expected_local_revision}, {"after_revision", expected_builtin_revision},
+        {"metadata_existed", tracked}, {"before_metadata", metadata}, {"after_metadata", updated}};
+    platform::atomic_write(transactions / (id + ".pending.json"), intent.dump(2), false);
+    recover_builtin_unlocked(id);
     return builtin;
+}
+
+void WorkflowRepository::recover_builtin_unlocked(const std::string &id) const {
+    (void)path_for(id);
+    const auto transactions = root_ / ".builtin-transactions";
+    const auto journal = transactions / (id + ".pending.json");
+    if (!std::filesystem::exists(journal)) return;
+    verify_plain_directory(transactions);
+    const auto intent = J::parse(read_plain_file(journal, id));
+    if (intent.value("schema", 0) != 1 || intent.value("flow_id", "") != id) fail("BUILTIN_TRANSACTION_INVALID", id);
+    const auto transaction = intent.at("transaction_id").get<std::string>();
+    if (!identifier(transaction)) fail("BUILTIN_TRANSACTION_INVALID", id);
+    const auto before = intent.at("before_revision").get<std::string>();
+    const auto after = intent.at("after_revision").get<std::string>();
+    require_revision(before); require_revision(after);
+    const auto backup_root = root_ / ".builtin-backups";
+    const auto backup_flow = backup_root / id;
+    const auto backup = backup_flow / before;
+    for (const auto &directory : {backup_root, backup_flow, backup}) verify_plain_directory(directory);
+    const auto old = J::parse(read_plain_file(backup / "document.json", id));
+    const auto text = read_plain_file(transactions / (id + "." + transaction + ".document.json"), id);
+    const auto proposed = J::parse(text);
+    if (old.at("flow").at("id") != id || proposed.at("flow").at("id") != id ||
+        old.at("revision") != before || revision(old) != before ||
+        proposed.at("revision") != after || revision(proposed) != after)
+        fail("BUILTIN_TRANSACTION_BACKUP_INVALID", id);
+    authoring::validate_author_workflow(old); authoring::validate_author_workflow(proposed);
+    const auto old_metadata = J::parse(read_plain_file(backup / (transaction + ".metadata.json"), id));
+    if (old_metadata != intent.at("before_metadata")) fail("BUILTIN_TRANSACTION_METADATA_INVALID", id);
+    const auto &new_metadata = intent.at("after_metadata");
+    if (old_metadata.value("schema", 0) != 1 || old_metadata.value("flow_id", "") != id ||
+        old_metadata.value("local_revision", "") != before || old_metadata.value("accepted_builtin", "") != before ||
+        new_metadata.value("schema", 0) != 1 || new_metadata.value("flow_id", "") != id ||
+        new_metadata.value("local_revision", "") != after || new_metadata.value("accepted_builtin", "") != after ||
+        new_metadata.at("import_baseline") != old_metadata.at("import_baseline") ||
+        new_metadata.at("last_sync").value("transaction_id", "") != transaction ||
+        new_metadata.at("last_sync").value("previous_revision", "") != before ||
+        !new_metadata.at("last_sync").value("backup_verified", false) ||
+        new_metadata.at("last_sync").value("backup_path", "") != ".builtin-backups/" + id + "/" + before)
+        fail("BUILTIN_TRANSACTION_METADATA_INVALID", id);
+    const auto target = path_for(id);
+    const auto current = J::parse(read_plain_file(target, id));
+    if (revision(current) != current.at("revision").get<std::string>() ||
+        (current.at("revision") != before && current.at("revision") != after))
+        fail("BUILTIN_TRANSACTION_LOCAL_CONFLICT", id);
+    const auto metadata_path = builtin_path_for(id);
+    verify_plain_directory(metadata_path.parent_path());
+    const bool tracked = std::filesystem::exists(metadata_path);
+    if (tracked) {
+        const auto metadata = J::parse(read_plain_file(metadata_path, id));
+        if (metadata != intent.at("before_metadata") && metadata != intent.at("after_metadata"))
+            fail("BUILTIN_TRANSACTION_METADATA_CONFLICT", id);
+        if (metadata == intent.at("after_metadata") && current.at("revision") != after)
+            fail("BUILTIN_TRANSACTION_COMMIT_ORDER_INVALID", id);
+    } else if (intent.at("metadata_existed").get<bool>()) fail("BUILTIN_TRANSACTION_METADATA_MISSING", id);
+    if (current.at("revision") == before) platform::atomic_write(target, text, true);
+    platform::atomic_write(metadata_path, intent.at("after_metadata").dump(2), tracked);
+    if (J::parse(read_plain_file(target, id)) != proposed ||
+        J::parse(read_plain_file(metadata_path, id)) != intent.at("after_metadata"))
+        fail("BUILTIN_TRANSACTION_COMMIT_VERIFY_FAILED", id);
+    // Preserve the durable intent as immutable completed history, not a
+    // deletion of authority or a silent metadata reset.
+    std::filesystem::rename(journal, transactions / (id + "." + transaction + ".completed.json"));
 }
 
 } // namespace wvd::storage

@@ -1,0 +1,16 @@
+linkage handoff multiple PASS
+linkage handoff single PASS
+linkage poll arrival PASS
+linkage poll arrival-confirm PASS
+linkage poll arrival-call PASS
+linkage poll stopped PASS
+linkage poll stalled PASS
+linkage poll progress PASS
+linkage poll unknown PASS
+linkage poll error PASS
+linkage poll stale PASS
+linkage poll cancel PASS
+linkage poll total PASS
+linkage poll stalled-threshold PASS
+linkage restart handoff PASS
+linkage closure: bounded production-executor cases; no real device input

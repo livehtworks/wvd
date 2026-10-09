@@ -19,7 +19,8 @@ struct HttpServer::Impl : std::enable_shared_from_this<HttpServer::Impl> {
     std::atomic<bool> stopping{false};
     bool joined{}; // only the host thread calls join
     asio::thread_pool workers{3};
-    asio::thread_pool controls{1}; // stop/status never queue behind three slow probes
+    asio::thread_pool controls{1};
+    asio::thread_pool urgent{1}; // stop/shutdown never queue behind status or diagnostic reads
     Impl(asio::io_context &io, unsigned short port, std::filesystem::path web_root,
          DynamicHandler dynamic_handler)
         : acceptor(io), root(std::filesystem::canonical(web_root)), handler(std::move(dynamic_handler)) {
@@ -36,6 +37,13 @@ struct HttpServer::Impl : std::enable_shared_from_this<HttpServer::Impl> {
                ((request.method() == http::verb::get || request.method() == http::verb::head) &&
                  (path == "/api/v1/runs/current" || path == "/api/v1/device" || path == "/api/v1/version")) ||
                (request.method() == http::verb::post && path.starts_with("/api/v1/runs/") && path.ends_with("/stop"));
+    }
+    static bool urgent_request(const Request &request) {
+        const auto raw = std::string(request.target());
+        const auto path = raw.substr(0, raw.find('?'));
+        return request.method() == http::verb::post &&
+            (path == "/api/v1/service/shutdown" ||
+             (path.starts_with("/api/v1/runs/") && path.ends_with("/stop")));
     }
     struct Connection : std::enable_shared_from_this<Connection> {
         std::shared_ptr<Impl> owner;
@@ -74,7 +82,8 @@ struct HttpServer::Impl : std::enable_shared_from_this<HttpServer::Impl> {
                         } else self->close();
                         return;
                     }
-                    auto &pool = Impl::control_request(self->parser.get()) ? self->owner->controls : self->owner->workers;
+                    auto &pool = Impl::urgent_request(self->parser.get()) ? self->owner->urgent :
+                        Impl::control_request(self->parser.get()) ? self->owner->controls : self->owner->workers;
                     asio::post(pool, [self] {
                         if (self->owner->stopping) return;
                         Response response;
@@ -127,6 +136,7 @@ struct HttpServer::Impl : std::enable_shared_from_this<HttpServer::Impl> {
         if (joined) return;
         workers.join();
         controls.join();
+        urgent.join();
         joined = true;
     }
 };

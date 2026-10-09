@@ -3,6 +3,8 @@ import copy
 import importlib.util
 from pathlib import Path
 import unittest
+import sys
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]/"tools"))
 
 spec = importlib.util.spec_from_file_location(
     "memory_owners", Path(__file__).resolve().parents[1] / "tools/analyze_memory_owners.py")

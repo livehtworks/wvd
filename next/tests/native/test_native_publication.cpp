@@ -31,6 +31,16 @@ bool staging_exists(const fs::path &root) {
         if (entry.path().filename().string().find(".staging-") != std::string::npos) return true;
     return false;
 }
+std::pair<DWORD, std::uint64_t> file_identity(const fs::path &path) {
+    const auto file = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE,
+        nullptr, OPEN_EXISTING, 0, nullptr);
+    require(file != INVALID_HANDLE_VALUE, "IDENTITY_OPEN_FAILED");
+    BY_HANDLE_FILE_INFORMATION info{};
+    const bool ok = GetFileInformationByHandle(file, &info) != FALSE;
+    CloseHandle(file);
+    require(ok, "IDENTITY_READ_FAILED");
+    return {info.dwVolumeSerialNumber, (std::uint64_t(info.nFileIndexHigh) << 32) | info.nFileIndexLow};
+}
 } // namespace
 
 int main(int argc, char **argv) {
@@ -85,6 +95,13 @@ int main(int argc, char **argv) {
             require(writer == INVALID_HANDLE_VALUE, "TARGET_WRITE_LOCK_RELAXED");
             require(!MoveFileExW(publication.bundle.root.c_str(), (root / "bad-rename").c_str(), 0),
                     "TARGET_DELETE_LOCK_RELAXED");
+            const auto second = wvd::games::tasks::publish_native(workflow, baseline, root / "second", J::object());
+            require(file_identity(model) == file_identity(second.bundle.root / "models/large.onnx"),
+                    "MODEL_CONTENT_OBJECT_NOT_SHARED");
+            require(file_identity(model) != file_identity(source / "models/large.onnx"),
+                    "MUTABLE_SOURCE_LINKED_INTO_PUBLICATION");
+            second.bundle.lease->verify_members();
+            results.push_back({{"case", "immutable_content_object_shared_not_mutable_source"}, {"passed", true}});
             results.push_back({{"case", "identity_manifest_streaming_rename_and_lock"}, {"passed", true},
                                {"metrics", publication.preparation}});
         }

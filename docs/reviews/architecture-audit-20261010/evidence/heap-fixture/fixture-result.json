@@ -1,0 +1,9 @@
+{
+  "source": "isolated projected observations, NOT Windows ETL",
+  "passed": true,
+  "attribution_complete": false,
+  "known_positive_and_negative": true,
+  "unknown_bucket_bounded": true,
+  "conservation_fault_rejected": true,
+  "partial_output_preserved": true
+}

@@ -12,6 +12,7 @@
 #include <set>
 #include <stop_token>
 #include <string>
+#include <span>
 #include <winsock2.h>
 #include <windows.h>
 
@@ -46,6 +47,8 @@ class ScrcpyControlClient final {
     SOCKET socket_{INVALID_SOCKET};
     HANDLE child_{};
     bool forward_{}, uploaded_{}, winsock_{}, unresolved_{}, ready_{}, partial_frame_{};
+    bool forward_attempted_{};
+    std::string forward_local_, forward_remote_;
     bool cleanup_unconfirmed_{}, held_{};
     std::set<int> held_keys_;
     int held_x_{}, held_y_{}, held_width_{}, held_height_{};
@@ -53,7 +56,7 @@ class ScrcpyControlClient final {
                      const Cancellation &cancelled);
     void receive_exact(char *destination, std::size_t count, Clock::time_point deadline,
                        std::stop_token stop, const Cancellation &cancelled);
-    void send_bytes(const std::vector<std::uint8_t> &bytes, Clock::time_point deadline,
+    void send_bytes(std::span<const std::uint8_t> bytes, Clock::time_point deadline,
                     std::stop_token stop, const Cancellation &cancelled);
 };
 } // namespace wvd::devices

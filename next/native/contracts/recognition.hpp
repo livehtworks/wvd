@@ -33,6 +33,7 @@ struct FrameIdentity {
     // captured_at 是采集开始时间；完成时间独立保存，不用重置旧时间掩盖耗时。
     std::chrono::steady_clock::time_point capture_finished_at{};
     int display_rotation{-1};
+    std::string instance_id, instance_created_identity;
     bool operator==(const FrameIdentity &) const = default;
 };
 struct FrameEnvelope {
@@ -65,4 +66,9 @@ struct Observation {
     nlohmann::json evidence = nlohmann::json::object();
     nlohmann::json timing_ms = nlohmann::json::object();
 };
+enum class PageAuthority { ReadOnly, InputEligible };
+inline PageAuthority page_authority(const Observation &observation) noexcept {
+    return observation.outcome == RecognitionOutcome::Hit && observation.action_eligible
+        ? PageAuthority::InputEligible : PageAuthority::ReadOnly;
+}
 } // namespace wvd::contracts

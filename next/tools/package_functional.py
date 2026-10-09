@@ -15,15 +15,15 @@ OUTPUT = ROOT / "dist/wvd-next-native"
 OCR_MODELS = json.loads((ROOT / "resources/recognition/ocr-models.json").read_text(encoding="utf-8"))["models"]
 
 
-def sync_authoring_resources():
+def _generate_authoring_resources(pack):
     """同步两份作者JSON及语义配方实际引用的扩展素材，不扫描日志或用户mod。"""
-    manifest_path = ROOT / "packs/wvd/manifest.json"
+    manifest_path = pack / "manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     members = {row["path"]: row for row in manifest["files"]}
     changed = False
     for name in ("semantic-assets.json", "public-flows.json"):
         source = ROOT / "resources/authoring" / name
-        target = ROOT / "packs/wvd/parameters" / name
+        target = pack / "parameters" / name
         relative = "parameters/" + name
         if relative not in members or target.is_symlink() or not target.is_file():
             raise RuntimeError("作者资源包成员不安全或缺失: " + relative)
@@ -57,7 +57,7 @@ def sync_authoring_resources():
         source = ROOT / "resources/images" / name
         if not source.is_file():
             continue  # 旧素材来自既有清单，不借此扫描/替换其权威来源。
-        target = ROOT / "packs/wvd/image" / name
+        target = pack / "image" / name
         if source.is_symlink() or target.is_symlink():
             raise RuntimeError("作者素材链接不安全: " + image)
         content = source.read_bytes()
@@ -86,26 +86,54 @@ def sync_authoring_resources():
         os.replace(temporary, manifest_path)
 
 
+def sync_authoring_resources():
+    """Explicit source-generation transaction; staging a candidate never calls it."""
+    from resource_generation import generate_transaction
+    def seed_missing(pack):
+        manifest = json.loads((pack / "manifest.json").read_text(encoding="utf-8"))
+        for row in manifest["files"]:
+            target = pack / row["path"]
+            if target.exists():
+                continue
+            source = (ROOT.parent / row["source"]).resolve()
+            if not source.is_relative_to(ROOT.parent) or source.is_symlink() or not source.is_file():
+                raise RuntimeError("RESOURCE_SOURCE_MISSING:" + row["path"])
+            if sha256(source) != row["sha256"] or source.stat().st_size != row["bytes"]:
+                raise RuntimeError("RESOURCE_SOURCE_CHANGED:" + row["path"])
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(source, target)
+    generate_transaction(ROOT / "packs/wvd", _generate_authoring_resources, seed_missing=seed_missing)
+
+
 def source_identity():
     repo = ROOT.parent
-    head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True).strip()
-    # 比较实际工作树与 HEAD：已暂存、未暂存和部分暂存的净源码变化都进入身份。
-    # 禁用展示型外部差异/转换，不修改用户 Git 配置；构建并不读取暂存区内容。
-    diff = subprocess.check_output(["git", "diff", "--binary", "--no-ext-diff", "--no-textconv",
-        "HEAD", "--", "next", "docs"], cwd=repo)
-    untracked = subprocess.check_output(["git", "ls-files", "--others", "--exclude-standard", "-z",
-        "--", "next", "docs"], cwd=repo).split(b"\0")
-    digest = hashlib.sha256(diff)
-    names = []
-    for raw in sorted(item for item in untracked if item):
+    head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True, timeout=20).strip()
+    # Hash consumed working-tree bytes; a documentation-only commit is provenance,
+    # not a new product binary identity. The index is never a build input.
+    names = subprocess.check_output(["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z",
+        "--", "next", "docs"], cwd=repo, timeout=20).split(b"\0")
+    product, documentation = hashlib.sha256(), hashlib.sha256()
+    count = 0
+    for raw in sorted(set(item for item in names if item)):
         name = raw.decode("utf-8", errors="surrogateescape")
         file = repo / name
-        if file.is_file():
-            digest.update(raw + b"\0")
-            digest.update(file.read_bytes())
-            names.append(name)
-    return {"source_commit": head, "worktree_dirty": bool(diff or names),
-            "worktree_diff_sha256": digest.hexdigest(), "untracked_source_count": len(names)}
+        if file.is_symlink():
+            raise RuntimeError("BUILD_SOURCE_SYMLINK_REJECTED:" + name)
+        if not file.is_file():
+            continue
+        doc = name.startswith(("docs/", "next/docs/")) or file.name in ("README.md", "AGENTS.md")
+        digest = documentation if doc else product
+        digest.update(raw + b"\0" + sha256(file).encode("ascii") + b"\0")
+        if not doc:
+            count += 1
+    return {"source_commit": head, "product_inputs_sha256": product.hexdigest(),
+            "product_input_count": count, "documentation_sha256": documentation.hexdigest()}
+
+
+def same_product_inputs(frozen):
+    current = source_identity()
+    return frozen.get("product_inputs_sha256") == current["product_inputs_sha256"] and \
+        frozen.get("product_input_count") == current["product_input_count"]
 
 
 def check_authoring_assets():
@@ -164,7 +192,9 @@ BUILD_RECEIPT = ROOT / ".local/build-input.json"
 def begin_build():
     """资源同步和 CMake 配置结束后冻结输入；不把打包时的 HEAD 当作构建来源。"""
     check_authoring_assets()
-    receipt = {"schema": 1, "state": "BUILDING", "source": source_identity(),
+    from verify_build_dependencies import verify
+    receipt = {"schema": 2, "state": "BUILDING", "source": source_identity(),
+               "consumed_dependencies": verify(),
                "started_at_utc": datetime.now(timezone.utc).isoformat()}
     BUILD_RECEIPT.parent.mkdir(parents=True, exist_ok=True)
     BUILD_RECEIPT.write_text(json.dumps(receipt, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -181,25 +211,30 @@ def build_artifacts():
 
 
 def finish_build():
+    from verify_build_dependencies import verify
     receipt = json.loads(BUILD_RECEIPT.read_text(encoding="utf-8"))
-    if receipt.get("state") != "BUILDING" or receipt["source"] != source_identity():
+    if receipt.get("state") != "BUILDING" or not same_product_inputs(receipt["source"]):
         raise RuntimeError("BUILD_SOURCE_CHANGED")
+    if receipt.get("consumed_dependencies") != verify():
+        raise RuntimeError("BUILD_CONSUMED_DEPENDENCIES_CHANGED")
     receipt.update(state="BUILT", artifacts=build_artifacts(), finished_at_utc=datetime.now(timezone.utc).isoformat())
     BUILD_RECEIPT.write_text(json.dumps(receipt, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return receipt
 
 
 def verified_build():
+    from verify_build_dependencies import verify
     receipt = json.loads(BUILD_RECEIPT.read_text(encoding="utf-8"))
-    if receipt.get("state") != "BUILT" or receipt.get("source") != source_identity():
+    if receipt.get("state") != "BUILT" or not same_product_inputs(receipt.get("source", {})):
         raise RuntimeError("BUILD_SOURCE_CHANGED_OR_NOT_COMPLETED")
     if receipt.get("artifacts") != build_artifacts():
         raise RuntimeError("BUILD_ARTIFACT_CHANGED")
+    if receipt.get("consumed_dependencies") != verify():
+        raise RuntimeError("BUILD_CONSUMED_DEPENDENCIES_CHANGED")
     return receipt
 
 
 def stage(target):
-    sync_authoring_resources()
     check_authoring_assets()
     build = verified_build()
     binary = ROOT / "build/Release"

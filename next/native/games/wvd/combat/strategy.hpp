@@ -8,6 +8,7 @@
 namespace wvd::games {
 // Compile only groups selectable by this frozen run, including enabled encounter overrides.
 std::set<std::string> reachable_strategy_groups(const nlohmann::json &profile);
+std::string effective_strategy_name(const nlohmann::json &profile, std::optional<std::size_t> task_step = {});
 struct PortraitScore {
     std::string portrait;
     double score;

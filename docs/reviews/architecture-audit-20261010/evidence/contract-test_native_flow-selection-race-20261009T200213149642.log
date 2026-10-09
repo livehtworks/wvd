@@ -1,0 +1,8 @@
+selection guarded:  no input/replay
+selection unguarded:  no input/replay
+selection flapping: FLOW_STAGE_TIMEOUT no input/replay
+effect selection confirm PASS; effects=0
+effect selection registered PASS; effects=0
+effect selection business-guard PASS; effects=0
+effect selection in-flight PASS; effects=1
+effect selection call PASS; effects=0

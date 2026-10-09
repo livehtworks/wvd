@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "audited_base_commit": "4c466e14fa514fa177380e902afe373c8f20c3b2",
+  "work_package": "WP10",
+  "issue_ids": [
+    "MP13"
+  ],
+  "implementation_commit": null,
+  "source_changed": true,
+  "source_reviewed": true,
+  "counterexample_fails_before_fix": null,
+  "positive_assertions_pass_after_fix": true,
+  "offline_validation": {
+    "executed": true,
+    "commands": [
+      "C:/Python314/python.exe next/tools/run_contracts.py --module runtime --module devices --module recognition --module app --module tools --module web --output next/.local/architecture-audit-20261010/final-contracts-14"
+    ],
+    "evidence_files": [
+      "../evidence/final-contracts-receipt.json",
+      "../evidence/final-contracts.log"
+    ],
+    "limits": [
+      "压力读数受控；实际DecodedAssetCache/MacthBudget准入测试，非制造系统低内存。"
+    ]
+  },
+  "windows_validation": {
+    "executed": true,
+    "build_identity": {
+      "receipt": "../evidence/final-contracts-receipt.json",
+      "source_commit": "4c466e14fa514fa177380e902afe373c8f20c3b2",
+      "product_inputs_sha256": "56a9ac97f30875dfd18931f573d2fe57d0616f60f29924111796a1e3a36d242e"
+    },
+    "evidence_files": [
+      "../evidence/final-contracts-receipt.json"
+    ]
+  },
+  "deployment": {
+    "executed": false,
+    "artifact_identity": null
+  },
+  "live_run": {
+    "executed": false,
+    "authorized_scope": null,
+    "completed_rounds": null,
+    "evidence_files": []
+  },
+  "memory": {
+    "captured": false,
+    "comparison_eligible": false,
+    "analyzed": false,
+    "attributed": false,
+    "phase": null,
+    "release_scope": null,
+    "unknown_bytes": null,
+    "coverage": null,
+    "lost_events": null,
+    "partial": false,
+    "reason": "No real workload ETL/heap snapshot/dump was captured in this scope; synthetic fixtures are not attribution."
+  },
+  "remaining_risks": [
+    "估算票据不等于RSS或整个第三方分配器成本；实际Job总余量不可查询时拒绝，不用峰值猜。"
+  ],
+  "user_data_changed": false,
+  "notes": "Scope is source remediation and named isolated checks only. No production profile/workflow writes, deployment, game input, loops, commit or push. A null positive_assertions_pass_after_fix denotes remaining required coverage, not a failed executed case. Baseline audit counterexamples are source-linked, but only WP01's positive invariant was also rerun to fail on the old binary here.",
+  "acceptance_state": "LIMITED_OFFLINE_CONTRACT_PASS",
+  "executed_targeted_assertions_passed": true,
+  "targeted_cases": [
+    "pressure-contract"
+  ],
+  "implementation_files": [
+    "next/native/recognition/resources.cpp",
+    "next/native/recognition/resources.hpp",
+    "next/native/recognition/service.cpp"
+  ]
+}

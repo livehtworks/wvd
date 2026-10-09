@@ -84,5 +84,31 @@ Reject 'active_output_file_limit' {Invoke-TraceTool -Executable $pwsh -Arguments
 Child-Gone $marker
 Reject 'expired_deadline_does_not_start_child' {Invoke-TraceTool -Executable $pwsh -Arguments @('-NoProfile','-Command','exit 0') `
     -Log (Join-Path $EvidenceRoot 'expired.log') -DeadlineUtc ([DateTime]::UtcNow.AddSeconds(-1))} 'DEADLINE_ALREADY_EXPIRED'
+foreach ($channel in @('Out','Error')) {
+    $path=Join-Path $EvidenceRoot ('flood-'+$channel+'.log')
+    $command="`$s=[Console]::$channel; `$text='x'*16384; while(`$true){`$s.Write(`$text);`$s.Flush()}"
+    Reject ('bounded_'+$channel+'_stream') {Invoke-TraceTool -Executable $pwsh -Arguments @('-NoProfile','-Command',$command) `
+        -Log $path -TimeoutSeconds 5 -OutputLimit 65536} 'STREAM_BUDGET_OR_IO_FAILURE'
+    if ((Get-Item -LiteralPath $path).Length -gt 65536) { throw 'STREAM_FILE_EXCEEDED_SHARED_BUDGET' }
+}
+$marker=Join-Path $EvidenceRoot 'descendant.pid'
+$childCommand="[IO.File]::WriteAllText('$marker',[string]`$PID); [Console]::Out.WriteLine('descendant'); Start-Sleep -Seconds 60"
+$encoded=[Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($childCommand))
+$parentCommand="`$info=[Diagnostics.ProcessStartInfo]::new('$pwsh'); `$info.UseShellExecute=`$false; `$info.CreateNoWindow=`$true; `$info.ArgumentList.Add('-NoProfile'); `$info.ArgumentList.Add('-EncodedCommand'); `$info.ArgumentList.Add('$encoded'); `$null=[Diagnostics.Process]::Start(`$info); `$watch=[Diagnostics.Stopwatch]::StartNew(); while(-not [IO.File]::Exists('$marker') -and `$watch.ElapsedMilliseconds -lt 3000){Start-Sleep -Milliseconds 20}; exit 0"
+$null=Invoke-TraceTool -Executable $pwsh -Arguments @('-NoProfile','-Command',$parentCommand) `
+    -Log (Join-Path $EvidenceRoot 'descendant.log') -TimeoutSeconds 6
+Child-Gone $marker
+$results.Add(@{case='parent_exited_descendant_pipe_owner_closed_by_job';passed=$true})
+$batch=Join-Path $EvidenceRoot 'owned batch with spaces.cmd'
+[IO.File]::WriteAllText($batch,"@echo off`r`necho %~1`r`nexit /b 41`r`n",[Text.Encoding]::ASCII)
+$batchLog=Join-Path $EvidenceRoot 'batch-quoting.log'
+$command='"'+$batch+'" "argument with spaces"'
+Reject 'owned_batch_path_and_argument_spaces_exit41' {
+    Invoke-TraceTool -Executable $env:COMSPEC -Arguments @('/d','/s','/c',$command) `
+        -RecordOnly -Log $batchLog -TimeoutSeconds 5
+} '^TRACE_TOOL_FAILED:41$'
+if([IO.File]::ReadAllText($batchLog).Trim() -ne 'argument with spaces') {
+    throw 'OWNED_BATCH_QUOTING_OR_EXIT_CODE_BROKEN'
+}
 $results | ConvertTo-Json -Depth 6 | Set-Content -Encoding utf8 (Join-Path $EvidenceRoot 'results.json')
 Write-Output ('Passed targeted trace guards: '+$results.Count)

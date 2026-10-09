@@ -1,6 +1,8 @@
 #include "OcrLite.h"
 #include "OcrLiteImpl.h"
 
+void OcrLite::setResultOnly(bool enabled) { pImpl->setResultOnly(enabled); }
+
 OcrLite::OcrLite() {
     pImpl = new OcrLiteImpl();
 }
@@ -31,6 +33,7 @@ bool OcrLite::initModels(const std::string &detPath, const std::string &clsPath,
 }
 
 void OcrLite::cancel() { pImpl->cancel(); }
+void OcrLite::resume() { pImpl->resume(); }
 
 void OcrLite::Logger(const char *format, ...) {
     if (!(pImpl->isOutputConsole || pImpl->isOutputResultTxt)) return;

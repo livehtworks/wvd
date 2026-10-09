@@ -1,0 +1,46 @@
+[
+  {
+    "passed": true,
+    "case": "two_real_contract_joined_endpoints_eligible"
+  },
+  {
+    "passed": true,
+    "case": "pid",
+    "failure": "MEASUREMENT_PROCESS_IDENTITY_MISMATCH"
+  },
+  {
+    "passed": true,
+    "case": "creation",
+    "failure": "MEASUREMENT_PROCESS_IDENTITY_MISMATCH"
+  },
+  {
+    "passed": true,
+    "case": "server",
+    "failure": "MEASUREMENT_PROCESS_IDENTITY_MISMATCH"
+  },
+  {
+    "passed": true,
+    "case": "phase",
+    "failure": "MEASUREMENT_ENDPOINT_NOT_JOINED_CLEAN"
+  },
+  {
+    "passed": true,
+    "case": "input",
+    "failure": "MEASUREMENT_ENDPOINT_NOT_JOINED_CLEAN"
+  },
+  {
+    "passed": true,
+    "case": "round",
+    "failure": "MEASUREMENT_PAIR_SCOPE_MISMATCH"
+  },
+  {
+    "passed": true,
+    "case": "configuration",
+    "failure": "MEASUREMENT_PAIR_SCOPE_MISMATCH"
+  },
+  {
+    "passed": true,
+    "case": "sequence",
+    "failure": "MEASUREMENT_PAIR_SCOPE_MISMATCH"
+  }
+]

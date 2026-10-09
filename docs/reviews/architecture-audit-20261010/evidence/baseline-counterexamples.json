@@ -1,0 +1,62 @@
+{
+  "business_confirm_ir_condition": {
+    "binding_calls": 1,
+    "effect_condition_calls": 0,
+    "flow_state": 2
+  },
+  "fixed_click_low_trust": {
+    "action_eligible": false,
+    "flow_state": 2,
+    "sends": 1,
+    "use_target_center": false
+  },
+  "oom_after_accepted_send": {
+    "flow_code": "bad allocation",
+    "flow_state": 4,
+    "pending_inputs": [],
+    "sends": 1,
+    "unresolved_input": false
+  },
+  "past_restart_then_new_skill_failure": {
+    "coordinator_restart_boolean": true,
+    "current_connection_generation": 2,
+    "current_instance_exited": false,
+    "flow_code": "FIXTURE_LATE_RECOGNITION_ERROR",
+    "old_window": {
+      "active": false,
+      "application_restarted_in_window": true,
+      "code": "DEVICE_INSTANCE_RESTART_REQUIRED",
+      "command_details": null,
+      "command_elapsed_ms": 0,
+      "command_timeout_ms": 0,
+      "context_recovery": {
+        "application_restarted": true,
+        "foreground_restored": true,
+        "reconnected": true
+      },
+      "duration_ms": 10,
+      "failures": 1,
+      "input_replayed": false,
+      "instance_restarted_in_window": true,
+      "operation": "fixture.capture",
+      "outage_limit_ms": 180000,
+      "reconnect_count": 1,
+      "source_path": "[{\"native_node\":\"audit-fixture-long-source-path/skill\"}]",
+      "started_at_ns": 769634211126100,
+      "state": "application_restarted_menu_reclassified"
+    },
+    "pending_inputs": [
+      {
+        "action_epoch": 1,
+        "attempts": 1,
+        "basis_epoch": 0,
+        "basis_frame": 2,
+        "delivery_unknown": false,
+        "source_path": "[{\"native_node\":\"audit-fixture-long-source-path/skill\"}]"
+      }
+    ],
+    "restarts": 1,
+    "sends": 1,
+    "unresolved_input": true
+  }
+}

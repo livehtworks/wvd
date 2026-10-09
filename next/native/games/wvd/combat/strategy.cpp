@@ -5,24 +5,51 @@
 
 namespace wvd::games {
 using J = nlohmann::json;
+namespace {
+bool task_point_mode(const std::string &name) {
+    return name == "自定义任务点策略" || name == "Custom Task Point Strategy";
+}
+bool auto_mode(const std::string &name) { return name == "全自动战斗" || name == "Full Auto"; }
+std::string require_group(const J &profile, const std::string &name) {
+    if (name.empty()) throw std::runtime_error("STRATEGY_DEFAULT_REQUIRED");
+    for (const auto &group : profile.at("STRATEGY")) {
+        const auto candidate = group.value("group_name", "");
+        if (candidate == name || (auto_mode(name) && auto_mode(candidate))) return candidate;
+    }
+    throw std::runtime_error("STRATEGY_GROUP_NOT_FOUND:" + name);
+}
+}
+std::string effective_strategy_name(const J &profile, std::optional<std::size_t> task_step) {
+    const auto global = profile.at("DEFAULT_OVERALL_STRATEGY").get<std::string>();
+    const auto &points = profile.at("TASK_POINT_STRATEGY");
+    auto selected = profile.at("TASK_SPECIFIC_CONFIG").get<bool>() ? points.value("overall_strategy", "") : global;
+    if (selected.empty()) selected = global;
+    if (task_point_mode(selected)) {
+        if (!task_step) return "Custom Task Point Strategy";
+        selected = points.value("task_point", J::object()).value(std::to_string(*task_step), "");
+        if (selected.empty()) selected = global;
+    }
+    return require_group(profile, selected);
+}
 std::set<std::string> reachable_strategy_groups(const J &profile) {
     std::set<std::string> result;
     const auto &points = profile.at("TASK_POINT_STRATEGY");
-    const auto name = profile.at("TASK_SPECIFIC_CONFIG").get<bool>()
-        ? points.value("overall_strategy", "")
-        : profile.at("DEFAULT_OVERALL_STRATEGY").get<std::string>();
-    const auto custom = profile.at("LANGUAGE") == "en_US" ? "Custom Task Point Strategy" : "自定义任务点策略";
-    if (profile.at("TASK_SPECIFIC_CONFIG").get<bool>() && name == custom) {
+    const auto name = effective_strategy_name(profile);
+    if (task_point_mode(name)) {
         const auto mapping = points.value("task_point", J::object());
-        for (const auto &value : mapping) result.insert(value.get<std::string>());
+        result.insert(require_group(profile, profile.at("DEFAULT_OVERALL_STRATEGY")));
+        for (const auto &[key,value] : mapping.items()) {
+            const auto group = value.get<std::string>();
+            if (!group.empty()) result.insert(require_group(profile,group));
+        }
     } else result.insert(name);
     const auto special = points.value("special_combat", J::object());
     const bool portrait = special.value("portrait", false), skull = special.value("skull", false);
     if (portrait || skull) {
-        result.insert(special.value("normal_strategy", ""));
+        result.insert(require_group(profile,special.value("normal_strategy", "")));
         const auto rules = combat::enemy_rules(profile);
-        if (skull || rules.empty()) result.insert(special.value("special_strategy", ""));
-        if (portrait) for (const auto &rule : rules) result.insert(rule.strategy);
+        if (skull || rules.empty()) result.insert(require_group(profile,special.value("special_strategy", "")));
+        if (portrait) for (const auto &rule : rules) result.insert(require_group(profile,rule.strategy));
     }
     return result;
 }
@@ -33,6 +60,7 @@ CombatStrategy::CombatStrategy(J profile)
         !profile_.at("DEFAULT_OVERALL_STRATEGY").is_string() ||
         !profile_.at("TASK_POINT_STRATEGY").is_object())
         throw std::runtime_error("STRATEGY_PROFILE_INVALID");
+    (void)reachable_strategy_groups(profile_);
     const auto special = profile_.at("TASK_POINT_STRATEGY").value("special_combat", J::object());
     if (!special.is_object()) throw std::runtime_error("SPECIAL_COMBAT_INVALID");
     const auto rules = combat::enemy_rules(profile_);
@@ -54,27 +82,17 @@ CombatStrategy::CombatStrategy(J profile)
     }
 }
 bool CombatStrategy::uses_task_points() const {
-    return profile_.at("TASK_SPECIFIC_CONFIG").get<bool>() &&
-           profile_.at("TASK_POINT_STRATEGY").value("overall_strategy", "") ==
-               (english_ ? "Custom Task Point Strategy" : "自定义任务点策略");
+    return task_point_mode(effective_strategy_name(profile_));
 }
 void CombatStrategy::reload(std::size_t task_step) {
-    std::string key;
-    if (!profile_.at("TASK_SPECIFIC_CONFIG").get<bool>())
-        key = profile_.at("DEFAULT_OVERALL_STRATEGY").get<std::string>();
-    else if (uses_task_points())
-        key = profile_.at("TASK_POINT_STRATEGY")
-                  .value("task_point", J::object())
-                  .value(std::to_string(task_step), "");
-    else
-        key = profile_.at("TASK_POINT_STRATEGY").value("overall_strategy", "");
-    load_group(key);
+    load_group(effective_strategy_name(profile_,task_step));
 }
 void CombatStrategy::load_group(const std::string &key) {
     current_ = J::object();
     // 固定旧源选择首个同名分组；深复制后消费，不修改冻结配置。
+    const auto resolved = require_group(profile_, key);
     for (const auto &group : profile_.at("STRATEGY")) {
-        if (group.value("group_name", "") == key) {
+        if (group.value("group_name", "") == resolved) {
             current_ = group;
             break;
         }
@@ -95,7 +113,7 @@ void CombatStrategy::begin_encounter(bool special, const std::string &enemy_rule
 }
 bool CombatStrategy::automatic() const {
     return current_.empty() ||
-           current_.value("group_name", "") == (english_ ? "Full Auto" : "全自动战斗") ||
+           auto_mode(current_.value("group_name", "")) ||
            current_.value("skill_settings", J::array()).empty();
 }
 std::optional<SkillSelection>
@@ -103,24 +121,22 @@ CombatStrategy::select(const std::vector<PortraitScore> &scores) const {
     if (automatic())
         return std::nullopt;
     double highest = 0;
-    std::optional<SkillSelection> selected;
+    const PortraitScore *identity = nullptr;
+    for (const auto &score : scores) {
+        if (!std::isfinite(score.score) || score.score < -1 || score.score > 1)
+            throw std::runtime_error("PORTRAIT_SCORE_INVALID");
+        if (score.score > highest) { highest = score.score; identity = &score; }
+    }
+    if (!identity || highest < .80) return std::nullopt;
     const auto &rows = current_.at("skill_settings");
     for (std::size_t i = 0; i < rows.size(); ++i) {
         const auto role = rows[i].value("role_var", "");
         if (role.empty())
             continue;
         for (const auto &candidate : {role, role + "_sp", role + "_alt"})
-            for (const auto &score : scores) {
-                // 相关系数允许负数；负相关是未匹配，不是视觉后端错误。
-                if (!std::isfinite(score.score) || score.score < -1 || score.score > 1)
-                    throw std::runtime_error("PORTRAIT_SCORE_INVALID");
-                if (score.portrait == candidate && score.score > highest) {
-                    highest = score.score;
-                    selected = SkillSelection{"", 0, epoch_, i, rows[i]};
-                }
-            }
+            if (identity->portrait == candidate) return SkillSelection{"", 0, epoch_, i, rows[i]};
     }
-    return highest >= .80 ? selected : std::nullopt;
+    return std::nullopt;
 }
 bool CombatStrategy::consume(const SkillSelection &selection, SkillOutcome outcome) {
     if (outcome != SkillOutcome::Succeeded && outcome != SkillOutcome::AutoFallbackConfirmed &&

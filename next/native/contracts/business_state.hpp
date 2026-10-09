@@ -45,6 +45,20 @@ class BusinessRunState {
         std::lock_guard lock(mutex_);
         return summarize();
     }
+    nlohmann::json field(const std::string &path) const {
+        std::lock_guard lock(mutex_);
+        if (path.empty() || path.front() != '/') throw std::runtime_error("BUSINESS_FIELD_PATH_INVALID");
+        const auto end = path.find('/', 1);
+        auto value = summarize_field(path.substr(1, end == std::string::npos ? end : end - 1));
+        if (end != std::string::npos) value = value.at(nlohmann::json::json_pointer(path.substr(end)));
+        return value;
+    }
+    nlohmann::json fields(std::initializer_list<std::string> names) const {
+        std::lock_guard lock(mutex_);
+        auto values = nlohmann::json::object();
+        for (const auto &name : names) values[name] = summarize_field(name);
+        return values;
+    }
     std::uint64_t version() const {
         std::lock_guard lock(mutex_);
         return version_;
@@ -53,6 +67,7 @@ class BusinessRunState {
   protected:
     virtual void on_segment(SegmentBoundary, std::uint64_t, std::size_t) = 0;
     virtual nlohmann::json summarize() const = 0;
+    virtual nlohmann::json summarize_field(const std::string &name) const { return summarize().at(name); }
 
   private:
     mutable std::recursive_mutex mutex_;

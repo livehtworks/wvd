@@ -1,0 +1,1 @@
+slow restore: foreground and app restart do not inherit old exception timer

@@ -79,9 +79,11 @@ Response route(const Request &request, const fs::path &root, unsigned short port
                  {"device_control", true},
                  {"task_execution", true},
                  {"websocket", false},
-                 {"real_startup_verified", false},
-                 {"delivery_state", "NATIVE_OFFLINE_ACCEPTANCE_REQUIRED"},
-                 {"production_switch", false}}
+                 {"evidence", {{"source_support", "implemented"},
+                               {"build_identity", "read_packaged_artifact_receipt"},
+                               {"deployment", "not_inferred_from_source"},
+                               {"live_validation", "run_specific_evidence_required"},
+                               {"memory_attribution", "UNRESOLVED"}}}}
                 .dump());
     } else if (target.starts_with("/api/")) {
         if (!handler)

@@ -1,0 +1,4 @@
+repeated boot confirmed: 
+repeated boot unconfirmed: CANCELLED
+repeated boot cleanup-failed: OBSERVED_RESULT_INPUT_CLEANUP_UNCONFIRMED
+repeated boot other-handler: EVENT_REPLAN_CROSSES_ACTIVE_HANDLER

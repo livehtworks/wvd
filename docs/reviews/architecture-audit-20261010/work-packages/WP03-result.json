@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "audited_base_commit": "4c466e14fa514fa177380e902afe373c8f20c3b2",
+  "work_package": "WP03",
+  "issue_ids": [
+    "EX03",
+    "AP06",
+    "AP07",
+    "MP04"
+  ],
+  "implementation_commit": null,
+  "source_changed": true,
+  "source_reviewed": true,
+  "counterexample_fails_before_fix": null,
+  "positive_assertions_pass_after_fix": null,
+  "offline_validation": {
+    "executed": true,
+    "commands": [
+      "C:/Python314/python.exe next/tools/run_contracts.py --module runtime --module devices --module recognition --module app --module tools --module web --output next/.local/architecture-audit-20261010/final-contracts-14"
+    ],
+    "evidence_files": [
+      "../evidence/final-contracts-receipt.json",
+      "../evidence/final-contracts.log"
+    ],
+    "limits": [
+      "实际Windows Job/设备契约与停止边界；没有连接ADB或SDK实机。"
+    ]
+  },
+  "windows_validation": {
+    "executed": true,
+    "build_identity": {
+      "receipt": "../evidence/final-contracts-receipt.json",
+      "source_commit": "4c466e14fa514fa177380e902afe373c8f20c3b2",
+      "product_inputs_sha256": "56a9ac97f30875dfd18931f573d2fe57d0616f60f29924111796a1e3a36d242e"
+    },
+    "evidence_files": [
+      "../evidence/final-contracts-receipt.json"
+    ]
+  },
+  "deployment": {
+    "executed": false,
+    "artifact_identity": null
+  },
+  "live_run": {
+    "executed": false,
+    "authorized_scope": null,
+    "completed_rounds": null,
+    "evidence_files": []
+  },
+  "memory": {
+    "captured": false,
+    "comparison_eligible": false,
+    "analyzed": false,
+    "attributed": false,
+    "phase": null,
+    "release_scope": null,
+    "unknown_bytes": null,
+    "coverage": null,
+    "lost_events": null,
+    "partial": false,
+    "reason": "No real workload ETL/heap snapshot/dump was captured in this scope; synthetic fixtures are not attribution."
+  },
+  "remaining_risks": [
+    "每个SDK HANDLE取得后/所有权转移前逐点bad_alloc、真实forward成功但响应超时，未逐一注入验证；源码RAII修正不能替代这些断言。"
+  ],
+  "user_data_changed": false,
+  "notes": "Scope is source remediation and named isolated checks only. No production profile/workflow writes, deployment, game input, loops, commit or push. A null positive_assertions_pass_after_fix denotes remaining required coverage, not a failed executed case. Baseline audit counterexamples are source-linked, but only WP01's positive invariant was also rerun to fail on the old binary here.",
+  "acceptance_state": "SOURCE_IMPLEMENTED_TARGETED_PASS_ACCEPTANCE_PARTIAL",
+  "executed_targeted_assertions_passed": true,
+  "targeted_cases": [
+    "test_native_devices",
+    "control-contract",
+    "verify_trace_guards.ps1"
+  ],
+  "implementation_files": [
+    "next/native/devices/scrcpy_control.cpp",
+    "next/native/devices/scrcpy_codec.cpp",
+    "next/native/devices/mumu_capture.cpp",
+    "next/native/devices/capture_host.cpp",
+    "next/native/platform/windows/metadata_query.cpp",
+    "next/native/app/application.cpp"
+  ]
+}

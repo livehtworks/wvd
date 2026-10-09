@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 import statistics
 import sys
+from diagnostic_io import InputBudget, write_report
 
 
 def node_name(value):
@@ -17,6 +18,7 @@ def node_name(value):
 
 
 def analyze(root):
+    budget = InputBudget()
     directories = sorted((p for p in root.iterdir() if p.is_dir() and p.name.isdecimal()), key=lambda p: int(p.name))
     if not directories:
         raise ValueError("NO_RUN_DATA")
@@ -32,13 +34,24 @@ def analyze(root):
             path = directory / name
             if not path.is_file():
                 raise ValueError(f"MISSING_LOG:{run}/{name}")
-            raw = path.read_bytes()
-            sources.append({"run": run, "file": name, "sha256": hashlib.sha256(raw).hexdigest(), "bytes": len(raw)})
-            data[name] = raw.decode("utf-8-sig")
+            data[name], identity = budget.json(path)
+            sources.append({"run":run,"file":name,**identity})
+        def line_log(name):
+            path = directory / name
+            if not path.is_file():
+                raise ValueError(f"MISSING_LOG:{run}/{name}")
+            identity = {"run":run,"file":name}
+            sources.append(identity)
+            try:
+                yield from budget.lines(path,identity)
+            except ValueError as error:
+                if name == "action-timing.jsonl" and str(error).startswith("DIAGNOSTIC_TRUNCATED_LINE:"):
+                    raise ValueError(f"TRUNCATED_TIMING_LOG:{run}") from error
+                raise
         for name in ("run.json", "result.json"):
             read_log(name)
-        run_info = json.loads(data["run.json"])
-        result = json.loads(data["result.json"])
+        run_info = data["run.json"]
+        result = data["result.json"]
         if run_info["run_id"] != run or result["run_id"] != run:
             raise ValueError(f"RUN_ID_MISMATCH:{run}")
         definition = run_info["definition"]
@@ -51,29 +64,27 @@ def analyze(root):
         timing = result["diagnostics"]["action_timing"]
         if not timing.get("collected", True):
             raise ValueError(f"TIMING_COLLECTION_DISABLED:{run}")
-        read_log("action-timing.jsonl")
         diagnostic_logs = result["diagnostics"].get("logs")
         if diagnostic_logs:
             memory_rows = []
             if diagnostic_logs.get("memory_collected"):
-                read_log("diagnostics.jsonl")
-                if not data["diagnostics.jsonl"].endswith("\n") or not diagnostic_logs["complete"]:
+                if not diagnostic_logs["complete"]:
                     raise ValueError(f"INCOMPLETE_DIAGNOSTIC_LOG:{run}")
-                diagnostic_lines = data["diagnostics.jsonl"].splitlines()
-                if len(diagnostic_lines) != diagnostic_logs["rows"]:
-                    raise ValueError(f"INCOMPLETE_DIAGNOSTIC_LOG:{run}")
-                for line in diagnostic_lines:
+                rows_seen = 0
+                for line in line_log("diagnostics.jsonl"):
+                    rows_seen += 1
                     row = json.loads(line)
                     if row.get("run_id") != run or row.get("instance_id") != run_info["instance"]:
                         raise ValueError(f"DIAGNOSTIC_IDENTITY_MISMATCH:{run}")
                     if row.get("type") == "session_owners_released" and row["payload"].get("process_memory_available"):
                         memory_rows.append(row["payload"]["private_bytes"] / 1024 / 1024)
+                if rows_seen != diagnostic_logs["rows"]:
+                    raise ValueError(f"INCOMPLETE_DIAGNOSTIC_LOG:{run}")
             else:
                 faults.append({"run": run, "type": "memory_collection_disabled"})
             basis = "session_owners_released"
         else:
-            read_log("recognition-memory.log")
-            memory_rows = [int(m.group(1)) / 1024 / 1024 for line in data["recognition-memory.log"].splitlines()
+            memory_rows = [int(m.group(1)) / 1024 / 1024 for line in line_log("recognition-memory.log")
                            if (m := re.search(r"\bprivate=(\d+)\b", line))]
             basis = "legacy_recognition_sample"
         if memory_rows:
@@ -100,26 +111,16 @@ def analyze(root):
         history = result["diagnostics"].get("event_history")
         events = result["events"]["events"]
         if history:
-            read_log("execution-events.jsonl")
-            text = data["execution-events.jsonl"]
-            if not history["complete"] or not text.endswith("\n"):
+            if not history["complete"]:
                 raise ValueError(f"INCOMPLETE_EVENT_HISTORY:{run}")
-            events = [json.loads(line) for line in text.splitlines()]
-            if len(events) != history["rows"]:
-                raise ValueError(f"EVENT_HISTORY_COUNT_MISMATCH:{run}")
-            for index, event in enumerate(events, 1):
-                if (event["run_id"] != run or event["server_instance_id"] != run_info["instance"]
-                        or event["seq"] != index):
-                    raise ValueError(f"EVENT_HISTORY_IDENTITY_OR_SEQUENCE:{run}:{index}")
-            if result["events"]["last_seq"] != len(events) + 1:
-                raise ValueError(f"EVENT_HISTORY_TERMINAL_GAP:{run}")
+            events = (json.loads(line) for line in line_log("execution-events.jsonl"))
         event_coverage.append({"run": run, "source": "execution-events.jsonl" if history else "result_tail",
                                "complete": bool(history) or not result["events"].get("resync_required", False)})
         boundary = result["diagnostics"].get("post_terminal_memory", {})
         if boundary.get("collected"):
             if (directory / "memory-lifecycle.json").is_file():
                 read_log("memory-lifecycle.json")
-                measured = json.loads(data["memory-lifecycle.json"])
+                measured = data["memory-lifecycle.json"]
                 if measured["run_id"] != run or measured["instance_id"] != run_info["instance"]:
                     raise ValueError(f"MEMORY_BOUNDARY_IDENTITY:{run}")
                 lifecycle_memory.append(measured)
@@ -128,7 +129,11 @@ def analyze(root):
             else:
                 faults.append({"run": run, "type": "post_worker_memory_missing"})
         recovery_seen = set()
-        for event in events:
+        events_seen = 0
+        for index, event in enumerate(events,1):
+            events_seen = index
+            if history and (event["run_id"] != run or event["server_instance_id"] != run_info["instance"] or event["seq"] != index):
+                raise ValueError(f"EVENT_HISTORY_IDENTITY_OR_SEQUENCE:{run}:{index}")
             payload = event.get("payload", {})
             if event["type"] == "observation.recovery":
                 key = (payload.get("started_at_ns"), payload.get("code"))
@@ -137,14 +142,16 @@ def analyze(root):
                     recovery_seen.add(key)
             if event["type"].startswith("diagnostic."):
                 diagnostic_reasons[payload.get("reason", payload.get("status", "unknown"))] += 1
-        text = data["action-timing.jsonl"]
-        if not text.endswith("\n"):
-            raise ValueError(f"TRUNCATED_TIMING_LOG:{run}")
-        rows = text.splitlines()
+        if history and events_seen != history["rows"]:
+            raise ValueError(f"EVENT_HISTORY_COUNT_MISMATCH:{run}")
+        if history and result["events"]["last_seq"] != events_seen + 1:
+            raise ValueError(f"EVENT_HISTORY_TERMINAL_GAP:{run}")
         timing = result["diagnostics"]["action_timing"]
-        if len(rows) != timing["rows"] or not timing["complete"]:
+        if not timing["complete"]:
             raise ValueError(f"INCOMPLETE_TIMING_LOG:{run}")
-        for index, line in enumerate(rows, 1):
+        timing_seen = 0
+        for index, line in enumerate(line_log("action-timing.jsonl"), 1):
+            timing_seen = index
             try:
                 row = json.loads(line)
             except ValueError as error:
@@ -162,6 +169,8 @@ def analyze(root):
                                     "outcome": p["outcome"], "seconds": round(p["result_wait_ns"] / 1e9, 3)})
             elif row["type"] == "input.attempt" and p.get("state") in ("rejected", "unresolved", "error"):
                 faults.append({"run": run, "node": node_name(p["source_path"]), "type": "input." + p["state"], "detail": p.get("detail")})
+        if timing_seen != timing["rows"]:
+            raise ValueError(f"INCOMPLETE_TIMING_LOG:{run}")
     node_rows = [{"node": name, "segments": len(rows),
                   "per_round_seconds": round(sum(p["wall_ns"] for p in rows) / 1e9 / len(durations), 3),
                   "max_segment_seconds": round(max(p["wall_ns"] for p in rows) / 1e9, 3),
@@ -172,7 +181,8 @@ def analyze(root):
     groups = collections.defaultdict(list)
     for row in retries:
         groups[row["node"]].append(row)
-    return {"runs": len(durations), "seconds": {"mean": round(statistics.mean(durations), 3),
+    return {"input_budget":{"bytes":budget.bytes,"records":budget.records,"maximum_bytes":budget.maximum_bytes},
+            "runs": len(durations), "seconds": {"mean": round(statistics.mean(durations), 3),
             "min": round(min(durations), 3), "max": round(max(durations), 3)},
             "phase_mean_seconds": {str(k): round(statistics.mean(v), 3) for k, v in phases.items()},
             "time_per_round_seconds": {k: round(v / 1e9 / len(durations), 3) for k, v in totals.items()},
@@ -201,7 +211,7 @@ def main():
     summary = analyze(root)
     output.mkdir(parents=True, exist_ok=True)
     destination = output / "run-timing-analysis.json"
-    destination.write_text(json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    write_report(destination,summary)
     print(f"Analyzed {summary['runs']} runs: {destination}")
 
 

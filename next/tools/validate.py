@@ -2,11 +2,13 @@
 
 import subprocess
 import sys
+import argparse
+from pathlib import Path
 
 from build import ROOT, cmake_path, run
 
 
-def validate():
+def validate(selected):
     cmake = cmake_path()
     targets = [
         "automationd", "test_native_flow", "test_native_devices", "capture_stall_helper",
@@ -14,9 +16,6 @@ def validate():
         "test_native_coordinator",
         "test_native_application", "test_native_recognition", "test_native_ocr",
     ]
-    run("native-acceptance-build", [
-        cmake, "--build", "--preset", "windows-release", "--target", *targets,
-    ])
     native = ROOT / "build/native/Release"
     product = ROOT / "dist/wvd-next-native"
     if not (product / "pack/manifest.json").is_file():
@@ -35,14 +34,28 @@ def validate():
         ("native-ocr", [native / "test_native_ocr.exe",
                           product / "pack/model/ocr"]),
     ]
+    cases = [(name, command) for name, command in cases if selected == "all" or name in selected]
+    chosen = {Path(command[0]).stem for _, command in cases}
+    if "test_native_capture" in chosen:
+        chosen.add("capture_stall_helper")
+    run("native-acceptance-build", [cmake, "--build", "--preset", "windows-release", "--target", *sorted(chosen)])
     for name, command in cases:
         run(name, [str(item) for item in command])
     print("Native offline product acceptance finished; real device and game NOT_RUN.")
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Explicitly scoped native offline validation; no game actions.")
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("--all", action="store_true", help="Run the complete existing offline acceptance suite")
+    group.add_argument("--case", action="append", choices=["native-" + name for name in
+        ("flow", "devices", "capture", "author", "coordinator", "application", "recognition", "ocr")])
+    options = parser.parse_args()
+    if not options.all and not options.case:
+        parser.print_help()
+        sys.exit(0)
     try:
-        validate()
+        validate("all" if options.all else options.case)
     except (OSError, RuntimeError, subprocess.SubprocessError) as error:
         print(str(error), file=sys.stderr)
         sys.exit(1)

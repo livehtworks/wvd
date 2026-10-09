@@ -20,6 +20,7 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 Import-Module (Join-Path $PSScriptRoot 'memory_trace_support.psm1') -Force
+Import-Module (Join-Path $PSScriptRoot 'measurement_endpoint.psm1') -Force
 Initialize-TraceInterop
 $root = [IO.Path]::GetFullPath($EvidenceRoot)
 $data = [IO.Path]::GetFullPath($DataRoot).TrimEnd('\', '/')
@@ -34,7 +35,7 @@ if ($Mode -eq 'Collect' -and (-not $AllowGameTasks -or -not $TaskRequestPath)) {
 if ($Mode -eq 'Monitor' -and (-not $BatchRequestId -or $AllowGameTasks -or $TaskRequestPath)) {
     throw 'MONITOR_REQUIRES_EXISTING_BATCH_WITHOUT_TASK_SUBMISSION'
 }
-if ($MonitorCurrentRound -and $Mode -ne 'Monitor') { throw 'PARTIAL_ROUND_OPTION_REQUIRES_MONITOR' }
+if ($MonitorCurrentRound) { throw 'MONITOR_CURRENT_ROUND_REMOVED_USE_ACKNOWLEDGED_JOIN_PAIR' }
 New-Item -ItemType Directory -Path $root | Out-Null
 $url = "http://127.0.0.1:$Port"
 $session = 'WvdStacks_' + [Guid]::NewGuid().ToString('N')
@@ -188,8 +189,8 @@ function Joined-Boundary($Run, [string]$Stage='worker_joined') {
     if (-not $directory.StartsWith((Join-Path $data 'runs') + [IO.Path]::DirectorySeparatorChar, 'OrdinalIgnoreCase')) {
         throw 'RUN_DIRECTORY_OUTSIDE_BOUND_DATA'
     }
-    $life=Get-Content -Encoding utf8 -Raw -LiteralPath (Join-Path $directory 'memory-lifecycle.json') | ConvertFrom-Json
-    $saved=Get-Content -Encoding utf8 -Raw -LiteralPath (Join-Path $directory 'result.json') | ConvertFrom-Json
+    $life=Read-TraceJson (Join-Path $directory 'memory-lifecycle.json')
+    $saved=Read-TraceJson (Join-Path $directory 'result.json') 16MB
     if ($life.failed -ne 0 -or $life.run_id -ne $Run.run_id -or
         $life.instance_id -ne [IO.DirectoryInfo]::new($directory).Parent.Name -or
         $saved.run_id -ne $Run.run_id -or $saved.generation -ne $Run.generation -or
@@ -197,16 +198,14 @@ function Joined-Boundary($Run, [string]$Stage='worker_joined') {
         $saved.secondary_errors.Count -ne 0) { throw 'SAVED_BOUNDARY_IDENTITY_OR_TERMINAL_INVALID' }
     $eventsPath=Join-Path $directory 'execution-events.jsonl'
     if(-not (Test-Path -LiteralPath $eventsPath)){throw 'RECOVERY_HISTORY_NOT_AVAILABLE'}
-    $reader=[IO.StreamReader]::new($eventsPath,[Text.Encoding]::UTF8)
-    try {
-        while($null -ne ($line=$reader.ReadLine())) {
+    if(-not ('WvdBoundedTraceInput' -as [type])) { Add-Type -Path (Join-Path $PSScriptRoot 'bounded_trace_input.cs') }
+    foreach($line in [WvdBoundedTraceInput]::Lines($eventsPath,64MB,100000,1MB)) {
             if([DateTime]::UtcNow -ge $absoluteDeadline.AddSeconds(-180)){throw 'BOUNDARY_HISTORY_READ_EXCEEDED_CAPTURE_WINDOW'}
-            $event=$line | ConvertFrom-Json
+            $event=$line | ConvertFrom-Json -Depth 32
             if($event.type -like 'recovery.*' -or $event.type -eq 'observation.recovery') {
                 throw 'SAVED_RECOVERY_EVENT_CHANGED_WINDOW'
             }
-        }
-    } finally {$reader.Dispose()}
+    }
     $sample = $life.samples.$Stage
     if (-not $sample) { throw "MEMORY_BOUNDARY_MISSING:$Stage" }
     if ($sample.process_id -ne $target.pid -or $sample.process_created_100ns.ToString() -ne $target.process_start_filetime) {
@@ -334,48 +333,45 @@ try {
         if ((Current-Run).busy) { throw 'PROBE_INTERRUPTED_BY_USER_TASK' }
         Snapshot 'idle_probe'
     } elseif ($Mode -eq 'Monitor') {
-        # Monitor never owns the batch. An explicitly requested partial first
-        # round is labeled separately; all joins require repeat.waiting.
-        $baselineCount=$null
-        $lastJoinedRun=0
-        $observedRuns=[Collections.Generic.HashSet[long]]::new()
+        $result.first_endpoint_workload_window_partial=$true
+        $result.comparison_window='Between two acknowledged worker_joined endpoints; one intervening complete round, not two full monitored game rounds'
+        $result.rounds_started=$null
+        # The batch owner keeps its payloads. Only the joined boundary is held,
+        # for at most 30s; collector loss releases it automatically.
+        $arm=@{controller_id=$session;configuration=@{capture_kind=$CaptureKind;scope='PID';phase='worker_joined'};
+            endpoints=2;hold_ms=30000;total_ms=[int][Math]::Min(1200000,($absoluteDeadline-[DateTime]::UtcNow).TotalMilliseconds)}
+        $null=Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/v1/runs/measurement/arm" -Method Post `
+            -ContentType 'application/json' -Body ($arm|ConvertTo-Json -Depth 8 -Compress) -TimeoutSec 5
+        $endpoints=[Collections.Generic.List[object]]::new()
         while ($completed -lt 2) {
             Check-Health
-            $run=Current-Run
-            Write-Json 'current-run.json' ($run | Select-Object state,busy,quiescent,run_id,run_directory,repeat,submission)
-            if (-not $run.repeat -or $run.repeat.request_id -ne $BatchRequestId) { throw 'MONITORED_BATCH_CHANGED' }
-            if ($run.state -eq 'Recovering') { throw 'DEVICE_OR_APPLICATION_RECOVERY_CHANGED_WINDOW' }
-            if (-not $run.repeat.active -and $run.repeat.state -ne 'completed') { throw 'MONITORED_BATCH_STOPPED' }
-            $count=[int]$run.repeat.completed_cycles
-            if ($null -ne $baselineCount -and $run.run_id -gt $lastJoinedRun -and $run.state -eq 'Running') {
-                if ($observedRuns.Add([long]$run.run_id)) { $result.rounds_started++ }
-            }
-            if ($run.state -eq 'Completed' -and $run.quiescent -and $run.repeat.active -and $run.repeat.state -eq 'waiting' -and
-                $run.run_id -ne $lastJoinedRun) {
+            $gate=Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/v1/runs/measurement" -TimeoutSec 5
+            if($gate.controller_id -ne $session){throw 'MEASUREMENT_CONTROLLER_CHANGED'}
+            if($gate.held -and $gate.sequence -eq $completed+1) {
+                $endpoint=$gate.endpoints[-1]
+                Assert-MeasurementEndpoint $endpoint $target
+                if($endpoint.batch_request_id -ne $BatchRequestId){throw 'MONITORED_BATCH_CHANGED'}
+                $run=Current-Run -Fresh
                 $boundary=Joined-Boundary $run
-                if ($null -eq $baselineCount) {
-                    if ($MonitorCurrentRound) {
-                        $phase='worker_joined_1_partial'; $baselineCount=$count-1
-                    } else { $phase='joined_baseline'; $baselineCount=$count }
-                    $result.baseline_completed_cycles=$baselineCount
-                } else {
-                    if ($count -ne $baselineCount+$completed+1) { throw 'MONITORED_JOIN_WINDOW_MISSED' }
-                    $phase='worker_joined_'+($completed+1)
-                }
-                $boundary.completed_cycles=$count
-                Snapshot $phase $boundary
-                $after=Current-Run
-                Assert-TraceSnapshotBoundary $run $after 'worker_joined'
-                $lastJoinedRun=[long]$run.run_id
-                if ($phase -ne 'joined_baseline') {
-                    $completed++; $result.rounds_completed=$completed
-                    if ($observedRuns.Add([long]$run.run_id)) { $result.rounds_started++ }
-                }
+                $boundary.measurement=$endpoint
+                $boundary.completed_cycles=$endpoint.round
+                Snapshot ('worker_joined_'+($completed+1)) $boundary
+                $after=Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/v1/runs/measurement" -TimeoutSec 5
+                if(-not $after.held -or $after.sequence -ne $endpoint.sequence){throw 'MEASUREMENT_HOLD_EXPIRED_DURING_SNAPSHOT'}
+                Assert-MeasurementEndpoint $after.endpoints[-1] $target
+                $ack=Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/v1/runs/measurement/release" -Method Post `
+                    -ContentType 'application/json' -Body (@{controller_id=$session;sequence=$endpoint.sequence}|ConvertTo-Json -Compress) -TimeoutSec 5
+                if(-not $ack.endpoints[-1].acknowledged){throw 'MEASUREMENT_RELEASE_NOT_ACKNOWLEDGED'}
+                $boundary.measurement_after=$after.endpoints[-1]
+                $boundary.measurement_ack=$ack.endpoints[-1]
+                Write-Json 'checkpoints.json' $checkpoints
+                $endpoints.Add($endpoint);$completed++;$result.rounds_completed=$completed
             }
-            if (-not $run.repeat.active -and $completed -lt 2) { throw 'BATCH_ENDED_BEFORE_TWO_FULL_WINDOWS' }
+            if($gate.state -in @('timed_out','cancelled')){throw 'MEASUREMENT_GATE_ENDED_BEFORE_PAIR'}
             Start-Sleep -Milliseconds 250
         }
-        $result.monitored_run_ids=@($observedRuns | Sort-Object)
+        Assert-MeasurementPair $endpoints[0] $endpoints[1] $target
+        $result.monitored_run_ids=@($endpoints|ForEach-Object{$_.run_id})
         $result.game_batch_not_stopped=$true
     } else {
         # One-round submissions provide a real join barrier before the next run.
@@ -436,7 +432,7 @@ try {
             }
         $result.cleanup=$cleanup; $result.cleanup_confirmed=$cleanup.cleanup_confirmed
         foreach($error in $cleanup.errors) { $failure+=';'+$error }
-        $result.elapsed_seconds=$watch.Elapsed.TotalSeconds
+        $result.capture_stopped_utc=[DateTime]::UtcNow.ToString('o')
         $result.side_effects_attempted=@{snapshot=$snapshotAttempted;trace=$traceAttempted}
         $result.observer_protocol=@{quiet_seconds=1;normal_current_poll_seconds=5;requests=@($observerRequests);
             other_observers='unknown; existing UI may still poll';http_callbacks_proven_destroyed=$false}
@@ -449,20 +445,42 @@ try {
         $final=if(Test-Path (Join-Path $root 'allocations.etl')){Join-Path $root 'allocations.etl'}elseif(Test-Path (Join-Path $root 'incomplete.etl')){Join-Path $root 'incomplete.etl'}else{$null}
         if ($final -and $cleanup.cleanup_confirmed) {
             try {
-                $integrity=Read-TraceFileIntegrity $AnalyzerPath $final $root
+                $integrity=Read-TraceFileIntegrity $AnalyzerPath $final $root $absoluteDeadline
                 Write-Json 'final-trace-integrity.json' $integrity
                 $result.events_lost=$integrity.events_lost; $result.buffers_lost=$integrity.buffers_lost
-                $result.final_etl_sha256=(Get-FileHash -LiteralPath $final).Hash
+                $stream=[IO.File]::OpenRead($final)
+                $hash=[Security.Cryptography.IncrementalHash]::CreateHash([Security.Cryptography.HashAlgorithmName]::SHA256)
+                try {
+                    $buffer=[byte[]]::new(65536)
+                    while (($count=$stream.Read($buffer,0,$buffer.Length)) -gt 0) {
+                        if ([DateTime]::UtcNow -ge $absoluteDeadline) { throw 'FINAL_HASH_DEADLINE_EXCEEDED' }
+                        $hash.AppendData($buffer,0,$count)
+                    }
+                    $result.final_etl_sha256=[Convert]::ToHexString($hash.GetHashAndReset())
+                } finally { $stream.Dispose(); $hash.Dispose() }
                 Assert-TraceFileIntegrity $integrity
                 $result.final_trace_validated=$true
             } catch { $failure+=';'+$_.Exception.Message }
         }
         if ($Mode -ne 'Preflight' -and $result.complete -and -not $result.final_trace_validated) { $failure+=';FINAL_TRACE_NOT_VALIDATED' }
+        $result.integrity_finished_utc=[DateTime]::UtcNow.ToString('o')
+        $result.elapsed_seconds=$watch.Elapsed.TotalSeconds
+        $result.cleanup_overrun_seconds=[Math]::Max(0.0,([DateTime]::UtcNow-$absoluteDeadline).TotalSeconds)
+        if ([DateTime]::UtcNow -ge $absoluteDeadline) { $failure+=';CAPTURE_DEADLINE_EXCEEDED_AFTER_FINAL_CHECK' }
         if ($failure) { $result.complete=$false }
         $result.capture_complete=($Mode -ne 'Preflight' -and $result.complete)
         $result.failure=$failure
         Write-Json 'collector-health.json' $health
+        $result.receipt_persist_started_utc=[DateTime]::UtcNow.ToString('o')
         Write-Json 'receipt.json' $result
+        $persisted=[DateTime]::UtcNow
+        $late=$persisted -ge $absoluteDeadline
+        $completion=@{schema_version=1;primary_receipt_persisted_utc=$persisted.ToString('o');
+            primary_receipt_elapsed_seconds=$watch.Elapsed.TotalSeconds;
+            cleanup_overrun_seconds=[Math]::Max(0.0,($persisted-$absoluteDeadline).TotalSeconds);
+            primary_receipt_deadline_met=(-not $late);complete=($result.complete -and -not $late)}
+        Write-Json 'receipt-completion.json' $completion
+        if($late){$failure+=';RECEIPT_PERSIST_DEADLINE_EXCEEDED'}
     } finally {
         try { if ($lockOwned) { $mutex.ReleaseMutex() } }
         finally { if ($mutex) { $mutex.Dispose() } }

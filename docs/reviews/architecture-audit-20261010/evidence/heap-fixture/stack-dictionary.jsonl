@@ -1,0 +1,3 @@
+{"stack_key":"known-A","canonical_address_identity":"fixture-module\u002B1","full_stack":"fixture!AllocateA","missing_stack":false}
+{"stack_key":"known-B","canonical_address_identity":"fixture-module\u002B2","full_stack":"fixture!AllocateB","missing_stack":false}
+{"stack_key":"unknown-stack","canonical_address_identity":"unknown-stack","full_stack":"unknown-stack","missing_stack":true}

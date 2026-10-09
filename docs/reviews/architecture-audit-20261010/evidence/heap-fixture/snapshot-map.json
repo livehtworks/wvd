@@ -1,0 +1,40 @@
+[
+  {
+    "index": 1,
+    "snapshot_id": "1/64",
+    "process_instance": "fixture",
+    "creation_verified": true,
+    "recorded_creation_utc": "fixture",
+    "phase": "unbound",
+    "timestamp_ns": 1,
+    "utc": "2026-01-01T00:00:00Z",
+    "is_32_bit": false,
+    "live_blocks": 100002,
+    "live_bytes": 4994312,
+    "unknown_stack_bytes": 800008,
+    "unique_stacks": 2,
+    "stack_coverage_ratio": 0.839816174880544,
+    "free_stack_coverage": "not_available_in_heap_snapshot",
+    "virtual_allocation_coverage": "not_collected",
+    "conservation_checked": true
+  },
+  {
+    "index": 2,
+    "snapshot_id": "2/64",
+    "process_instance": "fixture",
+    "creation_verified": true,
+    "recorded_creation_utc": "fixture",
+    "phase": "unbound",
+    "timestamp_ns": 2,
+    "utc": "2026-01-01T00:00:01Z",
+    "is_32_bit": false,
+    "live_blocks": 100003,
+    "live_bytes": 6042888,
+    "unknown_stack_bytes": 800008,
+    "unique_stacks": 3,
+    "stack_coverage_ratio": 0.8676116452927806,
+    "free_stack_coverage": "not_available_in_heap_snapshot",
+    "virtual_allocation_coverage": "not_collected",
+    "conservation_checked": true
+  }
+]

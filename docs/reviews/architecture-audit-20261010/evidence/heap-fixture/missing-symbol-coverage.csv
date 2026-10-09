@@ -1,0 +1,3 @@
+snapshot_id,module,covered_live_bytes,covered_live_blocks,byte_fraction,non_additive
+1/64,"unknown",800008,100001,0.1601838251194559,true
+2/64,"unknown",800008,100001,0.13238835470721946,true

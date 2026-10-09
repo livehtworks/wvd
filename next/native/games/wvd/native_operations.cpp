@@ -85,7 +85,7 @@ Result NativeOperations::execute(const std::string &binding, const J &parameters
     }
     if (context_.cancelled()) return {State::ExternalBlocked, "CANCELLED"};
     if (binding == "BusinessPredicate")
-        return business_condition(state_.summary(), parameters) ? done() : waiting();
+        return business_condition(state_.field(parameters.at("field")), parameters, true) ? done() : waiting();
     if (binding == "BusinessCheckpoint") {
         context_.checkpoint(source_path);
         return done();

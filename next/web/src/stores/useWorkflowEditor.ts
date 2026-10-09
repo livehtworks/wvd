@@ -215,7 +215,14 @@ export function useWorkflowEditor() {
       if (!owns(id)) return;
       accept(value);
       await refreshList();
-      if (owns(id)) notice.value = "内置定义已同步，新运行将使用新版本";
+      if (owns(id)) {
+        const completed = await inspectBuiltin(frozen.flow_id);
+        if (owns(id)) {
+          builtinDetail.value = completed;
+          notice.value = completed.last_sync?.backup_path
+            ? "内置定义已同步，旧文档备份已核验" : "内置定义已同步，未取得备份回执";
+        }
+      }
     } catch (reason) { if (owns(id)) error.value = formatApiError(reason); }
     finally { endWrite(id); }
   }

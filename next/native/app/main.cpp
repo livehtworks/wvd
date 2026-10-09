@@ -104,7 +104,7 @@ int wmain(int argc, wchar_t **argv) {
                                            std::filesystem::absolute(pack_root),
                                            legacy_config.empty() ? legacy_config
                                                                  : std::filesystem::absolute(legacy_config),
-                                           std::filesystem::absolute(quests)});
+                                           std::filesystem::absolute(quests), instance.id()});
         boost::asio::io_context io{1};
         shutdown_requested = false;
         SetConsoleCtrlHandler(console_control, TRUE);

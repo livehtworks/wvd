@@ -34,6 +34,7 @@ class BundleLease final {
     const std::vector<std::uint8_t> &bytes(const std::string &relative) const;
     void copy_member(const std::string &relative, const std::filesystem::path &destination,
                      const std::function<void()> &check_cancel = {}) const;
+    void link_member(const std::string &relative, const std::filesystem::path &destination) const;
     const std::string &hash(const std::string &relative) const;
     const std::filesystem::path &root() const;
     const std::string &revision() const;

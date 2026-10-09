@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Text.Json;
 using Wvd.HeapAnalyzer;
 
+if (args.Length==2 && args[0]=="--aggregation-contract") return AggregationContract.Verify(args[1]);
 if (args.Length < 1 || args[0] is not ("metadata" or "analyze")) throw new ArgumentException("MODE_MUST_BE_METADATA_OR_ANALYZE");
 var options = new Dictionary<string, string>();
 for (var i = 1; i < args.Length; i += 2)
@@ -39,13 +40,22 @@ try
     if (!integrity.complete || integrity.events_lost != 0 || integrity.buffers_lost != 0) throw new InvalidDataException("FINAL_TRACE_INTEGRITY_FAILED");
     if (heap != null)
     {
+        if (symbols != null)
+        {
+            phase = "symbols";
+            var cache = Path.Combine(root, "symcache"); Directory.CreateDirectory(cache);
+            symbols.Result.LoadSymbolsAsync(new SymCachePath(cache, []),
+                new SymbolPath([Path.GetFullPath(options["--pdb-directory"])]), null, [options["--target-image"]], []).GetAwaiter().GetResult();
+            if (files.DirectoryBytes() >= outputMiB * 1024L * 1024) throw new IOException("SYMBOL_CACHE_BUDGET_EXCEEDED");
+            files.Json("symbols.json", symbols.Result.Pdbs.Select(p => new { path = p.Path, guid = p.Id, age = p.Age, loaded = p.IsLoaded }));
+        }
         phase = "aggregate";
         var stacks = new Dictionary<string, StackRecord>();
         var snapshots = HeapAggregation.Read(heap.Result, int.Parse(options["--pid"]),
             long.Parse(options["--target-filetime"]), options["--target-image"], stacks);
         if (options.TryGetValue("--checkpoints", out var checkpointsPath))
         {
-            using var checkpoints = JsonDocument.Parse(File.ReadAllText(checkpointsPath));
+            using var checkpoints = ReportFiles.ReadJson(checkpointsPath);
             var entries = checkpoints.RootElement.ValueKind == JsonValueKind.Array
                 ? checkpoints.RootElement.EnumerateArray().ToArray() : [checkpoints.RootElement];
             snapshots = snapshots.Select(s => {
@@ -59,16 +69,6 @@ try
                 return s with { Phase = matches[0].GetProperty("phase").GetString()! };
             }).ToList();
         }
-        // Aggregate numbers first. Resolve/format each distinct full stack once.
-        if (symbols != null)
-        {
-            phase = "symbols";
-            var cache = Path.Combine(root, "symcache"); Directory.CreateDirectory(cache);
-            symbols.Result.LoadSymbolsAsync(new SymCachePath(cache, []),
-                new SymbolPath([Path.GetFullPath(options["--pdb-directory"])]), null, [options["--target-image"]], []).GetAwaiter().GetResult();
-            if (files.DirectoryBytes() >= outputMiB * 1024L * 1024) throw new IOException("SYMBOL_CACHE_BUDGET_EXCEEDED");
-            files.Json("symbols.json", symbols.Result.Pdbs.Select(p => new { path = p.Path, guid = p.Id, age = p.Age, loaded = p.IsLoaded }));
-        }
         phase = "write";
         HeapAggregation.Write(files, snapshots, stacks);
     }
@@ -76,7 +76,7 @@ try
     bool? captureComplete = null;
     if (options.TryGetValue("--capture-receipt", out var receiptPath))
     {
-        using var receipt = JsonDocument.Parse(File.ReadAllText(receiptPath));
+        using var receipt = ReportFiles.ReadJson(receiptPath);
         captureComplete = receipt.RootElement.GetProperty("complete").GetBoolean();
     }
     files.Json("analysis-receipt.json", new { analysis_complete = true, attribution_complete = false,

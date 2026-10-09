@@ -26,6 +26,14 @@ class Scope {
         if (!business_) throw std::runtime_error("BUSINESS_STATE_REQUIRED");
         return business_->summary();
     }
+    nlohmann::json business_value(const std::string &path) const {
+        if (!business_) throw std::runtime_error("BUSINESS_STATE_REQUIRED");
+        return business_->field(path);
+    }
+    nlohmann::json business_values(std::initializer_list<std::string> names) const {
+        if (!business_) throw std::runtime_error("BUSINESS_STATE_REQUIRED");
+        return business_->fields(names);
+    }
 
   private:
     friend class Service;

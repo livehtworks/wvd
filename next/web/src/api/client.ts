@@ -70,6 +70,9 @@ export const stopRun = (id?: string | number, requestId?: string) => send<RunSta
   "POST", requestId ? { request_id: requestId } : {},
 );
 export const readCurrentRun = () => get<RunState>("/api/v1/runs/current");
+export interface EventPage { instance_id: string; run_id: number | string; last_seq: number;
+  head_seq: number; resync_required: boolean; events: JsonObject[] }
+export const readRunEvents = (after: number) => get<EventPage>(`/api/v1/runs/current/events/${after}`);
 export const startCombatDebug = (strategyName: string, requestId: string, revision: string, locale: ResourceLocale) =>
   send<SubmissionReceipt>("/api/v1/combat/debug", "POST", { strategy_name: strategyName,
     request_id: requestId, profile_revision: revision, resource_locale: locale });

@@ -4,6 +4,19 @@
 #include <stdexcept>
 #include <thread>
 #include <tuple>
+#include <atomic>
+#include <cstdlib>
+#include <new>
+
+// One-shot allocation failure, armed only by the isolated transport fixture.
+static std::atomic<bool> fail_one_allocation{false};
+void *operator new(std::size_t size) {
+    if (fail_one_allocation.exchange(false)) throw std::bad_alloc();
+    if (auto *p = std::malloc(size ? size : 1)) return p;
+    throw std::bad_alloc();
+}
+void operator delete(void *p) noexcept { std::free(p); }
+void operator delete(void *p, std::size_t) noexcept { std::free(p); }
 
 namespace {
 using namespace wvd;
@@ -196,6 +209,218 @@ workflow::Step step(std::string id, workflow::StepData data,
 
 int main(int argc, char **argv) {
     try {
+        if (argc == 2 && std::string(argv[1]) == "--progress-contract") {
+            Ports ports;
+            workflow::FlowProgram program; program.revision="progress-contract"; program.root_definition="root";
+            workflow::Definition d; d.id="root"; d.entry="wait";
+            d.steps.emplace("wait", step("wait",workflow::Wait{150ms},{"done"}));
+            d.steps.emplace("done", step("done",workflow::Finish{}));
+            program.definitions.emplace("root",std::move(d));
+            runtime::FlowExecutor executor(program,ports,1s);
+            if (!executor.progress_changed() || executor.progress_changed())
+                throw std::runtime_error("INITIAL_PROGRESS_VERSION_INVALID");
+            for (int i=0;i<3;++i) {
+                (void)executor.tick();
+                std::this_thread::sleep_for(10ms);
+                if (executor.progress_changed()) throw std::runtime_error("TIME_ONLY_FULL_PROGRESS");
+            }
+            std::this_thread::sleep_for(150ms);
+            (void)executor.tick();
+            if (!executor.progress_changed() || executor.progress_changed())
+                throw std::runtime_error("STEP_PROGRESS_NOT_PUBLISHED");
+            (void)executor.tick();
+            if (!executor.progress_changed()) throw std::runtime_error("TERMINAL_PROGRESS_NOT_PUBLISHED");
+            std::cout << "PASS semantic progress: time unchanged, step and terminal changed\n";
+            return 0;
+        }
+        if (argc == 2 && std::string(argv[1]) == "--input-effect-contract") {
+            struct PermissionPorts final : Ports {
+                bool target_allowed{}, scene_allowed{};
+                contracts::RecognitionOutcome confirmation{contracts::RecognitionOutcome::Hit};
+                int sends{}, effects{}, condition_calls{};
+                std::uint64_t epoch{};
+                contracts::FrameEnvelope capture() override {
+                    auto frame = Ports::capture(); frame.identity.action_epoch = epoch;
+                    return frame;
+                }
+                contracts::Observation recognize(const contracts::FrameEnvelope &frame,
+                    const recognition::Request &request) override {
+                    auto result = Ports::recognize(frame, request);
+                    result.action_eligible = request.recognizer_id == "target" ? target_allowed : scene_allowed;
+                    if (request.recognizer_id == "confirmation") {
+                        ++condition_calls; result.outcome = confirmation;
+                        result.error_code = "CONFIRMATION_FIXTURE_ERROR";
+                    }
+                    result.box = contracts::Box{10,10,10,10}; result.center = contracts::Point{15,15};
+                    return result;
+                }
+                runtime::Submission submit(const contracts::Command &, const contracts::Observation &,
+                    const contracts::Observation &, contracts::Box, const std::string &) override {
+                    ++sends; return {runtime::SubmissionState::Accepted,++epoch,std::chrono::steady_clock::now(),{}};
+                }
+                runtime::OperationResult operate(const std::string &, const nlohmann::json &,
+                    const std::optional<contracts::FrameEnvelope> &, const std::optional<contracts::Observation> &,
+                    const std::string &) override { ++effects; return {runtime::OperationState::Done}; }
+            };
+            const auto request = [](const std::string &id) {
+                return recognition::Request{id,"1",{0,0,900,1600},recognition::CustomParameters{"Fixture",nlohmann::json::object()}};
+            };
+            const auto drive = [](runtime::FlowExecutor &executor) {
+                runtime::TickResult result;
+                for (int i=0;i<40;++i) {
+                    result=executor.tick();
+                    if (result.state!=runtime::TickState::Progress && result.state!=runtime::TickState::Waiting) break;
+                    if (result.state==runtime::TickState::Waiting) std::this_thread::sleep_until(result.wake_at);
+                }
+                return result;
+            };
+            for (const auto kind : {contracts::ActionKind::Click,contracts::ActionKind::ClickKey,contracts::ActionKind::Swipe}) {
+                for (bool authorized : {false,true}) {
+                    PermissionPorts ports; ports.target_allowed=authorized;
+                    workflow::FlowProgram program; program.revision="input-authority"; program.root_definition="root";
+                    workflow::Definition d; d.id="root"; d.entry="input";
+                    workflow::Input input; input.scene=request("scene"); input.target=request("target");
+                    input.command={{"kind",kind==contracts::ActionKind::Click ? "Click" :
+                        kind==contracts::ActionKind::Swipe ? "Swipe" : "ClickKey"},
+                        {"x",15},{"y",15},{"x2",20},{"y2",20},{"key",4},{"duration",100}};
+                    input.allowed_area={1,1,898,1598}; input.use_target_center=false;
+                    d.steps.emplace("input",step("input",input,{"await"}));
+                    d.steps.emplace("await",step("await",workflow::AwaitResult{request("result"),1s,1ms},{"done"}));
+                    d.steps.emplace("done",step("done",workflow::Finish{}));
+                    program.definitions.emplace("root",std::move(d));
+                    runtime::FlowExecutor executor(program,ports,1s); const auto result=drive(executor);
+                    if (ports.sends!=int(authorized) || (authorized && result.state!=runtime::TickState::Completed))
+                        throw std::runtime_error("FIXED_INPUT_AUTHORITY_BYPASSED");
+                }
+            }
+            for (auto outcome : {contracts::RecognitionOutcome::Hit,contracts::RecognitionOutcome::NoHit,contracts::RecognitionOutcome::Error}) {
+                PermissionPorts ports; ports.confirmation=outcome;
+                workflow::FlowProgram program; program.revision="business-condition"; program.root_definition="root";
+                workflow::Definition d; d.id="root"; d.entry="confirm";
+                d.steps.emplace("confirm",step("confirm",workflow::BusinessConfirm{"effect",request("confirmation"),nlohmann::json::object(),"effect"},{"done"}));
+                d.steps.emplace("done",step("done",workflow::Finish{}));
+                program.definitions.emplace("root",std::move(d));
+                runtime::FlowExecutor executor(program,ports,200ms); const auto result=drive(executor);
+                if (!ports.condition_calls || ports.effects!=int(outcome==contracts::RecognitionOutcome::Hit) ||
+                    (outcome!=contracts::RecognitionOutcome::Hit && result.state==runtime::TickState::Completed))
+                    throw std::runtime_error("BUSINESS_CONDITION_IGNORED");
+            }
+            std::cout << "PASS: fixed/back/swipe authority; read-only scene with authorized target; independent business condition.\n";
+            return 0;
+        }
+        if (argc == 2 && std::string(argv[1]) == "--exit-proof-causality") {
+            using Clock = std::chrono::steady_clock;
+            struct CausalPorts final : Ports {
+                bool fault{true};
+                std::uint64_t connection{1},epoch{};
+                unsigned sends{},restarts{};
+                contracts::FrameEnvelope capture() override {
+                    if (fault) { fault=false; throw contracts::ObservationUnavailable({contracts::ReadFaultKind::TransportUnavailable,
+                        contracts::ReadFaultStage::Capture,"DEVICE_INSTANCE_RESTART_REQUIRED","fixture.capture",{},{}}); }
+                    auto f=Ports::capture(); f.identity.connection_generation=connection; f.identity.action_epoch=epoch;
+                    f.identity.raw_size={900,1600}; f.identity.instance_id="2"; f.identity.instance_created_identity="fixture-instance"; return f;
+                }
+                contracts::ObservationRecovery recover_observation(bool=false) override {
+                    ++restarts; const auto at=Clock::now(); ++connection;
+                    return {contracts::ObservationReconnect{"offline","2","fixture-instance",1,connection},true,true,true,
+                        contracts::InstanceExitProof{"offline","2","fixture-instance",1,connection,at,1}};
+                }
+                contracts::Observation recognize(const contracts::FrameEnvelope &f,const recognition::Request &r) override {
+                    auto o=Ports::recognize(f,r); o.center=contracts::Point{110,110};
+                    if(r.recognizer_id=="effect") {o.outcome=contracts::RecognitionOutcome::Error; o.error_code="NEW_CONNECTION_ERROR";} return o;
+                }
+                runtime::Submission submit(const contracts::Command &,const contracts::Observation &,const contracts::Observation &,
+                    contracts::Box,const std::string &) override {++sends; return {runtime::SubmissionState::Accepted,++epoch,Clock::now(),{}};}
+                runtime::OperationResult operate(const std::string &,const nlohmann::json &,
+                    const std::optional<contracts::FrameEnvelope> &,const std::optional<contracts::Observation> &,const std::string &) override {
+                    return {runtime::OperationState::Done};
+                }
+            } ports;
+            const auto req=[](const char *id){return recognition::Request{id,"frozen",{0,0,900,1600},recognition::CustomParameters{"Fixture",{}}};};
+            workflow::FlowProgram p; p.root_definition="root";p.revision="frozen";
+            workflow::Definition root;root.id="root";root.entry="send";
+            workflow::Input input{req("scene"),req("target"),{{"kind","Click"}},{0,0,900,1600}};
+            input.instance_exit_discardable=true;input.interruption_reason="combat.skill_outcome_unconfirmed";
+            root.steps.emplace("send",step("send",std::move(input),{"await"}));
+            root.steps.emplace("await",step("await",workflow::AwaitResult{req("effect"),1s},{"done"}));
+            root.steps.emplace("done",step("done",workflow::Finish{}));
+            workflow::EventRule event;event.id="restart";event.on_device_restart=true;
+            event.category=workflow::EventClass::Exception;event.handler_definition="boot";root.events.push_back(event);
+            workflow::Definition boot;boot.id="boot";boot.entry="return";
+            boot.steps.emplace("return",step("return",workflow::Return{"completed"}));
+            p.definitions.emplace("root",std::move(root));p.definitions.emplace("boot",std::move(boot));
+            runtime::FlowExecutor executor(p,ports,2s,{1s,1ms,2ms});runtime::TickResult end;
+            do {end=executor.tick();if(end.state==runtime::TickState::Waiting)std::this_thread::sleep_until(end.wake_at);}
+            while(end.state==runtime::TickState::Waiting || end.state==runtime::TickState::Progress);
+            const auto state=executor.progress_snapshot(); const auto proof=state.at("observation_recovery").at("instance_exit_proof");
+            if(ports.sends!=1 || ports.restarts!=1 || !executor.has_unresolved_input() || end.code!="NEW_CONNECTION_ERROR" ||
+                contracts::exit_covers_receipts(proof,state.at("pending_inputs"))) throw std::runtime_error("HISTORICAL_EXIT_COVERS_NEW_INPUT");
+            auto old=state.at("pending_inputs");old[0]["connection_generation"]=1;
+            old[0]["captured_at_ns"]=proof.at("observed_at_ns").get<std::int64_t>()-200;
+            old[0]["submitted_at_ns"]=proof.at("observed_at_ns").get<std::int64_t>()-100;
+            if(!contracts::exit_covers_receipts(proof,old))throw std::runtime_error("VALID_EXIT_REJECTED");
+            old[0]["instance_created_identity"]="other";
+            if(contracts::exit_covers_receipts(proof,old))throw std::runtime_error("FOREIGN_EXIT_AUTHORIZED");
+            std::cout<<"exit-proof-causality: new input retained; old same-instance input covered; foreign identity denied\n";
+            return 0;
+        }
+        if (argc == 2 && std::string(argv[1]) == "--receipt-exception-safety") {
+            for (const std::string mode : {"after_accept", "inside_submit", "effect_publish", "rejected", "snapshot"}) {
+                struct ReceiptPorts final : Ports {
+                    std::string mode;
+                    unsigned sends{};
+                    contracts::Observation recognize(const contracts::FrameEnvelope &f, const recognition::Request &r) override {
+                        auto value = Ports::recognize(f, r); value.center = contracts::Point{110,110}; return value;
+                    }
+                    runtime::Submission submit(const contracts::Command &, const contracts::Observation &,
+                        const contracts::Observation &, contracts::Box, const std::string &) override {
+                        if (mode == "rejected") return {runtime::SubmissionState::Rejected, 0, {}, "DENIED"};
+                        ++sends;
+                        if (mode == "inside_submit") throw std::bad_alloc();
+                        if (mode == "after_accept") fail_one_allocation.store(true);
+                        return {runtime::SubmissionState::Accepted, 1, std::chrono::steady_clock::now(), {}};
+                    }
+                    runtime::OperationResult operate(const std::string &, const nlohmann::json &p,
+                        const std::optional<contracts::FrameEnvelope> &, const std::optional<contracts::Observation> &,
+                        const std::string &) override {
+                        if (p.value("phase", "") == "submitted") throw std::bad_alloc();
+                        return {runtime::OperationState::Done};
+                    }
+                } ports;
+                ports.mode = mode;
+                const auto request = [](const char *id) { return recognition::Request{id,"frozen",{0,0,900,1600}, recognition::CustomParameters{"Fixture",{}}}; };
+                workflow::FlowProgram p; p.root_definition = "root"; p.revision = "frozen";
+                workflow::Definition root; root.id = "root"; root.entry = "send";
+                workflow::Input input{request("scene"),request("target"),{{"kind","Click"}},{0,0,900,1600}};
+                if (mode == "effect_publish") input.effect_binding = "FixtureEffect";
+                auto send = step("send",std::move(input),{"await"});
+                send.source_path = "[{\"native_node\":\"allocation-failure-receipt-long-source-identity\"}]";
+                root.steps.emplace("send",std::move(send));
+                root.steps.emplace("await",step("await",workflow::AwaitResult{request("effect"),1s},{"done"}));
+                root.steps.emplace("done",step("done",workflow::Finish{})); p.definitions.emplace("root",std::move(root));
+                runtime::FlowExecutor executor(p,ports,2s);
+                const auto end = executor.tick();
+                if (mode == "snapshot") {
+                    fail_one_allocation.store(true);
+                    try { (void)executor.progress_snapshot(); throw std::runtime_error("EXPECTED_SNAPSHOT_OOM"); }
+                    catch (const std::bad_alloc &) {}
+                }
+                if (mode == "rejected") {
+                    if (ports.sends || executor.has_unresolved_input()) throw std::runtime_error("REJECTED_HAS_EFFECT");
+                } else {
+                    const auto pending = executor.progress_snapshot().at("pending_inputs");
+                    if (ports.sends != 1 || !executor.has_unresolved_input() || pending.size() != 1 ||
+                        pending[0].at("basis_frame") != 1 || pending[0].at("connection_generation") != 1)
+                        throw std::runtime_error("SENT_RECEIPT_LOST:"+mode);
+                    if (mode != "snapshot" && end.state != runtime::TickState::Failed)
+                        throw std::runtime_error("EXPECTED_POST_DELIVERY_FAILURE:"+mode);
+                    executor.report_unconfirmed_inputs("fixture_finish");
+                    if (!executor.has_unresolved_input()) throw std::runtime_error("FINISH_LOST_RECEIPT");
+                }
+                std::cout << "receipt-exception-safety " << mode << " passed\n";
+            }
+            return 0;
+        }
         if (argc == 2 && std::string(argv[1]) == "--recovery-recheck") {
             for (const std::string mode : {"cleared", "still_present", "recognition_error", "unconditional"}) {
                 struct RecoveryPorts final : Ports {
@@ -862,6 +1087,7 @@ int main(int argc, char **argv) {
                         auto frame = Ports::capture();
                         frame.identity.raw_size = {900,1600}; frame.identity.action_epoch = epoch;
                         frame.identity.connection_generation = recovered && instance_exit ? 2 : 1;
+                        frame.identity.instance_id = "2"; frame.identity.instance_created_identity = "original-instance";
                         return frame;
                     }
                     contracts::Observation recognize(const contracts::FrameEnvelope &frame,
@@ -880,7 +1106,8 @@ int main(int argc, char **argv) {
                     }
                     contracts::ObservationRecovery recover_observation(bool = false) override {
                         ++recoveries; recovered = true;
-                        if (instance_exit) return {contracts::ObservationReconnect{"offline", "2", "original-instance", 1, 2}, true, true, true};
+                        if (instance_exit) return {contracts::ObservationReconnect{"offline", "2", "original-instance", 1, 2}, true, true, true,
+                            contracts::InstanceExitProof{"offline","2","original-instance",1,2,std::chrono::steady_clock::now(),1}};
                         return {{}, true, true};
                     }
                     runtime::OperationResult operate(const std::string &binding, const nlohmann::json &,

@@ -3,6 +3,8 @@
 #include <fstream>
 #include <filesystem>
 #include <numeric>
+#include <cmath>
+#include <stdexcept>
 
 #ifdef __DIRECTML__
 #include <onnxruntime/core/providers/dml/dml_provider_factory.h>
@@ -99,9 +101,16 @@ inline static size_t argmax(ForwardIterator first, ForwardIterator last) {
     return std::distance(first, std::max_element(first, last));
 }
 
-TextLine CrnnNet::scoreToTextLine(const std::vector<float> &outputData, size_t h, size_t w) {
+TextLine CrnnNet::decodeScores(const std::vector<float> &outputData, size_t h, size_t w,
+                              const std::vector<std::string> &keys) {
+    return decodeView(outputData, h, w, keys);
+}
+TextLine CrnnNet::decodeView(std::span<const float> outputData, size_t h, size_t w,
+                           const std::vector<std::string> &keys) {
     auto keySize = keys.size();
     auto dataSize = outputData.size();
+    if (!h || !w || w != keySize || h > dataSize / w || h * w != dataSize)
+        throw std::runtime_error("OCR_CTC_SHAPE_INVALID");
     std::string strRes;
     std::vector<float> scores;
     size_t lastIndex = 0;
@@ -111,11 +120,13 @@ TextLine CrnnNet::scoreToTextLine(const std::vector<float> &outputData, size_t h
     for (size_t i = 0; i < h; i++) {
         size_t start = i * w;
         size_t stop = (i + 1) * w;
-        if (stop > dataSize - 1) {
-            stop = (i + 1) * w - 1;
-        }
-        maxIndex = int(argmax(&outputData[start], &outputData[stop]));
-        maxValue = float(*std::max_element(&outputData[start], &outputData[stop]));
+        const auto first = outputData.begin() + start;
+        const auto last = outputData.begin() + stop;
+        if (!std::all_of(first, last, [](float value) { return std::isfinite(value); }))
+            throw std::runtime_error("OCR_CTC_SCORE_INVALID");
+        const auto winner = std::max_element(first, last);
+        maxIndex = static_cast<size_t>(std::distance(first, winner));
+        maxValue = *winner;
 
         if (maxIndex > 0 && maxIndex < keySize && (!(i > 0 && maxIndex == lastIndex))) {
             scores.emplace_back(maxValue);
@@ -144,11 +155,13 @@ TextLine CrnnNet::getTextLine(const cv::Mat &src) {
                                      inputNames.size(), outputNames.data(), outputNames.size());
     assert(outputTensor.size() == 1 && outputTensor.front().IsTensor());
     std::vector<int64_t> outputShape = outputTensor[0].GetTensorTypeAndShapeInfo().GetShape();
-    int64_t outputCount = std::accumulate(outputShape.begin(), outputShape.end(), 1,
-                                          std::multiplies<int64_t>());
+    const auto outputCount = outputTensor[0].GetTensorTypeAndShapeInfo().GetElementCount();
     float *floatArray = outputTensor.front().GetTensorMutableData<float>();
-    std::vector<float> outputData(floatArray, floatArray + outputCount);
-    return scoreToTextLine(outputData, outputShape[1], outputShape[2]);
+    if (outputShape.size() != 3 || outputShape[0] != 1 || outputCount == 0 ||
+        outputShape[1] <= 0 || outputShape[2] <= 0 || outputShape[1] > INT_MAX || outputShape[2] > INT_MAX)
+        throw std::runtime_error("OCR_CTC_SHAPE_INVALID");
+    return decodeView({floatArray, static_cast<std::size_t>(outputCount)},
+                      outputShape[1], outputShape[2], keys);
 }
 
 std::vector<TextLine> CrnnNet::getTextLines(std::vector<cv::Mat> &partImg, const char *path, const char *imgName) {

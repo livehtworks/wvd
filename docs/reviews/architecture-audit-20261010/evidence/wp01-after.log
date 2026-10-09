@@ -1,0 +1,5 @@
+receipt-exception-safety inside_submit passed
+receipt-exception-safety after_accept passed
+receipt-exception-safety effect_publish passed
+receipt-exception-safety rejected passed
+receipt-exception-safety snapshot passed

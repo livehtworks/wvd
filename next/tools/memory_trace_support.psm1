@@ -92,35 +92,48 @@ public static class WvdTraceNative {
 '@
 }
 
+$script:TraceJsonBytes=0L
+$script:TraceJsonFiles=0
+function Read-TraceJson {
+    param([Parameter(Mandatory)][string]$Path,[long]$Limit=4MB)
+    if($Limit -le 0 -or $Limit -gt 32MB){throw 'TRACE_JSON_LIMIT_INVALID'}
+    if(([IO.File]::GetAttributes($Path) -band [IO.FileAttributes]::ReparsePoint) -ne 0){throw 'TRACE_JSON_REPARSE_REJECTED'}
+    $file=[IO.File]::Open($Path,'Open','Read','Read')
+    try {
+        if($file.Length -gt $Limit -or $script:TraceJsonBytes+$file.Length -gt 128MB -or
+            $script:TraceJsonFiles -ge 1000){throw 'TRACE_JSON_INPUT_BUDGET_EXCEEDED'}
+        $script:TraceJsonBytes+=$file.Length;$script:TraceJsonFiles++
+        $reader=[IO.StreamReader]::new($file,[Text.UTF8Encoding]::new($false,$true))
+        try { return ($reader.ReadToEnd()|ConvertFrom-Json -Depth 32 -NoEnumerate) }
+        finally {$reader.Dispose()}
+    } finally {$file.Dispose()}
+}
 function Invoke-TraceTool {
     param([string]$Executable, [string[]]$Arguments, [string]$Log,
           [int]$TimeoutSeconds = 20, [string]$OutputRoot, [long]$OutputLimit = 128MB,
           [DateTime]$DeadlineUtc=[DateTime]::MaxValue, [scriptblock]$Cancelled,
-          [long]$MaxPrivateBytes=0, [double]$MaxSystemCommitRatio=0)
+          [long]$MaxPrivateBytes=0, [double]$MaxSystemCommitRatio=0, [switch]$RecordOnly)
     if ([DateTime]::UtcNow -ge $DeadlineUtc) { throw 'TRACE_TOOL_DEADLINE_ALREADY_EXPIRED' }
     if ($Cancelled -and (& $Cancelled)) { throw 'TRACE_TOOL_CANCELLED_BEFORE_START' }
     if ($MaxSystemCommitRatio -gt 0) {
         Initialize-TraceInterop
         if ([WvdTraceNative]::SystemCommitRatio() -ge $MaxSystemCommitRatio) { throw 'ANALYSIS_SYSTEM_COMMIT_BUDGET_NOT_AVAILABLE' }
     }
-    $info = [Diagnostics.ProcessStartInfo]::new($Executable)
-    $info.UseShellExecute = $false
-    $info.CreateNoWindow = $true
-    $info.RedirectStandardOutput = $true
-    $info.RedirectStandardError = $true
-    foreach ($arg in $Arguments) { $info.ArgumentList.Add($arg) }
-    $process = [Diagnostics.Process]::new()
-    $process.StartInfo = $info
+    $process = $null
     $started = $false
     $terminationAttempted = $false
+    $pump = $null
+    if (-not ('WvdTraceOutput' -as [type])) {
+        Add-Type -Path @((Join-Path $PSScriptRoot 'owned_trace_process.cs'),(Join-Path $PSScriptRoot 'bounded_trace_output.cs'))
+    }
     try {
-        if (-not $process.Start()) { throw 'WPR_START_FAILED' }
+        $process = [WvdTraceProcess]::Start($Executable,$Arguments)
         $started = $true
-        $stdout = $process.StandardOutput.ReadToEndAsync()
-        $stderr = $process.StandardError.ReadToEndAsync()
+        $pump = [WvdTraceOutput]::new($process, $Log, [Math]::Min($OutputLimit,128MB))
         $watch=[Diagnostics.Stopwatch]::StartNew()
         $failure=''
         while (-not $process.WaitForExit(200)) {
+            if ($pump.Failed) { $failure='TRACE_TOOL_STREAM_BUDGET_OR_IO_FAILURE'; break }
             if ($watch.Elapsed.TotalSeconds -ge $TimeoutSeconds) { $failure='TRACE_TOOL_TIMEOUT'; break }
             if ([DateTime]::UtcNow -ge $DeadlineUtc) { $failure='TRACE_TOOL_ABSOLUTE_DEADLINE'; break }
             if ($Cancelled -and (& $Cancelled)) { $failure='TRACE_TOOL_CANCELLED'; break }
@@ -142,14 +155,25 @@ function Invoke-TraceTool {
         }
         if ($failure) {
             if (-not $process.HasExited) {
-                $terminationAttempted=$true; $process.Kill()
+                $terminationAttempted=$true; $process.Kill($true)
                 if (-not $process.WaitForExit(5000)) { throw "TRACE_TOOL_CHILD_EXIT_UNCONFIRMED:$($process.Id)" }
             }
-            [IO.File]::WriteAllText($Log, $stdout.GetAwaiter().GetResult() + $stderr.GetAwaiter().GetResult())
+            $null=$pump.Finish(1000)
             throw "$($failure):$($Arguments[0])"
         }
-        $text = $stdout.GetAwaiter().GetResult() + $stderr.GetAwaiter().GetResult()
-        [IO.File]::WriteAllText($Log, $text)
+        # A parent can exit while a descendant keeps both pipes open. Close
+        # the owned job even in that case; never discover/kill by process name.
+        $process.CloseOwnedTree()
+        $remaining=[Math]::Min(1000.0,[Math]::Max(0.0,($DeadlineUtc-[DateTime]::UtcNow).TotalMilliseconds))
+        if (-not $pump.Finish([int]$remaining)) { throw 'TRACE_TOOL_PIPE_EOF_UNCONFIRMED' }
+        if ($pump.Failed) { throw 'TRACE_TOOL_STREAM_BUDGET_OR_IO_FAILURE' }
+        if ($RecordOnly) {
+            if ($process.ExitCode -ne 0) { throw "TRACE_TOOL_FAILED:$($process.ExitCode)" }
+            return
+        }
+        if ((Get-Item -LiteralPath $Log).Length -gt 1MB) { throw 'TRACE_TOOL_TEXT_RESULT_LIMIT' }
+        if ([DateTime]::UtcNow -ge $DeadlineUtc) { throw 'TRACE_TOOL_ABSOLUTE_DEADLINE' }
+        $text=[IO.File]::ReadAllText($Log,[Text.Encoding]::UTF8)
         if ($process.ExitCode -ne 0) { throw "WPR_FAILED:$($Arguments[0]):$($process.ExitCode)" }
         return $text
     } finally {
@@ -157,10 +181,10 @@ function Invoke-TraceTool {
         try {
             if ($started -and -not $process.HasExited) {
                 if ($terminationAttempted) { throw "TRACE_TOOL_CHILD_EXIT_UNCONFIRMED:$($process.Id)" }
-                $terminationAttempted=$true; $process.Kill()
+                $terminationAttempted=$true; $process.Kill($true)
                 if (-not $process.WaitForExit(5000)) { throw "TRACE_TOOL_CHILD_EXIT_UNCONFIRMED:$($process.Id)" }
             }
-        } finally { $process.Dispose() }
+        } finally { if ($process) { $process.Dispose() }; if ($pump) { $pump.Dispose() } }
     }
 }
 
@@ -215,13 +239,14 @@ function Get-TraceFileBytes {
 }
 
 function Read-TraceFileIntegrity {
-    param([string]$AnalyzerPath, [string]$TracePath, [string]$OutputRoot)
+    param([string]$AnalyzerPath, [string]$TracePath, [string]$OutputRoot,
+          [DateTime]$DeadlineUtc=[DateTime]::MaxValue)
     $directory=Join-Path $OutputRoot ('final-integrity-'+[guid]::NewGuid().ToString('N'))
     $commandFailure=''
     try {
         Invoke-TraceTool -Executable $AnalyzerPath -Arguments @('metadata','--etl',$TracePath,
             '--output',$directory,'--memory-mib','512','--output-mib','1') `
-            -Log ($directory+'.log') -TimeoutSeconds 30 -OutputRoot $directory -OutputLimit 1MB | Out-Null
+            -Log ($directory+'.log') -TimeoutSeconds 30 -OutputRoot $directory -OutputLimit 1MB -DeadlineUtc $DeadlineUtc | Out-Null
     } catch { $commandFailure=$_.Exception.Message }
     $path=Join-Path $directory 'trace-integrity.json'
     if (-not (Test-Path -LiteralPath $path)) { throw "FINAL_TRACE_STATISTICS_UNKNOWN:$commandFailure" }
@@ -281,4 +306,4 @@ function Close-OwnedTraceCapture {
         cleanup_confirmed=($traceClosed -and $snapshotClosed);errors=@($errors)}
 }
 
-Export-ModuleMember -Function Initialize-TraceInterop, Invoke-TraceWpr, Invoke-TraceTool, Get-TraceFileBytes, Assert-TraceSnapshotBoundary, Read-TraceFileIntegrity, Assert-TraceFileIntegrity, Close-OwnedTraceCapture, Assert-NoExistingWprCapture
+Export-ModuleMember -Function Initialize-TraceInterop, Invoke-TraceWpr, Invoke-TraceTool, Get-TraceFileBytes, Assert-TraceSnapshotBoundary, Read-TraceFileIntegrity, Assert-TraceFileIntegrity, Close-OwnedTraceCapture, Assert-NoExistingWprCapture, Read-TraceJson

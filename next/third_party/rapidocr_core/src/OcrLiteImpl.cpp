@@ -60,13 +60,18 @@ void OcrLiteImpl::cancel() {
     angleNet.cancel();
     crnnNet.cancel();
 }
+void OcrLiteImpl::resume() {
+    dbNet.resume();
+    angleNet.resume();
+    crnnNet.resume();
+}
 
 void OcrLiteImpl::Logger(const char *format, ...) {
-    if (!(isOutputConsole || isOutputResultTxt)) return;
+    if (!isOutputConsole && !isOutputResultTxt) return;
     memset(loggerBuffer, 0, 8192);
     va_list args;
     va_start(args, format);
-    vsprintf(loggerBuffer, format, args);
+    vsnprintf(loggerBuffer, 8192, format, args);
     va_end(args);
     if (isOutputConsole) printf("%s", loggerBuffer);
     if (isOutputResultTxt) fprintf(resultTxt, "%s", loggerBuffer);
@@ -171,8 +176,9 @@ OcrResult OcrLiteImpl::detect(const char *path, const char *imgName,
                           cv::Mat &src, cv::Rect &originRect, ScaleParam &scale,
                           float boxScoreThresh, float boxThresh, float unClipRatio, bool doAngle, bool mostAngle) {
 
-    cv::Mat textBoxPaddingImg = src.clone();
-    int thickness = getThickness(src);
+    cv::Mat textBoxPaddingImg;
+    const bool render = !resultOnly || isOutputResultImg;
+    if (render) textBoxPaddingImg = src.clone();
 
     Logger("=====Start detect=====\n");
     Logger("ScaleParam(sw:%d,sh:%d,dw:%d,dh:%d,%f,%f)\n", scale.srcWidth, scale.srcHeight,
@@ -196,7 +202,7 @@ OcrResult OcrLiteImpl::detect(const char *path, const char *imgName,
     }
 
     Logger("---------- step: drawTextBoxes ----------\n");
-    drawTextBoxes(textBoxPaddingImg, textBoxes, thickness);
+    if (render) drawTextBoxes(textBoxPaddingImg, textBoxes, getThickness(src));
 
     //---------- getPartImages ----------
     std::vector<cv::Mat> partImages = getPartImages(src, textBoxes, path, imgName);
@@ -220,7 +226,7 @@ OcrResult OcrLiteImpl::detect(const char *path, const char *imgName,
     Logger("---------- step: crnnNet getTextLine ----------\n");
     std::vector<TextLine> textLines = crnnNet.getTextLines(partImages, path, imgName);
     //Log TextLines
-    for (size_t i = 0; i < textLines.size(); ++i) {
+    if (isOutputConsole || isOutputResultTxt) for (size_t i = 0; i < textLines.size(); ++i) {
         Logger("textLine[%d](%s)\n", i, textLines[i].text.c_str());
         std::ostringstream txtScores;
         for (size_t s = 0; s < textLines[i].charScores.size(); ++s) {
@@ -243,9 +249,9 @@ OcrResult OcrLiteImpl::detect(const char *path, const char *imgName,
         boxPoint[2] = cv::Point(textBoxes[i].boxPoint[2].x - padding, textBoxes[i].boxPoint[2].y - padding);
         boxPoint[3] = cv::Point(textBoxes[i].boxPoint[3].x - padding, textBoxes[i].boxPoint[3].y - padding);
         TextBlock textBlock{boxPoint, textBoxes[i].score, angles[i].index, angles[i].score,
-                            angles[i].time, textLines[i].text, textLines[i].charScores, textLines[i].time,
+                            angles[i].time, std::move(textLines[i].text), std::move(textLines[i].charScores), textLines[i].time,
                             angles[i].time + textLines[i].time};
-        textBlocks.emplace_back(textBlock);
+        textBlocks.emplace_back(std::move(textBlock));
     }
 
     double endTime = getCurrentTime();
@@ -256,7 +262,7 @@ OcrResult OcrLiteImpl::detect(const char *path, const char *imgName,
     //cropped to original size
     cv::Mat textBoxImg;
 
-    if (originRect.x > 0 && originRect.y > 0) {
+    if (render && originRect.x > 0 && originRect.y > 0) {
         textBoxPaddingImg(originRect).copyTo(textBoxImg);
     } else {
         textBoxImg = textBoxPaddingImg;
@@ -269,10 +275,10 @@ OcrResult OcrLiteImpl::detect(const char *path, const char *imgName,
     }
 
     std::string strRes;
-    for (auto &textBlock: textBlocks) {
+    if (!resultOnly) for (auto &textBlock: textBlocks) {
         strRes.append(textBlock.text);
         strRes.append("\n");
     }
 
-    return OcrResult{dbNetTime, textBlocks, textBoxImg, fullTime, strRes};
+    return OcrResult{dbNetTime, std::move(textBlocks), std::move(textBoxImg), fullTime, std::move(strRes)};
 }

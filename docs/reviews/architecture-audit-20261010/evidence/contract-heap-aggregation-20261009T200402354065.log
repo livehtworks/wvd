@@ -1,0 +1,1 @@
+PASS production aggregate/report: stable unknown bucket, no per-allocation totals object, signed deltas, conservation and bounded partial output

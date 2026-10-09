@@ -92,9 +92,9 @@ NativeExecutionResult NativeExecutionSession::run() {
     std::string skill_entry;
     nlohmann::json skills = nlohmann::json::array();
     NativeExecutionResult result;
-    nlohmann::json reported_progress;
     nlohmann::json objective;
     std::optional<std::uint64_t> business_version;
+    auto next_heartbeat = started;
     auto segment_at = started;
     auto segment_sample = totals.sample();
     auto segment_node = executor_.current_step_id();
@@ -147,8 +147,8 @@ NativeExecutionResult NativeExecutionSession::run() {
             }
             if (progress_) {
                 timing::Scope measure(timing::Part::JsonEvents);
-                auto current = executor_.progress_snapshot();
                 const auto version = ports_.business_version();
+                const bool changed = executor_.progress_changed() || business_version != version;
                 if (business_version != version) {
                     const auto summary = ports_.business_summary();
                     objective = nlohmann::json::object();
@@ -156,10 +156,15 @@ NativeExecutionResult NativeExecutionSession::run() {
                         if (summary.contains(key)) objective[key] = summary.at(key);
                     business_version = version;
                 }
-                current["main_objective"] = objective;
-                if (current != reported_progress) {
-                    reported_progress = current;
+                if (changed) {
+                    auto current = executor_.progress_snapshot();
+                    current["main_objective"] = objective;
                     progress_(current);
+                    next_heartbeat = std::chrono::steady_clock::now() + std::chrono::seconds{1};
+                } else if (std::chrono::steady_clock::now() >= next_heartbeat) {
+                    progress_({{"heartbeat", true}, {"session_elapsed_ms", std::chrono::duration_cast<std::chrono::milliseconds>(
+                        std::chrono::steady_clock::now() - started).count()}});
+                    next_heartbeat = std::chrono::steady_clock::now() + std::chrono::seconds{1};
                 }
             }
             if (result.flow.state == TickState::Completed ||

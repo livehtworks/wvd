@@ -56,13 +56,22 @@ struct NativeRunDefinition {
 // 控制面只保护短状态；设备与执行器由单个worker顺序拥有。
 class NativeRunCoordinator final {
   public:
+    struct ReadView {
+        contracts::RunSnapshot snapshot;
+        std::string instance_id, request_id;
+        std::shared_ptr<storage::EventJournal> journal;
+        std::shared_ptr<storage::RunStore> store;
+        bool worker_joined{}, heap_maintenance_complete{}, heap_maintenance_succeeded{};
+    };
     explicit NativeRunCoordinator(std::filesystem::path data_root,
-                                  std::size_t event_capacity = 256);
+                                  std::size_t event_capacity = 256, std::string instance_id = {});
     ~NativeRunCoordinator();
     contracts::RunSnapshot start(NativeRunDefinition definition,
                                  std::shared_ptr<devices::DeviceBackend> backend);
     void request_stop();
+    bool owns_request(const std::string &request_id) const;
     contracts::RunSnapshot snapshot() const;
+    ReadView read_view() const;
     std::optional<contracts::RunSnapshot> request_snapshot(const std::string &request_id) const;
     bool wait_for(std::chrono::milliseconds duration);
     bool wait_for_worker(std::chrono::milliseconds duration);
@@ -104,11 +113,12 @@ class NativeRunCoordinator final {
     bool active_{};
     bool execution_finished_{};
     bool terminal_recorded_{true};
+    bool worker_joined_{}, heap_maintenance_complete_{}, heap_maintenance_succeeded_{};
     contracts::RunSnapshot snapshot_;
     std::string request_id_;
     std::shared_ptr<NativeExecutionSession> session_;
     std::unique_ptr<platform::DeviceLease> lease_;
     std::shared_ptr<storage::EventJournal> journal_;
-    std::unique_ptr<storage::RunStore> store_;
+    std::shared_ptr<storage::RunStore> store_;
 };
 } // namespace wvd::runtime

@@ -1,0 +1,7 @@
+confirmed result valid PASS; inputs=1; pending=0
+confirmed result wrong-class PASS; inputs=1; pending=0
+confirmed result wrong-source PASS; inputs=1; pending=0
+confirmed result epoch PASS; inputs=1; pending=0
+confirmed result another-call PASS; inputs=1; pending=0
+confirmed result no-record PASS; inputs=1; pending=0
+confirmed result result-input PASS; inputs=1; pending=0

@@ -5,6 +5,7 @@
 
 namespace wvd::platform {
 std::string unique_id();
+std::filesystem::path extended_path(const std::filesystem::path &path);
 void atomic_write(const std::filesystem::path &target, const std::string &contents, bool replace);
 class DeviceLease {
   public:

@@ -25,10 +25,12 @@ struct DiagnosticRequest {
     std::string evidence_kind{"captured_frame"};
     // 有界动作证据按同一操作去重/节流；不同操作仍共享原失败数量和单帧预算。
     bool operation_scoped{};
+    bool critical{};
     nlohmann::json context = nlohmann::json::object();
 };
 struct DiagnosticLimits {
     std::size_t rewards{128}, failures{32}, frame_bytes{8 * 1024 * 1024};
+    std::size_t critical_failures{16};
 };
 class EventJournal {
   public:
@@ -37,6 +39,8 @@ class EventJournal {
     std::uint64_t emit(std::uint64_t generation, std::string type, nlohmann::json payload = {},
                        bool critical = false);
     nlohmann::json read(std::uint64_t after = 0) const;
+    nlohmann::json read_page(std::uint64_t after, std::size_t limit = 128) const;
+    nlohmann::json latest_node() const;
     void commit_terminal(std::uint64_t generation, nlohmann::json payload,
                          const std::function<void(const nlohmann::json &)> &persist);
 
@@ -68,7 +72,7 @@ class RunStore {
                                   const contracts::DiagnosticPixels *pixels = nullptr);
     bool save_recent_frame(const contracts::FrameEnvelope &frame, bool action_evidence = false) noexcept;
     void finish_recent_frames() noexcept;
-    nlohmann::json diagnostic_summary() const;
+    nlohmann::json diagnostic_summary(bool wait_for_writer = false) const;
     void note_diagnostic_hook_failure() noexcept;
     void save_events(const EventJournal &events);
     void append_timing(std::uint64_t generation, const std::string &type,
@@ -88,6 +92,9 @@ class RunStore {
         return logging_.memory && logging_.accepts(LogLevel::Info);
     }
     static nlohmann::json read_summary(const std::filesystem::path &directory);
+    static std::string read_diagnostic(const std::filesystem::path &directory,
+        const nlohmann::json &index, const std::string &instance, std::uint64_t run,
+        std::uint64_t generation, std::uint64_t id);
 
   private:
     std::filesystem::path directory_;
@@ -101,6 +108,8 @@ class RunStore {
     const DiagnosticLimits diagnostic_limits_;
     const LoggingPolicy logging_;
     mutable std::mutex diagnostic_mutex_;
+    mutable std::atomic<std::shared_ptr<const nlohmann::json>> diagnostic_view_{
+        std::make_shared<const nlohmann::json>(nlohmann::json{{"entries", nlohmann::json::array()}})};
     std::map<std::string, contracts::MonotonicClock::TimePoint> diagnostic_times_;
     std::set<std::string> diagnostic_operations_;
     std::set<std::string> diagnostic_scoped_operations_;
@@ -108,11 +117,13 @@ class RunStore {
     std::uint64_t diagnostic_rewards_{}, diagnostic_failures_{}, diagnostic_bytes_{},
         diagnostic_failed_{}, diagnostic_throttled_{}, diagnostic_duplicates_{}, diagnostic_quota_{},
         diagnostic_unavailable_{}, diagnostic_unrecorded_{};
+    std::uint64_t diagnostic_critical_{}, diagnostic_sequence_{};
     bool diagnostic_closed_{}, diagnostic_directory_created_{};
     std::uint64_t diagnostic_directory_id_{};
     // 与结果同一RunStore持有，只由协调工作线程写入；不新增日志线程或全局缓存。
     std::ofstream timing_stream_;
     std::uint64_t timing_bytes_{}, timing_rows_{}, timing_dropped_{}, timing_failed_{};
+    std::uint64_t timing_auxiliary_dropped_{}, timing_input_dropped_{};
     std::uint64_t timing_write_ns_{};
     bool timing_closed_{};
     std::ofstream log_stream_;

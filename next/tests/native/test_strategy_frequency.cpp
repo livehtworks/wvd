@@ -2,6 +2,7 @@
 #include "games/wvd/combat/selection_diagnostics.hpp"
 #include "games/wvd/state.hpp"
 #include "games/wvd/business_condition.hpp"
+#include "games/wvd/karma.hpp"
 #include "storage/profile_store.hpp"
 #include "platform/windows/file_digest.hpp"
 #include <fstream>
@@ -83,6 +84,38 @@ int main(int argc, char **argv) {
         check(actor_state.summary().at("combat_actor_recognized") == true &&
               actor_state.summary().at("has_prepared_skill") == true, "STABLE_FRAME_NOT_RESELECTED");
         check(games::business_condition(actor_state.summary(), actor_condition), "STABLE_FRAME_CONDITION_MISSED");
+        if (std::string(argv[1]) == "--configuration-contract") {
+            check(!diagnostic_strategy.select({{"actor",.97},{"other",.81}}),"CONSUMED_ACTOR_SELECTED_OTHER");
+            check(diagnostic_strategy.select({{"actor",.81},{"other",.97}})->skill.at("role_var")=="other",
+                "STRONGER_ACTOR_NOT_SELECTED");
+            check(!diagnostic_strategy.select({{"actor_sp",.97},{"other",.81}}),"CONSUMED_VARIANT_SELECTED_OTHER");
+            auto inherited=profile; inherited["TASK_SPECIFIC_CONFIG"]=true;
+            inherited["TASK_POINT_STRATEGY"]["overall_strategy"]="";
+            games::CombatStrategy empty(inherited); empty.reload(0);
+            check(!empty.automatic() && games::reachable_strategy_groups(inherited)==std::set<std::string>{"test"},
+                "EMPTY_OVERRIDE_DID_NOT_INHERIT");
+            for(const auto language : {"en_US","zh_CN"}) {
+                inherited["LANGUAGE"]=language;
+                inherited["TASK_POINT_STRATEGY"]["overall_strategy"]="自定义任务点策略";
+                inherited["TASK_POINT_STRATEGY"]["task_point"]={{"0",""}};
+                games::CombatStrategy points(inherited); points.reload(0);
+                check(points.uses_task_points() && !points.automatic() &&
+                    games::reachable_strategy_groups(inherited)==std::set<std::string>{"test"},"POINT_INHERITANCE_OR_LANGUAGE_DRIFT");
+            }
+            inherited["TASK_POINT_STRATEGY"]["task_point"]["0"]="missing";
+            bool missing=false;try{games::CombatStrategy invalid(inherited);}catch(const std::runtime_error &e){
+                missing=std::string(e.what())=="STRATEGY_GROUP_NOT_FOUND:missing";}
+            check(missing,"UNKNOWN_GROUP_BECAME_AUTO");
+            const auto karma=games::choose_karma("  -4 ");
+            check(karma.before=="  -4 " && karma.after=="-2" && karma.ambush,"KARMA_SIGN_NOT_NORMALIZED");
+            check(games::choose_karma("+0").after=="+2","KARMA_ZERO_CHANGED");
+            bool bad_karma_rejected = false;
+            try { (void)storage::LegacyConfigImporter(descriptor).parse({{"GENERAL",{{"KARMA_ADJUST","+-2"}}}}); }
+            catch (const std::exception &) { bad_karma_rejected = true; }
+            check(bad_karma_rejected,"INVALID_KARMA_REACHED_PREPARATION");
+            std::cout<<"PASS: identity before remaining actions; inheritance and dependency resolver; unknown group rejection; karma CAS sign.\n";
+            return 0;
+        }
         if (std::string(argv[1]) == "--semantics") {
             std::cout << "PASS: once/repeat, fallback preservation, group precedence, epoch invalidation. No profile writes or device input.\n";
             return 0;

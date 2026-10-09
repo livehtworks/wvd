@@ -5,6 +5,7 @@
 #include <optional>
 #include <string>
 #include <vector>
+#include "contracts/observation_fault.hpp"
 
 namespace wvd::devices {
 enum class LifecycleOperation { StopApplication, StartApplication, Reconnect, RestartInstance, EnsureVpn };
@@ -20,6 +21,7 @@ struct LifecycleObservation {
     bool application_foreground{};
     // 管理器明确确认绑定实例的进程已退出；Android未就绪/ADB离线不等于退出。
     bool instance_exited{};
+    std::optional<contracts::InstanceExitProof> instance_exit;
 };
 struct LifecyclePlan {
     LifecycleTarget target;
@@ -43,6 +45,7 @@ class LifecyclePort {
   public:
     virtual ~LifecyclePort() = default;
     virtual std::optional<LifecycleObservation> observe_lifecycle() = 0;
+    virtual void lifecycle_window(std::chrono::steady_clock::time_point) noexcept {}
     virtual bool execute_lifecycle(LifecycleOperation operation, const LifecycleTarget &target,
                                    const std::function<bool()> &cancelled) = 0;
 };

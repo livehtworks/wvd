@@ -21,5 +21,6 @@ class MetadataQuery {
 
   private:
     std::unique_ptr<Impl> impl_;
+    std::size_t cleanup_slot_{};
 };
 } // namespace wvd::platform

@@ -1,0 +1,95 @@
+[
+  {
+    "passed": true,
+    "case": "busy_batch_waiting_is_legal"
+  },
+  {
+    "passed": true,
+    "case": "waiting_to_starting_old_coordinator_fields",
+    "failure": "SNAPSHOT_CROSSED_PREPARATION_OR_BATCH_RELEASE"
+  },
+  {
+    "passed": true,
+    "case": "batch_changed",
+    "failure": "SNAPSHOT_RUN_OR_BATCH_IDENTITY_CHANGED"
+  },
+  {
+    "passed": true,
+    "case": "generation_changed",
+    "failure": "SNAPSHOT_RUN_OR_BATCH_IDENTITY_CHANGED"
+  },
+  {
+    "passed": true,
+    "case": "worker_join_to_batch_release",
+    "failure": "SNAPSHOT_CROSSED_PREPARATION_OR_BATCH_RELEASE"
+  },
+  {
+    "passed": true,
+    "case": "new_user_task_during_collect",
+    "failure": "SNAPSHOT_BATCH_PAYLOADS_NOT_RELEASED"
+  },
+  {
+    "passed": true,
+    "case": "successful_stop_text_nonzero_final_loss",
+    "failure": "FINAL_TRACE_EVENTS_OR_BUFFERS_LOST"
+  },
+  {
+    "passed": true,
+    "case": "unknown_final_statistics",
+    "failure": "FINAL_TRACE_INTEGRITY_UNKNOWN_OR_INCOMPLETE"
+  },
+  {
+    "passed": true,
+    "case": "unfinished_final_file",
+    "failure": "FINAL_TRACE_INTEGRITY_UNKNOWN_OR_INCOMPLETE"
+  },
+  {
+    "passed": true,
+    "case": "owned_child_timeout",
+    "failure": "TRACE_TOOL_TIMEOUT:-NoProfile"
+  },
+  {
+    "passed": true,
+    "case": "absolute_deadline",
+    "failure": "TRACE_TOOL_ABSOLUTE_DEADLINE:-NoProfile"
+  },
+  {
+    "passed": true,
+    "case": "owned_child_cancel",
+    "failure": "TRACE_TOOL_CANCELLED:-NoProfile"
+  },
+  {
+    "passed": true,
+    "case": "file_query_exception_kills_owned_child",
+    "failure": "INJECTED_LENGTH_QUERY_ERROR"
+  },
+  {
+    "passed": true,
+    "case": "active_output_file_limit",
+    "failure": "TRACE_EXPORT_OUTPUT_LIMIT:-NoProfile"
+  },
+  {
+    "passed": true,
+    "case": "expired_deadline_does_not_start_child",
+    "failure": "TRACE_TOOL_DEADLINE_ALREADY_EXPIRED"
+  },
+  {
+    "passed": true,
+    "case": "bounded_Out_stream",
+    "failure": "TRACE_TOOL_STREAM_BUDGET_OR_IO_FAILURE:-NoProfile"
+  },
+  {
+    "passed": true,
+    "case": "bounded_Error_stream",
+    "failure": "TRACE_TOOL_STREAM_BUDGET_OR_IO_FAILURE:-NoProfile"
+  },
+  {
+    "passed": true,
+    "case": "parent_exited_descendant_pipe_owner_closed_by_job"
+  },
+  {
+    "passed": true,
+    "case": "owned_batch_path_and_argument_spaces_exit41",
+    "failure": "TRACE_TOOL_FAILED:41"
+  }
+]

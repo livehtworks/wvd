@@ -1,0 +1,31 @@
+适用于 .NET Framework MSBuild 版本 17.14.40+3e7442088
+
+  1>Checking Build System
+  wvd-capture-host.vcxproj -> D:\programcode\python\wvd\next\build\native\Release\wvd-capture-host.exe
+  Verifying archive-derived consumed dependency files
+  Pinned native dependencies ready
+  {"headers": "812fa3ddf39d247841a6fae5438dc4118d6985af96306fb3d5723dc8eecf3162", "native": "b801ae56b2fa688bf0050180870b83eb0a0f7ed870e7d7adf8ca0d8dcd3f9c80"}
+  Building Custom Rule D:/programcode/python/wvd/next/CMakeLists.txt
+  Building Custom Rule D:/programcode/python/wvd/next/CMakeLists.txt
+  wvd_http.vcxproj -> D:\programcode\python\wvd\next\build\Release\wvd_http.lib
+  wvd_native_platform.vcxproj -> D:\programcode\python\wvd\next\build\native\Release\wvd_native_platform.lib
+  wvd_native_rapid.vcxproj -> D:\programcode\python\wvd\next\build\native\Release\wvd_native_rapid.lib
+  wvd_native_recognition.vcxproj -> D:\programcode\python\wvd\next\build\native\Release\wvd_native_recognition.lib
+  wvd_native_devices.vcxproj -> D:\programcode\python\wvd\next\build\native\Release\wvd_native_devices.lib
+  wvd_native_workflow.vcxproj -> D:\programcode\python\wvd\next\build\native\Release\wvd_native_workflow.lib
+  wvd_native_games.vcxproj -> D:\programcode\python\wvd\next\build\native\Release\wvd_native_games.lib
+  wvd_native_runtime.vcxproj -> D:\programcode\python\wvd\next\build\native\Release\wvd_native_runtime.lib
+  wvd_native_application.vcxproj -> D:\programcode\python\wvd\next\build\native\Release\wvd_native_application.lib
+  Building Custom Rule D:/programcode/python/wvd/next/CMakeLists.txt
+  automationd.vcxproj -> D:\programcode\python\wvd\next\build\Release\automationd.exe
+  Building Custom Rule D:/programcode/python/wvd/next/CMakeLists.txt
+  test_head_response.vcxproj -> D:\programcode\python\wvd\next\build\Release\test_head_response.exe
+  test_native_application.vcxproj -> D:\programcode\python\wvd\next\build\native\Release\test_native_application.exe
+  test_native_author.vcxproj -> D:\programcode\python\wvd\next\build\native\Release\test_native_author.exe
+  test_native_coordinator.vcxproj -> D:\programcode\python\wvd\next\build\native\Release\test_native_coordinator.exe
+  test_native_devices.vcxproj -> D:\programcode\python\wvd\next\build\native\Release\test_native_devices.exe
+  test_native_flow.vcxproj -> D:\programcode\python\wvd\next\build\native\Release\test_native_flow.exe
+  test_native_ocr.vcxproj -> D:\programcode\python\wvd\next\build\native\Release\test_native_ocr.exe
+  test_native_publication.vcxproj -> D:\programcode\python\wvd\next\build\native\Release\test_native_publication.exe
+  test_strategy_frequency.vcxproj -> D:\programcode\python\wvd\next\build\native\Release\test_strategy_frequency.exe
+  Building Custom Rule D:/programcode/python/wvd/next/CMakeLists.txt

@@ -1,0 +1,102 @@
+contract-build
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-build-20261009T200121193561.log
+contract-test_native_flow-recovery-recheck
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_flow-recovery-recheck-20261009T200157472393.log
+contract-test_native_flow-linkage-closure
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_flow-linkage-closure-20261009T200158443914.log
+contract-test_native_flow-positive-loop-frame
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_flow-positive-loop-frame-20261009T200201188512.log
+contract-test_native_flow-child-result-frame
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_flow-child-result-frame-20261009T200202224242.log
+contract-test_native_flow-late-receipt
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_flow-late-receipt-20261009T200203163214.log
+contract-test_native_flow-restored-context-timer
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_flow-restored-context-timer-20261009T200208077223.log
+contract-test_native_flow-critical-recovery
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_flow-critical-recovery-20261009T200209239951.log
+contract-test_native_flow-confirmed-result
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_flow-confirmed-result-20261009T200210701765.log
+contract-test_native_flow-timeout-reclassification
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_flow-timeout-reclassification-20261009T200211888453.log
+contract-test_native_flow-selection-race
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_flow-selection-race-20261009T200213149642.log
+contract-test_native_flow-restart-during-boot
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_flow-restart-during-boot-20261009T200214773090.log
+contract-test_native_flow-tolerance
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_flow-tolerance-20261009T200216211389.log
+contract-test_native_flow-receipt-exception-safety
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_flow-receipt-exception-safety-20261009T200229587792.log
+contract-test_native_flow-exit-proof-causality
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_flow-exit-proof-causality-20261009T200230558267.log
+contract-test_native_flow-input-effect-contract
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_flow-input-effect-contract-20261009T200231533666.log
+contract-test_native_flow-progress-contract
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_flow-progress-contract-20261009T200232894419.log
+contract-test_native_devices-base
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_devices-base-20261009T200234051808.log
+contract-test_native_devices-physical-gate-authority
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_devices-physical-gate-authority-20261009T200238569405.log
+contract-test_native_devices-lifecycle-deadline
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_devices-lifecycle-deadline-20261009T200239546837.log
+contract-test_native_author-pressure-contract
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_author-pressure-contract-20261009T200240642504.log
+contract-test_native_author-builtin-resource-closure
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_author-builtin-resource-closure-20261009T200241636569.log
+contract-test_native_author-healing-effect-contract
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_author-healing-effect-contract-20261009T200242624048.log
+contract-test_native_ocr-ctc-contract
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_ocr-ctc-contract-20261009T200244632024.log
+contract-test_native_ocr-result-contract
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_ocr-result-contract-20261009T200245625523.log
+contract-test_native_ocr-run-model-contract
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_ocr-run-model-contract-20261009T200246951166.log
+contract-test_strategy_frequency-configuration-contract
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_strategy_frequency-configuration-contract-20261009T200248240805.log
+contract-test_strategy_frequency-semantics
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_strategy_frequency-semantics-20261009T200249203295.log
+contract-test_strategy_frequency-fallback-contract
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_strategy_frequency-fallback-contract-20261009T200250156651.log
+contract-test_native_author-leaf-plan-contract
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_author-leaf-plan-contract-20261009T200251106419.log
+contract-test_native_author-supply-plan-contract
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_author-supply-plan-contract-20261009T200252104867.log
+contract-test_native_application-measurement-contract
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_application-measurement-contract-20261009T200256930001.log
+contract-test_native_application-builtin-transaction
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_application-builtin-transaction-20261009T200258029550.log
+contract-test_native_application-submission-history
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_application-submission-history-20261009T200259689975.log
+contract-test_native_application-control-contract
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_application-control-contract-20261009T200322958376.log
+contract-test_native_publication-base
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_publication-base-20261009T200327854655.log
+contract-test_native_coordinator-combat-diagnostic
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_coordinator-combat-diagnostic-20261009T200329495898.log
+contract-test_native_coordinator-instance-exit
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_coordinator-instance-exit-20261009T200330826225.log
+contract-test_native_coordinator-timing-quota
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_coordinator-timing-quota-20261009T200332465783.log
+contract-test_native_coordinator-event-history
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_coordinator-event-history-20261009T200333824171.log
+contract-tools
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-tools-20261009T200334797943.log
+contract-resource-tools
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-resource-tools-20261009T200336345800.log
+contract-test_diagnostic_io.py
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_diagnostic_io.py-20261009T200342418999.log
+contract-test_crash_plan_contract.py
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_crash_plan_contract.py-20261009T200343712481.log
+contract-verify_bounded_trace_input.ps1
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-verify_bounded_trace_input.ps1-20261009T200344797447.log
+contract-verify_measurement_endpoints.ps1
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-verify_measurement_endpoints.ps1-20261009T200346646999.log
+contract-verify_trace_guards.ps1
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-verify_trace_guards.ps1-20261009T200348173626.log
+contract-heap-restore
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-heap-restore-20261009T200358987550.log
+contract-heap-build
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-heap-build-20261009T200400615632.log
+contract-heap-aggregation
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-heap-aggregation-20261009T200402354065.log
+contract-web
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-web-20261009T200403473078.log

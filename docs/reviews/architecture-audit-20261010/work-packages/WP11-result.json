@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "audited_base_commit": "4c466e14fa514fa177380e902afe373c8f20c3b2",
+  "work_package": "WP11",
+  "issue_ids": [
+    "AP02",
+    "AP03",
+    "AP04",
+    "AP05"
+  ],
+  "implementation_commit": null,
+  "source_changed": true,
+  "source_reviewed": true,
+  "counterexample_fails_before_fix": null,
+  "positive_assertions_pass_after_fix": null,
+  "offline_validation": {
+    "executed": true,
+    "commands": [
+      "C:/Python314/python.exe next/tools/run_contracts.py --module runtime --module devices --module recognition --module app --module tools --module web --output next/.local/architecture-audit-20261010/final-contracts-14"
+    ],
+    "evidence_files": [
+      "../evidence/final-contracts-receipt.json",
+      "../evidence/final-contracts.log"
+    ],
+    "limits": [
+      "实际Application API直接调用；磁盘准入由隔离阻塞依赖验证<200ms停止。"
+    ]
+  },
+  "windows_validation": {
+    "executed": true,
+    "build_identity": {
+      "receipt": "../evidence/final-contracts-receipt.json",
+      "source_commit": "4c466e14fa514fa177380e902afe373c8f20c3b2",
+      "product_inputs_sha256": "56a9ac97f30875dfd18931f573d2fe57d0616f60f29924111796a1e3a36d242e"
+    },
+    "evidence_files": [
+      "../evidence/final-contracts-receipt.json"
+    ]
+  },
+  "deployment": {
+    "executed": false,
+    "artifact_identity": null
+  },
+  "live_run": {
+    "executed": false,
+    "authorized_scope": null,
+    "completed_rounds": null,
+    "evidence_files": []
+  },
+  "memory": {
+    "captured": false,
+    "comparison_eligible": false,
+    "analyzed": false,
+    "attributed": false,
+    "phase": null,
+    "release_scope": null,
+    "unknown_bytes": null,
+    "coverage": null,
+    "lost_events": null,
+    "partial": false,
+    "reason": "No real workload ETL/heap snapshot/dump was captured in this scope; synthetic fixtures are not attribution."
+  },
+  "remaining_risks": [
+    "并发换轮穷尽交错、两个run同id=1延迟PNG/前端复用的端到端回归未执行；身份绑定已实现但不宣称实机/浏览器压力通过。"
+  ],
+  "user_data_changed": false,
+  "notes": "Scope is source remediation and named isolated checks only. No production profile/workflow writes, deployment, game input, loops, commit or push. A null positive_assertions_pass_after_fix denotes remaining required coverage, not a failed executed case. Baseline audit counterexamples are source-linked, but only WP01's positive invariant was also rerun to fail on the old binary here.",
+  "acceptance_state": "SOURCE_IMPLEMENTED_TARGETED_PASS_ACCEPTANCE_PARTIAL",
+  "executed_targeted_assertions_passed": true,
+  "targeted_cases": [
+    "control-contract",
+    "event-history",
+    "combat-diagnostic"
+  ],
+  "implementation_files": [
+    "next/native/app/application.cpp",
+    "next/native/runtime/native_run_coordinator.cpp",
+    "next/native/storage/run_store.cpp",
+    "next/native/api/http_server.cpp",
+    "next/web/src/stores/useRunSession.ts"
+  ]
+}

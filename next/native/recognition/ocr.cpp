@@ -31,7 +31,9 @@ contracts::Box bounds(const std::vector<cv::Point> &points, cv::Size size) {
 } // namespace
 
 OcrEngine::OcrEngine(const std::filesystem::path &model_root,
-    std::shared_ptr<platform::MemoryDiagnostics> diagnostics) : diagnostics_(std::move(diagnostics)) {
+    std::shared_ptr<platform::MemoryDiagnostics> diagnostics,
+    std::shared_ptr<const platform::BundleLease> files)
+    : diagnostics_(std::move(diagnostics)), files_(std::move(files)) {
     if (diagnostics_) diagnostics_->owner_boundary("initialize.begin", "ocr", lifetime_.id());
     const auto det = model_root / "det.onnx";
     const auto rec = model_root / "rec.onnx";
@@ -42,6 +44,7 @@ OcrEngine::OcrEngine(const std::filesystem::path &model_root,
     model_ = std::make_shared<OcrLite>();
     model_->setNumThread(2);
     model_->initLogger(false, false, false);
+    model_->setResultOnly(true);
     if (!model_->initModels(utf8(det), {}, utf8(rec), utf8(keys)))
         throw std::runtime_error("OCR_MODEL_INITIALIZATION_FAILED");
     lifetime_.ready();
@@ -77,4 +80,25 @@ std::vector<contracts::RecognitionMatch> OcrEngine::recognize(const cv::Mat &reg
 }
 
 void OcrEngine::cancel() { model_->cancel(); }
+void OcrEngine::prepare_reuse() {
+    std::lock_guard lock(run_mutex_);
+    model_->resume();
+}
+std::shared_ptr<OcrEngine> RunOcrModels::acquire(std::size_t language, const std::string &identity,
+    const std::function<std::shared_ptr<OcrEngine>()> &create) {
+    if (language >= slots_.size() || identity.empty()) throw std::runtime_error("OCR_RUN_MODEL_IDENTITY_INVALID");
+    std::lock_guard lock(mutex_);
+    auto &slot = slots_[language];
+    if (slot.model) {
+        if (slot.identity != identity) throw std::runtime_error("OCR_RUN_MODEL_IDENTITY_CHANGED");
+        if (slot.model.use_count() != 1) throw std::runtime_error("OCR_PREVIOUS_SERVICE_LEASE_ACTIVE");
+        slot.model->prepare_reuse();
+    } else {
+        auto model = create();
+        if (!model) throw std::runtime_error("OCR_RUN_MODEL_OWNER_MISSING");
+        slot.identity = identity;
+        slot.model = std::move(model);
+    }
+    return slot.model;
+}
 } // namespace wvd::recognition

@@ -124,8 +124,7 @@ cv::Mat matRotateClockWise90(cv::Mat src) {
 }
 
 cv::Mat getRotateCropImage(const cv::Mat &src, std::vector<cv::Point> box) {
-    cv::Mat image;
-    src.copyTo(image);
+    if (src.empty() || box.size() != 4) throw std::runtime_error("OCR_CROP_INVALID");
     std::vector<cv::Point> points = box;
 
     int collectX[4] = {box[0].x, box[1].x, box[2].x, box[3].x};
@@ -135,8 +134,9 @@ cv::Mat getRotateCropImage(const cv::Mat &src, std::vector<cv::Point> box) {
     int top = int(*std::min_element(collectY, collectY + 4));
     int bottom = int(*std::max_element(collectY, collectY + 4));
 
-    cv::Mat imgCrop;
-    image(cv::Rect(left, top, right - left, bottom - top)).copyTo(imgCrop);
+    if (left < 0 || top < 0 || right > src.cols || bottom > src.rows || right <= left || bottom <= top)
+        throw std::runtime_error("OCR_CROP_OUTSIDE_IMAGE");
+    const cv::Mat imgCrop = src(cv::Rect(left, top, right - left, bottom - top));
 
     for (auto &point: points) {
         point.x -= left;

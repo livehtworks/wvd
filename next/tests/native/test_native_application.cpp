@@ -31,6 +31,12 @@ struct NativeCoordinatorTestAccess {
 namespace wvd::app {
 // 仅测试替换磁盘查询依赖；生产 API 不暴露容量覆盖或离线开关。
 struct ApplicationAssemblyTestAccess {
+    static void receipt(Application &app, const std::string &id, const nlohmann::json &intent, std::uint64_t run) {
+        app.submission_store_->save(id, intent, nlohmann::json{{"request_id",id},{"state","completed"},{"run_id",run}}, false);
+    }
+    static void space_reader(Application &app, std::function<std::filesystem::space_info(const std::filesystem::path &)> reader) {
+        app.space_query_=std::move(reader);
+    }
     static void space(Application &app, std::uintmax_t bytes, bool fail = false) {
         app.space_query_ = [bytes, fail](const auto &) -> std::filesystem::space_info {
             if (fail) throw std::runtime_error("fixture-space-query");
@@ -110,13 +116,14 @@ struct ApplicationAssemblyTestAccess {
     }
     static void watch(Application &app, const std::shared_ptr<devices::DeviceConnection> &backend,
                       const std::string &id) {
+        { std::lock_guard lock(app.mutex_); app.active_run_id_ = app.coordinator_->snapshot().run_id; }
         app.watch_task_session({{"task_id", "Scorpionesses"}, {"repeat", true}, {"repeat_count", 2}},
-            nlohmann::json::object(), nlohmann::json::object(), backend, id);
+            nlohmann::json::object(), nlohmann::json::object(), backend, id, std::make_shared<std::atomic<int>>(1));
     }
     static nlohmann::json queue(Application &app, const std::string &id, int &prepared) {
         return app.queue_run("closure", {{"request_id", id}}, {{"fixture", "closure"}}, [&prepared] {
             ++prepared; return nlohmann::json{{"run_id", 0}};
-        });
+        }, app.stop_epoch_.load());
     }
 };
 }
@@ -311,7 +318,7 @@ int closure_application(const std::filesystem::path &pack, const std::filesystem
     blocked(0, true, "RUN_STORAGE_SPACE_QUERY_FAILED");
     blocked(std::uintmax_t(-1), false, "RUN_STORAGE_SPACE_QUERY_FAILED");
     std::cout << "SPACE-01 PASS: low/unknown/query failure, no prepare/connect/capture\n";
-    A::space(app, 1073741824);
+    A::space(app, 2147483648ULL);
     const auto receipt = A::queue(app, "space-threshold", prepared);
     for (int i=0; i<200 && call(app, wvd::api::http::verb::get, "/api/v1/device").value("busy", false); ++i) std::this_thread::sleep_for(10ms);
     A::space(app, 0);
@@ -364,6 +371,151 @@ int closure_application(const std::filesystem::path &pack, const std::filesystem
 
 int main(int argc, char **argv) {
     try {
+        if (argc == 5 && std::string(argv[1]) == "--control-contract") {
+            using A = wvd::app::ApplicationAssemblyTestAccess;
+            const auto root=std::filesystem::absolute(argv[4]);
+            require_closure(!std::filesystem::exists(root),"NEW_ISOLATED_ROOT_REQUIRED");
+            auto backend=std::make_shared<OfflineConnection>(std::filesystem::absolute(argv[2]));
+            wvd::app::Application app({root/"data",std::filesystem::absolute(argv[2]),{},std::filesystem::absolute(argv[3])},backend);
+            for (const auto &kind : {std::string("task"),std::string("workflow"),std::string("combat_debug")}) {
+                J request{{"request_id","prior-"+kind},{"profile_revision","obsolete"},{"flow_revision","obsolete"},
+                    {"resource_locale","zh-Hant"},{"task_id","removed-task"},{"flow_id","removed-flow"}};
+                J intent{{"kind",kind},{"request",request}};
+                if(kind=="workflow") intent["flow_id"]="removed-flow";
+                A::receipt(app,"prior-"+kind,intent,42);
+                const auto path=kind=="task" ? "/api/v1/runs/start" : kind=="workflow" ?
+                    "/api/v1/workflows/removed-flow/run" : "/api/v1/combat/debug";
+                const auto prior=call(app,wvd::api::http::verb::post,path,request);
+                require_closure(prior.value("replayed",false) && prior.at("run_id")==42,"API_REPLAY_AFTER_MUTABLE_PREFLIGHT");
+            }
+            std::atomic<bool> entered{},release{}; int prepared{};
+            A::space_reader(app,[&](const auto &)->std::filesystem::space_info {
+                entered=true; while(!release) std::this_thread::sleep_for(5ms);
+                return {4ULL<<30,4ULL<<30,4ULL<<30};
+            });
+            auto queued=std::async(std::launch::async,[&] {
+                try { A::queue(app,"slow-space",prepared); return std::string("admitted"); }
+                catch(const std::exception &e){return std::string(e.what());}
+            });
+            struct Release {std::atomic<bool> &flag;~Release(){flag=true;}} cleanup{release};
+            const auto deadline=std::chrono::steady_clock::now()+3s;
+            while(!entered && std::chrono::steady_clock::now()<deadline) std::this_thread::sleep_for(5ms);
+            require_closure(entered,"SLOW_SPACE_NOT_ENTERED");
+            const auto start=std::chrono::steady_clock::now();
+            call(app,wvd::api::http::verb::post,"/api/v1/runs/current/stop");
+            require_closure(std::chrono::steady_clock::now()-start<200ms,"STOP_BLOCKED_BY_PREFLIGHT_IO");
+            release=true;
+            require_closure(queued.get()=="PREPARATION_CANCELLED" && prepared==0,"STOP_LOST_DURING_PREFLIGHT");
+            require_closure(backend->connections==0 && backend->captures==0 && backend->inputs==0,"CONTROL_FIXTURE_DEVICE_SIDE_EFFECT");
+            std::cout<<"PASS actual Application API: old task/workflow/debug receipt before changed preflight; stop bypasses blocked disk admission and cancels preparation\n";
+            return 0;
+        }
+        if (argc == 3 && std::string(argv[1]) == "--submission-history") {
+            const auto root = std::filesystem::absolute(argv[2]);
+            require_closure(!std::filesystem::exists(root), "SUBMISSION_ROOT_MUST_BE_FRESH");
+            {
+                wvd::storage::SubmissionStore store(root);
+                for (unsigned i = 0; i < 300; ++i) {
+                    const auto id = "request-" + std::to_string(i);
+                    const J intent{{"task_id", "GiantBounty"}, {"profile_revision", "original"}};
+                    store.save(id, intent, {{"state", "preparing"}, {"request_id", id}}, false);
+                    store.save(id, intent, {{"state", "submitted"}, {"run_id", i + 1}, {"request_id", id}}, true);
+                }
+            }
+            wvd::storage::SubmissionStore restarted(root);
+            const J original{{"task_id", "GiantBounty"}, {"profile_revision", "original"}};
+            const auto replay = restarted.replay("request-0", original);
+            require_closure(replay && replay->at("run_id") == 1 && replay->at("replayed") == true,
+                "ORIGINAL_RECEIPT_LOST_AFTER_256_OR_RESTART");
+            bool conflict{};
+            try { restarted.replay("request-0", {{"task_id", "Scorpionesses"}}); }
+            catch (const std::exception &e) { conflict = std::string(e.what()) == "IDEMPOTENCY_CONFLICT"; }
+            require_closure(conflict, "DIFFERENT_INTENT_REUSED_ID");
+            require_closure(!restarted.replay("new-request", original), "NEW_REQUEST_REFUSED_BY_HISTORY");
+            std::cout << "PASS production durable receipts: 300 completed intents, process restart, original run, identity conflict\n";
+            return 0;
+        }
+        if(argc==2 && std::string(argv[1])=="--measurement-contract") {
+            wvd::runtime::MeasurementBarrier gate;
+            const auto memory=wvd::platform::sample_memory();
+            const J endpoint{{"phase","worker_joined"},{"release_scope","worker"},
+                {"input_clean",true},{"cleanup_complete",true},{"heap_maintenance_complete",true},
+                {"process_id",memory.process_id},{"process_created_100ns",memory.process_created_100ns}};
+            require_closure(!gate.armed(),"MEASUREMENT_NOT_DEFAULT_OFF");
+            gate.arm("owned",{{"capture","isolated"}},2,250ms,2s);
+            for(unsigned i=1;i<=2;++i) {
+                auto held=std::async(std::launch::async,[&]{gate.joined_boundary(endpoint,[]{return false;});});
+                const auto deadline=std::chrono::steady_clock::now()+1s;
+                while(!gate.status().at("held").get<bool>() && std::chrono::steady_clock::now()<deadline)
+                    std::this_thread::sleep_for(2ms);
+                require_closure(gate.status().at("held")==true,"MEASUREMENT_NOT_HELD");
+                bool rejected{};
+                try {gate.release("foreign",i);} catch(const std::exception &){rejected=true;}
+                require_closure(rejected,"MEASUREMENT_FOREIGN_RELEASE");
+                gate.release("owned",i);held.get();gate.release("owned",i);
+            }
+            require_closure(!gate.armed() && gate.status().at("state")=="completed","MEASUREMENT_PAIR_NOT_RELEASED");
+            gate.arm("lost-collector",J::object(),2,30ms,100ms);
+            gate.joined_boundary(endpoint,[]{return false;});
+            require_closure(!gate.armed() && gate.status().at("state")=="timed_out","MEASUREMENT_COLLECTOR_LOSS_HANGS");
+            gate.arm("cancelled",J::object(),2,50ms,100ms);
+            gate.joined_boundary(endpoint,[]{return true;});
+            require_closure(!gate.armed() && gate.status().at("state")=="cancelled","MEASUREMENT_CANCEL_HANGS");
+            std::cout<<"PASS production measurement barrier: default off, two acknowledged joins, foreign identity rejected, expiry and cancel bounded\n";
+            return 0;
+        }
+        if (argc == 3 && std::string(argv[1]) == "--builtin-transaction") {
+            const auto root=std::filesystem::absolute(argv[2]);
+            require_closure(!std::filesystem::exists(root),"TRANSACTION_ROOT_MUST_BE_FRESH");
+            std::filesystem::create_directories(root);
+            std::ifstream source("resources/authoring/public-flows.json"); J documents; source>>documents;
+            auto original=documents.at(0);
+            const auto id=original.at("flow").at("id").get<std::string>();
+            for(unsigned stage=0;stage<4;++stage) {
+                const auto directory=root/std::to_string(stage);
+                wvd::storage::WorkflowRepository repository(directory);
+                const auto before=repository.create(original);
+                repository.register_builtin(before,before.at("revision"));
+                auto proposed=original; proposed["flow"]["description"]="isolated audited update";
+                const auto after=repository.inspect_builtin(proposed).at("builtin_revision").get<std::string>();
+                const auto updated=repository.sync_builtin(proposed,before.at("revision"),after);
+                const auto transactions=directory/".builtin-transactions";
+                std::filesystem::path completed;
+                for(const auto &entry:std::filesystem::directory_iterator(transactions))
+                    if(entry.path().filename().string().ends_with(".completed.json")) completed=entry.path();
+                require_closure(!completed.empty(),"TRANSACTION_HISTORY_MISSING");
+                std::ifstream record(completed);J intent;record>>intent;record.close();
+                std::filesystem::rename(completed,completed.string()+".fixture-history");
+                const auto body=stage==0?before:updated;
+                const auto metadata=stage<2?intent.at("before_metadata"):intent.at("after_metadata");
+                wvd::platform::atomic_write(directory/(id+".json"),body.dump(2),true);
+                wvd::platform::atomic_write(directory/".builtin"/(id+".json"),metadata.dump(2),true);
+                if(stage==3) intent["after_metadata"]["local_revision"]=before.at("revision");
+                wvd::platform::atomic_write(transactions/(id+".pending.json"),intent.dump(2),false);
+                if(stage==3) {
+                    bool rejected{};
+                    try {wvd::storage::WorkflowRepository recovered(directory);}
+                    catch(const std::exception &e) {rejected=std::string(e.what()).starts_with("BUILTIN_TRANSACTION_METADATA_INVALID");}
+                    require_closure(rejected,"TAMPERED_TRANSACTION_COMMITTED");
+                    continue;
+                }
+                wvd::storage::WorkflowRepository recovered(directory);
+                require_closure(recovered.read(id)==updated,"TRANSACTION_RECOVERY_BODY_MISMATCH");
+                require_closure(recovered.sync_builtin(proposed,before.at("revision"),after)==updated,
+                    "TRANSACTION_RETRY_NOT_IDEMPOTENT");
+                const auto backup=directory/".builtin-backups"/id/before.at("revision").get<std::string>()/"document.json";
+                std::ifstream saved(backup);J old;saved>>old;
+                require_closure(old==before,"TRANSACTION_OLD_BODY_LOST");
+                auto local=updated;local["flow"]["description"]="local user edit";
+                recovered.compare_exchange(id,after,local);
+                bool conflict{};
+                try {(void)recovered.sync_builtin(proposed,before.at("revision"),after);}
+                catch(const std::exception &e) {conflict=std::string(e.what()).starts_with("BUILTIN_LOCAL_CONFLICT");}
+                require_closure(conflict,"TRANSACTION_OVERWROTE_LOCAL_EDIT");
+            }
+            std::cout<<"PASS real repository transaction: pre-body/body-only/committed restart, exact old backup, retry, metadata tamper and CAS conflict\n";
+            return 0;
+        }
         if (argc == 5 && std::string(argv[1]) == "--stop-release") {
             using A = wvd::app::ApplicationAssemblyTestAccess;
             const auto root = std::filesystem::absolute(argv[4]);

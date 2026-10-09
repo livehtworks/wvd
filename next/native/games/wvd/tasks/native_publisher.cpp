@@ -1,5 +1,6 @@
 #include "native_publisher.hpp"
 #include "games/wvd/vision/native_asset_resolver.hpp"
+#include "games/wvd/vision/builtin_probes.hpp"
 #include "semantic_catalogue.hpp"
 #include "ocr_models.hpp"
 #include "platform/windows/bundle_lease.hpp"
@@ -78,6 +79,8 @@ NativePublication publish_native(const CompiledWorkflow &workflow,
         if (value.is_object()) {
             if (value.value("mode", "") == "ocr" || value.value("kind", "") == "ocr")
                 languages.insert(recognition::parse_ocr_parameters(value).language);
+            for (const auto &probe : vision::implicit_ocr_probes(value.value("mode", "")))
+                self(self, probe);
             for (const auto &child : value) self(self, child);
         } else if (value.is_array()) for (const auto &child : value) self(self, child);
     };
@@ -167,7 +170,31 @@ NativePublication publish_native(const CompiledWorkflow &workflow,
         const auto path = staging / platform::BundleLease::checked_relative(relative);
         std::filesystem::create_directories(path.parent_path());
         const auto &source = selected_mod_paths.contains(relative) ? *mod_origin : origin;
-        source.copy_member(relative, path, check_cancel);
+        if (!relative.ends_with(".onnx")) {
+            source.copy_member(relative, path, check_cancel);
+            bundle.files.push_back({relative, hash});
+            continue;
+        }
+        // Copy once from the locked origin. Every run links the immutable,
+        // content-addressed object, never the user's mutable source file.
+        const auto objects = destination.parent_path() / "asset-objects";
+        std::filesystem::create_directories(objects);
+        const auto object = objects / hash;
+        if (!std::filesystem::exists(object)) {
+            const auto temporary = objects / (hash + ".staging-" + platform::unique_id());
+            std::filesystem::create_directory(temporary);
+            try {
+                source.copy_member(relative, temporary / "payload.onnx", check_cancel);
+                std::filesystem::rename(temporary, object);
+            } catch (...) {
+                std::error_code cleanup;
+                std::filesystem::remove_all(temporary, cleanup);
+                if (cleanup) throw std::runtime_error("NATIVE_ASSET_STAGING_CLEANUP_FAILED");
+                throw;
+            }
+        }
+        platform::BundleLease shared(object, hash, {{"payload.onnx", hash}}, check_cancel);
+        shared.link_member("payload.onnx", path);
         bundle.files.push_back({relative, hash});
     }
     preparation["file_copy"] = copy_timer.sample();

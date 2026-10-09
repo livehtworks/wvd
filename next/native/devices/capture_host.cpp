@@ -13,6 +13,15 @@ using Connect = int(__cdecl *)(const wchar_t *, int);
 using Disconnect = void(__cdecl *)(int);
 using Display = int(__cdecl *)(int, const char *, int);
 using Capture = int(__cdecl *)(int, unsigned, int, int *, int *, unsigned char *);
+struct ModuleOwner {
+    HMODULE value{};
+    ~ModuleOwner() noexcept { if (value) FreeLibrary(value); }
+};
+struct ConnectionOwner {
+    Disconnect disconnect{};
+    int value{};
+    ~ConnectionOwner() noexcept { if (value > 0 && disconnect) disconnect(value); }
+};
 
 bool exact(HANDLE handle, void *buffer, DWORD size, bool reading) {
     auto *cursor = static_cast<unsigned char *>(buffer);
@@ -28,7 +37,7 @@ bool exact(HANDLE handle, void *buffer, DWORD size, bool reading) {
 }
 } // namespace
 
-int wmain(int argc, wchar_t **argv) {
+int run(int argc, wchar_t **argv) {
     if (argc != 6) return 2;
     const std::filesystem::path root(argv[1]), library(argv[2]);
     if (!root.is_absolute() || !library.is_absolute() ||
@@ -52,6 +61,7 @@ int wmain(int argc, wchar_t **argv) {
     HMODULE module = LoadLibraryExW(library.c_str(), nullptr,
                                     LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);
     if (!module) return 6;
+    ModuleOwner module_owner{module};
     const auto connect = reinterpret_cast<Connect>(GetProcAddress(module, "nemu_connect"));
     const auto disconnect = reinterpret_cast<Disconnect>(GetProcAddress(module, "nemu_disconnect"));
     const auto display = reinterpret_cast<Display>(GetProcAddress(module, "nemu_get_display_id"));
@@ -59,6 +69,7 @@ int wmain(int argc, wchar_t **argv) {
     if (!connect || !disconnect || !display || !capture_frame) return 7;
     const int handle = connect(root.c_str(), static_cast<int>(instance));
     if (handle <= 0) return 8;
+    ConnectionOwner connection_owner{disconnect, handle};
     int display_id = -1;
     HANDLE input = GetStdHandle(STD_INPUT_HANDLE);
     int code = 0;
@@ -107,7 +118,10 @@ int wmain(int argc, wchar_t **argv) {
         if (!exact(output, &reply, sizeof(reply), false) ||
             !exact(output, pixels.data(), bytes, false)) { code = 12; break; }
     }
-    disconnect(handle);
-    FreeLibrary(module);
     return code;
+}
+
+int wmain(int argc, wchar_t **argv) {
+    try { return run(argc, argv); }
+    catch (...) { return 14; }
 }

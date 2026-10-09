@@ -279,6 +279,11 @@ int main(int argc, char **argv) {
                 check(A::save(coordinator, &frame, request).at("status") == "invalid_request", "COMBAT_CONTEXT_TYPE_UNBOUNDED");
                 request.context = {{"oversize", std::string(16 * 1024, 'x')}};
                 check(A::save(coordinator, &frame, request).at("status") == "invalid_request", "COMBAT_CONTEXT_BYTES_UNBOUNDED");
+                request.context = J::object(); request.critical = true;
+                request.reason = "FIRST_CRITICAL_FAILURE"; request.operation_id = "critical-first";
+                check(A::save(coordinator, &frame, request).at("status") == "saved" &&
+                    coordinator.diagnostics().at("critical_attempts") == 1,
+                    "ORDINARY_QUOTA_CONSUMED_CRITICAL_RESERVE");
             }
             std::cout << "combat diagnostic: unavailable/write errors remain visible, connection identity and original quotas preserved\n";
             std::cout << "Evidence: " << data_root.string() << '\n';
@@ -316,6 +321,26 @@ int main(int argc, char **argv) {
                 failed.diagnostic_summary().at("event_history").at("failed") != 1)
                 throw std::runtime_error("HISTORY_WRITE_FAILURE_HIDDEN");
             std::cout << "Event history survives ring eviction and logging off; write failure reported\n";
+            return 0;
+        }
+        if (argc == 2 && std::string(argv[1]) == "--timing-quota") {
+            storage::RunStore store(data_root, "timing-quota", 1, {{"kind", "isolated"}});
+            const nlohmann::json sample{{"payload_bytes", std::string(1024 * 1024, 'x')}};
+            for (int i = 0; i < 35; ++i) store.append_timing(1, "timing.segment", sample);
+            store.append_timing(1, "input.result", {{"transaction_id", "last-input"}, {"outcome", "confirmed"}});
+            const auto summary = store.diagnostic_summary();
+            const auto &timing = summary.at("action_timing");
+            if (timing.at("auxiliary_dropped") == 0 || timing.at("sampling_complete") != false ||
+                timing.at("input_audit_dropped") != 0 || timing.at("input_audit_complete") != true ||
+                !summary.at("complete").get<bool>() || timing.at("bytes") > 33ULL * 1024 * 1024)
+                throw std::runtime_error("AUXILIARY_QUOTA_ERASED_INPUT_AUDIT");
+            std::ifstream input(store.directory() / "action-timing.jsonl");
+            std::string line, last;
+            while (std::getline(input, line)) last = std::move(line);
+            const auto tail = nlohmann::json::parse(last);
+            if (tail.at("type") != "input.result" || tail.at("payload").at("transaction_id") != "last-input")
+                throw std::runtime_error("LAST_INPUT_NOT_PERSISTED_AFTER_SAMPLING_CAP");
+            std::cout << "Timing sampling cap: auxiliary drops explicit, last input persisted, mandatory audit complete\n";
             return 0;
         }
         if (argc == 2 && std::string(argv[1]) == "--logging-policy") {
@@ -518,7 +543,7 @@ int main(int argc, char **argv) {
             class ExitBackend final : public Backend, public devices::LifecyclePort {
               public:
                 int submissions{}, restarts{};
-                bool restored{}, exited{}, read_recovery{};
+                bool restored{}, exited{}, read_recovery{}, stale_proof{};
                 std::uint64_t connection{1};
                 devices::LifecycleTarget target{"native-test", "2", "jp.co.drecom.wizardry.daphne", "", false};
                 bool offline() const override { return false; }
@@ -531,18 +556,24 @@ int main(int argc, char **argv) {
                         throw contracts::ObservationUnavailable({contracts::ReadFaultKind::TransportUnavailable,
                             contracts::ReadFaultStage::Capture, "ADB_TRANSPORT_FAILED", "fixture.capture", {}, {}});
                     if (exited) throw std::runtime_error("MUMU_INSTANCE_MISMATCH");
-                    auto frame = Backend::capture(); frame.connection_generation = connection; return frame;
+                    auto frame = Backend::capture(); frame.connection_generation = connection;
+                    frame.instance_id = target.instance_id; frame.instance_created_identity = "fixture-instance"; return frame;
                 }
                 devices::LifecyclePort *lifecycle_port() override { return this; }
                 contracts::ObservationRecovery recover_observation(bool = false) override {
                     if (!read_recovery) return {};
                     ++restarts; exited = false; restored = true; ++connection;
                     return {contracts::ObservationReconnect{target.device_id, target.instance_id, "fixture-instance", 1, connection},
-                        true, true, true};
+                        true, true, true, contracts::InstanceExitProof{target.device_id,target.instance_id,"fixture-instance",1,connection,
+                            std::chrono::steady_clock::now(),1}};
                 }
                 std::optional<devices::LifecycleObservation> observe_lifecycle() override {
-                    return devices::LifecycleObservation{target, !exited, !exited, restored, true,
+                    auto observation = devices::LifecycleObservation{target, !exited, !exited, restored, true,
                         connection, std::chrono::steady_clock::now(), restored, exited};
+                    if (exited) observation.instance_exit = contracts::InstanceExitProof{target.device_id,target.instance_id,
+                        "fixture-instance",connection,0,
+                        stale_proof ? observation.observed_at - 1s : observation.observed_at,1};
+                    return observation;
                 }
                 bool execute_lifecycle(devices::LifecycleOperation op, const devices::LifecycleTarget &,
                     const std::function<bool()> &) override {
@@ -552,10 +583,12 @@ int main(int argc, char **argv) {
                     return true;
                 }
             };
-            for (const std::string mode : {"protected", "exit", "read-recovery"}) {
+            for (const std::string mode : {"protected", "exit", "read-recovery", "stale-proof"}) {
                 const bool discardable = mode != "protected";
+                const bool admissible = discardable && mode != "stale-proof";
                 auto source = std::make_shared<ExitBackend>();
                 source->read_recovery = mode == "read-recovery";
+                source->stale_proof = mode == "stale-proof";
                 auto graph = std::make_shared<workflow::FlowProgram>(*definition.units.front().program);
                 auto &root = graph->definitions.at("root"); root.entry = "dispatch";
                 recognition::Request probe{"wvd", "1", {0,0,900,1600},
@@ -599,16 +632,17 @@ int main(int argc, char **argv) {
                 run.start(std::move(test), source);
                 if (!run.wait_for(5s)) throw std::runtime_error("EXIT_RECOVERY_NOT_TERMINAL");
                 const auto ended = run.snapshot();
-                if (source->submissions != 1 || source->restarts != (discardable ? 1 : 0) ||
-                    ended.state != (discardable ? contracts::RunState::Completed : contracts::RunState::Failed) ||
+                if (source->submissions != 1 || source->restarts != (admissible ? 1 : 0) ||
+                    ended.state != (admissible ? contracts::RunState::Completed : contracts::RunState::Failed) ||
                     ended.sessions.at(0).at("unresolved_inputs").size() != 1 ||
-                    (discardable && !ended.unresolved_inputs.empty()))
+                    (admissible && !ended.unresolved_inputs.empty()) ||
+                    (!admissible && ended.unresolved_inputs.empty()))
                     throw std::runtime_error("EXIT_RECOVERY_REPLAY_OR_HISTORY_LOST:" + ended.reason);
                 bool interrupted = false;
                 const auto recorded = run.events();
                 for (const auto &event : recorded.at("events"))
                     if (event.at("type") == "recovery.input_interrupted") interrupted = true;
-                if (interrupted != discardable) throw std::runtime_error("EXIT_AUDIT_MISSING");
+                if (interrupted != admissible) throw std::runtime_error("EXIT_AUDIT_MISSING");
             }
             std::cout << "instance exit: session-local skill resumed without replay; protected input preserved\n";
             return 0;

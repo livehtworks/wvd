@@ -83,10 +83,15 @@ J lifecycle_plan_json(const LifecyclePlan &plan) {
 }
 LifecycleEnd execute_lifecycle_plan(const LifecyclePlan &plan, LifecyclePort &port,
     const std::function<bool()> &cancelled,
-    const std::function<void(const std::string &, const J &)> &event) {
+    const std::function<void(const std::string &, const J &)> &event,
+    std::chrono::steady_clock::time_point absolute_deadline) {
     validate_lifecycle_plan(plan);
     if (plan.defer_for != std::chrono::milliseconds::zero())
         throw std::runtime_error("LIFECYCLE_DEFER_NOT_CONSUMED");
+    struct Window {
+        LifecyclePort &port;
+        ~Window() { port.lifecycle_window({}); }
+    } window{port};
     auto observe = [&] {
         auto value = port.observe_lifecycle();
         const auto now = std::chrono::steady_clock::now();
@@ -99,15 +104,23 @@ LifecycleEnd execute_lifecycle_plan(const LifecyclePlan &plan, LifecyclePort &po
         return *value;
     };
     for (auto operation : plan.operations) {
-        const auto deadline = std::chrono::steady_clock::now() + plan.step_timeout;
+        const auto deadline = std::min(absolute_deadline, std::chrono::steady_clock::now() + plan.step_timeout);
+        port.lifecycle_window(deadline);
         unsigned transport_failures = 0;
         bool operation_done = false;
         while (!operation_done && std::chrono::steady_clock::now() < deadline) try {
         if (cancelled())
             return LifecycleEnd::Cancelled;
         auto before = observe();
+        if (cancelled()) return LifecycleEnd::Cancelled;
+        if (std::chrono::steady_clock::now() >= deadline) {
+            event("lifecycle.retry_required", {{"operation", name(operation)}, {"reason", "OBSERVATION_EXCEEDED_DEADLINE"}});
+            return LifecycleEnd::RetryRequired;
+        }
         const auto operation_name = name(operation);
         event("lifecycle.observed", {{"operation", operation_name}, {"state", state_json(before)}});
+        if (cancelled()) return LifecycleEnd::Cancelled;
+        if (std::chrono::steady_clock::now() >= deadline) return LifecycleEnd::RetryRequired;
         if (already_done(operation, before)) {
             event("lifecycle.confirmed", {{"operation", operation_name}, {"skipped", true}});
             operation_done = true;
@@ -120,7 +133,10 @@ LifecycleEnd execute_lifecycle_plan(const LifecyclePlan &plan, LifecyclePort &po
         // 调用尝试与调用后的结果分开记录，底层阻塞时不能伪报已取消/静止。
         if (cancelled())
             return LifecycleEnd::Cancelled;
+        if (std::chrono::steady_clock::now() >= deadline) return LifecycleEnd::RetryRequired;
         event("lifecycle.backend_called", {{"operation", operation_name}});
+        if (cancelled()) return LifecycleEnd::Cancelled;
+        if (std::chrono::steady_clock::now() >= deadline) return LifecycleEnd::RetryRequired;
         const auto stop_or_expired = [&] {
             return cancelled() || std::chrono::steady_clock::now() >= deadline;
         };
@@ -131,6 +147,8 @@ LifecycleEnd execute_lifecycle_plan(const LifecyclePlan &plan, LifecyclePort &po
             return LifecycleEnd::RetryRequired;
         }
         bool confirmed = false;
+        if (cancelled()) return LifecycleEnd::Cancelled;
+        if (std::chrono::steady_clock::now() >= deadline) return LifecycleEnd::RetryRequired;
         auto next_start_retry = std::chrono::steady_clock::now() + std::chrono::seconds(3);
         unsigned start_attempts = 1;
         do {
@@ -138,6 +156,8 @@ LifecycleEnd execute_lifecycle_plan(const LifecyclePlan &plan, LifecyclePort &po
                 return LifecycleEnd::Cancelled;
             if (std::chrono::steady_clock::now() >= deadline) break;
             const auto after = observe();
+            if (cancelled()) return LifecycleEnd::Cancelled;
+            if (std::chrono::steady_clock::now() >= deadline) break;
             if (postcondition(operation, before, after)) {
                 event("lifecycle.confirmed", {{"operation", operation_name}, {"skipped", false}, {"state", state_json(after)}});
                 confirmed = true;
@@ -182,7 +202,11 @@ LifecycleEnd execute_lifecycle_plan(const LifecyclePlan &plan, LifecyclePort &po
                 {"reason", "TRANSPORT_RETRY_WINDOW_EXHAUSTED"}, {"failures", transport_failures}});
             return LifecycleEnd::RetryRequired;
         }
+        if (cancelled()) return LifecycleEnd::Cancelled;
+        if (std::chrono::steady_clock::now() >= deadline) return LifecycleEnd::RetryRequired;
     }
-    return LifecycleEnd::ReadyForBoot;
+    if (cancelled()) return LifecycleEnd::Cancelled;
+    return std::chrono::steady_clock::now() < absolute_deadline
+        ? LifecycleEnd::ReadyForBoot : LifecycleEnd::RetryRequired;
 }
 }

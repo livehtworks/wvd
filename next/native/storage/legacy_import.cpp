@@ -1,4 +1,5 @@
 #include "legacy_import.hpp"
+#include "games/wvd/karma.hpp"
 #include "platform/windows/file_digest.hpp"
 #include "platform/windows/runtime_files.hpp"
 #include <fstream>
@@ -32,6 +33,8 @@ void validate(const J &value, const J &field) {
             (type == "integer" && value.is_number_integer()) ||
             (type == "array" && value.is_array()) || (type == "object" && value.is_object());
     require(valid, "PROFILE_FIELD_TYPE");
+    if (field.at("name") == "KARMA_ADJUST")
+        (void)games::choose_karma(value.get<std::string>());
 }
 } // namespace
 J parse_legacy_json(const std::string &text) {

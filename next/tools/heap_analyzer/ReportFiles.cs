@@ -5,6 +5,8 @@ namespace Wvd.HeapAnalyzer;
 
 internal sealed class ReportFiles
 {
+    private static long inputBytes;
+    private static int inputFiles;
     private readonly string root;
     private readonly long limit;
     public ReportFiles(string root, long limit) { this.root = root; this.limit = limit; }
@@ -16,8 +18,25 @@ internal sealed class ReportFiles
         using (var writer = new StreamWriter(bounded, new UTF8Encoding(false))) { write(writer); }
         File.Move(partial, Path.Combine(root, name));
     }
-    public void Json(string name, object value) => Write(name, w => w.Write(JsonSerializer.Serialize(value,
-        new JsonSerializerOptions { WriteIndented = true })));
+    public void Json(string name, object value)
+    {
+        var partial = Path.Combine(root, name + ".partial");
+        using (var file = new FileStream(partial, FileMode.CreateNew, FileAccess.Write))
+        using (var bounded = new BoundedStream(file, limit - DirectoryBytes()))
+            JsonSerializer.Serialize(bounded, value, new JsonSerializerOptions { WriteIndented = true });
+        File.Move(partial, Path.Combine(root, name));
+    }
+    public static JsonDocument ReadJson(string path)
+    {
+        using var file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+        if ((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0)
+            throw new InvalidDataException("ANALYZER_JSON_INPUT_REPARSE_POINT");
+        if (file.Length > 4L * 1024 * 1024) throw new InvalidDataException("ANALYZER_JSON_INPUT_BUDGET_EXCEEDED");
+        if (Interlocked.Increment(ref inputFiles) > 256 ||
+            Interlocked.Add(ref inputBytes, file.Length) > 32L * 1024 * 1024)
+            throw new InvalidDataException("ANALYZER_JSON_TOTAL_BUDGET_EXCEEDED");
+        return JsonDocument.Parse(file, new JsonDocumentOptions { MaxDepth = 64 });
+    }
     public long DirectoryBytes() => Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories)
         .Sum(p => new FileInfo(p).Length);
     public static string Csv(string value) => "\"" + value.Replace("\"", "\"\"") + "\"";

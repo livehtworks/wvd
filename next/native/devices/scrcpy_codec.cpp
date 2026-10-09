@@ -4,24 +4,24 @@
 
 namespace wvd::devices::scrcpy {
 namespace {
-void be16(std::vector<std::uint8_t> &bytes, std::size_t offset, std::uint16_t value) {
+template<class Bytes> void be16(Bytes &bytes, std::size_t offset, std::uint16_t value) {
     bytes[offset] = static_cast<std::uint8_t>(value >> 8);
     bytes[offset + 1] = static_cast<std::uint8_t>(value);
 }
-void be32(std::vector<std::uint8_t> &bytes, std::size_t offset, std::uint32_t value) {
+template<class Bytes> void be32(Bytes &bytes, std::size_t offset, std::uint32_t value) {
     for (int i = 3; i >= 0; --i) { bytes[offset + i] = static_cast<std::uint8_t>(value); value >>= 8; }
 }
-void be64(std::vector<std::uint8_t> &bytes, std::size_t offset, std::uint64_t value) {
+template<class Bytes> void be64(Bytes &bytes, std::size_t offset, std::uint64_t value) {
     for (int i = 7; i >= 0; --i) { bytes[offset + i] = static_cast<std::uint8_t>(value); value >>= 8; }
 }
 } // namespace
 
-std::vector<std::uint8_t> touch(std::uint8_t action, std::uint64_t pointer,
+std::array<std::uint8_t, 32> touch_packet(std::uint8_t action, std::uint64_t pointer,
                                 int x, int y, int width, int height, bool pressed) {
     if (action > 2 || width <= 0 || width > 65535 || height <= 0 || height > 65535 ||
         x < 0 || x >= width || y < 0 || y >= height)
         throw std::runtime_error("SCRCPY_TOUCH_COORDINATES_INVALID");
-    std::vector<std::uint8_t> bytes(32);
+    std::array<std::uint8_t, 32> bytes{};
     bytes[0] = 2;
     bytes[1] = action;
     be64(bytes, 2, pointer);
@@ -32,14 +32,23 @@ std::vector<std::uint8_t> touch(std::uint8_t action, std::uint64_t pointer,
     be16(bytes, 22, pressed ? 0xffff : 0);
     return bytes;
 }
-std::vector<std::uint8_t> key(std::uint8_t action, int android_keycode) {
+std::array<std::uint8_t, 14> key_packet(std::uint8_t action, int android_keycode) {
     if (action > 1 || android_keycode < 0 || android_keycode > 65535)
         throw std::runtime_error("SCRCPY_KEY_INVALID");
-    std::vector<std::uint8_t> bytes(14);
+    std::array<std::uint8_t, 14> bytes{};
     bytes[0] = 0;
     bytes[1] = action;
     be32(bytes, 2, static_cast<std::uint32_t>(android_keycode));
     return bytes;
+}
+std::vector<std::uint8_t> touch(std::uint8_t action, std::uint64_t pointer,
+    int x, int y, int width, int height, bool pressed) {
+    const auto packet = touch_packet(action, pointer, x, y, width, height, pressed);
+    return {packet.begin(), packet.end()};
+}
+std::vector<std::uint8_t> key(std::uint8_t action, int code) {
+    const auto packet = key_packet(action, code);
+    return {packet.begin(), packet.end()};
 }
 std::vector<std::vector<std::uint8_t>> encode(const contracts::Command &command,
                                                int width, int height) {

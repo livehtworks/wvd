@@ -50,6 +50,11 @@ MumuCaptureClient::~MumuCaptureClient() {
 void MumuCaptureClient::start() {
     SECURITY_ATTRIBUTES security{sizeof(security), nullptr, TRUE};
     HANDLE parent_read{}, child_write{}, child_read{}, parent_write{};
+    HANDLE error{};
+    struct Pipes {
+        HANDLE &a, &b, &c, &d, &e;
+        ~Pipes() noexcept { discard(a); discard(b); discard(c); discard(d); discard(e); }
+    } owned{parent_read, child_write, child_read, parent_write, error};
     if (!CreatePipe(&parent_read, &child_write, &security, 0) ||
         !CreatePipe(&child_read, &parent_write, &security, 0)) {
         discard(parent_read); discard(child_write); discard(child_read); discard(parent_write);
@@ -62,7 +67,7 @@ void MumuCaptureClient::start() {
         !SetHandleInformation(parent_write, HANDLE_FLAG_INHERIT, 0)) {
         cleanup(); throw std::runtime_error("MUMU_CAPTURE_PIPE_INHERIT_FAILED");
     }
-    HANDLE error = CreateFileW(L"NUL", GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE,
+    error = CreateFileW(L"NUL", GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE,
                                &security, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (error == INVALID_HANDLE_VALUE) { cleanup(); throw std::runtime_error("MUMU_CAPTURE_STDERR_FAILED"); }
     std::array<HANDLE, 3> inherited{child_read, child_write, error};
@@ -70,11 +75,19 @@ void MumuCaptureClient::start() {
     InitializeProcThreadAttributeList(nullptr, 1, 0, &size);
     std::vector<std::uint8_t> buffer(size);
     auto *attributes = reinterpret_cast<LPPROC_THREAD_ATTRIBUTE_LIST>(buffer.data());
-    const bool initialized = InitializeProcThreadAttributeList(attributes, 1, 0, &size) != FALSE;
+    bool initialized = InitializeProcThreadAttributeList(attributes, 1, 0, &size) != FALSE;
+    const auto release_attributes = [&]() noexcept {
+        if (initialized) DeleteProcThreadAttributeList(attributes);
+        initialized = false;
+    };
+    struct Attributes {
+        const decltype(release_attributes) &release;
+        ~Attributes() noexcept { release(); }
+    } owned_attributes{release_attributes};
     if (!initialized ||
         !UpdateProcThreadAttribute(attributes, 0, PROC_THREAD_ATTRIBUTE_HANDLE_LIST,
                                    inherited.data(), sizeof(inherited), nullptr, nullptr)) {
-        if (initialized) DeleteProcThreadAttributeList(attributes);
+        release_attributes();
         discard(error); cleanup();
         throw std::runtime_error("MUMU_CAPTURE_HANDLE_LIST_FAILED");
     }
@@ -95,7 +108,7 @@ void MumuCaptureClient::start() {
     limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
     if (!job_ || !SetInformationJobObject(job_, JobObjectExtendedLimitInformation,
                                            &limits, sizeof(limits))) {
-        DeleteProcThreadAttributeList(attributes); discard(error); cleanup(); close();
+        release_attributes(); discard(error); cleanup(); close();
         throw std::runtime_error("MUMU_CAPTURE_JOB_FAILED");
     }
     PROCESS_INFORMATION child{};
@@ -103,7 +116,7 @@ void MumuCaptureClient::start() {
                                          EXTENDED_STARTUPINFO_PRESENT | CREATE_SUSPENDED |
                                              CREATE_NO_WINDOW,
                                          nullptr, nullptr, &startup.StartupInfo, &child);
-    DeleteProcThreadAttributeList(attributes);
+    release_attributes();
     discard(error);
     if (!created) { cleanup(); close(); throw std::runtime_error("MUMU_CAPTURE_START_FAILED"); }
     process_ = child.hProcess;
@@ -113,6 +126,7 @@ void MumuCaptureClient::start() {
     if (!resumed) { cleanup(); close(); throw std::runtime_error("MUMU_CAPTURE_JOB_ASSIGN_FAILED"); }
     discard(child_read); discard(child_write);
     input_ = parent_write; output_ = parent_read;
+    parent_write = parent_read = nullptr;
     ++generation_;
 }
 

@@ -6,25 +6,20 @@ import hashlib
 import json
 import re
 from pathlib import Path
+from diagnostic_io import InputBudget, write_report
 
 
-def read_json(path: Path) -> dict:
-    if path.stat().st_size > 32 * 1024 * 1024:
-        raise ValueError(f"INPUT_TOO_LARGE: {path.name}")
-    with path.open(encoding="utf-8-sig") as stream:
-        return json.load(stream)
+def read_json(path: Path, budget=None) -> dict:
+    return (budget or InputBudget()).json(path)[0]
 
 
-def ownership_boundaries(path: Path) -> dict:
+def ownership_boundaries(path: Path, budget=None) -> dict:
     records: dict[tuple[str, str, str, str], dict] = {}
     complete = True
     rows = 0
-    with path.open(encoding="utf-8-sig") as stream:
-        for row in stream:
+    stream = (budget or InputBudget()).lines(path)
+    for row in stream:
             rows += 1
-            if rows > 1000000:
-                complete = False
-                break
             if "event=owner_boundary " not in row:
                 continue
             values = dict(re.findall(r"([a-z_]+)=([^\s]+)", row))
@@ -121,6 +116,7 @@ def compare_heap_boundaries(before: dict, after: dict) -> dict:
 
 
 def main() -> None:
+    budget = InputBudget()
     parser = argparse.ArgumentParser()
     parser.add_argument("--run-directory", type=Path)
     parser.add_argument("--census", type=Path)
@@ -143,8 +139,7 @@ def main() -> None:
     report = {"schema": 1, "conclusion": "PARTIAL_ATTRIBUTION", "missing": [], "samples": []}
     if args.run_directory:
         path = args.run_directory / "diagnostics.jsonl"
-        with path.open(encoding="utf-8-sig") as stream:
-            for row in stream:
+        for row in budget.lines(path):
                 event = json.loads(row)
                 if event.get("category") != "memory":
                     continue
@@ -156,21 +151,21 @@ def main() -> None:
             report["missing"].append("historical run has no object lifetime census")
         boundaries = args.run_directory / "memory-lifecycle.json"
         if boundaries.exists():
-            report["lifecycle"] = read_json(boundaries)
+            report["lifecycle"] = read_json(boundaries,budget)
         else:
             report["missing"].append("memory-lifecycle.json")
         if args.compare_run_directory:
             report["missing"].append("allocation stacks for live-heap differences and non-heap ownership")
             earlier = args.compare_run_directory / "memory-lifecycle.json"
             if earlier.exists() and "lifecycle" in report:
-                report["heap_comparison"] = compare_heap_boundaries(read_json(earlier), report["lifecycle"])
+                report["heap_comparison"] = compare_heap_boundaries(read_json(earlier,budget), report["lifecycle"])
                 report["missing"].extend(report["heap_comparison"].get("missing", []))
                 report["missing"].extend(report["heap_comparison"].get("per_heap_comparison", {}).get("missing", []))
             else:
                 report["missing"].append("comparison memory-lifecycle.json")
     if args.census:
-        census = read_json(args.census)
-        report["census_sha256"] = hashlib.sha256(args.census.read_bytes()).hexdigest()
+        census, provenance = budget.json(args.census)
+        report["census_sha256"] = provenance["sha256"]
         report["census"] = census
         samples = census.get("samples", [])
         if samples:
@@ -179,7 +174,7 @@ def main() -> None:
         report["missing"].append("allocation stacks for allocator/external-runtime residual")
     log = args.recognition_log or (args.run_directory / "recognition-memory.log" if args.run_directory else None)
     if log and log.is_file():
-        report["owner_boundaries"] = ownership_boundaries(log)
+        report["owner_boundaries"] = ownership_boundaries(log,budget)
         report["missing"].extend(report["owner_boundaries"]["missing"])
     else:
         report["missing"].append("recognition owner-boundary log")
@@ -191,9 +186,8 @@ def main() -> None:
         "HeapSummary allocated/committed/reserved are distinct; never subtract internal heap committed from PrivateUsage",
     ]
     output.parent.mkdir(parents=True, exist_ok=True)
-    with output.open("x", encoding="utf-8", newline="\n") as stream:
-        json.dump(report, stream, ensure_ascii=False, indent=2)
-        stream.write("\n")
+    report["input_budget"] = {"bytes":budget.bytes,"records":budget.records,"maximum_bytes":budget.maximum_bytes}
+    write_report(output,report)
     print(f"PARTIAL_ATTRIBUTION: {output}; missing={len(report['missing'])}")
 
 

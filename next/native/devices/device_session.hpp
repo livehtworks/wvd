@@ -38,6 +38,7 @@ class DeviceSession final : public DeviceConnection, public LifecyclePort {
                          const std::string &application, std::stop_token stop) override;
     LifecyclePort *lifecycle_port() override { return this; }
     std::optional<LifecycleObservation> observe_lifecycle() override;
+    void lifecycle_window(std::chrono::steady_clock::time_point deadline) noexcept override { read_deadline_ = deadline; }
     bool execute_lifecycle(LifecycleOperation operation, const LifecycleTarget &target,
                            const std::function<bool()> &cancelled) override;
     LifecycleTarget lifecycle_target() const;
@@ -79,6 +80,7 @@ class DeviceSession final : public DeviceConnection, public LifecyclePort {
     std::stop_token read_stop_;
     std::optional<contracts::DiagnosticPixels> failed_pixels_;
     std::optional<std::uint64_t> recovery_origin_;
+    std::optional<contracts::InstanceExitProof> recovery_exit_;
     bool recovery_instance_detected_{};
     bool recovery_launched_{};
     bool recovery_application_started_{};

@@ -8,15 +8,11 @@ tasks::CompiledWorkflow recover_in_dungeon() {
     // 四分钟是本子图总预算，不延长输入帧 TTL；每个节点次数和取消门禁仍独立生效。
     C graph("supply.dungeon_recover", std::chrono::seconds{240});
     graph.check_policy("supply", {"wvd-network-retry", "wvd-pause", "wvd-download"});
-    const J combat{{"mode", "combat_active"}};
-    const auto chest = C::any({C::image("chestFlag"), C::image("whowillopenit"), C::image("chestOpening")});
-    const auto interrupted = C::any({combat, chest, C::image("RiseAgain")});
+    const auto phase = [](const char *name) { return J{{"mode","supply_context"},{"phase",name}}; };
+    const auto interrupted = phase("interrupted");
     const auto trait = C::image("trait"), recover = C::image("recover");
-    const auto dungeon = C::all({C::image("dungFlag"), C::absent(C::image("mapFlag")),
-                                 C::absent(trait), C::absent(recover), C::absent(interrupted)});
-    const auto panel = C::all({C::any({trait, recover}), C::absent(interrupted)});
-    const auto context = C::any({dungeon, panel});
-    const auto post = C::any({context, interrupted});
+    const auto dungeon = phase("dungeon"), panel = phase("panel");
+    const auto context = phase("context"), post = phase("post");
     const auto needed = C::business("/healing_required", true);
     // 无补给需求是无副作用的正常返回；不能为“什么都不做”扫描战斗/宝箱。
     // 真正开始补给时 Requested/Begin 仍必须取得可操作场景证据。
@@ -63,7 +59,10 @@ tasks::CompiledWorkflow recover_in_dungeon() {
         graph.delay_after("Back" + std::to_string(i), 300);
     }
     graph.recovery("ReturnFailed", "supply.recover_panel_not_closed");
-    graph.confirm("Recovered", "heal.complete", "healing_completed", dungeon, {"Terminal"});
+    // Returning to the dungeon is a page handoff, not proof of this heal's
+    // effect. No effect-only material is registered yet: retain the demand.
+    graph.observe("Recovered", dungeon, {"Unconfirmed"});
+    graph.recovery("Unconfirmed", "supply.healing_outcome_unconfirmed");
     graph.interrupt_on(C::absent(J{{"mode", "input_clear"}}), "supply.common_screen_requires_dispatch", "blocked");
     return graph.finish();
 }

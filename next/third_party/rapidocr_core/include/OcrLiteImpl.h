@@ -18,6 +18,7 @@ public:
     void setNumThread(int numOfThread);
 
     void initLogger(bool isConsole, bool isPartImg, bool isResultImg);
+    void setResultOnly(bool enabled) { resultOnly = enabled; }
 
     void enableResultTxt(const char *path, const char *imgName);
 
@@ -26,6 +27,7 @@ public:
     bool initModels(const std::string &detPath, const std::string &clsPath,
                     const std::string &recPath, const std::string &keysPath);
     void cancel();
+    void resume();
 
     void Logger(const char *format, ...);
 
@@ -45,6 +47,7 @@ public:
 private:
     friend void OcrLite::Logger(const char *format, ...);
     bool isOutputConsole = false;
+    bool resultOnly = false;
     bool isOutputPartImg = false;
     bool isOutputResultTxt = false;
     bool isOutputResultImg = false;

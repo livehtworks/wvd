@@ -18,6 +18,7 @@ struct RawFrame {
     std::chrono::steady_clock::time_point capture_finished_at{};
     int display_rotation{-1};
     std::shared_ptr<const std::vector<std::uint8_t>> raw_bgr;
+    std::string instance_id, instance_created_identity;
 };
 // 内层始终使用原始设备坐标；控制权由一个会话独占。
 class DeviceBackend {

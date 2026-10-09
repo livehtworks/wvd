@@ -1,0 +1,49 @@
+name: Native Product Contracts
+on:
+  pull_request:
+    paths: ['next/**', '.github/workflows/native-contracts.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  contracts:
+    if: github.repository == 'livehtworks/wvd'
+    runs-on: windows-2022
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.14.1'
+      - name: Locked Dependencies
+        shell: pwsh
+        run: |
+          python next/tools/dependencies.py
+          python next/tools/prepare_native.py
+          Push-Location next/web
+          npm install --global npm@11.11.0
+          npm ci --ignore-scripts --no-audit --no-fund
+          Pop-Location
+          cmake --preset windows-x64 -S next
+      - name: Affected Production Contracts
+        shell: pwsh
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if ($env:BASE_SHA) {
+            python next/tools/run_contracts.py --changed-from $env:BASE_SHA --output next/.local/ci-contracts
+          } else {
+            python next/tools/run_contracts.py --module runtime --module devices --module recognition --module app --module tools --module web --output next/.local/ci-contracts
+          }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-contract-evidence
+          path: |
+            next/.local/ci-contracts
+            next/.local/logs

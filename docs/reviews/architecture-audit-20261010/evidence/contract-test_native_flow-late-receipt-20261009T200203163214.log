@@ -1,0 +1,19 @@
+late local inputs=1 restarts=0 result=
+late threshold inputs=1 restarts=0 result=
+late black inputs=1 restarts=1 result=
+late stale inputs=1 restarts=0 result=AWAIT_EVIDENCE_STALE
+late generation inputs=1 restarts=0 result=AWAIT_EVIDENCE_STALE
+late error inputs=1 restarts=0 result=LATE_RESOURCE_ERROR
+late unknown inputs=1 restarts=0 result=
+late cleanup inputs=1 restarts=0 result=OBSERVED_RESULT_INPUT_CLEANUP_UNCONFIRMED
+late cleanup-cancel inputs=1 restarts=0 result=CANCELLED
+late cleanup-total inputs=1 restarts=0 result=FLOW_TOTAL_DEADLINE
+late cancel inputs=1 restarts=0 result=CANCELLED
+late total inputs=1 restarts=0 result=FLOW_TOTAL_DEADLINE
+late handler inputs=2 restarts=1 result=
+normal recheck observe result=; no input, restart requests=0
+normal recheck next result=; no input, restart requests=0
+normal recheck return-next result=; no input, restart requests=0
+normal recheck ongoing result=CANCELLED; no input, restart requests=0
+normal recheck read-error result=NORMAL_RESOURCE_ERROR; no input, restart requests=0
+normal recheck guard-only result=NO_NORMAL_RESULT_RESTART_EXPECTED; no input, restart requests=1

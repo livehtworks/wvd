@@ -29,10 +29,10 @@ KarmaChoice choose_karma(const std::string &value) {
     }
     if (negative)
         number = -number;
-    // 保留旧 startswith('-') 与 +0 约定，不以数值正负替换字符串业务键。
+    // Branch and arithmetic use the same parsed sign; before remains the CAS key.
     if (number == 0)
         return {true, value, "+2"};
-    if (value.starts_with('-')) {
+    if (negative) {
         number += 2;
         return {true, value, number.str()};
     }

@@ -3,6 +3,10 @@ project(wvd_next VERSION 0.1.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+add_custom_target(wvd_verified_dependencies
+  COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/verify_build_dependencies.py"
+  COMMENT "Verifying archive-derived consumed dependency files" VERBATIM)
 if(NOT WIN32)
   message(FATAL_ERROR "Native WVD Next currently supports Windows only")
 endif()
@@ -21,6 +25,9 @@ target_compile_definitions(wvd_http PUBLIC BOOST_ERROR_CODE_HEADER_ONLY NOMINMAX
 target_compile_options(wvd_http PRIVATE /utf-8 /W4 /EHsc)
 target_link_libraries(wvd_http PUBLIC ws2_32 mswsock)
 add_subdirectory(native)
+foreach(TARGET wvd_http wvd_native_platform wvd_native_rapid wvd_native_workflow)
+  add_dependencies(${TARGET} wvd_verified_dependencies)
+endforeach()
 set(WVD_NATIVE_DEPS "${CMAKE_CURRENT_SOURCE_DIR}/.local/native-deps")
 set(WVD_OPENCV "${WVD_NATIVE_DEPS}/opencv-unpacked/opencv/build")
 set(WVD_ORT "${WVD_NATIVE_DEPS}/ort-unpacked/onnxruntime-win-x64-1.22.1")
@@ -42,3 +49,6 @@ add_custom_command(TARGET automationd POST_BUILD
 add_executable(test_head_response tests/native/test_head_response.cpp)
 target_link_libraries(test_head_response PRIVATE wvd_http)
 target_compile_options(test_head_response PRIVATE /utf-8 /W4 /EHsc)
+add_custom_target(audit_correctness_targets DEPENDS test_native_flow test_native_author
+  test_native_ocr test_native_application test_native_coordinator test_native_devices
+  test_strategy_frequency test_native_publication automationd test_head_response)

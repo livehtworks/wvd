@@ -5,8 +5,10 @@
 #include "games/wvd/tasks/pipeline_compiler.hpp"
 #include "devices/device_session.hpp"
 #include "runtime/native_run_coordinator.hpp"
+#include "runtime/measurement_barrier.hpp"
 #include "storage/profile_store.hpp"
 #include "storage/workflow_repository.hpp"
+#include "storage/submission_store.hpp"
 #include "platform/windows/preparation_timer.hpp"
 #include <map>
 #include <mutex>
@@ -16,6 +18,7 @@
 namespace wvd::app {
 struct ApplicationPaths {
     std::filesystem::path data_root, pack_root, legacy_config, quest_catalog;
+    std::string service_instance_id;
 };
 
 // Windows常驻应用唯一装配者。HTTP只调用此对象；设备、Run和可编辑数据均不归Vue所有。
@@ -36,7 +39,7 @@ class Application {
     J effective_profile_values(const std::string &task_id) const;
     J effective_profile_values(const std::string &task_id, const J &stored) const;
     J queue_run(const std::string &kind, const J &request, const J &identity,
-                std::function<J()> prepare);
+                std::function<J()> prepare, std::uint64_t stop_epoch);
     games::tasks::CompiledWorkflow compile_task_graph(const J &request,
         const games::WvdQuestDefinition &task, const J &values,
         const platform::PreparationObserver &observer = {}) const;
@@ -71,7 +74,7 @@ class Application {
                    std::optional<games::tasks::CompiledWorkflow> prepared = std::nullopt);
     void watch_task_session(const J &request, const J &stored, J source_values,
                             std::shared_ptr<devices::DeviceConnection> backend,
-                            std::string request_id);
+                            std::string request_id, std::shared_ptr<std::atomic<int>> start_signal);
     J prepare_workflow(const std::string &flow_id, const J &request, const J &stored,
                        J document, std::shared_ptr<devices::DeviceConnection> backend,
                        const J &library_snapshot,
@@ -80,7 +83,7 @@ class Application {
     J catalog() const;
     J device_status() const;
     J run_status() const;
-    api::DynamicReply diagnostic_image(const std::string &name) const;
+    api::DynamicReply diagnostic_image(const std::string &identity) const;
     J save_profile(const J &request);
     J select_emulator_path() const;
     J connect_device(const J &request);
@@ -123,6 +126,7 @@ class Application {
     std::set<std::string> available_images_;
     std::unique_ptr<storage::ProfileStore> profile_store_;
     std::unique_ptr<storage::WorkflowRepository> workflow_store_;
+    std::unique_ptr<storage::SubmissionStore> submission_store_;
     std::unique_ptr<games::WvdQuestCatalog> catalog_;
     std::unique_ptr<runtime::NativeRunCoordinator> coordinator_;
     std::shared_ptr<recognition::MatchBudget> match_budget_ =
@@ -133,6 +137,8 @@ class Application {
     J frame_info_ = nullptr;
     std::optional<std::chrono::steady_clock::time_point> frame_captured_at_;
     std::string active_workflow_id_, active_workflow_revision_, active_task_name_;
+    std::uint64_t active_run_id_{};
+    runtime::MeasurementBarrier measurement_;
     std::optional<std::chrono::steady_clock::time_point> active_started_;
     std::map<std::string, std::string> active_pipeline_to_node_;
     J active_source_paths_ = J::object();
@@ -140,8 +146,10 @@ class Application {
     mutable std::recursive_mutex command_mutex_;
     mutable std::mutex mutex_;
     std::atomic<bool> cancel_operation_{false};
+    std::atomic<std::uint64_t> stop_epoch_{0};
+    std::atomic<bool> worker_publication_failed_{false};
     J submission_ = nullptr;
-    std::map<std::string, J> submissions_;
+    J submission_intent_;
     std::jthread device_worker_;
     std::jthread handoff_worker_;
     J handoff_status_ = nullptr;

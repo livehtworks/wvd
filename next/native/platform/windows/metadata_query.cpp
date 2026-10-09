@@ -193,9 +193,19 @@ class MetadataCleanupOwner {
         worker_.request_stop();
         cv_.notify_all();
     }
-    void adopt(std::unique_ptr<MetadataQuery::Impl> value) {
+    std::size_t reserve() {
         std::lock_guard lock(mutex_);
-        pending_.push_back(std::move(value));
+        for (std::size_t i = 0; i < slots_.size(); ++i)
+            if (!slots_[i].reserved) { slots_[i].reserved = true; return i; }
+        throw std::runtime_error("METADATA_CLEANUP_CAPACITY");
+    }
+    void release(std::size_t slot) noexcept {
+        std::lock_guard lock(mutex_);
+        slots_[slot].reserved = false;
+    }
+    void adopt(std::size_t slot, std::unique_ptr<MetadataQuery::Impl> value) noexcept {
+        std::lock_guard lock(mutex_);
+        slots_[slot].value = std::move(value);
         ++pending_metadata_cleanup;
         cv_.notify_one();
     }
@@ -204,19 +214,20 @@ class MetadataCleanupOwner {
         for (;;) {
             std::unique_lock lock(mutex_);
             cv_.wait_for(lock, std::chrono::milliseconds(100),
-                         [&] { return !pending_.empty() || stop.stop_requested(); });
-            for (auto it = pending_.begin(); it != pending_.end();) {
-                const bool quiet = finish_impl(**it, std::chrono::milliseconds(20));
-                if (quiet) { it = pending_.erase(it); --pending_metadata_cleanup; }
-                else ++it;
+                         [&] { return pending_metadata_cleanup.load() != 0 || stop.stop_requested(); });
+            for (auto &slot : slots_) {
+                if (slot.value && finish_impl(*slot.value, std::chrono::milliseconds(20))) {
+                    slot.value.reset(); slot.reserved = false; --pending_metadata_cleanup;
+                }
             }
-            if (stop.stop_requested() && pending_.empty())
+            if (stop.stop_requested() && pending_metadata_cleanup.load() == 0)
                 return;
         }
     }
     std::mutex mutex_;
     std::condition_variable cv_;
-    std::vector<std::unique_ptr<MetadataQuery::Impl>> pending_;
+    struct Slot { bool reserved{}; std::unique_ptr<MetadataQuery::Impl> value; };
+    std::array<Slot, 64> slots_;
     std::jthread worker_;
 };
 MetadataCleanupOwner &cleanup_owner() {
@@ -224,13 +235,19 @@ MetadataCleanupOwner &cleanup_owner() {
     return owner;
 }
 } // namespace
-MetadataQuery::MetadataQuery() : impl_(std::make_unique<Impl>()) {
+MetadataQuery::MetadataQuery() {
     check(pending_metadata_cleanup.load() == 0, "METADATA_CLEANUP_PENDING");
+    // Initialize the cleanup thread and reserve its non-growing slot before
+    // acquiring any kernel resource. Destruction only transfers into this slot.
+    cleanup_slot_ = cleanup_owner().reserve();
+    try { impl_ = std::make_unique<Impl>(); }
+    catch (...) { cleanup_owner().release(cleanup_slot_); throw; }
 }
 MetadataQuery::~MetadataQuery() {
     cancel();
     if (impl_ && !finish_cleanup(std::chrono::milliseconds(20)))
-        cleanup_owner().adopt(std::move(impl_));
+        cleanup_owner().adopt(cleanup_slot_, std::move(impl_));
+    else cleanup_owner().release(cleanup_slot_);
 }
 void MetadataQuery::cancel() { SetEvent(impl_->cancel_event.value); }
 bool MetadataQuery::finish_cleanup(std::chrono::milliseconds budget) {

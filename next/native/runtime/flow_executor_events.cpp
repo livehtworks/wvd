@@ -7,16 +7,6 @@
 namespace wvd::runtime {
 namespace {
 using namespace std::chrono_literals;
-nlohmann::json request_key(const recognition::Request &request) {
-    nlohmann::json key{{"id", request.recognizer_id}, {"revision", request.parameter_revision},
-        {"roi", {request.roi.x, request.roi.y, request.roi.width, request.roi.height}}};
-    if (const auto *custom = std::get_if<recognition::CustomParameters>(&request.parameters))
-        key["parameters"] = {{"binding", custom->binding}, {"value", custom->parameters}};
-    else if (const auto *image = std::get_if<recognition::TemplateParameters>(&request.parameters))
-        key["parameters"] = {{"image", image->image}, {"threshold", image->threshold}};
-    else key["parameters"] = recognition::ocr_parameters_json(std::get<recognition::OcrParameters>(request.parameters));
-    return key;
-}
 }
 
 void FlowExecutor::account_event_time() {
@@ -52,7 +42,24 @@ void FlowExecutor::account_event_time() {
         if (read_suspended && frame.ambiguity_since) *frame.ambiguity_since += elapsed;
     }
 }
-std::vector<FlowExecutor::ScopedEvent> FlowExecutor::effective_events(const workflow::Step &current) const {
+const std::vector<FlowExecutor::ScopedEvent> &FlowExecutor::effective_events(const workflow::Step &current) const {
+    bool unchanged = event_scope_keys_.size() == stack_.size();
+    for (std::size_t i = 0; unchanged && i < stack_.size(); ++i) {
+        const auto &active = stack_[i];
+        const auto *scope = i + 1 == stack_.size() ? &current :
+            &program_.definitions.at(active.definition).steps.at(active.current);
+        unchanged = event_scope_keys_[i].step == scope &&
+            (active.event ? event_scope_keys_[i].active == active.event->rule.id : event_scope_keys_[i].active.empty());
+    }
+    if (unchanged) return event_scope_rules_;
+    std::vector<EventScopeKey> keys;
+    keys.reserve(stack_.size());
+    for (std::size_t i = 0; i < stack_.size(); ++i) {
+        const auto &active = stack_[i];
+        keys.push_back({i + 1 == stack_.size() ? &current :
+            &program_.definitions.at(active.definition).steps.at(active.current),
+            active.event ? active.event->rule.id : std::string{}});
+    }
     std::map<std::string, ScopedEvent> inherited;
     const auto merge = [&](const workflow::Step &scope, std::size_t owner) {
         for (const auto &id : scope.disabled_events) inherited.erase(id);
@@ -74,7 +81,12 @@ std::vector<FlowExecutor::ScopedEvent> FlowExecutor::effective_events(const work
     std::stable_sort(result.begin(), result.end(), [](const auto &a, const auto &b) {
         return a.rule.priority > b.rule.priority;
     });
-    return result;
+    // Publish only a completely built scope. Immutable program pointers and
+    // active-handler identity invalidate it; elapsed time and pixels do not.
+    event_scope_rules_ = std::move(result);
+    event_scope_keys_ = std::move(keys);
+    ++event_scope_version_;
+    return event_scope_rules_;
 }
 std::optional<TickResult> FlowExecutor::check_unexpected(Frame &frame, const workflow::Step &current,
     const contracts::FrameEnvelope &image, const std::string &reason, bool force) {
@@ -91,7 +103,7 @@ std::optional<TickResult> FlowExecutor::check_unexpected(Frame &frame, const wor
     last_diagnostic_ = {{"source_path", current.source_path}, {"reason", reason},
         {"business_group", current.check_group}, {"checked_groups", nlohmann::json::array()}};
     // 异常先处理，特殊剧情其次；遭遇事件仍是原作用域的正常交接，不能提前全图扫描。
-    const auto rules = effective_events(current);
+    const auto &rules = effective_events(current);
     for (const auto &[category, name] : {std::pair{workflow::EventClass::Exception, "exception"},
                                        std::pair{workflow::EventClass::Special, "special"},
                                        std::pair{workflow::EventClass::Encounter, "encounter"}}) {
@@ -105,7 +117,7 @@ std::optional<TickResult> FlowExecutor::check_unexpected(Frame &frame, const wor
     return std::nullopt;
 }
 std::optional<TickResult> FlowExecutor::poll_wait_events(Frame &frame, const workflow::Step &current) {
-    const auto rules = effective_events(current);
+    const auto &rules = effective_events(current);
     const auto eligible = [&](const ScopedEvent &scoped) {
         const auto &rule = scoped.rule;
         if (rule.category != workflow::EventClass::Overlay &&
@@ -133,23 +145,10 @@ std::optional<TickResult> FlowExecutor::check_events(Frame &frame, const workflo
     const contracts::FrameEnvelope &image, workflow::EventClass category) {
     // 未确认旧输入已静止前，只核对原结果，不能让普通事件发送第二个输入。
     if (frame.pending && frame.pending->delivery_unknown) return std::nullopt;
-    const auto rules = effective_events(current);
+    const auto &rules = effective_events(current);
     std::string scope_key;
     if (category == workflow::EventClass::Overlay && frame.event_exits.empty() && observation_cycle_) {
-        nlohmann::json key = nlohmann::json::array();
-        for (const auto &scoped : rules) {
-            const auto &rule = scoped.rule;
-            if (rule.category != category) continue;
-            key.push_back({{"owner", scoped.owner}, {"id", rule.id}, {"detect", request_key(rule.detect)},
-                {"priority", rule.priority}, {"disposition", static_cast<int>(rule.disposition)},
-                {"handler", rule.handler_definition}, {"resume", static_cast<int>(rule.resume)},
-                {"replan", rule.replan_step}, {"reason", rule.reason},
-                {"exit_ms", rule.exit_budget.count()}, {"ambiguity_ms", rule.ambiguity_budget.count()},
-                {"resume_guard", rule.resume_guard ? request_key(*rule.resume_guard) : nlohmann::json(nullptr)}});
-        }
-        for (const auto &active : stack_)
-            if (active.event) key.push_back({{"active", active.event->rule.id}});
-        scope_key = key.dump();
+        scope_key = std::to_string(event_scope_version_);
         if (observation_cycle_->frame.identity == image.identity &&
             observation_cycle_->clear_overlay_scope == scope_key) {
             platform::timing::count(platform::timing::Counter::OverlayReuse);

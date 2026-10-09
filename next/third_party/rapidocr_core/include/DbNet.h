@@ -15,6 +15,7 @@ public:
 
     void initModel(const std::string &pathStr);
     void cancel() { runOptions.SetTerminate(); }
+    void resume() { runOptions.UnsetTerminate(); }
 
     std::vector<TextBox> getTextBoxes(cv::Mat &src, ScaleParam &s, float boxScoreThresh,
                                       float boxThresh, float unClipRatio);
