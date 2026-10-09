@@ -1,0 +1,1 @@
+PASS repository read bad_alloc after acquisition: handles stable, lock released, original document retry intact

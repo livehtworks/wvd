@@ -1,0 +1,110 @@
+warning: in the working copy of 'next/native/storage/workflow_repository.cpp', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'next/tests/native/test_native_application.cpp', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'next/tests/test_build_resource_contract.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'next/tools/run_contracts.py', LF will be replaced by CRLF the next time Git touches it
+contract-build
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-build-20261009T222825472305.log
+contract-test_native_flow-recovery-recheck
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_flow-recovery-recheck-20261009T222913717097.log
+contract-test_native_flow-linkage-closure
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_flow-linkage-closure-20261009T222914926709.log
+contract-test_native_flow-positive-loop-frame
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_flow-positive-loop-frame-20261009T222917737453.log
+contract-test_native_flow-child-result-frame
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_flow-child-result-frame-20261009T222918736086.log
+contract-test_native_flow-late-receipt
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_flow-late-receipt-20261009T222919711298.log
+contract-test_native_flow-restored-context-timer
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_flow-restored-context-timer-20261009T222924647793.log
+contract-test_native_flow-critical-recovery
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_flow-critical-recovery-20261009T222925794961.log
+contract-test_native_flow-confirmed-result
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_flow-confirmed-result-20261009T222927266630.log
+contract-test_native_flow-timeout-reclassification
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_flow-timeout-reclassification-20261009T222928447089.log
+contract-test_native_flow-selection-race
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_flow-selection-race-20261009T222929664867.log
+contract-test_native_flow-restart-during-boot
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_flow-restart-during-boot-20261009T222931632108.log
+contract-test_native_flow-tolerance
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_flow-tolerance-20261009T222933109303.log
+contract-test_native_flow-receipt-exception-safety
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_flow-receipt-exception-safety-20261009T222946480747.log
+contract-test_native_flow-exit-proof-causality
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_flow-exit-proof-causality-20261009T222947444411.log
+contract-test_native_flow-input-effect-contract
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_flow-input-effect-contract-20261009T222948415807.log
+contract-test_native_flow-progress-contract
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_flow-progress-contract-20261009T222949747838.log
+contract-test_native_devices-base
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_devices-base-20261009T222950895106.log
+contract-test_native_devices-physical-gate-authority
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_devices-physical-gate-authority-20261009T222955465959.log
+contract-test_native_devices-lifecycle-deadline
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_devices-lifecycle-deadline-20261009T222956433414.log
+contract-test_native_author-pressure-contract
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_author-pressure-contract-20261009T222957527519.log
+contract-test_native_author-builtin-resource-closure
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_author-builtin-resource-closure-20261009T222958577839.log
+contract-test_native_author-healing-effect-contract
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_author-healing-effect-contract-20261009T222959569973.log
+contract-test_native_ocr-ctc-contract
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_ocr-ctc-contract-20261009T223001580686.log
+contract-test_native_ocr-result-contract
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_ocr-result-contract-20261009T223002607294.log
+contract-test_native_ocr-run-model-contract
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_ocr-run-model-contract-20261009T223003992914.log
+contract-test_strategy_frequency-configuration-contract
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_strategy_frequency-configuration-contract-20261009T223005245480.log
+contract-test_strategy_frequency-semantics
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_strategy_frequency-semantics-20261009T223006256862.log
+contract-test_strategy_frequency-fallback-contract
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_strategy_frequency-fallback-contract-20261009T223007214098.log
+contract-test_native_author-leaf-plan-contract
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_author-leaf-plan-contract-20261009T223008167684.log
+contract-test_native_author-supply-plan-contract
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_author-supply-plan-contract-20261009T223009169648.log
+contract-test_native_application-measurement-contract
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_application-measurement-contract-20261009T223014279849.log
+contract-test_native_application-builtin-transaction
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_application-builtin-transaction-20261009T223015368579.log
+contract-test_native_application-submission-history
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_application-submission-history-20261009T223017196509.log
+contract-test_native_application-repository-read-oom
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_application-repository-read-oom-20261009T223032792903.log
+contract-test_native_application-control-contract
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_application-control-contract-20261009T223033808978.log
+contract-test_native_publication-base
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_publication-base-20261009T223038522430.log
+contract-test_native_coordinator-combat-diagnostic
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_coordinator-combat-diagnostic-20261009T223040245271.log
+contract-test_native_coordinator-diagnostic-identity
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_coordinator-diagnostic-identity-20261009T223041838764.log
+contract-test_native_coordinator-instance-exit
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_coordinator-instance-exit-20261009T223042855825.log
+contract-test_native_coordinator-timing-quota
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_coordinator-timing-quota-20261009T223044443501.log
+contract-test_native_coordinator-event-history
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_native_coordinator-event-history-20261009T223045768159.log
+contract-tools
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-tools-20261009T223046752531.log
+contract-resource-tools
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-resource-tools-20261009T223048288080.log
+contract-test_diagnostic_io.py
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_diagnostic_io.py-20261009T223055218753.log
+contract-test_crash_plan_contract.py
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-test_crash_plan_contract.py-20261009T223056484642.log
+contract-verify_bounded_trace_input.ps1
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-verify_bounded_trace_input.ps1-20261009T223057586699.log
+contract-verify_measurement_endpoints.ps1
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-verify_measurement_endpoints.ps1-20261009T223059406290.log
+contract-verify_trace_guards.ps1
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-verify_trace_guards.ps1-20261009T223100926739.log
+contract-heap-restore
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-heap-restore-20261009T223112019979.log
+contract-heap-build
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-heap-build-20261009T223113692236.log
+contract-heap-aggregation
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-heap-aggregation-20261009T223117170957.log
+contract-web
+  OK: D:\programcode\python\wvd\next\.local\logs\contract-web-20261009T223118412113.log

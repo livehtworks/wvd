@@ -33,9 +33,11 @@ CASES = {
     "app": [("test_native_application", ["--measurement-contract"]),
         ("test_native_application", ["--builtin-transaction", "{output}/builtin-transaction"]),
         ("test_native_application", ["--submission-history", "{output}/submission-history"]),
+        ("test_native_application", ["--repository-read-oom", "{output}/repository-read-oom"]),
         ("test_native_application", ["--control-contract", "{pack}", "{pack}/parameters/legacy-quests.json", "{output}/control"]),
         ("test_native_publication", ["{output}/publication"]),
         ("test_native_coordinator", ["--combat-diagnostic"]),
+        ("test_native_coordinator", ["--diagnostic-identity"]),
         ("test_native_coordinator", ["--instance-exit"]),
         ("test_native_coordinator", ["--timing-quota"]),
         ("test_native_coordinator", ["--event-history"])],
@@ -87,11 +89,26 @@ def select_modules(changed):
         elif path.startswith(("next/native/app/", "next/native/api/", "next/native/storage/", "next/native/platform/")):
             chosen.update(("app", "devices", "runtime"))
         elif path.startswith("next/web/"): chosen.update(("web", "app"))
-        elif path.startswith(("next/tools/", "next/tests/test_")): chosen.add("tools")
+        elif path in {"next/tools/prepare_native.py", "next/tools/dependencies.py",
+                      "next/tools/dependency_tree.py", "next/tools/verify_build_dependencies.py",
+                      "next/tools/resource_generation.py", "next/tools/package_functional.py",
+                      "next/tools/run_contracts.py"}:
+            chosen.update(CASES)
+        elif path.startswith(("next/tools/", "next/tests/tools/", "next/tests/test_")): chosen.add("tools")
         elif path.startswith("next/tests/native/"): chosen.update(("runtime", "recognition", "devices", "app"))
         elif path.startswith("next/") or path.startswith(".github/workflows/native-contracts"):
             chosen.update(CASES)
     return chosen
+
+def changed_paths(base):
+    repo = ROOT.parent
+    modified = subprocess.check_output(["git", "diff", "--name-only", "-z", base, "--"],
+                                       cwd=repo, timeout=20)
+    untracked = subprocess.check_output(["git", "ls-files", "--others", "--exclude-standard", "-z",
+                                       "--", "next", ".github/workflows/native-contracts.yml"],
+                                      cwd=repo, timeout=20)
+    return sorted({item.decode("utf-8", errors="surrogateescape")
+                   for item in (modified + untracked).split(b"\0") if item})
 
 def execute(modules, output):
     output = output.absolute()
@@ -192,9 +209,7 @@ def main():
     parser.add_argument("--plan", action="store_true")
     args = parser.parse_args()
     if args.changed_from:
-        paths = subprocess.check_output(["git", "diff", "--name-only", args.changed_from, "--"],
-            cwd=ROOT.parent, text=True, encoding="utf-8", timeout=20).splitlines()
-        modules = select_modules(paths)
+        modules = select_modules(changed_paths(args.changed_from))
     else: modules = set(args.module)
     if args.plan:
         print(json.dumps({"modules": sorted(modules), "cases": {m: len(CASES[m]) for m in sorted(modules)}}))

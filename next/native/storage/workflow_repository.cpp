@@ -82,6 +82,10 @@ std::string read_plain_file(const std::filesystem::path &path, const std::string
                                   nullptr);
     if (file == INVALID_HANDLE_VALUE)
         fail("WORKFLOW_READ_FAILED", flow_id);
+    struct CloseFile {
+        HANDLE value;
+        ~CloseFile() noexcept { CloseHandle(value); }
+    } owned{file};
     FILE_ATTRIBUTE_TAG_INFO attributes{};
     LARGE_INTEGER file_size{};
     const bool valid = GetFileInformationByHandleEx(
@@ -91,7 +95,6 @@ std::string read_plain_file(const std::filesystem::path &path, const std::string
                        GetFileSizeEx(file, &file_size) && file_size.QuadPart > 0 &&
                        file_size.QuadPart <= static_cast<LONGLONG>(max_document_size);
     if (!valid) {
-        CloseHandle(file);
         fail("WORKFLOW_FILE_UNSAFE", flow_id);
     }
     std::string text(static_cast<std::size_t>(file_size.QuadPart), '\0');
@@ -107,7 +110,6 @@ std::string read_plain_file(const std::filesystem::path &path, const std::string
         }
         position += read;
     }
-    CloseHandle(file);
     if (!success || position != text.size())
         fail("WORKFLOW_READ_FAILED", flow_id);
     return text;

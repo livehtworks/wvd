@@ -1,0 +1,288 @@
+{
+  "source": {
+    "source_commit": "ee024ebf2f378ddf8545f2b1ecf0ec4b9aeabe39",
+    "product_inputs_sha256": "60b68ff66c1b5f7733280e6f81cefec56c8f6b9d59dbd148b03906fc64c047e7",
+    "product_input_count": 1289,
+    "documentation_sha256": "946e6df0b8bd508f6e7385bc7795378ac9afd5054ba8895a661c3856fec9b82a"
+  },
+  "binaries": {
+    "test_native_application": "946bf37477b70dfc47e677fdc7649187e1f54c0f24fc97121f3ff4318d473c65",
+    "test_native_author": "36cb145b1935d53eff7164e02a4e62e4449560aa6bdb64cc9105853ad982fa75",
+    "test_native_coordinator": "4a749db8ff73944a5f68e1fabc9d1bf09cac38bfa450ce7dfbbf8665367e9471",
+    "test_native_devices": "8a90b486ea876fcdd9c0cb9fafc9fe59a3cff91f47a10a81dd780dc57ef96362",
+    "test_native_flow": "d37bd5ac2b4da3ebecc7c99a95a5c3dd720ec8a438edcf7aa18b4a97aaa517b5",
+    "test_native_ocr": "e4414829da4ac7a7d49d937f73137650d899f82827973193bb152cfab020c7ba",
+    "test_native_publication": "59deefc1bea386ace6a03bcde19a2ed0099c48e8cb099be6f6e43ebcfd8a441e",
+    "test_strategy_frequency": "f4671d23dc44ee43995cb22f64b4e74d7642a25fcb1a2b4602729f009f5692e7",
+    "automationd": "e9dc06ed9bf1423144b0fe36c9c5fef00249b897d950ab4e9294cffe93b0e046",
+    "test_head_response": "88ac1fe931df80fca635c20a997da4355eb302d650f25a28e3a770f729c513d5"
+  },
+  "modules": [
+    "app",
+    "devices",
+    "recognition",
+    "runtime",
+    "tools",
+    "web"
+  ],
+  "passed": [
+    [
+      "runtime",
+      "test_native_flow",
+      "--recovery-recheck"
+    ],
+    [
+      "runtime",
+      "test_native_flow",
+      "--linkage-closure"
+    ],
+    [
+      "runtime",
+      "test_native_flow",
+      "--positive-loop-frame"
+    ],
+    [
+      "runtime",
+      "test_native_flow",
+      "--child-result-frame"
+    ],
+    [
+      "runtime",
+      "test_native_flow",
+      "--late-receipt"
+    ],
+    [
+      "runtime",
+      "test_native_flow",
+      "--restored-context-timer"
+    ],
+    [
+      "runtime",
+      "test_native_flow",
+      "--critical-recovery"
+    ],
+    [
+      "runtime",
+      "test_native_flow",
+      "--confirmed-result"
+    ],
+    [
+      "runtime",
+      "test_native_flow",
+      "--timeout-reclassification"
+    ],
+    [
+      "runtime",
+      "test_native_flow",
+      "--selection-race"
+    ],
+    [
+      "runtime",
+      "test_native_flow",
+      "--restart-during-boot"
+    ],
+    [
+      "runtime",
+      "test_native_flow",
+      "--tolerance"
+    ],
+    [
+      "runtime",
+      "test_native_flow",
+      "--receipt-exception-safety"
+    ],
+    [
+      "runtime",
+      "test_native_flow",
+      "--exit-proof-causality"
+    ],
+    [
+      "runtime",
+      "test_native_flow",
+      "--input-effect-contract"
+    ],
+    [
+      "runtime",
+      "test_native_flow",
+      "--progress-contract"
+    ],
+    [
+      "devices",
+      "test_native_devices",
+      "base"
+    ],
+    [
+      "devices",
+      "test_native_devices",
+      "--physical-gate-authority"
+    ],
+    [
+      "devices",
+      "test_native_devices",
+      "--lifecycle-deadline"
+    ],
+    [
+      "recognition",
+      "test_native_author",
+      "--pressure-contract"
+    ],
+    [
+      "recognition",
+      "test_native_author",
+      "--builtin-resource-closure"
+    ],
+    [
+      "recognition",
+      "test_native_author",
+      "--healing-effect-contract"
+    ],
+    [
+      "recognition",
+      "test_native_ocr",
+      "--ctc-contract"
+    ],
+    [
+      "recognition",
+      "test_native_ocr",
+      "--result-contract"
+    ],
+    [
+      "recognition",
+      "test_native_ocr",
+      "--run-model-contract"
+    ],
+    [
+      "recognition",
+      "test_strategy_frequency",
+      "--configuration-contract"
+    ],
+    [
+      "recognition",
+      "test_strategy_frequency",
+      "--semantics"
+    ],
+    [
+      "recognition",
+      "test_strategy_frequency",
+      "--fallback-contract"
+    ],
+    [
+      "recognition",
+      "test_native_author",
+      "--leaf-plan-contract"
+    ],
+    [
+      "recognition",
+      "test_native_author",
+      "--supply-plan-contract"
+    ],
+    [
+      "app",
+      "test_native_application",
+      "--measurement-contract"
+    ],
+    [
+      "app",
+      "test_native_application",
+      "--builtin-transaction"
+    ],
+    [
+      "app",
+      "test_native_application",
+      "--submission-history"
+    ],
+    [
+      "app",
+      "test_native_application",
+      "--repository-read-oom"
+    ],
+    [
+      "app",
+      "test_native_application",
+      "--control-contract"
+    ],
+    [
+      "app",
+      "test_native_publication",
+      "base"
+    ],
+    [
+      "app",
+      "test_native_coordinator",
+      "--combat-diagnostic"
+    ],
+    [
+      "app",
+      "test_native_coordinator",
+      "--diagnostic-identity"
+    ],
+    [
+      "app",
+      "test_native_coordinator",
+      "--instance-exit"
+    ],
+    [
+      "app",
+      "test_native_coordinator",
+      "--timing-quota"
+    ],
+    [
+      "app",
+      "test_native_coordinator",
+      "--event-history"
+    ],
+    [
+      "tool-or-web",
+      "tools"
+    ],
+    [
+      "tool-or-web",
+      "resource-tools"
+    ],
+    [
+      "tool-or-web",
+      "test_diagnostic_io.py"
+    ],
+    [
+      "tool-or-web",
+      "test_crash_plan_contract.py"
+    ],
+    [
+      "tool-or-web",
+      "verify_bounded_trace_input.ps1"
+    ],
+    [
+      "tool-or-web",
+      "verify_measurement_endpoints.ps1"
+    ],
+    [
+      "tool-or-web",
+      "verify_trace_guards.ps1"
+    ],
+    [
+      "tool-or-web",
+      "heap-restore"
+    ],
+    [
+      "tool-or-web",
+      "heap-build"
+    ],
+    [
+      "tool-or-web",
+      "heap-aggregation"
+    ],
+    [
+      "tool-or-web",
+      "web"
+    ]
+  ],
+  "data_root": "D:\\programcode\\python\\wvd\\next\\.local\\architecture-audit-20261010\\followup-contracts-1",
+  "device_actions": false,
+  "complete": true,
+  "tool_binaries": {
+    "HeapAnalyzer.exe": "bb8f583173fcededccf3dfc6859489392da4f27ed4cac9797e882ecaa8d143af",
+    "HeapAnalyzer.dll": "e81bb241a32126fe1b1fd38c0b1822c977d9b1837f988e76e7ab82d833175772",
+    "HeapAnalyzer.deps.json": "d33fb2fe5eccfed01e72fe740d18b1adef1e578c3657422f5734ebb297443241",
+    "HeapAnalyzer.runtimeconfig.json": "28329cf08f6505e73806b17558b187c02f0c1c516fe47ebfb7a013d082aaa306"
+  }
+}

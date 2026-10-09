@@ -1,5 +1,7 @@
 # 当前执行注意项
 
+- 文件读取的HANDLE在取得后、缓冲分配前必须即时接管；流程仓库的bad_alloc旧实现可留下文件锁，现由局部RAII保护，验证须确认故障点已在真实文件打开之后。
+- 改动模块选择需合并未跟踪新源码与tracked/staged路径，用git的NUL输出而非换行切割；依赖/生成/验收入口变更不能仅跑工具。独立工具检查与用户.vscode不应因此触发无关全量回归。
 - OwnedWindowsJob的CreateProcess入口必须收到实际EXE绝对路径；build.run先用PATH解析命令名，再交Job。不把dotnet启动失败误报成restore失败，也不绕过Job归属。
 - cmd /d /s /c的末段是原始shell字符串，不可套CRT的反斜杠引号转义；OwnedWindowsJob只对该明确形式保留shell引号。含空格的批处理/参数及exit41均由同一Job入口验证，不换成无所有者的subprocess启动。
 - HeapAnalyzer还原沿用其README的显式nuget.org源、locked-mode及独立派生包缓存；本机默认源只有VS Offline，省略source会报NU1101。不得改用户NuGet设置或解锁版本来绕过。

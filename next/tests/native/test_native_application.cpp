@@ -12,9 +12,31 @@
 #include <thread>
 #include <fstream>
 #include <future>
+#include <cstdlib>
+#include <new>
 #include <windows.h>
 #include <dbghelp.h>
 #pragma comment(lib, "dbghelp.lib")
+
+// Fail only the isolated repository's read buffer, after verifying its file is
+// already locked. No fault switches exist in production code.
+static thread_local std::size_t read_allocation_fault{};
+static thread_local const wchar_t *read_fault_file{};
+static thread_local bool read_fault_after_open{};
+void *operator new(std::size_t size) {
+    if (read_allocation_fault && size == read_allocation_fault) {
+        read_allocation_fault = 0;
+        const auto probe = CreateFileW(read_fault_file, GENERIC_WRITE,
+            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, 0, nullptr);
+        read_fault_after_open = probe == INVALID_HANDLE_VALUE && GetLastError() == ERROR_SHARING_VIOLATION;
+        if (probe != INVALID_HANDLE_VALUE) CloseHandle(probe);
+        throw std::bad_alloc();
+    }
+    if (auto *value = std::malloc(size ? size : 1)) return value;
+    throw std::bad_alloc();
+}
+void operator delete(void *value) noexcept { std::free(value); }
+void operator delete(void *value, std::size_t) noexcept { std::free(value); }
 
 namespace wvd::runtime {
 struct NativeCoordinatorTestAccess {
@@ -371,6 +393,37 @@ int closure_application(const std::filesystem::path &pack, const std::filesystem
 
 int main(int argc, char **argv) {
     try {
+        if (argc == 3 && std::string(argv[1]) == "--repository-read-oom") {
+            const auto root = std::filesystem::absolute(argv[2]);
+            require_closure(!std::filesystem::exists(root), "NEW_ISOLATED_ROOT_REQUIRED");
+            std::ifstream source("resources/authoring/public-flows.json"); J documents; source >> documents;
+            auto original = documents.at(0);
+            original["flow"]["description"] = std::string(2000, 'x');
+            wvd::storage::WorkflowRepository repository(root);
+            const auto saved = repository.create(original);
+            const auto id = saved.at("flow").at("id").get<std::string>();
+            const auto path = root / (id + ".json");
+            require_closure(repository.read(id) == saved, "REPOSITORY_WARM_READ_FAILED");
+            const auto length = std::filesystem::file_size(path);
+            const auto buffer_capacity = std::string(static_cast<std::size_t>(length), '\0').capacity() + 1;
+            DWORD before{}, after{};
+            require_closure(GetProcessHandleCount(GetCurrentProcess(), &before), "HANDLE_COUNT_FAILED");
+            read_fault_file = path.c_str(); read_fault_after_open = false;
+            read_allocation_fault = buffer_capacity;
+            bool failed{};
+            try { (void)repository.read(id); } catch (const std::bad_alloc &) { failed = true; }
+            read_allocation_fault = 0; read_fault_file = nullptr;
+            require_closure(failed && read_fault_after_open, "READ_BUFFER_FAULT_NOT_AFTER_HANDLE_ACQUISITION");
+            require_closure(GetProcessHandleCount(GetCurrentProcess(), &after) && after == before,
+                "READ_ALLOCATION_LEAKED_HANDLE");
+            const auto writer = CreateFileW(path.c_str(), GENERIC_WRITE,
+                FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, 0, nullptr);
+            require_closure(writer != INVALID_HANDLE_VALUE, "READ_OOM_LEFT_STALE_FILE_LOCK");
+            CloseHandle(writer);
+            require_closure(repository.read(id) == saved, "READ_OOM_RETRY_CHANGED_DOCUMENT");
+            std::cout << "PASS repository read bad_alloc after acquisition: handles stable, lock released, original document retry intact\n";
+            return 0;
+        }
         if (argc == 5 && std::string(argv[1]) == "--control-contract") {
             using A = wvd::app::ApplicationAssemblyTestAccess;
             const auto root=std::filesystem::absolute(argv[4]);

@@ -15,9 +15,36 @@ from dependency_tree import verify_consumed_tree
 from resource_generation import generate_transaction, validate_pack
 import package_functional
 import build
+import run_contracts
 
 
 class BuildResourceContract(unittest.TestCase):
+    def test_module_selection_includes_untracked_staged_and_dependency_inputs(self):
+        with tempfile.TemporaryDirectory(prefix="wvd-module-proof-") as directory:
+            root = Path(directory)
+            def git(*arguments):
+                return subprocess.run(["git", *arguments], cwd=root, check=True, timeout=10,
+                                      stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            git("init")
+            git("config", "user.name", "isolated-fixture")
+            git("config", "user.email", "fixture@example.invalid")
+            (root / "README.md").write_text("baseline", encoding="utf-8")
+            git("add", ".")
+            git("commit", "-m", "isolated baseline")
+            (root / "next/native/runtime").mkdir(parents=True)
+            added = root / "next/native/runtime/added.hpp"
+            added.write_text("// new consumed source", encoding="utf-8")
+            (root / ".vscode").mkdir()
+            (root / ".vscode/user.json").write_text("{}", encoding="utf-8")
+            with patch.object(run_contracts, "ROOT", root / "next"):
+                paths = run_contracts.changed_paths("HEAD")
+                self.assertEqual(paths, ["next/native/runtime/added.hpp"])
+                self.assertEqual(run_contracts.select_modules(paths), {"runtime", "app"})
+                git("add", "next")
+                self.assertEqual(run_contracts.changed_paths("HEAD"), paths)
+            self.assertEqual(run_contracts.select_modules(["next/tools/prepare_native.py"]), set(run_contracts.CASES))
+            self.assertEqual(run_contracts.select_modules(["next/tests/tools/trace.ps1"]), {"tools"})
+
     def test_documentation_is_provenance_not_product_input(self):
         with tempfile.TemporaryDirectory(prefix="wvd-source-proof-") as directory:
             root = Path(directory)

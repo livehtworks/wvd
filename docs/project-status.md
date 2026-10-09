@@ -10,7 +10,8 @@
 
 - 用户指定的 `wvd-full-architecture-audit-4c466e1.zip`源码整改/限定离线交付已整理：基线4c466e14fa514fa177380e902afe373c8f20c3b2，54份文件哈希/大小一致。16包不是全部验收关闭，43项未批量closed。
 - 本轮只做源码、独立离线/Windows定向验证及文档；未改正式profile/用户流程，未部署、连接游戏、启动循环或现场内存采集。`.vscode/`用户修改未动。
-- [逐包整改报告](reviews/architecture-audit-remediation-20261010.md)、[43项索引](reviews/architecture-audit-20261010/ISSUE_INDEX.md)及16份JSON回执分别登记源码/命名断言/缺口/部署/实机/归因。本轮未提交/推送，工作区修改待审。
+- [逐包整改报告](reviews/architecture-audit-remediation-20261010.md)、[43项索引](reviews/architecture-audit-20261010/ISSUE_INDEX.md)及16份JSON回执保留历史验收维度。上一轮整改已提交/推送ee024eb；原回执null是当时状态，不重写历史。
+- [后续修复](reviews/architecture-audit-followup-20261010.md)：流程读缓冲OOM句柄泄漏已旧失败/新通过，未跟踪源码漏验与依赖模块映射已修复，跨实例同编号PNG/延迟旧读在实际RunStore通过。六模块后续回执complete=true，产品输入hash60b68ff66c1b5f7733280e6f81cefec56c8f6b9d59dbd148b03906fc64c047e7，随后续源码一并提交；未部署或启动游戏。
 - 最终final-contracts-14六模块入口complete=true：39个原生命令、11项工具/构建，另HEAD检查通过；源/10个EXE/4个分析器产物身份复核，产品输入hash为56a9ac97f30875dfd18931f573d2fe57d0616f60f29924111796a1e3a36d242e。这里的50项不是游戏轮数，也不覆盖全部工作包验收断言。
 - WP03/07/08/09/11/13/14/15有逐SDK故障、真实ETL/复杂图成本、并发图片端到端、批次边界、全部最小builtin/旧反例等必需覆盖缺口，具体由回执限定。缺疗效素材时补给保持Unconfirmed；自然崩溃计划UNARMED。未提升为正式运行结论。
 - 当前测试入口是 `next/tools/run_contracts.py`，必须指定模块/改动基线和全新隔离输出。个人fork的原生PR工作流已添加，远端CI尚未执行。
@@ -35,3 +36,4 @@
 - [暂停问题交接](reviews/runtime-issues-handoff-20261009.md)
 - [MuMu自然崩溃核查](reviews/mumu-renderer-crash-20261009.md)
 - [架构审计本轮交付](reviews/architecture-audit-remediation-20261010.md)
+- [架构审计后续修复](reviews/architecture-audit-followup-20261010.md)

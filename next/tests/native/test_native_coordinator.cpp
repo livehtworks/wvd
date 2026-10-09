@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <atomic>
 #include <fstream>
+#include <future>
 #include <iostream>
 #include <thread>
 #include <opencv2/imgcodecs.hpp>
@@ -92,6 +93,58 @@ int main(int argc, char **argv) {
         const auto data_root = std::filesystem::temp_directory_path() /
             ("wvd-native-coordinator-" + wvd::platform::unique_id());
         std::filesystem::create_directories(data_root);
+        if (argc == 2 && std::string(argv[1]) == "--diagnostic-identity") {
+            using J = nlohmann::json;
+            const auto check = [](bool value, const char *code) {
+                if (!value) throw std::runtime_error(code);
+            };
+            const J definition{{"engine_kind", "wvd_native"}, {"device_id", "native-test"},
+                {"game_id", "wvd"}, {"pack_revision", "native-test"}, {"viewport", "900x1600"}};
+            storage::RunStore old_run(data_root, "instance-old", 1, definition);
+            storage::RunStore new_run(data_root, "instance-new", 1, definition);
+            contracts::FrameEnvelope frame;
+            frame.identity.device_id = "native-test"; frame.identity.game_id = "wvd";
+            frame.identity.pack_revision = "native-test"; frame.identity.viewport_id = "900x1600";
+            frame.identity.generation = frame.identity.connection_generation = 1;
+            frame.identity.frame_id = 1; frame.identity.action_epoch = 1;
+            frame.identity.raw_size = frame.identity.recognition_size = {900, 1600};
+            frame.identity.captured_at = std::chrono::steady_clock::now();
+            frame.identity.backend = "synthetic-diagnostic";
+            frame.raw_bgr = std::make_shared<const std::vector<std::uint8_t>>(900 * 1600 * 3, 10);
+            storage::DiagnosticRequest request;
+            request.run_id = request.generation = 1; request.node = "identity-test";
+            request.reason = "IDENTITY_TEST"; request.stage = "pre_action";
+            check(old_run.save_diagnostic(&frame, request).at("status") == "saved", "OLD_IDENTITY_SAVE_FAILED");
+            const auto old_index = old_run.diagnostic_summary();
+            std::promise<void> release;
+            const auto signal = release.get_future().share();
+            auto delayed = std::async(std::launch::async, [&] {
+                signal.wait();
+                return storage::RunStore::read_diagnostic(old_run.directory(), old_index, "instance-old", 1, 1, 1);
+            });
+            struct Release { std::promise<void> &value; bool done{};
+                ~Release() { if (!done) value.set_value(); } } guard{release};
+            frame.raw_bgr = std::make_shared<const std::vector<std::uint8_t>>(900 * 1600 * 3, 20);
+            check(new_run.save_diagnostic(&frame, request).at("status") == "saved", "NEW_IDENTITY_SAVE_FAILED");
+            const auto new_index = new_run.diagnostic_summary();
+            check(old_index.at("entries").at(0).at("id") == 1 && new_index.at("entries").at(0).at("id") == 1,
+                "IDENTITY_COLLISION_NOT_EXERCISED");
+            release.set_value(); guard.done = true;
+            const auto old_bytes = delayed.get();
+            const auto new_bytes = storage::RunStore::read_diagnostic(new_run.directory(), new_index, "instance-new", 1, 1, 1);
+            check(old_bytes != new_bytes, "DELAYED_PNG_READ_RETURNED_NEW_RUN_BYTES");
+            const auto rejects = [&](const auto &directory, const J &index, const char *instance,
+                                     unsigned generation, const char *code) {
+                try { (void)storage::RunStore::read_diagnostic(directory, index, instance, 1, generation, 1); }
+                catch (const std::exception &error) { check(std::string(error.what()) == code, "WRONG_DIAGNOSTIC_REJECTION"); return; }
+                throw std::runtime_error("CROSS_RUN_DIAGNOSTIC_NOT_REJECTED");
+            };
+            rejects(new_run.directory(), new_index, "instance-old", 1, "DIAGNOSTIC_NOT_FOUND");
+            rejects(old_run.directory(), old_index, "instance-old", 2, "DIAGNOSTIC_NOT_FOUND");
+            rejects(new_run.directory(), old_index, "instance-old", 1, "DIAGNOSTIC_HASH_MISMATCH");
+            std::cout << "PASS actual RunStore PNG reads: same run/id across instances, delayed old read retained, wrong identity/generation/hash rejected\n";
+            return 0;
+        }
         if (argc == 2 && std::string(argv[1]) == "--combat-diagnostic") {
             using A = runtime::NativeCoordinatorTestAccess;
             using J = nlohmann::json;

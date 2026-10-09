@@ -1,0 +1,11 @@
+short-owned
+  OK: C:\Users\thevil\AppData\Local\Temp\wvd-build-owner-536p5e4u\.local\logs\short-owned-20261009T223049297043.log
+expired-owned
+......
+----------------------------------------------------------------------
+Ran 6 tests in 5.730s
+
+OK
+#< CLIXML
+<Objs Version="1.1.0.1" xmlns="http://schemas.microsoft.com/powershell/2004/04"><S S="Error">Exception: TRACE_TOOL_TIMEOUT:-c_x000D__x000A_</S></Objs>
+

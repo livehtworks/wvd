@@ -1,0 +1,1 @@
+PASS actual RunStore PNG reads: same run/id across instances, delayed old read retained, wrong identity/generation/hash rejected
