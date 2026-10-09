@@ -78,7 +78,8 @@ class PipelineCompiler {
     std::string define_child(const std::string &prefix, const CompiledWorkflow &child,
                              const std::vector<std::string> &normal_returns = {});
     void call_child(const std::string &name, const std::string &entry, nlohmann::json next,
-                    nlohmann::json handoffs = nlohmann::json::object());
+                    nlohmann::json handoffs = nlohmann::json::object(),
+                    nlohmann::json condition = nullptr);
     void public_step(const std::string &name, const std::string &flow_id,
                      const nlohmann::json &arguments, nlohmann::json next,
                      nlohmann::json handoffs = nlohmann::json::object(),
@@ -113,7 +114,8 @@ class PipelineCompiler {
     void interrupt_on(nlohmann::json condition, std::string reason, std::string port = "");
     void use_dialogue(recovery::DialoguePolicy policy);
     // 此节点已可能产生副作用。后继遇覆盖层只能报告结果未确认，不能正常返回后重放。
-    void stop_if_interrupted_after(const std::string &name, std::string reason);
+    void stop_if_interrupted_after(const std::string &name, std::string reason,
+                                  bool instance_exit_discardable = false);
     // 固定游戏行为 binding；不开放任意动作/任意实现名称。
     void combat_step(const std::string &name, const nlohmann::json &condition,
                      nlohmann::json parameters, nlohmann::json next);

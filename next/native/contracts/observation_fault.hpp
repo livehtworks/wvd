@@ -30,6 +30,7 @@ struct ObservationRecovery {
     std::optional<ObservationReconnect> reconnect;
     bool application_restarted{};
     bool foreground_restored{};
+    bool instance_restarted{};
 };
 class ObservationUnavailable final : public std::runtime_error {
   public:

@@ -20,6 +20,7 @@ tasks::CompiledWorkflow dismiss_global_prompt(GlobalPrompt prompt) {
         graph.fixed_click("HarkenChoice", vision::harken_buff_menu(), vision::harken_floor_menu(),
                           {450, 987}, {"HarkenReturned"});
         graph.postcondition_budget("HarkenChoice", 15000);
+        graph.retry_menu_input("HarkenChoice", vision::harken_buff_menu(), 1500);
         graph.observe("HarkenReturned", vision::harken_floor_menu(), {"Terminal"});
     }
     // 旧祝福二次确认优先关闭，不能继续点背景中的祝福按钮。

@@ -43,17 +43,22 @@ CompiledWorkflow leap_to_fordraig() {
     const auto selection = C::any({special, target, C::image("cursedWheelTitle")});
     graph.route("Entry", {"Wheel", "Ruins", "Dismiss"});
     graph.click("Wheel", wheel, wheel, selection, {"FindTarget"});
+    graph.retry_menu_input("Wheel", wheel, 3000);
     graph.click("Ruins", C::all({ruins, C::absent(wheel)}), ruins, opening, {"Entry"});
+    graph.retry_menu_input("Ruins", C::all({ruins, C::absent(wheel)}), 3000);
     graph.fixed_click("Dismiss", C::all({city(), C::absent(wheel), C::absent(ruins)}), opening, {1, 1}, {"Entry"});
     graph.route("FindTarget", {"Select", "Special", "MenuDismiss"});
     graph.click("Select", target, target, C::any({leap, ok}), {"FindOK"});
+    graph.retry_menu_input("Select", target, 3000);
     graph.click("Special", C::all({special, C::absent(target)}), special, selection, {"FindTarget"});
     graph.fixed_click("MenuDismiss", C::all({selection, C::absent(target), C::absent(special)}), selection, {1, 1}, {"FindTarget"});
     graph.route("FindOK", {"PrepareOK", "PrepareLeap"});
     graph.confirm("PrepareOK", "fordraig.leap.prepare", "fordraig_leap_prepared", ok, {"OK"});
     graph.confirm("PrepareLeap", "fordraig.leap.prepare", "fordraig_leap_prepared", C::all({leap, C::absent(ok)}), {"Leap"});
     graph.click("Leap", C::all({leap, C::absent(ok)}), leap, ok, {"OK"});
+    graph.retry_menu_input("Leap", C::all({leap, C::absent(ok)}), 5000);
     graph.click("OK", ok, ok, city(), {"WaitRemaining"});
+    graph.retry_menu_input("OK", ok, 5000);
     graph.postcondition_budget("OK", 20000);
     graph.delay_after("OK", 10000);
     graph.route("WaitRemaining", {"Confirmed"});
@@ -108,10 +113,12 @@ CompiledWorkflow return_from_fordraig() {
     graph.back("CloseMap", map, leaving, {"FindReturn"});
     graph.route("FindReturn", {"ReturnText", "Leave", "Approach"});
     graph.click("ReturnText", text, text, choice, {"FindCity"});
+    graph.retry_menu_input("ReturnText", text, 3000);
     graph.click("Leave", C::all({leave, C::absent(text)}), leave, leaving, {"ReturnText", "Approach"});
     graph.fixed_click("Approach", C::all({C::any({dung, leave}), C::absent(text)}), leaving, {455, 1200}, {"FindReturn"});
     graph.route("FindCity", {"Royal", "AtCity", "CityBack"});
     graph.click("Royal", royal, royal, city(), {"AtCity"});
+    graph.retry_menu_input("Royal", royal, 3000);
     graph.back("CityBack", C::all({choice, C::absent(royal), C::absent(city())}), choice, {"Royal", "AtCity", "CityDismiss"});
     graph.fixed_click("CityDismiss", C::all({choice, C::absent(royal), C::absent(city())}), choice, {1, 1}, {"FindCity"});
     for (const auto *name : {"ReturnText", "Leave", "Approach"}) {

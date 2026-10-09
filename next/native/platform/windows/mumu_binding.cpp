@@ -17,7 +17,8 @@ bool mumu_metadata_usable(const nlohmann::json &live) {
     const auto code = live.value("error_code", -1);
     // 重新启动期间旧崩溃码可能尚未清除，而进程已启动、Android仍在引导。
     // 元数据可读不等于实例已退出；重开准入另外严格检查is_process_started=false。
-    return code == 0 || ((code == 900 || code == 901) && !live.at("is_android_started").get<bool>());
+    return code == 0 || ((code == 900 || code == 901) &&
+        (!live.at("is_process_started").get<bool>() || !live.at("is_android_started").get<bool>()));
 }
 void launch_selected_instance(const std::filesystem::path &launcher, int index) {
     check(launcher.filename() == "MuMuNxDevice.exe" &&
@@ -51,7 +52,7 @@ nlohmann::json create_mumu_binding(const std::filesystem::path &manager, int ind
     check(mumu_metadata_usable(live) &&
               live.at("index").get<std::string>() == std::to_string(index),
           "MUMU_INSTANCE_MISMATCH");
-    if (live.value("is_android_started", false))
+    if (live.value("is_process_started", false) && live.value("is_android_started", false))
         check(live.contains("adb_port") &&
                   "127.0.0.1:" + std::to_string(live.at("adb_port").get<int>()) == serial,
               "CONFIG_MANAGER_ADB_MISMATCH");
@@ -87,16 +88,16 @@ nlohmann::json verify_mumu_binding(const nlohmann::json &source,
     if (!metadata.at("success").get<bool>())
         throw std::runtime_error(metadata.at("error").get<std::string>() + ":" + metadata.dump());
     auto live = metadata.at("data");
-    check(live.value("error_code", -1) == 0 &&
+    check(mumu_metadata_usable(live) &&
               live.at("index").get<std::string>() == std::to_string(index),
           "MUMU_INSTANCE_MISMATCH");
+    check(live.at("created_timestamp") == binding.at("created_timestamp"),
+          "MUMU_INSTANCE_REPLACED");
     check(live.value("is_android_started", false) && live.value("is_process_started", false),
           "MUMU_INSTANCE_NOT_RUNNING");
     check(live.contains("adb_port") && "127.0.0.1:" + std::to_string(live["adb_port"].get<int>()) ==
                                            binding.at("serial").get<std::string>(),
           "MUMU_ADB_BINDING_MISMATCH");
-    check(live.at("created_timestamp") == binding.at("created_timestamp"),
-          "MUMU_INSTANCE_REPLACED");
     auto adb = path_from_utf8(binding.at("adb"));
     check(std::filesystem::canonical(adb) ==
               std::filesystem::canonical(manager.parent_path() / "adb.exe"),

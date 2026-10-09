@@ -1,4 +1,5 @@
 #include "causality.hpp"
+#include "games/wvd/vision/location_probes.hpp"
 #include <cmath>
 
 namespace wvd::games::navigation {
@@ -16,6 +17,7 @@ tasks::CompiledWorkflow adjust_causality(const CausalitySettings &settings) {
     graph.route("Entry", {"Opened", "Open"});
     graph.observe("Opened", symbol, {"DisableReference"});
     graph.click("Open", C::all({leap, menu, C::absent(symbol)}), menu, symbol, {"Opened"});
+    graph.retry_menu_input("Open", vision::menu_retry_ready(C::all({leap, menu, C::absent(symbol)})), 3000);
     const auto complete = settings.options.empty() ? "Close" : "EnableReference";
     for (const bool enable : {false, true}) {
         if (enable && settings.options.empty()) continue;

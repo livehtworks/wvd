@@ -344,7 +344,7 @@ int main(int argc, char **argv) {
                 check(result.state == runtime::TickState::Completed && ports.child_calls == 1 && !executor.has_unresolved_input(), "handoff became success/replayed child:" + result.code);
                 std::cout << "linkage handoff " << (single ? "single" : "multiple") << " PASS\n";
             }
-            for (const std::string mode : {"arrival", "stopped", "stalled", "progress", "unknown", "error", "stale", "cancel", "total", "stalled-threshold"}) {
+            for (const std::string mode : {"arrival", "arrival-confirm", "arrival-call", "stopped", "stalled", "progress", "unknown", "error", "stale", "cancel", "total", "stalled-threshold"}) {
                 struct PollPorts final : Ports {
                     std::string mode;
                     bool stopped{}, restored{}, arrival_ready{}, changed{}, scene_known{true};
@@ -353,7 +353,7 @@ int main(int argc, char **argv) {
                         const recognition::Request &r) override {
                         auto result = Ports::recognize(frame, r);
                         bool hit = false;
-                        if (r.recognizer_id == "arrival") hit = mode == "arrival" || arrival_ready || restored;
+                        if (r.recognizer_id == "arrival") hit = mode.starts_with("arrival") || arrival_ready || restored;
                         if (r.recognizer_id == "stopped") hit = mode == "stopped";
                         if (r.recognizer_id == "scene") hit = scene_known || restored;
                         if (r.recognizer_id == "changed") hit = changed;
@@ -386,6 +386,14 @@ int main(int argc, char **argv) {
                 root.steps.emplace("moving", std::move(moving));
                 for (const auto *id : {"arrival", "stopped"}) {
                     auto node = step(id, workflow::Observe{request(id)}, {"done"}); node.guard = request(id);
+                    if (std::string(id) == "arrival" && mode == "arrival-confirm")
+                        node.data = workflow::BusinessConfirm{"arrival", request(id), nlohmann::json::object(), "ConfirmArrival"};
+                    if (std::string(id) == "arrival" && mode == "arrival-call") {
+                        node.data = workflow::Call{"arrived", {}};
+                        workflow::Definition child; child.id = "arrived"; child.entry = "return";
+                        child.steps.emplace("return", step("return", workflow::Return{"completed"}));
+                        program.definitions.emplace("arrived", std::move(child));
+                    }
                     root.steps.emplace(id, std::move(node));
                 }
                 root.steps.emplace("stall", step("stall", workflow::ExternalBlocked{"TEST_POLL_NO_PROGRESS"}));
@@ -475,7 +483,46 @@ int main(int argc, char **argv) {
                     "restart menu lost handoff or replayed child:" + result.code);
                 std::cout << "linkage restart handoff PASS\n";
             }
-            std::cout << "linkage closure: 13 bounded production-executor cases; no real device input\n";
+            std::cout << "linkage closure: bounded production-executor cases; no real device input\n";
+            return 0;
+        }
+        if (argc == 2 && std::string(argv[1]) == "--positive-loop-frame") {
+            struct LoopPorts final : Ports {
+                int reads{};
+                contracts::Observation recognize(const contracts::FrameEnvelope &frame,
+                    const recognition::Request &request) override {
+                    auto result = Ports::recognize(frame, request);
+                    if (request.recognizer_id == "done" && frame.identity.frame_id == 1)
+                        result.outcome = contracts::RecognitionOutcome::NoHit;
+                    if (request.recognizer_id == "loop") { ++reads; std::this_thread::sleep_for(30ms); }
+                    return result;
+                }
+            } ports;
+            const auto request = [](const char *id) {
+                return recognition::Request{id, "1", {0,0,900,1600},
+                    recognition::CustomParameters{"fixture", nlohmann::json::object()}};
+            };
+            workflow::FlowProgram program; program.root_definition = "root"; program.revision = "positive-loop";
+            workflow::Definition root; root.id = "root"; root.entry = "dispatch";
+            root.steps.emplace("dispatch", step("dispatch", workflow::Route{}, {"done", "call"}));
+            auto done = step("done", workflow::Observe{request("done")}, {"finish"}); done.guard = request("done");
+            root.steps.emplace("done", std::move(done));
+            root.steps.emplace("call", step("call", workflow::Call{"child", {}}, {"dispatch"}));
+            root.steps.emplace("finish", step("finish", workflow::Finish{}));
+            for (auto &[id, current] : root.steps) current.max_hit = 0;
+            workflow::Definition child; child.id = "child"; child.entry = "read";
+            child.steps.emplace("read", step("read", workflow::Observe{request("loop")}, {"return"}));
+            child.steps.emplace("return", step("return", workflow::Return{"completed"}));
+            program.definitions.emplace("root", std::move(root)); program.definitions.emplace("child", std::move(child));
+            runtime::FlowExecutor executor(program, ports, 1s);
+            runtime::TickResult end;
+            for (int i = 0; i < 200; ++i) {
+                end = executor.tick();
+                if (end.state != runtime::TickState::Progress && end.state != runtime::TickState::Waiting) break;
+            }
+            if (end.state != runtime::TickState::Completed || ports.captures < 2 || ports.reads > 8)
+                throw std::runtime_error("POSITIVE_LOOP_REUSED_OLD_FRAME:" + end.code);
+            std::cout << "positive observe/child-return loop captures new frame without overlay rules\n";
             return 0;
         }
         if (argc == 2 && std::string(argv[1]) == "--child-result-frame") {
@@ -724,6 +771,66 @@ int main(int argc, char **argv) {
             }
             return 0;
         }
+        if (argc == 2 && std::string(argv[1]) == "--restored-context-timer") {
+            for (const bool app_restart : {false, true}) {
+                struct SlowRestore final : Ports {
+                    bool restored{}, injected{}, restart{};
+                    int forced{}, boots{};
+                    contracts::FrameEnvelope capture() override {
+                        if (captures >= 3 && !injected) {
+                            injected = true;
+                            throw contracts::ObservationUnavailable({contracts::ReadFaultKind::ApplicationUnavailable,
+                                contracts::ReadFaultStage::Capture, "GAME_NOT_FOREGROUND", "fixture.focus", {}, {}});
+                        }
+                        return Ports::capture();
+                    }
+                    contracts::Observation recognize(const contracts::FrameEnvelope &frame, const recognition::Request &request) override {
+                        auto result = Ports::recognize(frame, request);
+                        if (request.recognizer_id == "ready" && (!restored || (restart && !boots)))
+                            result.outcome = contracts::RecognitionOutcome::NoHit;
+                        return result;
+                    }
+                    contracts::ObservationRecovery recover_observation(bool force = false) override {
+                        if (force) ++forced;
+                        std::this_thread::sleep_for(70ms);
+                        restored = true;
+                        return {{}, restart, true};
+                    }
+                    runtime::OperationResult operate(const std::string &, const nlohmann::json &,
+                        const std::optional<contracts::FrameEnvelope> &, const std::optional<contracts::Observation> &,
+                        const std::string &) override { ++boots; return {runtime::OperationState::Done}; }
+                } ports;
+                ports.restart = app_restart;
+                recognition::Request ready{"ready", "1", {0,0,900,1600},
+                    recognition::CustomParameters{"fixture", nlohmann::json::object()}};
+                workflow::FlowProgram program; program.root_definition = "root"; program.revision = "restore-timer";
+                workflow::Definition root; root.id = "root"; root.entry = "dispatch";
+                root.steps.emplace("dispatch", step("dispatch", workflow::Route{}, {"ready", "poll"}));
+                auto found = step("ready", workflow::Observe{ready}, {"finish"}); found.guard = ready;
+                root.steps.emplace("ready", std::move(found));
+                root.steps.emplace("poll", step("poll", workflow::Poll{2ms, {}, {}}, {"dispatch"}));
+                root.steps.at("dispatch").max_hit = root.steps.at("poll").max_hit = 0;
+                root.steps.emplace("finish", step("finish", workflow::Finish{}));
+                workflow::Definition boot; boot.id = "boot"; boot.entry = "start";
+                boot.steps.emplace("start", step("start", workflow::RegisteredOperation{"Boot", nlohmann::json::object()}, {"return"}));
+                boot.steps.emplace("return", step("return", workflow::Return{"completed"}));
+                workflow::EventRule event; event.id = "restart"; event.detect = ready;
+                event.on_device_restart = true; event.handler_definition = "boot"; root.events.push_back(event);
+                program.definitions.emplace("root", std::move(root)); program.definitions.emplace("boot", std::move(boot));
+                runtime::FlowExecutor executor(program, ports, 2s, {1s, 1ms, 5ms, 40ms});
+                runtime::TickResult end;
+                for (int i = 0; i < 300; ++i) {
+                    end = executor.tick();
+                    if (end.state != runtime::TickState::Progress && end.state != runtime::TickState::Waiting) break;
+                    if (end.state == runtime::TickState::Waiting) std::this_thread::sleep_until(end.wake_at);
+                }
+                if (end.state != runtime::TickState::Completed || ports.forced || !ports.injected ||
+                    ports.boots != (app_restart ? 1 : 0))
+                    throw std::runtime_error("RESTORED_CONTEXT_RESTARTED:" + end.code);
+            }
+            std::cout << "slow restore: foreground and app restart do not inherit old exception timer\n";
+            return 0;
+        }
         if (argc == 2 && std::string(argv[1]) == "--critical-recovery") {
             // Uses the production FlowExecutor. All frames, lifecycle operations and inputs are fake.
             // No device, shell, game process or profile is opened by this branch.
@@ -743,17 +850,18 @@ int main(int argc, char **argv) {
             recognition::Request scene{"scene", "1", {0,0,900,1600},
                 recognition::CustomParameters{"WvdVision", nlohmann::json::object()}};
             const std::string protected_reason = "combat.skill_outcome_unconfirmed";
-            for (const std::string mode : {"retry", "restart_from", "nested", "unknown", "no_retry"}) {
+            for (const std::string mode : {"retry", "restart_from", "nested", "unknown", "no_retry", "instance-exit"}) {
                 struct ProtectedPorts final : Ports {
                     std::uint64_t epoch{};
                     int submitted{}, boots{}, prepares{}, result_reads{}, recoveries{};
-                    bool recovered{}, unknown{};
+                    bool recovered{}, unknown{}, instance_exit{};
                     contracts::FrameEnvelope capture() override {
                         if (epoch && !recovered)
                             throw contracts::ObservationUnavailable({contracts::ReadFaultKind::ApplicationUnavailable,
                                 contracts::ReadFaultStage::Capture, "GAME_NOT_FOREGROUND", "test.capture", {}, {}});
                         auto frame = Ports::capture();
                         frame.identity.raw_size = {900,1600}; frame.identity.action_epoch = epoch;
+                        frame.identity.connection_generation = recovered && instance_exit ? 2 : 1;
                         return frame;
                     }
                     contracts::Observation recognize(const contracts::FrameEnvelope &frame,
@@ -771,7 +879,9 @@ int main(int argc, char **argv) {
                             ++epoch, std::chrono::steady_clock::now(), {}};
                     }
                     contracts::ObservationRecovery recover_observation(bool = false) override {
-                        ++recoveries; recovered = true; return {{}, true, true};
+                        ++recoveries; recovered = true;
+                        if (instance_exit) return {contracts::ObservationReconnect{"offline", "2", "original-instance", 1, 2}, true, true, true};
+                        return {{}, true, true};
                     }
                     runtime::OperationResult operate(const std::string &binding, const nlohmann::json &,
                         const std::optional<contracts::FrameEnvelope> &, const std::optional<contracts::Observation> &,
@@ -782,10 +892,12 @@ int main(int argc, char **argv) {
                     }
                 } ports;
                 ports.unknown = mode == "unknown";
+                ports.instance_exit = mode == "instance-exit";
                 workflow::FlowProgram program; program.revision = "critical-protected"; program.root_definition = "root";
                 workflow::Definition root; root.id = "root"; root.entry = "dispatch";
                 workflow::Input input{scene, scene, {{"kind","Click"}}, {0,0,900,1600}};
                 input.interruption_reason = protected_reason;
+                input.instance_exit_discardable = ports.instance_exit;
                 if (mode != "no_retry") input.retry = workflow::InputRetry{scene, 1s, 0};
                 if (mode == "restart_from") input.retry->restart_from = "dispatch";
                 auto result_probe = scene; result_probe.recognizer_id = "result";
@@ -811,7 +923,8 @@ int main(int argc, char **argv) {
                 program.definitions.emplace("boot", std::move(boot));
                 runtime::FlowExecutor executor(program, ports, 3s, {1s, 1ms, 10ms, 2s});
                 const auto result = drive(executor);
-                require(result.state == runtime::TickState::ExternalBlocked && result.code == protected_reason,
+                require(result.state == (ports.instance_exit ? runtime::TickState::Failed : runtime::TickState::ExternalBlocked) &&
+                    result.code == (ports.instance_exit ? "device.instance_restarted" : protected_reason),
                     "CRITICAL_PROTECTION_OUTCOME:" + mode + ":" + result.code);
                 require(ports.submitted == 1 && ports.recoveries == 1 && ports.boots == 0 && ports.result_reads == 0,
                     "CRITICAL_PROTECTED_INPUT_REPLAYED_OR_FALSE_CONFIRMED:" + mode);
@@ -1118,6 +1231,78 @@ int main(int argc, char **argv) {
                 if (ports.operations || executor.has_unresolved_input())
                     throw std::runtime_error("SELECTION_RACE_CHANGED_INPUT_STATE");
                 std::cout << "selection " << mode << ": " << result.code << " no input/replay\n";
+            }
+            // The production operation contract distinguishes no effect from
+            // an operation already in flight; neither may fabricate success.
+            for (const std::string mode : {"confirm", "registered", "business-guard", "in-flight", "call"}) {
+                struct EffectPorts final : Ports {
+                    std::string mode;
+                    int predicates{}, effects{};
+                    bool obsolete{};
+                    contracts::Observation recognize(const contracts::FrameEnvelope &f,
+                        const recognition::Request &r) override {
+                        auto o = Ports::recognize(f, r);
+                        if ((r.recognizer_id == "old" && obsolete) ||
+                            (r.recognizer_id == "new" && !obsolete)) o.outcome = contracts::RecognitionOutcome::NoHit;
+                        return o;
+                    }
+                    runtime::OperationResult operate(const std::string &binding, const nlohmann::json &,
+                        const std::optional<contracts::FrameEnvelope> &, const std::optional<contracts::Observation> &,
+                        const std::string &) override {
+                        if (binding == "BusinessPredicate") {
+                            if (++predicates == 1) return {runtime::OperationState::Done};
+                            obsolete = true; return {runtime::OperationState::Waiting};
+                        }
+                        ++operations;
+                        obsolete = true;
+                        if (mode == "in-flight") {
+                            if (operations == 1) return {runtime::OperationState::Waiting, {}, std::chrono::steady_clock::now()};
+                            ++effects; return {runtime::OperationState::Done};
+                        }
+                        return {runtime::OperationState::NotApplicable, "scene_changed_before_effect"};
+                    }
+                } ports;
+                ports.mode = mode;
+                recognition::Request old{"old", "1", {0, 0, 900, 1600},
+                    recognition::CustomParameters{"WvdVision", nlohmann::json::object()}};
+                auto fresh = old; fresh.recognizer_id = "new";
+                workflow::FlowProgram p; p.revision = "effect-race"; p.root_definition = "root";
+                workflow::Definition d; d.id = "root"; d.entry = "dispatch";
+                d.steps.emplace("dispatch", step("dispatch", workflow::Route{}, {"old", "new"}));
+                auto action = step("old", workflow::RegisteredOperation{"effect", nlohmann::json::object()}, {"done"});
+                if (mode == "confirm") action.data = workflow::BusinessConfirm{"effect", old, nlohmann::json::object(), "effect"};
+                if (mode == "business-guard") {
+                    action.data = workflow::Route{};
+                    action.business_guard = nlohmann::json::object();
+                }
+                if (mode == "call") {
+                    action.data = workflow::Call{"child", {}};
+                    action.guard = old;
+                    workflow::Definition child; child.id = "child"; child.entry = "return";
+                    child.steps.emplace("return", step("return", workflow::Return{"completed", {}, {}}));
+                    p.definitions.emplace("child", std::move(child));
+                } else if (mode != "in-flight" && mode != "business-guard") action.guard = old;
+                d.steps.emplace("old", std::move(action));
+                auto next = step("new", workflow::Finish{}); next.guard = fresh;
+                d.steps.emplace("new", std::move(next));
+                d.steps.emplace("done", step("done", workflow::Finish{}));
+                p.definitions.emplace("root", std::move(d));
+                runtime::FlowExecutor executor(p, ports, 2s);
+                runtime::TickResult result;
+                for (int i = 0; i < 40; ++i) {
+                    if (mode == "call" && executor.current_step_id() == "old") {
+                        ports.obsolete = true;
+                        std::this_thread::sleep_for(110ms);
+                    }
+                    result = executor.tick();
+                    if (result.state != runtime::TickState::Progress && result.state != runtime::TickState::Waiting) break;
+                    if (result.state == runtime::TickState::Waiting) std::this_thread::sleep_until(result.wake_at);
+                }
+                if (result.state != runtime::TickState::Completed || executor.has_unresolved_input() ||
+                    ports.effects != (mode == "in-flight" ? 1 : 0) ||
+                    (mode == "in-flight" ? ports.operations != 2 : executor.current_step_id() != "new"))
+                    throw std::runtime_error("EFFECT_SELECTION_RACE:" + mode + ":" + result.code);
+                std::cout << "effect selection " << mode << " PASS; effects=" << ports.effects << '\n';
             }
             return 0;
         }

@@ -83,9 +83,10 @@ class WvdRunState final : public contracts::BusinessRunState {
     // One target attempt belongs to this Run, route and point, across recovery generations.
     struct TargetEncounter {
         std::size_t unit{}, route{}, point{}, attempt{}, combat{};
-        int phase{}; // 0 idle, 1 fighting, 2 interlude, 3 confirmed, 4 settled.
+        int phase{}; // 0 idle, 1 fighting, 2 interlude, 3 confirmed, 4 settled/retired; reason distinguishes them.
         bool resume_authorized{};
         std::string completion_reason;
+        bool identity_lost{};
     } target_encounter_;
     std::size_t target_attempt_sequence_{};
     std::size_t wall_bypass_step_{3}, wall_bypass_sequence_{};

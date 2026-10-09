@@ -328,6 +328,97 @@ int main(int argc, char **argv) {
             closure::check(root && *root, "WVD_CLOSURE_ROOT_REQUIRED");
             return combat_diagnostic_drive(std::filesystem::path(root) / "combat-drive");
         }
+        if (argc == 3 && std::string(argv[1]) == "--combat-animation-wait") {
+            using namespace closure;
+            const auto profile = read(argv[2]).at("values");
+            J documents = J::object();
+            for (const auto &document : read("resources/authoring/public-flows.json"))
+                documents[document.at("flow").at("id").get<std::string>()] = document;
+            const games::tasks::PublicFlowLibrary library(documents, read("resources/authoring/semantic-assets.json"));
+            const games::tasks::PublicStepScope public_steps([&](const auto &id, const auto &arguments) {
+                return library.compile_step(id, arguments, "zh-Hant");
+            });
+            Driver d(games::combat::take_turn(profile, {}), profile);
+            d.ports.combat = true;
+            d.ports.images = {"spellskill/CombatAutoDisable", "combat_speed_on_zh_hant"};
+            d.until([&] { return d.executor.current_step_id() == "AnimationWait"; });
+            const auto began = std::chrono::steady_clock::now();
+            d.until([&] { return std::chrono::steady_clock::now() - began >= 1200ms; }, 2s);
+            check(!d.terminal() && d.ports.inputs.empty() &&
+                d.executor.progress_snapshot().at("wait_state") == "normal" &&
+                !d.executor.progress_snapshot().at("continuous_exception").at("active").get<bool>(),
+                "KNOWN_BATTLE_ANIMATION_MUST_NOT_ARM_UNKNOWN_RESTART");
+            d.ports.scene("ended");
+            d.finish();
+            check(d.last.state == runtime::TickState::Completed && d.ports.inputs.empty(),
+                "ANIMATION_END_MUST_RETURN_WITHOUT_AUTO");
+            d.evidence("combat-animation-wait");
+            return 0;
+        }
+        if (argc == 2 && std::string(argv[1]) == "--menu-retry-closure") {
+            using namespace closure;
+            for (const bool ignore_first : {true, false}) {
+                Driver d(games::navigation::leave_harken());
+                d.ports.scene("harken");
+                unsigned floor_taps{}, town_taps{};
+                d.ports.after_input = [&](const std::string &path) {
+                    if (path.find("Floor") != std::string::npos) {
+                        if (++floor_taps == (ignore_first ? 2u : 1u)) d.ports.scene("outskirts");
+                    } else if (path.find("Outskirts") != std::string::npos) {
+                        if (++town_taps == (ignore_first ? 2u : 1u)) d.ports.scene("city");
+                    } else throw std::runtime_error("HARKEN_EXIT_UNEXPECTED_INPUT:" + path);
+                };
+                d.finish();
+                check(d.last.state == runtime::TickState::Completed &&
+                    floor_taps == (ignore_first ? 2u : 1u) && town_taps == (ignore_first ? 2u : 1u),
+                    "HARKEN_EXIT_LOST_TAP_OR_REPEATED_AFTER_TRANSITION");
+                d.evidence(ignore_first ? "harken-exit-lost-taps" : "harken-exit-immediate-transition");
+            }
+            for (const bool ignore_first : {true, false}) {
+                Driver d(games::recovery::handle_download_prompt(true));
+                const auto prompt = games::vision::download_button_zh_hant();
+                d.ports.conditions[prompt.dump()] = true;
+                d.ports.after_input = [&](const auto &) {
+                    if (d.ports.inputs.size() == (ignore_first ? 2u : 1u))
+                        d.ports.conditions[prompt.dump()] = false;
+                };
+                d.finish();
+                check(d.last.state == runtime::TickState::Completed &&
+                    d.ports.inputs.size() == (ignore_first ? 2u : 1u), "DOWNLOAD_RETRY_OR_EXIT_FAILED");
+                d.evidence(ignore_first ? "download-lost-tap" : "download-immediate-transition");
+            }
+            J documents = J::object();
+            for (const auto &document : read("resources/authoring/public-flows.json"))
+                documents[document.at("flow").at("id").get<std::string>()] = document;
+            const games::tasks::PublicFlowLibrary library(documents, read("resources/authoring/semantic-assets.json"));
+            for (const bool ignore_first : {true, false}) {
+                Driver d(library.compile_step("navigation-resume", J::object(), "zh-Hant"));
+                bool arrived = false;
+                d.ports.scene("moving");
+                d.ports.images.insert("resume");
+                d.ports.semantic_leaf = [&](const J &probe) -> std::optional<bool> {
+                    if (probe.value("mode", "") == "auto_route_moving") return !arrived;
+                    if (probe.value("mode", "") == "auto_route_post") return arrived;
+                    return std::nullopt;
+                };
+                d.ports.after_input = [&](const auto &) {
+                    arrived = d.ports.inputs.size() == (ignore_first ? 2u : 1u);
+                };
+                if (ignore_first) {
+                    d.until([&] { return d.ports.inputs.size() == 1; });
+                    d.ports.blocker = true;
+                    const auto blocked_at = std::chrono::steady_clock::now();
+                    d.until([&] { return std::chrono::steady_clock::now() - blocked_at >= 3200ms; }, 4s);
+                    check(d.ports.inputs.size() == 1, "MENU_RETRY_CLICKED_THROUGH_BLOCKER");
+                    d.ports.blocker = false;
+                }
+                d.finish();
+                check(d.last.state == runtime::TickState::Completed &&
+                    d.ports.inputs.size() == (ignore_first ? 2u : 1u), "PUBLIC_NAVIGATION_RETRY_OR_EXIT_FAILED");
+                d.evidence(ignore_first ? "public-navigation-blocked-retry" : "public-navigation-immediate-transition");
+            }
+            return 0;
+        }
         if (argc == 3 && std::string(argv[1]) == "--giant-linkage") return closure::giant_linkage(argv[2]);
         if (argc == 4 && std::string(argv[1]) == "--giant-linkage") return closure::giant_linkage(argv[2], argv[3]);
         if (argc == 4 && std::string(argv[1]) == "--memory-owners") return closure::memory_owner_census(argv[2], argv[3]);
@@ -447,6 +538,63 @@ int main(int argc, char **argv) {
             std::cout << "locale coverage: direct/implicit foreign and unclassified inputs blocked; shared and correct language accepted\n";
             return 0;
         }
+        if (argc == 2 && std::string(argv[1]) == "--harken-no-route") {
+            using namespace closure;
+            const auto assets = read("resources/authoring/semantic-assets.json");
+            J documents = J::object();
+            for (const auto &doc : read("resources/authoring/public-flows.json"))
+                documents[doc.at("flow").at("id").get<std::string>()] = doc;
+            const games::tasks::PublicFlowLibrary library(documents, assets);
+            const games::tasks::PublicStepScope scope([&](const auto &id, const auto &args) {
+                return library.compile_step(id, args, "zh-Hant");
+            });
+            for (const std::string mode : {"stale-clears", "persistent", "after-input"}) {
+                Driver d(games::navigation::auto_route("dungFlag"));
+                d.ports.conditions[J{{"mode", "auto_route_moving"}}.dump()] = true;
+                d.ports.conditions[J{{"mode", "auto_route_post"}}.dump()] = true;
+                d.ports.images.insert("dungFlag");
+                if (mode != "after-input") d.ports.images.insert("theRouteToTheDestinationCannotBeFound");
+                const auto start = std::chrono::steady_clock::now();
+                d.ports.before_capture = [&] {
+                    if (mode == "stale-clears" && std::chrono::steady_clock::now() - start > 1s)
+                        d.ports.images.erase("theRouteToTheDestinationCannotBeFound");
+                };
+                d.ports.after_input = [&](const auto &) {
+                    if (mode == "stale-clears") d.ports.images.insert("EdgeOfTown");
+                    else d.ports.images.insert("theRouteToTheDestinationCannotBeFound");
+                };
+                d.finish();
+                check(d.ports.inputs.size() == (mode == "persistent" ? 0 : 1), "HARKEN_INPUT_LOOP:" + mode);
+                check(mode == "stale-clears" ? d.last.state == runtime::TickState::Completed :
+                    d.last.state == runtime::TickState::Failed && d.last.code == "navigation.harken_route_unavailable",
+                    "HARKEN_NO_ROUTE_WRONG_EXIT:" + mode + ":" + d.last.code);
+                if (mode != "stale-clears") {
+                    contracts::SessionResult result; result.end = contracts::SessionEnd::Failed;
+                    result.reason = d.last.code; result.quiescent = true;
+                    const auto policy = games::tasks::recovery_policy({"closure", "2", "game", "", false});
+                    const auto plan = policy(result, d.ports.business, 1);
+                    check(plan && plan->operations == std::vector<devices::LifecycleOperation>{
+                        devices::LifecycleOperation::StopApplication, devices::LifecycleOperation::StartApplication},
+                        "HARKEN_RECOVERY_NOT_SELECTED");
+                }
+            }
+            for (const bool during_selection : {false, true}) {
+                Driver d(library.compile_step("navigation-resume", J::object(), "zh-Hant"));
+                d.ports.conditions[J{{"mode","auto_route_post"}}.dump()] = true;
+                d.ports.conditions[J{{"mode","auto_route_moving"}}.dump()] = during_selection;
+                d.ports.images.insert("resume");
+                if (during_selection) {
+                    d.until([&] { return d.executor.current_step_id().find("_resume") != std::string::npos; });
+                    d.ports.conditions[J{{"mode","auto_route_moving"}}.dump()] = false;
+                    std::this_thread::sleep_for(110ms);
+                }
+                d.finish();
+                check(d.last.state == runtime::TickState::Completed && d.ports.inputs.empty(),
+                    "RESUME_MENU_HANDOFF_CLICKED_OR_STUCK");
+            }
+            std::cout << "Harken: old toast clears before input; persistent/new no-route recovers without repeated handoffs\n";
+            return 0;
+        }
         if ((argc == 2 || argc == 3) && std::string(argv[1]) == "--giant-bounty") {
             using namespace closure;
             games::WvdQuestCatalog quests(read("packs/wvd/parameters/legacy-quests.json"));
@@ -503,7 +651,7 @@ int main(int argc, char **argv) {
                 check(route.at("next").dump().find("Confirm0") != std::string::npos &&
                     flow.nodes.at("FirstDungeon_Route0_Entry").at("next").dump().find("Arrived") == std::string::npos &&
                     route.dump().find("TargetEncounter0") != std::string::npos &&
-                    flow.nodes.at("FirstDungeon_FightTarget0").at("next") == J{"FirstDungeon_TargetResult0"} &&
+                    flow.nodes.at("FirstDungeon_FightTarget0").at("next") == J{"FirstDungeon_TargetDispatch0"} &&
                     flow.nodes.at("FirstDungeon_TargetResult0").at("next") == J{"FirstDungeon_AfterTargetBattle0"} &&
                     flow.nodes.at("FirstDungeon_TargetResult0").at("operation_args").at("event") == "target_encounter_result" &&
                     flow.nodes.at("FirstDungeon_AfterTargetBattle0").at("operation_args").at("duration_ms") == 3000 &&

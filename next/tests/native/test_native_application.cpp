@@ -16,6 +16,18 @@
 #include <dbghelp.h>
 #pragma comment(lib, "dbghelp.lib")
 
+namespace wvd::runtime {
+struct NativeCoordinatorTestAccess {
+    static void image_failure(NativeRunCoordinator &coordinator, bool recorded = true) {
+        storage::DiagnosticRequest request;
+        request.run_id = coordinator.snapshot_.run_id; request.generation = 1;
+        request.node = "isolated-image"; request.reason = "IMAGE_UNAVAILABLE";
+        if (recorded) request.stage = "postcondition";
+        coordinator.store_->save_diagnostic(nullptr, request);
+    }
+};
+}
+
 namespace wvd::app {
 // 仅测试替换磁盘查询依赖；生产 API 不暴露容量覆盖或离线开关。
 struct ApplicationAssemblyTestAccess {
@@ -306,12 +318,14 @@ int closure_application(const std::filesystem::path &pack, const std::filesystem
     const auto duplicate = A::queue(app, "space-threshold", prepared);
     require_closure(prepared == 1 && duplicate.at("request_id") == receipt.at("request_id"), "SPACE_IDEMPOTENCY_FAILED");
     std::cout << "SPACE-02 PASS: threshold admission and low-space existing receipt\n";
-    for (const auto &fault : {std::string{"space"}, std::string{"timing"}, std::string{"terminal"}}) {
+    for (const auto &fault : {std::string{"space"}, std::string{"timing"}, std::string{"terminal"}, std::string{"image"}, std::string{"unrecorded"}}) {
         auto isolated_backend = std::make_shared<OfflineConnection>(pack);
         wvd::app::Application isolated({root / fault, pack, {}, quests}, isolated_backend);
         auto &coordinator = A::coordinator(isolated);
         const auto inject_fault = [&] {
             if (fault == "space") return;
+            if (fault == "image") { wvd::runtime::NativeCoordinatorTestAccess::image_failure(coordinator); return; }
+            if (fault == "unrecorded") { wvd::runtime::NativeCoordinatorTestAccess::image_failure(coordinator, false); return; }
             const auto path = coordinator.run_directory() / (fault == "timing" ? "action-timing.jsonl" : "result.json");
             std::filesystem::create_directory(path);
         };
@@ -321,6 +335,10 @@ int closure_application(const std::filesystem::path &pack, const std::filesystem
         if (fault == "space") require_closure(terminal.completed_business_units == 3 && terminal.result_saved, "SPACE_COMPLETED_SOURCE_REQUIRED:" + terminal.reason);
         if (fault == "timing") require_closure(std::find(terminal.secondary_errors.begin(), terminal.secondary_errors.end(), "ACTION_TIMING_INCOMPLETE") != terminal.secondary_errors.end(), "TIMING_FAILURE_UNREPORTED");
         if (fault == "terminal") require_closure(!terminal.result_saved && !terminal.storage_error.empty(), "TERMINAL_FAILURE_UNREPORTED");
+        if (fault == "image") require_closure(terminal.state == wvd::contracts::RunState::Completed &&
+            terminal.secondary_errors == std::vector<std::string>{"DIAGNOSTIC_IMAGES_INCOMPLETE"}, "IMAGE_FAILURE_UNREPORTED");
+        if (fault == "unrecorded") require_closure(terminal.secondary_errors == std::vector<std::string>{"DIAGNOSTIC_INCOMPLETE"},
+            "UNRECORDED_FAILURE_DOWNGRADED");
         const auto connections = isolated_backend->connections.load();
         A::space(isolated, 0);
         A::watch(isolated, isolated_backend, fault);
@@ -333,11 +351,11 @@ int closure_application(const std::filesystem::path &pack, const std::filesystem
         } while (std::chrono::steady_clock::now() < until);
         require_closure(!status.at("repeat").value("active", true) && status.at("repeat").at("state") == "failed", "SPACE_REPEAT_NOT_STOPPED:" + status.dump());
         require_closure(isolated_backend->connections == connections && isolated_backend->inputs == 0, "SPACE_NEXT_RUN_SIDE_EFFECT");
-        require_closure(status.at("repeat").at("completed_cycles") == (fault == "space" ? 1 : 0), "SPACE_COMPLETED_COUNT_LOST");
-        if (fault == "space") require_closure(status.at("repeat").at("reason") == "RUN_STORAGE_SPACE_LOW", "SPACE_NEXT_REASON");
+        require_closure(status.at("repeat").at("completed_cycles") == (fault == "space" || fault == "image" ? 1 : 0), "SPACE_COMPLETED_COUNT_LOST");
+        if (fault == "space" || fault == "image") require_closure(status.at("repeat").at("reason") == "RUN_STORAGE_SPACE_LOW", "SPACE_NEXT_REASON");
         std::ofstream(root / (fault + "-result.json")) << status.dump(2);
     }
-    std::cout << "SPACE-03/04 PASS: completed cycle retained; storage/timing/terminal faults block next run\n";
+    std::cout << "SPACE-03/04 PASS: image warning retains completed cycle; storage/timing/terminal faults block next run\n";
     require_closure(wvd::platform::file_sha256(sentinel) == sentinel_hash, "SPACE_EXISTING_FILE_CHANGED");
     std::cout << "SPACE-05 PASS: existing sentinel unchanged; fixture root=" << root.string() << '\n';
     return 0;

@@ -103,6 +103,26 @@ contracts::SessionResult session_result(const NativeExecutionResult &result,
     (void)program;
     return session;
 }
+bool instance_exit_interruptible(const workflow::FlowProgram &program,
+                                const nlohmann::json &pending) {
+    if (!pending.is_array() || pending.empty()) return false;
+    for (const auto &receipt : pending) {
+        const auto source = receipt.value("source_path", "");
+        const workflow::Input *input = nullptr;
+        for (const auto &[id, definition] : program.definitions)
+            for (const auto &[name, step] : definition.steps)
+                if (step.source_path == source) {
+                    const auto *candidate = std::get_if<workflow::Input>(&step.data);
+                    if (!candidate) continue;
+                    if (input) return false;
+                    input = candidate;
+                }
+        if (!input || (!input->instance_exit_discardable &&
+            !(input->interruption_reason.empty() && input->retry &&
+              (input->effect_binding.empty() || !input->retry->restart_from.empty())))) return false;
+    }
+    return true;
+}
 }
 
 NativeRunCoordinator::NativeRunCoordinator(std::filesystem::path data_root,
@@ -685,10 +705,14 @@ void NativeRunCoordinator::drive(const NativeRunDefinition &definition,
                         {"outcome", "NotCompleted"}, {"flow_state", static_cast<int>(result.flow.state)},
                         {"flow_code", result.flow.code}, {"details_complete", result.details_complete},
                         {"unresolved_input", result.unresolved_input}, {"observation_recovery", result.observation_recovery},
+                        {"unresolved_inputs", result.unresolved_inputs},
                         {"cleanup_error", result.cleanup_error}, {"performance", result.performance}});
                 }
                 auto *lifecycle = backend->lifecycle_port();
                 auto recovery_result = last;
+                bool instance_exit_observed = false;
+                const bool instance_restarted = result.observation_recovery.is_object() &&
+                    result.observation_recovery.value("instance_restarted_in_window", false);
                 // 业务判定与基础设施故障分开：只有实际设备观察能选中重连/实例恢复。
                 // 原始flow_code与session.ended保留，不能用恢复理由覆盖事故证据。
                 // 输入未确认仍可只读记录设备真相；观察不授权重放，也不覆盖原错误。
@@ -697,7 +721,10 @@ void NativeRunCoordinator::drive(const NativeRunDefinition &definition,
                     if (observed) {
                         require(observed->target.device_id == definition.policy.device_id,
                             "NATIVE_RECOVERY_DEVICE_MISMATCH");
-                        if (observed->instance_exited) recovery_result.reason = "device.instance_exited";
+                        if (observed->instance_exited) {
+                            instance_exit_observed = true;
+                            recovery_result.reason = "device.instance_exited";
+                        }
                         else if (observed->instance_running && !observed->connected)
                             recovery_result.reason = "device.disconnected";
                         else if (observed->connected && !observed->application_running)
@@ -713,8 +740,14 @@ void NativeRunCoordinator::drive(const NativeRunDefinition &definition,
                 } catch (const std::exception &error) {
                     event("recovery.observation_failed", {{"reason", error.what()}, {"original_reason", last.reason}});
                 }
-                // 外部维护/副作用未知不授权整段重跑；同一Session的读图恢复先处理现场。
-                if (stop_ || !quiescent || result.unresolved_input || !result.details_complete ||
+                // A proven instance exit invalidates session-local actions. Keep
+                // their receipts in history; the new session starts by observing.
+                const bool interrupted_by_exit = result.unresolved_input &&
+                    (instance_exit_observed || instance_restarted) &&
+                    instance_exit_interruptible(*unit.program, result.unresolved_inputs);
+                if (instance_restarted && !instance_exit_observed)
+                    recovery_result.reason = "device.instance_restarted";
+                if (stop_ || !quiescent || (result.unresolved_input && !interrupted_by_exit) || !result.details_complete ||
                     result.flow.state == TickState::BusinessFailed ||
                     result.flow.state == TickState::ExternalBlocked || !definition.recovery) break;
                 auto plan = definition.recovery(recovery_result, *business, recovery_attempt + 1);
@@ -748,6 +781,10 @@ void NativeRunCoordinator::drive(const NativeRunDefinition &definition,
                     failure = "NATIVE_RECOVERY_UNCONFIRMED";
                     break;
                 }
+                if (interrupted_by_exit)
+                    event("recovery.input_interrupted", {{"outcome", "interrupted_by_instance_exit"},
+                        {"original_reason", last.reason}, {"inputs", result.unresolved_inputs},
+                        {"input_replayed", false}, {"action_confirmed", false}});
                 business->enter_segment(contracts::SegmentBoundary::LifecycleRecovery,
                     generation + 1, index);
                 failure.clear();
@@ -820,8 +857,14 @@ void NativeRunCoordinator::drive(const NativeRunDefinition &definition,
         const auto diagnostics = store_->diagnostic_summary();
         if (!diagnostics.at("action_timing").value("complete", false))
             terminal.secondary_errors.push_back("ACTION_TIMING_INCOMPLETE");
-        if (!diagnostics.value("complete", false))
-            terminal.secondary_errors.push_back("DIAGNOSTIC_INCOMPLETE");
+        if (!diagnostics.value("complete", false)) {
+            const bool audit_complete = diagnostics.at("action_timing").value("complete", false) &&
+                diagnostics.at("logs").value("complete", false) &&
+                diagnostics.at("event_history").value("complete", false) &&
+                diagnostics.value("unrecorded", 1ULL) == 0;
+            terminal.secondary_errors.push_back(audit_complete ?
+                "DIAGNOSTIC_IMAGES_INCOMPLETE" : "DIAGNOSTIC_INCOMPLETE");
+        }
         journal_->commit_terminal(terminal.generation, storage::snapshot_json(terminal),
             [&](const nlohmann::json &events) {
                 store_->save_terminal(terminal, last, events);

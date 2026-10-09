@@ -33,10 +33,12 @@ CompiledWorkflow battle_pair(const J &profile, const std::set<std::string> &imag
         graph.confirm("Prepare" + s, "repel.prepare." + s, "repel_battle_prepared", C::any({prompt, combat}), {"AlreadyFighting" + s, "Continue" + s});
         graph.observe("AlreadyFighting" + s, combat, {"Fight" + s});
         graph.click("Continue" + s, C::all({prompt, C::absent(combat)}), prompt, combat, {"Fight" + s});
+        graph.retry_menu_input("Continue" + s, C::all({prompt, C::absent(combat)}), 3000);
         graph.delay_after("Continue" + s, 1000);
         graph.call_child("Fight" + s, encounter, {i == 0 ? "Prepare1" : "Withdraw"}, {{"revive", {"RecoveryRequired"}}, {"blocked", {"RecoveryRequired"}}});
     }
     graph.click("Withdraw", C::all({prompt, withdraw, C::absent(combat), C::business("/repel_forces/battles_in_pair", 2)}), withdraw, dung, {"Confirmed"});
+    graph.retry_menu_input("Withdraw", C::all({prompt, withdraw, C::absent(combat), C::business("/repel_forces/battles_in_pair", 2)}), 3000);
     graph.delay_after("Withdraw", 1000);
     graph.confirm("Confirmed", "repel.pair", "repel_pair_completed", dung, {"Terminal"});
     graph.interrupt_on({{"mode", "blocking_screen"}}, "quest.repel_common_screen_requires_dispatch");

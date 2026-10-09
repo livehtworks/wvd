@@ -102,11 +102,11 @@ Result NativeOperations::execute(const std::string &binding, const J &parameters
         if (parameters.contains("extra_known"))
             unknown_parameters["extra_known"] = parameters.at("extra_known");
         const auto unknown = observe(frame, unknown_parameters, "wvd.unknown_leap");
-        if (unknown.outcome != Outcome::Hit) return waiting();
+        if (unknown.outcome != Outcome::Hit) return {State::NotApplicable, "unknown_condition_changed"};
         const auto leap = observe(frame,
             {{"mode", "template"}, {"image", "cursedWheel_timeLeap"},
              {"threshold", .8}}, "wvd.unknown_leap.marker");
-        if (leap.outcome != Outcome::Hit) return waiting();
+        if (leap.outcome != Outcome::Hit) return {State::NotApplicable, "leap_condition_changed"};
         const auto samples = unknown.evidence.at("evidence").at("samples").get<std::uint64_t>();
         J receipt;
         const bool accepted = state_.apply([&](contracts::BusinessRunState &base) {
@@ -127,7 +127,7 @@ Result NativeOperations::execute(const std::string &binding, const J &parameters
     if (confirmation.basis.frame_id != frame.identity.frame_id ||
         !same_context(confirmation.basis, frame.identity))
         throw std::runtime_error("WVD_OPERATION_OBSERVATION_MISMATCH");
-    if (confirmation.outcome != Outcome::Hit) return waiting();
+    if (confirmation.outcome != Outcome::Hit) return {State::NotApplicable, "confirmation_not_matched"};
     if (!current(confirmation)) return {State::ExternalBlocked, "WVD_OPERATION_STALE"};
 
     if (binding == "WvdConfirm") {

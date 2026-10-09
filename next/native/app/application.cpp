@@ -1732,7 +1732,8 @@ void Application::watch_task_session(const J &request, const J &stored, J source
                     // 是否续轮由最终业务/清理回执决定，不能因这种已恢复的拒绝再终止成功轮。
                     require(snapshot->state == contracts::RunState::Completed &&
                         snapshot->completed_business_units == 3 &&
-                        snapshot->secondary_errors.empty() && snapshot->details_complete &&
+                        std::all_of(snapshot->secondary_errors.begin(), snapshot->secondary_errors.end(),
+                            [](const auto &error) { return error == "DIAGNOSTIC_IMAGES_INCOMPLETE"; }) && snapshot->details_complete &&
                         cycle.value("completed_cycles", 0) == 1 && cycle.value("reports_remaining", -1) == 0 &&
                         !business.value("bounty_report_pending", true) &&
                         !business.value("inn_payment_pending", true), "REPEAT_CYCLE_NOT_CLEAN");

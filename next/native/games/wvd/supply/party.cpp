@@ -1,5 +1,6 @@
 #include "party.hpp"
 #include "inn.hpp"
+#include "games/wvd/vision/location_probes.hpp"
 
 namespace wvd::games::supply {
 tasks::CompiledWorkflow assemble_party(const std::optional<std::string> &party_image) {
@@ -22,6 +23,11 @@ tasks::CompiledWorkflow assemble_party(const std::optional<std::string> &party_i
         graph.fixed_click("Select", selection, C::all({title, assemble}), {137, 290}, {"Assemble"});
     graph.click("Assemble", selection, assemble, ok, {"Confirm"});
     graph.click("Confirm", ok, ok, C::all({title, C::absent(ok)}), {"Return"});
+    graph.retry_menu_input("Guild", vision::menu_retry_ready(C::all({city, guild})), 3000);
+    graph.retry_menu_input("Edit", vision::menu_retry_ready(edit), 3000);
+    graph.retry_menu_input("Management", vision::menu_retry_ready(management), 3000);
+    graph.retry_menu_input("Assemble", vision::menu_retry_ready(C::all({selection, assemble})), 3000);
+    graph.retry_menu_input("Confirm", vision::menu_retry_ready(ok), 3000);
     graph.back("Return", C::all({title, C::absent(ok)}),
                C::any({city, edit, management, title}), {"Returned", "Return", "ReturnGuild"});
     graph.back("ReturnGuild", C::all({C::any({edit, management}), C::absent(title)}),

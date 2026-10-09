@@ -873,7 +873,8 @@
             "mode": "semantic",
             "id": "wheel.entry"
           },
-          "delay_after_ms": 1000
+          "delay_after_ms": 1000,
+          "menu_retry_interval_ms": 3000
         },
         "repeat_limit": 3
       },
@@ -982,7 +983,8 @@
               }
             ]
           },
-          "delay_after_ms": 2000
+          "delay_after_ms": 2000,
+          "menu_retry_interval_ms": 5000
         },
         "repeat_limit": 1
       },
@@ -1101,7 +1103,8 @@
                 "id": "boot.download.action"
               }
             ]
-          }
+          },
+          "menu_retry_interval_ms": 3000
         },
         "repeat_limit": 32
       },
@@ -1136,7 +1139,8 @@
           "postcondition": {
             "mode": "semantic",
             "id": "wheel.entry"
-          }
+          },
+          "menu_retry_interval_ms": 3000
         },
         "repeat_limit": 32
       },
@@ -1162,7 +1166,8 @@
                 "id": "boot.download.action"
               }
             ]
-          }
+          },
+          "menu_retry_interval_ms": 3000
         },
         "repeat_limit": 32
       },
@@ -1217,7 +1222,8 @@
             820,
             590
           ],
-          "delay_after_ms": 1000
+          "delay_after_ms": 1000,
+          "menu_retry_interval_ms": 3000
         },
         "repeat_limit": 3
       },
@@ -1399,7 +1405,8 @@
             "mode": "semantic",
             "id": "wheel.leap"
           },
-          "delay_after_ms": 2000
+          "delay_after_ms": 2000,
+          "menu_retry_interval_ms": 3000
         },
         "repeat_limit": 1
       },
@@ -1497,7 +1504,8 @@
             "mode": "semantic",
             "id": "wheel.chapter.waterway"
           },
-          "delay_after_ms": 500
+          "delay_after_ms": 500,
+          "menu_retry_interval_ms": 3000
         },
         "repeat_limit": 4
       },
@@ -1532,7 +1540,8 @@
             "mode": "semantic",
             "id": "wheel.chapter.fortress"
           },
-          "delay_after_ms": 500
+          "delay_after_ms": 500,
+          "menu_retry_interval_ms": 3000
         },
         "repeat_limit": 4
       },
@@ -1567,7 +1576,8 @@
             "mode": "semantic",
             "id": "wheel.chapter.dhi"
           },
-          "delay_after_ms": 500
+          "delay_after_ms": 500,
+          "menu_retry_interval_ms": 3000
         },
         "repeat_limit": 4
       },
@@ -1602,7 +1612,8 @@
             "mode": "semantic",
             "id": "wheel.chapter.fortress"
           },
-          "delay_after_ms": 500
+          "delay_after_ms": 500,
+          "menu_retry_interval_ms": 3000
         },
         "repeat_limit": 4
       },
@@ -1637,7 +1648,8 @@
             "mode": "semantic",
             "id": "wheel.chapter.waterway"
           },
-          "delay_after_ms": 500
+          "delay_after_ms": 500,
+          "menu_retry_interval_ms": 3000
         },
         "repeat_limit": 4
       },
@@ -1672,7 +1684,8 @@
             "mode": "semantic",
             "id": "wheel.chapter.abyss"
           },
-          "delay_after_ms": 500
+          "delay_after_ms": 500,
+          "menu_retry_interval_ms": 3000
         },
         "repeat_limit": 4
       },
@@ -1723,7 +1736,8 @@
                 "id": "boot.download.action"
               }
             ]
-          }
+          },
+          "menu_retry_interval_ms": 3000
         },
         "repeat_limit": 32
       },
@@ -1761,7 +1775,8 @@
             "mode": "semantic",
             "id": "wheel.leap"
           },
-          "delay_after_ms": 1000
+          "delay_after_ms": 1000,
+          "menu_retry_interval_ms": 3000
         },
         "repeat_limit": 1
       },
@@ -3980,7 +3995,8 @@
             258,
             1161
           ],
-          "delay_after_ms": 1500
+          "delay_after_ms": 1500,
+          "menu_retry_interval_ms": 3000
         }
       },
       {
@@ -4668,8 +4684,34 @@
       "name": "继续当前导航目标",
       "description": "只推进当前步骤，不消费外层路线目标；调用参数仅作用于本次实例。"
     },
-    "entry": "resume",
+    "entry": "entry",
     "nodes": [
+      {
+        "id": "entry",
+        "type": "route",
+        "name": "判断当前导航页面",
+        "parameters": {}
+      },
+      {
+        "id": "settled",
+        "type": "recognition",
+        "name": "导航已交接",
+        "parameters": {
+          "condition": {
+            "mode": "any",
+            "conditions": [
+              {
+                "mode": "all",
+                "conditions": [
+                  { "mode": "auto_route_post" },
+                  { "mode": "not", "conditions": [{ "mode": "auto_route_moving" }] }
+                ]
+              },
+              { "mode": "navigation_resume_unavailable" }
+            ]
+          }
+        }
+      },
       {
         "id": "resume",
         "type": "action",
@@ -4686,7 +4728,8 @@
           },
           "postcondition": {
             "mode": "auto_route_post"
-          }
+          },
+          "menu_retry_interval_ms": 3000
         }
       },
       {
@@ -4700,6 +4743,27 @@
     ],
     "edges": [
       {
+        "id": "entry_settled",
+        "from": "entry",
+        "to": "settled",
+        "outcome": "success",
+        "order": 0
+      },
+      {
+        "id": "entry_resume",
+        "from": "entry",
+        "to": "resume",
+        "outcome": "success",
+        "order": 1
+      },
+      {
+        "id": "settled_done",
+        "from": "settled",
+        "to": "done",
+        "outcome": "success",
+        "order": 0
+      },
+      {
         "id": "edge_0",
         "from": "resume",
         "to": "done",
@@ -4709,14 +4773,16 @@
     ],
     "layout": {
       "nodes": [
+        { "node_id": "entry", "x": 0, "y": 0 },
+        { "node_id": "settled", "x": 300, "y": -150 },
         {
           "node_id": "resume",
-          "x": 0,
-          "y": 0
+          "x": 300,
+          "y": 150
         },
         {
           "node_id": "done",
-          "x": 260,
+          "x": 600,
           "y": 0
         }
       ],

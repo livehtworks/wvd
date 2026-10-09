@@ -83,18 +83,26 @@ tasks::CompiledWorkflow take_turn(const J &profile, const std::set<std::string> 
     const auto full_auto = graph.append("FullAuto", enable_auto(), {"Terminal"}, auto_exits);
     const J single_auto_exits{{"BlockedExit", {"BlockedExit"}}};
     const auto char_auto = graph.append("CharAuto", single_actor_auto(), {"Terminal"}, single_auto_exits);
-    graph.route("Entry", {"Ended", "AutoOff", "SpeedZh", "Speed", "SpeedAlt", "Automatic", "Prepare", "UnexpectedPopup"});
+    const J entry_choices = {"Ended", "AutoOff", "SpeedZh", "Speed", "SpeedAlt", "Automatic",
+        "Prepare", "UnexpectedPopup", "AnimationWait"};
+    graph.route("Entry", entry_choices);
+    // The action bar can outlive enemies while the game settles a turn or
+    // battle. No menu is not an unknown scene or permission to press Auto.
+    graph.poll("AnimationWait", 250, entry_choices, C::all({clear, C::absent(menu)}),
+        J{{"mode", "region_changed"}, {"channel", "combat"}, {"roi", {15, 40, 145, 800}}});
+    graph.failure_route("AnimationWait", {"AnimationStalled"});
+    graph.recovery("AnimationStalled", "combat.auto_progress_timeout");
     const auto unintended_auto = C::all({clear, enabled, C::absent(disabled), C::business("/strategy/automatic", false)});
     graph.click("AutoOff", unintended_auto, enabled, C::any({disabled, ended}), {"Entry"});
     graph.retry_menu_input("AutoOff", unintended_auto, 1000);
     graph.click("SpeedZh", clear, speed_off_zh,
                 C::any({C::all({battle, speed_on_zh}), ended}),
-                {"Ended", "Automatic", "Prepare", "UnexpectedPopup"});
+                entry_choices);
     graph.hit_limit("SpeedZh", 1);
     graph.retry_menu_input("SpeedZh", C::all({clear, speed_off_zh}), 3000);
     for (const auto &[node, image] : {std::pair{"Speed", "combatSpd"}, std::pair{"SpeedAlt", "combatSpd_DHI"}}) {
         graph.click(node, clear, C::image(image), C::any({C::all({battle, C::absent(speed)}), ended}),
-                    {"Ended", "Automatic", "Prepare", "UnexpectedPopup"});
+                    entry_choices);
         graph.hit_limit(node, 1);
         graph.retry_menu_input(node, C::all({clear, C::image(image)}), 3000);
     }
@@ -129,8 +137,8 @@ tasks::CompiledWorkflow take_turn(const J &profile, const std::set<std::string> 
             graph.fixed_click(prefix + "Defend", C::all({menu, actor}), C::any({clear, ended}), {513, 1200},
                               {prefix + "Success", prefix + "DefendConfirm"});
             graph.fixed_click(prefix + "DefendConfirm", C::all({menu, actor}), advanced, {513, 1200}, {prefix + "Success"});
-            graph.stop_if_interrupted_after(prefix + "Defend", "combat.skill_outcome_unconfirmed");
-            graph.stop_if_interrupted_after(prefix + "DefendConfirm", "combat.skill_outcome_unconfirmed");
+            graph.stop_if_interrupted_after(prefix + "Defend", "combat.skill_outcome_unconfirmed", true);
+            graph.stop_if_interrupted_after(prefix + "DefendConfirm", "combat.skill_outcome_unconfirmed", true);
             graph.combat_step(prefix + "Success", advanced, {{"operation", "success"}, {"index", index}}, {"Terminal"});
             continue;
         }
@@ -143,7 +151,7 @@ tasks::CompiledWorkflow take_turn(const J &profile, const std::set<std::string> 
         graph.fixed_click(prefix + "UnavailableDefend", C::all({menu, actor}), defended,
             {513, 1200}, {prefix + "DefendFallbackDone"});
         graph.retry_menu_input(prefix + "UnavailableDefend", C::all({menu, actor}), 3000);
-        graph.stop_if_interrupted_after(prefix + "UnavailableDefend", "combat.defend_outcome_unconfirmed");
+        graph.stop_if_interrupted_after(prefix + "UnavailableDefend", "combat.defend_outcome_unconfirmed", true);
         graph.combat_step(prefix + "DefendFallbackDone", defended,
             {{"operation", "defend_fallback_confirmed"}, {"index", index}}, {"Terminal"});
         const auto position = slot(skill_name);
@@ -179,14 +187,14 @@ tasks::CompiledWorkflow take_turn(const J &profile, const std::set<std::string> 
             const J recipient{{"mode", "support_selection"}, {"slot", support_slot(skill.value("target_var", "左上角色"))}};
             graph.click(s + "Support", C::all({casting, support}), recipient, C::any({casting, finished, errors}),
                               {prefix + "Success", s + "Confirm", s + "ResourceError"});
-            graph.stop_if_interrupted_after(s + "Support", "combat.skill_outcome_unconfirmed");
+            graph.stop_if_interrupted_after(s + "Support", "combat.skill_outcome_unconfirmed", true);
             // 确认施放不是选目标：详情仍在不能结清输入，否则下一分支会立即取消技能。
             // 等待原业务期限内的新帧结果，异常处理返回后也继续核对同一次输入。
             graph.click(s + "Confirm", casting, ok, C::any({finished, errors}),
                         {prefix + "Success", s + "ResourceError", s + "StillDetail"});
             graph.retry_menu_input(s + "Confirm", casting, 3000);
             graph.failure_route(s + "Confirm", {s + "StillDetail"});
-            graph.stop_if_interrupted_after(s + "Confirm", "combat.skill_outcome_unconfirmed");
+            graph.stop_if_interrupted_after(s + "Confirm", "combat.skill_outcome_unconfirmed", true);
             const auto enemy = C::all({casting, C::absent(ok), no_support});
             // Each public step captures and guards anew; never batch points across actor changes.
             for (int point = 0; point < 24; ++point) {

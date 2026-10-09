@@ -25,7 +25,9 @@ tasks::CompiledWorkflow return_to_fortress() {
     std::size_t index = 0;
     for (const auto *name : {"returntotown", "returnText", "leaveDung", "blessing"}) {
         const auto node = "Exit" + std::to_string(index++), marker = std::string(name);
-        graph.click(node, C::all({C::image(marker), C::absent(inn)}), C::image(marker), normal, {"Entry"});
+        const auto source = C::all({C::image(marker), C::absent(inn)});
+        graph.click(node, source, C::image(marker), C::all({normal, C::absent(C::image(marker))}), {"Entry"});
+        graph.retry_menu_input(node, vision::menu_retry_ready(source), 3000);
         graph.delay_after(node, 2000); graph.hit_limit(node, 16);
     }
     const auto return_harken = graph.define_child("ReturnHarken", auto_route("dungFlag"));

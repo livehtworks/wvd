@@ -22,6 +22,45 @@ void check(bool ok, const std::string &reason) { if (!ok) throw std::runtime_err
 J read(const char *file) { std::ifstream in(file); return J::parse(in); }
 int main(int argc, char **argv) {
     try {
+        if (argc == 3 && std::string(argv[1]) == "--harken-menu") {
+            const auto manifest = read("packs/wvd/manifest.json");
+            const auto root = std::filesystem::temp_directory_path() / ("wvd-harken-frame-" + platform::unique_id());
+            recognition::Bundle bundle{root, manifest.at("revision"), {}};
+            const auto copy = [&](const std::filesystem::path &source, const std::string &relative, const std::string &hash) {
+                const auto target = root / relative;
+                std::filesystem::create_directories(target.parent_path());
+                std::filesystem::copy_file(source, target);
+                check(platform::file_sha256(target) == hash, "HARKEN_RESOURCE_HASH");
+                bundle.files.push_back({relative, hash});
+            };
+            for (const auto &row : manifest.at("files")) {
+                const auto relative = row.at("path").get<std::string>();
+                copy(std::filesystem::path("packs/wvd") / relative, relative, row.at("sha256"));
+            }
+            const auto models = read("resources/recognition/ocr-models.json");
+            for (const auto &[locale, model] : models.at("models").items())
+                for (const auto &[name, file] : model.at("files").items())
+                    copy(file.at("source").get<std::string>(), model.at("bundle_directory").get<std::string>() + "/" + name,
+                        file.at("sha256"));
+            const auto pixels = cv::imread(argv[2]);
+            check(pixels.cols == 900 && pixels.rows == 1600, "HARKEN_FRAME_INVALID");
+            recognition::Service service(bundle, games::vision::native_handlers(manifest.value("aliases", J::object()), "zh-Hant"));
+            contracts::FrameEnvelope frame;
+            frame.identity.device_id = "recorded"; frame.identity.game_id = "wvd";
+            frame.identity.pack_revision = bundle.revision; frame.identity.viewport_id = "900x1600";
+            frame.identity.generation = frame.identity.frame_id = frame.identity.connection_generation = 1;
+            frame.identity.raw_size = frame.identity.recognition_size = {900,1600};
+            frame.identity.captured_at = frame.identity.capture_finished_at = std::chrono::steady_clock::now();
+            frame.raw_bgr = std::make_shared<const std::vector<std::uint8_t>>(pixels.data, pixels.data + pixels.total() * pixels.elemSize());
+            for (const char *mode : {"auto_route_moving", "auto_route_post"}) {
+                const auto result = service.evaluate(frame, frame.identity, {mode, "1", {0,0,900,1600},
+                    recognition::CustomParameters{"WvdVision", {{"mode",mode}, {"resource_locale","zh-Hant"}}}});
+                check(result.outcome == (std::string(mode) == "auto_route_post" ? O::Hit : O::NoHit),
+                    "REAL_HARKEN_HANDOFF:" + std::string(mode) + ":" + result.error_code);
+            }
+            std::cout << "real Harken floor menu: navigation post Hit, moving NoHit\n";
+            return 0;
+        }
         if (argc == 5 && std::string(argv[1]) == "--disabled-skills") {
             const auto root = std::filesystem::temp_directory_path() / ("wvd-skill-" + platform::unique_id());
             std::filesystem::create_directories(root);

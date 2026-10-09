@@ -673,7 +673,8 @@ void PipelineCompiler::interrupt_on(J condition, std::string reason, std::string
     interruption_reason_ = std::move(reason);
     interruption_port_ = std::move(port);
 }
-void PipelineCompiler::stop_if_interrupted_after(const std::string &name, std::string reason) {
+void PipelineCompiler::stop_if_interrupted_after(const std::string &name, std::string reason,
+                                                bool instance_exit_discardable) {
     require(workflow_.nodes.contains(name) &&
                 std::find(local_nodes_.begin(), local_nodes_.end(), name) != local_nodes_.end() &&
                 workflow_.nodes.at(name).value("binding", "") == "Input" && !reason.empty(),
@@ -681,6 +682,8 @@ void PipelineCompiler::stop_if_interrupted_after(const std::string &name, std::s
     require(uncertain_actions_.emplace(name, std::move(reason)).second, "COMPILE_UNCERTAIN_ACTION_DUPLICATE");
     // 同一声明同时约束正常中断出口和应用重启入口，不能从 retry 反推重做授权。
     workflow_.nodes.at(name).at("operation_args")["interruption_reason"] = uncertain_actions_.at(name);
+    if (instance_exit_discardable)
+        workflow_.nodes.at(name).at("operation_args")["instance_exit_discardable"] = true;
 }
 void PipelineCompiler::compile_interruption() {
     if (interruption_.is_null()) {
@@ -877,7 +880,7 @@ std::string PipelineCompiler::define_child(const std::string &prefix, const Comp
     if (child.declared_budget) workflow_.definition_budgets.insert_or_assign(entry, *child.declared_budget);
     return entry;
 }
-void PipelineCompiler::call_child(const std::string &name, const std::string &entry, J next, J handoffs) {
+void PipelineCompiler::call_child(const std::string &name, const std::string &entry, J next, J handoffs, J condition) {
     require(!entry.empty(), "COMPILE_CHILD_ENTRY_INVALID");
     std::set<std::string> local;
     std::function<void(const std::string &)> collect = [&](const std::string &n) {
@@ -898,6 +901,10 @@ void PipelineCompiler::call_child(const std::string &name, const std::string &en
     add(name, {{"operation", "Registered"}, {"binding", "Call"},
                {"operation_args", {{"entry", entry}, {"clone", false}, {"local_counters", local}, {"handoffs", handoffs}}},
                {"next", std::move(next)}});
+    if (!condition.is_null()) {
+        workflow_.nodes.at(name).update({{"observation", "Registered"}, {"recognizer", "WvdVision"},
+            {"observation_args", std::move(condition)}, {"roi", {0, 0, 900, 1600}}});
+    }
 }
 void PipelineCompiler::recovery(const std::string &name, const std::string &reason,
                                 J still_present, J cleared_next) {
@@ -1011,7 +1018,8 @@ void PipelineCompiler::confirm(const std::string &name, const std::string &opera
                                       "dark_light_entered", "dark_light_completed"};
     require((events.contains(event) || event == "target_encounter_started" ||
         event == "target_encounter_interrupted" || event == "target_encounter_result" ||
-        event == "target_navigation_terminated" || event == "target_continuation_lost") &&
+        event == "target_navigation_terminated" || event == "target_continuation_lost" ||
+        event == "target_reacquire_prepared") &&
         !operation.empty() && operation.size() <= 128,
             "COMPILE_BUSINESS_EVENT_INVALID");
     require(step.is_null() || (step.is_number_integer() && step >= 0 && step <= 4096),

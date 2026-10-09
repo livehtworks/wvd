@@ -412,7 +412,11 @@ J RunStore::save_diagnostic(const contracts::FrameEnvelope *frame, const Diagnos
         diagnostic_require(request.error.empty(), request.error.c_str());
         std::vector<std::uint8_t> image_bytes;
         if (pixels) {
-            diagnostic_require(!frame && native && request.evidence_kind == "metadata_invalid_pixels" &&
+            const bool foreground = request.evidence_kind == "foreground_lost_pixels" &&
+                request.node == "capture.foreground" && request.reason == "GAME_NOT_FOREGROUND" &&
+                request.stage == "recovery_entry";
+            diagnostic_require(!frame && native &&
+                (request.evidence_kind == "metadata_invalid_pixels" || foreground) &&
                 pixels->device_id == definition_.at("device_id").get<std::string>() && pixels->bgr &&
                 pixels->size.width > 0 && pixels->size.height > 0 &&
                 pixels->size.width <= 16384 && pixels->size.height <= 16384 &&
@@ -425,7 +429,7 @@ J RunStore::save_diagnostic(const contracts::FrameEnvelope *frame, const Diagnos
             diagnostic_require(cv::imencode(".png", image, image_bytes) &&
                 image_bytes.size() <= diagnostic_limits_.frame_bytes, "DIAGNOSTIC_ENCODE_FAILED");
             entry["diagnostic_only"] = true;
-            entry["metadata_valid"] = false;
+            entry["metadata_valid"] = foreground;
             entry["pixels"] = {{"device_id", pixels->device_id}, {"backend", pixels->backend},
                 {"size", {pixels->size.width, pixels->size.height}}, {"input_authorization", false},
                 {"captured_at_ns", std::chrono::duration_cast<std::chrono::nanoseconds>(pixels->captured_at.time_since_epoch()).count()},

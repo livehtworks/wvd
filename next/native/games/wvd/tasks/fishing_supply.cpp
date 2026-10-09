@@ -76,10 +76,12 @@ CompiledWorkflow fishing_cycle(const WvdQuestDefinition &definition, const J &pr
     graph.observe("AtCity", city, {"Inventory"});
     graph.observe("AtDungeon", C::any({dungeon, map}), {"ApproachShop"});
     graph.click("QuitFishing", fishing, C::image("fishing/quit"), C::any({dungeon, map}), {"ApproachShop"});
+    graph.retry_menu_input("QuitFishing", fishing, 3000);
     const auto travel_shop = graph.define_child("Approach", approach);
     graph.call_child("ApproachShop", travel_shop, {"Inventory"});
     graph.route("Inventory", {"AtMenu", "CityMenu", "InventoryReady"});
     graph.fixed_click("CityMenu", world, C::any({city, menu}), {50, 1535}, {"AtMenu", "InventoryReady"});
+    graph.retry_menu_input("CityMenu", world, 3000);
     // 只在已完成接近路线的地图/本内页或已确认城内菜单执行原固定点，不在未知页连点。
     // 业务条件只能选分支，不能变成动作目标；输入仍单独读取新帧的视觉正证据。
     graph.observe("InventoryReady", C::any({city, C::all({C::any({map, dungeon}), C::business("/task_step", 1)})}), {"OpenInventory"});
@@ -100,7 +102,9 @@ CompiledWorkflow fishing_cycle(const WvdQuestDefinition &definition, const J &pr
     graph.call_child("ApproachWater", water, {"FindFishing"});
     graph.route("FindFishing", {"AlreadyFishing", "StartFishing", "CloseMap", "TurnWater"});
     graph.click("StartFishing", C::image("fishing/startfishing"), C::image("fishing/startfishing"), fishing, {"AlreadyFishing"});
+    graph.retry_menu_input("StartFishing", C::image("fishing/startfishing"), 3000);
     graph.click("CloseMap", map, map, dungeon, {"FindFishing"});
+    graph.retry_menu_input("CloseMap", map, 3000);
     graph.swipe("TurnWater", C::all({dungeon, C::absent(map)}), C::any({dungeon, fishing, C::image("fishing/startfishing")}),
         {450, 900, 450, 600}, {"AlreadyFishing", "StartFishing", "ApproachRod"});
     graph.fixed_click("ApproachRod", C::all({dungeon, C::absent(map)}), C::any({dungeon, fishing, C::image("fishing/startfishing")}),

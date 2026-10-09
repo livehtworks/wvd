@@ -23,6 +23,7 @@ CompiledWorkflow request_trial() {
     graph.confirm("Prepare", "steel.select.prepare", "steel_trial_prepared", steel, {"Select"});
     const auto arrived = C::any({C::image("mapFlag"), C::image("dungFlag"), C::image("ready")});
     graph.click("Select", steel, steel, arrived, {"Terminal"}, {306, 258});
+    graph.retry_menu_input("Select", C::all({steel, C::absent(arrived)}), 3000);
     for (const auto *name : {"Entry", "Guild", "Request", "Exam", "Scroll"}) graph.hit_limit(name, 32);
     return graph.finish();
 }

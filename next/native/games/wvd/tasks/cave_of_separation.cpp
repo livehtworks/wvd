@@ -131,6 +131,7 @@ CompiledWorkflow return_city() {
     graph.call_child("FindGuild", guild, {"PrepareGuild"});
     graph.confirm("PrepareGuild", "cos.guild.prepare", "cos_guild_prepared", C::image("guild"), {"OpenGuild"});
     graph.click("OpenGuild", C::image("guild"), C::image("guild"), C::image("guildRequest"), {"OpenedGuild"});
+    graph.retry_menu_input("OpenGuild", C::image("guild"), 3000);
     graph.delay_after("OpenGuild", 1000);
     graph.confirm("OpenedGuild", "cos.guild.entered", "cos_guild_entered", C::image("guildRequest"), {"InnPhase"});
     graph.observe("InnPhase", phase(Phase::ReturnInn), {"FindInn"});

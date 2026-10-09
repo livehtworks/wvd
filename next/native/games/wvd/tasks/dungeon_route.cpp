@@ -203,7 +203,7 @@ CompiledWorkflow traverse_dungeon(const WvdTaskPlan &plan, const J &profile,
                 graph.confirm("TargetStart" + suffix, "target.begin." + suffix,
                     "target_encounter_started", combat, {"FightTarget" + suffix}, i);
                 graph.observe("TargetCombat" + suffix, C::all({combat, active, authorized}), {"TargetStart" + suffix});
-                graph.call_child("FightTarget" + suffix, battle, {"TargetResult" + suffix},
+                graph.call_child("FightTarget" + suffix, battle, {"TargetDispatch" + suffix},
                     {{"blocked", {"TargetInterrupted" + suffix}}, {"revive", {"TargetInterrupted" + suffix}},
                      {"chest", {"TargetInterrupted" + suffix}}});
                 graph.confirm("TargetInterrupted" + suffix, "target.interlude." + suffix,
@@ -224,10 +224,17 @@ CompiledWorkflow traverse_dungeon(const WvdTaskPlan &plan, const J &profile,
                     "target_continuation_lost", active, {"TargetDispatch" + suffix}, i);
                 graph.confirm("TargetResult" + suffix, "target.result." + suffix, "target_encounter_result",
                     C::all({active, authorized, dungeon}), {"AfterTargetBattle" + suffix}, i);
-                graph.observe("TargetReacquire" + suffix, C::all({active, C::absent(authorized), dungeon}), {"SelectPoint"});
+                graph.observe("TargetReacquire" + suffix, C::all({active, C::absent(authorized), dungeon}),
+                    {"TargetReacquirePrepared" + suffix});
                 graph.observe("TargetIdentityUnknown" + suffix, C::all({active, C::absent(authorized), combat}),
-                    {"TargetIdentityUnknownExit" + suffix});
-                graph.recovery("TargetIdentityUnknownExit" + suffix, "target.continuation_identity_unconfirmed");
+                    {"FightUnattributed" + suffix});
+                // A restored battle is playable, but is not proof of the old
+                // target's identity. Finish it, then reacquire the route point.
+                graph.call_child("FightUnattributed" + suffix, battle, {"TargetDispatch" + suffix},
+                    {{"blocked", {"TargetDispatch" + suffix}}, {"revive", {"TargetDispatch" + suffix}},
+                     {"chest", {"TargetDispatch" + suffix}}});
+                graph.confirm("TargetReacquirePrepared" + suffix, "target.reacquire." + suffix,
+                    "target_reacquire_prepared", C::all({active, C::absent(authorized), dungeon}), {"SelectPoint"}, i);
                 graph.poll("TargetWait" + suffix, 250, {"TargetDispatch" + suffix});
                 graph.wait("AfterTargetBattle" + suffix, *target.shortcut_battle_wait_ms,
                     {"Confirm" + suffix, "AfterTargetResult" + suffix});

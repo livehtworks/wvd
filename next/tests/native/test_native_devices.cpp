@@ -92,6 +92,8 @@ int main(int argc, char **argv) {
         const nlohmann::json crashed{{"error_code", 900}, {"is_process_started", false},
             {"is_android_started", false}};
         if (!wvd::platform::mumu_metadata_usable(crashed) ||
+            !wvd::platform::mumu_metadata_usable({{"error_code",900}, {"is_process_started",false}, {"is_android_started",true}}) ||
+            wvd::platform::mumu_metadata_usable({{"error_code",900}, {"is_process_started",true}, {"is_android_started",true}}) ||
             wvd::platform::mumu_metadata_usable({{"error_code", 900}}) ||
             !wvd::platform::mumu_metadata_usable({{"error_code", 900}, {"is_process_started", true},
                 {"is_android_started", false}}) ||

@@ -81,6 +81,9 @@ void FlowProgram::validate() const {
                 if (operation->binding.empty() || !operation->parameters.is_object())
                     throw std::runtime_error("FLOW_OPERATION_INVALID");
             if (const auto *input = std::get_if<Input>(&step.data)) {
+                if (input->instance_exit_discardable &&
+                    (input->interruption_reason.empty() || !input->effect_binding.empty()))
+                    throw std::runtime_error("FLOW_INSTANCE_EXIT_ACTION_INVALID");
                 const auto pair_ms = input->command.value("click_pair_interval_ms", 0);
                 if (pair_ms && (input->command.value("kind", "") != "Click" || pair_ms != 100 || input->retry))
                     throw std::runtime_error("FLOW_CLICK_PAIR_INVALID");

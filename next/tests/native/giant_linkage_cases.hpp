@@ -32,7 +32,8 @@ inline int giant_linkage(const char *profile_path, const char *saved_public_root
     const auto graph = games::tasks::bounty_cycle(task, profile, {}, library,
         documents.at("guild-open-bounty-page"), "zh-Hant");
     for (const auto &scenario : {std::string("normal"), std::string("revive-chest"), std::string("blocked"),
-        std::string("direct-chest"), std::string("restart"), std::string("road-combat"), std::string("interlude-combat")}) {
+        std::string("direct-chest"), std::string("restart"), std::string("restart-battle"),
+        std::string("road-combat"), std::string("interlude-combat")}) {
         Driver driver(graph, profile);
         auto &ports = driver.ports;
         auto &state = ports.business;
@@ -134,9 +135,16 @@ inline int giant_linkage(const char *profile_path, const char *saved_public_root
         const auto deadline = std::chrono::steady_clock::now() + 35s;
         std::size_t unit{};
         bool blocked_once{};
+        bool reacquisition_observed{};
         std::string previous_step;
         while (std::chrono::steady_clock::now() < deadline) {
             const auto step = executor->current_step_id();
+            if (state.summary().at("target_encounter").at("completion_reason") == "unattributed_combat_reacquire") {
+                check(state.summary().at("task_step") == 0 &&
+                    !state.summary().at("target_encounter").at("resume_authorized").get<bool>(),
+                    "REACQUIRE_MUST_NOT_COMPLETE_TARGET_POINT");
+                reacquisition_observed = true;
+            }
             if (state.summary().at("target_encounter").at("phase") == 4) target_settled = true;
             if (step != previous_step) { driver.trace.push_back(step); previous_step = step; }
             if (screen == "battle" && step.find("Battle_StartProgress") != std::string::npos) {
@@ -149,10 +157,10 @@ inline int giant_linkage(const char *profile_path, const char *saved_public_root
                 check(state.summary().at("target_encounter").at("active") == true &&
                     state.summary().at("task_step") == 0, "TARGET_IDENTITY_MUST_EXIST_BEFORE_END");
                 context_attempts = state.summary().at("target_encounter").at("attempt").get<unsigned>();
-                if (scenario == "restart" && !restarted) {
+                if ((scenario == "restart" || scenario == "restart-battle") && !restarted) {
                     restarted = true;
                     state.enter_segment(contracts::SegmentBoundary::LifecycleRecovery, ++ports.generation, unit);
-                    show("dungeon");
+                    show(scenario == "restart-battle" ? "battle" : "dungeon");
                     executor = std::make_unique<runtime::FlowExecutor>(driver.program, ports, 35s);
                     check(state.summary().at("target_encounter").at("active") == true &&
                         state.summary().at("target_encounter").at("attempt") == context_attempts &&
@@ -162,7 +170,7 @@ inline int giant_linkage(const char *profile_path, const char *saved_public_root
                 }
                 if (scenario == "revive-chest" && target_battles == 1) show("revive");
                 else if ((scenario == "revive-chest" && target_battles == 2) || scenario == "direct-chest" ||
-                    scenario == "interlude-combat") show("chest");
+                    (scenario == "interlude-combat" && target_battles == 1)) show("chest");
                 else show("dungeon");
                 }
             }
@@ -189,13 +197,11 @@ inline int giant_linkage(const char *profile_path, const char *saved_public_root
             {"progress", executor->progress_snapshot()}, {"terminal_state", int(driver.last.state)},
             {"terminal_code", driver.last.code}, {"target_battle_entries", target_battles},
             {"revival_inputs", resumes}, {"target_attempt", context_attempts}}.dump(2);
-        if (scenario == "interlude-combat") {
-            check(driver.last.code == "target.continuation_identity_unconfirmed" &&
-                summary.at("task_step") == 0 && summary.at("target_encounter").at("active") == true &&
-                !executor->has_unresolved_input(), "INTERLUDE_COMBAT_MUST_NOT_COMPLETE_OR_REBIND_TARGET");
-            std::cout << "giant linkage interlude-combat PASS; target remains incomplete; explicit identity failure\n";
-            continue;
-        }
+        if (scenario == "interlude-combat" || scenario == "restart-battle")
+            check(reacquisition_observed && target_battles >= 3 && context_attempts >= 2 &&
+                std::any_of(driver.trace.begin(), driver.trace.end(), [](const auto &id) {
+                    return id.find("TargetReacquirePrepared") != std::string::npos;
+                }), "UNATTRIBUTED_COMBAT_MUST_REACQUIRE_WITH_NEW_ATTEMPT");
         check(driver.last.state == runtime::TickState::Completed && unit == 2 &&
             summary.at("bounty_cycle").at("completed_cycles") == 1 && summary.at("task_step") == 2 &&
             target_settled && !summary.at("target_encounter").at("active").get<bool>() && !executor->has_unresolved_input(),

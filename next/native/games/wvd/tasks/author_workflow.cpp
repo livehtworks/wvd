@@ -151,7 +151,10 @@ AuthorWorkflowCompilation compile_author_workflow(const J &source,
                 if (parameters.contains("interrupted_reason")) {
                     compiler.interrupt_on(PipelineCompiler::absent(J{{"mode", "input_clear"}}),
                         parameters.at("interrupted_reason").get<std::string>());
-                    compiler.stop_if_interrupted_after(runtime_name, parameters.at("interrupted_reason").get<std::string>());
+                    const auto reason = parameters.at("interrupted_reason").get<std::string>();
+                    compiler.stop_if_interrupted_after(runtime_name, reason,
+                        reason == "combat.skill_outcome_unconfirmed" ||
+                        reason == "combat.defend_outcome_unconfirmed");
                 }
             } else if (type == "wait") {
                 // 等待由可取消的原生步骤持有，不阻塞停止链。

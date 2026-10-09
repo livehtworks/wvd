@@ -16,13 +16,17 @@ CompiledWorkflow accept_job() {
     const auto story = C::any({C::image("fastforward"), option("royalcapital")});
     graph.route("Entry", {"Guild", "Go", "District", "Hungry"});
     graph.click("Guild", guild, guild, go, {"Go"});
+    graph.retry_menu_input("Guild", guild, 3000);
     graph.click("Go", go, go, C::any({district, hungry}), {"WaitForStory"});
+    graph.retry_menu_input("Go", go, 3000);
     // 旧流程等待15秒；拆开保留单节点10秒上限，并在后半段重新确认页面。
     graph.delay_after("Go", 10000); graph.postcondition_budget("Go", 22000);
     graph.observe("WaitForStory", C::any({district, hungry}), {"District", "Hungry"});
     graph.delay_after("WaitForStory", 5000);
     graph.click("Hungry", C::all({hungry, C::absent(district)}), hungry, district, {"District"});
+    graph.retry_menu_input("Hungry", C::all({hungry, C::absent(district)}), 3000);
     graph.click("District", district, district, story, {"Terminal"});
+    graph.retry_menu_input("District", district, 3000);
     return graph.finish();
 }
 CompiledWorkflow royal_capital() {

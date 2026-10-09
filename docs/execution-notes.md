@@ -1,5 +1,21 @@
 # 当前执行注意项
 
+- 排查恢复识别耗时时先分开wall_ns、exclusive_ns与worker_exclusive_ns；worker时间标明不可叠加墙钟。actual_matches是实际比对计数，不是不同模板或测试数量。all/any当前全部评估是既有Error传播契约；未完成受影响链审查不能直接全局短路或靠旧帧长缓存压计数。第8轮Heal约46.35秒/1199次是待整改证据，不是性能通过，详见docs/reviews/runtime-issues-handoff-20261009.md。
+
+- 单击送达不是菜单切页成功。新增/修改菜单入口需声明同页重试，统一复用retry_menu_input；先查结果、同帧重认原页/按钮并排除阻挡，转场后不能沿用旧坐标。公用定义修改须同步发布资源和通过revision比较交换更新正式保存定义；只改工厂或包内JSON不足以修复用户流程。Auto脉冲、技能效果、领奖和物品转移按各自回执约束，不能自动套普通菜单重试。排查见docs/reviews/menu-input-retry-audit-20261009.md。
+
+- 战斗行动条仍在但菜单未出现可能是动画/结算等待，不能只因菜单NoHit记未知异常，更不能点Auto。已知等待需正向场景及无阻挡条件，保留同层结束/菜单/事件出口和真实无进展恢复。Poll不要经无条件Entry重新进入自身以刷新期限；直接使用同一候选集合，只有真实进度续期。
+- 停止当前循环的API请求若传request_id，应从当前submission读取匹配值；临时生成新ID会被SUBMISSION_ID_MISMATCH拒绝。停止后必须回读busy=false、quiescent=true及repeat inactive，不能只凭发出请求认定停止，也不能把确认前发生的恢复记成已阻止。
+
+- 未执行节点的选择不是业务承诺：BusinessConfirm、带条件Call、业务守卫等必须保留同层候选来源。NotApplicable保证尚未产生效果，可重选；Waiting表示操作可能已开始，不能退回重放。正常重选先于异常计时，过期Poll及60秒重启前复查共用局部候选规则；已发送输入仍核对后置。不得因重选重置原分派期限或把候选命中记成业务完成。目标战重启丢失身份后可处理当前战斗，但须另行重新导航，不能凭再起/战斗结束恢复目标击杀授权。
+
+- 正向观察/子调用返回也可能构成无输入循环，不能仅在Overlay事件存在时刷新截图。只读观察周期超过100ms即失效并按需重新采集，这不是点击生效期限；同周期子结果仍可交给父层，输入仍走原门禁。返哈肯的无路线与标记导航完成语义不同：先等旧提示消失，实际返程无路线进入navigation.harken_route_unavailable恢复，不能交stopped回原步骤；仍只由哈肯/退场证据确认返程成功。
+- 公共导航动作选中后、点击前也可能已到哈肯/遭遇等新场景；navigation-resume需先走只读交接，外层仍自行确认路线终点。新增auto_route_post特征须同步冻结资源依赖。正式保存定义优先于包内定义，改公共流程不能只改源码包；停止任务后备份旧文档、revision比较交换并回读。真实楼层菜单需完整OCR模型冻结包，不用缺模型的素材子集冒充生产识别。
+
+- 失去前台的像素不等于元数据坏帧：RunStore接受foreground_lost_pixels只限capture.foreground/GAME_NOT_FOREGROUND/recovery_entry来源，保存原始视口且input_authorization=false；其它像素类型仍严格校验。DIAGNOSTIC_IMAGES_INCOMPLETE仅表示已记录图片失败/配额不足，成功业务可续轮；事件、动作回执、日志、终态和未记录诊断错误仍阻断。生命周期实际恢复并取得新游戏帧后清旧异常计时，纯读取重试不清；Android启动耗时不能触发刚恢复后的再次60秒重启。
+
+- 实例退出不能与旧技能成功混为一谈：只有业务明确标记instance_exit_discardable的会话动作，或有既定重启选路许可的普通菜单，才可在绑定实例退出证据及输入通道静止后转新Session。旧回执保存在sessions.unresolved_inputs及recovery.input_interrupted，不能算成功或重放。读取恢复已重启实例时需携带同创建身份/连接代次证明；单纯应用重启、断线、身份不符及持久副作用未知仍沿原保护。MuMu error900/901在进程或Android已退出时元数据仍可验证身份；进程已退出而Android标记暂未清除时不得要求在线ADB端口。
+
 - 通用金色“重试”可被技能“确认”模板匹配到0.899671，不得仅凭按钮认定技能详情；宽泛弹窗排除只用于禁止输入，正向分类需技能独有明细证据。条件恢复节点需同帧重查，事件处理成功不代表旧错误仍成立；带恢复后继的RequireRecovery属于本子流程，不能沿用无条件终止出口的跨作用域共享规则。真实样本和修复见docs/reviews/combat-popup-recovery-repair-20261007.md。
 - 用户暂停后，watch_task_session不能因cancel先退出而遗漏尚未terminal的worker；保留原监视线程等待并join，控制API不等待此过程。正式29轮停止现场曾仅有worker_definition_released、PrivateUsage约267.6MiB。停止时的busy要覆盖收尾窗口，不能用输入已静止冒充线程及堆页已回收。
 - Windows SegmentHeap由产品manifest声明（Windows 10 2004起支持），不是替换C++/OpenCV或注入第三方分配器。隔离内存/生命周期测试需同一manifest；短期准备A/B不证明完整游戏长期稳定。复制诊断EXE必须放独立目录并配原锁定DLL，不能直接放.local：该目录有旧onnxruntime.dll会优先加载，出现API22/17冲突须拒绝该结果。mt资源写入复制EXE在原同源EXE仍运行时本机曾报共享冲突，原进程结束后才成功，不杀产品进程绕过。

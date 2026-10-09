@@ -21,6 +21,7 @@ tasks::CompiledWorkflow travel_city_to_city(const WorldDestination &destination)
     graph.route("Entry", {"OnWorld", "Open"});
     graph.observe("OnWorld", world, {"Travel"});
     graph.click("Open", C::all({open, C::absent(world)}), open, world, {"Travel"});
+    graph.retry_menu_input("Open", vision::menu_retry_ready(C::all({open, C::absent(world)})), 3000);
     const auto travel = graph.define_child("World", travel_world(destination, WorldArrival::City));
     graph.call_child("Travel", travel, {"Arrived"});
     graph.observe("Arrived", arrived, {"Terminal"});
@@ -47,6 +48,8 @@ tasks::CompiledWorkflow travel_world(const WorldDestination &destination, WorldA
     graph.hit_limit("Entry", 256);
     graph.click("DownloadEn", download_en, download_en, C::absent(download), {"Entry"});
     graph.click("DownloadZhHant", download_zh_hant, download_zh_hant, C::absent(download), {"Entry"});
+    graph.retry_menu_input("DownloadEn", download_en, 3000);
+    graph.retry_menu_input("DownloadZhHant", download_zh_hant, 3000);
     graph.wait("Poll", 1000, {"Entry"});
     graph.hit_limit("Poll", 256);
     graph.observe("Arrived", arrived, {"Terminal"});
@@ -60,6 +63,7 @@ tasks::CompiledWorkflow travel_world(const WorldDestination &destination, WorldA
         graph.click("OpenWorld", C::all({inn, into, C::absent(world)}), into,
                     C::any({world, arrived, story, download}), {"Entry"});
     graph.route("Locate", {"DownloadEn", "DownloadZhHant", "Story", "Arrived", "Click0", "Relocate"});
+    graph.retry_menu_input("OpenWorld", vision::menu_retry_ready(C::all({into, C::absent(world)})), 3000);
     graph.hit_limit("Locate", 128);
     if (destination.swipe) {
         const auto &s = *destination.swipe;
@@ -79,6 +83,7 @@ tasks::CompiledWorkflow travel_world(const WorldDestination &destination, WorldA
                     {"DownloadEn", "DownloadZhHant", "Story", "Arrived", next, "Relocate"}, offsets[i]);
         graph.delay_after("Click" + std::to_string(i), 1500);
         graph.postcondition_budget("Click" + std::to_string(i), 22000);
+        graph.retry_menu_input("Click" + std::to_string(i), vision::menu_retry_ready(located), 3000);
     }
     return graph.finish();
 }

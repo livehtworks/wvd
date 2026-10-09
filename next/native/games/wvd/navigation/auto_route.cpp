@@ -39,7 +39,7 @@ tasks::CompiledWorkflow auto_route(const std::string &target) {
     } else {
         graph.observe("RecordedNoRoute", {{"mode", "confirmed_input_result"},
             {"classification", "navigation_no_route"}},
-            {target == "dungFlag" ? "StoppedExit" : "Terminal"});
+            {target == "dungFlag" ? "RouteUnavailable" : "Terminal"});
         auto button = C::image(target);
         button["roi"] = {680, 220, 220, 240};
         auto available = button;
@@ -49,10 +49,19 @@ tasks::CompiledWorkflow auto_route(const std::string &target) {
                           {"preprocess", {{"operation", "subtract"}, {"rgb", {90, 90, 90}}}}});
             available = C::all({button, minus});
         }
-        graph.route("Entry", {"RecordedNoRoute", "Done", "Encounter", "Retreated", "CloseMap", "Ready", "Expand"});
+        if (target == "dungFlag") {
+            // An old marker-navigation toast may still be fading. Observe its
+            // disappearance before issuing the separate return-to-Harken input.
+            graph.route("Entry", {"Retreated", "Encounter", "OldNoRoute", "CloseMap", "Ready", "Expand"});
+            graph.observe("OldNoRoute", no_route, {"OldNoRouteWait"});
+            graph.wait("OldNoRouteWait", 3000, {"OldNoRouteRecheck", "Entry"});
+            graph.recovery("OldNoRouteRecheck", "navigation.harken_route_unavailable", no_route, {"Entry"});
+            graph.recovery("RouteUnavailable", "navigation.harken_route_unavailable");
+        } else
+            graph.route("Entry", {"RecordedNoRoute", "Done", "Encounter", "Retreated", "CloseMap", "Ready", "Expand"});
         graph.observe("Retreated", retreated, {"Terminal"});
         // No route completes a search target, but never proves arrival at Harken.
-        graph.observe("Done", no_target, {target == "dungFlag" ? "StoppedExit" : "Terminal"});
+        graph.observe("Done", no_target, {target == "dungFlag" ? "RouteUnavailable" : "Terminal"});
         // 初始黑色按钮不证明到达；只有已提交导航之后才检查此终点。
         graph.observe("Arrived", target == "dungFlag" ? retreated :
             C::all({moving, resume_unavailable, stopped}), {"Terminal"});
@@ -65,6 +74,7 @@ tasks::CompiledWorkflow auto_route(const std::string &target) {
         graph.click("Choose", C::all({moving, available}), button, post,
                     {"RecordedNoRoute", "Done", "Encounter", "Retreated", "Arrived", "Resume", "Moving"});
         graph.hit_limit("Choose", 1);
+        graph.retry_menu_input("Choose", C::all({moving, available}), 3000);
         if (target == "chest_auto") {
             graph.click("Unavailable", C::all({moving, button, C::absent(available)}), button, post,
                         {"Encounter", "UnavailableExit"});

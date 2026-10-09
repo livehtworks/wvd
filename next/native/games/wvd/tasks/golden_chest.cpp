@@ -25,11 +25,15 @@ CompiledWorkflow golden_leap() {
     const auto outside = C::all({C::image("Inn"), C::absent(leap), C::absent(ok)});
     graph.route("Entry", {"Open", "Ruins"});
     graph.click("Ruins", ruins, ruins, chooser, {"Open"});
+    graph.retry_menu_input("Ruins", ruins, 3000);
     graph.click("Open", wheel, wheel, chooser, {"Target", "Special"});
+    graph.retry_menu_input("Open", wheel, 3000);
     graph.click("Special", C::all({special, C::absent(target)}), special, chooser, {"Target"});
     graph.click("Target", target, target, chooser, {"Confirm", "Leap"});
     graph.click("Leap", C::all({leap, C::absent(ok)}), leap, ok, {"Confirm"});
+    graph.retry_menu_input("Leap", C::all({leap, C::absent(ok)}), 5000);
     graph.click("Confirm", ok, ok, outside, {"Done"});
+    graph.retry_menu_input("Confirm", ok, 5000);
     graph.delay_after("Confirm", 10000);
     graph.postcondition_budget("Confirm", 22000);
     graph.observe("Done", outside, {"Terminal"});

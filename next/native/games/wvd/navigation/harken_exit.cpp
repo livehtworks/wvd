@@ -21,9 +21,13 @@ tasks::CompiledWorkflow leave_harken() {
     graph.call_child("ChooseBuff", choose_buff, {"Entry"});
     graph.click("Floor", floors, vision::harken_return_button(), C::any({outskirts, city, story}), {"Entry"});
     graph.postcondition_budget("Floor", 20000);
+    graph.retry_menu_input("Floor", vision::menu_retry_ready(floors), 1500);
     // 剧情是已经离开郊外的证据，不重放归还；剧情结束后仍须独立确认城市。
     graph.click("Outskirts", outskirts, outskirts, C::any({city, story}), {"Entry"});
     graph.postcondition_budget("Outskirts", 20000);
+    // Menu taps may be ignored while the network settles. Recheck the same
+    // button and the result before retrying; a new scene ends this input.
+    graph.retry_menu_input("Outskirts", vision::menu_retry_ready(C::all({outskirts, C::absent(story)})), 1500);
     graph.click("Story", story, vision::story_advance_arrow(), C::any({story, city}), {"Entry"});
     graph.delay_after("Story", 700);
     graph.hit_limit("Story", 50);

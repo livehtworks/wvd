@@ -1,6 +1,27 @@
 # 项目当前事实
 
+## 最新暂停与审核交接
+
+- 2026-10-09 23:05按用户要求只整理问题并提交/推送此前已有源码，不再修复、构建、部署或重跑。candidate138原17654服务仍在；最新UserStopped/busy=false/quiescent=true/repeat inactive，本批8/41完成、第9轮停止，跨批累计67/100，不是连续100轮通过。最新状态覆盖下方较早Running记录。
+- 第8轮迷宫恢复的Heal计时段合计46.352秒、1199次实际模板比对；取图/转换0.334秒，识别及调度34.906秒。组合条件全部评估及恢复链重复场景确认已定位，逐子配方归因与修复未完成；本次未改dungeon_recover或native_recognizers。MuMu渲染崩溃与RESOURCE_UNRESOLVED仍开放。完整问题、已有修复边界及证据索引见[暂停交接报告](reviews/runtime-issues-handoff-20261009.md)。
+
 ## 当前内存整改与部署
+
+- 最新循环核查（2026-10-09约22:25）：candidate138前5轮均Completed，游戏主动重启与读取恢复均为0。第6轮入本截图失联，Windows22:19:22记录原MuMu PID45736/libRenderer.dll/0xc0000409崩溃，新窗口22:19:35启动；不同于此前正常页60秒误重启，直接渲染故障已证实，但截图调用/厂商内部/系统压力的具体归因仍未闭合。恢复68秒后第6轮完成三段结算，无secondary_errors及报告/住宿待确认，已自动进入第7轮Running，续批6/41、总累计65/100。循环继续，未改代码、未另行重启设备或制造故障。详见[渲染崩溃核查](reviews/mumu-renderer-crash-20261009.md)。
+
+- 当前部署与运行（2026-10-09）：candidate138部署原17654/原data，PID31576/服务37EAD21C-68F8-49D4-9D21-A85FD932D8DE，正式profile哈希不变。同类菜单遗漏已扩大排查并补入统一retry_menu_input，包括原生导航/下载/加护/队伍/其它任务菜单，以及6份正式公共定义的17个节点；源码/包/正式保存定义同步并回读。菜单6种针对性场景及critical-input-protection通过，Release/冻结打包通过。续跑剩余41轮请求1953ee22-7a5b-4c7c-a21f-2b9339c79408，协调器C37C2A8F-4A66-4D1F-B744-03AB8E8252EA/run1实际Running、0/41；EnsureVpn/StartApplication已观察到就绪，新轮已完成跳轮/悬赏刷新，进入迷宫战斗，最新异常计时关闭。原累计59/100保留，本批尚无已完成轮。见[菜单点击排查](reviews/menu-input-retry-audit-20261009.md)。驱动崩溃及长期稳定性未闭合。
+
+- 上一candidate137已正常退出。其第1轮804.326秒完成三段结算，原累计达到59/100；第2轮郊外“回到城鎮”点击后原按钮仍在，attempts=1，60700ms后程序主动重启。随后MuMu20:42:47另报nvoglv64.dll/901驱动崩溃；本轮不能计成功，也不能归因为先有模拟器自然闪退。原整链重选、NotApplicable、目标身份恢复及战斗等待修复由138承接。见[整链审查](reviews/flow-dispatch-chain-audit-20261009.md)和[修复交付](reviews/flow-dispatch-repair-20261009.md)。
+
+- 上一candidate135已退出现行服务。其导航刷新、返哈肯无路线恢复和公共导航只读交接修复由136承接；源/包/正式保存定义同步记录及旧定义备份保留。旧续批2轮完成、第3轮60178ms误重启及随后MuMu nvoglv64.dll/error901、目标身份未知失败均保留原证据，不归因为工具OOM。累计32+4+20+2轮不等于100轮连续稳定；显卡故障及长期资源归因仍未闭合。详见[导航修复与实机证据](reviews/navigation-read-cycle-repair-20261009.md)。
+
+- 2026-10-09连续重启核查：续批前2轮无读取恢复，第3轮读取恢复74147ms后旧异常计时未清，紧接着再次触发60秒游戏重启；第4轮战后返城网络错误至少5次重试后持续60407ms触发游戏重启，MuMu13:37:37明确记录nvoglv64.dll图形驱动崩溃/901及实例退出，恢复链已重新拉起。第4轮随后提交/住宿各1并Completed，但foreground_lost_pixels截图DIAGNOSTIC_PIXELS_INVALID产生DIAGNOSTIC_INCOMPLETE，续轮门禁因此停止REPEAT_CYCLE_NOT_CLEAN，界面3/68、实际4轮业务完成；原批32轮完成保留。当前循环inactive，工具仍在。本轮只读核查、保存证据，未改产品或重新启动。详见[重启核查](reviews/repeated-restart-investigation-20261009.md)。
+
+- 2026-10-09实例退出恢复修复已部署candidate132，PID45260/服务89989E6C-AA83-4889-ADDA-DFDA57662231，原17654/原data，正式profile哈希3E873D08FB9135F558C3E3348B3BFFFFF3B73555C63A9176CC75CFF274CCB87C不变。原100轮已完成32轮，续跑剩余68轮：请求71445cb5-74d8-4cad-b712-714703a95bcb，协调器EFA3C994-9B06-4E05-9F57-DA18C62D41CF；第1轮Running、repeat active/target68。实例2由正式入口重新拉起，EnsureVpn及StartApplication均实际执行并确认VPN就绪/游戏前台。debug及内存/识别/耗时日志保持开启。未确认的会话战斗动作在真实实例退出后保留历史，恢复后由新Session观察推进；普通应用重启或身份错误不扩大许可。定向协调器两条恢复链、输入保护、设备元数据和巨人完整繁中图验证通过。详见[恢复修复](reviews/instance-exit-recovery-repair-20261009.md)。
+
+- 2026-10-09核查100轮批次：32轮Completed，第33轮在约03:40停止，Failed/MUMU_INSTANCE_MISMATCH，166.739秒，repeat inactive、busy=false/quiescent=true/details_complete=true。工具PID28972和17654端口仍正常，当前PrivateUsage约37.26MiB；MuMu实例2元数据error_code=900、is_process_started=false、is_android_started=false。技能Skill4Try0Confirm已发送但结果未确认；随后ADB dumpsys window报error: closed，绑定校验将退出实例报为MUMU_INSTANCE_MISMATCH。收尾已观察device.instance_exited，但native_run_coordinator.cpp的result.unresolved_input条件在生成恢复计划前退出，因此没有重启。退出触发原因仍未归因，不能据此称工具内存崩溃。本轮只读核查、重新打开工具网页入口并记录证据，未启动新循环或修改产品。详见[实例退出核查](reviews/giant131-instance-exit-20261009.md)。
+
+- 2026-10-08按用户要求启动100轮悬赏巨人：candidate131，PID28972/服务CDD3C698-8EFF-4A9E-B4FE-1980BC0541EF，原17654/原data；请求3c826170-3198-43b5-b20f-9ddf886ec858，协调器4131E134-709D-47D1-B9B6-F04D34484FA2。启动核查为第1轮Running、repeat.active=true、target_cycles=100、completed_cycles=0，不代表100轮完成。实例2/繁中/原悬赏巨人方案，EnsureVpn与StartApplication均观察到已就绪并确认，无需重复启动。debug及memory/performance/recognition保持开启，未启用WPR/CDB；启动回执在next/.local/giant131-100-20261008-3c826170，运行证据在原data/runs/4131E134-709D-47D1-B9B6-F04D34484FA2。以下Idle及30轮停止为此前记录，当前以此批次为准；资源长期稳定性仍未证明。
 
 - 用户要求的网络误判修复已提交a5463be并部署candidate131：PID51060/服务4900EBEB-1912-4A83-B622-CD9BCF3585EA，原17654/原data，Idle/busy=false/quiescent=true/repeat=null，未开循环、未操作游戏，正式profile哈希不变。未知技能弹窗需战斗加明细证据；异常处理后条件失败节点重查，错误消失回本作用域观察入口，仍存在/Error则失败，不重放输入。真实网络/连接中/技能原图经生产Service通过，事件返回、未确认输入保护及完整巨人/共享蝎女图验证通过。截至23:14普通push被GitHub接收端持续500拒绝，远端仍ea5495f，推送尚未确认成功；不强推。详见[弹窗与恢复修复](reviews/combat-popup-recovery-repair-20261007.md)。
 

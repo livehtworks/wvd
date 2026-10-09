@@ -1,5 +1,6 @@
 #pragma once
 #include "chest_probes.hpp"
+#include "harken_probes.hpp"
 #include <json.hpp>
 
 namespace wvd::games::vision {
@@ -13,6 +14,11 @@ inline nlohmann::json auto_route_probes(const std::string &locale = {}) {
     for (const auto &probe : chest_stage_probes()) probes.push_back(probe);
     for (const auto *name : {"RiseAgain"})
         probes.push_back({{"mode", "template"}, {"image", name}, {"threshold", .8}});
+    if (locale == "zh-Hant") {
+        probes.push_back(harken_floor_menu());
+        probes.push_back(harken_buff_menu());
+        probes.push_back(outskirts_return_button());
+    }
     probes.push_back(navigation_no_route_probe(locale));
     return probes;
 }

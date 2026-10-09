@@ -465,6 +465,27 @@ int main(int argc, char **argv) {
                     !ports.failed_pixels() || ports.failed_pixels()->size != contracts::Size{1600,900} ||
                     ports.last_valid_frame()) throw;
             }
+            storage::RunStore foreground_store(data_root / "foreground", "native-test", 1,
+                {{"engine_kind", "wvd_native"}, {"device_id", "native-test"},
+                 {"game_id", "wvd"}, {"pack_revision", "native-test"}, {"viewport", "900x1600"}});
+            storage::DiagnosticRequest request;
+            request.run_id = request.generation = 1; request.node = "capture.foreground";
+            request.reason = "GAME_NOT_FOREGROUND"; request.stage = "recovery_entry";
+            request.evidence_kind = "foreground_lost_pixels";
+            const auto pixels = ports.failed_pixels();
+            const auto saved = foreground_store.save_diagnostic(nullptr, request, &*pixels);
+            if (saved.at("status") != "saved" || !saved.at("metadata_valid").get<bool>() ||
+                saved.at("pixels").at("input_authorization") != false)
+                throw std::runtime_error("FOREGROUND_PIXELS_NOT_SAVED");
+            const auto decoded = cv::imread((foreground_store.directory() / saved.at("path").get<std::string>()).string());
+            if (decoded.cols != 1600 || decoded.rows != 900)
+                throw std::runtime_error("FOREGROUND_PIXELS_VIEWPORT_CHANGED");
+            request.node = "wrong-node";
+            storage::RunStore rejected_store(data_root / "rejected-foreground", "native-test", 1,
+                {{"engine_kind", "wvd_native"}, {"device_id", "native-test"},
+                 {"game_id", "wvd"}, {"pack_revision", "native-test"}, {"viewport", "900x1600"}});
+            if (rejected_store.save_diagnostic(nullptr, request, &*pixels).at("status") != "failed")
+                throw std::runtime_error("ARBITRARY_PIXELS_KIND_ACCEPTED");
             source.desktop = false;
             const auto frame = ports.capture();
             if (frame.identity.recognition_size != contracts::Size{900,1600} || ports.failed_pixels())
@@ -493,6 +514,105 @@ int main(int argc, char **argv) {
                 };
             };
         };
+        if (argc == 2 && std::string(argv[1]) == "--instance-exit") {
+            class ExitBackend final : public Backend, public devices::LifecyclePort {
+              public:
+                int submissions{}, restarts{};
+                bool restored{}, exited{}, read_recovery{};
+                std::uint64_t connection{1};
+                devices::LifecycleTarget target{"native-test", "2", "jp.co.drecom.wizardry.daphne", "", false};
+                bool offline() const override { return false; }
+                bool context_matches(const contracts::FrameIdentity &, const std::string &) override { return !exited; }
+                bool input_channel_ready() const override { return true; }
+                void prepare_input_channel(std::stop_token) override {}
+                bool execute(const contracts::Command &) override { ++submissions; exited = true; return true; }
+                devices::RawFrame capture() override {
+                    if (exited && read_recovery)
+                        throw contracts::ObservationUnavailable({contracts::ReadFaultKind::TransportUnavailable,
+                            contracts::ReadFaultStage::Capture, "ADB_TRANSPORT_FAILED", "fixture.capture", {}, {}});
+                    if (exited) throw std::runtime_error("MUMU_INSTANCE_MISMATCH");
+                    auto frame = Backend::capture(); frame.connection_generation = connection; return frame;
+                }
+                devices::LifecyclePort *lifecycle_port() override { return this; }
+                contracts::ObservationRecovery recover_observation(bool = false) override {
+                    if (!read_recovery) return {};
+                    ++restarts; exited = false; restored = true; ++connection;
+                    return {contracts::ObservationReconnect{target.device_id, target.instance_id, "fixture-instance", 1, connection},
+                        true, true, true};
+                }
+                std::optional<devices::LifecycleObservation> observe_lifecycle() override {
+                    return devices::LifecycleObservation{target, !exited, !exited, restored, true,
+                        connection, std::chrono::steady_clock::now(), restored, exited};
+                }
+                bool execute_lifecycle(devices::LifecycleOperation op, const devices::LifecycleTarget &,
+                    const std::function<bool()> &) override {
+                    if (op == devices::LifecycleOperation::RestartInstance) {
+                        ++restarts; exited = false; ++connection;
+                    } else if (op == devices::LifecycleOperation::StartApplication) restored = true;
+                    return true;
+                }
+            };
+            for (const std::string mode : {"protected", "exit", "read-recovery"}) {
+                const bool discardable = mode != "protected";
+                auto source = std::make_shared<ExitBackend>();
+                source->read_recovery = mode == "read-recovery";
+                auto graph = std::make_shared<workflow::FlowProgram>(*definition.units.front().program);
+                auto &root = graph->definitions.at("root"); root.entry = "dispatch";
+                recognition::Request probe{"wvd", "1", {0,0,900,1600},
+                    recognition::CustomParameters{"ExitFixture", nlohmann::json::object()}};
+                auto ready = probe; std::get<recognition::CustomParameters>(ready.parameters).parameters["ready"] = true;
+                workflow::Step dispatch; dispatch.id = "dispatch"; dispatch.source_path = R"([{"native_node":"dispatch"}])";
+                dispatch.data = workflow::Route{}; dispatch.next = {"ready", "skill"};
+                root.steps.emplace(dispatch.id, std::move(dispatch));
+                workflow::Step found; found.id = "ready"; found.source_path = R"([{"native_node":"ready"}])";
+                found.data = workflow::Observe{ready}; found.guard = ready; found.next = {"checkpoint"};
+                root.steps.emplace(found.id, std::move(found));
+                workflow::Input input{probe, probe, {{"kind", "Click"}}, {0,0,900,1600}};
+                input.interruption_reason = "combat.skill_outcome_unconfirmed";
+                input.instance_exit_discardable = discardable;
+                workflow::Step skill; skill.id = "skill"; skill.source_path = R"([{"native_node":"skill"}])";
+                skill.data = std::move(input); skill.next = {"await"};
+                root.steps.emplace(skill.id, std::move(skill));
+                workflow::Step await; await.id = "await"; await.source_path = R"([{"native_node":"skill"}])";
+                await.data = workflow::AwaitResult{ready, 1s}; await.next = {"checkpoint"};
+                root.steps.emplace(await.id, std::move(await));
+                runtime::NativeRunDefinition test;
+                test.request_id = mode;
+                test.policy = definition.policy;
+                test.policy.capabilities.insert(contracts::ActionKind::Click);
+                test.policy.permissions.insert(contracts::ActionKind::Click);
+                test.total_time_limit = 5s; test.create_state = definition.create_state; test.operations = definition.operations;
+                auto unit = definition.units.front(); unit.program = graph;
+                unit.recognizers["ExitFixture"] = [source](const auto &, auto, const nlohmann::json &p, const auto &, auto &) {
+                    return nlohmann::json{{"schema",1}, {"outcome", p.value("ready",false) && !source->restored ? "NoHit" : "Hit"},
+                        {"box", {100,100,20,20}}, {"target",true}};
+                };
+                test.units.push_back(std::move(unit));
+                test.recovery = [source](const auto &result, const auto &, unsigned) -> std::optional<devices::LifecyclePlan> {
+                    if (result.reason != (source->read_recovery ? "device.instance_restarted" : "device.instance_exited"))
+                        throw std::runtime_error("EXIT_NOT_OBSERVED");
+                    devices::LifecyclePlan plan{source->target, {devices::LifecycleOperation::StartApplication}, 1};
+                    if (!source->read_recovery) plan.operations.insert(plan.operations.begin(), devices::LifecycleOperation::RestartInstance);
+                    return plan;
+                };
+                runtime::NativeRunCoordinator run(data_root / test.request_id);
+                run.start(std::move(test), source);
+                if (!run.wait_for(5s)) throw std::runtime_error("EXIT_RECOVERY_NOT_TERMINAL");
+                const auto ended = run.snapshot();
+                if (source->submissions != 1 || source->restarts != (discardable ? 1 : 0) ||
+                    ended.state != (discardable ? contracts::RunState::Completed : contracts::RunState::Failed) ||
+                    ended.sessions.at(0).at("unresolved_inputs").size() != 1 ||
+                    (discardable && !ended.unresolved_inputs.empty()))
+                    throw std::runtime_error("EXIT_RECOVERY_REPLAY_OR_HISTORY_LOST:" + ended.reason);
+                bool interrupted = false;
+                const auto recorded = run.events();
+                for (const auto &event : recorded.at("events"))
+                    if (event.at("type") == "recovery.input_interrupted") interrupted = true;
+                if (interrupted != discardable) throw std::runtime_error("EXIT_AUDIT_MISSING");
+            }
+            std::cout << "instance exit: session-local skill resumed without replay; protected input preserved\n";
+            return 0;
+        }
         runtime::NativeRunCoordinator coordinator(data_root / "runs");
         auto backend = std::make_shared<Backend>();
         const auto fixture = [&] {

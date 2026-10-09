@@ -19,7 +19,8 @@ struct Submission {
     std::string detail;
     std::optional<contracts::ReadFault> read_fault;
 };
-enum class OperationState { Done, Waiting, Failed, ExternalBlocked };
+// NotApplicable guarantees that no effect has started; Waiting does not.
+enum class OperationState { Done, Waiting, NotApplicable, Failed, ExternalBlocked };
 struct OperationResult {
     OperationState state{OperationState::Failed};
     std::string detail;
@@ -144,6 +145,7 @@ class FlowExecutor final {
         Clock::time_point next_diagnostic_poll{};
         bool diagnostic_checked{};
         bool known_wait{};
+        bool operation_started{};
         std::optional<Clock::time_point> delay_until;
         // 轮询自身的唤醒时间；不覆盖 entered_at、调用累计期限或父输入回执。
         std::optional<Clock::time_point> poll_until;
@@ -176,6 +178,7 @@ class FlowExecutor final {
     };
     std::optional<ObservationCycle> observation_cycle_;
     nlohmann::json last_diagnostic_ = nullptr;
+    nlohmann::json last_selection_ = nullptr;
     struct ReadRecovery {
         Clock::time_point started, next_attempt;
         unsigned failures{};
@@ -187,6 +190,7 @@ class FlowExecutor final {
         bool device_checked{};
         bool restart_application{};
         bool application_restarted_in_window{};
+        bool instance_restarted_in_window{};
         nlohmann::json context_recovery = nullptr;
         std::string source_path;
         std::size_t stack_depth{};

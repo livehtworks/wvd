@@ -127,6 +127,8 @@ tasks::CompiledWorkflow compile_time_leap(const std::string &target_name,
         graph.click("DownloadEn", download_en, download_en, C::absent(download), {"Entry"});
         graph.click("DownloadZhHant", download_zh_hant, download_zh_hant,
                     C::absent(download), {"Entry"});
+        graph.retry_menu_input("DownloadEn", download_en, 3000);
+        graph.retry_menu_input("DownloadZhHant", download_zh_hant, 3000);
     } else {
         graph.observe("DownloadEn", download_en, {"DownloadDenied"});
         graph.observe("DownloadZhHant", download_zh_hant, {"DownloadDenied"});

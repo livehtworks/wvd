@@ -239,11 +239,6 @@ TickResult FlowExecutor::resume_event(Frame &frame, const workflow::Step &curren
         return route_error(frame, current, "EVENT_RESUME_UNCONFIRMED");
     const auto image = observation_frame();
     if (auto event = check_events(frame, current, image, workflow::EventClass::Overlay)) return *event;
-    for (std::size_t i = resume.owner; i < stack_.size(); ++i) {
-        const auto &pending = stack_[i].pending;
-        if (pending && Clock::now() >= pending->result_started_at + pending->result_budget + pending->event_pause)
-            return blocked("EVENT_PARENT_RESULT_TIMEOUT");
-    }
     const auto guard = ports_.recognize(image, *resume.rule.resume_guard);
     if (guard.outcome == contracts::RecognitionOutcome::Error)
         return fail(guard.error_code.empty() ? "EVENT_RESUME_RECOGNITION_ERROR" : guard.error_code);
@@ -275,6 +270,8 @@ TickResult FlowExecutor::resume_event(Frame &frame, const workflow::Step &curren
             return fail(result.error_code.empty() ? "EVENT_PARENT_RESULT_ERROR" : result.error_code);
         if (result.outcome == contracts::RecognitionOutcome::NoHit) {
             if (auto event = check_unexpected(frame, current, image, "event_parent_result_not_confirmed")) return *event;
+            if (Clock::now() >= pending.result_started_at + pending.result_budget + pending.event_pause)
+                return blocked("EVENT_PARENT_RESULT_TIMEOUT");
             return waiting(50ms);
         }
         const auto &a = result.basis; const auto &b = pending.before;
@@ -302,6 +299,7 @@ TickResult FlowExecutor::resume_event(Frame &frame, const workflow::Step &curren
     target.next_pending = target.error_pending = false;
     target.selected_frame.reset(); target.selected_observation.reset();
     target.selection_origin.reset();
+    target.operation_started = false;
     target.resume.reset(); target.delay_until.reset(); target.event_exits.clear();
     target.entered_at = Clock::now(); // 仅新步骤起点，phase_deadlines 与全任务期限不重置。
     invalidate_observation();

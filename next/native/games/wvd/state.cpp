@@ -228,7 +228,7 @@ void WvdRunState::resurrected() {
         pending_chest_ = false;
     last_encounter_ = Encounter::None;
     revival_pending_ = false;
-    if (target_encounter_.phase == 2 && target_encounter_.unit == unit_index_)
+    if (target_encounter_.phase == 2 && target_encounter_.unit == unit_index_ && !target_encounter_.identity_lost)
         target_encounter_.resume_authorized = true;
     suicide_requested_ = false;
     ++revivals_;
@@ -238,8 +238,10 @@ void WvdRunState::resurrected() {
 }
 void WvdRunState::restart_game() {
     prepared_.reset();
-    if (target_encounter_.phase > 0 && target_encounter_.phase < 3)
+    if (target_encounter_.phase > 0 && target_encounter_.phase < 3) {
         target_encounter_.resume_authorized = false;
+        target_encounter_.identity_lost = true;
+    }
     healing_active_ = false;
     combat_speed_ = false;
     zoom_world_map_ = false;
@@ -337,7 +339,7 @@ std::string WvdRunState::confirmation_id(const std::string &operation, const std
             std::to_string(combat_sequence_ + (pending_combat_ ? 0 : 1)) + ":route:" +
             std::to_string(lifecycle_recovery_sequence_);
     else if (event == "target_encounter_interrupted" || event == "target_encounter_result" ||
-             event == "target_continuation_lost" ||
+             event == "target_continuation_lost" || event == "target_reacquire_prepared" ||
              event == "target_navigation_terminated")
         id += ":target:" + std::to_string(target_encounter_.attempt) + ":combat:" +
             std::to_string(target_encounter_.combat) + ":phase:" + std::to_string(target_encounter_.phase);
@@ -864,6 +866,16 @@ bool WvdRunState::confirm_event(const std::string &operation, const std::string 
             throw std::runtime_error("TARGET_ENCOUNTER_IDENTITY_INVALID");
         target_encounter_.phase = 2;
         target_encounter_.resume_authorized = false;
+        target_encounter_.identity_lost = true;
+    } else if (event == "target_reacquire_prepared") {
+        if (!expected_step || target_encounter_.phase < 1 || target_encounter_.phase > 2 ||
+            target_encounter_.unit != unit_index_ || target_encounter_.point != task_step_ ||
+            target_encounter_.resume_authorized || revival_pending_)
+            throw std::runtime_error("TARGET_REACQUIRE_UNCONFIRMED");
+        resume_dungeon();
+        // Retire this unproven attempt without completing its point or bounty.
+        target_encounter_.phase = 4;
+        target_encounter_.completion_reason = "unattributed_combat_reacquire";
     } else if (event == "target_encounter_result") {
         if (!expected_step || target_encounter_.unit != unit_index_ ||
             target_encounter_.point != task_step_ || !target_encounter_.resume_authorized ||
@@ -1032,6 +1044,7 @@ J WvdRunState::summarize() const {
                 {"attempt", target_encounter_.attempt}, {"combat", target_encounter_.combat},
                 {"unit_matches", target_encounter_.unit == unit_index_},
                 {"resume_authorized", target_encounter_.resume_authorized},
+                {"identity_lost", target_encounter_.identity_lost},
                 {"completion_reason", target_encounter_.completion_reason}}},
             {"strategy", std::move(strategy)},
             {"has_prepared_skill", prepared_.has_value()},

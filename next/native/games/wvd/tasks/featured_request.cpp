@@ -31,6 +31,7 @@ CompiledWorkflow accept_featured_request(FeaturedRequest request, bool royal_sui
     graph.call_child("Rest", rest, {"FindMenu"});
     graph.route("FindMenu", {"Request", "Guild"});
     graph.click("Guild", C::all({guild, C::absent(menu)}), guild, menus, {"FindMenu"});
+    graph.retry_menu_input("Guild", C::all({guild, C::absent(menu)}), 3000);
     graph.click("Request", menu, menu, menus, {"Featured"});
     graph.click("Featured", featured, featured, list, {"Scroll0"});
     const int count = check_accepted ? 3 : 1;

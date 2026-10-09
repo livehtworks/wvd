@@ -29,6 +29,8 @@ tasks::CompiledWorkflow single_actor_auto() {
     graph.click("ClosePopup", C::all({battle, popup}), close, C::any({clear_battle, ended}), choices);
     graph.click("CancelPopup", C::all({battle, popup, C::absent(close)}), ok,
                 C::any({clear_battle, ended}), choices, {-280, 0});
+    graph.retry_menu_input("ClosePopup", C::all({battle, popup, close}), 3000);
+    graph.retry_menu_input("CancelPopup", C::all({battle, popup, C::absent(close), ok}), 3000);
     graph.back("BackPopup", C::all({battle, detail, C::absent(close), C::absent(ok)}),
                C::any({clear_battle, ended}), choices);
     // User-selected 100 ms pulse, followed immediately by a fresh color-state observation.

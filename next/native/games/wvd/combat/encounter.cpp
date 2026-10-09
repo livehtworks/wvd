@@ -87,7 +87,8 @@ tasks::CompiledWorkflow fight_encounter(const nlohmann::json &profile,
     // 自动战斗仅在行动条持续无变化时超时，不能以战斗总时长/角色数判失败。
     {
         const std::string name = "Turn0", after = "Turn0";
-        graph.call_child(name + "Action", turn, {"Dungeon", "Chest", "Revive", name + "Auto", after});
+        graph.call_child(name + "Action", turn, {"Dungeon", "Chest", "Revive", name + "Auto", after},
+                         J::object(), battle);
         graph.observe(name + "Auto", full_auto, {name + "Poll"});
         // Auto 就绪不是又一个角色行动。等待可暂时缺图，但不能由此发送新输入；
         // 只有明确退出/关闭 Auto 才继续，独立等待预算耗尽给出可追溯原因。

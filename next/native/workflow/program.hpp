@@ -77,6 +77,9 @@ struct Input {
     // 由既有 stop_if_interrupted_after 声明产生；同页补点许可不能覆盖跨重启保护。
     // 空值保持既有普通菜单及显式 restart_from 行为，不新增业务重试次数上限。
     std::string interruption_reason;
+    // Session-local actions may be abandoned after proven instance exit, never
+    // reported as successful or replayed from an old frame.
+    bool instance_exit_discardable{};
 };
 struct AwaitResult {
     recognition::Request condition;

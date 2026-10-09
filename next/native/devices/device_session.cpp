@@ -75,6 +75,8 @@ void DeviceSession::prepare_input_channel(std::stop_token stop) {
     require(!stop.stop_requested(), "INPUT_PREPARATION_CANCELLED");
 }
 void DeviceSession::record(nlohmann::json item) {
+    item["utc_ms"] = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count();
     std::lock_guard lock(mutex_);
     if (diagnostics_.size() >= 256) diagnostics_.erase(diagnostics_.begin());
     diagnostics_.push_back(std::move(item));
@@ -407,7 +409,7 @@ nlohmann::json DeviceSession::instance_metadata() {
         live.at("index").get<std::string>() == std::to_string(binding_.at("index").get<int>()) &&
         live.at("created_timestamp") == binding_.at("created_timestamp") &&
         live.at("is_process_started").is_boolean(), "MUMU_INSTANCE_MISMATCH");
-    if (live.value("is_android_started", false))
+    if (live.value("is_process_started", false) && live.value("is_android_started", false))
         require("127.0.0.1:" + std::to_string(live.at("adb_port").get<int>()) ==
             binding_.at("serial").get<std::string>(), "MUMU_ADB_BINDING_MISMATCH");
     return live;
@@ -474,6 +476,7 @@ contracts::ObservationRecovery DeviceSession::recover_observation(bool restart_a
     (void)instance_metadata();
     contracts::ObservationRecovery result;
     result.application_restarted = recovery_launched_ || recovery_application_started_;
+    result.instance_restarted = recovery_launched_;
     result.foreground_restored = restored;
     if (recovery_origin_) {
         result.reconnect = contracts::ObservationReconnect{target.device_id, target.instance_id,

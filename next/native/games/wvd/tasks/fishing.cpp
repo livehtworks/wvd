@@ -34,6 +34,7 @@ CompiledWorkflow collect_fishing_reward() {
     // 分类来自关闭前的同一新帧；完成数只在关闭后确认。恢复看到已关闭页时不再输入。
     graph.confirm("Prepare", "fishing.reward.prepare", "fishing_reward_prepared", {{"mode", "fishing_reward"}}, {"Close"});
     graph.click("Close", C::all({close, C::absent(blocked)}), close, closed, {"Completed"});
+    graph.retry_menu_input("Close", C::all({close, C::absent(blocked)}), 3000);
     graph.postcondition_budget("Close", 10000);
     graph.delay_after("Close", 5000);
     graph.confirm("Completed", "fishing.reward.done", "fishing_reward_completed", closed, {"Terminal"});

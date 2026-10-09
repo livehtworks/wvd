@@ -217,6 +217,8 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, Dialogue
         graph.click("DownloadEn", download_en, download_en, progressed(download), {"Entry"});
         graph.click("DownloadZhHant", download_zh_hant, download_zh_hant,
                     progressed(download), {"Entry"});
+        graph.retry_menu_input("DownloadEn", download_en, 3000);
+        graph.retry_menu_input("DownloadZhHant", download_zh_hant, 3000);
     } else {
         graph.observe("DownloadEn", download_en, {"DownloadBlocked"});
         graph.observe("DownloadZhHant", download_zh_hant, {"DownloadBlocked"});
@@ -228,6 +230,10 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, Dialogue
     graph.click("ReturnTitle", to_title, to_title, progressed(to_title), {"Entry"});
     graph.click("Resume", resume_prompt, resume, progressed(resume), {"Entry"});
     graph.fixed_click("Attention", attention, progressed(attention), {450, 1450}, {"Entry"});
+    const J repeatable_prompts{{"RetryBlank", blank}, {"Retry", retry}, {"RetryLow", low_retry},
+        {"ReturnTitle", to_title}, {"Resume", resume_prompt}, {"Attention", attention}};
+    for (const auto &[name, scene] : repeatable_prompts.items())
+        graph.retry_menu_input(name, scene, 3000);
     graph.fixed_click("Title", title, progressed(title), {450, 1450}, {"Entry"});
     // The logo also exists before Tap to Start becomes interactive. Retry only
     // while a fresh frame still confirms this title page, within the same deadline.
@@ -373,6 +379,8 @@ tasks::CompiledWorkflow handle_download(bool allowed) {
     if (allowed) {
         graph.click("Zh", zh, zh, C::absent(prompt), {"Terminal"});
         graph.click("En", en, en, C::absent(prompt), {"Terminal"});
+        graph.retry_menu_input("Zh", zh, 3000);
+        graph.retry_menu_input("En", en, 3000);
     } else {
         graph.observe("Zh", zh, {"Denied"}); graph.observe("En", en, {"Denied"});
         graph.recovery("Denied", "boot.download_permission_missing");
