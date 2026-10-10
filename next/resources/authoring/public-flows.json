@@ -2620,20 +2620,25 @@
     "entry": "open-entry",
     "nodes": [
       {"id": "open-entry", "type": "route", "name": "重看当前技能页面", "parameters": {}},
-      {"id": "open-advanced", "type": "recognition", "name": "技能页面已交接", "parameters": {"condition": {"mode": "all", "conditions": [
-        {"mode": "input_clear"}, {"mode": "any", "conditions": [
-          {"mode": "all", "conditions": [{"mode": "combat_active"}, {"mode": "semantic", "id": "combat.skill.detail"}]},
-          {"mode": "all", "conditions": [{"mode": "combat_active"}, {"mode": "not", "conditions": [{"mode": "prepared_actor"}]}]},
-          {"mode": "template", "image": "notenoughsp", "threshold": 0.8},
-          {"mode": "template", "image": "notenoughmp", "threshold": 0.8},
-          {"mode": "all", "conditions": [{"mode": "not", "conditions": [{"mode": "combat_active"}]}, {"mode": "any", "conditions": [
-            {"mode": "template", "image": "dungFlag", "threshold": 0.8},
-            {"mode": "semantic", "id": "chest.open.option"}, {"mode": "semantic", "id": "chest.choose.page"},
-            {"mode": "template", "image": "chestOpening", "threshold": 0.8}, {"mode": "semantic", "id": "chest.reward.page"},
-            {"mode": "template", "image": "RiseAgain", "threshold": 0.8}
-          ]}]}
-        ]}
-      ]}}},
+      {
+        "id": "open-advanced",
+        "type": "recognition",
+        "name": "技能页面已交接",
+        "parameters": {
+          "condition": {
+            "mode": "all",
+            "conditions": [
+              {
+                "mode": "input_clear"
+              },
+              {
+                "mode": "combat_phase",
+                "phase": "detail_handoff"
+              }
+            ]
+          }
+        }
+      },
       {"id": "open-advanced-exit", "type": "end", "name": "未补点，交回新页面", "parameters": {"outcome": "handoff", "port": "AdvancedExit"}},
       {
         "id": "open",
@@ -2691,78 +2696,8 @@
             ]
           },
           "postcondition": {
-            "mode": "any",
-            "conditions": [
-              {
-                "mode": "all",
-                "conditions": [
-                  {
-                    "mode": "combat_active"
-                  },
-                  {
-                    "mode": "prepared_actor"
-                  },
-                  {
-                    "mode": "semantic",
-                    "id": "combat.skill.detail"
-                  }
-                ]
-              },
-              {
-                "mode": "all",
-                "conditions": [
-                  {
-                    "mode": "combat_active"
-                  },
-                  {
-                    "mode": "not",
-                    "conditions": [
-                      {
-                        "mode": "prepared_actor"
-                      }
-                    ]
-                  }
-                ]
-              },
-              {
-                "mode": "any",
-                "conditions": [
-                  {
-                    "mode": "template",
-                    "image": "notenoughsp",
-                    "threshold": 0.8
-                  },
-                  {
-                    "mode": "template",
-                    "image": "notenoughmp",
-                    "threshold": 0.8
-                  }
-                ]
-              },
-              {
-                "mode": "any",
-                "conditions": [
-                  {
-                    "mode": "template",
-                    "image": "dungFlag",
-                    "threshold": 0.8
-                  },
-                  {
-                    "mode": "template",
-                    "image": "chestFlag",
-                    "threshold": 0.8
-                  },
-                  {"mode": "semantic", "id": "chest.choose.page"},
-                  {"mode": "template", "image": "chestOpening", "threshold": 0.8},
-                  {"mode": "semantic", "id": "chest.reward.page"},
-                  {
-                    "mode": "template",
-                    "image": "RiseAgain",
-                    "threshold": 0.8
-                  }
-                ]
-              }
-            ]
+            "mode": "combat_phase",
+            "phase": "detail_handoff"
           },
           "position": [
             266,
@@ -3366,158 +3301,8 @@
             "candidate_index": 0
           },
           "postcondition": {
-            "mode": "any",
-            "conditions": [
-              {
-                "mode": "all",
-                "conditions": [
-                  {
-                    "mode": "combat_active"
-                  },
-                  {
-                    "mode": "prepared_actor"
-                  },
-                  {
-                    "mode": "semantic",
-                    "id": "combat.skill.detail"
-                  }
-                ]
-              },
-              {
-                "mode": "all",
-                "conditions": [
-                  {
-                    "mode": "any",
-                    "conditions": [
-                      {
-                        "mode": "all",
-                        "conditions": [
-                          {
-                            "mode": "combat_active"
-                          },
-                          {
-                            "mode": "not",
-                            "conditions": [
-                              {
-                                "mode": "any",
-                                "conditions": [
-                                  {
-                                    "mode": "semantic",
-                                    "id": "combat.skill.detail"
-                                  },
-                                  {
-                                    "mode": "semantic",
-                                    "id": "combat.skill.confirm"
-                                  },
-                                  {
-                                    "mode": "template",
-                                    "image": "close",
-                                    "threshold": 0.8,
-                                    "roi": [
-                                      0,
-                                      600,
-                                      900,
-                                      1000
-                                    ]
-                                  }
-                                ]
-                              }
-                            ]
-                          }
-                        ]
-                      },
-                      {
-                        "mode": "any",
-                        "conditions": [
-                          {
-                            "mode": "template",
-                            "image": "dungFlag",
-                            "threshold": 0.8
-                          },
-                          {
-                            "mode": "template",
-                            "image": "chestFlag",
-                            "threshold": 0.8
-                          },
-                          {"mode": "semantic", "id": "chest.choose.page"},
-                          {"mode": "template", "image": "chestOpening", "threshold": 0.8},
-                          {"mode": "semantic", "id": "chest.reward.page"},
-                          {
-                            "mode": "template",
-                            "image": "RiseAgain",
-                            "threshold": 0.8
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "mode": "not",
-                    "conditions": [
-                      {
-                        "mode": "any",
-                        "conditions": [
-                          {
-                            "mode": "template",
-                            "image": "notenoughsp",
-                            "threshold": 0.8
-                          },
-                          {
-                            "mode": "template",
-                            "image": "notenoughmp",
-                            "threshold": 0.8
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "mode": "not",
-                    "conditions": [
-                      {
-                        "mode": "any",
-                        "conditions": [
-                          {
-                            "mode": "semantic",
-                            "id": "combat.skill.detail"
-                          },
-                          {
-                            "mode": "semantic",
-                            "id": "combat.skill.confirm"
-                          },
-                          {
-                            "mode": "template",
-                            "image": "close",
-                            "threshold": 0.8,
-                            "roi": [
-                              0,
-                              600,
-                              900,
-                              1000
-                            ]
-                          }
-                        ]
-                      }
-                    ]
-                  }
-                ]
-              },
-              {
-                "mode": "any",
-                "conditions": [
-                  {
-                    "mode": "template",
-                    "image": "notenoughsp",
-                    "threshold": 0.8
-                  },
-                  {
-                    "mode": "template",
-                    "image": "notenoughmp",
-                    "threshold": 0.8
-                  }
-                ]
-              }
-            ]
+            "mode": "combat_phase",
+            "phase": "target_handoff"
           },
           "offset": [
             0,
@@ -3629,123 +3414,8 @@
         "name": "详情已消失且没有资源不足提示",
         "parameters": {
           "condition": {
-            "mode": "all",
-            "conditions": [
-              {
-                "mode": "any",
-                "conditions": [
-                  {
-                    "mode": "all",
-                    "conditions": [
-                      {
-                        "mode": "combat_active"
-                      },
-                      {
-                        "mode": "not",
-                        "conditions": [
-                          {
-                            "mode": "any",
-                            "conditions": [
-                              {
-                                "mode": "semantic",
-                                "id": "combat.skill.detail"
-                              },
-                              {
-                                "mode": "semantic",
-                                "id": "combat.skill.confirm"
-                              },
-                              {
-                                "mode": "template",
-                                "image": "close",
-                                "threshold": 0.8,
-                                "roi": [
-                                  0,
-                                  600,
-                                  900,
-                                  1000
-                                ]
-                              }
-                            ]
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "mode": "any",
-                    "conditions": [
-                      {
-                        "mode": "template",
-                        "image": "dungFlag",
-                        "threshold": 0.8
-                      },
-                      {
-                        "mode": "template",
-                        "image": "chestFlag",
-                        "threshold": 0.8
-                      },
-                      {"mode": "semantic", "id": "chest.choose.page"},
-                      {"mode": "template", "image": "chestOpening", "threshold": 0.8},
-                      {"mode": "semantic", "id": "chest.reward.page"},
-                      {
-                        "mode": "template",
-                        "image": "RiseAgain",
-                        "threshold": 0.8
-                      }
-                    ]
-                  }
-                ]
-              },
-              {
-                "mode": "not",
-                "conditions": [
-                  {
-                    "mode": "any",
-                    "conditions": [
-                      {
-                        "mode": "template",
-                        "image": "notenoughsp",
-                        "threshold": 0.8
-                      },
-                      {
-                        "mode": "template",
-                        "image": "notenoughmp",
-                        "threshold": 0.8
-                      }
-                    ]
-                  }
-                ]
-              },
-              {
-                "mode": "not",
-                "conditions": [
-                  {
-                    "mode": "any",
-                    "conditions": [
-                      {
-                        "mode": "semantic",
-                        "id": "combat.skill.detail"
-                      },
-                      {
-                        "mode": "semantic",
-                        "id": "combat.skill.confirm"
-                      },
-                      {
-                        "mode": "template",
-                        "image": "close",
-                        "threshold": 0.8,
-                        "roi": [
-                          0,
-                          600,
-                          900,
-                          1000
-                        ]
-                      }
-                    ]
-                  }
-                ]
-              }
-            ]
+            "mode": "combat_phase",
+            "phase": "finished"
           }
         }
       },

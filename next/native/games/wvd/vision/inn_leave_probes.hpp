@@ -11,6 +11,10 @@ inline nlohmann::json inn_leave_zh() {
 inline nlohmann::json character_page() {
     return {{"mode", "template"}, {"image", "trait"}, {"threshold", 0.84}};
 }
+inline nlohmann::json hp_overlay_close() {
+    return {{"mode", "template"}, {"image", "close"}, {"threshold", .8},
+        {"roi", {0,800,900,800}}, {"crop", {18,12,40,40}}};
+}
 inline nlohmann::json notice_advance_arrow() {
     // 信息弹窗高度随内容变化，搜索整个下半屏；仍点击真实匹配中心。
     return {{"mode", "template"}, {"image", "chest_reward_advance"},

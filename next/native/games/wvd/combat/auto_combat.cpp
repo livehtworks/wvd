@@ -1,5 +1,6 @@
 #include "auto_combat.hpp"
 #include "games/wvd/vision/chest_probes.hpp"
+#include "games/wvd/vision/combat_phase_probes.hpp"
 
 namespace wvd::games::combat {
 tasks::CompiledWorkflow single_actor_auto() {
@@ -13,7 +14,7 @@ tasks::CompiledWorkflow single_actor_auto() {
         return value;
     };
     const J battle{{"mode", "combat_active"}};
-    const auto ended = C::all({C::any({C::image("dungFlag"), vision::chest_page_condition(), C::image("RiseAgain")}), C::absent(battle)});
+    const auto ended = vision::combat_phase("ended");
     const auto popup = C::any({C::image("combat_skill_detail"), C::image("combat_skill_confirm"),
                               image("close", {0, 600, 900, 1000})});
     const auto enabled = image("spellskill/CombatAutoEnable", {740, 940, 160, 280});
@@ -61,15 +62,14 @@ tasks::CompiledWorkflow enable_auto() {
         return value;
     };
     const J battle{{"mode", "combat_active"}};
-    const auto ended = C::all({C::any({C::image("dungFlag"), vision::chest_page_condition(), C::image("RiseAgain")}),
-                               C::absent(battle)});
+    const auto ended = vision::combat_phase("ended");
     const auto close = image("close", {0, 600, 900, 1000});
     const auto ok = C::image("combat_skill_confirm");
     const auto detail = C::image("combat_skill_detail");
     const auto popup = C::any({detail, close, ok});
     const auto enabled = image("spellskill/CombatAutoEnable", {740, 940, 160, 280});
     const auto disabled = image("spellskill/CombatAutoDisable", {740, 940, 160, 280});
-    const auto clear_battle = C::all({battle, C::absent(popup)});
+    const auto clear_battle = vision::combat_phase("clear");
     const auto done = C::all({clear_battle, enabled});
     const J choices{"BattleEnded", "Enabled", "ClosePopup", "CancelPopup", "BackPopup", "Enable", "Unknown0"};
     // 关闭后再出现详情，或动画期间战斗结束，都回到同一组有场景约束的候选。

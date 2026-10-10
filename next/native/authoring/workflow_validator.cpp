@@ -212,6 +212,14 @@ void validate_condition(const J &condition, const std::string &node_id,
         integer(condition.at("slot"), 0, 3, "AUTHOR_CONDITION_INVALID", node_id);
         return;
     }
+    if (mode == "combat_phase") {
+        exact_object(condition, {"mode", "phase"}, {}, "AUTHOR_CONDITION_INVALID", node_id);
+        const auto phase = condition.at("phase").get<std::string>();
+        if (phase != "clear" && phase != "menu" && phase != "ended" && phase != "finished" &&
+            phase != "dungeon" && phase != "chest" && phase != "revival" && phase != "detail_handoff" && phase != "target_handoff")
+            fail("AUTHOR_CONDITION_INVALID", node_id);
+        return;
+    }
     if (mode == "support_selection") {
         exact_object(condition, {"mode"}, {"expect", "slot"}, "AUTHOR_CONDITION_INVALID", node_id);
         const auto expected = condition.value("expect", "present");
@@ -235,7 +243,7 @@ void validate_condition(const J &condition, const std::string &node_id,
         "fishing_reward", "fishing_unknown", "map_route_post", "mining_reward",
         "movement_stopped", "navigation_resume_unavailable", "next_low_confidence", "party_death", "party_defeat",
         "pause", "pause_negative", "special_dialogue", "special_dialogue_post",
-        "target_marker", "task_stop", "prepared_actor", "skill_target", "revival_prompt", "combat_resource_error"};
+        "target_marker", "task_stop", "prepared_actor", "skill_target", "revival_prompt", "combat_resource_error", "hp_overlay"};
     if (!builtins.contains(mode) || condition.size() != 1)
         fail("AUTHOR_CONDITION_UNSUPPORTED", node_id + ":" + mode);
 }

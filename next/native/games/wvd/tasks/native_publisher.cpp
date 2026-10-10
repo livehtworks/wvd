@@ -1,6 +1,8 @@
 #include "native_publisher.hpp"
 #include "games/wvd/vision/native_asset_resolver.hpp"
 #include "games/wvd/vision/builtin_probes.hpp"
+#include "games/wvd/vision/combat_phase_probes.hpp"
+#include "locale_assets.hpp"
 #include "semantic_catalogue.hpp"
 #include "ocr_models.hpp"
 #include "platform/windows/bundle_lease.hpp"
@@ -75,8 +77,17 @@ NativePublication publish_native(const CompiledWorkflow &workflow,
     const auto serialized = workflow::serialize(program);
     const auto models = J::parse(wvd_ocr_models).at("models");
     std::set<std::string> languages;
+    std::set<std::string> combat_phases;
     const auto collect = [&](auto &&self, const J &value) -> void {
         if (value.is_object()) {
+            if (value.value("mode", "") == "combat_phase") {
+                const auto phase = value.at("phase").get<std::string>();
+                if (combat_phases.insert(phase).second)
+                    for (const auto &probe : vision::combat_phase_dependencies(phase)) {
+                        const auto localized = localize_implicit_probe(probe, workflow.authoring.value("resource_locale", ""));
+                        self(self, localized.value_or(probe));
+                    }
+            }
             if (value.value("mode", "") == "ocr" || value.value("kind", "") == "ocr")
                 languages.insert(recognition::parse_ocr_parameters(value).language);
             for (const auto &probe : vision::implicit_ocr_probes(value.value("mode", "")))

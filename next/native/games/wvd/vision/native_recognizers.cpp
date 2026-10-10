@@ -12,6 +12,8 @@
 #include "boot_probes.hpp"
 #include "navigation_probes.hpp"
 #include "builtin_probes.hpp"
+#include "combat_phase_probes.hpp"
+#include "inn_leave_probes.hpp"
 #include "unknown_window.hpp"
 #include "image_ops.hpp"
 #include "games/wvd/business_condition.hpp"
@@ -677,6 +679,84 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
         platform::timing::count(platform::timing::Counter::OcrCalls);
         check(!p.contains("preprocess"), "WVD_OCR_PREPROCESS_UNSUPPORTED");
         return scope.recognize_ocr(p);
+    }
+    if (mode == "hp_overlay") {
+        check(p.size() == 1 && allowed_rect == cv::Rect(0,0,900,1600), "WVD_HP_OVERLAY_SCOPE_INVALID");
+        cv::Mat hsv, green;
+        cv::cvtColor(image(cv::Rect(0,0,900,240)), hsv, cv::COLOR_BGR2HSV);
+        cv::inRange(hsv, cv::Scalar(40,90,110), cv::Scalar(90,255,255), green);
+        std::vector<std::vector<cv::Point>> contours;
+        cv::findContours(green, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
+        cv::Rect bar;
+        for (const auto &contour : contours) {
+            const auto r = cv::boundingRect(contour);
+            if (r.width >= 450 && r.height >= 4 && r.height <= 30 &&
+                double(cv::countNonZero(green(r))) / r.area() >= .8) { bar = r; break; }
+        }
+        if (bar.empty()) return decision(false, {}, {{"reason", "no_full_width_hp_bar"}});
+        const auto close = evaluate_impl(bundle, pixels, hp_overlay_close(), bound, scope, cache, depth + 1, memo);
+        check(close.at("outcome") != "Error", "WVD_HP_OVERLAY_ERROR");
+        return decision(close.at("outcome") == "Hit", allowed_rect, {{"hp_bar", box(bar)}, {"close", close}});
+    }
+    if (mode == "combat_phase") {
+        const auto phase = p.at("phase").get<std::string>();
+        check(p.size() == 2 && (phase == "clear" || phase == "menu" || phase == "ended" ||
+            phase == "finished" || phase == "dungeon" || phase == "chest" || phase == "revival" ||
+            phase == "detail_handoff" || phase == "target_handoff"), "WVD_COMBAT_PHASE_INVALID");
+        J evidence = J::array();
+        bool eligible = true;
+        const auto observe = [&](const J &probe) {
+            auto result = evaluate_impl(bundle, pixels, probe, bound, scope, cache, depth + 1, memo);
+            check(result.at("outcome") != "Error", "WVD_COMBAT_PHASE_ERROR");
+            eligible = eligible && result.value("action_eligible", true);
+            const bool hit = result.at("outcome") == "Hit";
+            evidence.push_back({{"probe", probe}, {"result", std::move(result)}});
+            return hit;
+        };
+        const auto finish = [&](bool hit) {
+            auto result = decision(hit, allowed_rect, {{"phase", phase}, {"probes", std::move(evidence)}});
+            result["action_eligible"] = eligible;
+            return result;
+        };
+        const bool active = observe(J{{"mode", "combat_active"}});
+        const bool exit_phase = phase == "ended" || phase == "dungeon" || phase == "chest" || phase == "revival";
+        // A live battle does not need dungeon/chest/revival classification.
+        if (exit_phase && active) return finish(false);
+        if ((phase == "clear" || phase == "menu") && !active) return finish(false);
+        if (!active) {
+            bool ended = false;
+            const auto ends = combat_end_probes();
+            if (phase == "dungeon") ended = observe(ends.at(0));
+            else if (phase == "revival") ended = observe(ends.back());
+            else if (phase == "chest") {
+                const auto stages = chest_page_condition();
+                for (const auto &probe : stages.at("conditions"))
+                    if (observe(probe)) { ended = true; break; }
+            } else for (const auto &probe : ends)
+                if (observe(probe)) { ended = true; break; }
+            if (exit_phase || phase == "detail_handoff" || !ended) return finish(ended);
+        } else if (phase == "detail_handoff") {
+            if (observe(combat_popup_probes().at(0)) || !observe(J{{"mode", "prepared_actor"}}))
+                return finish(true);
+            for (const auto *name : {"notenoughsp", "notenoughmp"})
+                if (observe(J{{"mode", "template"}, {"image", name}, {"threshold", .8}})) return finish(true);
+            return finish(false);
+        }
+        if (phase == "target_handoff") {
+            if (active && observe(combat_popup_probes().at(0)) && observe(J{{"mode", "prepared_actor"}}))
+                return finish(true);
+            for (const auto *name : {"notenoughsp", "notenoughmp"})
+                if (observe(J{{"mode", "template"}, {"image", name}, {"threshold", .8}})) return finish(true);
+            for (const auto &probe : combat_popup_probes()) if (observe(probe)) return finish(false);
+            return finish(true);
+        }
+        // Current phase first; generic all/any error propagation remains unchanged.
+        for (const auto &probe : combat_popup_probes()) if (observe(probe)) return finish(false);
+        if (phase == "menu") return finish(observe(J{{"mode", "template"}, {"image", "flee"},
+            {"threshold", .8}, {"roi", {660,1080,240,220}}}));
+        if (phase == "finished") for (const auto *name : {"notenoughsp", "notenoughmp"})
+            if (observe(J{{"mode", "template"}, {"image", name}, {"threshold", .8}})) return finish(false);
+        return finish(true);
     }
     if (mode == "revival_prompt") {
         check(p.size() == 1, "WVD_REVIVAL_PARAMETERS_INVALID");

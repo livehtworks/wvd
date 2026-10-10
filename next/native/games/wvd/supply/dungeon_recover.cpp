@@ -1,4 +1,5 @@
 #include "dungeon_recover.hpp"
+#include "games/wvd/vision/inn_leave_probes.hpp"
 
 namespace wvd::games::supply {
 tasks::CompiledWorkflow recover_in_dungeon() {
@@ -16,7 +17,11 @@ tasks::CompiledWorkflow recover_in_dungeon() {
     const auto needed = C::business("/healing_required", true);
     // 无补给需求是无副作用的正常返回；不能为“什么都不做”扫描战斗/宝箱。
     // 真正开始补给时 Requested/Begin 仍必须取得可操作场景证据。
-    graph.route("Entry", {"Unneeded", "Encounter", "ResumeAttempt", "Requested"});
+    const J hp_overlay{{"mode", "hp_overlay"}};
+    graph.route("Entry", {"Unneeded", "CloseHpOverlay", "Encounter", "ResumeAttempt", "Requested"});
+    // 只关闭角色覆盖页；不消费回复尝试，也不推断生命值/复活效果。
+    graph.click("CloseHpOverlay", hp_overlay, vision::hp_overlay_close(), C::absent(hp_overlay), {"Entry"});
+    graph.retry_menu_input("CloseHpOverlay", hp_overlay, 3000);
     graph.observe("Encounter", interrupted, {"EncounterExit"});
     graph.handoff("EncounterExit", "encounter");
     graph.observe_business("Unneeded", C::business("/healing_required", false), {"Terminal"});

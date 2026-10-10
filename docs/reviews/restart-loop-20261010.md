@@ -54,3 +54,24 @@ FlowExecutor在连续异常期限到达后先复核当前观察，再发bound_ga
 - 正式/api/v1/runs/start请求6ed1c35c-b9a3-4811-846e-90681e2e2a57：GiantBounty、resource_locale=zh-Hant、repeat=true、repeat_count=100，提交时核对当前profile revision。不是续接旧计数；原跨批12轮不计入新100轮。
 - 已核对实际Running/run1/0完成/目标100及repeat.active=true；输入回执确认跳轮、进入公会、委托和悬赏页面、退出列表及进入副本。真实近期图083700376_r1_f19.png为郊外/第十區-要塞3F領主室列表，随后进度Task_FirstDungeon_Route0_Moving。检查时未出现错误、失败诊断或游戏重启，不能将此记成完整一轮/100轮成功。
 - run证据在data/runs/2F1D2172-8C75-47AB-B643-898E3800C6CD/1，execution-events.jsonl、action-timing.jsonl、recognition-memory.log正在保存；data/recent-frames持续保存动作PNG/周期JPEG。profile哈希/revision不变，AUTO_START_CLASH=true；未改VPN/战斗配置、未新增系统内存采集，禁止宝石购买/抽卡/卖装备的边界继续有效。
+
+## 战斗分阶段识别修复
+
+上述100轮完成7轮后，用户要求处理识别成本并重开。正式停止确认Completed、busy=false、quiescent=true、repeat.active=false，未关闭模拟器。旧六轮实际模板比对27508–65594次/轮，不是不同素材数；同类节点没有持续递增证据，明确冗余来自复合条件在已判正常战斗后仍展开其它页面。
+
+- combat_phase作为现有WvdVision的游戏阶段配方：先当前battle，再按clear/menu/detail_handoff或实际dungeon/chest/revival出口识别；技能结果finished仍排除详情/确认/关闭及资源错误。通用all/any、输入epoch/身份、未决输入、Auto与业务结算不变；不增加等待，不降低阈值，不用旧帧长缓存。
+- 模板闭包按phase登记全部可达资源，模型闭包按实际locale解析内部再起/资源错误OCR；不能借动态跳过某页放行缺模型。没有新增执行器或全图场景扫描。
+- phase-current-battle-frames.log使用真实第7轮菜单/详情、旧奖励及黑屏，和完整冻结包/生产Service/真实业务状态比较新旧结果，均相同。菜单ended实际比对7→1，详情finished14→2，menu5→2；奖励finished38→26，黑屏仍NoHit。未测热缓存耗时来宣称实机提速。通用all缺图/无效phase仍Error，只有phase finished的独立图缺隐式OCR模型也拒绝发布。
+- phase-final-handoff.log、phase-open-repair.log、phase-reentry.log为受影响交接、同页补点/转场不补点与遗留详情关闭的限定回归；没有新增全量测试或制造实机异常。phase-real-frames.log保留夹具缺业务状态错误，phase-real-frames-final.log保留隔离图未建立Entry错误；只修夹具装配，未改生产逻辑迎合测试。选图时核对旧diagnostics/10.png实际是黑屏，只作反例。
+- phase-product-build.log、phase-service-stop.log、phase-service-deploy.log记录构建、打包及部署。产品输入fc2e5efa73c736084f502410ed54d50d304ce6b2371a49e3a9986121f4fe3b5d、1290项、EXE b6d4dcc3fe12c6d73563222499fa60c13fd3ae71cfc44429b20e0bc7ecf5ce9a，基线提交8d3547c含本轮未提交修复。新实例5B891D68-1CC7-46F0-9E06-3738B430DF4F、pid48448，原17654/data-root。
+- 正式公共步骤准确备份在phase-saved-before；只改open-advanced/result节点condition，经原API revision CAS保存并逐对象核对其它内容相同。combat-open-detail revision由6c070bec191899ab48bf80df83c913ec441c71c3d73d8b0411aa248ad01712ac变为0227a8b31eb5ed90bb6e3340a31658ca9c074d90bae1f123125a2c34eac03dbc；combat-confirm-result由768cf5b95ea0b97476c5d47b5d59e837eb14a67571be348d44b904dbf7c8482b变为456ac3a7bff5391fd1df9d74e8562be05a7e134eae10434b05d9819e812c9e59。
+- 用户授权剩余93轮续跑，正式请求5f4e827e-8454-41de-abe6-e6d7fe5b2959、GiantBounty/zh-Hant，已确认实际Running/run1/0完成/目标93及repeat.active=true，不把accepted当开跑。旧7轮与新93轮分别计数。profile哈希/revision、战斗配置、VPN与日志设置未变；实际整轮成本仍待日志观察，不预报长期稳定性通过。
+
+### 实跑补齐及覆盖页出口
+
+- 首个候选实跑Entry平均330.4ms/35.5次比对，result平均236.4ms/11次；打开详情等待仍约1101ms/59次，查明open/target输入后置仍展开旧大条件。已同步源码、发布资源与正式保存open/target后置；最终保存revision分别为9fb4909c5e6db0c2c1d53af02584445b2bfe44a8283bb7276953663c4a8cbe2b、cc7002f7d75ae8288c64139e7c4ca08884659f88da7a87223eb635a2be69e085，原定义备份在phase-post-before，其余内容逐对象核对未改。
+- 完整后置候选实例25DD8A42-B34E-4C90-B42F-960C150B0E58/batch de9e5f65-2049-4b93-a67a-cab4f3b7037c已实际执行战斗，随后在Task_FirstDungeon_Heal_Requested卡住：diagnostics/1.png为满宽HP条/右下关闭按钮覆盖页，补给和Boot不认识该页；记录两次CONTINUOUS_EXCEPTION_TIMEOUT重启。首次卡住前最后输入为技能流程，没有确认补给输入，进入该页的业务原因尚未证明。已人工停止、0/93，不计部分轮。
+- 新hp_overlay仅判顶部绿色条和下半屏关闭形状，复用现有关闭图标，命中中心约(807,1489)，score0.850670；没有添加姓名/道具OCR或全局页面穷举。只在补给/Boot入口关闭后重新选路，不记回复、复活或技能成功。实际失败图正例与动画、技能详情、奖励、黑屏反例用生产Service核对；执行器出口另作限定验证。
+- phase-full-chain-frames.log记录最终打开/选人后置的新旧语义/成本核对；动画detail_handoff13→2、详情57→11，详情target_handoff89→32，未知黑屏不完成。定向open/reentry/handoff通过，不扩大全量测试，也不宣称整轮耗时已获最终结论。
+- 日志没有丢失：停止后result的action_timing=1660行/1970719字节、event_history=3671行/6366363字节、diagnostics=40行/66669字节；各failed_rows=0/complete=true，details_complete=true。活跃目录枚举曾显示0不能作为空日志证据。未新增系统级内存跟踪。
+- hp-overlay-verified-frames.log通过真实Service正/反例及生产补给执行器关闭/转场验证；hp-overlay-heal.log保持旧版尽力回复、未知送达及不虚报疗效合同；hp-overlay-open.log保持菜单补点/转场不重放。早期hp-overlay-final-frames.log失败是受控夹具未开启RECOVER_WHEN_BEGINNING，命中Unneeded后没有输入；旧hp-overlay-frames.log误要求经过input_clear包装的观察参数等于单叶，均只修夹具，失败日志保留。未改生产逻辑迎合断言。

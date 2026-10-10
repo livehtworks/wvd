@@ -53,6 +53,7 @@
 #include "games/wvd/vision/network_probes.hpp"
 #include "games/wvd/supply/dungeon_recover.hpp"
 #include "games/wvd/vision/inn_leave_probes.hpp"
+#include "games/wvd/vision/combat_phase_probes.hpp"
 #include "storage/legacy_import.hpp"
 #include "storage/run_store.hpp"
 
@@ -133,6 +134,32 @@ struct Ports final : runtime::FlowPorts {
             p.at("phase").get<std::string>());
         if (mode == "business") return games::business_condition(business.summary(), p);
         if (semantic_leaf) if (const auto supplied = semantic_leaf(p)) return *supplied;
+        if (mode == "combat_phase") {
+            const auto phase = p.at("phase").get<std::string>();
+            const auto detail = [&] {
+                return images.contains("combat_skill_detail") || images.contains("spellskill/skillDetail") ||
+                    evaluate(games::vision::resource("combat.skill.detail", "zh-Hant"));
+            };
+            bool ended = false;
+            for (const auto &probe : games::vision::combat_end_probes()) ended |= evaluate(probe);
+            if (phase == "dungeon") return !combat && images.contains("dungFlag");
+            if (phase == "chest") return !combat && (images.contains("chestFlag") || images.contains("whowillopenit") ||
+                images.contains("chestOpening") || images.contains("chest_reward_advance"));
+            if (phase == "revival") return !combat && images.contains("RiseAgain");
+            if (phase == "ended") return !combat && ended;
+            if (phase == "detail_handoff") return combat ?
+                detail() ||
+                !evaluate(J{{"mode", "prepared_actor"}}) : ended;
+            if (phase == "target_handoff" && combat && detail() &&
+                evaluate(J{{"mode", "prepared_actor"}})) return true;
+            if (phase == "target_handoff" && (images.contains("notenoughsp") || images.contains("notenoughmp"))) return true;
+            bool popup = detail() || evaluate(games::vision::resource("combat.skill.confirm", "zh-Hant"));
+            for (const auto &probe : games::vision::combat_popup_probes()) popup |= evaluate(probe);
+            if (phase == "menu") return combat && !popup && (images.contains("flee") ||
+                evaluate(games::vision::resource("combat.menu.flee", "zh-Hant")));
+            if (phase == "clear") return combat && !popup;
+            return (combat || ended) && !popup && !images.contains("notenoughsp") && !images.contains("notenoughmp");
+        }
         if (mode == "template") return images.contains(p.at("image").get<std::string>());
         if (mode == "combat_active") return combat;
         if (mode == "blocking_screen") return blocker || network;
@@ -642,6 +669,156 @@ int main(int argc, char **argv) {
             check(fault && recoveries == 1 && d.last.state == runtime::TickState::Completed && d.ports.inputs.empty() &&
                 !d.executor.has_unresolved_input(), "INN_EXPIRED_NODE_REJECTS_RECOVERED_CITY:" + d.last.code);
             std::cout << "PASS optional notice/no notice, BACK exit without city wait, recovered city after expired inn node without restart/replay\n";
+            return 0;
+        }
+        if (argc >= 4 && (std::string(argv[1]) == "--combat-phase-frames" ||
+            std::string(argv[1]) == "--hp-overlay-frames")) {
+            using namespace closure;
+            const auto root = std::filesystem::absolute(argv[2]);
+            const auto identity = read((root / "program/identity.json").string().c_str());
+            recognition::Bundle bundle{root, "combat-phase-recorded", {}};
+            bundle.snapshot_parent = std::filesystem::temp_directory_path() / ("wvd-combat-phase-" + platform::unique_id());
+            for (const auto &file : std::filesystem::recursive_directory_iterator(root)) {
+                if (!file.is_regular_file()) continue;
+                const auto relative = std::filesystem::relative(file.path(), root).generic_string();
+                const auto hash = platform::file_sha256(file.path());
+                if (identity.at("source_files").contains(relative))
+                    check(identity.at("source_files").at(relative) == hash, "PHASE_RESOURCE_CHANGED:" + relative);
+                bundle.files.push_back({relative, hash});
+            }
+            recognition::Service service(bundle, games::vision::native_handlers(identity.at("aliases"), "zh-Hant",
+                games::recovery::DialoguePolicy::Default, false));
+            const J active{{"mode", "combat_active"}};
+            Ports business;
+            const auto popups = C::any(games::vision::combat_popup_probes());
+            const auto ended = C::all({C::absent(active), C::any(games::vision::combat_end_probes())});
+            const auto clear = C::all({active, C::absent(popups)});
+            const auto errors = C::any({C::image("notenoughsp"), C::image("notenoughmp")});
+            const std::map<std::string, J> references{
+                {"ended", ended}, {"clear", clear},
+                {"menu", C::all({clear, J{{"mode", "template"}, {"image", "flee"}, {"threshold", .8}, {"roi", {660,1080,240,220}}}})},
+                {"finished", C::all({C::any({clear, ended}), C::absent(errors), C::absent(popups)})},
+                {"dungeon", C::all({C::absent(active), C::image("dungFlag")})},
+                {"chest", C::all({C::absent(active), games::vision::chest_page_condition()})},
+                {"revival", C::all({C::absent(active), C::image("RiseAgain")})},
+                {"detail_handoff", C::any({ended, C::all({active, C::any({C::image("combat_skill_detail"),
+                    C::absent(J{{"mode", "prepared_actor"}}), errors})})})},
+                {"target_handoff", C::any({C::all({active, J{{"mode", "prepared_actor"}}, C::image("combat_skill_detail")}),
+                    C::all({C::any({clear, ended}), C::absent(errors), C::absent(popups)}), errors})}};
+            std::uint64_t frame_id{};
+            for (int i = 3; i < argc; ++i) {
+                const auto pixels = cv::imread(argv[i]);
+                check(pixels.size() == cv::Size(900,1600), "COMBAT_PHASE_FRAME_INVALID");
+                if (std::string(argv[1]) == "--hp-overlay-frames") {
+                    contracts::FrameEnvelope frame;
+                    frame.identity.device_id = "recorded"; frame.identity.game_id = "wvd";
+                    frame.identity.pack_revision = bundle.revision; frame.identity.viewport_id = "900x1600";
+                    frame.identity.generation = 1; frame.identity.frame_id = ++frame_id;
+                    frame.identity.raw_size = frame.identity.recognition_size = {900,1600};
+                    frame.identity.captured_at = frame.identity.capture_finished_at = std::chrono::steady_clock::now();
+                    frame.raw_bgr = std::make_shared<const std::vector<std::uint8_t>>(pixels.data, pixels.data + pixels.total()*pixels.elemSize());
+                    const auto observe = [&](const J &condition) {
+                        return service.evaluate(frame, frame.identity, {"overlay", "1", {0,0,900,1600},
+                            recognition::CustomParameters{"WvdVision", condition}}, &business.business);
+                    };
+                    const auto result = observe({{"mode", "hp_overlay"}});
+                    std::cout << J{{"frame", i-3}, {"outcome", int(result.outcome)},
+                        {"error", result.error_code}, {"evidence", result.evidence}}.dump() << '\n';
+                    check(result.outcome == (i == 3 ? contracts::RecognitionOutcome::Hit : contracts::RecognitionOutcome::NoHit),
+                        "HP_OVERLAY_CLASSIFICATION_INVALID:" + result.error_code);
+                    if (i == 3) {
+                        const auto close = observe(games::vision::hp_overlay_close());
+                        check(close.outcome == contracts::RecognitionOutcome::Hit && close.action_eligible,
+                            "HP_OVERLAY_CLOSE_TARGET_INVALID");
+                        std::cout << J{{"target", close.evidence}}.dump() << '\n';
+                    }
+                    continue;
+                }
+                for (const auto &[phase, reference] : references) {
+                    contracts::FrameEnvelope frame;
+                    frame.identity.device_id = "recorded"; frame.identity.game_id = "wvd";
+                    frame.identity.pack_revision = bundle.revision; frame.identity.viewport_id = "900x1600";
+                    frame.identity.generation = 1; frame.identity.raw_size = frame.identity.recognition_size = {900,1600};
+                    frame.raw_bgr = std::make_shared<const std::vector<std::uint8_t>>(pixels.data, pixels.data + pixels.total()*pixels.elemSize());
+                    const auto observe = [&](const J &condition, platform::timing::Totals &totals) {
+                        frame.identity.frame_id = ++frame_id;
+                        frame.identity.captured_at = frame.identity.capture_finished_at = std::chrono::steady_clock::now();
+                        platform::timing::Bind bind(&totals);
+                        return service.evaluate(frame, frame.identity, {"phase", "1", {0,0,900,1600},
+                            recognition::CustomParameters{"WvdVision", condition}}, &business.business);
+                    };
+                    platform::timing::Totals old_cost, new_cost;
+                    const auto old = observe(reference, old_cost);
+                    const auto result = observe(games::vision::combat_phase(phase.c_str()), new_cost);
+                    check(old.outcome != contracts::RecognitionOutcome::Error && result.outcome == old.outcome,
+                        "COMBAT_PHASE_SEMANTICS_CHANGED:" + phase + ":" + old.error_code + ":" + result.error_code);
+                    check(result.outcome != contracts::RecognitionOutcome::Hit || !result.action_eligible || old.action_eligible,
+                        "COMBAT_PHASE_AUTHORITY_RAISED:" + phase);
+                    const auto index = static_cast<std::size_t>(platform::timing::Counter::Matches);
+                    const auto before = old_cost.sample().counts[index], after = new_cost.sample().counts[index];
+                    check(after <= before, "COMBAT_PHASE_MATCH_COST_INCREASED:" + phase);
+                    if (i == 3 && phase == "ended") {
+                        platform::timing::Totals ignored;
+                        const auto missing = observe(C::all({active, C::image("missing-required-phase-fixture")}), ignored);
+                        check(missing.outcome == contracts::RecognitionOutcome::Error, "GENERIC_ALL_ERROR_HIDDEN");
+                        const auto invalid = observe(games::vision::combat_phase("invalid"), ignored);
+                        check(invalid.outcome == contracts::RecognitionOutcome::Error, "INVALID_COMBAT_PHASE_ACCEPTED");
+                    }
+                    std::cout << J{{"frame", i-3}, {"phase", phase}, {"outcome", int(result.outcome)},
+                        {"old_matches", before}, {"new_matches", after}, {"evidence", result.evidence}}.dump() << '\n';
+                }
+            }
+            if (std::string(argv[1]) == "--hp-overlay-frames") {
+                const auto boot = games::recovery::wait_boot_ready(true);
+                const auto heal = games::supply::recover_in_dungeon();
+                const auto has_overlay = [&](const auto &self, const J &value) -> bool {
+                    if (value.is_object() && value.value("mode", "") == "hp_overlay") return true;
+                    if (value.is_structured()) for (const auto &child : value)
+                        if (self(self, child)) return true;
+                    return false;
+                };
+                for (const auto *flow : {&boot, &heal}) {
+                    check(flow->nodes.contains("CloseHpOverlay"), "HP_OVERLAY_EXIT_MISSING");
+                    check(has_overlay(has_overlay, flow->nodes.at("CloseHpOverlay").at("observation_args")),
+                        "HP_OVERLAY_EXIT_NOT_GUARDED");
+                }
+                auto profile = storage::LegacyConfigImporter(read("packs/wvd/parameters/legacy-config-fields.json"))
+                    .parse({{"GENERAL", J::object()}}).values;
+                profile["RECOVER_WHEN_BEGINNING"] = true;
+                Driver driver(heal, profile);
+                driver.ports.business.enter_dungeon();
+                const J overlay{{"mode", "hp_overlay"}};
+                driver.ports.conditions[overlay.dump()] = true;
+                driver.ports.images = {"close"};
+                driver.ports.after_input = [&](const auto &) {
+                    driver.ports.conditions[overlay.dump()] = false;
+                    driver.ports.combat = true;
+                };
+                driver.until([&] { return driver.terminal(); }, 4s);
+                check(driver.ports.commands.size() == 1 && driver.ports.inputs.front().find("CloseHpOverlay") != std::string::npos,
+                    "HP_OVERLAY_EXIT_NOT_EXECUTED:commands=" + std::to_string(driver.ports.commands.size()) +
+                    ":code=" + driver.last.code);
+                check(!driver.ports.business.summary().at("healing_attempt_finished").get<bool>(),
+                    "HP_OVERLAY_CLOSE_FORGED_HEAL_ATTEMPT");
+                std::cout << "PASS actual HP overlay and negative pages, guarded boot/supply exits\n";
+                return 0;
+            }
+            C phase_graph("test.combat.phase");
+            phase_graph.route("Entry", {"Check"});
+            phase_graph.observe("Check", games::vision::combat_phase("finished"), {"Terminal"});
+            auto phase_flow = phase_graph.finish();
+            games::tasks::localize_task_assets(phase_flow, read("resources/authoring/semantic-assets.json"), "zh-Hant");
+            auto no_models = bundle;
+            std::erase_if(no_models.files, [](const auto &file) { return file.relative_path.ends_with(".onnx"); });
+            const auto destination = std::filesystem::temp_directory_path() / ("wvd-phase-missing-model-" + platform::unique_id());
+            bool rejected{};
+            try { games::tasks::publish_native(phase_flow, no_models, destination, identity.at("aliases"), J::object()); }
+            catch (const std::exception &error) {
+                rejected = std::string(error.what()).starts_with("NATIVE_OCR_MODEL_MISSING_OR_UNLOCKED:");
+                check(rejected, "PHASE_MODEL_REJECT_WRONG_REASON:" + std::string(error.what()));
+            }
+            check(rejected && !std::filesystem::exists(destination), "PHASE_UNREACHABLE_OCR_MODEL_NOT_REQUIRED");
+            std::cout << "PASS generic all errors, invalid phase, implicit OCR publication closure\n";
             return 0;
         }
         if (argc == 5 && std::string(argv[1]) == "--inn-exit-frames") {

@@ -3,6 +3,7 @@
 #include "auto_combat.hpp"
 #include "strategy.hpp"
 #include "games/wvd/vision/chest_probes.hpp"
+#include "games/wvd/vision/combat_phase_probes.hpp"
 #include <algorithm>
 #include <map>
 
@@ -66,12 +67,11 @@ tasks::CompiledWorkflow take_turn(const J &profile, const std::set<std::string> 
     const auto detail = C::image("combat_skill_detail");
     const auto ok = C::image("combat_skill_confirm");
     const auto close = roi_image("close", {0, 600, 900, 1000});
-    const auto popup = C::any({detail, ok, close});
-    const auto ended = C::all({C::absent(battle), C::any({C::image("dungFlag"), vision::chest_page_condition(), C::image("RiseAgain")})});
-    const auto menu = C::all({battle, roi_image("flee", {660, 1080, 240, 220}), C::absent(popup)});
+    const auto ended = vision::combat_phase("ended");
+    const auto menu = vision::combat_phase("menu");
     const auto disabled = roi_image("spellskill/CombatAutoDisable", {740, 940, 160, 280});
     const auto enabled = roi_image("spellskill/CombatAutoEnable", {740, 940, 160, 280});
-    const auto clear = C::all({battle, C::absent(popup)});
+    const auto clear = vision::combat_phase("clear");
     const auto speed_off_zh = roi_image("combat_speed_off_zh_hant", {0, 930, 120, 210});
     const auto speed_on_zh = roi_image("combat_speed_on_zh_hant", {0, 930, 120, 210});
     const auto speed = C::any({C::image("combatSpd"), C::image("combatSpd_DHI"), speed_off_zh});
@@ -79,7 +79,7 @@ tasks::CompiledWorkflow take_turn(const J &profile, const std::set<std::string> 
     const J support{{"mode", "support_selection"}};
     const J no_support{{"mode", "support_selection"}, {"expect", "absent"}};
     const auto errors = C::any({C::image("notenoughsp"), C::image("notenoughmp")});
-    const auto finished = C::all({C::any({clear, ended}), C::absent(errors), C::absent(popup)});
+    const auto finished = vision::combat_phase("finished");
     const J auto_exits{{"BattleEndedExit", {"Terminal"}}, {"BlockedExit", {"BlockedExit"}}};
     const auto full_auto = graph.append("FullAuto", enable_auto(), {"Terminal"}, auto_exits);
     const J single_auto_exits{{"BlockedExit", {"BlockedExit"}}};

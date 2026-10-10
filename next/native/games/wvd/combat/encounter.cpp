@@ -1,6 +1,7 @@
 #include "encounter.hpp"
 #include "enemy_rules.hpp"
 #include "games/wvd/vision/chest_probes.hpp"
+#include "games/wvd/vision/combat_phase_probes.hpp"
 
 namespace wvd::games::combat {
 tasks::CompiledWorkflow fight_encounter(const nlohmann::json &profile,
@@ -17,8 +18,8 @@ tasks::CompiledWorkflow fight_encounter(const nlohmann::json &profile,
     stalled["mode"] = "region_stalled";
     graph.observe("StartProgress", baseline, {"Turn0"});
     graph.observe("NoProgress", C::all({battle, stalled}), {"AutoTimeout"});
-    const auto dungeon = C::all({C::image("dungFlag"), C::absent(battle)});
-    const auto chest = C::all({vision::chest_page_condition(), C::absent(battle)});
+    const auto dungeon = vision::combat_phase("dungeon");
+    const auto chest = vision::combat_phase("chest");
     const bool repel = end == EncounterEnd::RepelPrompt;
     const auto special = profile.at("TASK_POINT_STRATEGY").value("special_combat", J::object());
     const bool detect_skull = !repel && special.value("skull", false);
@@ -75,13 +76,12 @@ tasks::CompiledWorkflow fight_encounter(const nlohmann::json &profile,
     graph.observe("Chest", chest, repel ? J{"UnexpectedEnd"} : J{"ChestExit"});
     if (!repel) graph.handoff("ChestExit", "chest");
     if (repel) graph.recovery("UnexpectedEnd", "quest.repel_unexpected_encounter_end");
-    graph.observe("Revive", C::image("RiseAgain"), {"ReviveExit"});
+    graph.observe("Revive", vision::combat_phase("revival"), {"ReviveExit"});
     graph.handoff("ReviveExit", "revive");
     graph.recovery("AutoTimeout", "combat.auto_progress_timeout");
     auto enabled = C::image("spellskill/CombatAutoEnable"), disabled = C::image("spellskill/CombatAutoDisable");
     enabled["roi"] = disabled["roi"] = {740, 940, 160, 280};
-    const auto popup = C::any({C::image("combat_skill_detail"), C::image("combat_skill_confirm"), C::image("close")});
-    const auto clear = C::all({battle, C::absent(popup)});
+    const auto clear = vision::combat_phase("clear");
     const auto full_auto = C::all({clear, enabled, C::business("/strategy/automatic", true)});
     const auto turn = graph.define_child("Actor", take_turn(profile, available_images), {"BlockedExit"});
     // 子调用每次重新识别当前角色；回到真实终点检查后再处理下一角色。
