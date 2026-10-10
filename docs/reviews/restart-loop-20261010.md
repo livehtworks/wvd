@@ -4,7 +4,7 @@
 
 故障批次部署为输入hash `d1b45197726826370f8ad9605ab196d389b4b9f8434124843882935717aa697a`，服务实例 `E398993B-FFA7-4516-8331-0819EDF84AF5`。批次 `fa827b34-27bc-40cd-8636-41bd65c3d6c7` 已完成8/96；run9停在住宿后的离店/启动恢复链，非第9轮完成。当前修正版部署见文末。
 
-发现重启循环后已通过正式停止接口取消run9及循环；API为UserStopped、busy=false、quiescent=true、repeat.active=false。服务仍可操作，未关闭模拟器，未清日志/图片，未更改用户配置。以下修复已写入源码；最终候选的构建、验证和部署状态以文末收口记录为准，循环保持停止。
+发现重启循环后已通过正式停止接口取消run9及循环；当时API为UserStopped、busy=false、quiescent=true、repeat.active=false。未关闭模拟器，未清日志/图片，未更改用户配置。以下修复已完成源码、限定验证及部署；用户随后明确授权提交/推送/部署和新100轮，当前状态见文末启动记录。
 
 ## 已证实的问题
 
@@ -46,3 +46,11 @@ FlowExecutor在连续异常期限到达后先复核当前观察，再发bound_ga
 - 原17654/原data-root；新服务实例3891BA20-7485-49CD-B15A-60D58E90F34D、pid22400。网页HTTP200，服务API正常，当前Idle、busy=false、quiescent=true，未启动循环。
 - product_inputs_sha256=f068d3cb93428fae31df90f3905afa0781a59e638396150ac658595aab3da33d，1289项；EXE=8eae4ed0b3c351f6cc4655958cec21edd4c95be5fde31bfa819661d393b2492e。source_commit仍fd6b617，包含未提交修复，不将旧提交号冒充全部本轮源码已提交。
 - profile SHA256仍3E873D08FB9135F558C3E3348B3BFFFFF3B73555C63A9176CC75CFF274CCB87C，revision仍d26988cd440cd5f55fbf2ca34e0e4b7b1aaf54dc16d1717d154e0a065b865cab。没有改用户配置或保存流程，没有新增实机轮次、付费或内存采集。本次源码/限定验证/部署完成，实机整轮与长期稳定性未验。
+
+## 提交后100轮启动
+
+- 用户再次明确要求commit/push/部署并运行100轮。已将上述修复及前序页面交接/补给/部署修复提交91f49112ac271c0e297c1e2fa608964426586374，推送个人fork的agent/local-stability-notes；未提交用户.vscode。产品输入与已验证产物一致，没有重复跑全量验证。
+- commit100-product-build.log、commit100-service-stop.log、commit100-service-deploy.log记录按91f4911构建、打包和部署；product_inputs仍f068d3cb93428fae31df90f3905afa0781a59e638396150ac658595aab3da33d、EXE仍8eae4ed0b3c351f6cc4655958cec21edd4c95be5fde31bfa819661d393b2492e，1289项。新实例2F1D2172-8C75-47AB-B643-898E3800C6CD、pid21016，原17654/data-root。
+- 正式/api/v1/runs/start请求6ed1c35c-b9a3-4811-846e-90681e2e2a57：GiantBounty、resource_locale=zh-Hant、repeat=true、repeat_count=100，提交时核对当前profile revision。不是续接旧计数；原跨批12轮不计入新100轮。
+- 已核对实际Running/run1/0完成/目标100及repeat.active=true；输入回执确认跳轮、进入公会、委托和悬赏页面、退出列表及进入副本。真实近期图083700376_r1_f19.png为郊外/第十區-要塞3F領主室列表，随后进度Task_FirstDungeon_Route0_Moving。检查时未出现错误、失败诊断或游戏重启，不能将此记成完整一轮/100轮成功。
+- run证据在data/runs/2F1D2172-8C75-47AB-B643-898E3800C6CD/1，execution-events.jsonl、action-timing.jsonl、recognition-memory.log正在保存；data/recent-frames持续保存动作PNG/周期JPEG。profile哈希/revision不变，AUTO_START_CLASH=true；未改VPN/战斗配置、未新增系统内存采集，禁止宝石购买/抽卡/卖装备的边界继续有效。
