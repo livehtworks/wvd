@@ -243,7 +243,7 @@ void validate_condition(const J &condition, const std::string &node_id,
         "fishing_reward", "fishing_unknown", "map_route_post", "mining_reward",
         "movement_stopped", "navigation_resume_unavailable", "next_low_confidence", "party_death", "party_defeat",
         "pause", "pause_negative", "special_dialogue", "special_dialogue_post",
-        "target_marker", "task_stop", "prepared_actor", "skill_target", "revival_prompt", "combat_resource_error", "hp_overlay"};
+        "target_marker", "task_stop", "prepared_actor", "skill_target", "revival_prompt", "combat_resource_error"};
     if (!builtins.contains(mode) || condition.size() != 1)
         fail("AUTHOR_CONDITION_UNSUPPORTED", node_id + ":" + mode);
 }

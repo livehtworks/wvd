@@ -71,7 +71,18 @@ FlowExecutor在连续异常期限到达后先复核当前观察，再发bound_ga
 
 - 首个候选实跑Entry平均330.4ms/35.5次比对，result平均236.4ms/11次；打开详情等待仍约1101ms/59次，查明open/target输入后置仍展开旧大条件。已同步源码、发布资源与正式保存open/target后置；最终保存revision分别为9fb4909c5e6db0c2c1d53af02584445b2bfe44a8283bb7276953663c4a8cbe2b、cc7002f7d75ae8288c64139e7c4ca08884659f88da7a87223eb635a2be69e085，原定义备份在phase-post-before，其余内容逐对象核对未改。
 - 完整后置候选实例25DD8A42-B34E-4C90-B42F-960C150B0E58/batch de9e5f65-2049-4b93-a67a-cab4f3b7037c已实际执行战斗，随后在Task_FirstDungeon_Heal_Requested卡住：diagnostics/1.png为满宽HP条/右下关闭按钮覆盖页，补给和Boot不认识该页；记录两次CONTINUOUS_EXCEPTION_TIMEOUT重启。首次卡住前最后输入为技能流程，没有确认补给输入，进入该页的业务原因尚未证明。已人工停止、0/93，不计部分轮。
-- 新hp_overlay仅判顶部绿色条和下半屏关闭形状，复用现有关闭图标，命中中心约(807,1489)，score0.850670；没有添加姓名/道具OCR或全局页面穷举。只在补给/Boot入口关闭后重新选路，不记回复、复活或技能成功。实际失败图正例与动画、技能详情、奖励、黑屏反例用生产Service核对；执行器出口另作限定验证。
+- 【已撤回错误实现】hp_overlay把顶部绿色条/右下X当普通可关闭页，新增Boot及补给关闭出口；实际目标中心(807,1489)，score0.850670。这张图实际为救人过程，操作语义错误，不能因匹配成功或未记回复成功就称安全。该实现及支持它的旧测试已撤回，详情见下方T0事故。
 - phase-full-chain-frames.log记录最终打开/选人后置的新旧语义/成本核对；动画detail_handoff13→2、详情57→11，详情target_handoff89→32，未知黑屏不完成。定向open/reentry/handoff通过，不扩大全量测试，也不宣称整轮耗时已获最终结论。
 - 日志没有丢失：停止后result的action_timing=1660行/1970719字节、event_history=3671行/6366363字节、diagnostics=40行/66669字节；各failed_rows=0/complete=true，details_complete=true。活跃目录枚举曾显示0不能作为空日志证据。未新增系统级内存跟踪。
-- hp-overlay-verified-frames.log通过真实Service正/反例及生产补给执行器关闭/转场验证；hp-overlay-heal.log保持旧版尽力回复、未知送达及不虚报疗效合同；hp-overlay-open.log保持菜单补点/转场不重放。早期hp-overlay-final-frames.log失败是受控夹具未开启RECOVER_WHEN_BEGINNING，命中Unneeded后没有输入；旧hp-overlay-frames.log误要求经过input_clear包装的观察参数等于单叶，均只修夹具，失败日志保留。未改生产逻辑迎合断言。
+- hp-overlay-verified-frames.log的旧PASS仅证明错误的关闭链能够执行，不证明救人业务正确，不能作为放行依据。该正向断言已由撤除断言替换；原日志及失败日志全部保留，不重写证据。hp-overlay-heal/open验证仍仅对应其限定合同。
+
+## T0取消救人事故与撤回
+
+- 用户明确指出救人页被取消、角色已死亡。源码fedfbf5新增Boot_CloseHpOverlay抢在正常分派前，运行实例D6857E39-8C97-4CD5-BBEE-F180C11FADA9/run1的execution-events.jsonl：seq13为点击(807,1489)尝试，seq15为accepted，source_path=Boot_CloseHpOverlay。不是手动操作，也不是旧救人逻辑。随后战斗截图可见狮樱HP0/598；目前证据证明取消救人，不能证明永久损失或倒推首次死亡发生时刻。
+- 原recovery/party_death.cpp分支仍存在，确认救人页后点击(450,800)、逐帧继续或接续再起；本次没有修改它。事故原因是新增关闭分支绕开了既有救人业务分类，错误验收只检查按钮命中/关闭而没有核实页面用途。
+- 循环已停止：UserStopped/busy=false/quiescent=true/repeat.active=false，0/93；错误后台pid10856已经manage_service退出，模拟器/游戏没有由撤回操作重启。
+- 按用户要求完整移除Boot/补给CloseHpOverlay、hp_overlay识别模式、关闭配方、编译依赖和作者白名单。保留combat_phase性能改动；不重写用户profile/保存流程，不盲点，不自动开循环。旧正向关闭测试替换为真实事故帧的已撤销模式必须Error且不可授权输入、编译图无关闭分支及既有救人中心保持的定向验证。
+- 事故PNG/日志留在本地忽略目录，历史错误提交保留，通过新提交明确撤回，不重置历史。救人实机可靠性仍需另行核对，撤除完成不冒充救人或完整循环通过。
+- 撤除验证t0-cancel-final-revoked.log通过：生产Service对事故帧上的已撤销mode返回Error且没有目标坐标，Boot/补给编译图不存在取消入口，救人中心仍(450,800)。t0-death-transition.log既有再起/战斗接续及取消停止合同通过。首次t0-cancel-revoked.log错误要求Error结果的独立action_eligible标志为false；实际输入合同要求Hit和可操作同时成立，改为核对Error与无目标坐标，未改生产Service或门禁。
+- 发布包回滚：旧完整候选wvd-next-native.previous-c81d563d5ea9475d96fc1bf70ec9f56b经manage_service Validate通过；确认错误后台退出后在同一dist根内原子改名，将错误候选移到wvd-next-native.t0-withdrawn-fedfbf5，旧候选还原为wvd-next-native。没有删配置/日志/资源、没有兼容旁路或自动回退。当前输入hash81fd113333cd13ad02c62e664fec527d4d2733d3682937eaaa3829cb76521bd3，EXE1b58ef43f65b851ed0e8365cdcf070566d665466f7c5e38219af77d39d45e822，构建来源8d3547c，保留原身份。
+- t0-rollback-final-deploy.log：实例23FC3DF9-FE96-460E-8A5D-049909751C81/pid58992正式17654/原data-root。API回读Idle/busy=false/quiescent=true，未提交start，profile哈希未变。第一次改名命令在解析阶段失败，后续部署曾重新拉起原错误服务但未启动任务，已立即再次退出后重做改名/部署；此工具编排错误保留日志，不能把那次服务启动当回滚完成。

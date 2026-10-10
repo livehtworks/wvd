@@ -5,7 +5,6 @@
 #include "games/wvd/vision/navigation_probes.hpp"
 #include "games/wvd/vision/builtin_probes.hpp"
 #include "games/wvd/vision/combat_phase_probes.hpp"
-#include "games/wvd/vision/inn_leave_probes.hpp"
 #include "games/wvd/vision/dialogue_probes.hpp"
 #include <algorithm>
 #include <functional>
@@ -97,7 +96,6 @@ void collect_images(const J &value, std::set<std::string> &images, std::set<std:
         // 不缓存整份图或跨编译共享结果，validate 仍独立重算完整资源集合。
         const bool expand = expanded_modes.insert(mode + ":" + value.value("classification", "legacy") + ":" + value.value("phase", "")).second;
         if (expand) {
-            if (mode == "hp_overlay") collect_images(vision::hp_overlay_close(), images, expanded_modes);
             if (mode == "combat_phase") collect_images(vision::combat_phase_dependencies(value.at("phase").get<std::string>()), images, expanded_modes);
             if (auto probe = vision::builtin_template_probe(mode)) collect_images(*probe, images, expanded_modes);
             collect_images(vision::implicit_ocr_probes(mode), images, expanded_modes);

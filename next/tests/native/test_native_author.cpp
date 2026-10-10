@@ -672,7 +672,7 @@ int main(int argc, char **argv) {
             return 0;
         }
         if (argc >= 4 && (std::string(argv[1]) == "--combat-phase-frames" ||
-            std::string(argv[1]) == "--hp-overlay-frames")) {
+            std::string(argv[1]) == "--revival-cancel-revoked")) {
             using namespace closure;
             const auto root = std::filesystem::absolute(argv[2]);
             const auto identity = read((root / "program/identity.json").string().c_str());
@@ -688,6 +688,31 @@ int main(int argc, char **argv) {
             }
             recognition::Service service(bundle, games::vision::native_handlers(identity.at("aliases"), "zh-Hant",
                 games::recovery::DialoguePolicy::Default, false));
+            if (std::string(argv[1]) == "--revival-cancel-revoked") {
+                const auto pixels = cv::imread(argv[3]);
+                check(pixels.size() == cv::Size(900,1600), "RESCUE_INCIDENT_FRAME_INVALID");
+                contracts::FrameEnvelope frame;
+                frame.identity.device_id = "recorded"; frame.identity.game_id = "wvd";
+                frame.identity.pack_revision = bundle.revision; frame.identity.viewport_id = "900x1600";
+                frame.identity.generation = 1; frame.identity.frame_id = 1;
+                frame.identity.raw_size = frame.identity.recognition_size = {900,1600};
+                frame.identity.captured_at = frame.identity.capture_finished_at = std::chrono::steady_clock::now();
+                frame.raw_bgr = std::make_shared<const std::vector<std::uint8_t>>(pixels.data, pixels.data + pixels.total()*pixels.elemSize());
+                const auto rejected = service.evaluate(frame, frame.identity, {"revoked", "1", {0,0,900,1600},
+                    recognition::CustomParameters{"WvdVision", J{{"mode", "hp_overlay"}}}});
+                check(rejected.outcome == contracts::RecognitionOutcome::Error && !rejected.box.has_value(),
+                    "REVOKED_RESCUE_CANCEL_STILL_AUTHORIZED");
+                for (const auto &flow : {games::recovery::wait_boot_ready(true), games::supply::recover_in_dungeon()}) {
+                    flow.validate();
+                    check(flow.nodes.dump().find("CloseHpOverlay") == std::string::npos &&
+                        flow.nodes.dump().find("hp_overlay") == std::string::npos, "REVOKED_RESCUE_CANCEL_IN_GRAPH");
+                }
+                const auto rescue = games::recovery::dismiss_party_death();
+                const auto &command = rescue.nodes.at("Dismiss").at("operation_args").at("command");
+                check(command.at("x") == 450 && command.at("y") == 800, "RESCUE_CENTER_CLICK_CHANGED");
+                std::cout << "PASS revoked recognizer rejects incident frame; no cancel in boot/supply; existing rescue center retained\n";
+                return 0;
+            }
             const J active{{"mode", "combat_active"}};
             Ports business;
             const auto popups = C::any(games::vision::combat_popup_probes());
@@ -709,31 +734,6 @@ int main(int argc, char **argv) {
             for (int i = 3; i < argc; ++i) {
                 const auto pixels = cv::imread(argv[i]);
                 check(pixels.size() == cv::Size(900,1600), "COMBAT_PHASE_FRAME_INVALID");
-                if (std::string(argv[1]) == "--hp-overlay-frames") {
-                    contracts::FrameEnvelope frame;
-                    frame.identity.device_id = "recorded"; frame.identity.game_id = "wvd";
-                    frame.identity.pack_revision = bundle.revision; frame.identity.viewport_id = "900x1600";
-                    frame.identity.generation = 1; frame.identity.frame_id = ++frame_id;
-                    frame.identity.raw_size = frame.identity.recognition_size = {900,1600};
-                    frame.identity.captured_at = frame.identity.capture_finished_at = std::chrono::steady_clock::now();
-                    frame.raw_bgr = std::make_shared<const std::vector<std::uint8_t>>(pixels.data, pixels.data + pixels.total()*pixels.elemSize());
-                    const auto observe = [&](const J &condition) {
-                        return service.evaluate(frame, frame.identity, {"overlay", "1", {0,0,900,1600},
-                            recognition::CustomParameters{"WvdVision", condition}}, &business.business);
-                    };
-                    const auto result = observe({{"mode", "hp_overlay"}});
-                    std::cout << J{{"frame", i-3}, {"outcome", int(result.outcome)},
-                        {"error", result.error_code}, {"evidence", result.evidence}}.dump() << '\n';
-                    check(result.outcome == (i == 3 ? contracts::RecognitionOutcome::Hit : contracts::RecognitionOutcome::NoHit),
-                        "HP_OVERLAY_CLASSIFICATION_INVALID:" + result.error_code);
-                    if (i == 3) {
-                        const auto close = observe(games::vision::hp_overlay_close());
-                        check(close.outcome == contracts::RecognitionOutcome::Hit && close.action_eligible,
-                            "HP_OVERLAY_CLOSE_TARGET_INVALID");
-                        std::cout << J{{"target", close.evidence}}.dump() << '\n';
-                    }
-                    continue;
-                }
                 for (const auto &[phase, reference] : references) {
                     contracts::FrameEnvelope frame;
                     frame.identity.device_id = "recorded"; frame.identity.game_id = "wvd";
@@ -767,41 +767,6 @@ int main(int argc, char **argv) {
                     std::cout << J{{"frame", i-3}, {"phase", phase}, {"outcome", int(result.outcome)},
                         {"old_matches", before}, {"new_matches", after}, {"evidence", result.evidence}}.dump() << '\n';
                 }
-            }
-            if (std::string(argv[1]) == "--hp-overlay-frames") {
-                const auto boot = games::recovery::wait_boot_ready(true);
-                const auto heal = games::supply::recover_in_dungeon();
-                const auto has_overlay = [&](const auto &self, const J &value) -> bool {
-                    if (value.is_object() && value.value("mode", "") == "hp_overlay") return true;
-                    if (value.is_structured()) for (const auto &child : value)
-                        if (self(self, child)) return true;
-                    return false;
-                };
-                for (const auto *flow : {&boot, &heal}) {
-                    check(flow->nodes.contains("CloseHpOverlay"), "HP_OVERLAY_EXIT_MISSING");
-                    check(has_overlay(has_overlay, flow->nodes.at("CloseHpOverlay").at("observation_args")),
-                        "HP_OVERLAY_EXIT_NOT_GUARDED");
-                }
-                auto profile = storage::LegacyConfigImporter(read("packs/wvd/parameters/legacy-config-fields.json"))
-                    .parse({{"GENERAL", J::object()}}).values;
-                profile["RECOVER_WHEN_BEGINNING"] = true;
-                Driver driver(heal, profile);
-                driver.ports.business.enter_dungeon();
-                const J overlay{{"mode", "hp_overlay"}};
-                driver.ports.conditions[overlay.dump()] = true;
-                driver.ports.images = {"close"};
-                driver.ports.after_input = [&](const auto &) {
-                    driver.ports.conditions[overlay.dump()] = false;
-                    driver.ports.combat = true;
-                };
-                driver.until([&] { return driver.terminal(); }, 4s);
-                check(driver.ports.commands.size() == 1 && driver.ports.inputs.front().find("CloseHpOverlay") != std::string::npos,
-                    "HP_OVERLAY_EXIT_NOT_EXECUTED:commands=" + std::to_string(driver.ports.commands.size()) +
-                    ":code=" + driver.last.code);
-                check(!driver.ports.business.summary().at("healing_attempt_finished").get<bool>(),
-                    "HP_OVERLAY_CLOSE_FORGED_HEAL_ATTEMPT");
-                std::cout << "PASS actual HP overlay and negative pages, guarded boot/supply exits\n";
-                return 0;
             }
             C phase_graph("test.combat.phase");
             phase_graph.route("Entry", {"Check"});

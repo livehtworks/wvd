@@ -13,7 +13,6 @@
 #include "navigation_probes.hpp"
 #include "builtin_probes.hpp"
 #include "combat_phase_probes.hpp"
-#include "inn_leave_probes.hpp"
 #include "unknown_window.hpp"
 #include "image_ops.hpp"
 #include "games/wvd/business_condition.hpp"
@@ -679,24 +678,6 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
         platform::timing::count(platform::timing::Counter::OcrCalls);
         check(!p.contains("preprocess"), "WVD_OCR_PREPROCESS_UNSUPPORTED");
         return scope.recognize_ocr(p);
-    }
-    if (mode == "hp_overlay") {
-        check(p.size() == 1 && allowed_rect == cv::Rect(0,0,900,1600), "WVD_HP_OVERLAY_SCOPE_INVALID");
-        cv::Mat hsv, green;
-        cv::cvtColor(image(cv::Rect(0,0,900,240)), hsv, cv::COLOR_BGR2HSV);
-        cv::inRange(hsv, cv::Scalar(40,90,110), cv::Scalar(90,255,255), green);
-        std::vector<std::vector<cv::Point>> contours;
-        cv::findContours(green, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
-        cv::Rect bar;
-        for (const auto &contour : contours) {
-            const auto r = cv::boundingRect(contour);
-            if (r.width >= 450 && r.height >= 4 && r.height <= 30 &&
-                double(cv::countNonZero(green(r))) / r.area() >= .8) { bar = r; break; }
-        }
-        if (bar.empty()) return decision(false, {}, {{"reason", "no_full_width_hp_bar"}});
-        const auto close = evaluate_impl(bundle, pixels, hp_overlay_close(), bound, scope, cache, depth + 1, memo);
-        check(close.at("outcome") != "Error", "WVD_HP_OVERLAY_ERROR");
-        return decision(close.at("outcome") == "Hit", allowed_rect, {{"hp_bar", box(bar)}, {"close", close}});
     }
     if (mode == "combat_phase") {
         const auto phase = p.at("phase").get<std::string>();

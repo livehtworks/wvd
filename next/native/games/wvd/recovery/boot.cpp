@@ -173,10 +173,6 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, Dialogue
     // 可选提示只处理真实继续箭头。已经就绪的迷宫/宝箱页仍交给业务流程。
     const auto notice = C::all({vision::inn_notice_page(),
         C::any({C::absent(J{{"mode", "boot_ready"}}), vision::city_screen()})});
-    const J hp_overlay{{"mode", "hp_overlay"}};
-    entry.insert(entry.begin(), "CloseHpOverlay");
-    graph.click("CloseHpOverlay", hp_overlay, vision::hp_overlay_close(), C::absent(hp_overlay), {"Entry"});
-    graph.retry_menu_input("CloseHpOverlay", hp_overlay, 3000);
     entry.insert(std::find(entry.begin(), entry.end(), "Ready"), "ContinueNotice");
     graph.click("ContinueNotice", notice, vision::notice_advance_arrow(),
         C::any({notice, ready}), {"Entry"});
@@ -361,7 +357,7 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, Dialogue
             result.nodes.at(before)["next"].push_back(reselect);
         }
     };
-    for (const auto *name : {"Story", "ContinueNotice", "CloseHpOverlay", "CloseCharacter", "LeaveInnMenuZh", "LeaveInnMenu",
+    for (const auto *name : {"Story", "ContinueNotice", "CloseCharacter", "LeaveInnMenuZh", "LeaveInnMenu",
         "HandleNetwork", "ChooseSpecial", "ChooseDialogue", "ChooseKarma", "SandmanHandle", "BlessingHandle",
         "DismissDeath", "AcknowledgeDefeat", "DownloadEn", "DownloadZhHant", "RetryBlank", "Retry",
         "RetryLow", "ReturnTitle", "Resume", "Attention", "Title", "Announcement", "AnnouncementClassic"}) wrap_observed_action(name);
