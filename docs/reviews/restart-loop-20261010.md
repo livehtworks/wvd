@@ -86,3 +86,42 @@ FlowExecutor在连续异常期限到达后先复核当前观察，再发bound_ga
 - 撤除验证t0-cancel-final-revoked.log通过：生产Service对事故帧上的已撤销mode返回Error且没有目标坐标，Boot/补给编译图不存在取消入口，救人中心仍(450,800)。t0-death-transition.log既有再起/战斗接续及取消停止合同通过。首次t0-cancel-revoked.log错误要求Error结果的独立action_eligible标志为false；实际输入合同要求Hit和可操作同时成立，改为核对Error与无目标坐标，未改生产Service或门禁。
 - 发布包回滚：旧完整候选wvd-next-native.previous-c81d563d5ea9475d96fc1bf70ec9f56b经manage_service Validate通过；确认错误后台退出后在同一dist根内原子改名，将错误候选移到wvd-next-native.t0-withdrawn-fedfbf5，旧候选还原为wvd-next-native。没有删配置/日志/资源、没有兼容旁路或自动回退。当前输入hash81fd113333cd13ad02c62e664fec527d4d2733d3682937eaaa3829cb76521bd3，EXE1b58ef43f65b851ed0e8365cdcf070566d665466f7c5e38219af77d39d45e822，构建来源8d3547c，保留原身份。
 - t0-rollback-final-deploy.log：实例23FC3DF9-FE96-460E-8A5D-049909751C81/pid58992正式17654/原data-root。API回读Idle/busy=false/quiescent=true，未提交start，profile哈希未变。第一次改名命令在解析阶段失败，后续部署曾重新拉起原错误服务但未启动任务，已立即再次退出后重做改名/部署；此工具编排错误保留日志，不能把那次服务启动当回滚完成。
+
+## 撤回后同页多处理器只读审查
+
+### 已证实的救人调用缺口
+
+本节审查源码356ba5a、当前回滚产物、已保存公共定义及事故前冻结程序；不改生产源码、配置或运行数据，不构建、不测试、不操作游戏。结论不把“多个调用点复用一个工厂”算成多套实现，也不把同一条件配置不同技能/角色点位算成冲突。
+
+- 既有救人只有recovery/party_death.cpp的中心点击处理；shared X并非新增发现。native_recognizers.cpp:1690附近原注释已明确救人也有X，通用X只能排除Pause，不能证明普通角色面板。新增hp_overlay恰恰违反了这个已有边界。
+- supply/dungeon_recover.cpp:10的继承列表只有network/pause/download，没有party-death/party-defeat；Entry只有Unneeded/Encounter/ResumeAttempt/Requested。vision/supply_scene_plan.hpp的Interrupted表包含战斗、宝箱和RiseAgain，却不包含救人/多人死亡。故救人打断补给时，既不能正常交接，也不能沿已存在的救人事件处理。
+- runtime/flow_executor_events.cpp:70-73实际按子定义inherit过滤父规则，不是仅在文档中少写一个名字。事故前冻结repeat-ae9c.../program/flow.json的Task_FirstDungeon_Heal_Entry也确实只继承三个事件，本地Death步骤及本地事件均为空。
+- recovery/boot.cpp:136-137的common=false候选没有Death/Defeat，210处只为common=true构造救人子图；ReconnectBoot_Entry在同一冻结程序中inherit=[]、events=[]且没有Death步骤。恢复进入这层后同样没有救人出口，这是第二个已证实漏接。
+- 必须区分冷启动与重连：with_boot_recovery根定义仍注册wvd-party-death，冻结Entry/Boot_Poll亦保留父层事件；因此不能笼统声称所有冷启动都没有救人处理。问题是子调用继承被过滤，以及Boot自身的本地候选覆盖不完整。
+- 这些证据证明了处理器不可达，不证明someonedead模板在事故图上实际NoHit或某个匹配分数。旧日志未提供足够的该叶子分数；本次不杜撰识别失败原因。新增关闭分支的错误动作则已有seq13/15直接证据。
+
+### 六类已定位的独立处理定义
+
+以下为已确认的下限，不是已穷尽全部作者自定义流程的总数；不同后置/次数/延迟不一定都已经造成实机事故，但确有多处独立编写同页动作，修复一处不会自动更新另外几处。
+
+| 同一页面/动作族 | 独立定义位置 | 差异及风险 |
+| --- | --- | --- |
+| 下载确认，4处 | boot.cpp:224的Boot动作、379的handle_download、navigation/time_leap.cpp:127、public-flows.json的wheel-open/Download（1148附近） | 共用下载素材，却各自定义动作/后置/次数。Boot延迟1500ms且max_hit6，事件直接结束，无Boot该延迟；公开步骤repeat_limit32。不能只修事件处理器就宣称所有下载链一致。 |
+| Pause恢复，2处 | boot.cpp:254附近的ResumePause循环、397的handle_pause | 同为pause/(450,760)，Boot后置recognized与事件response不同；Boot设置hit_limit6，事件Press节点没有同样显式设置。共用探针不等于共用输入流程。 |
+| 普通剧情继续，3处 | boot.cpp:183、414的handle_story、supply/inn.cpp:87 | 同为ordinary_story_page及story_advance_arrow，Boot等待story/ready，事件接受城市/选项/迷宫/战斗，旅店等待after_payment；前两者延迟2000ms，旅店本地没有这一设置。 |
+| 旅店退出，2处 | boot.cpp:163/166、supply/inn.cpp:97/102 | Boot点繁中離開或Stay偏移，要求城市/角色页后置；旅店走Android BACK，菜单退出即终点。不是相反动作，但同一退出职责由两套入口/完成条件承接，已有容错修复可能只覆盖一边。两边还有分别声明的CloseCharacter。 |
+| 旅店补给信息继续，2处 | boot.cpp:177、supply/inn.cpp:90 | 同用inn_notice_page/notice_advance_arrow；Boot延迟300ms、后置notice/ready，旅店hit_limit6、后置after_payment。都能处理相同页，但重试与完成语义独立。 |
+| 技能弹窗取消，3处 | combat/auto_combat.cpp:31/36、82/87、combat/turn.cpp:120 | 单角色Auto和持续Auto分别复制X/左偏取消/BACK逻辑；普通回合重入只在技能专用detail下BACK。两种Auto功能本身不同且必须保留，但弹窗清理不应各自扩大分类范围；不能把正常确认/选人混进取消。尚未证明当前三者在救人图上都可授权点击。 |
+
+另外一类重叠风险：boot.cpp:44的网络重试子图用正文/按钮及英文0.86阈值，234-236的Retry/RetryLow又直接定义英文普通/0.60阈值及固定(450,900)点击。不是两个独立网络引擎，但相同英文网络页可落入不同识别门槛及动作路径，繁中当前不能直接外推发生过此冲突。列为待统一，不算已证明T0事故。
+
+### 不属于重复实现的部分
+
+- public-flows源20份、正式保存25份；源/pack/回滚部署pack逐对象相同。7份保存定义初看有差异，按node ID及边的from/to/outcome/order规范化、排除布局/语言默认值后，当前20份同ID公共定义均无动作语义差异。不得据原始数组顺序差异覆盖用户配置。
+- 事故前冻结巨人程序中，同scene/target但command不同的精确分组有3类：四格技能入口、六个开箱选人点位、补给轮流打开前排角色。这些是明确参数化选择，不是三起重复分支事故，也不是三套执行器。
+- 多任务调用dismiss_party_death/revive_after_defeat/choose_default_dialogue，以及节点展开后出现许多同名前缀，是共享工厂/公共定义，不按出现次数计套数。蝎女/巨人任务的路线差异及单角色/全场Auto策略也不能借清理重复擅自退役。
+- src/script.py为参考；旧IdentifyState在someonedead命中后点中心，不点X。本次没有旧Python并行运行的证据，不能把参考源码算成另一个有效执行所有者。
+
+### 后续整改边界
+
+优先补回既有救人在补给/重连的可达性，并核对其实际场景识别；不得再新增取消或第二套救人处理。然后按页面职责统一上述重复动作配方，启动、事件和业务调用同一处理器，只保留调用者自己的业务终态判断。迁移须承接相关任务、公共保存定义、回执和恢复；不能通过放宽共享X、删分支或整体覆盖保存流程“统一”。本节没有执行这些整改，当前循环继续停止。
