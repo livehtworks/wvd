@@ -3,6 +3,7 @@
 #include "platform/windows/bundle_lease.hpp"
 #include "platform/windows/file_digest.hpp"
 #include "platform/windows/path_utf8.hpp"
+#include "platform/windows/runtime_files.hpp"
 #include "workflow/serialization.hpp"
 #include <fstream>
 #include <iostream>
@@ -77,7 +78,17 @@ int main(int argc, char **argv) {
             reinterpret_cast<const std::uint8_t *>(identity_text.data()), identity_text.size()});
         J results = J::array();
         {
+            wvd::platform::BundleLease lease(wvd::platform::extended_path(source), baseline.revision, files);
+            lease.verify_members();
+            lease.copy_member("definition.json", wvd::platform::extended_path(root / "extended-copy.json"));
+            require(wvd::platform::file_sha256(root / "extended-copy.json") == files.at("definition.json"),
+                    "EXTENDED_PATH_COPY_HASH_MISMATCH");
+            results.push_back({{"case", "extended_namespace_ancestor_and_copy"}, {"passed", true}});
+        }
+        {
             const auto publication = wvd::games::tasks::publish_native(workflow, baseline, root / "normal", J::object());
+            require(publication.bundle.lease->root() == publication.bundle.root,
+                    "PUBLICATION_LEASE_ROOT_MISMATCH");
             require(publication.identity == expected_identity && publication.program.revision == expected_revision,
                     "IDENTITY_OR_REVISION_CHANGED");
             require(publication.preparation.at("source_model_bytes_after_copy") == 0 &&

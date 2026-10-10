@@ -40,6 +40,8 @@ class WvdRunState final : public contracts::BusinessRunState {
     void prepare_chest_character(const std::array<bool, 6> &fear, int preferred, std::uint32_t seed);
     void resume_dungeon();
     bool healing_required() const;
+    bool healing_input_ready() const;
+    void healing_input_submitted(bool delivery_unknown);
     void resurrected();
     void restart_game();
     void dungeon_completed();
@@ -78,6 +80,7 @@ class WvdRunState final : public contracts::BusinessRunState {
     std::optional<TimePoint> combat_started_, chest_started_, lap_started_;
     std::optional<double> last_lap_seconds_;
     void settle_legacy_lap(TimePoint now);
+    void settle_encounter_handoff(bool combat);
     double combat_seconds_{}, chest_seconds_{}, total_seconds_{};
     bool pending_combat_{}, pending_chest_{}, need_initial_recover_{true}, recover_after_rez_{},
         met_encounter_{}, combat_speed_{}, zoom_world_map_{};
@@ -129,6 +132,9 @@ class WvdRunState final : public contracts::BusinessRunState {
     std::size_t lifecycle_recovery_sequence_{};
     bool healing_pending_{}, healing_active_{};
     std::size_t healing_sequence_{};
+    bool healing_attempt_finished_{};
+    unsigned healing_submissions_{};
+    bool healing_delivery_unknown_{};
     bool inn_rest_completed_{}, inn_payment_pending_{};
     std::size_t supply_cycle_{}, inn_rests_{};
     std::optional<std::size_t> inn_payment_cycle_;

@@ -486,9 +486,9 @@ Application::Application(ApplicationPaths paths,
     workflow_store_ = std::make_unique<storage::WorkflowRepository>(paths_.data_root / "workflows");
     submission_store_ = std::make_unique<storage::SubmissionStore>(paths_.data_root / "requests");
     // 首次引入公共定义；已有同 ID 的用户编辑版本绝不覆盖。公共定义仍存于同一 WorkflowRepository。
-    const auto semantic_path = author_bundle_.root / "parameters/semantic-assets.json";
+    const auto semantic_path = author_bundle_.root / platform::BundleLease::checked_relative("parameters/semantic-assets.json");
     if (std::filesystem::is_regular_file(semantic_path)) semantic_catalogue_ = load_json(semantic_path);
-    const auto library_path = author_bundle_.root / "parameters/public-flows.json";
+    const auto library_path = author_bundle_.root / platform::BundleLease::checked_relative("parameters/public-flows.json");
     if (std::filesystem::is_regular_file(library_path)) {
         std::set<std::string> existing;
         for (const auto &entry : workflow_store_->list()) existing.insert(entry.at("id").get<std::string>());
@@ -2410,7 +2410,7 @@ api::DynamicReply Application::handle(const api::Request &request) {
             }
             require(available_images_.contains(image + ".png"), "ENEMY_PORTRAIT_MISSING");
             const auto source = games::vision::resolve_image_source(author_bundle_, aliases_, image);
-            std::ifstream input(source.bundle->root / source.relative_path, std::ios::binary);
+            std::ifstream input(source.bundle->root / platform::BundleLease::checked_relative(source.relative_path), std::ios::binary);
             require(bool(input), "ENEMY_PORTRAIT_MISSING");
             return {api::http::status::ok, std::string(std::istreambuf_iterator<char>(input), {}), "image/png"};
         }

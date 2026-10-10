@@ -12,12 +12,20 @@
 
 ## 运行与读取
 
+- 场景所有权与业务终态分离：已确认战斗→宝箱/宝箱→战斗时，退出旧页面处理并按新场景分派，不依赖瞬时迷宫帧或具体奖励名称。宝箱处理段退出不证明奖励到账，战斗页面退出不自行证明整个副本完成。目标战斗另核unit/point/combat身份后推进目标；临时遮挡保留未决输入并重新观察，未知页面不是成功证明。
+
 - Application → Coordinator → Session → FlowExecutor唯一链；Application拥有批次，旧Python/Maa不参与原生构建/运行。
 - current一次ReadView；事件按cursor读取并绑定instance/run/gen，缺区间明确resync。图片URL含instance/run/gen/id并核不可变索引/哈希，不使用“当前图片”别名。
 - 停止不等command mutex、准备磁盘I/O或诊断图片写入完成；stop_epoch阻止停后新准备。收尾仍等真实worker退出，不能用停止请求成功代替静止。
 - 一个根run拥有OCR模型池，unit/recovery借用；取消终止当前运行，不能清活跃引擎后复用。生命周期配对/归零不证明所有Windows提交增长已归因。
+- 迷宫补给沿旧StateDungeon的尽力尝试语义，不以MP/道具充足或全员满HP为推进条件。healing_required表示当前遭遇尚欠一次恢复尝试，不是实时血量判断；WvdHealingEffect记录实际输入，healing_attempt_finished在已提交回复操作、角色面板关闭并回到当前迷宫后消费尝试。日志healing_effect_status=not_verified，送达未知标志另存，不虚报治疗成功，也不以疗效未确认阻断行进；generic healing_completed仍不得用页面返回伪造疗效。未发送不消费尝试；网络等覆盖层仍沿现有事件处理，且不重复回复来追求“满血”。
+
+- 住宿沿旧StateInn：确认房型付款后，在旅店菜单按BACK退出，菜单退出即住宿步骤终点；不以“背包补充完毕”文字、满HP/MP或额外城市帧作为终点。上层仍核实际住宿回执及付款非pending，不能凭城市图伪造住宿成功。剧情/补给提示仅在出现时处理；箭头搜索下半屏、点击真实命中中心，并保留剧情控制、战斗和宝石购买反证。
+- 事件恢复接续先识别当前resume_guard，再在NoHit时判断旧业务节点超时；旧节点过期不能否定已经回到有效场景。停止/生命周期截止及未决输入的原后置、身份、送达核对不放宽。菜单输入补试只支持普通Click和BACK键4，不允许HOME/POWER等系统按键借此自动重放。
 
 ## 识别与预算
+
+- 布尔条件结构最多八层；这是结构合同，不是游戏重试次数。WvdVision在请求入口校验，内部内置配方调用另受32层递归防护。布尔树由独立小函数求值，不重复携带场景分派的局部栈空间。编译请求可合并同类all/any包装，但不得删叶子、短路隐藏Error或提高action_eligible；超过16子项则保留原结构，不扩展运行合同。
 
 - Service内有界叶子身份登记，同帧/epoch共享；并行重复叶子只有一生产者。组合和业务状态不跨帧缓存，语言/ROI/阈值/TTL不放宽；any/all仍传播所需叶子Error。
 - 有效事件清单按program/step/active scope缓存；语义进度与elapsed心跳分开，不每tick构造整份进度。

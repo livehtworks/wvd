@@ -21,11 +21,12 @@ tasks::CompiledWorkflow open_chest(int preferred_character, bool quick, std::uin
     const auto post = C::any({reward, chest, dungeon, interrupted});
     // 打开动作必须看到下一阶段；原宝箱按钮仍在不能算成功，避免网络慢时重复点击。
     const auto opened = C::any({choose, opening, reward, dungeon, interrupted});
-    graph.route("Entry", {"Reward", "Begin"});
+    graph.route("Entry", {"Reward", "Combat", "Revive", "Ambush", "Done", "Begin"});
     graph.confirm("Begin", "chest.begin", "chest_observed", chest, quick ? J{"QuickOpen", "Dispatch"} : J{"Dispatch"});
     graph.route("Dispatch", {"Reward", "Combat", "Revive", "Ambush", "Done", "Round0"});
     graph.observe("Reward", reward, {"RewardAdvance"});
-    graph.public_step("RewardAdvance", "chest-reward-continue", J::object(), {"AfterReward"}, J::object(), reward);
+    graph.public_step("RewardAdvance", "chest-reward-continue", J::object(), {"AfterReward"},
+        {{"AdvancedExit", {"AfterReward"}}}, reward);
     // 奖励可能连续多页，也可能直接返回迷宫或自动走到下一个宝箱。
     graph.route("AfterReward", {"Reward", "Combat", "Revive", "Ambush", "Done", "DoneAtNextChest"});
     graph.confirm("DoneAtNextChest", "chest.completed", "dungeon_resumed", flag, {"Terminal"});
@@ -58,7 +59,8 @@ tasks::CompiledWorkflow open_chest(int preferred_character, bool quick, std::uin
             choices.push_back("QuickDisarm0");
             graph.route("QuickRoute" + suffix, choices);
             graph.public_step("QuickRole" + suffix, "chest-choose-character", {{"x", position[0]}, {"y", position[1]}, {"delay_ms", i < 2 ? 200 : 1000}},
-                after(i < 2 ? "QuickRoute" + std::to_string(i + 1) : "QuickDisarm0"), J::object(), C::all({chest, choose}));
+                after(i < 2 ? "QuickRoute" + std::to_string(i + 1) : "QuickDisarm0"),
+                {{"AdvancedExit", exits}}, C::all({chest, choose}));
             graph.hit_limit("QuickRole" + suffix, 1);
         }
         // 每次输入都是新帧意图，不把旧版的循环变成一串不可撤销的底层输入。
@@ -101,7 +103,8 @@ tasks::CompiledWorkflow open_chest(int preferred_character, bool quick, std::uin
             auto fear = C::image("chestfear");
             fear["roi"] = {x - 125, y - 82, 250, 164};
             graph.observe(name, C::business("/chest_character", role), {name + "Choose", name + "Fear"});
-            graph.public_step(name + "Choose", "chest-choose-character", {{"x", x}, {"y", y}, {"delay_ms", 1500}}, {prefix + "Attempted"}, J::object(), C::all({chest, choose, C::absent(fear)}));
+            graph.public_step(name + "Choose", "chest-choose-character", {{"x", x}, {"y", y}, {"delay_ms", 1500}},
+                {prefix + "Attempted"}, {{"AdvancedExit", exits}}, C::all({chest, choose, C::absent(fear)}));
             graph.observe(name + "Fear", C::all({chest, choose, fear}), {next_round});
         }
         graph.confirm(prefix + "Attempted", "chest.character", "chest_character_attempted", post,

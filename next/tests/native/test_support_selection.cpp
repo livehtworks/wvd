@@ -22,6 +22,44 @@ void check(bool ok, const std::string &reason) { if (!ok) throw std::runtime_err
 J read(const char *file) { std::ifstream in(file); return J::parse(in); }
 int main(int argc, char **argv) {
     try {
+        if (argc >= 4 && argc % 2 == 0 && std::string(argv[1]) == "--skill-menu-frames") {
+            const auto root = std::filesystem::temp_directory_path() / ("wvd-skill-menu-" + platform::unique_id());
+            std::filesystem::create_directories(root);
+            std::filesystem::copy_file(argv[2], root / "frame.png");
+            recognition::Service service({root, "recorded-menu", {{"frame.png", platform::file_sha256(root / "frame.png")}}},
+                games::vision::native_handlers(J::object(), "zh-Hant"));
+            contracts::FrameEnvelope frame;
+            frame.identity.device_id = "recorded"; frame.identity.game_id = "wvd";
+            frame.identity.pack_revision = "recorded-menu"; frame.identity.viewport_id = "900x1600";
+            frame.identity.generation = 1; frame.identity.raw_size = frame.identity.recognition_size = {900, 1600};
+            for (int i = 2; i < argc; i += 2) {
+                const auto pixels = cv::imread(argv[i]);
+                check(pixels.size() == cv::Size(900, 1600), "REAL_MENU_FRAME_INVALID");
+                const int mask = std::stoi(argv[i + 1]);
+                check(mask >= 0 && mask <= 15, "DISABLED_MASK_INVALID");
+                ++frame.identity.frame_id;
+                frame.identity.captured_at = frame.identity.capture_finished_at = std::chrono::steady_clock::now();
+                frame.raw_bgr = std::make_shared<const std::vector<std::uint8_t>>(pixels.data, pixels.data + pixels.total() * pixels.elemSize());
+                for (int slot = 0; slot < 4; ++slot) {
+                    const auto measured = games::vision::measure_skill_availability(pixels, slot);
+                    const bool expected = (mask & (1 << slot)) != 0;
+                    check(measured.disabled == expected, "REAL_MENU_AVAILABILITY:" + std::to_string(slot));
+                    const auto result = service.evaluate(frame, frame.identity, {"disabled-skill", "1", {0, 0, 900, 1600},
+                        recognition::CustomParameters{"WvdVision", {{"mode", "combat_skill_disabled"}, {"slot", slot}}}});
+                    check(result.outcome == (expected ? O::Hit : O::NoHit), "SERVICE_MENU_AVAILABILITY:" + result.error_code);
+                    check(!result.center.has_value(), "GRAY_OBSERVATION_GRANTED_CLICK_TARGET");
+                    cv::Mat dim; pixels.convertTo(dim, -1, .35);
+                    check(!games::vision::measure_skill_availability(dim, slot).disabled, "DIM_PAGE_IS_NOT_DISABLED_PROOF");
+                    auto blank = pixels.clone();
+                    blank(cv::Rect(slot % 2 ? 520 : 145, slot / 2 ? 1040 : 950, 230, 40)).setTo(cv::Scalar(65, 65, 65));
+                    check(!games::vision::measure_skill_availability(blank, slot).disabled, "BLANK_LABEL_IS_NOT_DISABLED_PROOF");
+                    std::cout << J{{"file", argv[i]}, {"slot", slot}, {"disabled", measured.disabled},
+                        {"bright_pixels", measured.bright_pixels}, {"text_edges", measured.text_edges},
+                        {"command_bright_pixels", measured.command_bright_pixels}}.dump() << '\n';
+                }
+            }
+            return 0;
+        }
         if (argc == 3 && std::string(argv[1]) == "--harken-menu") {
             const auto manifest = read("packs/wvd/manifest.json");
             const auto root = std::filesystem::temp_directory_path() / ("wvd-harken-frame-" + platform::unique_id());

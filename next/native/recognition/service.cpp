@@ -329,7 +329,8 @@ contracts::Observation Service::recognize_ocr(const FramePixels &pixels,
         require(!cancelled_.load(), "RECOGNITION_CANCELLED");
         engine = models_->acquire(parameters.language == "en" ? 0 : 1, model.dump(), [&] {
             auto ticket = cache_.match_budget->acquire(192ULL * 1024 * 1024, cancelled_);
-            return std::make_shared<OcrEngine>(bundle_.root / model.at("bundle_directory").get<std::string>(),
+            return std::make_shared<OcrEngine>(bundle_.root /
+                platform::BundleLease::checked_relative(model.at("bundle_directory").get<std::string>()),
                 cache_.diagnostics, bundle_.lease);
         });
         slot.store(engine);

@@ -430,6 +430,10 @@ int main(int argc, char **argv) {
             require_closure(!std::filesystem::exists(root),"NEW_ISOLATED_ROOT_REQUIRED");
             auto backend=std::make_shared<OfflineConnection>(std::filesystem::absolute(argv[2]));
             wvd::app::Application app({root/"data",std::filesystem::absolute(argv[2]),{},std::filesystem::absolute(argv[3])},backend);
+            const auto catalog = call(app, wvd::api::http::verb::get, "/api/v1/catalog");
+            require_closure(!catalog.at("semantic_resources").empty(), "FROZEN_SEMANTIC_LIBRARY_NOT_LOADED");
+            const auto board = call(app, wvd::api::http::verb::get, "/api/v1/workflows/guild-open-bounty-page/builtin");
+            require_closure(board.at("status") == "current", "FROZEN_PUBLIC_LIBRARY_NOT_LOADED");
             for (const auto &kind : {std::string("task"),std::string("workflow"),std::string("combat_debug")}) {
                 J request{{"request_id","prior-"+kind},{"profile_revision","obsolete"},{"flow_revision","obsolete"},
                     {"resource_locale","zh-Hant"},{"task_id","removed-task"},{"flow_id","removed-flow"}};

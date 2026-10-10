@@ -16,10 +16,13 @@ tasks::CompiledWorkflow recover_in_dungeon() {
     const auto needed = C::business("/healing_required", true);
     // 无补给需求是无副作用的正常返回；不能为“什么都不做”扫描战斗/宝箱。
     // 真正开始补给时 Requested/Begin 仍必须取得可操作场景证据。
-    graph.route("Entry", {"Unneeded", "Encounter", "Requested"});
+    graph.route("Entry", {"Unneeded", "Encounter", "ResumeAttempt", "Requested"});
     graph.observe("Encounter", interrupted, {"EncounterExit"});
     graph.handoff("EncounterExit", "encounter");
     graph.observe_business("Unneeded", C::business("/healing_required", false), {"Terminal"});
+    // A cleared overlay resumes closing the old attempt, not another heal.
+    graph.observe("ResumeAttempt", C::all({context, C::business("/healing_active", true),
+        C::business("/healing_submissions", 1)}), {"Recovered", "Back0"});
     // 业务条件只能选路，不提供视觉许可。确认动作重新截图证明场景，
     // confirm_event 在同一状态所有者中再次检查需求，不能跳过需求直接声明完成。
     graph.observe("Requested", C::all({context, needed}), {"Begin"});
@@ -47,22 +50,19 @@ tasks::CompiledWorkflow recover_in_dungeon() {
     graph.fixed_click("Recover", C::all({panel, recover}), post, {600, 1200},
         {"Encounter", "Recovered", "Back0"});
     graph.hit_limit("Recover", 1);
-    graph.stop_if_interrupted_after("Recover", "supply.healing_outcome_unconfirmed");
+    graph.input_effect("Recover", "WvdHealingEffect");
     graph.delay_after("Recover", 1000);
-    // 返回只在仍有角色面板证据时执行；已回地下城则立即停，最多五次返回。
+    // 返回只在角色面板仍打开时执行；已回迷宫就结束返回操作并继续路线。
     for (int i = 0; i < 5; ++i) {
         graph.back("Back" + std::to_string(i), panel, post,
             {"Encounter", "Recovered", i < 4 ? "Back" + std::to_string(i + 1) : "ReturnFailed"});
         graph.hit_limit("Back" + std::to_string(i), 1);
-        // Recover 已经点过，返回途中同样不能清弹窗后从 Recover 再来一次。
-        graph.stop_if_interrupted_after("Back" + std::to_string(i), "supply.healing_outcome_unconfirmed");
         graph.delay_after("Back" + std::to_string(i), 300);
     }
     graph.recovery("ReturnFailed", "supply.recover_panel_not_closed");
-    // Returning to the dungeon is a page handoff, not proof of this heal's
-    // effect. No effect-only material is registered yet: retain the demand.
-    graph.observe("Recovered", dungeon, {"Unconfirmed"});
-    graph.recovery("Unconfirmed", "supply.healing_outcome_unconfirmed");
+    // Match legacy StateDungeon: attempt Recover, close its UI, continue. This
+    // is not a health guarantee and must not be recorded as a healing effect.
+    graph.confirm("Recovered", "heal.attempt.closed", "healing_attempt_finished", dungeon, {"Terminal"});
     graph.interrupt_on(C::absent(J{{"mode", "input_clear"}}), "supply.common_screen_requires_dispatch", "blocked");
     return graph.finish();
 }

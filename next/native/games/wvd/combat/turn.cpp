@@ -2,6 +2,7 @@
 #include "level_selection_steps.hpp"
 #include "auto_combat.hpp"
 #include "strategy.hpp"
+#include "games/wvd/vision/chest_probes.hpp"
 #include <algorithm>
 #include <map>
 
@@ -66,7 +67,7 @@ tasks::CompiledWorkflow take_turn(const J &profile, const std::set<std::string> 
     const auto ok = C::image("combat_skill_confirm");
     const auto close = roi_image("close", {0, 600, 900, 1000});
     const auto popup = C::any({detail, ok, close});
-    const auto ended = C::any({C::image("dungFlag"), C::image("chestFlag"), C::image("RiseAgain")});
+    const auto ended = C::all({C::absent(battle), C::any({C::image("dungFlag"), vision::chest_page_condition(), C::image("RiseAgain")})});
     const auto menu = C::all({battle, roi_image("flee", {660, 1080, 240, 220}), C::absent(popup)});
     const auto disabled = roi_image("spellskill/CombatAutoDisable", {740, 940, 160, 280});
     const auto enabled = roi_image("spellskill/CombatAutoEnable", {740, 940, 160, 280});
@@ -114,7 +115,10 @@ tasks::CompiledWorkflow take_turn(const J &profile, const std::set<std::string> 
     // detail evidence before classifying an unowned skill dialog.
     const auto unowned_detail = C::all({battle, detail});
     graph.observe("UnexpectedPopup", unowned_detail, {"UnownedDetail", "Entry"});
-    graph.recovery("UnownedDetail", "combat.unowned_skill_detail", unowned_detail, {"Entry"});
+    // Re-entry can retain a detail opened before a user stop. Cancel it without
+    // claiming a cast; the next menu observation prepares the actor afresh.
+    graph.back("UnownedDetail", unowned_detail, C::any({menu, ended}), {"Entry"});
+    graph.stop_if_interrupted_after("UnownedDetail", "combat.detail_close_unconfirmed", true);
     const auto recognized_actor = C::business("/combat_actor_recognized", true);
     J choices = {"UnknownActor", "NoSelection"};
     for (std::size_t index = 0; index < catalog.size(); ++index)
@@ -177,7 +181,8 @@ tasks::CompiledWorkflow take_turn(const J &profile, const std::set<std::string> 
             // 详情打开由同一次公共调用等待并补点，原菜单不能充当成功回执。
             graph.public_step(s + "Open0", "combat-open-detail", {{"x", position[0]}, {"y", position[1]}},
                               {s + "Detail", s + "ResourceError", "Ended", "ActorChanged"},
-                              {{"UnavailableExit", {prefix + "UnavailableDefend"}}}, C::all({menu, actor}));
+                              {{"UnavailableExit", {prefix + "UnavailableDefend"}},
+                               {"AdvancedExit", {s + "Detail", s + "ResourceError", "Ended", "ActorChanged"}}}, C::all({menu, actor}));
             const auto levels = append_level_selection_steps(graph, s, use_level, casting,
                 target_choices, J{prefix + "LevelUnconfirmed"});
             graph.observe(s + "Detail", casting, levels);
@@ -204,7 +209,8 @@ tasks::CompiledWorkflow take_turn(const J &profile, const std::set<std::string> 
                 next.push_back(s + "Support");
                 next.push_back(s + "Confirm");
                 next.push_back(point + 1 < 24 ? s + "Enemy" + std::to_string(point + 1) : s + "StillDetail");
-                graph.public_step(name, "combat-select-target", {{"candidate_index", point}}, next, J::object(), enemy);
+                graph.public_step(name, "combat-select-target", {{"candidate_index", point}}, next,
+                    {{"AdvancedExit", {"Ended", "ActorChanged", s + "Support", s + "Confirm", s + "DetailClosed", s + "ResourceError"}}}, enemy);
             }
             // Keep the selected skill while retrying under the existing no-progress deadline.
             graph.observe(s + "StillDetail", casting, target_choices);

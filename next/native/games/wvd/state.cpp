@@ -159,6 +159,7 @@ void WvdRunState::target_point_completed() {
         strategy_.reload(task_step_);
 }
 void WvdRunState::observe_combat(bool special, const std::string &enemy_rule) {
+    if (pending_chest_) settle_encounter_handoff(false);
     if (!pending_combat_) {
         ++combat_sequence_;
         last_encounter_ = Encounter::Combat;
@@ -170,6 +171,7 @@ void WvdRunState::observe_combat(bool special, const std::string &enemy_rule) {
     pending_combat_ = true;
 }
 void WvdRunState::observe_chest() {
+    if (pending_combat_) settle_encounter_handoff(true);
     if (!pending_chest_) {
         chest_selection_.reset();
         ++chest_sequence_;
@@ -179,6 +181,22 @@ void WvdRunState::observe_chest() {
     if (!chest_started_)
         chest_started_ = clock_->now();
     pending_chest_ = true;
+}
+void WvdRunState::settle_encounter_handoff(bool combat) {
+    auto &pending = combat ? pending_combat_ : pending_chest_;
+    if (!pending) return;
+    auto &started = combat ? combat_started_ : chest_started_;
+    const auto elapsed = started ? std::chrono::duration<double>(clock_->now() - *started).count() : 0;
+    if (elapsed < 0) throw std::runtime_error("WVD_CLOCK_MOVED_BACKWARD");
+    (combat ? combat_seconds_ : chest_seconds_) += elapsed;
+    started.reset();
+    pending = false;
+    ++(combat ? combats_ : chests_);
+    met_encounter_ = true;
+    healing_pending_ = healing_pending_ || !profile_.at(combat ? "SKIP_COMBAT_RECOVER" : "SKIP_CHEST_RECOVER").get<bool>();
+    prepared_.reset();
+    if (combat && setting_is("RELOAD_STRATEGY_WHEN", "每场战斗前", "Before combat"))
+        strategy_.reload(task_step_);
 }
 void WvdRunState::prepare_chest_character(const std::array<bool, 6> &fear, int preferred, std::uint32_t seed) {
     if (!pending_chest_)
@@ -217,6 +235,14 @@ void WvdRunState::resume_dungeon() {
 bool WvdRunState::healing_required() const {
     return healing_pending_ || recover_after_rez_ ||
            (need_initial_recover_ && profile_.at("RECOVER_WHEN_BEGINNING").get<bool>());
+}
+bool WvdRunState::healing_input_ready() const {
+    return healing_active_ && healing_submissions_ == 0;
+}
+void WvdRunState::healing_input_submitted(bool delivery_unknown) {
+    if (!healing_input_ready()) throw std::runtime_error("HEALING_INPUT_NOT_PREPARED");
+    ++healing_submissions_;
+    healing_delivery_unknown_ = delivery_unknown;
 }
 void WvdRunState::resurrected() {
     prepared_.reset();
@@ -338,7 +364,7 @@ std::string WvdRunState::confirmation_id(const std::string &operation, const std
             ? target_encounter_.attempt : target_attempt_sequence_ + 1) + ":combat:" +
             std::to_string(combat_sequence_ + (pending_combat_ ? 0 : 1)) + ":route:" +
             std::to_string(lifecycle_recovery_sequence_);
-    else if (event == "target_encounter_interrupted" || event == "target_encounter_result" ||
+    else if (event == "target_encounter_interrupted" || event == "target_encounter_result" || event == "target_encounter_chest_result" ||
              event == "target_continuation_lost" || event == "target_reacquire_prepared" ||
              event == "target_navigation_terminated")
         id += ":target:" + std::to_string(target_encounter_.attempt) + ":combat:" +
@@ -368,7 +394,7 @@ std::string WvdRunState::confirmation_id(const std::string &operation, const std
         id += ":restart:" + std::to_string(lifecycle_recovery_sequence_);
     else if (event == "healing_requested")
         id += ":heal:" + std::to_string(healing_sequence_ + (healing_active_ ? 0 : 1));
-    else if (event == "healing_completed")
+    else if (event == "healing_completed" || event == "healing_attempt_finished")
         id += ":heal:" + std::to_string(healing_sequence_);
     else if (event == "inn_rest_completed" || event == "inn_payment_prepared")
         id += ":supply:" + std::to_string(supply_cycle_);
@@ -876,16 +902,20 @@ bool WvdRunState::confirm_event(const std::string &operation, const std::string 
         // Retire this unproven attempt without completing its point or bounty.
         target_encounter_.phase = 4;
         target_encounter_.completion_reason = "unattributed_combat_reacquire";
-    } else if (event == "target_encounter_result") {
+    } else if (event == "target_encounter_result" || event == "target_encounter_chest_result") {
         if (!expected_step || target_encounter_.unit != unit_index_ ||
             target_encounter_.point != task_step_ || !target_encounter_.resume_authorized ||
             target_encounter_.combat != combat_sequence_ || revival_pending_ ||
             target_encounter_.phase < 1 || target_encounter_.phase > 2)
             throw std::runtime_error("TARGET_ENCOUNTER_RESULT_UNCONFIRMED");
-        // The target dispatch supplies a fresh dungeon end, never a revival or chest page.
-        resume_dungeon();
+        if (event == "target_encounter_chest_result") {
+            if (!pending_combat_) throw std::runtime_error("TARGET_ENCOUNTER_RESULT_UNCONFIRMED");
+            // This settles the ended fight, not a dungeon return or a chest reward.
+            settle_encounter_handoff(true);
+        } else resume_dungeon();
         target_encounter_.phase = 3;
-        target_encounter_.completion_reason = "target_encounter_ended";
+        target_encounter_.completion_reason = event == "target_encounter_chest_result"
+            ? "target_battle_ended_at_chest" : "target_encounter_ended";
     } else if (event == "target_navigation_terminated") {
         if (!expected_step) throw std::runtime_error("BUSINESS_TASK_STEP_REQUIRED");
         if (target_encounter_.phase > 0 && target_encounter_.phase < 3)
@@ -980,15 +1010,26 @@ bool WvdRunState::confirm_event(const std::string &operation, const std::string 
         if (!healing_active_)
             ++healing_sequence_;
         healing_active_ = true;
+        healing_attempt_finished_ = false;
+        healing_submissions_ = 0;
+        healing_delivery_unknown_ = false;
         healing_pending_ = true;
         // 入本/复活请求在开始尝试时消费；未确认恢复结束时 pending 仍保留。
         need_initial_recover_ = false;
         recover_after_rez_ = false;
     } else if (event == "healing_completed") {
+        if (!healing_active_) throw std::runtime_error("HEALING_NOT_STARTED");
+        throw std::runtime_error("HEALING_EFFECT_PROOF_REQUIRED");
+    } else if (event == "healing_attempt_finished") {
         if (!healing_active_)
             throw std::runtime_error("HEALING_NOT_STARTED");
-        // Returning to a dungeon proves a page transition, not restored HP/MP.
-        throw std::runtime_error("HEALING_EFFECT_PROOF_REQUIRED");
+        if (healing_submissions_ != 1)
+            throw std::runtime_error("HEALING_ATTEMPT_NOT_CONFIRMED");
+        // Consume this encounter's supply attempt, not a claim of restored HP.
+        // Lack of spell points/items cannot freeze the dungeon route.
+        healing_attempt_finished_ = true;
+        healing_pending_ = false;
+        healing_active_ = false;
     }
     else if (event == "game_restarted") {
         if (!lifecycle_recovery_active_)
@@ -1036,6 +1077,8 @@ J WvdRunState::summarize_field(const std::string &name) const {
     if (name == "prepared_skill_index") return prepared_ ? J(prepared_index_) : J(nullptr);
     if (name == "prepared_portrait") return prepared_ ? prepared_portrait_ : "";
     if (name == "healing_required") return healing_required();
+    if (name == "healing_active") return healing_active_;
+    if (name == "healing_submissions") return healing_submissions_;
     if (name == "chest_has_character") return chest_selection_.selected().has_value();
     if (name == "chest_character") return chest_selection_.selected() ? J(*chest_selection_.selected()) : J(nullptr);
     if (name == "inn_rest_completed") return inn_rest_completed_;
@@ -1188,6 +1231,10 @@ J WvdRunState::summarize() const {
             {"healing_required", healing_required()},
             {"healing_active", healing_active_},
             {"healing_sequence", healing_sequence_},
+            {"healing_attempt_finished", healing_attempt_finished_},
+            {"healing_effect_status", "not_verified"},
+            {"healing_submissions", healing_submissions_},
+            {"healing_delivery_unknown", healing_delivery_unknown_},
             {"combat_speed", combat_speed_},
             {"zoom_world_map", zoom_world_map_},
             {"bypass_after_restart", wall_bypass_step_ == 3},

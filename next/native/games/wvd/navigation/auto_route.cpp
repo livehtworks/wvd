@@ -1,5 +1,6 @@
 #include "auto_route.hpp"
 #include "games/wvd/vision/harken_probes.hpp"
+#include "games/wvd/vision/chest_probes.hpp"
 
 namespace wvd::games::navigation {
 using J = nlohmann::json;
@@ -11,7 +12,7 @@ tasks::CompiledWorkflow auto_route(const std::string &target) {
     graph.check_policy("navigation", {"wvd-network-retry", "wvd-pause", "wvd-download", "wvd-story", "wvd-blessing", "wvd-karma", "wvd-dialogue", "wvd-special-dialogue", "wvd-sandman"});
     const auto map = C::image("mapFlag");
     const J combat{{"mode", "combat_active"}};
-    const auto chest = C::any({C::image("chestFlag"), C::image("chestOpening"), C::image("whowillopenit")});
+    const auto chest = vision::chest_page_condition();
     const auto encounter = C::any({combat, chest, C::image("RiseAgain")});
     const auto outside = C::all({C::any({C::image("Inn"), C::image("EdgeOfTown"), C::image("returnText"),
                                         C::image("returntoTown"), C::image("openworldmap"), C::image("worldmapflag")}),

@@ -1,4 +1,5 @@
 #include "auto_combat.hpp"
+#include "games/wvd/vision/chest_probes.hpp"
 
 namespace wvd::games::combat {
 tasks::CompiledWorkflow single_actor_auto() {
@@ -12,7 +13,7 @@ tasks::CompiledWorkflow single_actor_auto() {
         return value;
     };
     const J battle{{"mode", "combat_active"}};
-    const auto ended = C::all({C::any({C::image("dungFlag"), C::image("chestFlag"), C::image("RiseAgain")}), C::absent(battle)});
+    const auto ended = C::all({C::any({C::image("dungFlag"), vision::chest_page_condition(), C::image("RiseAgain")}), C::absent(battle)});
     const auto popup = C::any({C::image("combat_skill_detail"), C::image("combat_skill_confirm"),
                               image("close", {0, 600, 900, 1000})});
     const auto enabled = image("spellskill/CombatAutoEnable", {740, 940, 160, 280});
@@ -60,7 +61,7 @@ tasks::CompiledWorkflow enable_auto() {
         return value;
     };
     const J battle{{"mode", "combat_active"}};
-    const auto ended = C::all({C::any({C::image("dungFlag"), C::image("chestFlag"), C::image("RiseAgain")}),
+    const auto ended = C::all({C::any({C::image("dungFlag"), vision::chest_page_condition(), C::image("RiseAgain")}),
                                C::absent(battle)});
     const auto close = image("close", {0, 600, 900, 1000});
     const auto ok = C::image("combat_skill_confirm");

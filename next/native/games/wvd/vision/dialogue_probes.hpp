@@ -32,7 +32,7 @@ inline nlohmann::json story_auto_control() {
 }
 inline nlohmann::json story_advance_arrow() {
     return {{"mode", "template"}, {"image", "chest_reward_advance"}, {"threshold", .9},
-            {"roi", {730, 1330, 170, 270}}};
+            {"roi", {0, 800, 900, 800}}};
 }
 // 普通剧情只点继续箭头；已知选项页由独立对话策略处理，不能在导航中代选。
 inline nlohmann::json ordinary_story_page() {

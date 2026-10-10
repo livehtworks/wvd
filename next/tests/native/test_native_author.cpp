@@ -22,6 +22,7 @@
 #include "games/wvd/navigation/auto_route.hpp"
 #include "games/wvd/combat/auto_combat.hpp"
 #include "games/wvd/combat/encounter.hpp"
+#include "games/wvd/chest/chest.hpp"
 #include "games/wvd/combat/strategy.hpp"
 #include "games/wvd/combat/turn.hpp"
 #include "games/wvd/supply/inn.hpp"
@@ -37,6 +38,7 @@
 #include <opencv2/imgproc.hpp>
 #include "platform/windows/file_digest.hpp"
 #include "platform/windows/path_utf8.hpp"
+#include "platform/windows/runtime_files.hpp"
 #include <algorithm>
 #include <chrono>
 #include <fstream>
@@ -169,7 +171,8 @@ struct Ports final : runtime::FlowPorts {
         conditions[games::vision::inn_button().dump()] = city;
         conditions[games::vision::edge_of_town_button().dump()] = city;
         conditions[games::vision::ordinary_story_page().dump()] = name == "story";
-        conditions[games::vision::story_advance_arrow().dump()] = name == "story";
+        // 剧情/补给共用继续箭头；非剧情不能把其它信息页的同一形状强制置为NoHit。
+        if (name == "story") conditions[games::vision::story_advance_arrow().dump()] = true;
         conditions[games::vision::character_page().dump()] = false;
         conditions[games::vision::network_retry_prompt().dump()] = name == "network";
         conditions[games::vision::network_prompt_zh_hant().dump()] = name == "network";
@@ -549,8 +552,8 @@ int main(int argc, char **argv) {
             const auto &handoff=graph.nodes.at("Recovered");
             if(handoff.value("action","")=="Custom" && handoff.dump().find("healing_completed")!=std::string::npos)
                 throw std::runtime_error("HEAL_PAGE_HANDOFF_CLEARS_DEMAND");
-            if(graph.nodes.at("Unconfirmed").dump().find("supply.healing_outcome_unconfirmed")==std::string::npos)
-                throw std::runtime_error("HEAL_EFFECT_GAP_HIDDEN");
+            check(handoff.dump().find("healing_attempt_finished") != std::string::npos,
+                "HEAL_BEST_EFFORT_EXIT_MISSING");
             auto profile=storage::LegacyConfigImporter(read("packs/wvd/parameters/legacy-config-fields.json"))
                 .parse({{"GENERAL",J::object()}}).values;
             profile["RECOVER_WHEN_BEGINNING"]=true;
@@ -560,16 +563,399 @@ int main(int argc, char **argv) {
             driver.ports.after_input=[&](const auto &){driver.ports.images={"dungFlag"};};
             driver.until([&]{return driver.terminal();},4s);
             const auto before=driver.ports.business.summary();
-            if(!before.at("healing_required").get<bool>()) throw std::runtime_error("HEAL_DEMAND_MISSING");
-            if(driver.ports.commands.size()!=1 || driver.last.state==runtime::TickState::Completed ||
-                driver.last.code.find("supply.healing_outcome_unconfirmed")==std::string::npos)
-                throw std::runtime_error("HEAL_NO_OP_FALSE_COMPLETION:"+driver.last.code);
+            check(driver.ports.commands.size()==1 && driver.last.state==runtime::TickState::Completed &&
+                !before.at("healing_required").get<bool>() && before.at("healing_attempt_finished").get<bool>() &&
+                before.at("healing_effect_status") == "not_verified", "HEAL_NO_OP_FALSE_EFFECT_OR_BLOCKING:commands=" +
+                std::to_string(driver.ports.commands.size()) + ":code=" + driver.last.code + ":finished=" +
+                before.at("healing_attempt_finished").dump() + ":required=" + before.at("healing_required").dump());
+            check(!driver.ports.business.confirm_event(driver.ports.business.confirmation_id("heal.attempt.closed", "healing_attempt_finished"),
+                "healing_attempt_finished", 1, 898), "HEAL_ATTEMPT_REPLAY_NOT_IDEMPOTENT");
+            driver.ports.business.enter_dungeon();
+            driver.ports.business.confirm_event("heal-next-request", "healing_requested", 1, 899);
             bool forged_completed{};
             try { driver.ports.business.confirm_event("heal-forged", "healing_completed", 1, 900); }
             catch(const std::exception &e) { forged_completed=std::string(e.what())=="HEALING_EFFECT_PROOF_REQUIRED"; }
             if(!forged_completed || !driver.ports.business.summary().at("healing_required").get<bool>())
                 throw std::runtime_error("HEAL_GENERIC_COMPLETION_BYPASS");
-            std::cout << "PASS actual heal graph, executor and state: one no-op heal, page returned, demand retained, unconfirmed result\n";
+            bool unsent_rejected{};
+            try { driver.ports.business.confirm_event("heal-unsent-close", "healing_attempt_finished", 1, 901); }
+            catch(const std::exception &e) { unsent_rejected=std::string(e.what())=="HEALING_ATTEMPT_NOT_CONFIRMED"; }
+            check(unsent_rejected, "HEAL_UNSENT_ATTEMPT_ACCEPTED");
+            driver.ports.business.enter_dungeon();
+            driver.ports.business.confirm_event("heal-unknown-request", "healing_requested", 1, 903);
+            driver.ports.business.healing_input_submitted(true);
+            check(driver.ports.business.confirm_event("heal-unknown-close", "healing_attempt_finished", 1, 904),
+                "HEAL_UNKNOWN_ATTEMPT_BLOCKS_NAVIGATION");
+            const auto uncertain = driver.ports.business.summary();
+            check(!uncertain.at("healing_required").get<bool>() && uncertain.at("healing_delivery_unknown").get<bool>() &&
+                uncertain.at("healing_effect_status") == "not_verified", "HEAL_UNKNOWN_DELIVERY_WASHED_AWAY");
+            std::cout << "PASS legacy best-effort heal: attempt continues without false effect, replay stable, unknown delivery retained, unsent rejected\n";
+            return 0;
+        }
+        if (argc == 2 && std::string(argv[1]) == "--inn-exit-contract") {
+            using namespace closure;
+            const auto paid = [](Ports &ports) {
+                ports.business.confirm_event("inn.prepare", "inn_payment_prepared", 1, 1);
+                ports.business.inn_payment_submitted(false);
+            };
+            for (const bool notice : {false, true}) {
+                Driver d(games::supply::rest_at_inn(false, true));
+                paid(d.ports);
+                if (notice) { d.ports.scene("black"); d.ports.images.insert("chest_reward_advance"); }
+                else d.ports.scene("stayed");
+                d.ports.after_input = [&](const auto &path) {
+                    if (path.find("ContinueSupply") != std::string::npos) d.ports.scene("stayed");
+                    else if (path.find("BackFromStay") != std::string::npos) d.ports.scene("black");
+                    else throw std::runtime_error("INN_EXIT_UNEXPECTED_INPUT:" + path);
+                };
+                d.finish();
+                check(d.last.state == runtime::TickState::Completed && d.ports.commands.size() == (notice ? 2 : 1) &&
+                    d.ports.commands.back().kind == contracts::ActionKind::ClickKey && d.ports.commands.back().key == 4 &&
+                    !d.executor.has_unresolved_input() && d.ports.business.summary().at("inn_rest_completed") == true,
+                    "INN_EXIT_REQUIRES_OPTIONAL_NOTICE_OR_CITY");
+            }
+            auto task = games::supply::rest_at_inn(false, true);
+            task.nodes.at("Leave")["timeout"] = 20;
+            Driver d(games::recovery::with_boot_recovery(task, true));
+            paid(d.ports);
+            d.ports.business.confirm_event("inn.paid", "inn_rest_completed", 1, 2);
+            d.ports.scene("black"); d.ports.ready = true;
+            bool fault{};
+            int recoveries{};
+            const auto started = std::chrono::steady_clock::now();
+            d.ports.before_capture = [&] {
+                if (!fault && d.executor.current_step_id() == "Task_Leave" &&
+                    std::chrono::steady_clock::now() - started > 30ms) {
+                    fault = true;
+                    throw contracts::ObservationUnavailable({contracts::ReadFaultKind::TransportUnavailable,
+                        contracts::ReadFaultStage::Capture, "ADB_OFFLINE", "test.inn.capture", {}, {}});
+                }
+            };
+            d.ports.observation_recovery = [&](bool) {
+                check(++recoveries == 1, "INN_RESTART_LOOP");
+                ++d.ports.generation;
+                d.ports.business.enter_segment(contracts::SegmentBoundary::LifecycleRecovery, d.ports.generation, 0);
+                d.ports.scene("city");
+                return contracts::ObservationRecovery{{}, true, true};
+            };
+            d.finish();
+            check(fault && recoveries == 1 && d.last.state == runtime::TickState::Completed && d.ports.inputs.empty() &&
+                !d.executor.has_unresolved_input(), "INN_EXPIRED_NODE_REJECTS_RECOVERED_CITY:" + d.last.code);
+            std::cout << "PASS optional notice/no notice, BACK exit without city wait, recovered city after expired inn node without restart/replay\n";
+            return 0;
+        }
+        if (argc == 5 && std::string(argv[1]) == "--inn-exit-frames") {
+            using namespace closure;
+            const auto root = std::filesystem::absolute(argv[2]);
+            const auto identity = read((root / "program/identity.json").string().c_str());
+            recognition::Bundle bundle{root, "inn-exit-recorded", {}};
+            bundle.snapshot_parent = std::filesystem::temp_directory_path() / ("wvd-inn-exit-" + platform::unique_id());
+            for (const auto &file : std::filesystem::recursive_directory_iterator(root)) {
+                if (!file.is_regular_file()) continue;
+                const auto relative = std::filesystem::relative(file.path(), root).generic_string();
+                const auto hash = platform::file_sha256(file.path());
+                if (identity.at("source_files").contains(relative))
+                    check(identity.at("source_files").at(relative) == hash, "RECORDED_RESOURCE_CHANGED:" + relative);
+                bundle.files.push_back({relative, hash});
+            }
+            recognition::Service service(bundle, games::vision::native_handlers(identity.at("aliases"), "zh-Hant",
+                games::recovery::DialoguePolicy::Default, false));
+            const auto inn = games::supply::rest_at_inn(false, true);
+            const auto boot = games::recovery::wait_boot_ready(true);
+            for (int i = 3; i <= 4; ++i) {
+                const auto pixels = cv::imread(argv[i]);
+                check(pixels.size() == cv::Size(900,1600), "INN_EXIT_FRAME_INVALID");
+                contracts::FrameEnvelope frame;
+                frame.identity.device_id = "recorded"; frame.identity.game_id = "wvd";
+                frame.identity.pack_revision = bundle.revision; frame.identity.viewport_id = "900x1600";
+                frame.identity.generation = 1; frame.identity.frame_id = i;
+                frame.identity.raw_size = frame.identity.recognition_size = {900,1600};
+                frame.identity.captured_at = frame.identity.capture_finished_at = std::chrono::steady_clock::now();
+                frame.raw_bgr = std::make_shared<const std::vector<std::uint8_t>>(pixels.data, pixels.data + pixels.total()*pixels.elemSize());
+                const auto observe = [&](const std::string &id, const J &condition) {
+                    const auto result = service.evaluate(frame, frame.identity, {id, "1", {0,0,900,1600},
+                        recognition::CustomParameters{"WvdVision", condition}});
+                    std::cout << J{{"frame", i == 3 ? "notice" : "city"}, {"probe", id},
+                        {"outcome", int(result.outcome)}, {"error", result.error_code}, {"evidence", result.evidence}}.dump() << '\n';
+                    check(result.outcome != contracts::RecognitionOutcome::Error, "INN_EXIT_PROBE_ERROR:" + id + ":" + result.error_code);
+                    return result;
+                };
+                for (const auto *id : {"AtCity", "ContinueSupply", "ContinueStory", "Rested"}) {
+                    const auto observed = observe(id, inn.nodes.at(id).at("observation_args"));
+                    if (std::string(id) == "ContinueSupply")
+                        check(observed.outcome == (i == 3 ? contracts::RecognitionOutcome::Hit : contracts::RecognitionOutcome::NoHit),
+                            "NOTICE_OPTIONAL_DISPATCH_INVALID");
+                }
+                const auto notice = observe("notice-target", games::vision::notice_advance_arrow());
+                check(notice.outcome == (i == 3 ? contracts::RecognitionOutcome::Hit : contracts::RecognitionOutcome::NoHit),
+                    "NOTICE_ARROW_SCOPE_INVALID");
+                const auto boot_notice = observe("boot-notice", boot.nodes.at("ContinueNotice").at("observation_args"));
+                check(boot_notice.outcome == (i == 3 ? contracts::RecognitionOutcome::Hit : contracts::RecognitionOutcome::NoHit),
+                    "BOOT_NOTICE_DISPATCH_INVALID");
+                observe("boot-ready", {{"mode", "boot_ready"}});
+                observe("blocking", {{"mode", "blocking_screen"}});
+                const auto ready = observe("boot-ready-guarded", boot.nodes.at("Ready").at("observation_args"));
+                check(ready.outcome == (i == 3 ? contracts::RecognitionOutcome::NoHit : contracts::RecognitionOutcome::Hit),
+                    "CITY_READY_DISPATCH_INVALID");
+            }
+            return 0;
+        }
+        if (argc == 4 && std::string(argv[1]) == "--condition-depth-frame") {
+            using namespace closure;
+            using O = contracts::RecognitionOutcome;
+            const auto root = std::filesystem::absolute(argv[2]);
+            const auto identity = read((root / "program/identity.json").string().c_str());
+            const auto program = read((root / "program/flow.json").string().c_str());
+            recognition::Bundle bundle{root, "condition-depth-recorded", {}};
+            bundle.snapshot_parent = std::filesystem::temp_directory_path() / ("wvd-condition-depth-" + platform::unique_id());
+            for (const auto &file : std::filesystem::recursive_directory_iterator(root)) {
+                if (!file.is_regular_file()) continue;
+                const auto relative = std::filesystem::relative(file.path(), root).generic_string();
+                const auto hash = platform::file_sha256(file.path());
+                if (identity.at("source_files").contains(relative))
+                    check(identity.at("source_files").at(relative) == hash, "RECORDED_RESOURCE_CHANGED:" + relative);
+                bundle.files.push_back({relative, hash});
+            }
+            recognition::Service service(bundle, games::vision::native_handlers(identity.at("aliases"), "zh-Hant",
+                games::recovery::DialoguePolicy::Default, false));
+            const auto pixels = cv::imread(argv[3]);
+            check(pixels.size() == cv::Size(900,1600), "CONDITION_FRAME_INVALID");
+            contracts::FrameEnvelope frame;
+            frame.identity.device_id = "recorded"; frame.identity.game_id = "wvd";
+            frame.identity.pack_revision = bundle.revision; frame.identity.viewport_id = "900x1600";
+            frame.identity.generation = frame.identity.frame_id = 1;
+            frame.identity.raw_size = frame.identity.recognition_size = {900,1600};
+            frame.identity.captured_at = frame.identity.capture_finished_at = std::chrono::steady_clock::now();
+            frame.raw_bgr = std::make_shared<const std::vector<std::uint8_t>>(pixels.data, pixels.data + pixels.total()*pixels.elemSize());
+            const auto evaluate = [&](const J &condition, const std::string &id) {
+                return service.evaluate(frame, frame.identity, {id, "1", {0,0,900,1600},
+                    recognition::CustomParameters{"WvdVision", condition}});
+            };
+            const auto &original = program.at("definitions").at("Task_FirstDungeon_Box_SharedStep1_Entry")
+                .at("steps").at("Task_FirstDungeon_Box_SharedStep1_Author_choose@await").at("data")
+                .at("condition").at("parameters");
+            const auto result = evaluate(original, "recorded-choose-result");
+            check(result.outcome != O::Error, "RECORDED_CHOOSE_RESULT:" + result.error_code);
+            J documents = J::object();
+            for (const auto &doc : read("resources/authoring/public-flows.json"))
+                documents[doc.at("flow").at("id").get<std::string>()] = doc;
+            const games::tasks::PublicFlowLibrary library(documents, read("resources/authoring/semantic-assets.json"));
+            const auto choose = library.compile_step("chest-choose-character", J::object(), "zh-Hant");
+            const auto &input = choose.nodes.at("Author_choose").at("operation_args");
+            for (const auto *key : {"scene_recognition", "target_recognition", "postcondition"}) {
+                const auto current = service.evaluate(frame, frame.identity, recognition::parse_request(input.at(key)));
+                check(current.outcome != O::Error, std::string("COMPILED_CHOOSE_") + key + ":" + current.error_code);
+            }
+            const auto retry = service.evaluate(frame, frame.identity, recognition::parse_request(input.at("retry").at("ready")));
+            check(retry.outcome != O::Error, "COMPILED_CHOOSE_RETRY:" + retry.error_code);
+            auto boundary = J{{"mode", "revival_prompt"}};
+            for (unsigned i = 0; i < 8; ++i) boundary = C::absent(std::move(boundary));
+            const auto permitted = evaluate(boundary, "eight-condition-levels");
+            check(permitted.outcome != O::Error, "LEGAL_CONDITION_RECIPE_DEPTH:" + permitted.error_code);
+            const auto excessive = evaluate(C::absent(boundary), "nine-condition-levels");
+            check(excessive.outcome == O::Error && excessive.error_code == "WVD_CONDITION_DEPTH",
+                "CONDITION_STRUCTURE_LIMIT_LOST");
+            const auto missing = evaluate(C::any({J{{"mode", "template"}, {"image", "missing-condition-asset"}}, original}), "missing-leaf");
+            check(missing.outcome == O::Error && missing.error_code != "WVD_CONDITION_DEPTH", "CONDITION_ASSET_ERROR_HIDDEN");
+            std::cout << "PASS recorded choose postcondition, eight-level builtin expansion, nine-level rejection, missing-asset error propagation\n";
+            return 0;
+        }
+        if (argc == 6 && std::string(argv[1]) == "--reentry-frames") {
+            using namespace closure;
+            using O = contracts::RecognitionOutcome;
+            const auto metadata = read((std::filesystem::path(argv[2]) / "manifest.json").string().c_str());
+            recognition::Bundle bundle{platform::extended_path(argv[5]), metadata.at("revision"), {}};
+            bundle.snapshot_parent = std::filesystem::temp_directory_path() / ("wvd-reentry-frames-" + platform::unique_id());
+            for (const auto &row : metadata.at("files")) bundle.files.push_back({row.at("path"), row.at("sha256")});
+            recognition::Service service(bundle, games::vision::native_handlers(metadata.value("aliases", J::object()), "zh-Hant"));
+            contracts::FrameEnvelope frame;
+            frame.identity.device_id = "recorded"; frame.identity.game_id = "wvd";
+            frame.identity.pack_revision = bundle.revision; frame.identity.viewport_id = "900x1600";
+            frame.identity.generation = 1; frame.identity.raw_size = frame.identity.recognition_size = {900, 1600};
+            for (int i = 3; i <= 4; ++i) {
+                const auto pixels = cv::imread(argv[i]);
+                check(pixels.size() == cv::Size(900,1600), "REENTRY_FRAME_INVALID");
+                ++frame.identity.frame_id;
+                frame.identity.captured_at = frame.identity.capture_finished_at = std::chrono::steady_clock::now();
+                frame.raw_bgr = std::make_shared<const std::vector<std::uint8_t>>(pixels.data, pixels.data + pixels.total()*pixels.elemSize());
+                const auto combat = service.evaluate(frame, frame.identity, {"battle", "1", {0,0,900,1600},
+                    recognition::CustomParameters{"WvdVision", {{"mode", "combat_active"}}}});
+                const auto reward = service.evaluate(frame, frame.identity, {"reward", "1", {0,0,900,1600},
+                    recognition::CustomParameters{"WvdVision", {{"mode", "template"}, {"image", "chest_reward_advance"},
+                        {"roi", {730,1330,170,270}}, {"threshold", .8}}}});
+                const auto target_end = service.evaluate(frame, frame.identity, {"target-end", "1", {0,0,900,1600},
+                    recognition::CustomParameters{"WvdVision", {{"mode", "target_chest_end"}}}});
+                check(combat.outcome == (i == 4 ? O::Hit : O::NoHit), "REAL_REENTRY_BATTLE:" + combat.error_code + ":" + combat.evidence.dump());
+                check(reward.outcome == (i == 3 ? O::Hit : O::NoHit), "REAL_REENTRY_REWARD:" + reward.error_code);
+                check(target_end.outcome == (i == 3 ? O::Hit : O::NoHit), "REAL_TARGET_CHEST_END:" + target_end.error_code);
+                std::cout << (i == 3 ? "reward:Hit,battle:NoHit" : "reward:NoHit,battle:Hit") << '\n';
+            }
+            return 0;
+        }
+        if (argc == 2 && std::string(argv[1]) == "--reentry-closure") {
+            using namespace closure;
+            J docs = J::object();
+            for (const auto &doc : read("resources/authoring/public-flows.json")) docs[doc.at("flow").at("id").get<std::string>()] = doc;
+            const games::tasks::PublicFlowLibrary library(docs, read("resources/authoring/semantic-assets.json"));
+            const games::tasks::PublicStepScope public_steps([&](const auto &id, const auto &args) {
+                return library.compile_step(id, args, "zh-Hant");
+            });
+            auto profile = storage::LegacyConfigImporter(read("packs/wvd/parameters/legacy-config-fields.json"))
+                .parse({{"GENERAL", J::object()}}).values;
+            profile["STRATEGY"] = J::array({{{"group_name", "reentry"}, {"skill_settings", J::array({{
+                {"role_var", "0 面具"}, {"skill_var", "左上技能"}, {"skill_lvl", 1},
+                {"target_var", "左上角色"}, {"freq_var", "重复"}}})}}});
+            profile["DEFAULT_OVERALL_STRATEGY"] = "reentry";
+            Driver popup(games::combat::take_turn(profile, {}));
+            popup.ports.scene("popup");
+            popup.ports.after_input = [&](const auto &) { popup.ports.scene("ended"); };
+            popup.finish();
+            check(popup.last.state == runtime::TickState::Completed && popup.ports.commands.size() == 1 &&
+                popup.ports.commands.front().key == 4, "REENTRY_DETAIL_NOT_CANCELLED_WITHOUT_CAST_OR_AUTO");
+
+            const auto disarm = library.compile_step("chest-disarm", J::object(), "zh-Hant");
+            const auto reward = library.resource_condition("chest.reward.page", "zh-Hant", authoring::ResourceUse::Observation);
+            C parent("reentry.chest");
+            const auto child = parent.define_child("Disarm", disarm);
+            parent.route("Entry", {"First"}); parent.call_child("First", child, {"Second"});
+            parent.call_child("Second", child, {"Terminal"});
+            Driver transitioned(parent.finish());
+            transitioned.ports.images = {"chestOpening"};
+            transitioned.ports.after_input = [&](const auto &) {
+                transitioned.ports.images.clear();
+                transitioned.ports.conditions.clear();
+                transitioned.ports.conditions[reward.dump()] = true;
+            };
+            transitioned.finish();
+            check(transitioned.last.state == runtime::TickState::Completed && transitioned.ports.commands.size() == 1,
+                "DISARM_CALLED_AGAIN_ON_REWARD_PAGE");
+            Driver already_advanced(disarm);
+            already_advanced.ports.conditions[reward.dump()] = true;
+            already_advanced.finish();
+            check(already_advanced.last.state == runtime::TickState::Completed && already_advanced.ports.inputs.empty(),
+                "REWARD_ENTRY_DID_NOT_RETURN_WITHOUT_INPUT");
+            std::cout << "PASS skill-detail cancel and disarm-to-reward reentry without Auto or duplicate disarm\n";
+            return 0;
+        }
+        if (argc == 2 && std::string(argv[1]) == "--target-chest-completion") {
+            using namespace closure;
+            J docs = J::object();
+            for (const auto &doc : read("resources/authoring/public-flows.json")) docs[doc.at("flow").at("id").get<std::string>()] = doc;
+            const games::tasks::PublicFlowLibrary library(docs, read("resources/authoring/semantic-assets.json"));
+            const games::tasks::PublicStepScope public_steps([&](const auto &id, const auto &args) {
+                return library.compile_step(id, args, "zh-Hant");
+            });
+            auto profile = storage::LegacyConfigImporter(read("packs/wvd/parameters/legacy-config-fields.json"))
+                .parse({{"GENERAL", J::object()}}).values;
+            profile["STRATEGY"] = J::array({{{"group_name", "target-end"}, {"skill_settings", J::array({{
+                {"role_var", "0 面具"}, {"skill_var", "左上技能"}, {"skill_lvl", 1},
+                {"target_var", "左上角色"}, {"freq_var", "重复"}}})}}});
+            profile["DEFAULT_OVERALL_STRATEGY"] = "target-end";
+            const games::WvdQuestCatalog quests(read("packs/wvd/parameters/legacy-quests.json"));
+            auto graph = games::tasks::traverse_dungeon(games::tasks::giant_bounty_plan(quests.at("GiantBounty")), profile, {});
+            graph.entry = "TargetDispatch0";
+            Driver ended_at_chest(graph, profile);
+            auto &state = ended_at_chest.ports.business;
+            state.enter_dungeon();
+            check(state.confirm_event("target.begin", "target_encounter_started", 1, 1, 0), "TARGET_BEGIN_FAILED");
+            state.observe_combat();
+            ended_at_chest.ports.images = {"chestFlag"};
+            ended_at_chest.ports.conditions[J{{"mode", "target_chest_end"}}.dump()] = true;
+            const auto before = std::chrono::steady_clock::now();
+            ended_at_chest.until([&] { return state.summary().at("task_step") == 1; }, 5s);
+            check(ended_at_chest.ports.inputs.empty() && std::chrono::steady_clock::now() - before >= 3s &&
+                state.summary().at("target_encounter").at("completion_reason") == "target_battle_ended_at_chest" &&
+                state.summary().at("combats") == 1 && state.summary().at("chests") == 0 &&
+                !state.summary().at("pending_combat").get<bool>(),
+                "TARGET_CHEST_END_MUST_ADVANCE_POINT_WITHOUT_FAKE_DUNGEON_RETURN");
+            state.observe_chest();
+            state.observe_combat();
+            check(state.summary().at("combat_sequence") == 2 && state.summary().at("chests") == 1 &&
+                !state.summary().at("pending_chest").get<bool>() && state.summary().at("pending_combat").get<bool>(),
+                "NEXT_BATTLE_MUST_NOT_INHERIT_ENDED_ENCOUNTER");
+            state.resume_dungeon(); state.resume_dungeon();
+            check(state.summary().at("combats") == 2 && state.summary().at("chests") == 1,
+                "HANDOFF_COUNTS_MUST_NOT_REPEAT_ON_DUNGEON_RETURN");
+
+            auto handoff_root = [](const games::tasks::CompiledWorkflow &child) {
+                C root("handoff-check");
+                J exits = J::object();
+                for (const auto &port : child.handoffs) exits[port] = {"Terminal"};
+                const auto definition = root.define_child("Child", child);
+                root.route("Entry", {"Call"}); root.call_child("Call", definition, {"Terminal"}, exits);
+                return root.finish();
+            };
+            Driver chest_to_battle(handoff_root(games::chest::open_chest(4, true, 1)), profile);
+            chest_to_battle.ports.combat = true;
+            chest_to_battle.finish();
+            check(chest_to_battle.last.state == runtime::TickState::Completed &&
+                chest_to_battle.ports.inputs.empty(), "CHEST_ENTRY_MUST_YIELD_TO_BATTLE_WITHOUT_OPENING_RESULT");
+            Driver battle_to_reward(handoff_root(games::combat::fight_encounter(profile, {})), profile);
+            battle_to_reward.ports.images = {"chest_reward_advance"};
+            battle_to_reward.finish();
+            check(battle_to_reward.last.state == runtime::TickState::Completed &&
+                battle_to_reward.ports.inputs.empty(), "BATTLE_MUST_YIELD_TO_DIRECT_REWARD_WITHOUT_DUNGEON_FRAME");
+            for (const std::string id : {"chest-choose-character", "chest-reward-continue", "combat-open-detail", "combat-select-target"}) {
+                Driver advanced(handoff_root(library.compile_step(id, J::object(), "zh-Hant")), profile);
+                advanced.ports.combat = true;
+                advanced.finish();
+                check(advanced.last.state == runtime::TickState::Completed && advanced.ports.inputs.empty(),
+                    "ADVANCED_PUBLIC_ENTRY_MUST_NOT_CLICK_OLD_PAGE:" + id);
+            }
+
+            for (const std::string kind : {"no-target", "restart", "other-battle"}) {
+                games::WvdRunState invalid(profile, {"invalid-target-" + kind, 1, std::make_shared<contracts::SteadyClock>()});
+                invalid.enter_segment(contracts::SegmentBoundary::Initial, 1, 0); invalid.enter_dungeon();
+                if (kind != "no-target") {
+                    invalid.confirm_event("begin", "target_encounter_started", 1, 1, 0); invalid.observe_combat();
+                    if (kind == "restart") invalid.restart_game();
+                    else { invalid.resume_dungeon(); invalid.observe_combat(); }
+                }
+                bool rejected = false;
+                try { invalid.confirm_event("bad", "target_encounter_chest_result", 1, 2, 0); }
+                catch (const std::runtime_error &e) { rejected = std::string(e.what()) == "TARGET_ENCOUNTER_RESULT_UNCONFIRMED"; }
+                check(rejected && invalid.summary().at("task_step") == 0, "UNATTRIBUTED_CHEST_COUNTED_TARGET:" + kind);
+            }
+            Driver no_route(games::navigation::auto_route("mark_auto"));
+            no_route.ports.images = {"theRouteToTheDestinationCannotBeFound"};
+            no_route.finish();
+            check(no_route.last.state == runtime::TickState::Completed && no_route.ports.inputs.empty(),
+                "KNOWN_NO_ROUTE_MUST_END_MARK_NAVIGATION_WITHOUT_MORE_INPUT");
+            std::cout << "PASS battle/chest handoffs, direct reward, encounter identity/counts, advanced public entries, attributed target 3s boundary and no-route stop\n";
+            return 0;
+        }
+        if (argc == 6 && std::string(argv[1]) == "--healing-frames") {
+            using namespace wvd;
+            using J = nlohmann::json;
+            using O = contracts::RecognitionOutcome;
+            const auto root = std::filesystem::absolute(argv[2]);
+            const auto manifest_path = root / "manifest.json";
+            std::ifstream manifest_input(manifest_path);
+            const auto manifest = J::parse(manifest_input);
+            // Use the actual frozen, manifest-only cache. The authoring pack
+            // also has manifest.json, which is deliberately outside the lease.
+            recognition::Bundle bundle{platform::extended_path(argv[5]), manifest.at("revision"), {}};
+            for (const auto &member : manifest.at("files")) bundle.files.push_back({member.at("path"), member.at("sha256")});
+            recognition::Service service(bundle, games::vision::native_handlers(manifest.value("aliases", J::object()), "zh-Hant"));
+            contracts::FrameEnvelope frame;
+            frame.identity.device_id = "recorded-healing"; frame.identity.game_id = "wvd";
+            frame.identity.pack_revision = bundle.revision; frame.identity.viewport_id = "900x1600";
+            frame.identity.generation = 1; frame.identity.raw_size = frame.identity.recognition_size = {900,1600};
+            for (const auto &[file, kind, expected] : std::vector<std::tuple<std::string,std::string,O>>{
+                {argv[3], "dungeon", O::Hit}, {argv[4], "panel", O::Hit},
+                {argv[3], "panel", O::NoHit}, {argv[4], "dungeon", O::NoHit}}) {
+                const auto image = cv::imread(file);
+                closure::check(!image.empty() && image.cols == 900 && image.rows == 1600, "HEAL_FRAME_INVALID");
+                ++frame.identity.frame_id;
+                frame.identity.captured_at = frame.identity.capture_finished_at = std::chrono::steady_clock::now();
+                frame.raw_bgr = std::make_shared<const std::vector<std::uint8_t>>(image.data,image.data+image.total()*image.elemSize());
+                const recognition::Request request{"healing-frame","1",{0,0,900,1600},
+                    recognition::CustomParameters{"WvdVision",{{"mode","supply_context"},{"phase",kind}}}};
+                const auto observed = service.evaluate(frame,frame.identity,request);
+                closure::check(observed.outcome == expected, "HEAL_FRAME_RESULT:"+file+":"+kind+":"+observed.error_code+":"+observed.evidence.dump());
+                std::cout << kind << ':' << (expected == O::Hit ? "Hit" : "NoHit") << ':' << observed.evidence.dump() << '\n';
+            }
+            std::cout << "PASS real captured recovery panel and dungeon return; each rejects the other phase\n";
             return 0;
         }
         if (argc == 2 && std::string(argv[1]) == "--combat-diagnostic-drive") {
@@ -1000,9 +1386,18 @@ int main(int argc, char **argv) {
                 documents[doc.at("flow").at("id").get<std::string>()] = doc;
             const games::tasks::PublicFlowLibrary library(documents, assets);
             const auto graph = library.compile_step("combat-open-detail", {{"x", 640}, {"y", 965}}, "zh-Hant");
-            const auto open_node = graph.nodes.at("Entry").at("next").at(0).get<std::string>();
+            std::string open_node;
+            for (const auto &[id, node] : graph.nodes.items())
+                if (node.contains("operation_args") && node.at("operation_args").contains("retry")) {
+                    check(open_node.empty(), "OPEN_INPUT_AMBIGUOUS");
+                    open_node = id;
+                }
+            check(!open_node.empty(), "OPEN_INPUT_MISSING");
             const auto &args = graph.nodes.at(open_node).at("operation_args");
             check(args.at("retry").at("interval_ms") == 1500, "OPEN_RETRY_NOT_COMPILED");
+            check(args.at("retry").at("max_submissions") == 3 &&
+                args.at("postcondition_timeout_ms") == 5000,
+                "OPEN_SKILL_STILL_SPAMS_UNRESPONSIVE_MENU");
             const auto flee = library.resource_condition("combat.menu.flee", "zh-Hant", authoring::ResourceUse::Observation);
             const auto detail = library.resource_condition("combat.skill.detail", "zh-Hant", authoring::ResourceUse::Observation);
             const auto setup = [&](Ports &ports) {
@@ -1048,7 +1443,8 @@ int main(int argc, char **argv) {
             C failed_open("closure.unavailable_skill");
             const auto child = failed_open.define_child("Open", graph);
             failed_open.route("Entry", {"Call"});
-            failed_open.call_child("Call", child, {"Terminal"}, {{"UnavailableExit", {"Defend"}}});
+            failed_open.call_child("Call", child, {"Terminal"},
+                {{"UnavailableExit", {"Defend"}}, {"AdvancedExit", {"Terminal"}}});
             const auto same_menu = args.at("scene_recognition").at("parameters");
             failed_open.fixed_click("Defend", same_menu, C::absent(J{{"mode", "prepared_actor"}}),
                 {513, 1200}, {"Terminal"});

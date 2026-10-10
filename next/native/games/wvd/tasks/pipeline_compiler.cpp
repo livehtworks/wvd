@@ -18,6 +18,23 @@ void require(bool value, const char *code) {
     if (!value)
         throw std::runtime_error(code);
 }
+J compact_condition(const J &condition) {
+    const auto mode = condition.value("mode", "");
+    if (mode != "all" && mode != "any" && mode != "not") return condition;
+    auto result = condition;
+    J children = J::array();
+    for (const auto &child : condition.at("conditions")) {
+        auto nested = compact_condition(child);
+        // 只合并同类布尔包装，保留叶子顺序、错误与输入授权；不短路/去重。
+        if (mode != "not" && nested.size() == 2 && nested.value("mode", "") == mode &&
+            nested.at("conditions").size() + children.size() <= 16) {
+            for (auto &leaf : nested.at("conditions")) children.push_back(std::move(leaf));
+        } else children.push_back(std::move(nested));
+    }
+    // 若合并后的整层超限，保留原结构，而不是扩大运行合同。
+    if (children.size() <= 16) result["conditions"] = std::move(children);
+    return result;
+}
 // Routing-only business predicates never authorize input. Keep the full
 // predicate in scene/guard; fixed input gets a separate visual region proof.
 std::optional<J> visual_authority(const J &condition) {
@@ -133,6 +150,13 @@ void collect_images(const J &value, std::set<std::string> &images, std::set<std:
             collect_images(vision::blocking_probes(true, locale, random_maze_events), images, expanded_modes);
         if (expand && mode == "input_clear")
             collect_images(vision::input_blockers(value.value("phase", ""), locale, random_maze_events), images, expanded_modes);
+        if (expand && mode == "target_chest_end") {
+            collect_images(J{{"mode", "combat_active"}}, images, expanded_modes);
+            collect_images(vision::task_probes(vision::chest_stage_probes(), locale, random_maze_events), images, expanded_modes);
+            collect_images(J{{"mode", "input_clear"}, {"phase", "combat"}}, images, expanded_modes);
+            collect_images(J{{"mode", "revival_prompt"}}, images, expanded_modes);
+            add_image("RiseAgain.png", images, expanded_modes);
+        }
         if (expand && mode == "exception_screen")
             collect_images(vision::exception_probes(locale), images, expanded_modes);
         if (expand && mode == "special_screen") {
@@ -192,7 +216,7 @@ void collect_images(const J &value, std::set<std::string> &images, std::set<std:
             for (const auto &probe : vision::supply_scene_probes()) collect_images(probe, images, expanded_modes);
         if (mode == "combat_active")
             for (const auto *name : {"combat_active_zh_hant", "combatActive", "combatActive_2", "combatActive_3", "combatActive_4",
-                                    "combat_speed_off_zh_hant", "combat_speed_on_zh_hant", "combat_skill_detail_zh_hant"})
+                                    "combat_speed_off_zh_hant", "combat_speed_on_zh_hant", "combat_skill_detail_zh_hant", "combat_flee_zh_hant"})
                 add_image(std::string(name) + ".png", images, expanded_modes);
         if (mode == "movement_stopped")
             for (const auto *name : {"dungFlag", "mapFlag"})
@@ -491,7 +515,7 @@ J PipelineCompiler::business(const std::string &field, J value, const std::strin
 J PipelineCompiler::request(const J &condition) const {
     return {{"id", workflow_.kind},   {"revision", "1"},          {"type", "custom"},
             {"binding", condition.value("mode", "") == "confirmed_input_result" ? "ConfirmedInputResult" : "WvdVision"},
-            {"roi", {0, 0, 900, 1600}}, {"parameters", condition}};
+            {"roi", {0, 0, 900, 1600}}, {"parameters", compact_condition(condition)}};
 }
 void PipelineCompiler::add(const std::string &name, J node) {
     require(!workflow_.nodes.contains(name), "COMPILE_NODE_DUPLICATE");
@@ -678,7 +702,9 @@ void PipelineCompiler::retry_menu_input(const std::string &name, const J &ready,
     unsigned max_submissions, const std::string &restart_from) {
     require(workflow_.nodes.contains(name) &&
         workflow_.nodes.at(name).value("binding", "") == "Input" &&
-        workflow_.nodes.at(name).at("operation_args").at("command").at("kind") == "Click" &&
+        (workflow_.nodes.at(name).at("operation_args").at("command").at("kind") == "Click" ||
+         (workflow_.nodes.at(name).at("operation_args").at("command").at("kind") == "ClickKey" &&
+          workflow_.nodes.at(name).at("operation_args").at("command").at("key") == 4)) &&
         interval_ms >= 1000 && interval_ms <= 60000, "COMPILE_INPUT_RETRY_INVALID");
     workflow_.nodes[name]["operation_args"]["retry"] = {
         {"ready", request(ready)}, {"interval_ms", interval_ms}, {"max_submissions", max_submissions}};
@@ -998,7 +1024,7 @@ void PipelineCompiler::confirm(const std::string &name, const std::string &opera
                                const std::string &event, const J &condition, J next, J step, const std::string &enemy_rule) {
     const std::set<std::string> events{"target_completed", "dungeon_entered", "combat_observed", "combat_special_observed",
                                       "chest_observed", "dungeon_resumed", "dungeon_completed", "revival_observed", "resurrected", "game_restarted",
-                                      "healing_requested", "healing_completed", "inn_payment_prepared", "inn_rest_completed", "party_reassembled", "chest_character_attempted",
+                                      "healing_requested", "healing_completed", "healing_attempt_finished", "inn_payment_prepared", "inn_rest_completed", "party_reassembled", "chest_character_attempted",
                                       "party_death_observed", "party_death_cleared", "party_defeat_observed",
                                       "wall_turn_completed", "wall_left_completed", "wall_right_completed",
                                       "karma_observed", "karma_completed", "trap_cycle_started", "trap_cycle_completed",
@@ -1044,7 +1070,7 @@ void PipelineCompiler::confirm(const std::string &name, const std::string &opera
                                       "mining_party_assembled", "mining_refill_completed", "mining_cycle_completed",
                                       "dark_light_entered", "dark_light_completed"};
     require((events.contains(event) || event == "target_encounter_started" ||
-        event == "target_encounter_interrupted" || event == "target_encounter_result" ||
+        event == "target_encounter_interrupted" || event == "target_encounter_result" || event == "target_encounter_chest_result" ||
         event == "target_navigation_terminated" || event == "target_continuation_lost" ||
         event == "target_reacquire_prepared") &&
         !operation.empty() && operation.size() <= 128,

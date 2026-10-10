@@ -1,4 +1,5 @@
 #include "dungeon_route.hpp"
+#include "games/wvd/vision/chest_probes.hpp"
 #include "games/wvd/combat/encounter.hpp"
 #include "games/wvd/chest/chest.hpp"
 #include "games/wvd/navigation/auto_route.hpp"
@@ -93,9 +94,7 @@ CompiledWorkflow traverse_dungeon(const WvdTaskPlan &plan, const J &profile,
             {"resume", {{"mode", "reobserve"}}}}}));
     }
     const J combat{{"mode", "combat_active"}};
-    auto reward = C::image("chest_reward_advance");
-    reward["roi"] = {730, 1330, 170, 270};
-    const auto chest = C::any({C::image("chestFlag"), C::image("whowillopenit"), C::image("chestOpening"), reward});
+    const auto chest = vision::chest_page_condition();
     const auto revive = C::image("RiseAgain");
     const auto encounter = C::any({combat, chest, revive});
     const J input_clear{{"mode", "input_clear"}, {"phase", "navigation"}};
@@ -209,10 +208,17 @@ CompiledWorkflow traverse_dungeon(const WvdTaskPlan &plan, const J &profile,
                 graph.confirm("TargetInterrupted" + suffix, "target.interlude." + suffix,
                     "target_encounter_interrupted", active, {"TargetDispatch" + suffix}, i);
                 graph.route("TargetDispatch" + suffix, {"TargetConfirmed" + suffix, "TargetRevive" + suffix,
-                    "TargetChest" + suffix, "TargetCombat" + suffix, "TargetResult" + suffix,
+                    "TargetChestEnd" + suffix, "TargetChest" + suffix, "TargetCombat" + suffix, "TargetResult" + suffix,
                     "TargetReacquire" + suffix, "TargetIdentityUnknown" + suffix, "TargetWait" + suffix});
                 graph.observe("TargetConfirmed" + suffix, C::all({active, C::business("/target_encounter/phase", 3)}),
                     {"AfterTargetBattle" + suffix});
+                // A chest UI after this attributed battle is an end boundary,
+                // even when the short intervening dungeon frame was not captured.
+                const J chest_end{{"mode", "target_chest_end"}};
+                graph.observe("TargetChestEnd" + suffix, C::all({active, authorized, chest_end}),
+                    {"ConfirmTargetChestEnd" + suffix});
+                graph.confirm("ConfirmTargetChestEnd" + suffix, "target.chest-end." + suffix,
+                    "target_encounter_chest_result", chest_end, {"AfterTargetBattle" + suffix}, i);
                 graph.observe("TargetRevive" + suffix, C::all({active, revive}), {"ResurrectTarget" + suffix});
                 graph.call_child("ResurrectTarget" + suffix, resurrection, {"TargetDispatch" + suffix});
                 graph.observe("TargetChest" + suffix, C::all({active, chest}), {"OpenTargetChest" + suffix});

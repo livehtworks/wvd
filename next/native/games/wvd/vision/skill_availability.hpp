@@ -6,10 +6,11 @@ namespace wvd::games::vision {
 struct SkillAvailability {
     bool disabled{};
     std::array<int, 4> bright_pixels{}, text_edges{};
+    std::array<int, 4> command_bright_pixels{};
 };
 // Only menu label interiors: exclude borders, skill symbols and detail icons.
-// A dark label alone is unknown. Require visible lettering and another bright
-// label in the same menu, so whole-screen dimming cannot authorize a fallback.
+// Compare skill lettering with the command row, not another skill: resource
+// shortage or a status effect can disable all four skills at once.
 inline SkillAvailability measure_skill_availability(const cv::Mat &bgr, int slot) {
     SkillAvailability result;
     if (bgr.size() != cv::Size(900, 1600) || bgr.type() != CV_8UC3 || slot < 0 || slot > 3)
@@ -21,10 +22,16 @@ inline SkillAvailability measure_skill_availability(const cv::Mat &bgr, int slot
         cv::Canny(gray, edges, 40, 80);
         result.text_edges[i] = cv::countNonZero(edges);
     }
-    bool bright_peer = false;
-    for (int i = 0; i < 4; ++i)
-        if (i != slot && result.bright_pixels[i] >= 100 && result.text_edges[i] >= 150) bright_peer = true;
-    result.disabled = bright_peer && result.bright_pixels[slot] <= 5 && result.text_edges[slot] >= 150;
+    int visible_commands = 0;
+    constexpr std::array<int, 4> command_x{195, 330, 465, 740};
+    for (int i = 0; i < 4; ++i) {
+        cv::Mat gray;
+        cv::cvtColor(bgr(cv::Rect(command_x[i], 1170, 90, 40)), gray, cv::COLOR_BGR2GRAY);
+        result.command_bright_pixels[i] = cv::countNonZero(gray > 170);
+        visible_commands += result.command_bright_pixels[i] >= 60;
+    }
+    // Blank labels and whole-screen dimming are unknown, not disabled proof.
+    result.disabled = visible_commands >= 2 && result.bright_pixels[slot] <= 5 && result.text_edges[slot] >= 150;
     return result;
 }
 }

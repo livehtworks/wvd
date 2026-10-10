@@ -22,11 +22,12 @@ function Assert-Candidate {
     $delivery = Get-Content -LiteralPath $marker -Raw -Encoding UTF8 | ConvertFrom-Json
     if ($delivery.engine -ne 'wvd_native' -or $delivery.status -ne 'BUILT_NOT_GAME_ACCEPTED' -or
         $delivery.build_input.state -ne 'BUILT' -or -not $delivery.build_input.artifacts -or
-        -not $delivery.source_commit -or -not $delivery.worktree_diff_sha256 -or -not $delivery.files) { throw 'CANDIDATE_MARKER_INVALID' }
+        -not $delivery.source_commit -or -not $delivery.product_inputs_sha256 -or
+        $delivery.product_inputs_sha256 -notmatch '^[0-9a-f]{64}$' -or
+        $delivery.product_input_count -le 0 -or -not $delivery.files) { throw 'CANDIDATE_MARKER_INVALID' }
     if ($delivery.source_commit -ne $delivery.build_input.source.source_commit -or
-        $delivery.worktree_diff_sha256 -ne $delivery.build_input.source.worktree_diff_sha256 -or
-        $delivery.worktree_dirty -ne $delivery.build_input.source.worktree_dirty -or
-        $delivery.untracked_source_count -ne $delivery.build_input.source.untracked_source_count) { throw 'CANDIDATE_BUILD_IDENTITY_MISMATCH' }
+        $delivery.product_inputs_sha256 -ne $delivery.build_input.source.product_inputs_sha256 -or
+        $delivery.product_input_count -ne $delivery.build_input.source.product_input_count) { throw 'CANDIDATE_BUILD_IDENTITY_MISMATCH' }
     $members = @{}
     foreach ($row in $delivery.files) {
         $relative = [string]$row.path

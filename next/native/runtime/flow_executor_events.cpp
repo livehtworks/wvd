@@ -234,14 +234,15 @@ TickResult FlowExecutor::resume_event(Frame &frame, const workflow::Step &curren
     const auto resume = *frame.resume;
     if (resume.owner >= stack_.size()) return fail("EVENT_RESUME_OWNER_MISSING");
     if (!resume.rule.resume_guard) return fail("EVENT_RESUME_GUARD_MISSING");
-    if (frame.event_exits.empty() && Clock::now() - frame.entered_at >= current.time_limit)
-        return route_error(frame, current, "EVENT_RESUME_UNCONFIRMED");
     const auto image = observation_frame();
     if (auto event = check_events(frame, current, image, workflow::EventClass::Overlay)) return *event;
     const auto guard = ports_.recognize(image, *resume.rule.resume_guard);
     if (guard.outcome == contracts::RecognitionOutcome::Error)
         return fail(guard.error_code.empty() ? "EVENT_RESUME_RECOGNITION_ERROR" : guard.error_code);
     if (guard.outcome == contracts::RecognitionOutcome::NoHit) {
+        // 先看恢复后的新画面；旧节点已超时不能否定刚完成的启动恢复。
+        if (frame.event_exits.empty() && Clock::now() - frame.entered_at >= current.time_limit)
+            return route_error(frame, current, "EVENT_RESUME_UNCONFIRMED");
         if (auto event = check_unexpected(frame, current, image, "event_resume_not_confirmed")) return *event;
         return waiting(50ms);
     }

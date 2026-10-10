@@ -13,7 +13,7 @@ inline bool business_condition(const nlohmann::json &summary, const nlohmann::js
         "/target_encounter/active", "/target_encounter/phase", "/target_encounter/unit_matches",
         "/target_encounter/point", "/target_encounter/resume_authorized",
         "/recover_after_rez", "/met_encounter", "/dungeons", "/combats", "/chests", "/strategy/automatic",
-        "/has_prepared_skill", "/combat_actor_recognized", "/prepared_skill_index", "/healing_required", "/chest_has_character", "/chest_character",
+        "/has_prepared_skill", "/combat_actor_recognized", "/prepared_skill_index", "/healing_required", "/healing_active", "/healing_submissions", "/chest_has_character", "/chest_character",
         "/ordinary_rest_due", "/party_refresh_due", "/city_supply_due", "/inn_rest_completed", "/inn_payment_pending", "/inn_payment/submitted", "/death_prompt_pending", "/wall_bypass_step",
         "/giant_route_completed", "/giant_rest_due", "/giant_cycle_active",
         "/dark_light_active", "/encounter_timed_out", "/unit_index",

@@ -296,7 +296,12 @@ CompiledWorkflow bounty_cycle(const WvdQuestDefinition &definition, const J &pro
     graph.observe("NoRest", C::business("/bounty_cycle/rest_due", false), {"Completed"});
     const auto rest = graph.define_child("Inn", supply::rest_at_inn(profile.at("ACTIVE_ROYALSUITE_REST").get<bool>(), true));
     graph.call_child("Rest", rest, {"Completed"});
-    graph.confirm("Completed", "bounty.cycle.done", "bounty_cycle_completed", giant ? C::all({C::any({inn, edge}), bounty_city}) : C::any({inn, edge}), {"Terminal"});
+    // Rest子流程已按返回并退出菜单；不重复等待离店后的可选信息或城市帧。
+    const auto completed = C::any({C::all({C::business("/bounty_cycle/rest_due", true),
+        C::business("/inn_rest_completed", true), C::business("/inn_payment_pending", false)}),
+        C::all({C::business("/bounty_cycle/rest_due", false),
+            giant ? C::all({C::any({inn, edge}), bounty_city}) : C::any({inn, edge})})});
+    graph.confirm("Completed", "bounty.cycle.done", "bounty_cycle_completed", completed, {"Terminal"});
     graph.interrupt_on({{"mode", "blocking_screen"}, {"parallel_basic", true}}, "quest.bounty_common_screen_requires_dispatch");
     auto result = graph.finish();
     result.random_maze_events = false;

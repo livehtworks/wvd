@@ -170,6 +170,13 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, Dialogue
         graph.retry_menu_input("LeaveInnMenu", vision::menu_retry_ready(
             C::all({inn_menu, C::absent(story)}), "supply"));
     }
+    // 可选提示只处理真实继续箭头。已经就绪的迷宫/宝箱页仍交给业务流程。
+    const auto notice = C::all({vision::inn_notice_page(),
+        C::any({C::absent(J{{"mode", "boot_ready"}}), vision::city_screen()})});
+    entry.insert(std::find(entry.begin(), entry.end(), "Ready"), "ContinueNotice");
+    graph.click("ContinueNotice", notice, vision::notice_advance_arrow(),
+        C::any({notice, ready}), {"Entry"});
+    graph.delay_after("ContinueNotice", 300);
     graph.route("Entry", entry);
     // 启动时也可能留在城市普通剧情；只复用已确认的继续箭头，
     // ordinary_story_page 排除选项页，不能由城市背景提前宣布 Ready。
@@ -350,7 +357,7 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, Dialogue
             result.nodes.at(before)["next"].push_back(reselect);
         }
     };
-    for (const auto *name : {"Story", "CloseCharacter", "LeaveInnMenuZh", "LeaveInnMenu",
+    for (const auto *name : {"Story", "ContinueNotice", "CloseCharacter", "LeaveInnMenuZh", "LeaveInnMenu",
         "HandleNetwork", "ChooseSpecial", "ChooseDialogue", "ChooseKarma", "SandmanHandle", "BlessingHandle",
         "DismissDeath", "AcknowledgeDefeat", "DownloadEn", "DownloadZhHant", "RetryBlank", "Retry",
         "RetryLow", "ReturnTitle", "Resume", "Attention", "Title", "Announcement", "AnnouncementClassic"}) wrap_observed_action(name);

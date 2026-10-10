@@ -110,6 +110,21 @@ std::wstring fold(const std::filesystem::path &p) {
                    [](wchar_t c) { return std::towlower(c); });
     return value;
 }
+std::vector<std::filesystem::path> ancestors(const std::filesystem::path &path) {
+    // Traverse a DOS/UNC path, not the extended namespace: MSVC otherwise
+    // treats \\?\D: as a parent, which is not a valid Win32 directory.
+    auto text = path.native();
+    if (text.starts_with(L"\\\\?\\UNC\\")) text = L"\\\\" + text.substr(8);
+    else if (text.starts_with(L"\\\\?\\")) text = text.substr(4);
+    std::vector<std::filesystem::path> result;
+    for (auto p = std::filesystem::absolute(text).lexically_normal(); !p.empty();) {
+        result.push_back(extended_path(p));
+        auto parent = p.parent_path();
+        if (parent == p) break;
+        p = std::move(parent);
+    }
+    return result;
+}
 } // namespace
 struct BundleLease::Impl {
     std::filesystem::path root;
@@ -163,12 +178,12 @@ BundleLease::BundleLease(std::filesystem::path root, std::string revision, Manif
     : impl_(std::make_unique<Impl>()) {
     auto &s = *impl_;
     require(!revision.empty() && !manifest.empty(), "BUNDLE_MANIFEST_INVALID");
-    s.root = std::filesystem::absolute(root).lexically_normal();
+    s.root = std::filesystem::absolute(root).lexically_normal().make_preferred();
     s.revision = std::move(revision);
     s.id = unique_id();
     s.manifest = std::move(manifest);
     // 连同祖先检查 reparse，避免 canonical 把链接证据抹掉。
-    for (auto p = s.root; !p.empty() && p != p.parent_path(); p = p.parent_path()) {
+    for (const auto &p : ancestors(s.root)) {
         auto attributes = GetFileAttributesW(p.c_str());
         require(attributes != INVALID_FILE_ATTRIBUTES &&
                     !(attributes & FILE_ATTRIBUTE_REPARSE_POINT),
@@ -237,7 +252,7 @@ void BundleLease::copy_member(const std::string &relative,
     // Freeze the target ancestor chain as well as the source; do not follow a
     // junction or permit a parent rename during the synchronous copy.
     std::vector<std::unique_ptr<Held>> parents;
-    for (auto p = destination.parent_path(); !p.empty() && p != p.parent_path(); p = p.parent_path())
+    for (const auto &p : ancestors(destination.parent_path()))
         parents.push_back(std::make_unique<Held>(p, true));
     auto &file = *impl_->files.at(relative);
     std::lock_guard lock(file.content_mutex);

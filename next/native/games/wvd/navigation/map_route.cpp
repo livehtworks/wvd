@@ -1,4 +1,5 @@
 #include "map_route.hpp"
+#include "games/wvd/vision/chest_probes.hpp"
 #include "games/wvd/vision/location_probes.hpp"
 #include "games/wvd/vision/harken_probes.hpp"
 #include <algorithm>
@@ -16,8 +17,8 @@ tasks::CompiledWorkflow reach_map_target(const MapTarget &target,
     graph.check_policy("navigation", {"wvd-network-retry", "wvd-pause", "wvd-download", "wvd-story", "wvd-blessing", "wvd-karma", "wvd-dialogue", "wvd-special-dialogue", "wvd-sandman"});
     const auto map = C::image("mapFlag"), dungeon = C::image("dungFlag");
     const J combat{{"mode", "combat_active"}};
-    const auto chest = C::any({C::image("chestFlag"), C::image("whowillopenit"), C::image("chestOpening")});
-    const auto encounter = C::any({combat, chest});
+    const auto chest = vision::chest_page_condition();
+    const auto encounter = C::any({combat, chest, C::image("RiseAgain")});
     const auto map_scene = C::all({map, C::absent(encounter)});
     const auto moving = C::all({dungeon, C::absent(map), C::absent(encounter)});
     auto correct_map = map_scene;

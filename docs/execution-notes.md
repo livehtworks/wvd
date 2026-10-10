@@ -1,5 +1,19 @@
 # 当前执行注意项
 
+- 住宿退出菜单即步骤结束，不等待“背包補充完畢”或额外城市确认。正常信息页的箭头可随内容到y=1136，搜索整个下半屏而非固定小框；仍核场景及实际匹配中心。故事与信息页共用箭头形状，受控观察夹具不得把“非故事”强制设成“箭头不存在”。第9轮恢复日志已证明Boot Ready/Terminal结束，真正重复重启源于resume_event先判旧Leave超时再看恢复新帧；已修为先看resume_guard，NoHit才检查旧期限，未决输入保护不改。详见reviews/restart-loop-20261010.md。
+
+- 识别条件的结构深度和内部配方调用栈必须分开：入口校验八层布尔树，不能把revival_prompt→combat_active→本地化模板的内部调用算成新增作者层。布尔递归不得进入包含全部场景局部变量的大分派函数，否则只扩大递归限制会触发Windows栈溢出。编译识别请求时仅合并同类all/any包装，保留叶子顺序、Error与action_eligible，不短路/去重；菜单重试额外包装也须验证。回归必须让真实Service执行失败现场的完整条件、场景/目标/重试请求，而非只测独立叶子或受控Ports。
+
+- 战斗/宝箱/导航转场必须结束旧页面处理并重新分派，不能要求捕获中间迷宫帧。宝箱阶段包括直接奖励页；奖励内容未观察不等于开箱处理未退出。目标战斗结束与副本结束分别确认，需保留目标/遭遇身份，不能把后来战斗归给旧目标。公共步骤从父页进入时再取新帧，已转场须走明确只读出口；未提交动作不记施放/开箱选人成功。网络等遮挡挂起未决输入，不能借普通交接清未决输入。确认战斗/宝箱互切时结清上一处理段，下一场用新遭遇序号，回迷宫不重复累计。
+
+- 暂停后重入战斗可留下技能详情。只在combat_active及技能专用detail同时成立、且无未结输入时取消详情并重看菜单；不把关闭记为施放成功，不点Auto。拆锁子流程须在自己的入口保留奖励/战斗/迷宫等已进展页面出口：父页命中到子调用实际选路之间可已转场，不能把子入口只有拆锁页当作合理等待。战斗排队会改变倍速/队列HUD，masked ACTIVE需独立锚点，但不能只依赖倍速和详情；既有逃跑菜单文字也可只读确认战斗。新增硬编码锚点必须同步pipeline_compiler资源闭包。
+
+- 技能禁用判断不能要求另一技能可用：资源不足/状态异常可让四格全部灰掉。以仍亮着的指令栏文字作亮度参照，目标格须有文字边缘且无亮文字；整页变暗/空白不能当禁用证据。灰色确认后沿既有手动防御出口，不开持续Auto、不消费未施放技能。只对同角色同菜单打不开详情的补点采用旧代码3次尝试及5秒结果窗口；网络/未知场景恢复仍走原规则，不给整场战斗设3次上限。正式保存combat-open-detail须同步这两个参数，备份后revision CAS，不能覆盖其余用户编辑。
+
+- 冻结包采用Win32长路径前缀时，相对成员必须先用BundleLease::checked_relative转成系统分隔符，不能把带`/`的字符串直接拼到`\\?\`根。祖先检查应在DOS/UNC路径上遍历后逐个转成长路径，MSVC会把`\\?\D:`当作祖先而GetFileAttributesW返回87；不得因此放宽reparse检查。租约root的对外表示必须与Bundle.root一致，不能仅把其中一个强制转成扩展形式，否则Service会报BUNDLE_LEASE_MISMATCH。部署验证须覆盖真实冻结目录加载、普通/扩展路径发布复制与租约根一致性。
+- manage_service候选身份使用product_inputs_sha256/product_input_count及source_commit，不能继续要求已退出的worktree_diff_sha256/worktree_dirty/untracked_source_count字段。start返回accepted只表示准备已排队；必须继续核对submission、真实Running和游戏画面，不能当作循环成功。
+- 回复语义先对照src/script.py的StateDungeon（3243起）及悬赏恢复（3770起）：回复一次、返回关闭、继续，不验满HP/MP，不以物资不足停止。healing_attempt_finished与healing_completed分开；前者消费已提交尝试并保留delivery_unknown及effect_status=not_verified，后者不能凭页面返回伪造疗效。恢复插入后用已有healing_active/submissions续关闭，不重放回复；新增业务字段必须同步business_condition白名单及summarize_field，避免运行前BUSINESS_CONDITION_FIELD_INVALID。素材读取验证用真正的manifest-only冻结目录，authoring pack中未入manifest的manifest.json不能被放入BundleLease；不放宽成员检查绕过。
+
 - 文件读取的HANDLE在取得后、缓冲分配前必须即时接管；流程仓库的bad_alloc旧实现可留下文件锁，现由局部RAII保护，验证须确认故障点已在真实文件打开之后。
 - 改动模块选择需合并未跟踪新源码与tracked/staged路径，用git的NUL输出而非换行切割；依赖/生成/验收入口变更不能仅跑工具。独立工具检查与用户.vscode不应因此触发无关全量回归。
 - OwnedWindowsJob的CreateProcess入口必须收到实际EXE绝对路径；build.run先用PATH解析命令名，再交Job。不把dotnet启动失败误报成restore失败，也不绕过Job归属。

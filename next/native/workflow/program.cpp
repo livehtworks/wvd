@@ -87,7 +87,9 @@ void FlowProgram::validate() const {
                 const auto pair_ms = input->command.value("click_pair_interval_ms", 0);
                 if (pair_ms && (input->command.value("kind", "") != "Click" || pair_ms != 100 || input->retry))
                     throw std::runtime_error("FLOW_CLICK_PAIR_INVALID");
-                if (input->retry && (input->command.value("kind", "") != "Click" ||
+                const bool repeatable_menu_command = input->command.value("kind", "") == "Click" ||
+                    (input->command.value("kind", "") == "ClickKey" && input->command.value("key", 0) == 4);
+                if (input->retry && (!repeatable_menu_command ||
                     input->retry->interval < std::chrono::seconds{1} ||
                     input->retry->interval > std::chrono::minutes{1}))
                     throw std::runtime_error("FLOW_INPUT_RETRY_INVALID");

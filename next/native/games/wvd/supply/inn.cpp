@@ -12,7 +12,7 @@ tasks::CompiledWorkflow rest_at_inn(bool royal_suite, bool record_completion) {
                royal = C::image("royalsuite"), ok_en = C::image("OK");
     ok_en["locale_only"] = "en";
     const auto ok_zh = nlohmann::json{{"mode", "template"}, {"image", "inn_confirm_zh_hant"},
-        {"threshold", 0.8}, {"roi", {100, 820, 700, 340}}};
+        {"threshold", 0.8}, {"roi", {0, 800, 900, 800}}};
     const auto ok = C::any({ok_zh, ok_en});
     // 用户已明确普通资源不受宝石消费禁令限制。此确认只从已选住宿房型进入，
     // 不因语言/价格不同退役旧住宿功能；宝石购买组合单独阻断，不靠商品颜色判断。
@@ -35,9 +35,8 @@ tasks::CompiledWorkflow rest_at_inn(bool royal_suite, bool record_completion) {
     const auto stayed = C::all({stay, C::absent(ok)});
     const auto rest_story = vision::ordinary_story_page();
     const auto character = vision::character_page();
-    auto supply_arrow = C::image("chest_reward_advance");
-    supply_arrow["roi"] = {775, 940, 125, 120};
-    const auto supply_notice = C::all({supply_arrow, C::absent(vision::story_auto_control())});
+    const auto supply_arrow = vision::notice_advance_arrow();
+    const auto supply_notice = vision::inn_notice_page();
     // 城市反证逐项展开，避免“城市 -> 非结果页 -> 剧情 -> 对话”反复嵌套。
     // 后置已有“无确认/无宝石购买”，其内部不再包一份完整城市判定。
     const auto city = C::all({inn, C::absent(stay), C::absent(ok), C::absent(premium),
@@ -92,15 +91,17 @@ tasks::CompiledWorkflow rest_at_inn(bool royal_suite, bool record_completion) {
     graph.hit_limit("ContinueSupply", 6);
     graph.fixed_click("CloseCharacter", character, after_payment, {66, 1500}, {"Leave"});
     graph.retry_menu_input("CloseCharacter", character, 3000);
-    const auto leave_result = C::any({city, character, rest_story, supply_notice});
-    graph.click("BackFromStayZh", C::all({stayed, leave_zh, C::absent(rest_story),
+    // 与旧StateInn一致：确认在旅店菜单后按返回；菜单退出就是本步骤终点。
+    // 可选信息出现才处理，不等待补给文字/道具结果，也不重复确认城市帧。
+    const auto exited = C::all({C::absent(stay), C::absent(ok), C::absent(premium)});
+    graph.back("BackFromStayZh", C::all({stayed, leave_zh, C::absent(rest_story),
                     C::absent(supply_notice), C::absent(character),
                     nlohmann::json{{"mode", "input_clear"}, {"phase", "supply"}}}),
-                leave_zh, leave_result, {"Leave"});
+                exited, {"Terminal"});
     graph.retry_menu_input("BackFromStayZh", C::all({stayed, leave_zh, C::absent(character)}), 3000);
-    graph.click("BackFromStay", C::all({stayed, C::absent(leave_zh), C::absent(character), C::absent(rest_story), C::absent(supply_notice),
+    graph.back("BackFromStay", C::all({stayed, C::absent(leave_zh), C::absent(character), C::absent(rest_story), C::absent(supply_notice),
                     nlohmann::json{{"mode", "input_clear"}, {"phase", "supply"}}}),
-                C::image("Stay.png"), leave_result, {"Leave"}, vision::inn_leave_offset());
+                exited, {"Terminal"});
     graph.retry_menu_input("BackFromStay", vision::menu_retry_ready(
         C::all({stayed, C::absent(rest_story), C::absent(supply_notice)}), "supply"));
     // 只有真正走过确认住宿和退出旅店的路径，才能到达本段业务终点。

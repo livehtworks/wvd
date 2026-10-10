@@ -1,5 +1,6 @@
 #include "encounter.hpp"
 #include "enemy_rules.hpp"
+#include "games/wvd/vision/chest_probes.hpp"
 
 namespace wvd::games::combat {
 tasks::CompiledWorkflow fight_encounter(const nlohmann::json &profile,
@@ -17,7 +18,7 @@ tasks::CompiledWorkflow fight_encounter(const nlohmann::json &profile,
     graph.observe("StartProgress", baseline, {"Turn0"});
     graph.observe("NoProgress", C::all({battle, stalled}), {"AutoTimeout"});
     const auto dungeon = C::all({C::image("dungFlag"), C::absent(battle)});
-    const auto chest = C::all({C::image("chestFlag"), C::absent(battle)});
+    const auto chest = C::all({vision::chest_page_condition(), C::absent(battle)});
     const bool repel = end == EncounterEnd::RepelPrompt;
     const auto special = profile.at("TASK_POINT_STRATEGY").value("special_combat", J::object());
     const bool detect_skull = !repel && special.value("skull", false);
@@ -70,7 +71,7 @@ tasks::CompiledWorkflow fight_encounter(const nlohmann::json &profile,
     // 击退敌势力在战后对话结束一场战斗；不扩大普通遭遇的成功条件。
     graph.confirm("Dungeon", "combat.resume", repel ? "repel_battle_completed" : "dungeon_resumed",
         repel ? C::all({C::image("icanstillgo"), C::absent(battle)}) : dungeon, {"Terminal"});
-    // 宝箱/复活不是 Dungeon resumed；计时和待计数遭遇留给外层返回地下城时结算。
+    // A known chest page ends this screen owner; no intervening dungeon frame is required.
     graph.observe("Chest", chest, repel ? J{"UnexpectedEnd"} : J{"ChestExit"});
     if (!repel) graph.handoff("ChestExit", "chest");
     if (repel) graph.recovery("UnexpectedEnd", "quest.repel_unexpected_encounter_end");

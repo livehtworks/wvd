@@ -358,20 +358,35 @@ bool pure_condition(const J &p, unsigned depth = 0) {
            mode == "pause_negative" || mode == "auto_route_post" || mode == "focus_cursor" ||
            mode == "reached" || mode == "through_stair";
 }
+void validate_condition_depth(const J &p, unsigned depth = 0) {
+    check(depth <= 8, "WVD_CONDITION_DEPTH");
+    if (!p.is_object()) return;
+    const auto mode = p.value("mode", "");
+    if ((mode == "all" || mode == "any" || mode == "not") &&
+        p.contains("conditions") && p.at("conditions").is_array())
+        for (const auto &child : p.at("conditions")) validate_condition_depth(child, depth + 1);
+}
 J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixels, const J &p,
                     const J &bound, const recognition::Scope &scope,
                     recognition::Cache &cache, unsigned depth, EvaluationMemo &memo);
+J evaluate_conditions(const recognition::Bundle &bundle, recognition::Pixels pixels, const J &p,
+                      const J &bound, const recognition::Scope &scope,
+                      recognition::Cache &cache, unsigned depth, EvaluationMemo &memo);
 J evaluate_impl(const recognition::Bundle &bundle, recognition::Pixels pixels, const J &p,
                 const J &bound, const recognition::Scope &scope,
                 recognition::Cache &cache, unsigned depth, EvaluationMemo &memo) {
     platform::timing::count(platform::timing::Counter::ConditionVisits);
-    check(depth <= 8, "WVD_CONDITION_DEPTH");
+    // 作者条件的八层边界在入口校验；这里计的是内部配方调用栈。
+    // revival_prompt -> combat_active -> 本地化模板不是新增作者条件层。
+    check(depth <= 32, "WVD_RECIPE_DEPTH");
     // Resolve aliases before choosing a cache contract: a legacy template may
     // now be an OCR/composite probe with no template score at all.
     const auto localized = tasks::localize_implicit_probe(p, bound.value("resource_locale", ""));
     if (localized && *localized != p)
         return evaluate_impl(bundle, pixels, *localized, bound, scope, cache, depth, memo);
     const auto mode = p.value("mode", "");
+    if (mode == "all" || mode == "any" || mode == "not")
+        return evaluate_conditions(bundle, pixels, p, bound, scope, cache, depth, memo);
     // 普通单最佳匹配的测量值与最终阈值无关。复用 score/box，不能复用旧 Hit/NoHit。
     // ROI、预处理、缩放、遮罩和其它参数仍全部参与身份；multiple 不进入此路径。
     const bool single_template = (mode == "template" || mode == "bright_mask") && !p.value("multiple", false);
@@ -536,6 +551,42 @@ ProbeBatch evaluate_batch(const recognition::Bundle &bundle, recognition::Pixels
                 memo.values.try_emplace(key, value);
     // 有序候选只消费优先级到达的结果/异常；all/any 调用者必须消费全部结果。
     return batch;
+}
+J evaluate_conditions(const recognition::Bundle &bundle, recognition::Pixels pixels, const J &p,
+                      const J &bound, const recognition::Scope &scope,
+                      recognition::Cache &cache, unsigned depth, EvaluationMemo &memo) {
+    // 布尔树递归不进入大识别分派函数，避免每层携带所有场景的局部栈空间。
+    check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");
+    const auto mode = p.at("mode").get<std::string>();
+    const auto &children = p.at("conditions");
+    check(children.is_array() && !children.empty() && children.size() <= 16 &&
+              (mode != "not" || children.size() == 1), "WVD_CONDITIONS_INVALID");
+    bool all = true, any = false, action_eligible = true;
+    J evidence = J::array();
+    std::vector<J> evaluated(children.size());
+    const bool parallel_conditions = !memo.in_parallel && children.size() > 1 && pure_condition(p);
+    if (parallel_conditions) {
+        const auto batch = evaluate_batch(bundle, pixels, children, bound, scope, cache, depth, memo, 2);
+        for (std::size_t i = 0; i < children.size(); ++i) evaluated[i] = batch.at(i);
+    } else {
+        for (std::size_t i = 0; i < children.size(); ++i)
+            evaluated[i] = evaluate_impl(bundle, pixels, children[i], bound, scope, cache, depth + 1, memo);
+    }
+    // 所有叶子仍检查；不能短路掩盖缺图/Error或提高输入授权。
+    for (auto &result : evaluated) {
+        check(result.at("outcome") != "Error", "WVD_CONDITION_ERROR");
+        const bool hit = result.at("outcome") == "Hit";
+        all = all && hit;
+        any = any || hit;
+        action_eligible = action_eligible && result.value("action_eligible", true);
+        evidence.push_back(std::move(result));
+    }
+    const auto area = scope.allowed_roi();
+    auto result = decision(mode == "all" ? all : mode == "any" ? any : !any,
+        cv::Rect(area.x, area.y, area.width, area.height), {{"conditions", std::move(evidence)},
+            {"evaluation", parallel_conditions ? "opencv_two_way" : "sequential"}}, false);
+    result["action_eligible"] = action_eligible;
+    return result;
 }
 J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixels, const J &p,
                     const J &bound, const recognition::Scope &scope,
@@ -1322,6 +1373,25 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
         }
         return decision(false, {}, {{"group", mode}, {"stage", "unknown"}});
     }
+    if (mode == "target_chest_end") {
+        check(p.size() == 1, "TARGET_CHEST_END_PARAMETERS_INVALID");
+        const auto observe = [&](const J &probe) {
+            auto result = evaluate_impl(bundle, pixels, probe, bound, scope, cache, depth + 1, memo);
+            check(result.at("outcome") != "Error", "TARGET_CHEST_END_RECOGNITION_ERROR");
+            return result;
+        };
+        if (observe(J{{"mode", "combat_active"}}).at("outcome") == "Hit")
+            return decision(false, {}, {{"reason", "battle_still_present"}}, false);
+        for (const auto &probe : task_probes(chest_stage_probes(), locale, random_maze_events)) {
+            auto chest_end = observe(probe);
+            if (chest_end.at("outcome") != "Hit") continue;
+            if (observe(J{{"mode", "input_clear"}, {"phase", "combat"}}).at("outcome") != "Hit" ||
+                observe(revival_probe(bound)).at("outcome") == "Hit")
+                return decision(false, {}, {{"reason", "chest_end_obstructed"}}, false);
+            return decision(true, allowed_rect, {{"reason", "battle_ended_at_chest"}, {"matched", std::move(chest_end)}}, false);
+        }
+        return decision(false, {}, {{"reason", "no_chest_end_evidence"}}, false);
+    }
     if (mode == "boot_ready" || mode == "boot_post" || mode == "blocking_screen") {
         check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");
         if (mode == "boot_post") {
@@ -1343,42 +1413,6 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
                 return decision(true, allowed_rect, {{"stage", probe.value("image", probe.value("mode", "unknown"))}, {"matched", result}});
         }
         return decision(false, {}, {{"stage", "unknown"}});
-    }
-    if (mode == "all" || mode == "any" || mode == "not") {
-        check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");
-        const auto &children = p.at("conditions");
-        check(children.is_array() && !children.empty() && children.size() <= 16 &&
-                  (mode != "not" || children.size() == 1),
-              "WVD_CONDITIONS_INVALID");
-        bool all = true, any = false, action_eligible = true;
-        J evidence = J::array();
-        std::vector<J> evaluated(children.size());
-        const bool parallel_conditions = !memo.in_parallel && children.size() > 1 && pure_condition(p);
-        if (parallel_conditions) {
-            const auto batch = evaluate_batch(bundle, pixels, children, bound, scope, cache, depth, memo, 2);
-            for (std::size_t i = 0; i < children.size(); ++i)
-                evaluated[i] = batch.at(i);
-        } else {
-            for (std::size_t i = 0; i < children.size(); ++i)
-                evaluated[i] = evaluate_impl(bundle, pixels, children[i], bound, scope, cache, depth + 1, memo);
-        }
-        // 组合只产生布尔条件，不赋予坐标许可；所有子项都检查，不能短路掩盖缺图/Error。
-        for (auto &result : evaluated) {
-            check(result.at("outcome") != "Error", "WVD_CONDITION_ERROR");
-            bool hit = result.at("outcome") == "Hit";
-            all = all && hit;
-            any = any || hit;
-            // 布尔包装不能提升子识别的授权级别，尤其不能洗掉低置信 NEXT 的限制。
-            action_eligible = action_eligible && result.value("action_eligible", true);
-            evidence.push_back(std::move(result));
-        }
-        auto result = decision(mode == "all"   ? all
-                               : mode == "any" ? any
-                                               : !any,
-                               allowed_rect, {{"conditions", evidence},
-                                              {"evaluation", parallel_conditions ? "opencv_two_way" : "sequential"}}, false);
-        result["action_eligible"] = action_eligible;
-        return result;
     }
     if (mode == "fishing_bobber") {
         check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");
@@ -1635,6 +1669,14 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
                         return active;
                     }
                 }
+                // Queued commands alter the speed/party HUD. The unchanged
+                // instruction-menu label is another independent battle anchor.
+                auto menu = one("combat_flee_zh_hant", {{"roi", {660, 1080, 240, 220}}, {"threshold", .82}});
+                if (menu.at("outcome") == "Hit") {
+                    active["battle_hud"] = std::move(menu);
+                    active["attempts"] = std::move(attempts);
+                    return active;
+                }
                 // Skill overlays dim the speed HUD, but retain their independent detail button.
                 auto detail = one("combat_skill_detail_zh_hant", {{"roi", {0, 600, 900, 1000}},
                     {"threshold", .82}});
@@ -1650,11 +1692,12 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
     if (mode == "combat_skill_disabled") {
         const int slot = p.at("slot").get<int>();
         check(slot >= 0 && slot < 4 && p.size() == 2, "COMBAT_SKILL_SLOT_INVALID");
-        check((cv::Rect(0, 930, 820, 180) & allowed_rect) == cv::Rect(0, 930, 820, 180), "WVD_ROI_OUTSIDE_SCOPE");
+        check((cv::Rect(0, 930, 900, 300) & allowed_rect) == cv::Rect(0, 930, 900, 300), "WVD_ROI_OUTSIDE_SCOPE");
         const auto measured = measure_skill_availability(image, slot);
         const cv::Rect label(slot % 2 ? 520 : 145, slot / 2 ? 1040 : 950, 230, 40);
         return decision(measured.disabled, label, {{"slot", slot}, {"bright_pixels", measured.bright_pixels},
-            {"text_edges", measured.text_edges}, {"reason", measured.disabled ? "disabled_menu_label" : "not_proven_disabled"}}, false);
+            {"text_edges", measured.text_edges}, {"command_bright_pixels", measured.command_bright_pixels},
+            {"reason", measured.disabled ? "disabled_menu_label" : "not_proven_disabled"}}, false);
     }
     if (mode == "support_selection") {
         const auto expected = p.value("expect", "present");
@@ -1865,6 +1908,7 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
 }
 J evaluate(const recognition::Bundle &bundle, recognition::Pixels pixels, const J &p, const J &bound,
            const recognition::Scope &scope, recognition::Cache &cache) {
+    validate_condition_depth(p);
     // 候选选路会在同一帧用多个条件检查同一个阻塞页。复用纯模板叶子，
     // 不缓存业务/运动判断，不跳过 Error，也绝不跨帧或跨范围复用。
     const auto area = scope.allowed_roi();

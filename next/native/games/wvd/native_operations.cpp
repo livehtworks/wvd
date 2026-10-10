@@ -68,6 +68,22 @@ Result NativeOperations::execute(const std::string &binding, const J &parameters
     const std::optional<contracts::FrameEnvelope> &selected_frame,
     const std::optional<contracts::Observation> &selected_observation,
     const std::string &source_path) {
+    if (binding == "WvdHealingEffect") {
+        if (parameters.at("phase") == "submitted") {
+            state_.apply([&](contracts::BusinessRunState &base) {
+                dynamic_cast<WvdRunState &>(base).healing_input_submitted(parameters.at("delivery_unknown"));
+                return true;
+            });
+            context_.business_event("heal.input_submitted", {{"delivery_unknown",parameters.at("delivery_unknown")},
+                {"source_path",source_path}});
+            return done();
+        }
+        if (parameters.at("phase") != "authorize") throw std::runtime_error("INPUT_EFFECT_PHASE_INVALID");
+        if (context_.cancelled()) return {State::ExternalBlocked, "CANCELLED"};
+        const bool ready = state_.field("/healing_active").get<bool>() &&
+            state_.field("/healing_submissions").get<unsigned>() == 0;
+        return ready ? done() : waiting();
+    }
     if (binding == "WvdInnGoldEffect") {
         // 只由已冻结的金币确认输入调用。实际送达计数独立于“住宿成功”，
         // 停止与提交竞态也必须保留刚刚发生的副作用事实。
@@ -133,6 +149,14 @@ Result NativeOperations::execute(const std::string &binding, const J &parameters
     if (binding == "WvdConfirm") {
         const auto event = parameters.at("event").get<std::string>();
         const auto operation = parameters.at("operation").get<std::string>();
+        if (event == "healing_attempt_finished") {
+            const auto &probe = parameters.at("confirmation").at("parameters");
+            if (probe != J{{"mode","supply_context"},{"phase","dungeon"}})
+                throw std::runtime_error("HEALING_RETURN_PROOF_REQUIRED");
+        }
+        if (event == "target_encounter_chest_result" &&
+            parameters.at("confirmation").at("parameters") != J{{"mode", "target_chest_end"}})
+            throw std::runtime_error("TARGET_CHEST_END_PROOF_REQUIRED");
         std::optional<std::size_t> expected_step, reward_index;
         if (parameters.contains("expected_step") && !parameters.at("expected_step").is_null()) {
             const auto step = parameters.at("expected_step");
@@ -158,6 +182,7 @@ Result NativeOperations::execute(const std::string &binding, const J &parameters
                 {"frame_id", confirmation.basis.frame_id},
                 {"generation", confirmation.basis.generation}};
             if (parameters.contains("enemy_rule")) receipt["enemy_rule"] = parameters.at("enemy_rule");
+            if (event == "healing_attempt_finished") receipt["effect_status"] = "not_verified";
             return true;
         });
         if (!accepted) return {State::ExternalBlocked, "BUSINESS_CONFIRMATION_STALE"};

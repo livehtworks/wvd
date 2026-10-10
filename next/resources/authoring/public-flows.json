@@ -2617,8 +2617,24 @@
       "name": "打开当前角色技能详情",
       "description": "只推进当前步骤，不消费外层路线目标；调用参数仅作用于本次实例。"
     },
-    "entry": "open",
+    "entry": "open-entry",
     "nodes": [
+      {"id": "open-entry", "type": "route", "name": "重看当前技能页面", "parameters": {}},
+      {"id": "open-advanced", "type": "recognition", "name": "技能页面已交接", "parameters": {"condition": {"mode": "all", "conditions": [
+        {"mode": "input_clear"}, {"mode": "any", "conditions": [
+          {"mode": "all", "conditions": [{"mode": "combat_active"}, {"mode": "semantic", "id": "combat.skill.detail"}]},
+          {"mode": "all", "conditions": [{"mode": "combat_active"}, {"mode": "not", "conditions": [{"mode": "prepared_actor"}]}]},
+          {"mode": "template", "image": "notenoughsp", "threshold": 0.8},
+          {"mode": "template", "image": "notenoughmp", "threshold": 0.8},
+          {"mode": "all", "conditions": [{"mode": "not", "conditions": [{"mode": "combat_active"}]}, {"mode": "any", "conditions": [
+            {"mode": "template", "image": "dungFlag", "threshold": 0.8},
+            {"mode": "semantic", "id": "chest.open.option"}, {"mode": "semantic", "id": "chest.choose.page"},
+            {"mode": "template", "image": "chestOpening", "threshold": 0.8}, {"mode": "semantic", "id": "chest.reward.page"},
+            {"mode": "template", "image": "RiseAgain", "threshold": 0.8}
+          ]}]}
+        ]}
+      ]}}},
+      {"id": "open-advanced-exit", "type": "end", "name": "未补点，交回新页面", "parameters": {"outcome": "handoff", "port": "AdvancedExit"}},
       {
         "id": "open",
         "type": "action",
@@ -2736,6 +2752,9 @@
                     "image": "chestFlag",
                     "threshold": 0.8
                   },
+                  {"mode": "semantic", "id": "chest.choose.page"},
+                  {"mode": "template", "image": "chestOpening", "threshold": 0.8},
+                  {"mode": "semantic", "id": "chest.reward.page"},
                   {
                     "mode": "template",
                     "image": "RiseAgain",
@@ -2751,7 +2770,8 @@
           ],
           "delay_after_ms": 600,
           "menu_retry_interval_ms": 1500,
-          "postcondition_timeout_ms": 20000
+          "menu_retry_max_submissions": 3,
+          "postcondition_timeout_ms": 5000
         }
       },
       {
@@ -2791,11 +2811,17 @@
         "outcome": "success",
         "order": 0
       },
+      {"id": "open-entry-advanced", "from": "open-entry", "to": "open-advanced", "outcome": "success", "order": 0},
+      {"id": "open-entry-action", "from": "open-entry", "to": "open", "outcome": "success", "order": 1},
+      {"id": "open-advanced-return", "from": "open-advanced", "to": "open-advanced-exit", "outcome": "success", "order": 0},
       {"id": "open-no-progress", "from": "open", "to": "unavailable-menu", "outcome": "failure", "order": 0},
       {"id": "menu-unavailable", "from": "unavailable-menu", "to": "unavailable", "outcome": "success", "order": 0}
     ],
     "layout": {
       "nodes": [
+        {"node_id": "open-entry", "x": -520, "y": 0},
+        {"node_id": "open-advanced", "x": -260, "y": -120},
+        {"node_id": "open-advanced-exit", "x": 0, "y": -120},
         {"node_id": "unavailable-menu", "x": 260, "y": 100},
         {"node_id": "unavailable", "x": 520, "y": 100},
         {
@@ -2864,7 +2890,7 @@
           ]
         }
       ],
-      "handoffs": ["UnavailableExit"]
+      "handoffs": ["UnavailableExit", "AdvancedExit"]
     }
   },
   {
@@ -3278,8 +3304,24 @@
       "name": "点击当前单体技能目标",
       "description": "只推进当前步骤，不消费外层路线目标；调用参数仅作用于本次实例。"
     },
-    "entry": "target",
+    "entry": "target-entry",
     "nodes": [
+      {"id": "target-entry", "type": "route", "name": "重看目标选择页面", "parameters": {}},
+      {"id": "target-advanced", "type": "recognition", "name": "目标选择页面已交接", "parameters": {"condition": {"mode": "all", "conditions": [
+        {"mode": "input_clear"}, {"mode": "any", "conditions": [
+          {"mode": "all", "conditions": [{"mode": "combat_active"}, {"mode": "not", "conditions": [{"mode": "prepared_actor"}]}]},
+          {"mode": "all", "conditions": [{"mode": "combat_active"}, {"mode": "not", "conditions": [{"mode": "semantic", "id": "combat.skill.detail"}]}]},
+          {"mode": "template", "image": "notenoughsp", "threshold": 0.8},
+          {"mode": "template", "image": "notenoughmp", "threshold": 0.8},
+          {"mode": "all", "conditions": [{"mode": "not", "conditions": [{"mode": "combat_active"}]}, {"mode": "any", "conditions": [
+            {"mode": "template", "image": "dungFlag", "threshold": 0.8},
+            {"mode": "semantic", "id": "chest.open.option"}, {"mode": "semantic", "id": "chest.choose.page"},
+            {"mode": "template", "image": "chestOpening", "threshold": 0.8}, {"mode": "semantic", "id": "chest.reward.page"},
+            {"mode": "template", "image": "RiseAgain", "threshold": 0.8}
+          ]}]}
+        ]}
+      ]}}},
+      {"id": "target-advanced-exit", "type": "end", "name": "未点目标，交回新页面", "parameters": {"outcome": "handoff", "port": "AdvancedExit"}},
       {
         "id": "target",
         "type": "action",
@@ -3397,6 +3439,9 @@
                             "image": "chestFlag",
                             "threshold": 0.8
                           },
+                          {"mode": "semantic", "id": "chest.choose.page"},
+                          {"mode": "template", "image": "chestOpening", "threshold": 0.8},
+                          {"mode": "semantic", "id": "chest.reward.page"},
                           {
                             "mode": "template",
                             "image": "RiseAgain",
@@ -3504,10 +3549,16 @@
         "to": "done",
         "outcome": "success",
         "order": 0
-      }
+      },
+      {"id": "target-entry-advanced", "from": "target-entry", "to": "target-advanced", "outcome": "success", "order": 0},
+      {"id": "target-entry-action", "from": "target-entry", "to": "target", "outcome": "success", "order": 1},
+      {"id": "target-advanced-return", "from": "target-advanced", "to": "target-advanced-exit", "outcome": "success", "order": 0}
     ],
     "layout": {
       "nodes": [
+        {"node_id": "target-entry", "x": -520, "y": 0},
+        {"node_id": "target-advanced", "x": -260, "y": -120},
+        {"node_id": "target-advanced-exit", "x": 0, "y": -120},
         {
           "node_id": "target",
           "x": 0,
@@ -3560,7 +3611,7 @@
           ]
         }
       ],
-      "handoffs": []
+      "handoffs": ["AdvancedExit"]
     }
   },
   {
@@ -3633,6 +3684,9 @@
                         "image": "chestFlag",
                         "threshold": 0.8
                       },
+                      {"mode": "semantic", "id": "chest.choose.page"},
+                      {"mode": "template", "image": "chestOpening", "threshold": 0.8},
+                      {"mode": "semantic", "id": "chest.reward.page"},
                       {
                         "mode": "template",
                         "image": "RiseAgain",
@@ -3762,8 +3816,19 @@
       "name": "点击已选开箱角色",
       "description": "只推进当前步骤，不消费外层路线目标；调用参数仅作用于本次实例。"
     },
-    "entry": "choose",
+    "entry": "choose-entry",
     "nodes": [
+      {"id": "choose-entry", "type": "route", "name": "重看当前开箱页面", "parameters": {}},
+      {"id": "choose-advanced", "type": "recognition", "name": "选人页面已交接", "parameters": {"condition": {"mode": "all", "conditions": [
+        {"mode": "input_clear"}, {"mode": "not", "conditions": [{"mode": "semantic", "id": "chest.choose.page"}]},
+        {"mode": "any", "conditions": [
+          {"mode": "combat_active"}, {"mode": "template", "image": "RiseAgain", "threshold": 0.8},
+          {"mode": "template", "image": "ambush", "threshold": 0.8},
+          {"mode": "template", "image": "chestOpening", "threshold": 0.8},
+          {"mode": "semantic", "id": "chest.reward.page"}, {"mode": "template", "image": "dungFlag", "threshold": 0.8}
+        ]}
+      ]}}},
+      {"id": "choose-advanced-exit", "type": "end", "name": "未选人，交回新页面", "parameters": {"outcome": "handoff", "port": "AdvancedExit"}},
       {
         "id": "choose",
         "type": "action",
@@ -4015,10 +4080,16 @@
         "to": "done",
         "outcome": "success",
         "order": 0
-      }
+      },
+      {"id": "choose-entry-advanced", "from": "choose-entry", "to": "choose-advanced", "outcome": "success", "order": 0},
+      {"id": "choose-entry-action", "from": "choose-entry", "to": "choose", "outcome": "success", "order": 1},
+      {"id": "choose-advanced-return", "from": "choose-advanced", "to": "choose-advanced-exit", "outcome": "success", "order": 0}
     ],
     "layout": {
       "nodes": [
+        {"node_id": "choose-entry", "x": -520, "y": 0},
+        {"node_id": "choose-advanced", "x": -260, "y": -120},
+        {"node_id": "choose-advanced-exit", "x": 0, "y": -120},
         {
           "node_id": "choose",
           "x": 0,
@@ -4097,7 +4168,7 @@
           ]
         }
       ],
-      "handoffs": []
+      "handoffs": ["AdvancedExit"]
     }
   },
   {
@@ -4107,8 +4178,27 @@
       "name": "尝试当前宝箱拆锁",
       "description": "只推进当前步骤，不消费外层路线目标；调用参数仅作用于本次实例。"
     },
-    "entry": "disarm",
+    "entry": "entry",
     "nodes": [
+      {
+        "id": "entry", "type": "route", "name": "先核对宝箱是否已进入下一页", "parameters": {}
+      },
+      {
+        "id": "advanced", "type": "recognition", "name": "已到奖励、战斗或迷宫，交回外层",
+        "parameters": {"condition": {"mode": "any", "conditions": [
+          {"mode": "semantic", "id": "chest.reward.page"},
+          {"mode": "combat_active"},
+          {"mode": "template", "image": "RiseAgain", "threshold": 0.8},
+          {"mode": "all", "conditions": [
+            {"mode": "template", "image": "dungFlag", "threshold": 0.8},
+            {"mode": "not", "conditions": [{"mode": "any", "conditions": [
+              {"mode": "semantic", "id": "chest.open.option"},
+              {"mode": "semantic", "id": "chest.choose.page"},
+              {"mode": "template", "image": "chestOpening", "threshold": 0.8}
+            ]}]}
+          ]}
+        ]}}
+      },
       {
         "id": "disarm",
         "type": "action",
@@ -4364,6 +4454,9 @@
       }
     ],
     "edges": [
+      {"id": "entry-advanced", "from": "entry", "to": "advanced", "outcome": "success", "order": 0},
+      {"id": "entry-disarm", "from": "entry", "to": "disarm", "outcome": "success", "order": 1},
+      {"id": "advanced-done", "from": "advanced", "to": "done", "outcome": "success", "order": 0},
       {
         "id": "edge_0",
         "from": "disarm",
@@ -4374,14 +4467,16 @@
     ],
     "layout": {
       "nodes": [
+        {"node_id": "entry", "x": 0, "y": 0},
+        {"node_id": "advanced", "x": 260, "y": -100},
         {
           "node_id": "disarm",
-          "x": 0,
+          "x": 260,
           "y": 0
         },
         {
           "node_id": "done",
-          "x": 260,
+          "x": 520,
           "y": 0
         }
       ],
@@ -4434,8 +4529,19 @@
       "name": "继续当前宝箱奖励页面",
       "description": "只推进当前步骤，不消费外层路线目标；调用参数仅作用于本次实例。"
     },
-    "entry": "continue",
+    "entry": "reward-entry",
     "nodes": [
+      {"id": "reward-entry", "type": "route", "name": "重看当前奖励页面", "parameters": {}},
+      {"id": "reward-advanced", "type": "recognition", "name": "奖励页面已交接", "parameters": {"condition": {"mode": "all", "conditions": [
+        {"mode": "input_clear"}, {"mode": "not", "conditions": [{"mode": "semantic", "id": "chest.reward.page"}]},
+        {"mode": "any", "conditions": [
+          {"mode": "combat_active"}, {"mode": "template", "image": "RiseAgain", "threshold": 0.8},
+          {"mode": "template", "image": "ambush", "threshold": 0.8},
+          {"mode": "semantic", "id": "chest.open.option"}, {"mode": "semantic", "id": "chest.choose.page"},
+          {"mode": "template", "image": "chestOpening", "threshold": 0.8}, {"mode": "template", "image": "dungFlag", "threshold": 0.8}
+        ]}
+      ]}}},
+      {"id": "reward-advanced-exit", "type": "end", "name": "未点奖励，交回新页面", "parameters": {"outcome": "handoff", "port": "AdvancedExit"}},
       {
         "id": "continue",
         "type": "action",
@@ -4635,10 +4741,16 @@
         "to": "done",
         "outcome": "success",
         "order": 0
-      }
+      },
+      {"id": "reward-entry-advanced", "from": "reward-entry", "to": "reward-advanced", "outcome": "success", "order": 0},
+      {"id": "reward-entry-action", "from": "reward-entry", "to": "continue", "outcome": "success", "order": 1},
+      {"id": "reward-advanced-return", "from": "reward-advanced", "to": "reward-advanced-exit", "outcome": "success", "order": 0}
     ],
     "layout": {
       "nodes": [
+        {"node_id": "reward-entry", "x": -520, "y": 0},
+        {"node_id": "reward-advanced", "x": -260, "y": -120},
+        {"node_id": "reward-advanced-exit", "x": 0, "y": -120},
         {
           "node_id": "continue",
           "x": 0,
@@ -4674,7 +4786,7 @@
       "kind": "step",
       "category": "宝箱",
       "parameters": [],
-      "handoffs": []
+      "handoffs": ["AdvancedExit"]
     }
   },
   {
