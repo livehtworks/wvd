@@ -80,7 +80,7 @@ CompiledWorkflow golden_chest_cycle(const WvdQuestDefinition &definition, const 
     graph.call_child("Leap", leap, {"Leaped"});
     graph.confirm("Leaped", "golden.leap.done", "golden_leaped", inn, {"TravelPhase"});
     graph.observe("TravelPhase", phase(Phase::Travel), {"Travel"});
-    const auto travel = graph.define_child("RoyalCity", navigation::travel_city_to_city({"City_RoyalCityLuknalia", TaskSwipe{{450, 150}, {500, 150}}, {550, 1}}));
+    const auto travel = graph.define_child("RoyalCity", navigation::travel_city_to_city({"City_RoyalCityLuknalia", TaskSwipe{{450, 150}, {500, 150}}, {550, 1}}, allow_download));
     graph.call_child("Travel", travel, {"Travelled"});
     graph.confirm("Travelled", "golden.travel", "golden_travelled", royal_city, {"RequestPhase"});
     graph.observe("RequestPhase", phase(Phase::Request), {"Request"});
@@ -88,7 +88,7 @@ CompiledWorkflow golden_chest_cycle(const WvdQuestDefinition &definition, const 
     graph.call_child("Request", request, {"Requested"});
     graph.confirm("Requested", "golden.request", "golden_requested", inn, {"Terminal"});
     graph.observe("EnterPhase", phase(Phase::Enter), {"Enter"});
-    const auto enter = graph.define_child("EnterCave", navigation::travel_world({"SSC/SSC", TaskSwipe{{700, 500}, {600, 600}}, {550, 1}}, navigation::WorldArrival::DungeonEntrance));
+    const auto enter = graph.define_child("EnterCave", navigation::travel_world({"SSC/SSC", TaskSwipe{{700, 500}, {600, 600}}, {550, 1}}, navigation::WorldArrival::DungeonEntrance, allow_download));
     graph.call_child("Enter", enter, {"Entered"});
     graph.confirm("Entered", "golden.enter", "golden_entered", dung, {"TrapPhase"});
     graph.observe("TrapPhase", phase(Phase::Trap), {"Trap"});

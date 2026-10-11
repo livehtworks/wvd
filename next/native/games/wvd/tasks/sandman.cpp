@@ -46,7 +46,7 @@ CompiledWorkflow sandman_cycle(const WvdQuestDefinition &definition, const J &pr
     graph.confirm("StartFloor", "sandman.start", "sandman_started", C::image("fortressb3f"), {"Stage"});
     graph.route("Stage", {"EnterPhase", "RoutePhase", "ExitPhase", "DecidePhase", "RestDukePhase", "LeapDukePhase", "RestTriumphPhase", "LeapTriumphPhase"});
     graph.observe("EnterPhase", phase(Phase::Enter), {"Enter"});
-    const auto entry = graph.define_child("DungeonEntry", navigation::enter_dungeon(plan));
+    const auto entry = graph.define_child("DungeonEntry", navigation::enter_dungeon(plan, false, allow_download));
     graph.call_child("Enter", entry, {"Entered"});
     graph.confirm("Entered", "sandman.enter", "sandman_entered", C::any({dung, map}), {"RoutePhase"});
     graph.observe("RoutePhase", phase(Phase::Route), {"Route"});

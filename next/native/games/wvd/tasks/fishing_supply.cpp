@@ -96,7 +96,7 @@ CompiledWorkflow fishing_cycle(const WvdQuestDefinition &definition, const J &pr
     graph.call_child("TransferBait", giving, {"Terminal"});
     graph.observe("BackToWater", phase(4), {"AlreadyFishing", "EnterDungeon"});
     graph.observe("AlreadyFishing", fishing, {"StillEmpty", "Refilled"});
-    const auto entry = graph.define_child("WaterEntry", navigation::enter_dungeon(to_water));
+    const auto entry = graph.define_child("WaterEntry", navigation::enter_dungeon(to_water, false, allow_download));
     graph.call_child("EnterDungeon", entry, {"ApproachWater"});
     const auto water = graph.define_child("WaterRoute", traverse_dungeon(to_water, profile, images, allow_download));
     graph.call_child("ApproachWater", water, {"FindFishing"});

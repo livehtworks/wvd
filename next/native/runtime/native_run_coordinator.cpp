@@ -26,9 +26,10 @@ nlohmann::json executable_digest() {
     return digest.empty() ? nlohmann::json(nullptr) : nlohmann::json(digest);
 }
 
+template<class Action>
 struct ScopeExit {
-    std::function<void()> action;
-    ~ScopeExit() noexcept { try { if (action) action(); } catch (...) {} }
+    Action action;
+    ~ScopeExit() noexcept { try { action(); } catch (...) {} }
 };
 
 nlohmann::json memory_record(const platform::MemorySample &memory) {
@@ -556,6 +557,16 @@ void NativeRunCoordinator::drive(const NativeRunDefinition &definition,
                         store_->append_timing(generation, "timing.segment", timing);
                     });
                 weak_session = session;
+                // The published Session borrows this drive()'s business state.
+                // Its control owner must leave every exceptional path before
+                // that state is destroyed, including a throw from run() itself.
+                ScopeExit release_session{[this, &session] {
+                    std::lock_guard lock(mutex_);
+                    if (session_ == session) {
+                        snapshot_.details_complete = false;
+                        session_.reset();
+                    }
+                }};
                 {
                     std::lock_guard lock(mutex_);
                     session_ = session;
@@ -565,7 +576,26 @@ void NativeRunCoordinator::drive(const NativeRunDefinition &definition,
                     snapshot_.unresolved_inputs = nlohmann::json::array();
                 }
                 if (stop_) session->request_stop();
-                const auto result = session->run();
+                auto result = session->run();
+                // Adopt the completed input/cleanup facts before optional
+                // diagnostics can allocate or throw. Move the pending owner
+                // first: failure while making a diagnostic copy must not erase
+                // the only full receipt from the control-plane snapshot.
+                quiescent = quiescent && result.inputs_released;
+                {
+                    std::lock_guard lock(mutex_);
+                    snapshot_.inputs.attempted += result.inputs.attempted;
+                    snapshot_.inputs.accepted += result.inputs.accepted;
+                    snapshot_.inputs.rejected += result.inputs.rejected;
+                    snapshot_.inputs.backend_called += result.inputs.backend_called;
+                    snapshot_.inputs.cleanup_called += result.inputs.cleanup_called;
+                    snapshot_.details_complete = snapshot_.details_complete && result.details_complete;
+                    if (result.details_complete || !result.unresolved_inputs.empty())
+                        snapshot_.unresolved_inputs.swap(result.unresolved_inputs);
+                    result.unresolved_inputs = snapshot_.unresolved_inputs;
+                    snapshot_.active_event = nullptr;
+                    session_.reset();
+                }
                 if (const auto &pixels = session->failed_pixels(); pixels) {
                     try {
                         storage::DiagnosticRequest request;
@@ -606,6 +636,10 @@ void NativeRunCoordinator::drive(const NativeRunDefinition &definition,
                         event("diagnostic.failure_frame", saved);
                     } catch (...) { store_->note_diagnostic_hook_failure(); }
                 }
+                // Resource accounting is diagnostic. Its failure cannot turn
+                // an already returned input result into a recovery attempt or
+                // keep a completed Session (and its business references) alive.
+                try {
                 const auto resources = recognizer->resource_stats();
                 const bool memory_enabled = definition.logging.memory &&
                     definition.logging.accepts(storage::LogLevel::Info);
@@ -668,20 +702,7 @@ void NativeRunCoordinator::drive(const NativeRunDefinition &definition,
                         {"result_cache_estimated_bytes", resources.result_cache_estimated_bytes},
                         {"peak_matches", resources.peak_matches},
                         {"peak_estimated_workspace_bytes", resources.peak_estimated_workspace_bytes}});
-                {
-                    std::lock_guard lock(mutex_);
-                    session_.reset();
-                    snapshot_.active_event = nullptr;
-                    snapshot_.details_complete = snapshot_.details_complete && result.details_complete;
-                    if (result.details_complete && !result.unresolved_input)
-                        snapshot_.unresolved_inputs = nlohmann::json::array();
-                    snapshot_.inputs.attempted += result.inputs.attempted;
-                    snapshot_.inputs.accepted += result.inputs.accepted;
-                    snapshot_.inputs.rejected += result.inputs.rejected;
-                    snapshot_.inputs.backend_called += result.inputs.backend_called;
-                    snapshot_.inputs.cleanup_called += result.inputs.cleanup_called;
-                }
-                quiescent = quiescent && result.inputs_released;
+                } catch (...) { store_->note_diagnostic_hook_failure(); }
                 last = session_result(result, *unit.program, generation,
                     checkpoint_seen ? unit.checkpoint_source_path : std::string{}, *business);
                 event("session.ended", {{"flow_state", static_cast<int>(result.flow.state)},
@@ -919,7 +940,7 @@ void NativeRunCoordinator::record_combat_diagnostic(std::uint64_t generation, st
                 path.back().value("flow_id", "") == "combat-open-detail" &&
                 path.back().value("node_id", "") == "open";
         };
-        bool defended = false;
+        bool attacked = false;
         if (type == "combat") {
             const auto operation = data.value("operation", "");
             if (operation == "prepare") {
@@ -933,14 +954,14 @@ void NativeRunCoordinator::record_combat_diagnostic(std::uint64_t generation, st
                 return;
             }
             if (state.opening.is_null()) return;
-            if (operation != "defend_fallback_confirmed" ||
+            if (operation != "attack_fallback_confirmed" ||
                 data.value("generation", 0ULL) != generation ||
                 !data.value("action_confirmed", false) || data.value("skill_confirmed", true) ||
                 data.value("consumed", true)) {
                 state.opening = nullptr;
                 return;
             }
-            defended = true;
+            attacked = true;
         } else if (type == "input" && open_detail(data)) {
             if (data.value("state", "") == "accepted") {
                 state.submission = J::object();
@@ -968,29 +989,29 @@ void NativeRunCoordinator::record_combat_diagnostic(std::uint64_t generation, st
         storage::DiagnosticRequest request;
         { std::lock_guard lock(mutex_); request.run_id = snapshot_.run_id; }
         request.generation = generation; request.unit_index = index;
-        request.node = defended ? "combat.defend_fallback_confirmed" : "combat-open-detail/open";
+        request.node = attacked ? "combat.attack_fallback_confirmed" : "combat-open-detail/open";
         request.reason = "combat.open_detail_no_progress";
         request.stage = "postcondition";
-        request.evidence_kind = defended ? "combat_defend_fallback" : "combat_open_no_progress";
+        request.evidence_kind = attacked ? "combat_attack_fallback" : "combat_open_no_progress";
         request.operation_id = state.opening.at("operation_id").get<std::string>();
         request.operation_scoped = true;
         request.critical = true;
-        const auto wanted = data.value(defended ? "frame_id" : "observed_frame", 0ULL);
+        const auto wanted = data.value(attacked ? "frame_id" : "observed_frame", 0ULL);
         const auto epoch = state.opening.at("input_result").value("action_epoch", 0ULL);
         const auto opening_frame = state.opening.at("input_result").value("observed_frame", 0ULL);
         const auto connection = state.opening.value("connection_generation", 0ULL);
         const bool available = frame && wanted && epoch && frame->identity.generation == generation &&
             frame->identity.frame_id == wanted &&
-            (defended ? wanted > opening_frame && frame->identity.action_epoch > epoch &&
+            (attacked ? wanted > opening_frame && frame->identity.action_epoch > epoch &&
                 (!connection || frame->identity.connection_generation == connection)
                 : frame->identity.action_epoch == epoch);
-        if (!defended) {
+        if (!attacked) {
             state.opening["connection_generation"] = available ? frame->identity.connection_generation : 0ULL;
             state.opening["opening_frame_available"] = available;
         }
         request.context = state.opening;
-        if (defended) {
-            request.context["defend_result"] = data;
+        if (attacked) {
+            request.context["attack_result"] = data;
             request.context["same_connection_as_opening"] = connection && frame
                 ? J(frame->identity.connection_generation == connection) : J(nullptr);
         }
@@ -1003,7 +1024,7 @@ void NativeRunCoordinator::record_combat_diagnostic(std::uint64_t generation, st
             store_->note_diagnostic_hook_failure();
         }
         // 清除关联后才做I/O；落盘失败不能把下一行动串成同一次防御，也不能重试输入。
-        if (defended) state.opening = nullptr;
+        if (attacked) state.opening = nullptr;
         auto saved = store_->save_diagnostic(available ? frame : nullptr, request);
         saved["operation_id"] = request.operation_id;
         saved["unit_index"] = request.unit_index;

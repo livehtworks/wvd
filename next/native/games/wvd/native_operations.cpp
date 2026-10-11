@@ -209,7 +209,7 @@ Result NativeOperations::execute(const std::string &binding, const J &parameters
                     {"crop", match.value("crop", J(nullptr))},
                     {"identity_basis", match.value("identity_basis", "unknown")}});
             }
-        } else if (operation != "success" && operation != "auto_confirmed" && operation != "defend_fallback_confirmed") {
+        } else if (operation != "success" && operation != "auto_confirmed" && operation != "attack_fallback_confirmed") {
             throw std::runtime_error("COMBAT_OPERATION_UNKNOWN");
         }
         J receipt;
@@ -220,7 +220,7 @@ Result NativeOperations::execute(const std::string &binding, const J &parameters
             if (operation == "prepare") state.prepare_skill(scores, parameters.at("catalog"));
             else state.finish_prepared_skill(parameters.at("index").get<std::size_t>(),
                 operation == "success" ? SkillOutcome::Succeeded :
-                    operation == "defend_fallback_confirmed" ? SkillOutcome::DefendFallbackConfirmed :
+                    operation == "attack_fallback_confirmed" ? SkillOutcome::AttackFallbackConfirmed :
                     SkillOutcome::AutoFallbackConfirmed);
             receipt = {{"operation", operation}, {"frame_id", frame.identity.frame_id},
                 {"generation", frame.identity.generation}, {"action_confirmed", operation != "prepare"},

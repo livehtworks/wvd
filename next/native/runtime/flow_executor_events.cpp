@@ -7,6 +7,20 @@
 namespace wvd::runtime {
 namespace {
 using namespace std::chrono_literals;
+// Existing direct dispositions terminate without entering a handler, replanning
+// or confirming business effects. Only this subset may observe an unknown input.
+bool stops_without_input(const workflow::EventRule &rule) noexcept {
+    return rule.disposition == workflow::EventDisposition::ExternalBlocked &&
+        rule.handler_definition.empty() && !rule.on_device_restart &&
+        rule.resume != workflow::ResumeMode::Replan && rule.replan_step.empty() &&
+        !rule.resume_guard && !rule.reason.empty();
+}
+}
+
+bool FlowExecutor::has_unknown_delivery() const noexcept {
+    return std::any_of(stack_.begin(), stack_.end(), [](const Frame &active) {
+        return active.pending && active.pending->delivery_unknown;
+    });
 }
 
 void FlowExecutor::account_event_time() {
@@ -91,7 +105,10 @@ const std::vector<FlowExecutor::ScopedEvent> &FlowExecutor::effective_events(con
 std::optional<TickResult> FlowExecutor::check_unexpected(Frame &frame, const workflow::Step &current,
     const contracts::FrameEnvelope &image, const std::string &reason, bool force) {
     if (!frame.no_progress_since) frame.no_progress_since = Clock::now();
-    if (exception_restart_supported_ && !exception_since_) exception_since_ = Clock::now();
+    const bool stop_only = has_unknown_delivery();
+    // Read-only manual stops must not arm a new automatic restart while the
+    // original input still has unknown delivery.
+    if (!stop_only && exception_restart_supported_ && !exception_since_) exception_since_ = Clock::now();
     // 一帧 NoHit 常是动画/加载，不是异常。这里只延迟诊断，不缩短原业务等待预算。
     const auto now = Clock::now();
     const auto &policy = program_.definitions.at(frame.definition).checks;
@@ -109,7 +126,9 @@ std::optional<TickResult> FlowExecutor::check_unexpected(Frame &frame, const wor
                                        std::pair{workflow::EventClass::Encounter, "encounter"}}) {
         if (!diagnose && category != workflow::EventClass::Encounter) continue;
         if (std::none_of(rules.begin(), rules.end(),
-            [category](const ScopedEvent &event) { return event.rule.category == category; })) continue;
+            [category, stop_only](const ScopedEvent &event) {
+                return event.rule.category == category && (!stop_only || stops_without_input(event.rule));
+            })) continue;
         last_diagnostic_["checked_groups"].push_back(name);
         if (auto result = check_events(frame, current, image, category)) return result;
     }
@@ -118,10 +137,12 @@ std::optional<TickResult> FlowExecutor::check_unexpected(Frame &frame, const wor
 }
 std::optional<TickResult> FlowExecutor::poll_wait_events(Frame &frame, const workflow::Step &current) {
     const auto &rules = effective_events(current);
+    const bool stop_only = has_unknown_delivery();
     const auto eligible = [&](const ScopedEvent &scoped) {
         const auto &rule = scoped.rule;
         if (rule.category != workflow::EventClass::Overlay &&
             rule.category != workflow::EventClass::Encounter) return false;
+        if (stop_only && !stops_without_input(rule)) return false;
         return std::none_of(stack_.begin(), stack_.end(), [&](const Frame &active) {
             return active.event && active.event->rule.id == rule.id;
         });
@@ -143,11 +164,12 @@ std::optional<TickResult> FlowExecutor::poll_wait_events(Frame &frame, const wor
 }
 std::optional<TickResult> FlowExecutor::check_events(Frame &frame, const workflow::Step &current,
     const contracts::FrameEnvelope &image, workflow::EventClass category) {
-    // 未确认旧输入已静止前，只核对原结果，不能让普通事件发送第二个输入。
-    if (frame.pending && frame.pending->delivery_unknown) return std::nullopt;
+    // Preserve every unresolved receipt. An unknown ancestor also forbids a
+    // second automatic action; a direct manual stop needs no handler or cleanup.
+    const bool stop_only = has_unknown_delivery();
     const auto &rules = effective_events(current);
     std::string scope_key;
-    if (category == workflow::EventClass::Overlay && frame.event_exits.empty() && observation_cycle_) {
+    if (!stop_only && category == workflow::EventClass::Overlay && frame.event_exits.empty() && observation_cycle_) {
         scope_key = std::to_string(event_scope_version_);
         if (observation_cycle_->frame.identity == image.identity &&
             observation_cycle_->clear_overlay_scope == scope_key) {
@@ -156,7 +178,7 @@ std::optional<TickResult> FlowExecutor::check_events(Frame &frame, const workflo
         }
     }
     bool exiting = false;
-    if (category == workflow::EventClass::Overlay && !frame.event_exits.empty()) {
+    if (!stop_only && category == workflow::EventClass::Overlay && !frame.event_exits.empty()) {
         for (auto it = frame.event_exits.begin(); it != frame.event_exits.end();) {
             const auto observed = ports_.recognize(image, it->detect);
             account_event_time(); // 退出判断本身的耗时也属于仍挂起的父流程。
@@ -173,6 +195,7 @@ std::optional<TickResult> FlowExecutor::check_events(Frame &frame, const workflo
     for (const auto &scoped : rules) {
         const auto &rule = scoped.rule;
         if (rule.on_device_restart || rule.category != category) continue;
+        if (stop_only && !stops_without_input(rule)) continue;
         // 同优先级仍检查歧义；已命中高优先级时不再计算任何低优先级候选。
         if (!hits.empty() && rule.priority < priority) break;
         if (std::any_of(frame.event_exits.begin(), frame.event_exits.end(),
@@ -185,6 +208,8 @@ std::optional<TickResult> FlowExecutor::check_events(Frame &frame, const workflo
         if (observation.outcome == contracts::RecognitionOutcome::Error)
             return fail(observation.error_code.empty() ? "EVENT_RECOGNITION_ERROR" : observation.error_code);
         if (observation.outcome == contracts::RecognitionOutcome::NoHit) continue;
+        if (stop_only && (!image.identity.frame_id || observation.basis != image.identity))
+            return fail("EVENT_EVIDENCE_STALE");
         if (rule.priority > priority) { priority = rule.priority; hits.clear(); }
         if (rule.priority == priority) hits.push_back(&scoped);
     }

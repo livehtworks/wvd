@@ -1,5 +1,6 @@
 #include "harken_exit.hpp"
 #include "games/wvd/recovery/global_prompt.hpp"
+#include "games/wvd/recovery/page_actions.hpp"
 #include "games/wvd/vision/harken_probes.hpp"
 #include "games/wvd/vision/location_probes.hpp"
 #include "games/wvd/vision/dialogue_probes.hpp"
@@ -28,7 +29,7 @@ tasks::CompiledWorkflow leave_harken() {
     // Menu taps may be ignored while the network settles. Recheck the same
     // button and the result before retrying; a new scene ends this input.
     graph.retry_menu_input("Outskirts", vision::menu_retry_ready(C::all({outskirts, C::absent(story)})), 1500);
-    graph.click("Story", story, vision::story_advance_arrow(), C::any({story, city}), {"Entry"});
+    recovery::page_actions::continue_story(graph, "Story", C::any({story, city}), {"Entry"});
     graph.delay_after("Story", 700);
     graph.hit_limit("Story", 50);
     graph.hit_limit("Entry", 64);

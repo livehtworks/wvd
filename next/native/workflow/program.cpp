@@ -4,6 +4,24 @@
 #include <stdexcept>
 
 namespace wvd::workflow {
+namespace {
+void validate_direct_stop_rule(const EventRule &event, const std::string &definition, const Step &owner) {
+    if (event.disposition != EventDisposition::ExternalBlocked) return;
+    const auto invalid = [&](const char *field) {
+        throw std::runtime_error("FLOW_EVENT_STOP_INVALID:" + definition + ":" +
+            owner.source_path + ":" + event.id + ":" + field);
+    };
+    // This is the same input-free contract that the executor requires while an
+    // earlier input has unknown delivery. Reject ambiguity before execution.
+    if (!event.handler_definition.empty()) invalid("handler_definition");
+    if (event.on_device_restart) invalid("on_device_restart");
+    if (event.resume != ResumeMode::Reobserve) invalid("resume");
+    if (!event.replan_step.empty()) invalid("replan_step");
+    if (event.resume_guard) invalid("resume_guard");
+    if (event.reason.empty()) invalid("reason");
+}
+} // namespace
+
 void FlowProgram::validate() const {
     if (engine_kind != "wvd_native" || revision.empty() || root_definition.empty() ||
         !definitions.contains(root_definition))
@@ -128,6 +146,7 @@ void FlowProgram::validate() const {
             if (std::holds_alternative<Finish>(step.data) && definition_id != root_definition)
                 throw std::runtime_error("FLOW_CHILD_FINISH_INVALID");
             for (const auto &event : step.event_policy) {
+                validate_direct_stop_rule(event, definition_id, step);
                 if (step.disabled_events.contains(event.id))
                     throw std::runtime_error("FLOW_EVENT_CONFLICT");
                 if (event.id.empty() || event.priority < 0 || event.priority > 1000 ||
@@ -146,7 +165,8 @@ void FlowProgram::validate() const {
         if (definition.checks && (definition.checks->phase.empty() || definition.checks->debounce.count() < 0 ||
             definition.checks->interval.count() <= 0)) throw std::runtime_error("FLOW_CHECK_POLICY_INVALID");
         std::set<std::string> event_ids;
-        for (const auto &event : definition.events)
+        for (const auto &event : definition.events) {
+            validate_direct_stop_rule(event, definition_id, definition.steps.at(definition.entry));
             if (event.id.empty() || !event_ids.insert(event.id).second ||
                 event.priority < 0 || event.priority > 1000 || event.exit_budget.count() < 1 ||
                 event.exit_budget > std::chrono::minutes{1} || event.ambiguity_budget.count() < 1 ||
@@ -154,6 +174,7 @@ void FlowProgram::validate() const {
                 (event.disposition == EventDisposition::Handle && !definitions.contains(event.handler_definition)) ||
                 (event.resume == ResumeMode::Replan && (!definition.steps.contains(event.replan_step) || !event.resume_guard)))
                 throw std::runtime_error("FLOW_DEFINITION_EVENT_INVALID");
+        }
     }
     std::set<std::string> active, visited;
     std::function<void(const std::string &)> visit = [&](const std::string &id) {

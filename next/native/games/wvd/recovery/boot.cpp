@@ -3,6 +3,7 @@
 #include "global_prompt.hpp"
 #include "karma_prompt.hpp"
 #include "dialogue.hpp"
+#include "page_actions.hpp"
 #include "games/wvd/vision/harken_probes.hpp"
 #include "games/wvd/vision/download_probes.hpp"
 #include "games/wvd/vision/network_probes.hpp"
@@ -91,7 +92,7 @@ tasks::CompiledWorkflow retry_network_prompt() {
     return result;
 }
 tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, DialoguePolicy policy = DialoguePolicy::Default,
-                                    bool random_maze_events = true) {
+                                    bool random_maze_events = true, bool reconnect = false) {
     C graph(common ? "recovery.common_screens" : "recovery.boot_ready", std::chrono::seconds{120});
     // 冷启动是正常进场流程；标题/下载等正面回执表示进展。网络子图仍属exception，
     // 反复按重试只关闭弹窗，不能重置“未恢复业务现场”的连续异常窗口。
@@ -135,6 +136,13 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, Dialogue
     const auto progressed = [](const J &current) { return C::absent(current); };
     J entry = common ? J{"NetworkZhHant", "DownloadZhHant", "DownloadEn", "Announcement", "AnnouncementClassic", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title", "Pause", "Death", "Sandman", "Blessing", "Karma", "Dialogue", "Story", "Defeat", "Ready", "Poll"}
                      : J{"Ready", "NetworkZhHant", "DownloadZhHant", "DownloadEn", "Announcement", "AnnouncementClassic", "RetryBlank", "Retry", "RetryLow", "ReturnTitle", "Resume", "Attention", "Title", "Pause", "Sandman", "Blessing", "Karma", "Dialogue", "Story", "Poll"};
+    if (reconnect && !common) {
+        // ReconnectBoot is a child definition with no inherited handlers. Use
+        // the existing local rescue/manual-stop exits; cold Boot keeps its
+        // root event ownership and the reconnect resume guard stays unchanged.
+        entry.insert(std::find(entry.begin(), entry.end(), "Sandman"), "Death");
+        entry.insert(std::find(entry.begin(), entry.end(), "Poll"), "Defeat");
+    }
     if (!random_maze_events)
         entry.erase(std::remove_if(entry.begin(), entry.end(), [](const J &name) {
             return name == "Sandman" || name == "Karma" || name == "Dialogue";
@@ -157,9 +165,7 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, Dialogue
         const auto inn_menu = vision::inn_menu();
         const auto character = vision::character_page(), leave_zh = vision::inn_leave_zh();
         const auto left = C::any({C::all({vision::city_screen(), C::absent(inn_menu)}), character});
-        graph.fixed_click("CloseCharacter", character,
-            C::any({inn_menu, ready}), {66, 1500}, {"Entry"});
-        graph.retry_menu_input("CloseCharacter", character, 3000);
+        page_actions::close_character(graph, "CloseCharacter", C::any({inn_menu, ready}), {"Entry"});
         graph.click("LeaveInnMenuZh", C::all({inn_menu, leave_zh, C::absent(story),
             C::absent(character), J{{"mode", "input_clear"}, {"phase", "supply"}}}), leave_zh, left, {"Entry"});
         graph.retry_menu_input("LeaveInnMenuZh", C::all({inn_menu, leave_zh, C::absent(character)}), 3000);
@@ -174,13 +180,12 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, Dialogue
     const auto notice = C::all({vision::inn_notice_page(),
         C::any({C::absent(J{{"mode", "boot_ready"}}), vision::city_screen()})});
     entry.insert(std::find(entry.begin(), entry.end(), "Ready"), "ContinueNotice");
-    graph.click("ContinueNotice", notice, vision::notice_advance_arrow(),
-        C::any({notice, ready}), {"Entry"});
+    page_actions::continue_inn_notice(graph, "ContinueNotice", notice, C::any({notice, ready}), {"Entry"});
     graph.delay_after("ContinueNotice", 300);
     graph.route("Entry", entry);
     // 启动时也可能留在城市普通剧情；只复用已确认的继续箭头，
     // ordinary_story_page 排除选项页，不能由城市背景提前宣布 Ready。
-    graph.click("Story", story, vision::story_advance_arrow(), C::any({story, ready}), {"Entry"});
+    page_actions::continue_story(graph, "Story", C::any({story, ready}), {"Entry"});
     graph.delay_after("Story", 2000);
     graph.hit_limit("Story", 12);
     graph.observe("NetworkZhHant", vision::network_prompt_zh_hant(), {"HandleNetwork"});
@@ -207,11 +212,17 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, Dialogue
         graph.observe(name, marker, {name + "Handle"});
         graph.call_child(name + "Handle", child, {"Entry"});
     }
-    if (common) {
+    if (common || reconnect) {
         const auto death = graph.define_child("PartyDeath", dismiss_party_death(), {"BlockedExit"});
         graph.observe("Death", {{"mode", "party_death"}}, {"DismissDeath"});
         graph.call_child("DismissDeath", death, {"Entry"});
-        const auto defeat = graph.define_child("PartyDefeat", acknowledge_party_defeat());
+        const auto defeat_workflow = acknowledge_party_defeat();
+        // Reuse the existing no-input Overlay rule in this definition too.
+        // A pending Boot input cannot call Defeat first, and checks.inherit
+        // intentionally excludes parent handlers. The local rule may stop it
+        // without settling, replaying or cancelling that original input.
+        graph.event_scope("Entry", defeat_workflow.event_scopes.at(defeat_workflow.entry));
+        const auto defeat = graph.define_child("PartyDefeat", defeat_workflow);
         graph.observe("Defeat", {{"mode", "party_defeat"}}, {"AcknowledgeDefeat"});
         graph.call_child("AcknowledgeDefeat", defeat, {"Entry"});
     }
@@ -220,17 +231,8 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, Dialogue
         graph.observe("PendingDeathCleared", C::business("/death_prompt_pending", true), {"ConfirmDeathCleared"});
         graph.confirm("ConfirmDeathCleared", "party.death.clear", "party_death_cleared", ready, {"Terminal"});
     }
-    if (allow_download) {
-        graph.click("DownloadEn", download_en, download_en, progressed(download), {"Entry"});
-        graph.click("DownloadZhHant", download_zh_hant, download_zh_hant,
-                    progressed(download), {"Entry"});
-        graph.retry_menu_input("DownloadEn", download_en, 3000);
-        graph.retry_menu_input("DownloadZhHant", download_zh_hant, 3000);
-    } else {
-        graph.observe("DownloadEn", download_en, {"DownloadBlocked"});
-        graph.observe("DownloadZhHant", download_zh_hant, {"DownloadBlocked"});
-        graph.recovery("DownloadBlocked", "boot.download_permission_missing");
-    }
+    page_actions::download_choices(graph, allow_download, "DownloadEn", "DownloadZhHant",
+        progressed(download), {"Entry"}, "DownloadBlocked");
     graph.click("RetryBlank", blank, blank, progressed(blank), {"Entry"}, {0, 103});
     graph.click("Retry", retry, retry, progressed(retry), {"Entry"});
     graph.fixed_click("RetryLow", low_retry, progressed(low_retry), {450, 900}, {"Entry"});
@@ -257,14 +259,7 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, Dialogue
     graph.observe("Pause", pause, {"ResumePause0"});
     // 按旧版连续六次无效点击判定冻结，但第六次仍须新帧确认：
     // 最后一次已恢复不能重启；角色/技能详情负例由 pause 识别器排除。
-    for (unsigned i = 0; i < 6; ++i) {
-        const auto name = "ResumePause" + std::to_string(i);
-        graph.fixed_click(name, pause, recognized, {450, 760},
-            {"PauseCleared", i < 5 ? "ResumePause" + std::to_string(i + 1) : "PauseFrozen"});
-        graph.hit_limit(name, 6);
-        graph.delay_after(name, 2000);
-        graph.postcondition_budget(name, 10000);
-    }
+    page_actions::pause_sequence(graph, "ResumePause", recognized, "PauseCleared", "PauseFrozen", 6);
     graph.observe("PauseCleared", C::absent(pause), {"Entry"});
     graph.observe("PauseFrozen", pause, {"PauseFrozenExit"});
     graph.recovery("PauseFrozenExit", "pause.physics_frozen");
@@ -383,30 +378,18 @@ tasks::CompiledWorkflow handle_download(bool allowed) {
     const auto prompt = C::any({zh, en});
     graph.route("Entry", {"Gone", "Zh", "En"});
     graph.observe("Gone", C::absent(prompt), {"Terminal"});
-    if (allowed) {
-        graph.click("Zh", zh, zh, C::absent(prompt), {"Terminal"});
-        graph.click("En", en, en, C::absent(prompt), {"Terminal"});
-        graph.retry_menu_input("Zh", zh, 3000);
-        graph.retry_menu_input("En", en, 3000);
-    } else {
-        graph.observe("Zh", zh, {"Denied"}); graph.observe("En", en, {"Denied"});
-        graph.recovery("Denied", "boot.download_permission_missing");
-    }
+    page_actions::download_choices(graph, allowed, "En", "Zh", C::absent(prompt), {"Terminal"}, "Denied");
     return graph.finish();
 }
 tasks::CompiledWorkflow handle_pause() {
     C graph("recovery.pause", std::chrono::seconds{120});
     graph.check_policy("exception", {"wvd-network-retry"}, 1000, 1000, false);
     const J pause{{"mode", "pause"}};
-    const auto response = C::any({pause, J{{"mode", "combat_active"}}, C::image("dungFlag"), C::image("mapFlag")});
+    const auto response = C::any({pause, J{{"mode", "combat_active"}}, C::image("dungFlag"), C::image("mapFlag"),
+        vision::city_screen()});
     graph.route("Entry", {"Gone", "Press0"});
     graph.observe("Gone", C::absent(pause), {"Terminal"});
-    for (int i = 0; i < 6; ++i) {
-        const auto name = "Press" + std::to_string(i);
-        graph.fixed_click(name, pause, response, {450, 760},
-            {"Gone", i < 5 ? "Press" + std::to_string(i + 1) : "Frozen"});
-        graph.delay_after(name, 2000); graph.postcondition_budget(name, 10000);
-    }
+    page_actions::pause_sequence(graph, "Press", response, "Gone", "Frozen", 5);
     graph.observe("Frozen", pause, {"FrozenExit"});
     graph.recovery("FrozenExit", "pause.physics_frozen");
     return graph.finish();
@@ -417,7 +400,7 @@ tasks::CompiledWorkflow handle_story() {
     const auto story = vision::ordinary_story_page();
     graph.route("Entry", {"Gone", "Continue"});
     graph.observe("Gone", C::absent(story), {"Terminal"});
-    graph.click("Continue", story, vision::story_advance_arrow(),
+    page_actions::continue_story(graph, "Continue",
         C::any({story, vision::city_screen(), J{{"mode", "default_dialogue"}},
             C::image("dungFlag"), C::image("mapFlag"), J{{"mode", "combat_active"}}}), {"Entry"});
     graph.delay_after("Continue", 2000); graph.hit_limit("Continue", 12);
@@ -426,6 +409,14 @@ tasks::CompiledWorkflow handle_story() {
 }
 tasks::CompiledWorkflow handle_download_prompt(bool allowed) {
     return handle_download(allowed);
+}
+void preserve_download_permission(tasks::PipelineCompiler &graph, bool allowed) {
+    if (allowed) return;
+    const auto deny = graph.define_child("DownloadPermission", handle_download_prompt(false));
+    graph.default_body_event(J{{"id", "wvd-download"}, {"class", "exception"},
+        {"priority", 900}, {"source_node", "Entry"}, {"entry", deny},
+        {"detect", C::any({vision::download_button_zh_hant(), vision::download_button_en()})},
+        {"resume", {{"mode", "reobserve"}}}});
 }
 tasks::CompiledWorkflow with_boot_recovery(const tasks::CompiledWorkflow &task, bool allow_download) {
     task.validate();
@@ -451,7 +442,7 @@ tasks::CompiledWorkflow with_boot_recovery(const tasks::CompiledWorkflow &task, 
     // 非恢复首段不执行 game_restarted，避免把首次进入误记成崩溃/重置策略。
     graph.route("Entry", {boot});
     const auto network_entry = graph.define_child("NetworkOverlay", retry_network_prompt());
-    const auto reconnect_boot = graph.define_child("ReconnectBoot", boot_workflow(allow_download, false, task.dialogue_policy, task.random_maze_events));
+    const auto reconnect_boot = graph.define_child("ReconnectBoot", boot_workflow(allow_download, false, task.dialogue_policy, task.random_maze_events, true));
     // finish 会验证完整调用闭包，处理器必须从声明入口可达，而非封存后才补孤立引用。
     J rules = J::array({
         J{{"id", "wvd-network-retry"}, {"class", "exception"}, {"priority", 1000},
@@ -473,7 +464,11 @@ tasks::CompiledWorkflow with_boot_recovery(const tasks::CompiledWorkflow &task, 
     add("wvd-download", "exception", 900, C::any({vision::download_button_zh_hant(), vision::download_button_en()}), handle_download(allow_download));
     add("wvd-pause", "exception", 800, J{{"mode", "pause"}}, handle_pause());
     add("wvd-party-death", "exception", 700, J{{"mode", "party_death"}}, dismiss_party_death());
-    add("wvd-party-defeat", "exception", 690, J{{"mode", "party_defeat"}}, acknowledge_party_defeat());
+    // Multiple deaths authorize only a manual stop, never another handler or
+    // input. Keep this disposition visible while an earlier delivery is unknown.
+    rules.push_back({{"id", "wvd-party-defeat"}, {"class", "exception"}, {"priority", 690},
+        {"detect", J{{"mode", "party_defeat"}}}, {"source_node", "Entry"},
+        {"disposition", "external_blocked"}, {"reason", "party.multiple_deaths_manual_required"}});
     add("wvd-story", "special", 600, vision::ordinary_story_page(), handle_story());
     add("wvd-blessing", "special", 500, C::any({vision::harken_buff_menu(), english_image("blessing")}), dismiss_global_prompt(GlobalPrompt::Blessing));
     if (task.random_maze_events) {

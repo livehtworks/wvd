@@ -160,7 +160,7 @@ std::vector<CompiledWorkflow> fordraig_cycle(const WvdQuestDefinition &definitio
         if (is_route) work = traverse_dungeon(plan.with_route(route_points(stage)), profile, images, allow_download, dialogue);
         else if (stage == Phase::Leap) work = leap_to_fordraig();
         else if (stage == Phase::Request) work = accept_featured_request(FeaturedRequest::Fordraig, profile.at("ACTIVE_ROYALSUITE_REST").get<bool>());
-        else if (stage == Phase::Enter) work = navigation::enter_dungeon(plan);
+        else if (stage == Phase::Enter) work = navigation::enter_dungeon(plan, false, allow_download);
         else work = return_from_fordraig();
         const auto budget = work.time_limit + std::chrono::seconds{mechanism ? 300 : 120};
         if (budget > std::chrono::seconds{1800}) throw std::runtime_error("FORDRAIG_SEGMENT_BUDGET_EXCEEDED");

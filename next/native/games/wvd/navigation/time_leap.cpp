@@ -1,4 +1,6 @@
 #include "time_leap.hpp"
+#include "games/wvd/recovery/boot.hpp"
+#include "games/wvd/recovery/page_actions.hpp"
 #include "games/wvd/vision/location_probes.hpp"
 #include "games/wvd/vision/download_probes.hpp"
 #include "causality.hpp"
@@ -123,17 +125,8 @@ tasks::CompiledWorkflow compile_time_leap(const std::string &target_name,
         graph.retry_menu_input(name, vision::menu_retry_ready(city));
     for (const auto *name : {"OpenWheelEn", "OpenWheelZhHant"})
         graph.retry_menu_input(name, vision::menu_retry_ready(C::all({wheel, C::absent(opened_wheel)})));
-    if (allow_download) {
-        graph.click("DownloadEn", download_en, download_en, C::absent(download), {"Entry"});
-        graph.click("DownloadZhHant", download_zh_hant, download_zh_hant,
-                    C::absent(download), {"Entry"});
-        graph.retry_menu_input("DownloadEn", download_en, 3000);
-        graph.retry_menu_input("DownloadZhHant", download_zh_hant, 3000);
-    } else {
-        graph.observe("DownloadEn", download_en, {"DownloadDenied"});
-        graph.observe("DownloadZhHant", download_zh_hant, {"DownloadDenied"});
-        graph.recovery("DownloadDenied", "boot.download_permission_missing");
-    }
+    recovery::page_actions::download_choices(graph, allow_download, "DownloadEn", "DownloadZhHant",
+        C::absent(download), {"Entry"}, "DownloadDenied");
     // 原函数的可见目标快路径会直接跳跃，不重置页签也不调整因果。
     if (!zh_only_target) {
         graph.click("QuickSelectEn", C::all({title, target_en}), target_en, leap, {"QuickLeapRoute"});
@@ -229,6 +222,7 @@ tasks::CompiledWorkflow compile_time_leap(const std::string &target_name,
         "ReopenWheelEn", "ReopenWheelZhHant", "FindTarget",
         "LeapRoute", "LeapEn", "LeapZhHant"})
         graph.hit_limit(name, 32);
+    recovery::preserve_download_permission(graph, allow_download);
     return graph.finish();
 }
 }

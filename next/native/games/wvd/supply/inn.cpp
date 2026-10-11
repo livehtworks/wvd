@@ -2,12 +2,14 @@
 #include "games/wvd/vision/location_probes.hpp"
 #include "games/wvd/vision/dialogue_probes.hpp"
 #include "games/wvd/vision/inn_leave_probes.hpp"
+#include "games/wvd/recovery/page_actions.hpp"
 
 namespace wvd::games::supply {
 tasks::CompiledWorkflow rest_at_inn(bool royal_suite, bool record_completion) {
     using C = tasks::PipelineCompiler;
     C graph("supply.inn");
-    graph.check_policy("supply", {"wvd-network-retry", "wvd-download", "wvd-story", "wvd-dialogue"});
+    graph.check_policy("supply", {"wvd-network-retry", "wvd-pause", "wvd-download", "wvd-party-death", "wvd-party-defeat", "wvd-story", "wvd-dialogue"});
+    graph.require_inherited_events({"wvd-party-death", "wvd-party-defeat"});
     auto inn = vision::inn_button(), stay = C::image("Stay"), economy = C::image("Economy"),
                royal = C::image("royalsuite"), ok_en = C::image("OK");
     ok_en["locale_only"] = "en";
@@ -35,7 +37,6 @@ tasks::CompiledWorkflow rest_at_inn(bool royal_suite, bool record_completion) {
     const auto stayed = C::all({stay, C::absent(ok)});
     const auto rest_story = vision::ordinary_story_page();
     const auto character = vision::character_page();
-    const auto supply_arrow = vision::notice_advance_arrow();
     const auto supply_notice = vision::inn_notice_page();
     // 城市反证逐项展开，避免“城市 -> 非结果页 -> 剧情 -> 对话”反复嵌套。
     // 后置已有“无确认/无宝石购买”，其内部不再包一份完整城市判定。
@@ -80,17 +81,15 @@ tasks::CompiledWorkflow rest_at_inn(bool royal_suite, bool record_completion) {
         graph.observe("Rooms", economy, royal_suite ? nlohmann::json{"Royal", "Economy"} : nlohmann::json{"Economy"});
     }
     const auto leave_zh = vision::inn_leave_zh();
-    graph.route("Leave", {"AtCity", "ContinueStory", "ContinueSupply", "CloseCharacter", "BackFromStayZh", "BackFromStay"});
+    graph.route("Leave", {"BackFromStayZh", "BackFromStay", "AtCity", "ContinueStory", "ContinueSupply", "CloseCharacter"});
     // 分派不是住宿次数，不加默认经过次数；剧情/补给输入仍各自有界。
     // 已有住宿结果则仅退出；没有结果且回到普通菜单时允许重新办理金币住宿。
     graph.observe("AtCity", city, {"Rested"});
-    graph.click("ContinueStory", rest_story, vision::story_advance_arrow(),
-                after_payment, {"Leave"});
+    recovery::page_actions::continue_story(graph, "ContinueStory", after_payment, {"Leave"});
     graph.hit_limit("ContinueStory", 12);
-    graph.click("ContinueSupply", supply_notice, supply_arrow, after_payment, {"Leave"});
+    recovery::page_actions::continue_inn_notice(graph, "ContinueSupply", supply_notice, after_payment, {"Leave"});
     graph.hit_limit("ContinueSupply", 6);
-    graph.fixed_click("CloseCharacter", character, after_payment, {66, 1500}, {"Leave"});
-    graph.retry_menu_input("CloseCharacter", character, 3000);
+    recovery::page_actions::close_character(graph, "CloseCharacter", after_payment, {"Leave"});
     // 与旧StateInn一致：确认在旅店菜单后按返回；菜单退出就是本步骤终点。
     // 可选信息出现才处理，不等待补给文字/道具结果，也不重复确认城市帧。
     const auto exited = C::all({C::absent(stay), C::absent(ok), C::absent(premium)});

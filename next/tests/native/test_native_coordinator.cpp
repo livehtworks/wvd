@@ -179,7 +179,7 @@ int main(int argc, char **argv) {
                 return frame;
             };
             const auto defended = [](std::uint64_t frame) {
-                return J{{"operation", "defend_fallback_confirmed"}, {"generation", 1}, {"frame_id", frame},
+                return J{{"operation", "attack_fallback_confirmed"}, {"generation", 1}, {"frame_id", frame},
                     {"action_confirmed", true}, {"skill_confirmed", false}, {"consumed", false}};
             };
             storage::LoggingPolicy logging;
@@ -203,11 +203,11 @@ int main(int argc, char **argv) {
                 const auto entries = summary.at("entries");
                 check(entries.size() == 2 && entries.at(0).at("operation_id") == entries.at(1).at("operation_id") &&
                     entries.at(0).at("evidence_kind") == "combat_open_no_progress" &&
-                    entries.at(1).at("evidence_kind") == "combat_defend_fallback" &&
+                    entries.at(1).at("evidence_kind") == "combat_attack_fallback" &&
                     entries.at(0).at("context").at("selection").at("configured_skill") == skill &&
                     entries.at(0).at("context").at("submission").at("position") == J::array({266, 965}) &&
-                    entries.at(1).at("context").at("defend_result").at("skill_confirmed") == false &&
-                    entries.at(1).at("context").at("defend_result").at("consumed") == false,
+                    entries.at(1).at("context").at("attack_result").at("skill_confirmed") == false &&
+                    entries.at(1).at("context").at("attack_result").at("consumed") == false,
                     "COMBAT_PAIR_CONTEXT_OR_DEDUP");
                 for (const auto &entry : entries) {
                     const auto path = coordinator.run_directory() / entry.at("path").get<std::string>();
@@ -322,7 +322,7 @@ int main(int argc, char **argv) {
                 check(A::save(coordinator, &frame, request).at("status") == "saved", "COMBAT_QUOTA_FIRST");
                 clock->value += 120s;
                 check(A::save(coordinator, &frame, request).at("status") == "duplicate", "COMBAT_DUPLICATE_AFTER_INTERVAL");
-                request.evidence_kind = "combat_defend_fallback";
+                request.evidence_kind = "combat_attack_fallback";
                 check(A::save(coordinator, &frame, request).at("status") == "saved", "COMBAT_QUOTA_PAIR");
                 request.operation_id = "next-action";
                 check(A::save(coordinator, &frame, request).at("status") == "quota_exceeded" &&
@@ -834,6 +834,7 @@ int main(int argc, char **argv) {
             auto adjusted = std::make_shared<workflow::FlowProgram>(*deferred_definition.units.front().program);
             auto &root = adjusted->definitions.at("root");
             root.steps.at("checkpoint").data = workflow::Fail{"deferred.recovery"};
+            root.steps.at("checkpoint").next.clear(); // Pure failure has no guarded resume edge.
             deferred_definition.units.front().program = std::move(adjusted);
             deferred_definition.request_id = "native-deferred-stop";
             deferred_definition.total_time_limit = 10s;

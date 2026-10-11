@@ -20,7 +20,7 @@ struct SkillSelection {
     nlohmann::json skill;
 };
 // 发起自动兜底不等于成功；后置确认后按频次结算。consume返回确认成功，不代表删行。
-enum class SkillOutcome { Succeeded, TargetFailed, Cancelled, AutoFallback, AutoFallbackConfirmed, DefendFallbackConfirmed };
+enum class SkillOutcome { Succeeded, TargetFailed, Cancelled, AutoFallback, AutoFallbackConfirmed, AttackFallbackConfirmed };
 class CombatStrategy {
   public:
     explicit CombatStrategy(nlohmann::json profile);

@@ -191,6 +191,7 @@ void WvdRunState::settle_encounter_handoff(bool combat) {
     (combat ? combat_seconds_ : chest_seconds_) += elapsed;
     started.reset();
     pending = false;
+    if (combat) settled_combat_sequence_ = combat_sequence_;
     ++(combat ? combats_ : chests_);
     met_encounter_ = true;
     healing_pending_ = healing_pending_ || !profile_.at(combat ? "SKIP_COMBAT_RECOVER" : "SKIP_CHEST_RECOVER").get<bool>();
@@ -224,6 +225,7 @@ void WvdRunState::resume_dungeon() {
         ++combats_;
         met_encounter_ = true;
         pending_combat_ = false;
+        settled_combat_sequence_ = combat_sequence_;
     }
     if (pending_chest_) {
         healing_pending_ = healing_pending_ || !profile_.at("SKIP_CHEST_RECOVER").get<bool>();
@@ -909,7 +911,8 @@ bool WvdRunState::confirm_event(const std::string &operation, const std::string 
             target_encounter_.phase < 1 || target_encounter_.phase > 2)
             throw std::runtime_error("TARGET_ENCOUNTER_RESULT_UNCONFIRMED");
         if (event == "target_encounter_chest_result") {
-            if (!pending_combat_) throw std::runtime_error("TARGET_ENCOUNTER_RESULT_UNCONFIRMED");
+            if (!pending_combat_ && (combat_sequence_ == 0 || settled_combat_sequence_ != target_encounter_.combat))
+                throw std::runtime_error("TARGET_ENCOUNTER_RESULT_UNCONFIRMED");
             // This settles the ended fight, not a dungeon return or a chest reward.
             settle_encounter_handoff(true);
         } else resume_dungeon();
@@ -963,7 +966,6 @@ bool WvdRunState::confirm_event(const std::string &operation, const std::string 
         if (!death_prompt_pending_) {
             ++death_prompt_sequence_;
             prepared_.reset();
-            strategy_.reload(task_step_);
         }
         death_prompt_pending_ = true;
     }
@@ -1217,6 +1219,7 @@ J WvdRunState::summarize() const {
             {"chest_available_mask", chest_selection_.available_mask()},
             {"chest_character_attempts", chest_selection_.attempts()},
             {"combat_sequence", combat_sequence_},
+            {"settled_combat_sequence", settled_combat_sequence_},
             {"chest_sequence", chest_sequence_},
             {"revival_sequence", revival_sequence_},
             {"revival_pending", revival_pending_},

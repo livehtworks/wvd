@@ -1,0 +1,4 @@
+# Resource manifests hash payload bytes, so Windows checkouts must keep LF.
+/next/resources/authoring/*.json text eol=lf
+/next/packs/wvd/parameters/*.json text eol=lf
+/next/packs/wvd/manifest.json text eol=lf

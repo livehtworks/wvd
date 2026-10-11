@@ -103,7 +103,7 @@ CompiledWorkflow preparation(const WvdQuestDefinition &definition, const J &prof
     graph.confirm("AtFortress", "cos.fortress", "cos_fortress", inn, {"Stage"});
     graph.observe("RoyalPhase", phase(Phase::RoyalCity), {"Royal"});
     const auto royal = graph.define_child("TravelRoyal", navigation::travel_city_to_city(
-        {"City_RoyalCityLuknalia", TaskSwipe{{450, 150}, {500, 150}}, {550, 1}}));
+        {"City_RoyalCityLuknalia", TaskSwipe{{450, 150}, {500, 150}}, {550, 1}}, download));
     graph.call_child("Royal", royal, {"FindGuild"});
     const auto find = graph.define_child("RoyalGuild", find_city_menu(true, true));
     graph.call_child("FindGuild", find, {"AtRoyal"});
@@ -117,7 +117,7 @@ CompiledWorkflow preparation(const WvdQuestDefinition &definition, const J &prof
     graph.call_child("Rest", rest, {"Rested"});
     graph.confirm("Rested", "cos.rested", "cos_rested", inn, {"Stage"});
     graph.observe("EnterPhase", phase(Phase::Enter), {"Enter"});
-    const auto enter = graph.define_child("CaveEntry", navigation::enter_dungeon(cave_of_separation_plan(definition, Segment::Preparation)));
+    const auto enter = graph.define_child("CaveEntry", navigation::enter_dungeon(cave_of_separation_plan(definition, Segment::Preparation), false, download));
     graph.call_child("Enter", enter, {"Entered"});
     graph.confirm("Entered", "cos.entered", "cos_entered", C::any({C::image("mapFlag"), C::image("dungFlag"), J{{"mode", "combat_active"}}}), {"Terminal"});
     return graph.finish();

@@ -10,6 +10,7 @@
 #include "games/wvd/supply/inn.hpp"
 #include "games/wvd/vision/location_probes.hpp"
 #include "games/wvd/vision/harken_probes.hpp"
+#include "games/wvd/vision/chest_probes.hpp"
 
 namespace wvd::games::tasks {
 namespace {
@@ -22,7 +23,7 @@ CompiledWorkflow return_to_bounty_city(bool guild, bool fortress = false) {
     C graph(guild ? "quest.bounty.return_guild" : "quest.bounty.return_fortress", std::chrono::seconds{240});
     const auto target = guild ? vision::guild_button() : vision::inn_button();
     const auto map = C::image("mapFlag");
-    const auto encounter = C::any({J{{"mode", "combat_active"}}, C::image("chestFlag"), C::image("RiseAgain")});
+    const auto encounter = C::any({J{{"mode", "combat_active"}}, vision::chest_page_condition(), C::image("RiseAgain")});
     const auto harken = C::any({vision::harken_buff_menu(), vision::harken_floor_menu(),
                                 vision::outskirts_return_button()});
     J known{target, map, C::image("dungFlag"), vision::city_screen(), harken};
@@ -35,9 +36,11 @@ CompiledWorkflow return_to_bounty_city(bool guild, bool fortress = false) {
     for (const auto &name : exits) known.push_back(exit_probe(name));
     const auto city_identity = fortress || !guild ? vision::fortress_city() : vision::royal_city();
     const auto destination = C::all({target, city_identity});
-    const auto done = C::all({destination, C::absent(map), C::absent(encounter)});
-    graph.route("Entry", guild ? J{"Done", "WrongCity", "Harken", "Dungeon", "Back"}
-                               : J{"Done", "Harken", "Dungeon", "Exit0", "Exit1", "Exit2", "Exit3", "Back"});
+    const auto done = C::all({destination, C::absent(map)});
+    graph.route("Entry", guild ? J{"Done", "WrongCity", "Harken", "Dungeon", "Encounter", "Back"}
+                               : J{"Done", "Harken", "Dungeon", "Exit0", "Exit1", "Exit2", "Exit3", "Encounter", "Back"});
+    // A new encounter can appear after the caller selected the return flow.
+    graph.observe("Encounter", encounter, {"EncounterExit"});
     graph.observe("Done", done, {"Terminal"});
     if (guild) {
         graph.observe("WrongCity", C::all({vision::city_screen(), C::absent(city_identity)}), {"WrongCityExit"});
@@ -47,7 +50,7 @@ CompiledWorkflow return_to_bounty_city(bool guild, bool fortress = false) {
     graph.observe("Harken", harken, {"LeaveHarken"});
     graph.call_child("LeaveHarken", harken_exit, {"Entry"});
     const auto return_harken = graph.define_child("ReturnHarken", navigation::auto_route("dungFlag"));
-    graph.observe("Dungeon", C::all({C::image("dungFlag"), C::absent(map), C::absent(encounter)}), {"GoHarken"});
+    graph.observe("Dungeon", J{{"mode", "auto_route_moving"}}, {"GoHarken"});
     // 返哈肯途中遇怪/宝箱或导航暂时停止是业务插入，交还调用者处理后再续返城。
     graph.call_child("GoHarken", return_harken, {"Entry"}, {{"blocked", {"Entry"}}, {"encounter", {"EncounterExit"}}, {"stopped", {"StoppedExit"}}});
     graph.handoff("EncounterExit", "encounter");
@@ -97,7 +100,7 @@ WvdTaskPlan giant_bounty_plan(const WvdQuestDefinition &definition) {
     if (!plan.time_leap() || plan.entry_steps().size() != 2 || plan.route().size() != 2 ||
         plan.route().back().target != "dungFlag")
         throw std::runtime_error("GIANT_BOUNTY_PLAN_INCOMPLETE");
-    return plan.with_shortcut_battle(3000).with_last_harken_arrival();
+    return plan.with_shortcut_battle().with_last_harken_arrival();
 }
 TaskTimeLeap bounty_time_leap(const WvdTaskPlan &plan, const J &profile) {
     // 任务内的显式跳轮步骤优先；不会修改外部默认配置或额外执行一次默认跳轮。
@@ -247,7 +250,7 @@ CompiledWorkflow bounty_cycle(const WvdQuestDefinition &definition, const J &pro
         graph.call_child("ReturnFortress", fortress, {"GoRoyalCity"},
             {{"encounter", {"RecoverReturn"}}, {"stopped", {"RecoverReturn"}}});
         const auto travel = graph.define_child("RoyalCity", navigation::travel_city_to_city(
-            {"City_RoyalCityLuknalia", TaskSwipe{{450, 150}, {500, 150}}, {550, 1}}));
+            {"City_RoyalCityLuknalia", TaskSwipe{{450, 150}, {500, 150}}, {550, 1}}, allow_download));
         graph.call_child("GoRoyalCity", travel, {"Travelled"});
     }
     graph.confirm("Travelled", "bounty.travel.done", skip_travel ? "bounty_travel_skipped" : "bounty_travel_completed",
@@ -263,7 +266,7 @@ CompiledWorkflow bounty_cycle(const WvdQuestDefinition &definition, const J &pro
         if (second && !hands) continue;
         const auto plan = second ? scorpion_plan(definition, true, locale) : first_plan;
         graph.observe(name + "RoutePhase", phase(second ? Phase::SecondRoute : Phase::FirstRoute), {name + "Enter"});
-        const auto entry = graph.define_child(name + "Entry", navigation::enter_dungeon(plan, !jier));
+        const auto entry = graph.define_child(name + "Entry", navigation::enter_dungeon(plan, !jier, allow_download));
         graph.call_child(name + "Enter", entry, {name + "Traverse"});
         const auto route = second ? graph.define_child(name + "Dungeon", traverse_dungeon(plan, profile, images, allow_download)) : first_dungeon;
         graph.call_child(name + "Traverse", route, {name + "Points", "Incomplete"});

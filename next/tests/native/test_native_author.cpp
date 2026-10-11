@@ -134,6 +134,27 @@ struct Ports final : runtime::FlowPorts {
             p.at("phase").get<std::string>());
         if (mode == "business") return games::business_condition(business.summary(), p);
         if (semantic_leaf) if (const auto supplied = semantic_leaf(p)) return *supplied;
+        if (mode == "chest_phase") {
+            const auto phase = p.at("phase").get<std::string>();
+            const bool open = images.contains("chestFlag"), choose = images.contains("whowillopenit");
+            const bool opening = images.contains("chestOpening"), reward = images.contains("chest_reward_advance");
+            if (phase == "choose") return choose;
+            if (phase == "opening") return opening;
+            if (phase == "reward") return reward;
+            if (phase == "disarm") return choose || opening;
+            if (phase == "active") return open || choose || opening;
+            if (phase == "post") return open || choose || opening || reward || combat ||
+                images.contains("dungFlag") || images.contains("RiseAgain") || images.contains("ambush");
+            if (phase == "opened") return choose || opening || reward || combat || images.contains("dungFlag") || images.contains("RiseAgain");
+            if (phase == "handoff") return reward || combat || images.contains("RiseAgain") || images.contains("dungFlag");
+            if (phase == "choose_handoff") return opening || reward || combat || images.contains("RiseAgain") || images.contains("dungFlag");
+            if (open || choose || opening || reward) return false;
+            if (phase == "combat") return combat;
+            if (phase == "dungeon") return !combat && images.contains("dungFlag");
+            if (phase == "revival") return !combat && images.contains("RiseAgain");
+            if (phase == "ambush") return !combat && images.contains("ambush");
+            return false;
+        }
         if (mode == "combat_phase") {
             const auto phase = p.at("phase").get<std::string>();
             const auto detail = [&] {
@@ -175,6 +196,9 @@ struct Ports final : runtime::FlowPorts {
         result.outcome = evaluate(parameters) ? contracts::RecognitionOutcome::Hit : contracts::RecognitionOutcome::NoHit;
         result.box = contracts::Box{400, 800, 50, 50}; result.center = contracts::Point{425, 825};
         result.action_eligible = parameters.value("mode", "") != "business";
+        if (parameters.value("mode", "") == "portrait")
+            result.evidence = {{"evidence", {{"best_score", result.outcome == contracts::RecognitionOutcome::Hit ? .95 : .10},
+                {"best_box", {0, 0, 80, 80}}, {"identity_basis", "controlled_full_portrait"}}}};
         return result;
     }
     runtime::Submission submit(const contracts::Command &command, const contracts::Observation &, const contracts::Observation &,
@@ -373,10 +397,48 @@ int transitions() {
 #include "giant_linkage_cases.hpp"
 #include "memory_owner_cases.hpp"
 #include "combat_diagnostic_drive.hpp"
+#include "download_retry_cases.hpp"
+#include "event_stop_contract_cases.hpp"
+#include "shared_page_actions_cases.hpp"
+#if defined(_MSC_VER)
+__declspec(noinline)
+#endif
+int run_author_cases(int argc, char **argv);
+
+// Keep real OCR calls off the stack frame containing unrelated author cases.
 int main(int argc, char **argv) {
     try {
-        if(argc==4 && std::string(argv[1])=="--supply-plan-contract") {
+        if (argc == 2 && std::string(argv[1]) == "--event-stop-contract")
+            return event_stop_contract::run();
+        if (argc == 3 && std::string(argv[1]) == "--shared-page-actions")
+            return shared_page_actions_contract_test::run(std::filesystem::current_path(),
+                std::filesystem::absolute(argv[2]));
+        if (argc == 3 && std::string(argv[1]) == "--public-download-retry")
+            return download_contract_test::run(std::filesystem::current_path(),
+                std::filesystem::absolute(argv[2]), true);
+        if((argc==4 || argc==5 || argc==6) && std::string(argv[1])=="--supply-plan-contract") {
             using namespace closure;
+            std::vector<std::string> visited;
+            const auto normal_page = games::vision::classify_supply_page([&](const J &probe) {
+                const auto name = probe.value("image", probe.at("mode").get<std::string>());
+                visited.push_back(name);
+                check(name == "trait" || name == "recover" || name == "dungFlag" || name == "mapFlag",
+                    "NORMAL_DUNGEON_CHECKED_UNRELATED_PHASE:" + name);
+                return name == "dungFlag";
+            });
+            check(normal_page == games::vision::SupplyPage::Dungeon && visited.size() == 4,
+                "NORMAL_DUNGEON_NOT_DIRECTLY_CLASSIFIED");
+            for (const auto *anchor : {"trait", "recover"}) {
+                unsigned probes{};
+                const auto panel_page = games::vision::classify_supply_page([&](const J &probe) {
+                    ++probes;
+                    const auto name = probe.value("image", "");
+                    check(name == "trait" || name == "recover", "PANEL_CHECKED_UNRELATED_PHASE");
+                    return name == anchor;
+                });
+                check(panel_page == games::vision::SupplyPage::Panel && probes <= 2,
+                    "NORMAL_PANEL_NOT_DIRECTLY_CLASSIFIED");
+            }
             const auto root=std::filesystem::absolute(argv[3]);
             check(!std::filesystem::exists(root),"NEW_ISOLATED_ROOT_REQUIRED");
             std::filesystem::create_directories(root);
@@ -389,6 +451,16 @@ int main(int argc, char **argv) {
                 std::filesystem::create_directories(destination.parent_path());
                 std::filesystem::copy_file(pack/relative,destination);
                 bundle.files.push_back({row.at("path"),row.at("sha256")});
+            }
+            const auto model=read("resources/recognition/ocr-models.json").at("models").at("zh-Hant");
+            for(const auto &[name,spec]:model.at("files").items()) {
+                const auto source=platform::path_from_utf8(spec.at("source").get<std::string>());
+                check(platform::file_sha256(source)==spec.at("sha256").get<std::string>(),"SUPPLY_OCR_MODEL_CHANGED");
+                const auto relative=model.at("bundle_directory").get<std::string>()+"/"+name;
+                const auto destination=bundle.root/platform::BundleLease::checked_relative(relative);
+                std::filesystem::create_directories(destination.parent_path());
+                std::filesystem::copy_file(source,destination);
+                bundle.files.push_back({relative,spec.at("sha256")});
             }
             const auto trait=cv::imread((pack/"image/trait.png").string());
             check(!trait.empty(),"REAL_TRAIT_TEMPLATE_MISSING");
@@ -433,16 +505,114 @@ int main(int argc, char **argv) {
             const auto before=measure(old),after=measure(planned);
             check(after.at("counts").at("condition_visits")<before.at("counts").at("condition_visits"),"STAGE_PLAN_REPEATS_CONDITIONS");
             check(after.at("cpp_new_bytes")<before.at("cpp_new_bytes"),"STAGE_PLAN_ALLOCATION_NOT_REDUCED");
+            J revival = J::array();
+            for (const auto *name : {"dungFlag", "character_panel_zh_hant", "recovery_panel_zh_hant",
+                "chest_open_zh_hant", "chest_choose_zh_hant", "chestOpening"}) {
+                const auto leaf = cv::imread((pack / "image" / (std::string(name) + ".png")).string());
+                check(!leaf.empty(), "REVIVAL_NORMAL_TEMPLATE_MISSING");
+                cv::Mat normal(1600,900,CV_8UC3,cv::Scalar(34,47,63));
+                const auto position = std::string(name) == "character_panel_zh_hant" ? cv::Point(90,1400) :
+                    std::string(name) == "recovery_panel_zh_hant" ? cv::Point(250,300) :
+                    std::string(name) == "chest_open_zh_hant" ? cv::Point(360,1220) :
+                    std::string(name) == "chest_choose_zh_hant" ? cv::Point(300,900) : cv::Point(10,10);
+                leaf.copyTo(normal(cv::Rect(position,leaf.size())));
+                frame.raw_bgr = std::make_shared<const std::vector<std::uint8_t>>(normal.data,normal.data+normal.total()*3);
+                recognition::Service service(bundle,games::vision::native_handlers(manifest.value("aliases",J::object()),"zh-Hant"));
+                if (std::string(name) == "dungFlag") {
+                    platform::timing::Totals totals; platform::timing::Bind bind(&totals);
+                    for (const auto &condition : std::vector<J>{J{{"mode", "auto_route_moving"}},
+                            J{{"mode", "supply_context"}, {"phase", "dungeon"}}}) {
+                        ++frame.identity.frame_id;
+                        frame.identity.captured_at = frame.identity.capture_finished_at = std::chrono::steady_clock::now();
+                        const auto result = service.evaluate(frame, frame.identity,
+                            {"normal-dungeon", "1", {0,0,900,1600}, recognition::CustomParameters{"WvdVision", condition}});
+                        check(result.outcome == contracts::RecognitionOutcome::Hit,
+                            "NORMAL_DUNGEON_PRIORITY_CHANGED:" + result.error_code + ":" + result.evidence.dump());
+                    }
+                    const auto counts = platform::timing::report(totals.sample(), 0).at("counts");
+                    check(counts.at("ocr_calls") == 0 && counts.at("actual_matches") <= 8,
+                        "NORMAL_DUNGEON_SCANNED_OTHER_FLOWS:" + counts.dump());
+                }
+                const auto evaluate = [&](const J &condition) {
+                    ++frame.identity.frame_id;
+                    frame.identity.captured_at=frame.identity.capture_finished_at=std::chrono::steady_clock::now();
+                    platform::timing::Totals totals; platform::timing::Bind bind(&totals);
+                    const auto started=std::chrono::steady_clock::now();
+                    const auto result=service.evaluate(frame,frame.identity,{"revival-normal","1",{0,0,900,1600},
+                        recognition::CustomParameters{"WvdVision",condition}});
+                    check(result.outcome==contracts::RecognitionOutcome::NoHit,
+                        std::string("NORMAL_PAGE_BECAME_REVIVAL:")+name+":"+result.error_code+":"+result.evidence.dump());
+                    return platform::timing::report(totals.sample(),std::chrono::duration_cast<std::chrono::nanoseconds>(
+                        std::chrono::steady_clock::now()-started).count());
+                };
+                const auto guarded=evaluate(J{{"mode","revival_prompt"}});
+                check(guarded.at("counts").at("ocr_calls")==0,"NORMAL_PAGE_STILL_CALLS_REVIVAL_OCR");
+                const auto direct=evaluate(games::vision::resource("party.revival.action","zh-Hant"));
+                check(direct.at("counts").at("ocr_calls")==1,"DIRECT_REVIVAL_OCR_NOT_MEASURED");
+                // Absence of a normal anchor must keep the OCR path, not an unconditional negative.
+                cv::Mat unknown(1600,900,CV_8UC3,cv::Scalar(34,47,63));
+                frame.raw_bgr=std::make_shared<const std::vector<std::uint8_t>>(unknown.data,unknown.data+unknown.total()*3);
+                const auto fallback=evaluate(J{{"mode","revival_prompt"}});
+                check(fallback.at("counts").at("ocr_calls")==1,"UNKNOWN_PAGE_LOST_REVIVAL_OCR");
+                revival.push_back({{"anchor",name},{"guarded",guarded},{"direct_ocr",direct},{"unknown",fallback}});
+            }
+            J chest_frame = nullptr;
+            if (argc >= 5) {
+                const auto path = std::filesystem::absolute(argv[4]);
+                const auto pixels = cv::imread(path.string());
+                check(!pixels.empty() && pixels.size() == cv::Size(900,1600), "CHEST_RECORDED_FRAME_INVALID");
+                frame.raw_bgr = std::make_shared<const std::vector<std::uint8_t>>(pixels.data,pixels.data+pixels.total()*3);
+                recognition::Service service(bundle,games::vision::native_handlers(manifest.value("aliases",J::object()),"zh-Hant"));
+                platform::timing::Totals totals; platform::timing::Bind bind(&totals);
+                const auto began = std::chrono::steady_clock::now();
+                const bool reward_frame = argc == 6 && std::string(argv[5]) == "reward";
+                const std::vector<const char *> phases = reward_frame ?
+                    std::vector<const char *>{"reward", "handoff", "post"} :
+                    std::vector<const char *>{"opening", "active", "disarm", "post"};
+                for (const auto *phase : phases) {
+                    ++frame.identity.frame_id;
+                    frame.identity.captured_at = frame.identity.capture_finished_at = std::chrono::steady_clock::now();
+                    const auto observed = service.evaluate(frame,frame.identity,{"chest-phase-frame","1",{0,0,900,1600},
+                        recognition::CustomParameters{"WvdVision",games::vision::chest_phase(phase)}});
+                    check(observed.outcome == contracts::RecognitionOutcome::Hit, std::string("CHEST_PHASE_FRAME_FAILED:")+phase+":"+observed.error_code);
+                }
+                if (reward_frame) for (const auto *phase : {"active", "disarm", "opening"}) {
+                    ++frame.identity.frame_id;
+                    frame.identity.captured_at = frame.identity.capture_finished_at = std::chrono::steady_clock::now();
+                    const auto observed = service.evaluate(frame,frame.identity,{"chest-negative-frame","1",{0,0,900,1600},
+                        recognition::CustomParameters{"WvdVision",games::vision::chest_phase(phase)}});
+                    check(observed.outcome == contracts::RecognitionOutcome::NoHit, "REWARD_FRAME_STILL_AUTHORIZES_DISARM");
+                }
+                chest_frame = platform::timing::report(totals.sample(),std::chrono::duration_cast<std::chrono::nanoseconds>(
+                    std::chrono::steady_clock::now()-began).count());
+                check(chest_frame.at("counts").at("ocr_calls") == 0, "CHEST_PHASE_STILL_CALLS_UNRELATED_OCR");
+                chest_frame["source_sha256"] = platform::file_sha256(path);
+                chest_frame["kind"] = reward_frame ? "recorded reward frame; Service only, no device or input" :
+                    "recorded opening frame; Service only, no device or input";
+            }
             std::ofstream report(root/"metrics.json");
             report<<J{{"passed",true},{"frame_kind","synthetic 900x1600 containing real English trait template, not live capture"},
                 {"template_sha256",platform::file_sha256(pack/"image/trait.png")},
+                {"revival_normal_pages",revival}, {"recorded_chest_frame",chest_frame},
                 {"baseline_kind","former context/panel/post recipes through current production Service; not a pre-fix binary"},
                 {"allocation_scope","C++ new/new[] all evaluation threads; excludes malloc/OpenCV/ORT internal allocation"},
-                {"before",before},{"after",after},{"progress_events",0},{"ocr_expected",0}}.dump(2);
+                {"before",before},{"after",after},{"progress_events",0},{"stage_ocr_expected",0}}.dump(2);
             report.close(); check(bool(report),"METRIC_WRITE_FAILED");
             std::cout<<"PASS supply stage plan: fixed synthetic frame, actual Service, same four positive stages, metrics saved\n";
             return 0;
         }
+        return run_author_cases(argc, argv);
+    } catch (const std::exception &error) {
+        std::cerr << error.what() << '\n';
+        return 1;
+    }
+}
+
+#if defined(_MSC_VER)
+__declspec(noinline)
+#endif
+int run_author_cases(int argc, char **argv) {
+    try {
         if (argc == 3 && std::string(argv[1]) == "--leaf-plan-contract") {
             using J = nlohmann::json;
             const auto root = std::filesystem::absolute(argv[2]);
@@ -498,6 +668,21 @@ int main(int argc, char **argv) {
                 totals.sample().counts[static_cast<unsigned>(platform::timing::Counter::Matches)]==5,
                 "MASKED_LEAF_NOT_SHARED");
             auto missing=leaf; missing["image"]="missing";
+            const auto prior = totals.sample().counts[static_cast<unsigned>(platform::timing::Counter::Matches)];
+            auto unrelated = leaf; unrelated["roi"] = {0,0,65,65};
+            const J absent{{"mode","not"},{"conditions",J::array({leaf})}};
+            const auto shorted = evaluate(J{{"mode","all"},{"conditions",J::array({absent,unrelated})}});
+            closure::check(shorted.outcome == contracts::RecognitionOutcome::NoHit &&
+                totals.sample().counts[static_cast<unsigned>(platform::timing::Counter::Matches)] == prior &&
+                shorted.evidence.at("evidence").at("conditions").size() == 1,
+                "FAILED_CONJUNCTION_EVALUATED_UNRELATED_IMAGE");
+            closure::check(evaluate(J{{"mode","all"},{"conditions",J::array({leaf,missing})}}).outcome ==
+                contracts::RecognitionOutcome::Error, "REACHED_CONJUNCTION_ERROR_HIDDEN");
+            const J rejected{{"mode","all"},{"conditions",J::array({absent,missing})}};
+            closure::check(evaluate(J{{"mode","not"},{"conditions",J::array({rejected})}}).outcome ==
+                contracts::RecognitionOutcome::Error, "NEGATED_CONJUNCTION_BYPASSED_INPUT_QUALIFICATION");
+            closure::check(evaluate(J{{"mode","any"},{"conditions",J::array({leaf,rejected})}}).outcome ==
+                contracts::RecognitionOutcome::Error, "ALTERNATIVE_BYPASSED_NESTED_INPUT_QUALIFICATION");
             closure::check(evaluate(J{{"mode","any"},{"conditions",J::array({leaf,missing})}}).outcome==
                 contracts::RecognitionOutcome::Error, "LEAF_ERROR_HIDDEN_BY_HIT");
             service.cancel();
@@ -569,6 +754,13 @@ int main(int argc, char **argv) {
             using namespace closure;
             const auto graph=games::supply::recover_in_dungeon();
             graph.validate();
+            check(!graph.nodes.contains("Requested") &&
+                graph.nodes.at("Begin").at("operation_args").dump().find("healing_required")!=std::string::npos,
+                "HEAL_ADMISSION_NOT_CONSOLIDATED");
+            check(graph.nodes.at("Begin").at("next").front() == "Open0" &&
+                graph.nodes.at("Open0").at("post_delay") == 100 &&
+                graph.nodes.at("Open0").at("operation_args").at("postcondition").dump().find("\"phase\":\"post\"") == std::string::npos,
+                "HEAL_OPEN_STILL_SLEEPS_OR_ACCEPTS_UNCHANGED_DUNGEON");
             for (const auto *phase : {"dungeon","panel","context","post"}) {
                 const auto page=games::vision::classify_supply_page([](const J &probe) {
                     return probe.value("image","")=="recover";
@@ -597,6 +789,20 @@ int main(int argc, char **argv) {
                 before.at("healing_attempt_finished").dump() + ":required=" + before.at("healing_required").dump());
             check(!driver.ports.business.confirm_event(driver.ports.business.confirmation_id("heal.attempt.closed", "healing_attempt_finished"),
                 "healing_attempt_finished", 1, 898), "HEAL_ATTEMPT_REPLAY_NOT_IDEMPOTENT");
+            Driver opening(graph, profile);
+            opening.ports.business.enter_dungeon();
+            opening.ports.images = {"dungFlag"};
+            opening.ports.after_input = [&](const auto &) {
+                if (opening.ports.commands.size() == 2) opening.ports.images = {"recover"};
+                if (opening.ports.commands.size() == 3) opening.ports.images = {"dungFlag"};
+            };
+            opening.finish();
+            check(opening.last.state == runtime::TickState::Completed &&
+                opening.ports.commands.size() == 3 &&
+                opening.ports.commands[0].x == opening.ports.commands[1].x &&
+                opening.ports.commands[0].y == opening.ports.commands[1].y &&
+                opening.ports.business.summary().at("healing_attempt_finished").get<bool>(),
+                "HEAL_OPEN_MISSED_CLICK_NOT_RETRIED_ON_SAME_CHARACTER");
             driver.ports.business.enter_dungeon();
             driver.ports.business.confirm_event("heal-next-request", "healing_requested", 1, 899);
             bool forged_completed{};
@@ -621,6 +827,9 @@ int main(int argc, char **argv) {
         }
         if (argc == 2 && std::string(argv[1]) == "--inn-exit-contract") {
             using namespace closure;
+            const auto inn = games::supply::rest_at_inn(false, true);
+            check(inn.nodes.at("Leave").at("next") == nlohmann::json({"BackFromStayZh", "BackFromStay",
+                "AtCity", "ContinueStory", "ContinueSupply", "CloseCharacter"}), "INN_NORMAL_EXIT_NOT_FIRST");
             const auto paid = [](Ports &ports) {
                 ports.business.confirm_event("inn.prepare", "inn_payment_prepared", 1, 1);
                 ports.business.inn_payment_submitted(false);
@@ -981,6 +1190,14 @@ int main(int argc, char **argv) {
         }
         if (argc == 2 && std::string(argv[1]) == "--target-chest-completion") {
             using namespace closure;
+            {
+                C deep("linear-validation");
+                deep.route("Entry", {"Step0"});
+                for (int i = 0; i < 2000; ++i)
+                    deep.route("Step" + std::to_string(i), {i == 1999 ? "Terminal" : "Step" + std::to_string(i + 1)});
+                const auto linear = deep.finish();
+                games::tasks::compile_native_program(linear, J::object(), "linear-validation").validate();
+            }
             J docs = J::object();
             for (const auto &doc : read("resources/authoring/public-flows.json")) docs[doc.at("flow").at("id").get<std::string>()] = doc;
             const games::tasks::PublicFlowLibrary library(docs, read("resources/authoring/semantic-assets.json"));
@@ -995,6 +1212,48 @@ int main(int argc, char **argv) {
             profile["DEFAULT_OVERALL_STRATEGY"] = "target-end";
             const games::WvdQuestCatalog quests(read("packs/wvd/parameters/legacy-quests.json"));
             auto graph = games::tasks::traverse_dungeon(games::tasks::giant_bounty_plan(quests.at("GiantBounty")), profile, {});
+            check(graph.nodes.at("Entry").at("next").front() == "EnteredDungeon" &&
+                graph.nodes.at("SelectPoint").at("next").front() == "NavigationReady",
+                "DUNGEON_ENTRY_STILL_SCANS_UNRELATED_BRANCHES_FIRST");
+            auto transitioning_graph = graph;
+            transitioning_graph.entry = "AfterTargetBattle0";
+            Driver transitioning(transitioning_graph, profile);
+            transitioning.ports.business.enter_dungeon();
+            transitioning.ports.business.confirm_event("transition-target", "target_encounter_started", 1, 1, 0);
+            transitioning.ports.business.observe_combat();
+            transitioning.ports.business.confirm_event("transition-result", "target_encounter_result", 1, 2, 0);
+            const auto transition_at = std::chrono::steady_clock::now();
+            transitioning.until([&] { return transitioning.ports.business.summary().at("task_step") == 1; }, 4s);
+            check(transitioning.ports.inputs.empty() &&
+                std::chrono::steady_clock::now() - transition_at < 1s &&
+                transitioning.ports.business.summary().at("combats") == 1,
+                "SETTLED_TARGET_WAITS_FOR_ANOTHER_PAGE_OR_INPUT");
+            {
+                auto configured_docs = docs;
+                auto &hook = configured_docs.at("after-target-battle");
+                hook["nodes"].push_back({{"id", "ConfiguredWait"}, {"type", "wait"},
+                    {"name", "Configured wait"}, {"parameters", {{"duration_ms", 250}}}});
+                hook["layout"]["nodes"].push_back({{"node_id", "ConfiguredWait"}, {"x", 150}, {"y", 180}});
+                hook["edges"][0]["to"] = "ConfiguredWait";
+                hook["edges"].push_back({{"id", "after-wait"}, {"from", "ConfiguredWait"},
+                    {"to", "Done"}, {"outcome", "success"}, {"order", 0}});
+                const games::tasks::PublicFlowLibrary configured(configured_docs, read("resources/authoring/semantic-assets.json"));
+                const games::tasks::PublicStepScope configured_steps([&](const auto &id, const auto &args) {
+                    return configured.compile_step(id, args, "zh-Hant");
+                });
+                auto waiting_graph = games::tasks::traverse_dungeon(
+                    games::tasks::giant_bounty_plan(quests.at("GiantBounty")), profile, {});
+                waiting_graph.entry = "AfterTargetBattle0";
+                Driver waiting(waiting_graph, profile);
+                waiting.ports.business.enter_dungeon();
+                waiting.ports.business.confirm_event("wait-target", "target_encounter_started", 1, 1, 0);
+                waiting.ports.business.observe_combat();
+                waiting.ports.business.confirm_event("wait-result", "target_encounter_result", 1, 2, 0);
+                const auto started = std::chrono::steady_clock::now();
+                waiting.until([&] { return waiting.ports.business.summary().at("task_step") == 1; }, 2s);
+                check(waiting.ports.inputs.empty() && std::chrono::steady_clock::now() - started >= 250ms &&
+                    std::chrono::steady_clock::now() - started < 1s, "AUTHORED_WAIT_IGNORED_OR_FIXED_BATTLE_DELAY");
+            }
             graph.entry = "TargetDispatch0";
             Driver ended_at_chest(graph, profile);
             auto &state = ended_at_chest.ports.business;
@@ -1005,7 +1264,7 @@ int main(int argc, char **argv) {
             ended_at_chest.ports.conditions[J{{"mode", "target_chest_end"}}.dump()] = true;
             const auto before = std::chrono::steady_clock::now();
             ended_at_chest.until([&] { return state.summary().at("task_step") == 1; }, 5s);
-            check(ended_at_chest.ports.inputs.empty() && std::chrono::steady_clock::now() - before >= 3s &&
+            check(ended_at_chest.ports.inputs.empty() && std::chrono::steady_clock::now() - before < 1s &&
                 state.summary().at("target_encounter").at("completion_reason") == "target_battle_ended_at_chest" &&
                 state.summary().at("combats") == 1 && state.summary().at("chests") == 0 &&
                 !state.summary().at("pending_combat").get<bool>(),
@@ -1018,6 +1277,27 @@ int main(int argc, char **argv) {
             state.resume_dungeon(); state.resume_dungeon();
             check(state.summary().at("combats") == 2 && state.summary().at("chests") == 1,
                 "HANDOFF_COUNTS_MUST_NOT_REPEAT_ON_DUNGEON_RETURN");
+
+            for (const bool via_chest : {false, true}) {
+                Driver already_settled(graph, profile);
+                auto &settled = already_settled.ports.business;
+                settled.enter_dungeon();
+                settled.confirm_event("target.begin", "target_encounter_started", 1, 1, 0);
+                settled.observe_combat();
+                if (via_chest) settled.observe_chest();
+                else settled.resume_dungeon();
+                already_settled.ports.images = {"chestFlag"};
+                already_settled.ports.conditions[J{{"mode", "target_chest_end"}}.dump()] = true;
+                already_settled.until([&] { return settled.summary().at("task_step") == 1; }, 5s);
+                check(already_settled.ports.inputs.empty() && settled.summary().at("combats") == 1 &&
+                    settled.summary().at("chests") == 0 &&
+                    settled.summary().at("pending_chest").get<bool>() == via_chest &&
+                    settled.summary().at("target_encounter").at("completion_reason") == "target_battle_ended_at_chest",
+                    "SETTLED_TARGET_MUST_SURVIVE_DUNGEON_TO_CHEST_WITHOUT_DOUBLE_COUNT");
+                settled.resume_dungeon(); settled.resume_dungeon();
+                check(settled.summary().at("combats") == 1 && settled.summary().at("chests") == (via_chest ? 1 : 0),
+                    "SETTLED_TARGET_RECEIPT_MUST_NOT_REPEAT_ENCOUNTER_COUNTS");
+            }
 
             auto handoff_root = [](const games::tasks::CompiledWorkflow &child) {
                 C root("handoff-check");
@@ -1045,25 +1325,37 @@ int main(int argc, char **argv) {
                     "ADVANCED_PUBLIC_ENTRY_MUST_NOT_CLICK_OLD_PAGE:" + id);
             }
 
-            for (const std::string kind : {"no-target", "restart", "other-battle"}) {
+            for (const std::string kind : {"no-target", "restart", "other-battle", "revived", "never-observed"}) {
                 games::WvdRunState invalid(profile, {"invalid-target-" + kind, 1, std::make_shared<contracts::SteadyClock>()});
                 invalid.enter_segment(contracts::SegmentBoundary::Initial, 1, 0); invalid.enter_dungeon();
                 if (kind != "no-target") {
-                    invalid.confirm_event("begin", "target_encounter_started", 1, 1, 0); invalid.observe_combat();
+                    invalid.confirm_event("begin", "target_encounter_started", 1, 1, 0);
+                    if (kind != "never-observed") invalid.observe_combat();
                     if (kind == "restart") invalid.restart_game();
-                    else { invalid.resume_dungeon(); invalid.observe_combat(); }
+                    else if (kind == "revived") invalid.resurrected();
+                    else if (kind == "other-battle") { invalid.resume_dungeon(); invalid.observe_combat(); }
                 }
                 bool rejected = false;
                 try { invalid.confirm_event("bad", "target_encounter_chest_result", 1, 2, 0); }
                 catch (const std::runtime_error &e) { rejected = std::string(e.what()) == "TARGET_ENCOUNTER_RESULT_UNCONFIRMED"; }
                 check(rejected && invalid.summary().at("task_step") == 0, "UNATTRIBUTED_CHEST_COUNTED_TARGET:" + kind);
             }
+            auto returning = games::tasks::bounty_cycle(quests.at("GiantBounty"), profile, {}, library,
+                docs.at("guild-open-bounty-page"), "zh-Hant");
+            returning.entry = "ReturnForInspection";
+            for (const std::string scene : {"combat", "chestFlag", "chest_reward_advance", "RiseAgain"}) {
+                Driver interlude(returning, profile);
+                interlude.ports.combat = scene == "combat";
+                if (scene != "combat") interlude.ports.images = {scene};
+                interlude.until([&] { return interlude.executor.current_step_id() == "RecoverReturn"; }, 2s);
+                check(interlude.ports.inputs.empty(), "RETURN_ENTRY_MUST_HAND_OFF_LATE_ENCOUNTER_WITHOUT_INPUT:" + scene);
+            }
             Driver no_route(games::navigation::auto_route("mark_auto"));
             no_route.ports.images = {"theRouteToTheDestinationCannotBeFound"};
             no_route.finish();
             check(no_route.last.state == runtime::TickState::Completed && no_route.ports.inputs.empty(),
                 "KNOWN_NO_ROUTE_MUST_END_MARK_NAVIGATION_WITHOUT_MORE_INPUT");
-            std::cout << "PASS battle/chest handoffs, direct reward, encounter identity/counts, advanced public entries, attributed target 3s boundary and no-route stop\n";
+            std::cout << "PASS battle/chest handoffs, direct reward, encounter identity/counts, authored wait and immediate settled-target boundary, no-route stop\n";
             return 0;
         }
         if (argc == 6 && std::string(argv[1]) == "--healing-frames") {
@@ -1093,9 +1385,20 @@ int main(int argc, char **argv) {
                 frame.raw_bgr = std::make_shared<const std::vector<std::uint8_t>>(image.data,image.data+image.total()*image.elemSize());
                 const recognition::Request request{"healing-frame","1",{0,0,900,1600},
                     recognition::CustomParameters{"WvdVision",{{"mode","supply_context"},{"phase",kind}}}};
+                platform::timing::Totals totals; platform::timing::Bind timing(&totals);
+                const auto started = std::chrono::steady_clock::now();
                 const auto observed = service.evaluate(frame,frame.identity,request);
                 closure::check(observed.outcome == expected, "HEAL_FRAME_RESULT:"+file+":"+kind+":"+observed.error_code+":"+observed.evidence.dump());
                 std::cout << kind << ':' << (expected == O::Hit ? "Hit" : "NoHit") << ':' << observed.evidence.dump() << '\n';
+                std::cout << "timing:" << platform::timing::report(totals.sample(),
+                    std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now()-started).count()).dump() << '\n';
+                if (kind == "dungeon") {
+                    const auto moving = service.evaluate(frame,frame.identity,
+                        {"healing-frame-moving","1",{0,0,900,1600},
+                            recognition::CustomParameters{"WvdVision",J{{"mode","auto_route_moving"}}}});
+                    closure::check(moving.outcome == expected,
+                        "NAVIGATION_PANEL_EXCLUSION:" + file + ":" + moving.error_code + ":" + moving.evidence.dump());
+                }
             }
             std::cout << "PASS real captured recovery panel and dungeon return; each rejects the other phase\n";
             return 0;
@@ -1355,6 +1658,28 @@ int main(int argc, char **argv) {
                         "HARKEN_RECOVERY_NOT_SELECTED");
                 }
             }
+            for (const bool arrives : {false, true}) {
+                Driver d(games::navigation::auto_route("dungFlag"));
+                d.ports.conditions[J{{"mode", "auto_route_moving"}}.dump()] = true;
+                d.ports.conditions[J{{"mode", "auto_route_post"}}.dump()] = true;
+                d.ports.conditions[J{{"mode", "movement_stopped"}, {"scope", "auto_route.dungFlag"}}.dump()] = true;
+                d.ports.images.insert("dungFlag");
+                d.until([&] { return d.executor.current_step_id() == "Moving"; });
+                check(d.program.definitions.at(d.program.root_definition).steps.at("Moving").time_limit == 60s,
+                    "HARKEN_STALL_PRODUCTION_WINDOW_CHANGED");
+                d.program.definitions.at(d.program.root_definition).steps.at("Moving").time_limit = 1500ms;
+                const auto entered = std::chrono::steady_clock::now();
+                d.ports.before_capture = [&] {
+                    if (arrives && std::chrono::steady_clock::now() - entered > 500ms)
+                        d.ports.scene("harken");
+                };
+                d.finish();
+                check(d.ports.inputs.size() == 1,
+                    "HARKEN_STALL_RETRY_CONTRACT");
+                check(arrives ? d.last.state == runtime::TickState::Completed :
+                    d.last.state == runtime::TickState::Failed && d.last.code == "navigation.input_no_progress",
+                    "HARKEN_STATIONARY_HANDOFF_LOOP:" + d.last.code);
+            }
             for (const bool during_selection : {false, true}) {
                 Driver d(library.compile_step("navigation-resume", J::object(), "zh-Hant"));
                 d.ports.conditions[J{{"mode","auto_route_post"}}.dump()] = true;
@@ -1381,7 +1706,7 @@ int main(int argc, char **argv) {
             const auto plan = games::tasks::giant_bounty_plan(task);
             check(plan.entry_steps()[0].target == "impregnableFortress" &&
                 plan.entry_steps()[1].target == "fortressb10f" &&
-                plan.route()[0].target == "mark_auto" && plan.route()[0].shortcut_battle_wait_ms == 3000 &&
+                plan.route()[0].target == "mark_auto" && plan.route()[0].shortcut_battle &&
                 plan.route()[1].target == "dungFlag" && plan.route()[1].harken_arrival,
                 "GIANT_BOUNTY_ROUTE");
             J documents = J::object();
@@ -1410,7 +1735,18 @@ int main(int argc, char **argv) {
                 });
                 games::tasks::localize_task_assets(flow, catalogue, "zh-Hant");
                 std::cout << "giant compiled nodes: " << flow.nodes.size() << '\n';
-                games::tasks::compile_native_program(flow, J::object(), "giant-bounty").validate();
+                const auto compiled = games::tasks::compile_native_program(flow, J::object(), "giant-bounty");
+                compiled.validate();
+                for (const auto &[definition_id, definition] : compiled.definitions)
+                    for (const auto &[node_id, node] : definition.steps) {
+                        if (!flow.nodes.contains(node_id)) continue;
+                        const auto &source = flow.nodes.at(node_id);
+                        if (source.value("operation", "") == "Route" && source.contains("observation_args") &&
+                            source.at("observation_args").value("mode", "") == "business" &&
+                            !source.value("unexpected_only", false))
+                            check(node.business_guard && !node.guard && std::holds_alternative<workflow::Route>(node.data),
+                                "PURE_BUSINESS_ROUTE_STILL_REQUIRES_IMAGE:" + node_id);
+                    }
                 if (!ore && !triumph) {
                     auto production = games::recovery::with_boot_recovery(flow, true);
                     games::tasks::localize_task_assets(production, catalogue, "zh-Hant");
@@ -1425,13 +1761,17 @@ int main(int argc, char **argv) {
                     !flow.nodes.contains("GoRoyalCity") && !flow.nodes.contains("FirstDungeon_CallAutoMap0"),
                     "GIANT_BOUNTY_MUST_STAY_IN_CHAPTER_THREE_WITHOUT_MAP_NAVIGATION");
                 const auto &route = flow.nodes.at("FirstDungeon_CallRoute0");
+                check(flow.nodes.at("ReturnGuild_Entry").at("next").front() == "ReturnGuild_Done" &&
+                    flow.nodes.at("ReturnGuild_Done").dump().find("combat_active") == std::string::npos &&
+                    flow.nodes.at("ReturnGuild_Dungeon").at("observation_args").at("mode") == "auto_route_moving",
+                    "RETURN_CITY_CHECKS_ENCOUNTER_BEFORE_CURRENT_PAGE");
                 check(route.at("next").dump().find("Confirm0") != std::string::npos &&
                     flow.nodes.at("FirstDungeon_Route0_Entry").at("next").dump().find("Arrived") == std::string::npos &&
                     route.dump().find("TargetEncounter0") != std::string::npos &&
                     flow.nodes.at("FirstDungeon_FightTarget0").at("next") == J{"FirstDungeon_TargetDispatch0"} &&
                     flow.nodes.at("FirstDungeon_TargetResult0").at("next") == J{"FirstDungeon_AfterTargetBattle0"} &&
                     flow.nodes.at("FirstDungeon_TargetResult0").at("operation_args").at("event") == "target_encounter_result" &&
-                    flow.nodes.at("FirstDungeon_AfterTargetBattle0").at("operation_args").at("duration_ms") == 3000 &&
+                    flow.nodes.at("FirstDungeon_AfterTargetBattle0").at("binding") == "Call" &&
                     flow.nodes.at("FirstDungeon_AfterTargetBattle0").at("next") ==
                         J{"FirstDungeon_Confirm0", "FirstDungeon_AfterTargetResult0"},
                     "GIANT_MARK_STOP_IS_NOT_A_KILL_OR_AN_EXTRA_MAP_CLICK");
@@ -1460,8 +1800,16 @@ int main(int argc, char **argv) {
                 check(wait.ports.business.summary().at("task_step") == 0 && wait.ports.inputs.empty(),
                     "GIANT_UNKNOWN_POST_BATTLE_FRAME_MUST_NOT_CONFIRM_OR_RENAVIGATE");
                 wait.ports.images = {scene};
+                const auto captures = wait.ports.captures;
+                wait.until([&] { return wait.ports.captures >= captures + 3; }, 2s);
+                check(wait.ports.business.summary().at("task_step") == 0 && wait.ports.inputs.empty(),
+                    "GIANT_PAGE_ALONE_MUST_NOT_CONFIRM_UNATTRIBUTED_TARGET");
+                wait.ports.business.enter_dungeon();
+                wait.ports.business.confirm_event("late-target", "target_encounter_started", 1, 1, 0);
+                wait.ports.business.observe_combat();
+                wait.ports.business.confirm_event("late-result", "target_encounter_result", 1, 2, 0);
                 wait.until([&] { return wait.ports.business.summary().at("task_step") == 1; }, 2s);
-                check(std::chrono::steady_clock::now() - waited_from >= 3s && wait.ports.inputs.empty(),
+                check(std::chrono::steady_clock::now() - waited_from < 3s && wait.ports.inputs.empty(),
                     "GIANT_POST_BATTLE_RESULT_MUST_KEEP_SUCCESS_THROUGH_CHEST_OR_LOADING");
             }
             Driver arrived(games::navigation::auto_route("mark_auto"));
@@ -1559,9 +1907,48 @@ int main(int argc, char **argv) {
             const auto turn = games::combat::take_turn(profile, {});
             check(turn.nodes.at("Skill0Open0").at("next").at(0) == "Skill0Try0Disabled" &&
                 turn.nodes.at("Skill0Try0Disabled").at("post_delay") == 250 &&
-                turn.nodes.at("Skill0Try0DisabledAgain").at("next").at(0) == "Skill0UnavailableDefend" &&
-                turn.nodes.at("Skill0DefendFallbackDone").at("operation_args").at("operation") == "defend_fallback_confirmed",
-                "DISABLED_SKILL_NOT_CONNECTED_TO_UNCONSUMED_DEFEND");
+                turn.nodes.at("Skill0Try0DisabledAgain").at("next").at(0) == "Skill0UnavailableAttack" &&
+                turn.nodes.at("Skill0AttackFallbackDone").at("operation_args").at("operation") == "attack_fallback_confirmed",
+                "DISABLED_SKILL_NOT_CONNECTED_TO_UNCONSUMED_ATTACK");
+            for (unsigned role = 0; role < 6; ++role) {
+                auto six = profile;
+                J rows = J::array();
+                std::set<std::string> portraits;
+                for (unsigned i = 0; i < 6; ++i) {
+                    const auto name = "actor" + std::to_string(i);
+                    rows.push_back({{"role_var", name}, {"skill_var", "左上技能"}, {"skill_lvl", 1},
+                        {"target_var", "左上角色"}, {"freq_var", "用完后移除"}});
+                    portraits.insert("spellskill/char/" + name + ".png");
+                }
+                six["STRATEGY"][0]["skill_settings"] = rows;
+                Driver exhausted(games::combat::take_turn(six, portraits), six);
+                exhausted.ports.combat = true;
+                exhausted.ports.images.insert("flee");
+                const auto name = "actor" + std::to_string(role);
+                bool acted = false;
+                exhausted.ports.semantic_leaf = [&](const J &p) -> std::optional<bool> {
+                    const auto mode = p.value("mode", "");
+                    if (mode == "portrait") return !acted && p.at("image") == "spellskill/char/" + name;
+                    if (mode == "prepared_actor") return !acted;
+                    if (mode == "combat_skill_disabled") return true;
+                    if (mode == "skill_target") return !acted;
+                    if (mode == "support_selection") return p.value("expect", "") == "absent";
+                    return std::nullopt;
+                };
+                exhausted.ports.after_input = [&](const std::string &path) {
+                    if (path.find("Author_target") != std::string::npos) acted = true;
+                };
+                exhausted.finish();
+                check(exhausted.last.state == runtime::TickState::Completed && acted &&
+                    exhausted.ports.commands.size() == 2 && exhausted.ports.commands[0].x == 66 &&
+                    exhausted.ports.commands[0].y == 1200 && exhausted.ports.commands[1].y < 900,
+                    "NO_SP_ACTOR_DID_NOT_MANUALLY_ATTACK");
+                check(exhausted.ports.business.summary().at("strategy").at("current").at("skill_settings") == rows,
+                    "ATTACK_CONSUMED_UNCAST_SKILLS");
+                for (const auto &command : exhausted.ports.commands)
+                    check(command.x != 513 && command.x != 850 && command.click_pair_interval_ms == 0,
+                        "NO_SP_ACTOR_DEFENDED_OR_ENABLED_AUTO");
+            }
             // 帧语义由受控端口提供；公共定义、重试门禁和回执来自生产执行器。
             Driver d(graph);
             setup(d.ports);
@@ -1586,10 +1973,10 @@ int main(int argc, char **argv) {
             const auto child = failed_open.define_child("Open", graph);
             failed_open.route("Entry", {"Call"});
             failed_open.call_child("Call", child, {"Terminal"},
-                {{"UnavailableExit", {"Defend"}}, {"AdvancedExit", {"Terminal"}}});
+                {{"UnavailableExit", {"Attack"}}, {"AdvancedExit", {"Terminal"}}});
             const auto same_menu = args.at("scene_recognition").at("parameters");
-            failed_open.fixed_click("Defend", same_menu, C::absent(J{{"mode", "prepared_actor"}}),
-                {513, 1200}, {"Terminal"});
+            failed_open.fixed_click("Attack", same_menu, C::absent(J{{"mode", "prepared_actor"}}),
+                {66, 1200}, {"Terminal"});
             Driver unavailable(failed_open.finish());
             setup(unavailable.ports);
             // Only the test clock is compressed; failure routing/input receipts are production code.
@@ -1602,12 +1989,12 @@ int main(int argc, char **argv) {
                         input->retry->interval = 1ms;
                 }
             unavailable.ports.after_input = [&](const auto &) {
-                if (unavailable.ports.commands.back().x == 513)
+                if (unavailable.ports.commands.back().x == 66)
                     unavailable.ports.conditions[J{{"mode", "prepared_actor"}}.dump()] = false;
             };
             unavailable.finish();
             check(unavailable.last.state == runtime::TickState::Completed && unavailable.ports.commands.size() > 2 &&
-                unavailable.ports.commands.back().x == 513, "UNCHANGED_MENU_DID_NOT_HANDOFF_MANUAL_DEFEND");
+                unavailable.ports.commands.back().x == 66, "UNCHANGED_MENU_DID_NOT_HANDOFF_MANUAL_ATTACK");
             for (const auto &command : unavailable.ports.commands)
                 check(command.x != 850 && command.click_pair_interval_ms == 0, "UNAVAILABLE_SKILL_ENABLED_AUTO");
 
@@ -1714,7 +2101,7 @@ int main(int argc, char **argv) {
                   "SINGLE_AUTO_FIXED_POINT");
             check(turn.nodes.contains("Skill0Try0Enemy23") && !turn.nodes.contains("Skill0Try0Missing"),
                   "ENEMY_SCAN_NOT_CONNECTED");
-            check(turn.nodes.at("Skill0DefendFallbackDone").at("operation_args").at("operation") == "defend_fallback_confirmed",
+            check(turn.nodes.at("Skill0AttackFallbackDone").at("operation_args").at("operation") == "attack_fallback_confirmed",
                 "UNAVAILABLE_SKILL_FALSE_SUCCESS");
             check(turn.nodes.at("Skill0Try0StillDetail").at("next").dump().find("Auto") == std::string::npos,
                   "FAILED_SKILL_SWITCHED_AUTO");
@@ -3231,6 +3618,7 @@ int main(int argc, char **argv) {
             inn.nodes.at("PreparePayment").at("next").at(0) != "SelectConfirm")
             throw std::runtime_error("ZH_INN_PAYMENT_CONFIRM_MISSING");
         std::cout << "native author slot six and independent calls passed\n";
+        return 0;
     } catch (const std::exception &error) {
         std::cerr << error.what() << '\n';
         return 1;

@@ -50,5 +50,5 @@ add_executable(test_head_response tests/native/test_head_response.cpp)
 target_link_libraries(test_head_response PRIVATE wvd_http)
 target_compile_options(test_head_response PRIVATE /utf-8 /W4 /EHsc)
 add_custom_target(audit_correctness_targets DEPENDS test_native_flow test_native_author
-  test_native_ocr test_native_application test_native_coordinator test_native_devices
+  test_native_ocr test_native_application test_native_coordinator test_native_devices test_recognition_methods
   test_strategy_frequency test_native_publication automationd test_head_response)

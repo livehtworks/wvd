@@ -57,39 +57,150 @@ int main(int argc, char **argv) {
             using namespace wvd;
             struct Backend final : devices::DeviceBackend {
                 unsigned calls{};
+                bool context_valid{true}, channel_ready{true}, expired{}, foreground_lost{};
+                int rotation{};
                 bool offline() const override { return true; }
                 bool connect() override { return true; }
+                bool input_channel_ready() const override { return channel_ready; }
+                bool context_matches(const contracts::FrameIdentity &, const std::string &) override {
+                    return context_valid;
+                }
                 devices::RawFrame capture() override {
                     devices::RawFrame frame;
-                    frame.device_id="device";frame.viewport_id="viewport";frame.foreground_application="game";
-                    frame.size={10,10};frame.connection_generation=1;frame.display_rotation=0;
-                    frame.captured_at=std::chrono::steady_clock::now();
-                    frame.raw_bgr=std::make_shared<const std::vector<std::uint8_t>>(300,0);
+                    frame.device_id = "device";
+                    frame.viewport_id = "viewport";
+                    frame.foreground_application = foreground_lost ? "other-app" : "game";
+                    frame.instance_id = "2";
+                    frame.instance_created_identity = "instance-created-1";
+                    frame.size = {10, 10};
+                    frame.connection_generation = 1;
+                    frame.display_rotation = rotation;
+                    frame.captured_at = std::chrono::steady_clock::now() -
+                        (expired ? std::chrono::seconds(1) : std::chrono::seconds(0));
+                    frame.raw_bgr = std::make_shared<const std::vector<std::uint8_t>>(300, 0);
                     return frame;
                 }
-                bool execute(const contracts::Command &) override {++calls;return true;}
-            } backend;
-            contracts::InputPolicy policy;
-            policy.device_id="device";policy.game_id="game";policy.application_id="game";
-            policy.pack_revision="pack";policy.recognition_size={10,10};
-            policy.allowed_scenes={"game"};policy.permissions={contracts::ActionKind::Click};
-            policy.capabilities=policy.permissions;
-            devices::NativeInputGate gate(backend,policy,1);
-            contracts::Command command;command.kind=contracts::ActionKind::Click;command.x=5;command.y=5;
-            for (const auto mode : {"scene-readonly","target-readonly","nohit","eligible"}) {
-                const auto frame=gate.capture();
-                contracts::Observation scene,target;
-                scene.basis=target.basis=frame.identity;
-                scene.outcome=target.outcome=contracts::RecognitionOutcome::Hit;
-                scene.action_eligible=std::string(mode)!="scene-readonly";
-                target.action_eligible=std::string(mode)!="target-readonly";
-                if(std::string(mode)=="nohit") target.outcome=contracts::RecognitionOutcome::NoHit;
-                const auto result=gate.submit(command,scene,target,{0,0,10,10});
-                if ((result.disposition==devices::InputDisposition::Submitted) != (std::string(mode)=="eligible"))
-                    throw std::runtime_error("PHYSICAL_GATE_READONLY_AUTHORIZED_INPUT");
+                bool execute(const contracts::Command &) override { ++calls; return true; }
+            };
+            unsigned checked{}, submitted{}, rejected{};
+            // AutoOff 这类输入允许只读策略参与 scene；只有独立按钮 target 可以授权。
+            // 固定点、BACK 和 Swipe 也必须遵守同一观察合同，不以命令种类绕过门禁。
+            for (const auto kind : {contracts::ActionKind::Click, contracts::ActionKind::ClickKey,
+                                   contracts::ActionKind::Swipe}) {
+                for (const std::string mode : {
+                    "scene-readonly", "eligible", "target-readonly", "scene-nohit", "scene-error",
+                    "target-nohit", "target-error", "stale-frame", "scene-other-frame",
+                    "target-other-frame", "scene-other-device", "target-other-device",
+                    "scene-other-instance", "target-other-creation", "scene-other-connection",
+                    "wrong-epoch", "wrong-generation", "wrong-pack", "wrong-viewport",
+                    "foreground-lost", "rotation-unknown", "expired-frame", "invalid-area",
+                    "scene-forbidden", "capability-denied", "permission-denied", "context-changed",
+                    "channel-changed", "stopped", "consumed-frame"}) {
+                    Backend backend;
+                    backend.foreground_lost = mode == "foreground-lost";
+                    backend.rotation = mode == "rotation-unknown" ? -1 : 0;
+                    backend.expired = mode == "expired-frame";
+                    contracts::InputPolicy policy;
+                    policy.device_id = "device";
+                    policy.game_id = policy.application_id = "game";
+                    policy.pack_revision = "pack";
+                    policy.recognition_size = {10, 10};
+                    policy.allowed_scenes = {"game"};
+                    policy.permissions = policy.capabilities = {kind};
+                    if (mode == "scene-forbidden") policy.allowed_scenes.clear();
+                    if (mode == "capability-denied") policy.capabilities.clear();
+                    if (mode == "permission-denied") policy.permissions.clear();
+                    if (backend.expired) policy.max_frame_age = std::chrono::milliseconds(10);
+                    devices::NativeInputGate gate(backend, policy, 1);
+                    contracts::Command command;
+                    command.kind = kind;
+                    command.x = command.y = 5;
+                    command.x2 = command.y2 = 8;
+                    command.duration = 100;
+                    command.key = 4;
+                    contracts::Box area{0, 0, 10, 10};
+                    const auto frame = gate.capture();
+                    contracts::Observation scene, target;
+                    scene.basis = target.basis = frame.identity;
+                    scene.outcome = target.outcome = contracts::RecognitionOutcome::Hit;
+                    scene.action_eligible = mode == "eligible";
+                    target.action_eligible = mode != "target-readonly";
+                    if (mode == "scene-nohit") scene.outcome = contracts::RecognitionOutcome::NoHit;
+                    if (mode == "scene-error") scene.outcome = contracts::RecognitionOutcome::Error;
+                    if (mode == "target-nohit") target.outcome = contracts::RecognitionOutcome::NoHit;
+                    if (mode == "target-error") target.outcome = contracts::RecognitionOutcome::Error;
+                    if (mode == "stale-frame") (void)gate.capture();
+                    if (mode == "scene-other-frame") ++scene.basis.frame_id;
+                    if (mode == "target-other-frame") ++target.basis.frame_id;
+                    if (mode == "scene-other-device") scene.basis.device_id = "other-device";
+                    if (mode == "target-other-device") target.basis.device_id = "other-device";
+                    if (mode == "scene-other-instance") scene.basis.instance_id = "3";
+                    if (mode == "target-other-creation") target.basis.instance_created_identity = "later-instance";
+                    if (mode == "scene-other-connection") ++scene.basis.connection_generation;
+                    if (mode == "wrong-epoch") ++scene.basis.action_epoch;
+                    if (mode == "wrong-generation") ++scene.basis.generation;
+                    if (mode == "wrong-pack") scene.basis.pack_revision = "other-pack";
+                    if (mode == "wrong-viewport") scene.basis.viewport_id = "other-viewport";
+                    // 相互一致也不够：两份旧观察仍须匹配门禁持有的本次帧。
+                    if (mode == "wrong-epoch" || mode == "wrong-generation" ||
+                        mode == "wrong-pack" || mode == "wrong-viewport") target.basis = scene.basis;
+                    if (mode == "invalid-area") area.width = 11;
+                    backend.context_valid = mode != "context-changed";
+                    backend.channel_ready = mode != "channel-changed";
+                    if (mode == "stopped") gate.stop();
+                    const bool allowed = mode == "scene-readonly" || mode == "eligible" ||
+                        mode == "consumed-frame";
+                    const auto result = gate.submit(command, scene, target, area);
+                    if (result.disposition != (allowed ? devices::InputDisposition::Submitted :
+                                                       devices::InputDisposition::Rejected) ||
+                        backend.calls != (allowed ? 1u : 0u))
+                        throw std::runtime_error("PHYSICAL_GATE_CONTRACT:" + mode);
+                    ++checked;
+                    if (allowed) ++submitted;
+                    else ++rejected;
+                    if (mode == "consumed-frame") {
+                        const auto replay = gate.submit(command, scene, target, area);
+                        if (replay.disposition != devices::InputDisposition::Rejected || backend.calls != 1)
+                            throw std::runtime_error("PHYSICAL_GATE_CONSUMED_FRAME_REUSED");
+                        ++checked;
+                        ++rejected;
+                    }
+                    if (gate.counts().backend_called != backend.calls)
+                        throw std::runtime_error("PHYSICAL_GATE_BACKEND_COUNT_MISMATCH");
+                }
+                if (kind == contracts::ActionKind::ClickKey) continue;
+                // 合法同帧目标不能授权区域外的固定点或 Swipe 终点。
+                Backend backend;
+                contracts::InputPolicy policy;
+                policy.device_id = "device";
+                policy.game_id = policy.application_id = "game";
+                policy.pack_revision = "pack";
+                policy.recognition_size = {10, 10};
+                policy.allowed_scenes = {"game"};
+                policy.permissions = policy.capabilities = {kind};
+                devices::NativeInputGate gate(backend, policy, 1);
+                const auto frame = gate.capture();
+                contracts::Observation scene, target;
+                scene.basis = target.basis = frame.identity;
+                scene.outcome = target.outcome = contracts::RecognitionOutcome::Hit;
+                scene.action_eligible = false;
+                contracts::Command command;
+                command.kind = kind;
+                command.x = kind == contracts::ActionKind::Click ? 10 : 5;
+                command.y = 5;
+                command.x2 = 10;
+                command.y2 = 5;
+                command.duration = 100;
+                const auto result = gate.submit(command, scene, target, {0, 0, 10, 10});
+                if (result.disposition != devices::InputDisposition::Rejected || backend.calls ||
+                    result.detail != "INPUT_OUTSIDE_ALLOWED_AREA")
+                    throw std::runtime_error("PHYSICAL_GATE_OUTSIDE_AREA_INPUT");
+                ++checked;
+                ++rejected;
             }
-            if(backend.calls!=1) throw std::runtime_error("PHYSICAL_GATE_CALLED_REJECTED_BACKEND");
-            std::cout<<"PASS real NativeInputGate: readonly scene/target and NoHit reject, one eligible input\n";
+            std::cout << "PASS real NativeInputGate: " << checked << " checks, " << submitted
+                      << " allowed inputs, " << rejected << " rejections; readonly scene with an independent "
+                         "eligible target is allowed, invalid evidence never reaches the backend\n";
             return 0;
         }
         if (argc == 2 && std::string(argv[1]) == "--lifecycle-deadline") {

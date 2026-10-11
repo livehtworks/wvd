@@ -1,7 +1,7 @@
 name: Native Product Contracts
 on:
   pull_request:
-    paths: ['next/**', '.github/workflows/native-contracts.yml']
+    paths: ['next/**', '.github/workflows/native-contracts.yml', '.gitattributes']
   workflow_dispatch:
 permissions:
   contents: read
@@ -35,7 +35,8 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
-          if ($env:BASE_SHA) {
+          $eolChanged = if ($env:BASE_SHA) { git diff --name-only $env:BASE_SHA -- .gitattributes } else { $null }
+          if ($env:BASE_SHA -and -not $eolChanged) {
             python next/tools/run_contracts.py --changed-from $env:BASE_SHA --output next/.local/ci-contracts
           } else {
             python next/tools/run_contracts.py --module runtime --module devices --module recognition --module app --module tools --module web --output next/.local/ci-contracts

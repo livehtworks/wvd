@@ -38,8 +38,16 @@ Outputs:
 The current wrapper analyzes heap snapshots only. Recorded VirtualAlloc events are
 not interpreted or added to heap bytes. A successful file parse is not a successful
 business comparison, and a stack delta does not prove continuous lifetime of an
-individual address. Main comparisons require two verified `batch_payloads_released`
-endpoints; background, partial and legacy unverified boundaries cannot authorize them.
+individual address. The current wrapper accepts one pair of verified
+`worker_joined_1/2` endpoints, or one pair of verified
+`batch_payloads_released_1/2` endpoints; it rejects mixed release scopes. Joined
+endpoints must pass `Assert-MeasurementPair`: the same process creation identity,
+controller, configuration and release scope, consecutive round/sequence numbers,
+different run IDs, and increasing monotonic time. Each joined snapshot also needs
+the held measurement and matching acknowledgement before and after capture.
+`worker_joined` is not renamed to `batch_payloads_released`. Background, partial
+and legacy unverified boundaries cannot authorize comparison. The analyzer's
+`analysis_complete` does not replace the wrapper's `comparison_eligible` decision.
 
 Focused checks use isolated roots under `next/.local/`: `test_event_page_copy`,
 `heap_fixture`, `verify_heap_capture.ps1`, `verify_trace_guards.ps1`, and the

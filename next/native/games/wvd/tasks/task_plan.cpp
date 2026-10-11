@@ -254,11 +254,11 @@ WvdTaskPlan WvdTaskPlan::with_floor(const std::string &image) const {
     plan.floor_ = pattern(image);
     return plan;
 }
-WvdTaskPlan WvdTaskPlan::with_shortcut_battle(int wait_ms) const {
-    if (route_.empty() || route_.front().target != "mark_auto" || wait_ms < 1 || wait_ms > 10000)
+WvdTaskPlan WvdTaskPlan::with_shortcut_battle() const {
+    if (route_.empty() || route_.front().target != "mark_auto")
         throw std::runtime_error("TASK_SHORTCUT_BATTLE_INVALID");
     auto plan = *this;
-    plan.route_.front().shortcut_battle_wait_ms = wait_ms;
+    plan.route_.front().shortcut_battle = true;
     return plan;
 }
 nlohmann::json WvdTaskPlan::inspect() const {
@@ -287,7 +287,7 @@ nlohmann::json WvdTaskPlan::inspect() const {
              {"stair_reference", target.stair_reference},
              {"regions", target.regions},
              {"harken_arrival", target.harken_arrival},
-             {"shortcut_battle_wait_ms", target.shortcut_battle_wait_ms ? J(*target.shortcut_battle_wait_ms) : J(nullptr)}});
+             {"shortcut_battle", target.shortcut_battle}});
     }
     // 解析产物不是可运行 Pipeline。特别是 quest 的代码分支不能由这里伪造成功入口。
     return {{"task_id", definition_.id},

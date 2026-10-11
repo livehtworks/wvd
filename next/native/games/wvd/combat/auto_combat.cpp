@@ -1,6 +1,7 @@
 #include "auto_combat.hpp"
 #include "games/wvd/vision/chest_probes.hpp"
 #include "games/wvd/vision/combat_phase_probes.hpp"
+#include "games/wvd/recovery/page_actions.hpp"
 
 namespace wvd::games::combat {
 tasks::CompiledWorkflow single_actor_auto() {
@@ -20,21 +21,12 @@ tasks::CompiledWorkflow single_actor_auto() {
     const auto enabled = image("spellskill/CombatAutoEnable", {740, 940, 160, 280});
     const auto disabled = image("spellskill/CombatAutoDisable", {740, 940, 160, 280});
     const auto clear = C::absent(popup);
-    const auto close = image("close", {0, 600, 900, 1000});
-    const auto ok = C::image("combat_skill_confirm");
-    const auto detail = C::image("combat_skill_detail");
     const auto clear_battle = C::all({battle, clear});
     const auto off = C::all({clear, disabled, C::absent(enabled)});
     const auto on = C::all({clear, enabled, C::absent(disabled)});
     const J choices{"Ended", "DisableAuto", "ClosePopup", "CancelPopup", "BackPopup", "Pulse"};
     graph.route("Entry", choices);
-    graph.click("ClosePopup", C::all({battle, popup}), close, C::any({clear_battle, ended}), choices);
-    graph.click("CancelPopup", C::all({battle, popup, C::absent(close)}), ok,
-                C::any({clear_battle, ended}), choices, {-280, 0});
-    graph.retry_menu_input("ClosePopup", C::all({battle, popup, close}), 3000);
-    graph.retry_menu_input("CancelPopup", C::all({battle, popup, C::absent(close), ok}), 3000);
-    graph.back("BackPopup", C::all({battle, detail, C::absent(close), C::absent(ok)}),
-               C::any({clear_battle, ended}), choices);
+    recovery::page_actions::auto_popup_cleanup(graph, popup, C::any({clear_battle, ended}), choices);
     // User-selected 100 ms pulse, followed immediately by a fresh color-state observation.
     // This pair is never retried as a unit; any remaining ON state is only turned OFF.
     graph.click_pair("Pulse", C::all({clear_battle, disabled, C::absent(enabled)}), disabled,
@@ -61,7 +53,6 @@ tasks::CompiledWorkflow enable_auto() {
         value["roi"] = std::move(roi);
         return value;
     };
-    const J battle{{"mode", "combat_active"}};
     const auto ended = vision::combat_phase("ended");
     const auto close = image("close", {0, 600, 900, 1000});
     const auto ok = C::image("combat_skill_confirm");
@@ -79,13 +70,7 @@ tasks::CompiledWorkflow enable_auto() {
     graph.observe("BattleEnded", ended, {"BattleEndedExit"});
     graph.recovery("BattleEndedExit", "combat.auto_not_confirmed_before_battle_end");
     graph.observe("Enabled", done, {"Terminal"});
-    graph.click("ClosePopup", C::all({battle, popup}), close, C::any({clear_battle, ended}), after_popup);
-    graph.retry_menu_input("ClosePopup", C::all({battle, popup, close}), 3000);
-    graph.click("CancelPopup", C::all({battle, popup, C::absent(close)}), ok, C::any({clear_battle, ended}), after_popup,
-                {-280, 0});
-    graph.retry_menu_input("CancelPopup", C::all({battle, popup, C::absent(close), ok}), 3000);
-    graph.back("BackPopup", C::all({battle, detail, C::absent(close), C::absent(ok)}), C::any({clear_battle, ended}),
-               after_popup);
+    recovery::page_actions::auto_popup_cleanup(graph, popup, C::any({clear_battle, ended}), after_popup);
     for (auto name : {"ClosePopup", "CancelPopup", "BackPopup"})
         graph.hit_limit(name, 3);
     // 已知关闭才正常点击；新帧先查 Enabled，所以不会无条件双击把开关关回去。

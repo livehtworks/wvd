@@ -78,8 +78,16 @@ NativePublication publish_native(const CompiledWorkflow &workflow,
     const auto models = J::parse(wvd_ocr_models).at("models");
     std::set<std::string> languages;
     std::set<std::string> combat_phases;
+    bool chest_phase_collected = false;
     const auto collect = [&](auto &&self, const J &value) -> void {
         if (value.is_object()) {
+            if (value.value("mode", "") == "chest_phase" && !chest_phase_collected) {
+                chest_phase_collected = true;
+                for (const auto &probe : vision::chest_phase_dependencies()) {
+                    const auto localized = localize_implicit_probe(probe, workflow.authoring.value("resource_locale", ""));
+                    self(self, localized.value_or(probe));
+                }
+            }
             if (value.value("mode", "") == "combat_phase") {
                 const auto phase = value.at("phase").get<std::string>();
                 if (combat_phases.insert(phase).second)

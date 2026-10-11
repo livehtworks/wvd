@@ -1,4 +1,6 @@
 #include "world_travel.hpp"
+#include "games/wvd/recovery/boot.hpp"
+#include "games/wvd/recovery/page_actions.hpp"
 #include "games/wvd/vision/location_probes.hpp"
 #include "games/wvd/vision/download_probes.hpp"
 #include "games/wvd/vision/dialogue_probes.hpp"
@@ -12,7 +14,7 @@ nlohmann::json city_arrival(const WorldDestination &destination) {
     return vision::inn_button();
 }
 }
-tasks::CompiledWorkflow travel_city_to_city(const WorldDestination &destination) {
+tasks::CompiledWorkflow travel_city_to_city(const WorldDestination &destination, bool allow_download) {
     using C = tasks::PipelineCompiler;
     C graph("navigation.city_to_city", std::chrono::seconds{120});
     const auto world = C::image("worldmapflag");
@@ -22,12 +24,13 @@ tasks::CompiledWorkflow travel_city_to_city(const WorldDestination &destination)
     graph.observe("OnWorld", world, {"Travel"});
     graph.click("Open", C::all({open, C::absent(world)}), open, world, {"Travel"});
     graph.retry_menu_input("Open", vision::menu_retry_ready(C::all({open, C::absent(world)})), 3000);
-    const auto travel = graph.define_child("World", travel_world(destination, WorldArrival::City));
+    const auto travel = graph.define_child("World", travel_world(destination, WorldArrival::City, allow_download));
     graph.call_child("Travel", travel, {"Arrived"});
     graph.observe("Arrived", arrived, {"Terminal"});
+    recovery::preserve_download_permission(graph, allow_download);
     return graph.finish();
 }
-tasks::CompiledWorkflow travel_world(const WorldDestination &destination, WorldArrival arrival) {
+tasks::CompiledWorkflow travel_world(const WorldDestination &destination, WorldArrival arrival, bool allow_download) {
     using C = tasks::PipelineCompiler;
     using J = nlohmann::json;
     C graph("navigation.world_travel", std::chrono::seconds{300});
@@ -37,7 +40,6 @@ tasks::CompiledWorkflow travel_world(const WorldDestination &destination, WorldA
     const auto download_zh_hant = vision::download_button_zh_hant();
     const auto download = C::any({download_en, download_zh_hant});
     const auto story = vision::ordinary_story_page();
-    const auto advance = vision::story_advance_arrow();
     const auto expected = arrival == WorldArrival::City ? city_arrival(destination) : C::any({open, C::image("dungFlag")});
     // 城市底图可能透过剧情/下载框显示；底图出现不等于已经能进行下一步。
     const auto arrived = C::all({expected, C::absent(world), C::absent(story), C::absent(download)});
@@ -46,14 +48,12 @@ tasks::CompiledWorkflow travel_world(const WorldDestination &destination, WorldA
     const auto missing = C::all({searching, C::absent(target)});
     graph.route("Entry", {"DownloadEn", "DownloadZhHant", "Arrived", "Story", "OpenWorld", "Locate", "Poll"});
     graph.hit_limit("Entry", 256);
-    graph.click("DownloadEn", download_en, download_en, C::absent(download), {"Entry"});
-    graph.click("DownloadZhHant", download_zh_hant, download_zh_hant, C::absent(download), {"Entry"});
-    graph.retry_menu_input("DownloadEn", download_en, 3000);
-    graph.retry_menu_input("DownloadZhHant", download_zh_hant, 3000);
+    recovery::page_actions::download_choices(graph, allow_download, "DownloadEn", "DownloadZhHant",
+        C::absent(download), {"Entry"}, "DownloadDenied");
     graph.wait("Poll", 1000, {"Entry"});
     graph.hit_limit("Poll", 256);
     graph.observe("Arrived", arrived, {"Terminal"});
-    graph.click("Story", story, advance, C::any({story, arrived, download}), {"Entry"});
+    recovery::page_actions::continue_story(graph, "Story", C::any({story, arrived, download}), {"Entry"});
     graph.delay_after("Story", 700);
     graph.hit_limit("Story", 50);
     if (arrival == WorldArrival::City)
@@ -85,6 +85,7 @@ tasks::CompiledWorkflow travel_world(const WorldDestination &destination, WorldA
         graph.postcondition_budget("Click" + std::to_string(i), 22000);
         graph.retry_menu_input("Click" + std::to_string(i), vision::menu_retry_ready(located), 3000);
     }
+    recovery::preserve_download_permission(graph, allow_download);
     return graph.finish();
 }
 }

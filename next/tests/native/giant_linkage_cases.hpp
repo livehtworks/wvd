@@ -43,7 +43,22 @@ inline int giant_linkage(const char *profile_path, const char *saved_public_root
         bool restarted = false, road_completed = false;
         unsigned target_battles{}, resumes{}, context_attempts{};
         const auto recipe = [&](const char *id, bool value) {
-            ports.conditions[library.resource_condition(id, "zh-Hant", authoring::ResourceUse::Observation).dump()] = value;
+            const auto condition = library.resource_condition(id,"zh-Hant",authoring::ResourceUse::Observation);
+            ports.conditions[condition.dump()] = value;
+            // Script real leaves, not only a compound key that disappears when
+            // the production serializer flattens an equivalent all/any tree.
+            const auto leaves = [&](const auto &self, const J &probe, bool hit) -> void {
+                const auto mode = probe.value("mode", "");
+                if (mode == "all" || mode == "any" || mode == "not") {
+                    std::size_t index{};
+                    for (const auto &child : probe.at("conditions")) {
+                        const bool child_hit = mode == "not" ? !hit
+                            : mode == "any" ? hit && index == 0 : hit;
+                        self(self,child,child_hit); ++index;
+                    }
+                } else ports.conditions[probe.dump()] = hit;
+            };
+            if (value) leaves(leaves,condition,true);
         };
         const auto show = [&](const std::string &name) {
             screen = name;

@@ -4,9 +4,13 @@
 
 完整字段、原审计来源和当前实现文件见[ISSUES.json](ISSUES.json)，验收边界见[主报告](../architecture-audit-remediation-20261010.md)。`source_repaired_acceptance_partial`表示已有修复与部分真实生产代码断言，但尚有回执所列的必需覆盖缺口；不是已完成生产验收。`source_repaired_targeted_verified`也仅证明列出的限定离线合同。
 
+2026-10-10继续修复勘误：EX07/EX08/R03/R07的现行剩余义务不再包含“没有疗效素材就保持healing_required”。补给遵循尽力尝试、效果分别记账；R07的统一输入许可及EX05的三处消费端复制已经进入首份离线补丁，真实Service/现场/分配净增仍未代验。原来源、原回执和撤回原因留在JSON的`guidance_errata`，当前继续证据见[继续修复回执](../critical-followup-v2-20261010.md)。
+
+2026-10-11 Windows承接：六模块contracts-final-7回执complete=true；43个原ID和历史状态保留，JSON逐项补RA承接方向，V2包的新发现独立登记，不混入43项数量。模块回归不是每项验收关闭，内存仍RESOURCE_UNRESOLVED；本机原帧/职责/部署与未完成条件见继续修复回执第十一节。
+
 | 问题 | 优先级 | 回执 | 原问题 | 当前状态 |
 | --- | --- | --- | --- | --- |
-+| EX01 | P0 | [WP01](work-packages/WP01-result.json) | 输入已发送后分配失败，未决回执消失 | source_repaired_targeted_verified |
+| EX01 | P0 | [WP01](work-packages/WP01-result.json) | 输入已发送后分配失败，未决回执消失 | source_repaired_targeted_verified |
 | EX02 | P0 | [WP02](work-packages/WP02-result.json) | 历史重启布尔可被用来放行后来产生的未决输入 | source_repaired_targeted_verified |
 | EX03 | P1 | [WP03](work-packages/WP03-result.json) | scrcpy资源在命令已生效但返回失败时可能失去清理归属 | source_repaired_acceptance_partial |
 | EX04 | P1 | [WP02](work-packages/WP02-result.json) | 生命周期读取不共享完整绝对期限，超时/取消后仍可返回就绪 | source_repaired_targeted_verified |
@@ -42,7 +46,7 @@
 | MP13 | P1 | [WP10](work-packages/WP10-result.json) | 匹配并发预算不是全局内存准入，OCR/解码绕过压力护栏 | source_repaired_targeted_verified |
 | R01 | P1 | [WP04](work-packages/WP04-result.json) | 界面承诺的空配置继承变为Auto，未知组也自动化 | source_repaired_targeted_verified |
 | R02 | P1 | [WP04](work-packages/WP04-result.json) | 先过滤剩余动作再识别角色，会选择次高分的错误角色 | source_repaired_targeted_verified |
-| R03 | P1 | [WP05](work-packages/WP05-result.json) | 恢复输入未生效，返回迷宫也能确认healing_completed | contract_repaired_healing_effect_material_unresolved |
+| R03 | P1 | [WP05](work-packages/WP05-result.json) | 恢复输入未生效，返回迷宫也能确认healing_completed | source_repaired_acceptance_partial |
 | R04 | P1 | [WP08](work-packages/WP08-result.json) | 补给图重复展开宽泛场景/反证/后置，缺阶段识别计划 | source_repaired_acceptance_partial |
 | R05 | P1 | [WP08](work-packages/WP08-result.json) | 递归识别复制条件树、aliases、business summary和嵌套证据 | source_repaired_acceptance_partial |
 | R06 | P2 | [WP14](work-packages/WP14-result.json) | 获准builtin的资源依赖闭包遗漏，完整基础包掩盖漏项 | source_repaired_acceptance_partial |

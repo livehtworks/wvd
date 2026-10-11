@@ -144,6 +144,8 @@ class WvdRunState final : public contracts::BusinessRunState {
     enum class Encounter { None, Combat, Chest } last_encounter_{Encounter::None};
     // 遭遇编号不等于成功次数：复活取消一次待计数事件后仍不能重用其幂等 ID。
     std::size_t combat_sequence_{}, chest_sequence_{}, revival_sequence_{}, revivals_{};
+    // Retain the ended fight's identity across a brief dungeon-to-chest transition.
+    std::size_t settled_combat_sequence_{};
     bool revival_pending_{};
     // 队友死亡提示不等于全队复活：只重置策略，不撤销遭遇计数或设置战后恢复。
     std::size_t death_prompt_sequence_{};

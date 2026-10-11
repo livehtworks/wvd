@@ -8,6 +8,7 @@
 #include <opencv2/imgcodecs.hpp>
 #include <fstream>
 #include <iostream>
+#include "recorded_input_cases.hpp"
 
 using namespace wvd;
 using J = nlohmann::json;
@@ -31,6 +32,9 @@ J document(const J &recipe) {
 }
 int main(int argc, char **argv) {
     try {
+        if (argc == 5 && std::string(argv[1]) == "--recorded-input-contract")
+            return recorded_input_contract::run(std::filesystem::absolute(argv[2]),
+                std::filesystem::absolute(argv[3]),std::filesystem::absolute(argv[4]));
         check(argc == 2, "PASS_RECORDED_FRAME_DIRECTORY");
         const std::filesystem::path frames = argv[1];
         const auto catalogue = read("resources/authoring/semantic-assets.json");

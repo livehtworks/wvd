@@ -150,9 +150,7 @@ InputReceipt NativeInputGate::submit(const contracts::Command &command,
         }
         frame = last_frame_;
         if (stopped() || !frame.frame_id || frame.action_epoch != epoch_ ||
-            !same(scene.basis, frame) || !same(target.basis, frame) ||
-            contracts::page_authority(scene) != contracts::PageAuthority::InputEligible ||
-            contracts::page_authority(target) != contracts::PageAuthority::InputEligible ||
+            !contracts::input_evidence_matches_frame(scene, target, frame) ||
             frame.foreground_application != policy_.application_id ||
             frame.display_rotation < 0 || area.width <= 0 || area.height <= 0 ||
             area.x < 0 || area.y < 0 ||

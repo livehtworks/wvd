@@ -339,6 +339,7 @@ struct EvaluationMemo {
     // 语法树深度不等于正在并行。阻塞反证之后的纯子树也可同步分片，
     // 但已经进入分片的工作项不能再启动嵌套并行。
     bool in_parallel{};
+    bool preserve_operand_eligibility{};
 };
 bool pure_condition(const J &p, unsigned depth = 0) {
     if (depth > 8 || !p.is_object() || !p.contains("mode") || !p.at("mode").is_string())
@@ -373,6 +374,12 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
 J evaluate_conditions(const recognition::Bundle &bundle, recognition::Pixels pixels, const J &p,
                       const J &bound, const recognition::Scope &scope,
                       recognition::Cache &cache, unsigned depth, EvaluationMemo &memo);
+J evaluate_chest_phase(const recognition::Bundle &bundle, recognition::Pixels pixels, const J &p,
+                    const J &bound, const recognition::Scope &scope,
+                    recognition::Cache &cache, unsigned depth, EvaluationMemo &memo);
+J evaluate_revival_prompt(const recognition::Bundle &bundle, recognition::Pixels pixels, const J &p,
+                    const J &bound, const recognition::Scope &scope,
+                    recognition::Cache &cache, unsigned depth, EvaluationMemo &memo);
 J evaluate_impl(const recognition::Bundle &bundle, recognition::Pixels pixels, const J &p,
                 const J &bound, const recognition::Scope &scope,
                 recognition::Cache &cache, unsigned depth, EvaluationMemo &memo) {
@@ -388,6 +395,10 @@ J evaluate_impl(const recognition::Bundle &bundle, recognition::Pixels pixels, c
     const auto mode = p.value("mode", "");
     if (mode == "all" || mode == "any" || mode == "not")
         return evaluate_conditions(bundle, pixels, p, bound, scope, cache, depth, memo);
+    if (mode == "chest_phase")
+        return evaluate_chest_phase(bundle, pixels, p, bound, scope, cache, depth, memo);
+    if (mode == "revival_prompt")
+        return evaluate_revival_prompt(bundle, pixels, p, bound, scope, cache, depth, memo);
     // 普通单最佳匹配的测量值与最终阈值无关。复用 score/box，不能复用旧 Hit/NoHit。
     // ROI、预处理、缩放、遮罩和其它参数仍全部参与身份；multiple 不进入此路径。
     const bool single_template = (mode == "template" || mode == "bright_mask") && !p.value("multiple", false);
@@ -493,6 +504,7 @@ ProbeBatch evaluate_batch(const recognition::Bundle &bundle, recognition::Pixels
     std::vector<EvaluationMemo> worker_memos(partitions);
     for (auto &worker : worker_memos) {
         worker.in_parallel = true;
+        worker.preserve_operand_eligibility = memo.preserve_operand_eligibility;
         worker.parent = &memo; // 外层同步等待期间不修改父 memo，不复制历史 JSON。
         worker.measurements = memo.measurements;
         worker.identities = memo.identities;
@@ -550,7 +562,7 @@ ProbeBatch evaluate_batch(const recognition::Bundle &bundle, recognition::Pixels
         for (const auto &[key, value] : worker.values)
             if (memo.values.size() < 256 && !memo.find(key))
                 memo.values.try_emplace(key, value);
-    // 有序候选只消费优先级到达的结果/异常；all/any 调用者必须消费全部结果。
+    // Ordered candidates consume only reached results; exhaustive callers consume all.
     return batch;
 }
 J evaluate_conditions(const recognition::Bundle &bundle, recognition::Pixels pixels, const J &p,
@@ -562,18 +574,32 @@ J evaluate_conditions(const recognition::Bundle &bundle, recognition::Pixels pix
     const auto &children = p.at("conditions");
     check(children.is_array() && !children.empty() && children.size() <= 16 &&
               (mode != "not" || children.size() == 1), "WVD_CONDITIONS_INVALID");
+    struct EligibilityScope {
+        bool &value;
+        bool previous;
+        ~EligibilityScope() { value = previous; }
+    } eligibility_scope{memo.preserve_operand_eligibility, memo.preserve_operand_eligibility};
+    // any/not can turn a failed operand into a Hit; retain its input vetoes.
+    memo.preserve_operand_eligibility = memo.preserve_operand_eligibility || mode != "all";
     bool all = true, any = false, action_eligible = true;
     J evidence = J::array();
     std::vector<J> evaluated(children.size());
-    const bool parallel_conditions = !memo.in_parallel && children.size() > 1 && pure_condition(p);
+    const bool parallel_conditions = mode == "any" && !memo.in_parallel && children.size() > 1 && pure_condition(p);
     if (parallel_conditions) {
         const auto batch = evaluate_batch(bundle, pixels, children, bound, scope, cache, depth, memo, 2);
         for (std::size_t i = 0; i < children.size(); ++i) evaluated[i] = batch.at(i);
     } else {
-        for (std::size_t i = 0; i < children.size(); ++i)
+        for (std::size_t i = 0; i < children.size(); ++i) {
             evaluated[i] = evaluate_impl(bundle, pixels, children[i], bound, scope, cache, depth + 1, memo);
+            check(evaluated[i].at("outcome") != "Error", "WVD_CONDITION_ERROR");
+            if (mode == "all" && !memo.preserve_operand_eligibility && evaluated[i].at("outcome") == "NoHit") {
+                evaluated.resize(i + 1);
+                break;
+            }
+        }
     }
-    // 所有叶子仍检查；不能短路掩盖缺图/Error或提高输入授权。
+    // A failed conjunction cannot authorize input. For a successful conjunction,
+    // every operand still contributes its input eligibility; any keeps its vetoes.
     for (auto &result : evaluated) {
         check(result.at("outcome") != "Error", "WVD_CONDITION_ERROR");
         const bool hit = result.at("outcome") == "Hit";
@@ -588,6 +614,94 @@ J evaluate_conditions(const recognition::Bundle &bundle, recognition::Pixels pix
             {"evaluation", parallel_conditions ? "opencv_two_way" : "sequential"}}, false);
     result["action_eligible"] = action_eligible;
     return result;
+}
+#if defined(_MSC_VER)
+__declspec(noinline)
+#endif
+J evaluate_chest_phase(const recognition::Bundle &bundle, recognition::Pixels pixels, const J &p,
+                    const J &bound, const recognition::Scope &scope,
+                    recognition::Cache &cache, unsigned depth, EvaluationMemo &memo) {
+    check(pixels.size.width > 0 && pixels.size.height > 0 &&
+        pixels.bgr.size() == std::size_t(pixels.size.width) * pixels.size.height * 3, "WVD_PIXELS_INVALID");
+    const auto area = scope.allowed_roi();
+    const cv::Rect allowed_rect(area.x, area.y, area.width, area.height);
+    const auto phase = p.at("phase").get<std::string>();
+    check(p.size() == 2 && (phase == "active" || phase == "choose" || phase == "opening" ||
+        phase == "reward" || phase == "combat" || phase == "revival" || phase == "ambush" ||
+        phase == "dungeon" || phase == "post" || phase == "opened" || phase == "disarm" ||
+        phase == "handoff" || phase == "choose_handoff"), "WVD_CHEST_PHASE_INVALID");
+    const auto observe = [&](const J &probe) {
+        const auto result = evaluate_impl(bundle, pixels, probe, bound, scope, cache, depth + 1, memo);
+        check(result.at("outcome") != "Error", "WVD_CHEST_PHASE_ERROR");
+        return result.at("outcome") == "Hit";
+    };
+    const auto stages = chest_page_condition().at("conditions");
+    // The current chest stage comes before cross-flow classification. Death
+    // prompts remain mandatory counter-evidence, never normal close targets.
+    const int wanted = phase == "choose" ? 1 : phase == "opening" ? 2 : phase == "reward" ? 3 : -1;
+    int stage = -1;
+    if (wanted >= 0 && observe(stages.at(wanted))) stage = wanted;
+    if (stage < 0) for (const int index : {2, 1, 0, 3})
+        if (observe(stages.at(index))) { stage = index; break; }
+    if (stage >= 0) {
+        if (observe(J{{"mode", "party_death"}}) || observe(J{{"mode", "party_defeat"}}))
+            return decision(false, {}, {{"phase", phase}, {"reason", "death_prompt"}}, false);
+        const bool hit = wanted >= 0 ? stage == wanted : phase == "post" ||
+            (phase == "active" && stage != 3) || (phase == "opened" && stage != 0) ||
+            (phase == "disarm" && (stage == 1 || stage == 2)) ||
+            (phase == "handoff" && stage == 3) || (phase == "choose_handoff" && stage >= 2);
+        return decision(hit, allowed_rect, {{"phase", phase}, {"stage", stage}, {"current_stage_first", true}}, false);
+    }
+    if (wanted >= 0 || phase == "active" || phase == "disarm")
+        return decision(false, {}, {{"phase", phase}, {"reason", "not_current_chest_stage"}}, false);
+    const bool active_combat = observe(J{{"mode", "combat_active"}});
+    const bool handoff = phase == "post" || phase == "opened" || phase == "handoff" || phase == "choose_handoff";
+    if (active_combat)
+        return decision(phase == "combat" || handoff, allowed_rect,
+            {{"phase", phase}, {"stage", "combat"}}, false);
+    bool hit = false;
+    if (!hit && (phase == "dungeon" || handoff))
+        hit = observe(J{{"mode", "template"}, {"image", "dungFlag"}, {"threshold", .8}});
+    if (!hit && (phase == "revival" || handoff))
+        hit = observe(revival_probe(bound));
+    if (!hit && (phase == "ambush" || handoff))
+        hit = observe(J{{"mode", "template"}, {"image", "ambush"}, {"threshold", .8}});
+    return decision(hit, allowed_rect, {{"phase", phase}, {"stage", "handoff"}}, false);
+}
+#if defined(_MSC_VER)
+__declspec(noinline)
+#endif
+J evaluate_revival_prompt(const recognition::Bundle &bundle, recognition::Pixels pixels, const J &p,
+                    const J &bound, const recognition::Scope &scope,
+                    recognition::Cache &cache, unsigned depth, EvaluationMemo &memo) {
+    check(pixels.size.width > 0 && pixels.size.height > 0 &&
+        pixels.bgr.size() == std::size_t(pixels.size.width) * pixels.size.height * 3, "WVD_PIXELS_INVALID");
+    check(p.size() == 1, "WVD_REVIVAL_PARAMETERS_INVALID");
+    // A live ACTIVE HUD proves this is not the post-defeat revival menu.
+    // Keep this gate local: generic all/any must still propagate leaf errors.
+    const auto active = evaluate_impl(bundle, pixels, {{"mode", "combat_active"}},
+        bound, scope, cache, depth + 1, memo);
+    if (active.at("outcome") == "Hit")
+        return decision(false, {}, {{"reason", "active_combat_excludes_revival"}, {"ocr_skipped", true}}, false);
+    for (const auto &probe : revival_normal_page_probes()) {
+        const auto normal = evaluate_impl(bundle, pixels, probe, bound, scope, cache, depth + 1, memo);
+        check(normal.at("outcome") != "Error", "WVD_REVIVAL_NORMAL_PAGE_ERROR");
+        if (normal.at("outcome") != "Hit") continue;
+        // A normal-page anchor cannot override either death handler.
+        // Unknown/death pages retain the original OCR path and input gates.
+        bool death = false;
+        for (const auto *mode : {"party_death", "party_defeat"}) {
+            const auto prompt = evaluate_impl(bundle, pixels, {{"mode", mode}}, bound, scope, cache, depth + 1, memo);
+            check(prompt.at("outcome") != "Error", "WVD_REVIVAL_DEATH_GUARD_ERROR");
+            death = death || prompt.at("outcome") == "Hit";
+        }
+        if (!death)
+            return decision(false, {}, {{"reason", "normal_page_excludes_revival"},
+                {"normal_page", probe}, {"ocr_skipped", true}}, false);
+        break;
+    }
+    return evaluate_impl(bundle, pixels, implicit_ocr_probes("revival_prompt").at(0),
+        bound, scope, cache, depth + 1, memo);
 }
 J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixels, const J &p,
                     const J &bound, const recognition::Scope &scope,
@@ -681,7 +795,9 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
     }
     if (mode == "combat_phase") {
         const auto phase = p.at("phase").get<std::string>();
-        check(p.size() == 2 && (phase == "clear" || phase == "menu" || phase == "ended" ||
+        check((p.size() == 2 || (p.size() == 3 && phase == "target_handoff" &&
+            p.contains("attack_mode") && p.at("attack_mode").is_boolean())) &&
+            (phase == "clear" || phase == "menu" || phase == "ended" ||
             phase == "finished" || phase == "dungeon" || phase == "chest" || phase == "revival" ||
             phase == "detail_handoff" || phase == "target_handoff"), "WVD_COMBAT_PHASE_INVALID");
         J evidence = J::array();
@@ -724,7 +840,9 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
             return finish(false);
         }
         if (phase == "target_handoff") {
-            if (active && observe(combat_popup_probes().at(0)) && observe(J{{"mode", "prepared_actor"}}))
+            const auto selection_page = p.value("attack_mode", false)
+                ? combat_phase("menu") : combat_popup_probes().at(0);
+            if (active && observe(selection_page) && observe(J{{"mode", "prepared_actor"}}))
                 return finish(true);
             for (const auto *name : {"notenoughsp", "notenoughmp"})
                 if (observe(J{{"mode", "template"}, {"image", name}, {"threshold", .8}})) return finish(true);
@@ -738,17 +856,6 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
         if (phase == "finished") for (const auto *name : {"notenoughsp", "notenoughmp"})
             if (observe(J{{"mode", "template"}, {"image", name}, {"threshold", .8}})) return finish(false);
         return finish(true);
-    }
-    if (mode == "revival_prompt") {
-        check(p.size() == 1, "WVD_REVIVAL_PARAMETERS_INVALID");
-        // A live ACTIVE HUD proves this is not the post-defeat revival menu.
-        // Keep this gate local: generic all/any must still propagate leaf errors.
-        const auto active = evaluate_impl(bundle, pixels, {{"mode", "combat_active"}},
-            bound, scope, cache, depth + 1, memo);
-        if (active.at("outcome") == "Hit")
-            return decision(false, {}, {{"reason", "active_combat_excludes_revival"}, {"ocr_skipped", true}}, false);
-        return evaluate_impl(bundle, pixels, implicit_ocr_probes(mode).at(0),
-            bound, scope, cache, depth + 1, memo);
     }
     if (mode == "combat_resource_error") {
         check(p.size() == 1, "WVD_RESOURCE_ERROR_PARAMETERS_INVALID");
@@ -1172,17 +1279,14 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
     if (mode == "auto_route_moving") {
         check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");
         const auto probes = auto_route_moving_probes();
-        const auto matches = evaluate_batch(bundle, pixels, probes, bound, scope, cache, depth, memo, 4);
-        bool hit = true;
         for (std::size_t i = 0; i < probes.size(); ++i) {
-            const auto &result = matches.at(i);
+            const auto result = evaluate_impl(bundle, pixels, probes.at(i), bound, scope, cache, depth + 1, memo);
             check(result.at("outcome") != "Error", "WVD_NAVIGATION_RECOGNITION_ERROR");
             const bool present = result.at("outcome") == "Hit";
-            hit = hit && (i == 0 ? present : !present);
+            if (i == 0 ? !present : present)
+                return decision(false, {}, {{"stage", "not_moving"}, {"probe", probes.at(i)}}, false);
         }
-        // 即使先发现反证也消费全部结果，保持原 all/any 的 Error 传播。
-        // 不列入外层并行白名单，否则 OpenCV 嵌套并行会令本层退化为串行。
-        return decision(hit, allowed_rect, {{"stage", hit ? "moving" : "not_moving"}}, false);
+        return decision(true, allowed_rect, {{"stage", "moving"}}, false);
     }
     if (mode == "auto_route_post") {
         check(!p.contains("roi") && !p.contains("preprocess"), "WVD_COMPOSITE_SCOPE_INVALID");
@@ -1815,20 +1919,27 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
         auto actor = evaluate_impl(bundle, pixels, {{"mode", "portrait"}, {"image", name}}, bound, scope, cache, depth + 1, memo);
         if (mode == "prepared_actor" || actor.at("outcome") != "Hit")
             return actor;
-        // 0.60 只在已选技能、同一角色、详情仍开且没有友方/OK 确认的单体阶段生效。
+        // 低信任标记仅在同一角色的有效敌方选择阶段提供区域尝试。
         // 普通 next_low_confidence 的低信任契约不变，不能用组合条件直接抬升它。
         auto detail = evaluate_impl(bundle, pixels, combat_detail_probe(bound),
             bound, scope, cache, depth + 1, memo);
         auto ok = evaluate_impl(bundle, pixels, combat_confirm_probe(bound),
             bound, scope, cache, depth + 1, memo);
-        auto no_support = evaluate_impl(bundle, pixels, {{"mode", "support_selection"}, {"expect", "absent"}},
-            bound, scope, cache, depth + 1, memo);
-        if (detail.at("outcome") != "Hit" || ok.at("outcome") == "Hit" || no_support.at("outcome") != "Hit")
+        const bool attack_mode = p.value("attack_mode", false);
+        const bool selected_page = attack_mode
+            ? detail.at("outcome") != "Hit" &&
+                evaluate_impl(bundle, pixels, combat_phase("menu"), bound, scope, cache, depth + 1, memo).at("outcome") == "Hit"
+            : detail.at("outcome") == "Hit";
+        // Without a detail/close pair the friendly-card classifier is unknown,
+        // not absent. That classifier belongs only to skill-detail selection.
+        const bool no_friendly_selection = attack_mode ||
+            evaluate_impl(bundle, pixels, {{"mode", "support_selection"}, {"expect", "absent"}},
+                bound, scope, cache, depth + 1, memo).at("outcome") == "Hit";
+        if (!selected_page || ok.at("outcome") == "Hit" || !no_friendly_selection)
             return decision(false, {}, {{"reason", "not_enemy_selection"}});
         const int index = p.value("candidate_index", 0);
         check(index >= 0 && index < 24, "COMBAT_TARGET_INDEX_INVALID");
-        const auto detail_box = rect(detail.at("box"), image.size());
-        const int bottom = std::min(900, detail_box.y - 60);
+        const int bottom = attack_mode ? 900 : std::min(900, rect(detail.at("box"), image.size()).y - 60);
         if (bottom < 300) return decision(false, {}, {{"reason", "enemy_area_occluded"}});
         // Search can include the action bar; inputs cannot. Keep every point above the live popup.
         const cv::Rect safe(220, 180, 620, bottom - 180);
@@ -1857,7 +1968,7 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
                 result["evidence"]["attempts"] = attempts;
                 result["evidence"]["selection_index"] = summary.at("prepared_skill_index");
                 result["evidence"]["actor"] = actor;
-                result["evidence"]["phase"] = "confirmed_single_target_detail";
+                result["evidence"]["phase"] = attack_mode ? "confirmed_attack_target" : "confirmed_single_target_detail";
                 return result;
             }
         }

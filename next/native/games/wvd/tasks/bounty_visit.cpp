@@ -2,6 +2,7 @@
 #include "authoring/semantic_assets.hpp"
 #include "games/wvd/vision/location_probes.hpp"
 #include "games/wvd/vision/dialogue_probes.hpp"
+#include "games/wvd/recovery/page_actions.hpp"
 
 namespace wvd::games::tasks {
 CompiledWorkflow leave_bounty_board(const PublicFlowLibrary &library, const std::string &locale) {
@@ -25,7 +26,10 @@ CompiledWorkflow leave_bounty_board(const PublicFlowLibrary &library, const std:
         graph.route("Entry", {"CloseReveal", "Story", "AtCity", "ListBack", "GuildLeave"});
         // 联网刷新可以在列表已出现、甚至返回已提交之后才弹展示卡。
         // 它不是返回成功；先消化已识别的卡片，再重新定位当前页面。
-        graph.click("CloseReveal", reveal, reveal, C::any({lists, reveal, in_guild, city, story}), {"Entry"});
+        // The same close label also appears in skill details. Keep the combat
+        // exclusion used by CloseLateOldReveal before authorizing this close.
+        graph.click("CloseReveal", C::all({reveal, C::absent(J{{"mode", "combat_active"}})}),
+            reveal, C::any({lists, reveal, in_guild, city, story}), {"Entry"});
         graph.delay_after("CloseReveal", 700);
         // 必须观察到不同页面，不能把来源菜单仍在当作返回成功而连续发送BACK。
         graph.click("ListBack", in_list, back, C::any({in_guild, reveal, city, story}), {"Entry"});
@@ -39,7 +43,7 @@ CompiledWorkflow leave_bounty_board(const PublicFlowLibrary &library, const std:
         graph.back("Back", menu, C::any({menu, city, story}), {"Entry"});
         graph.delay_after("Back", 1000);
     }
-    graph.click("Story", story, vision::story_advance_arrow(), C::any({story, city}), {"Entry"});
+    recovery::page_actions::continue_story(graph, "Story", C::any({story, city}), {"Entry"});
     graph.delay_after("Story", 700);
     graph.observe("AtCity", city, {"Terminal"});
     graph.interrupt_on({{"mode", "blocking_screen"}, {"parallel_basic", true}},

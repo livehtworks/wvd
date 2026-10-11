@@ -212,9 +212,20 @@ void validate_condition(const J &condition, const std::string &node_id,
         integer(condition.at("slot"), 0, 3, "AUTHOR_CONDITION_INVALID", node_id);
         return;
     }
-    if (mode == "combat_phase") {
+    if (mode == "chest_phase") {
         exact_object(condition, {"mode", "phase"}, {}, "AUTHOR_CONDITION_INVALID", node_id);
         const auto phase = condition.at("phase").get<std::string>();
+        static const std::set<std::string> phases{"active", "choose", "opening", "reward", "combat",
+            "revival", "ambush", "dungeon", "post", "opened", "disarm", "handoff", "choose_handoff"};
+        if (!phases.contains(phase)) fail("AUTHOR_CONDITION_INVALID", node_id);
+        return;
+    }
+    if (mode == "combat_phase") {
+        exact_object(condition, {"mode", "phase"}, {"attack_mode"}, "AUTHOR_CONDITION_INVALID", node_id);
+        const auto phase = condition.at("phase").get<std::string>();
+        if (condition.contains("attack_mode") &&
+            (phase != "target_handoff" || !condition.at("attack_mode").is_boolean()))
+            fail("AUTHOR_CONDITION_INVALID", node_id);
         if (phase != "clear" && phase != "menu" && phase != "ended" && phase != "finished" &&
             phase != "dungeon" && phase != "chest" && phase != "revival" && phase != "detail_handoff" && phase != "target_handoff")
             fail("AUTHOR_CONDITION_INVALID", node_id);
@@ -231,7 +242,9 @@ void validate_condition(const J &condition, const std::string &node_id,
         return;
     }
     if (mode == "skill_target") {
-        exact_object(condition, {"mode"}, {"candidate_index"}, "AUTHOR_CONDITION_INVALID", node_id);
+        exact_object(condition, {"mode"}, {"candidate_index", "attack_mode"}, "AUTHOR_CONDITION_INVALID", node_id);
+        if (condition.contains("attack_mode") && !condition.at("attack_mode").is_boolean())
+            fail("AUTHOR_CONDITION_INVALID", node_id);
         if (condition.contains("candidate_index"))
             integer(condition.at("candidate_index"), 0, 23, "AUTHOR_CONDITION_INVALID", node_id);
         return;
@@ -614,7 +627,7 @@ ValidatedGraph validate_graph(const J &document) {
                  "AUTHOR_EXECUTION_FIELDS_INVALID");
     if (document.at("execution").contains("checks")) {
         const auto &checks = document.at("execution").at("checks");
-        exact_object(checks, {"phase", "inherit"}, {"debounce_ms", "interval_ms", "protect_input"},
+        exact_object(checks, {"phase", "inherit"}, {"debounce_ms", "interval_ms", "protect_input", "required"},
                      "AUTHOR_CHECK_POLICY_INVALID");
         const std::set<std::string> phases{"business", "navigation", "combat", "chest", "supply", "special", "exception"};
         if (!checks.at("phase").is_string() || !phases.contains(checks.at("phase").get<std::string>()) ||
@@ -627,6 +640,14 @@ ValidatedGraph validate_graph(const J &document) {
         if (checks.contains("debounce_ms")) integer(checks.at("debounce_ms"), 0, 60000, "AUTHOR_CHECK_POLICY_INVALID", "debounce_ms");
         if (checks.contains("interval_ms")) integer(checks.at("interval_ms"), 1, 60000, "AUTHOR_CHECK_POLICY_INVALID", "interval_ms");
         if (checks.contains("protect_input") && !checks.at("protect_input").is_boolean()) fail("AUTHOR_CHECK_POLICY_INVALID");
+        if (checks.contains("required")) {
+            const auto &duties = checks.at("required");
+            if (!duties.is_array() || duties.empty() || duties.size() > 32) fail("AUTHOR_EVENT_RESPONSIBILITY_INVALID");
+            std::set<std::string> required;
+            for (const auto &id : duties)
+                if (!id.is_string() || !authoring::public_id(id.get<std::string>()) ||
+                    !required.insert(id.get<std::string>()).second) fail("AUTHOR_EVENT_RESPONSIBILITY_INVALID");
+        }
     }
     try {
     authoring::validate_event_policy(document);

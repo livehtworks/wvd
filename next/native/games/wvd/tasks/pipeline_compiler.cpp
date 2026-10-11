@@ -56,14 +56,30 @@ J fixed_authority(const J &scene) {
     return std::move(*visual);
 }
 const J &scope_rules(const J &scope) {
-    if (scope.is_array()) return scope;
-    require(scope.is_object() && scope.contains("rules") && scope.at("rules").is_array() &&
-        scope.contains("disabled") && scope.at("disabled").is_array(),
-        "COMPILE_EVENT_SCOPE_INVALID");
-    for (const auto &id : scope.at("disabled"))
-        require(id.is_string() && !id.get<std::string>().empty(),
+    if (!scope.is_array()) {
+        require(scope.is_object() && scope.contains("rules") && scope.at("rules").is_array() &&
+            scope.contains("disabled") && scope.at("disabled").is_array(),
             "COMPILE_EVENT_SCOPE_INVALID");
-    return scope.at("rules");
+        for (const auto &id : scope.at("disabled"))
+            require(id.is_string() && !id.get<std::string>().empty(),
+                "COMPILE_EVENT_SCOPE_INVALID");
+    }
+    const auto &rules = scope.is_array() ? scope : scope.at("rules");
+    for (const auto &rule : rules) {
+        if (rule.value("disposition", "handled") != "external_blocked") continue;
+        const auto invalid = [&](const char *field) {
+            throw std::runtime_error("COMPILE_EVENT_STOP_INVALID:" + rule.value("source_node", "") +
+                ":" + rule.value("id", "") + ":" + field);
+        };
+        // Native lowering does not consume handler or continuation metadata for
+        // a direct stop. Reject it here rather than silently changing semantics.
+        for (const auto *field : {"entry", "local_counters", "resume"})
+            if (rule.contains(field)) invalid(field);
+        if (rule.value("on_device_restart", false)) invalid("on_device_restart");
+        if (!rule.contains("reason") || !rule.at("reason").is_string() ||
+            rule.at("reason").get_ref<const std::string &>().empty()) invalid("reason");
+    }
+    return rules;
 }
 struct ImageCollector {
 std::string locale;
@@ -97,6 +113,7 @@ void collect_images(const J &value, std::set<std::string> &images, std::set<std:
         const bool expand = expanded_modes.insert(mode + ":" + value.value("classification", "legacy") + ":" + value.value("phase", "")).second;
         if (expand) {
             if (mode == "combat_phase") collect_images(vision::combat_phase_dependencies(value.at("phase").get<std::string>()), images, expanded_modes);
+            if (mode == "chest_phase") collect_images(vision::chest_phase_dependencies(), images, expanded_modes);
             if (auto probe = vision::builtin_template_probe(mode)) collect_images(*probe, images, expanded_modes);
             collect_images(vision::implicit_ocr_probes(mode), images, expanded_modes);
             if (mode == "movement_stopped") collect_images(vision::movement_page_probes(locale), images, expanded_modes);
@@ -206,8 +223,12 @@ void collect_images(const J &value, std::set<std::string> &images, std::set<std:
         if (mode == "reached")
             for (int i = 0; i < 4; ++i)
                 add_image("cursor_" + std::to_string(i) + ".png", images, expanded_modes);
-        if (expand && mode == "revival_prompt")
+        if (expand && mode == "revival_prompt") {
             collect_images(J{{"mode", "combat_active"}}, images, expanded_modes);
+            collect_images(vision::revival_normal_page_probes(), images, expanded_modes);
+            collect_images(J{{"mode", "party_death"}}, images, expanded_modes);
+            collect_images(J{{"mode", "party_defeat"}}, images, expanded_modes);
+        }
         if (expand && mode == "combat_resource_error") {
             collect_images(J{{"mode", "combat_active"}}, images, expanded_modes);
             add_image("combat_skill_detail_zh_hant.png", images, expanded_modes);
@@ -238,6 +259,7 @@ void collect_images(const J &value, std::set<std::string> &images, std::set<std:
                 add_image(std::string(name) + ".png", images, expanded_modes);
         if (mode == "skill_target") {
             collect_images(J{{"mode", "support_selection"}}, images, expanded_modes);
+            collect_images(vision::combat_phase_dependencies("menu"), images, expanded_modes);
             for (const auto *name : {"next", "combatTarget", "spellskill/skillDetail", "combat_skill_detail_zh_hant",
                     "OK", "combat_skill_confirm_zh_hant"})
                 if (locale != "zh-Hant" || std::string_view(name) != "OK")
@@ -293,6 +315,15 @@ void CompiledWorkflow::validate() const {
     require(!kind.empty() && nodes.is_object() && nodes.contains(entry) && nodes.contains(terminal),
             "COMPILE_ENTRY_INVALID");
     require(event_scopes.is_object(), "COMPILE_EVENT_SCOPE_INVALID");
+    require(event_responsibilities.is_object(), "COMPILE_EVENT_RESPONSIBILITY_INVALID");
+    for (const auto &[name, duties] : event_responsibilities.items()) {
+        require(nodes.contains(name) && duties.is_array() && !duties.empty(),
+                "COMPILE_EVENT_RESPONSIBILITY_INVALID");
+        std::set<std::string> seen;
+        for (const auto &id : duties)
+            require(id.is_string() && !id.get_ref<const std::string &>().empty() &&
+                    seen.insert(id.get<std::string>()).second, "COMPILE_EVENT_RESPONSIBILITY_INVALID");
+    }
     for (const auto &[entry, budget] : definition_budgets)
         require(nodes.contains(entry) && budget.count() > 0 && budget <= std::chrono::minutes{30},
                 "COMPILE_DEFINITION_BUDGET_INVALID");
@@ -304,11 +335,15 @@ void CompiledWorkflow::validate() const {
     // 保留明确的 4,608 硬上限，不为任意作者输入取消有界校验。
     require(nodes.size() <= 4608, "COMPILE_NODE_LIMIT");
     std::set<std::string> reached;
-    std::function<void(const std::string &)> visit = [&](const std::string &name) {
+    std::vector<std::string> pending{entry};
+    while (!pending.empty()) {
+        const auto name = std::move(pending.back());
+        pending.pop_back();
         require(nodes.contains(name), "COMPILE_NEXT_UNKNOWN");
         if (!reached.insert(name).second)
-            return;
+            continue;
         const auto &node = nodes.at(name);
+        std::vector<std::string> successors;
         if (node.value("pure_business_guard", false))
             require(node.value("operation", "Route") == "Route" &&
                 node.value("observation", "") == "Registered" &&
@@ -363,24 +398,24 @@ void CompiledWorkflow::validate() const {
             require(p.is_object() && p.size() == 4 && p.contains("entry") && p.at("entry").is_string() &&
                         p.contains("clone") && p.at("clone") == false && p.contains("local_counters") &&
                         p.at("local_counters").is_array(), "COMPILE_CHILD_PARAMETERS_INVALID");
-            visit(p.at("entry").get<std::string>());
+            successors.push_back(p.at("entry").get<std::string>());
             for (const auto &targets : p.at("handoffs"))
-                for (const auto &target : targets) visit(target.get<std::string>());
+                for (const auto &target : targets) successors.push_back(target.get<std::string>());
         }
         if (event_scopes.contains(name))
             for (const auto &rule : scope_rules(event_scopes.at(name))) {
                 require(rule.at("source_node") == name, "COMPILE_EVENT_SOURCE_INVALID");
-                if (rule.contains("entry")) visit(rule.at("entry").get<std::string>());
+                if (rule.contains("entry")) successors.push_back(rule.at("entry").get<std::string>());
                 if (rule.contains("resume") && rule.at("resume").value("mode", "") == "replan")
                     require(nodes.contains(rule.at("resume").at("node_id").get<std::string>()),
                             "COMPILE_EVENT_REPLAN_INVALID");
             }
         for (const auto &next : node.value("next", J::array()))
-            visit(next.get<std::string>());
+            successors.push_back(next.get<std::string>());
         for (const auto &next : node.value("on_error", J::array()))
-            visit(next.get<std::string>());
-    };
-    visit(entry);
+            successors.push_back(next.get<std::string>());
+        pending.insert(pending.end(), successors.rbegin(), successors.rend());
+    }
     require(reached.contains(terminal), "COMPILE_TERMINAL_UNREACHABLE");
     if (reached.size() != nodes.size())
         for (const auto &[name, node] : nodes.items()) {
@@ -403,14 +438,18 @@ void CompiledWorkflow::validate() const {
         std::set<std::string> local;
         bool has_terminal = false;
         unsigned height = 1;
-        std::function<void(const std::string &)> walk = [&](const std::string &name) {
+        std::vector<std::string> scope_pending{scope};
+        while (!scope_pending.empty()) {
+            const auto name = std::move(scope_pending.back());
+            scope_pending.pop_back();
             if (!local.insert(name).second)
-                return;
+                continue;
             const auto &node = nodes.at(name);
             const auto action = node.value("binding", "");
             // Only unconditional terminal failures may be shared across scopes.
             if (action == "RequireRecovery" && node.value("next", J::array()).empty())
-                return;
+                continue;
+            std::vector<std::string> successors;
             const auto [owner, inserted] = owners.emplace(name, scope);
             require(inserted || owner->second == scope, "COMPILE_CHILD_BOUNDARY_CROSSED");
             if (action == "Finish")
@@ -420,7 +459,7 @@ void CompiledWorkflow::validate() const {
                 check_scope(target);
                 height = std::max(height, 1 + scope_heights.at(target));
                 for (const auto &targets : node.at("operation_args").at("handoffs"))
-                    for (const auto &target : targets) walk(target.get<std::string>());
+                    for (const auto &target : targets) successors.push_back(target.get<std::string>());
             }
             if (event_scopes.contains(name))
                 for (const auto &rule : scope_rules(event_scopes.at(name)))
@@ -434,9 +473,9 @@ void CompiledWorkflow::validate() const {
                 has_terminal = true;
             for (const auto *key : {"next", "on_error"})
                 for (const auto &edge : node.value(key, J::array()))
-                    walk(edge.get<std::string>());
-        };
-        walk(scope);
+                    successors.push_back(edge.get<std::string>());
+            scope_pending.insert(scope_pending.end(), successors.rbegin(), successors.rend());
+        }
         require(has_terminal, "COMPILE_CHILD_TERMINAL_MISSING");
         // 已从浅层验证过的共享子图，也要计入当前调用链的最长深度。
         require(height <= 8, "COMPILE_CHILD_DEPTH_LIMIT");
@@ -583,6 +622,7 @@ void PipelineCompiler::diagnostic_candidate(const std::string &name) {
         (node.value("operation", "Route") == "Route" ||
          node.value("binding", "") == "WvdUnknownLeap"), "COMPILE_DIAGNOSTIC_NODE_INVALID");
     node["unexpected_only"] = true;
+    node.erase("pure_business_guard");
     node["check_group"] = "exception";
 }
 void PipelineCompiler::mark_known_scene(const std::string &name) {
@@ -600,6 +640,8 @@ void PipelineCompiler::observe(const std::string &name, const J &condition, J ne
                {"roi", {0, 0, 900, 1600}},
                {"operation", "Route"},
                {"next", std::move(next)}});
+    if (condition.value("mode", "") == "business")
+        workflow_.nodes.at(name)["pure_business_guard"] = true;
 }
 void PipelineCompiler::observe_business(const std::string &name, const J &condition, J next) {
     require(condition.is_object() && condition.value("mode", "") == "business", "COMPILE_BUSINESS_GUARD_INVALID");
@@ -634,7 +676,7 @@ void PipelineCompiler::action(const std::string &name, const J &scene, const J &
         params.update({{"target_offset", offset}, {"clip_target_to_area", true}});
     add(name, {{"observation", "Registered"},
                {"recognizer", "WvdVision"},
-               {"observation_args", all({guarded_scene, target})},
+               {"observation_args", guarded_scene},
                {"roi", {0, 0, 900, 1600}},
                {"operation", "Registered"},
                {"binding", "Input"},
@@ -674,6 +716,84 @@ void PipelineCompiler::event_scope(const std::string &name, J rules) {
     require(workflow_.nodes.contains(name), "COMPILE_EVENT_SCOPE_INVALID");
     (void)scope_rules(rules);
     workflow_.event_scopes[name] = std::move(rules);
+}
+void PipelineCompiler::require_inherited_events(J events) {
+    require(events.is_array() && !events.empty(), "COMPILE_EVENT_RESPONSIBILITY_INVALID");
+    std::set<std::string> seen;
+    for (const auto &event : events) {
+        require(event.is_string() && !event.get_ref<const std::string &>().empty(),
+                "COMPILE_EVENT_RESPONSIBILITY_INVALID");
+        require(seen.insert(event.get<std::string>()).second, "COMPILE_EVENT_RESPONSIBILITY_DUPLICATE");
+    }
+    workflow_.event_responsibilities[workflow_.entry] = std::move(events);
+}
+void PipelineCompiler::default_body_event(J rule) {
+    require(rule.is_object() && rule.contains("id") && rule.at("id").is_string() &&
+        !rule.at("id").get_ref<const std::string &>().empty(), "COMPILE_DEFAULT_EVENT_INVALID");
+    (void)scope_rules(J::array({rule}));
+    for (const auto &existing : default_body_events_)
+        require(existing.at("id") != rule.at("id"), "COMPILE_DEFAULT_EVENT_DUPLICATE");
+    default_body_events_.push_back(std::move(rule));
+}
+void PipelineCompiler::compile_default_body_events() {
+    if (default_body_events_.empty()) return;
+    // Match native definition ownership: inline nodes and caller return/handoff
+    // targets belong to this body; Call targets and event handlers do not.
+    const auto body_of = [&](const std::string &entry) {
+        std::set<std::string> seen;
+        std::function<void(const std::string &)> visit = [&](const std::string &name) {
+            if (!seen.insert(name).second) return;
+            const auto &node = workflow_.nodes.at(name);
+            for (const auto *key : {"next", "on_error"})
+                for (const auto &next : node.value(key, J::array())) visit(next.get<std::string>());
+            if (node.value("binding", "") == "Call")
+                for (const auto &targets : node.at("operation_args").at("handoffs"))
+                    for (const auto &target : targets) visit(target.get<std::string>());
+        };
+        visit(entry);
+        return seen;
+    };
+    std::set<std::string> roots{workflow_.entry};
+    for (const auto &node : workflow_.nodes)
+        if (node.value("binding", "") == "Call") roots.insert(node.at("operation_args").at("entry").get<std::string>());
+    for (const auto &scope : workflow_.event_scopes)
+        for (const auto &rule : scope_rules(scope))
+            if (rule.contains("entry")) roots.insert(rule.at("entry").get<std::string>());
+    for (const auto &rule : default_body_events_)
+        if (rule.contains("entry")) roots.insert(rule.at("entry").get<std::string>());
+    std::map<std::string, unsigned> terminal_failure_owners;
+    const auto body = body_of(workflow_.entry);
+    for (const auto &root : roots)
+        for (const auto &name : body_of(root)) {
+            const auto &node = workflow_.nodes.at(name);
+            if (body.contains(name) && node.value("binding", "") == "RequireRecovery" &&
+                node.value("next", J::array()).empty()) ++terminal_failure_owners[name];
+        }
+    for (const auto &name : body) {
+        auto &scope = workflow_.event_scopes[name];
+        if (scope.is_null()) scope = J::array();
+        for (auto rule : default_body_events_) {
+            const auto &id = rule.at("id");
+            const auto &existing = scope_rules(scope);
+            const bool explicit_rule = std::any_of(existing.begin(), existing.end(),
+                [&](const auto &entry) { return entry.at("id") == id; });
+            const bool disabled = scope.is_object() &&
+                std::find(scope.at("disabled").begin(), scope.at("disabled").end(), id) != scope.at("disabled").end();
+            if (explicit_rule || disabled) continue;
+            // Native ownership deliberately shares bare terminal failures. An
+            // appended handler's Terminal.on_error may reach one too. Giving
+            // that shared failure a handler rule would create a call cycle.
+            // Disable just this ID there; preserve the failure and other rules.
+            if (terminal_failure_owners[name] > 1) {
+                if (scope.is_array()) scope = J{{"rules", scope}, {"disabled", J::array()}};
+                scope["disabled"].push_back(id);
+            } else {
+                rule["source_node"] = name;
+                auto &entries = scope.is_array() ? scope : scope.at("rules");
+                entries.push_back(std::move(rule));
+            }
+        }
+    }
 }
 void PipelineCompiler::delay_after(const std::string &name, int milliseconds) {
     require(workflow_.nodes.contains(name) && milliseconds >= 0 && milliseconds <= 10000,
@@ -837,6 +957,12 @@ std::string PipelineCompiler::append(const std::string &prefix, const CompiledWo
         workflow_.definition_budgets.emplace(prefix + "_" + entry, budget);
     for (const auto &[entry, checks] : child.definition_checks.items())
         workflow_.definition_checks[prefix + "_" + entry] = checks;
+    for (const auto &[entry, duties] : child.event_responsibilities.items())
+        workflow_.event_responsibilities[prefix + "_" + entry] = duties;
+    for (const auto &[entry, names] : child.event_responsibility_nodes) {
+        auto &copied = workflow_.event_responsibility_nodes[prefix + "_" + entry];
+        for (const auto &name : names) copied.insert(prefix + "_" + name);
+    }
     require(normal_exits.is_object(), "COMPILE_EXIT_BINDINGS_INVALID");
     for (const auto &[name, successors] : normal_exits.items())
         require(child.nodes.contains(name) && child.nodes.at(name).value("binding", "") == "RequireRecovery" &&
@@ -938,21 +1064,25 @@ std::string PipelineCompiler::define_child(const std::string &prefix, const Comp
 void PipelineCompiler::call_child(const std::string &name, const std::string &entry, J next, J handoffs, J condition) {
     require(!entry.empty(), "COMPILE_CHILD_ENTRY_INVALID");
     std::set<std::string> local;
-    std::function<void(const std::string &)> collect = [&](const std::string &n) {
+    std::vector<std::string> pending{entry};
+    while (!pending.empty()) {
+        const auto n = std::move(pending.back());
+        pending.pop_back();
         if (n == "RecoveryRequired")
-            return;
+            continue;
         require(workflow_.nodes.contains(n), "COMPILE_CHILD_ENTRY_INVALID");
         const auto &node = workflow_.nodes.at(n);
         if ((node.value("binding", "") == "RequireRecovery" && node.value("next", J::array()).empty()) || !local.insert(n).second)
-            return;
+            continue;
+        std::vector<std::string> successors;
         for (const auto *key : {"next", "on_error"})
             for (const auto &edge : node.value(key, J::array()))
-                collect(edge.get<std::string>());
+                successors.push_back(edge.get<std::string>());
         if (node.value("binding", "") == "Call")
             for (const auto &targets : node.at("operation_args").at("handoffs"))
-                for (const auto &target : targets) collect(target.get<std::string>());
-    };
-    collect(entry);
+                for (const auto &target : targets) successors.push_back(target.get<std::string>());
+        pending.insert(pending.end(), successors.rbegin(), successors.rend());
+    }
     add(name, {{"operation", "Registered"}, {"binding", "Call"},
                {"operation_args", {{"entry", entry}, {"clone", false}, {"local_counters", local}, {"handoffs", handoffs}}},
                {"next", std::move(next)}});
@@ -1124,6 +1254,22 @@ CompiledWorkflow PipelineCompiler::finish() {
         {{"operation", "Registered"},
          {"binding", "RequireRecovery"},
          {"operation_args", {{"reason", workflow_.kind + ".budget_exhausted"}}}});
+    compile_default_body_events();
+    // Freeze the original body before append can wire its exits into a caller.
+    // Call and event-handler targets remain independent responsibility scopes.
+    if (workflow_.event_responsibilities.contains(workflow_.entry)) {
+        auto &body = workflow_.event_responsibility_nodes[workflow_.entry];
+        const auto visit = [&](auto &&self, const std::string &name) -> void {
+            if (!body.insert(name).second) return;
+            const auto &node = workflow_.nodes.at(name);
+            for (const auto *key : {"next", "on_error"})
+                for (const auto &next : node.value(key,J::array())) self(self,next.get<std::string>());
+            if (node.value("binding", "") == "Call")
+                for (const auto &targets : node.at("operation_args").at("handoffs"))
+                    for (const auto &next : targets) self(self,next.get<std::string>());
+        };
+        visit(visit,workflow_.entry);
+    }
     const auto actions = collect_actions(workflow_.nodes);
     workflow_.required_actions.assign(actions.begin(), actions.end());
     workflow_.refresh_images();

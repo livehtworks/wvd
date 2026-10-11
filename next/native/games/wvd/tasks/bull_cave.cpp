@@ -54,14 +54,14 @@ CompiledWorkflow bull_cave_cycle(const WvdQuestDefinition &definition, const J &
     graph.call_child("Fortress", fortress, {"AtFortress"});
     graph.confirm("AtFortress", "bull.fortress", "bull_cave_fortress", inn, {"RoyalPhase"});
     graph.observe("RoyalPhase", phase(Phase::RoyalCity), {"Royal"});
-    const auto royal = graph.define_child("RoyalCity", navigation::travel_city_to_city({"City_RoyalCityLuknalia", TaskSwipe{{450, 150}, {500, 150}}, {550, 1}}));
+    const auto royal = graph.define_child("RoyalCity", navigation::travel_city_to_city({"City_RoyalCityLuknalia", TaskSwipe{{450, 150}, {500, 150}}, {550, 1}}, allow_download));
     graph.call_child("Royal", royal, {"AtRoyal"});
     graph.confirm("AtRoyal", "bull.royal", "bull_cave_royal", royal_city, {"RequestPhase"});
     graph.observe("RequestPhase", phase(Phase::Request), {"Request"});
     const auto request = graph.define_child("Featured", accept_featured_request(FeaturedRequest::BullCave, profile.at("ACTIVE_ROYALSUITE_REST").get<bool>()));
     graph.call_child("Request", request, {"Requested"});
     graph.confirm("Requested", "bull.request", "bull_cave_requested", inn, {"Terminal"});
-    const auto enter = graph.define_child("EnterCave", navigation::travel_world({"LBC/LBC", TaskSwipe{{400, 400}, {400, 500}}, {550, 1}}, navigation::WorldArrival::DungeonEntrance));
+    const auto enter = graph.define_child("EnterCave", navigation::travel_world({"LBC/LBC", TaskSwipe{{400, 400}, {400, 500}}, {550, 1}}, navigation::WorldArrival::DungeonEntrance, allow_download));
     const auto exit = graph.define_child("LeaveCave", navigation::reach_map_target(plan.route().back()));
     for (const bool second : {false, true}) {
         if (second && !rest) continue;

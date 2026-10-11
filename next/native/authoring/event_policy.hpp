@@ -6,6 +6,20 @@
 
 namespace wvd::authoring {
 // 作者契约只保存声明和值；运行时的作用域令牌不从 JSON 读取。
+inline const char *direct_stop_invalid_field(const Json &rule) {
+    if (rule.value("disposition", std::string("handled")) != "external_blocked") return nullptr;
+    // A stop has no handler invocation or return continuation. Check the merged
+    // rule too: node overrides must not add fields which lowering would discard.
+    for (const auto *field : {"handler", "resume"})
+        if (rule.contains(field)) return field;
+    if (rule.contains("allow_nested") && !rule.at("allow_nested").empty())
+        return "allow_nested";
+    if (!rule.contains("reason") || !rule.at("reason").is_string() ||
+        rule.at("reason").get_ref<const std::string &>().empty())
+        return "reason";
+    return nullptr;
+}
+
 inline void validate_event_resume(const Json &resume, const std::string &id) {
     if (!resume.is_object() || !resume.contains("mode")) contract_error("EVENT_RESUME_INVALID", id);
     for (const auto &[key, value] : resume.items()) {
@@ -49,9 +63,8 @@ inline void validate_event_policy(const Json &document) {
             validate_call(rule.at("handler"));
             if (rule.contains("resume")) validate_event_resume(rule.at("resume"), id);
         } else if (disposition == "external_blocked") {
-            if (rule.contains("handler") || rule.contains("resume") || !rule.contains("reason") ||
-                !rule.at("reason").is_string() || rule.at("reason").get<std::string>().empty())
-                contract_error("EVENT_BLOCKED_INVALID", id);
+            if (const auto *field = direct_stop_invalid_field(rule))
+                contract_error("EVENT_BLOCKED_INVALID", id + ":" + field);
         } else contract_error("EVENT_DISPOSITION_INVALID", id);
         const auto nested = rule.value("allow_nested", Json::array());
         if (!nested.is_array() || nested.size() > 16) contract_error("EVENT_NESTED_INVALID", id);
@@ -103,6 +116,10 @@ inline Json effective_event_policy(const Json &inherited, const Json &document, 
         if (!result.contains(id)) contract_error("EVENT_RESUME_UNKNOWN", id);
     for (const auto &[id, resume] : resumes.items())
         result[id]["resume"] = resume;
+    for (const auto &[id, rule] : result.items())
+        if (const auto *field = direct_stop_invalid_field(rule))
+            contract_error("EVENT_BLOCKED_INVALID", document.at("flow").at("id").get<std::string>() +
+                ":" + node.at("id").get<std::string>() + ":" + id + ":" + field);
     return result;
 }
 

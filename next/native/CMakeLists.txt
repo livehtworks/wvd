@@ -168,10 +168,11 @@ add_executable(test_native_capture EXCLUDE_FROM_ALL
 target_link_libraries(test_native_capture PRIVATE wvd_native_devices)
 target_compile_options(test_native_capture PRIVATE /utf-8 /W4 /EHsc)
 add_executable(test_native_author EXCLUDE_FROM_ALL
-  ../tests/native/test_native_author.cpp)
+  ../tests/native/test_native_author.cpp ../tests/native/shared_page_actions_cases.cpp)
 target_link_libraries(test_native_author PRIVATE wvd_native_games wvd_native_runtime)
-target_compile_options(test_native_author PRIVATE /utf-8 /W4 /EHsc)
-add_executable(test_recognition_methods EXCLUDE_FROM_ALL ../tests/native/test_recognition_methods.cpp)
+target_compile_options(test_native_author PRIVATE /utf-8 /W4 /EHsc /bigobj)
+add_executable(test_recognition_methods EXCLUDE_FROM_ALL ../tests/native/test_recognition_methods.cpp
+  ../tests/native/recorded_input_cases.cpp)
 target_link_libraries(test_recognition_methods PRIVATE wvd_native_games wvd_native_runtime)
 target_compile_options(test_recognition_methods PRIVATE /utf-8 /W4 /EHsc)
 add_executable(test_strategy_frequency EXCLUDE_FROM_ALL ../tests/native/test_strategy_frequency.cpp)

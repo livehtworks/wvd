@@ -37,6 +37,7 @@ inline nlohmann::json combat_phase_dependencies(std::string_view phase) {
     }
     if (phase == "revival") probes.push_back(combat_end_probes().back());
     if (phase == "detail_handoff" || phase == "target_handoff") {
+        if (phase == "target_handoff") probes.push_back(combat_phase("menu"));
         probes.push_back(combat_popup_probes().at(0));
         probes.push_back(J{{"mode", "prepared_actor"}});
     }

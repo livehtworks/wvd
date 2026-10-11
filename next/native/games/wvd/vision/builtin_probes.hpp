@@ -2,6 +2,7 @@
 #include "location_probes.hpp"
 #include "search_regions.hpp"
 #include "supply_scene_plan.hpp"
+#include "chest_probes.hpp"
 #include <optional>
 
 namespace wvd::games::vision {
@@ -30,5 +31,16 @@ inline nlohmann::json implicit_ocr_probes(const std::string &mode) {
     if (mode=="revival_prompt") return J::array({resource("party.revival.action","zh-Hant")});
     if (mode=="combat_resource_error") return J::array({combat_resource_error_text()});
     return J::array();
+}
+inline nlohmann::json revival_normal_page_probes() {
+    using J = nlohmann::json;
+    // These are actual page anchors, not HP bars or the rescue screen's X.
+    // Keep runtime and publication dependencies on the same recipes.
+    auto probes = J::array({J{{"mode","template"},{"image","dungFlag"}},
+        J{{"mode","template"},{"image","trait"}},
+        J{{"mode","template"},{"image","recover"}}});
+    const auto stages = chest_page_condition();
+    for (const auto &probe : stages.at("conditions")) probes.push_back(probe);
+    return probes;
 }
 }

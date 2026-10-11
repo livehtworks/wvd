@@ -25,6 +25,9 @@ struct CompiledWorkflow {
     std::optional<std::chrono::milliseconds> declared_budget;
     std::map<std::string, std::chrono::milliseconds> definition_budgets;
     nlohmann::json definition_checks = nlohmann::json::object();
+    // Independent business duties, checked against the actual native owner.
+    nlohmann::json event_responsibilities = nlohmann::json::object();
+    std::map<std::string, std::set<std::string>> event_responsibility_nodes;
     std::set<std::string> handoffs;
     recovery::DialoguePolicy dialogue_policy{recovery::DialoguePolicy::Default};
     // Bounty routes do not traverse the optional full-maze dialogue encounters.
@@ -56,6 +59,7 @@ class PipelineCompiler {
     void mark_known_scene(const std::string &name);
     void check_policy(const std::string &phase, nlohmann::json inherit = nlohmann::json::array({"wvd-network-retry"}),
                       int debounce_ms = 1000, int interval_ms = 1000, bool protect_input = true);
+    void require_inherited_events(nlohmann::json events);
     void handoff(const std::string &name, const std::string &port);
     void observe(const std::string &name, const nlohmann::json &condition, nlohmann::json next);
     void observe_business(const std::string &name, const nlohmann::json &condition, nlohmann::json next);
@@ -98,6 +102,11 @@ class PipelineCompiler {
     // 输入默认限制连续未确认尝试；作者显式业务循环可选择整次调用计数。
     void hit_limit(const std::string &name, int limit, bool invocation_count = false);
     void event_scope(const std::string &name, nlohmann::json rules);
+    // Fill missing event IDs across this definition's business body at finish,
+    // including inline append nodes and Call sites, but not child definitions.
+    // Explicit per-step rules/disabled IDs win. This is a default, not an
+    // authorization override; callers must still pass consistent action policy.
+    void default_body_event(nlohmann::json rule);
     void failure_route(const std::string &name, nlohmann::json next);
     void business_failure(const std::string &name, const std::string &reason);
     void delay_after(const std::string &name, int milliseconds);
@@ -126,6 +135,7 @@ class PipelineCompiler {
   private:
     CompiledWorkflow workflow_;
     std::vector<std::string> local_nodes_;
+    nlohmann::json default_body_events_ = nlohmann::json::array();
     nlohmann::json interruption_;
     std::string interruption_reason_;
     std::string interruption_port_;
@@ -133,6 +143,7 @@ class PipelineCompiler {
     // 单次编译的同参数公共定义只展开一次；调用帧/计数仍由每次 Call 独占。
     std::map<std::string, std::string> public_steps_;
     void compile_interruption();
+    void compile_default_body_events();
     void add(const std::string &name, nlohmann::json node);
     nlohmann::json request(const nlohmann::json &condition) const;
     void action(const std::string &name, const nlohmann::json &scene, const nlohmann::json &target,

@@ -16,10 +16,10 @@ inline const std::array<nlohmann::json, 9> &supply_scene_probes() {
 }
 template<class Probe> SupplyPage classify_supply_page(Probe &&probe) {
     const auto &plan=supply_scene_probes();
+    const bool panel = probe(plan[5]) || probe(plan[6]);
+    if (panel) return SupplyPage::Panel;
+    if (probe(plan[7]) && !probe(plan[8])) return SupplyPage::Dungeon;
     for(std::size_t i=0;i<5;++i) if(probe(plan[i])) return SupplyPage::Interrupted;
-    // Once a panel is proven, dungeon/map negatives are not that stage's input prerequisites.
-    if(probe(plan[5]) || probe(plan[6])) return SupplyPage::Panel;
-    if(probe(plan[7]) && !probe(plan[8])) return SupplyPage::Dungeon;
     return SupplyPage::Unknown;
 }
 inline bool supply_phase_matches(SupplyPage page, const std::string &phase) {

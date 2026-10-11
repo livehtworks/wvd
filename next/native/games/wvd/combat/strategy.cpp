@@ -140,7 +140,7 @@ CombatStrategy::select(const std::vector<PortraitScore> &scores) const {
 }
 bool CombatStrategy::consume(const SkillSelection &selection, SkillOutcome outcome) {
     if (outcome != SkillOutcome::Succeeded && outcome != SkillOutcome::AutoFallbackConfirmed &&
-        outcome != SkillOutcome::DefendFallbackConfirmed)
+        outcome != SkillOutcome::AttackFallbackConfirmed)
         return false;
     if (selection.strategy_epoch != epoch_ || !current_.contains("skill_settings"))
         throw std::runtime_error("STALE_STRATEGY_SELECTION");

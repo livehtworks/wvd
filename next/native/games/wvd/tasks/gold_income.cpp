@@ -4,6 +4,7 @@
 #include "games/wvd/navigation/world_travel.hpp"
 #include "games/wvd/navigation/return_city.hpp"
 #include "games/wvd/vision/location_probes.hpp"
+#include "games/wvd/recovery/boot.hpp"
 
 namespace wvd::games::tasks {
 namespace {
@@ -106,11 +107,13 @@ CompiledWorkflow gold_income_cycle(const WvdQuestDefinition &definition, bool al
     std::vector<CompiledWorkflow> steps;
     steps.push_back(navigation::time_leap_without_causality("FortressArrival", "cursedwheel_impregnableFortress", allow_download));
     steps.push_back(navigation::return_to_fortress());
-    steps.push_back(navigation::travel_city_to_city({"City_RoyalCityLuknalia", TaskSwipe{{450, 150}, {500, 150}}, {550, 1}}));
+    steps.push_back(navigation::travel_city_to_city({"City_RoyalCityLuknalia", TaskSwipe{{450, 150}, {500, 150}}, {550, 1}}, allow_download));
     steps.push_back(accept_job()); steps.push_back(royal_capital());
     for (int i = 0; i < 3; ++i) steps.push_back(ask_person(i));
     steps.push_back(refuse()); steps.push_back(volunteer());
     graph.route("Entry", {"Pending", "Active", "Start"});
+    // Permission covers the phase dispatcher too, not only travel children.
+    recovery::preserve_download_permission(graph, allow_download);
     graph.observe("Pending", C::business("/gold_income/pending", true), {"Uncertain"});
     graph.recovery("Uncertain", "quest.gold_income_outcome_unconfirmed");
     graph.observe("Active", C::business("/gold_income/active", true), {"Stage"});

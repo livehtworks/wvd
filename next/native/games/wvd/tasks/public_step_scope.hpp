@@ -25,5 +25,6 @@ class PublicStepScope {
 };
 inline const std::vector<std::string> native_public_steps{
     "combat-open-detail", "combat-select-level", "combat-select-target", "combat-confirm-result",
-    "chest-choose-character", "chest-disarm", "chest-reward-continue", "navigation-resume"};
+    "chest-choose-character", "chest-disarm", "chest-reward-continue", "navigation-resume",
+    "after-target-battle"};
 } // namespace wvd::games::tasks

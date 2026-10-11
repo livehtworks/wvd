@@ -28,18 +28,15 @@ inline nlohmann::json auto_route_outside_probes() {
         probes.push_back({{"mode", "template"}, {"image", name}, {"threshold", .8}});
     return probes;
 }
-// moving 的原谓词完全展开：本内锚点成立，地图、遭遇和退场锚点均不成立。
-// 统一定义也供发布时收集资源；不能只优化识别却漏封存隐式模板。
+// Normal dungeon controls first. Only the map and character panels share this
+// background; other flow classification belongs to the caller's failure path.
+// Keep the dependency list identical to the probes actually evaluated.
 inline nlohmann::json auto_route_moving_probes() {
     using J = nlohmann::json;
-    J probes = J::array({J{{"mode", "template"}, {"image", "dungFlag"}, {"threshold", .8}},
+    return J::array({J{{"mode", "template"}, {"image", "dungFlag"}, {"threshold", .8}},
         J{{"mode", "template"}, {"image", "mapFlag"}, {"threshold", .8}},
-        J{{"mode", "combat_active"}}});
-    for (const auto &probe : chest_stage_probes()) probes.push_back(probe);
-    for (const auto *name : {"RiseAgain"})
-        probes.push_back({{"mode", "template"}, {"image", name}, {"threshold", .8}});
-    for (const auto &probe : auto_route_outside_probes()) probes.push_back(probe);
-    return probes;
+        J{{"mode", "template"}, {"image", "trait"}, {"threshold", .8}},
+        J{{"mode", "template"}, {"image", "recover"}, {"threshold", .8}}});
 }
 inline nlohmann::json map_route_post_probes() {
     using J = nlohmann::json;

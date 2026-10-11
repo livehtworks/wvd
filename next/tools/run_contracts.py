@@ -17,12 +17,16 @@ FLOW_REGRESSIONS = (
 )
 CASES = {
     "runtime": [("test_native_flow", ["--" + flag]) for flag in
-        (*FLOW_REGRESSIONS, "receipt-exception-safety", "exit-proof-causality", "input-effect-contract", "progress-contract")],
+        (*FLOW_REGRESSIONS, "receipt-exception-safety", "exit-proof-causality", "input-effect-contract", "progress-contract",
+         "unknown-input-manual-stop", "event-scope-copy-contract", "unknown-ancestor-reconnect-input")],
     "devices": [("test_native_devices", []), ("test_native_devices", ["--physical-gate-authority"]),
         ("test_native_devices", ["--lifecycle-deadline"])],
     "recognition": [("test_native_author", ["--" + flag]) for flag in
-        ("pressure-contract", "builtin-resource-closure", "healing-effect-contract")] +
-        [("test_native_ocr", ["--ctc-contract"]),
+        ("pressure-contract", "builtin-resource-closure", "healing-effect-contract", "target-chest-completion",
+         "combat-open-repair", "single-auto-progress")] +
+        [("test_native_author", ["--public-download-retry", "{output}/public-download-retry"]),
+         ("test_native_author", ["--shared-page-actions", "{output}/shared-page-actions"]),
+         ("test_native_ocr", ["--ctc-contract"]),
          ("test_native_ocr", ["--result-contract", ROOT / "resources/ocr/en_us"]),
          ("test_native_ocr", ["--run-model-contract", ROOT / "resources/ocr/en_us"]),
          ("test_strategy_frequency", ["--configuration-contract"]),
@@ -30,12 +34,15 @@ CASES = {
          ("test_strategy_frequency", ["--fallback-contract"]),
          ("test_native_author", ["--leaf-plan-contract", "{output}/leaf-plan"]),
          ("test_native_author", ["--supply-plan-contract", "{pack}", "{output}/supply-plan"])],
-    "app": [("test_native_application", ["--measurement-contract"]),
+    "app": [("test_native_author", ["--event-stop-contract"]),
+        ("test_native_application", ["--measurement-contract"]),
         ("test_native_application", ["--builtin-transaction", "{output}/builtin-transaction"]),
         ("test_native_application", ["--submission-history", "{output}/submission-history"]),
         ("test_native_application", ["--repository-read-oom", "{output}/repository-read-oom"]),
         ("test_native_application", ["--control-contract", "{pack}", "{pack}/parameters/legacy-quests.json", "{output}/control"]),
         ("test_native_publication", ["{output}/publication"]),
+        ("test_native_coordinator", []),
+        ("test_native_coordinator", ["--logging-boundary"]),
         ("test_native_coordinator", ["--combat-diagnostic"]),
         ("test_native_coordinator", ["--diagnostic-identity"]),
         ("test_native_coordinator", ["--instance-exit"]),

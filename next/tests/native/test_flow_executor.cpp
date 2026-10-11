@@ -10,8 +10,12 @@
 
 // One-shot allocation failure, armed only by the isolated transport fixture.
 static std::atomic<bool> fail_one_allocation{false};
+static std::atomic<bool> watch_large_allocations{false};
+static std::atomic<std::uint64_t> large_allocation_count{0};
 void *operator new(std::size_t size) {
     if (fail_one_allocation.exchange(false)) throw std::bad_alloc();
+    if (watch_large_allocations.load(std::memory_order_relaxed) && size >= 16384)
+        large_allocation_count.fetch_add(1, std::memory_order_relaxed);
     if (auto *p = std::malloc(size ? size : 1)) return p;
     throw std::bad_alloc();
 }
@@ -207,8 +211,17 @@ workflow::Step step(std::string id, workflow::StepData data,
 }
 } // namespace
 
+#include "unknown_input_manual_stop_cases.hpp"
+#include "ancestor_unknown_cases.hpp"
+
 int main(int argc, char **argv) {
     try {
+        if (argc == 2 && std::string(argv[1]) == "--unknown-input-manual-stop")
+            return manual_stop_contract::run();
+        if (argc == 2 && std::string(argv[1]) == "--unknown-ancestor-reconnect-input")
+            return ancestor_unknown_contract::run();
+        if (argc == 2 && std::string(argv[1]) == "--event-scope-copy-contract")
+            return manual_stop_contract::scope_copy(watch_large_allocations, large_allocation_count);
         if (argc == 2 && std::string(argv[1]) == "--progress-contract") {
             Ports ports;
             workflow::FlowProgram program; program.revision="progress-contract"; program.root_definition="root";
@@ -714,6 +727,7 @@ int main(int argc, char **argv) {
         if (argc == 2 && std::string(argv[1]) == "--positive-loop-frame") {
             struct LoopPorts final : Ports {
                 int reads{};
+                bool reusable(const contracts::FrameIdentity &) const override { return true; }
                 contracts::Observation recognize(const contracts::FrameEnvelope &frame,
                     const recognition::Request &request) override {
                     auto result = Ports::recognize(frame, request);
@@ -751,6 +765,71 @@ int main(int argc, char **argv) {
             return 0;
         }
         if (argc == 2 && std::string(argv[1]) == "--child-result-frame") {
+            // A slow successful recognition must be consumed, not discarded at
+            // the next tick merely because it took more than 100 milliseconds.
+            for (const char *phase : {"navigation", "combat", "chest", "supply", "guild", "inn"}) {
+                struct SlowPorts final : Ports {
+                    std::map<std::string, unsigned> reads;
+                    unsigned inputs{};
+                    runtime::OperationResult operate(const std::string &, const nlohmann::json &,
+                        const std::optional<contracts::FrameEnvelope> &frame,
+                        const std::optional<contracts::Observation> &, const std::string &) override {
+                        if (!frame) throw std::runtime_error("SLOW_COMMIT_FRAME_MISSING");
+                        ++operations;
+                        return {runtime::OperationState::Done};
+                    }
+                    bool reusable(const contracts::FrameIdentity &f) const override {
+                        return f.action_epoch == inputs;
+                    }
+                    contracts::FrameEnvelope capture() override {
+                        auto f = Ports::capture(); f.identity.action_epoch = inputs; return f;
+                    }
+                    contracts::Observation recognize(const contracts::FrameEnvelope &f,
+                        const recognition::Request &r) override {
+                        ++reads[r.recognizer_id];
+                        if (r.recognizer_id == "expected") std::this_thread::sleep_for(120ms);
+                        auto o = Ports::recognize(f, r);
+                        o.action_eligible = true; o.center = contracts::Point{110, 110};
+                        o.box = contracts::Box{100, 100, 20, 20}; return o;
+                    }
+                    runtime::Submission submit(const contracts::Command &, const contracts::Observation &scene,
+                        const contracts::Observation &target, contracts::Box, const std::string &) override {
+                        if (scene.basis != target.basis || !reusable(scene.basis))
+                            throw std::runtime_error("SLOW_INPUT_STALE");
+                        return {runtime::SubmissionState::Accepted, ++inputs, std::chrono::steady_clock::now(), {}};
+                    }
+                } slow;
+                const auto query = [](const char *id) { return recognition::Request{id, "1", {0,0,900,1600},
+                    recognition::CustomParameters{"fixture", nlohmann::json::object()}}; };
+                workflow::FlowProgram p; p.root_definition = "root"; p.revision = phase;
+                workflow::Definition d; d.id = "root"; d.entry = "entry";
+                d.steps.emplace("entry", step("entry", workflow::Route{}, {"expected", "unrelated"}));
+                auto expected = step("expected", workflow::Observe{query("expected")}, {"commit"});
+                expected.guard = query("expected"); d.steps.emplace("expected", std::move(expected));
+                auto commit = step("commit", workflow::BusinessConfirm{"fixture", query("commit"),
+                    nlohmann::json::object(), "fixture"}, {"click"});
+                commit.guard = query("commit"); d.steps.emplace("commit", std::move(commit));
+                auto unrelated = step("unrelated", workflow::Finish{}); unrelated.guard = query("unrelated");
+                d.steps.emplace("unrelated", std::move(unrelated));
+                d.steps.emplace("click", step("click", workflow::Input{query("scene"), query("target"),
+                    {{"kind", "Click"}}, {0,0,900,1600}}, {"await"}));
+                d.steps.emplace("await", step("await", workflow::AwaitResult{query("result"), 1s, 0ms, 1ms}, {"done"}));
+                d.steps.emplace("done", step("done", workflow::Finish{}));
+                p.definitions.emplace("root", std::move(d));
+                runtime::FlowExecutor executor(p, slow, 3s);
+                runtime::TickResult result;
+                for (unsigned tick = 0; tick < 60; ++tick) {
+                    result = executor.tick();
+                    if (result.state == runtime::TickState::Waiting) std::this_thread::sleep_until(result.wake_at);
+                    else if (result.state != runtime::TickState::Progress) break;
+                }
+                if (result.state != runtime::TickState::Completed || slow.inputs != 1 || slow.captures != 2 ||
+                    slow.reads["expected"] != 1 || slow.reads["scene"] != 1 || slow.reads["target"] != 1 ||
+                    slow.reads["commit"] != 1 || slow.operations != 1 || slow.reads["unrelated"] != 0 || executor.has_unresolved_input())
+                    throw std::runtime_error(std::string("SLOW_FORWARD_OBSERVATION_REPEATED:") + phase + ":" +
+                        nlohmann::json{{"code",result.code},{"captures",slow.captures},{"inputs",slow.inputs},
+                            {"operations",slow.operations},{"reads",slow.reads}}.dump());
+            }
             struct ResultPorts final : Ports {
                 bool valid{true};
                 std::uint64_t child_frame{}, parent_frame{};
@@ -929,8 +1008,12 @@ int main(int argc, char **argv) {
             for (const std::string mode : {"observe", "next", "return-next", "ongoing", "read-error", "guard-only"}) {
                 struct ReadPorts final : Ports {
                     bool ready{}, stop{}; int restarts{}; std::string mode;
+                    std::uint64_t before_ready_frame{};
                     contracts::Observation recognize(const contracts::FrameEnvelope &f, const recognition::Request &r) override {
                         auto result = Ports::recognize(f, r);
+                        if (ready && (r.recognizer_id == "normal" || r.recognizer_id == "ongoing") &&
+                            f.identity.frame_id <= before_ready_frame)
+                            throw std::runtime_error("NORMAL_RECHECK_REUSED_PRE_READY_FRAME");
                         if (r.recognizer_id == "normal") {
                             result.outcome = ready ? contracts::RecognitionOutcome::Hit : contracts::RecognitionOutcome::NoHit;
                             if (ready && mode == "read-error") {
@@ -976,7 +1059,14 @@ int main(int argc, char **argv) {
                 runtime::TickResult result; bool recovered{};
                 for (int i = 0; i < 500; ++i) {
                     const auto state = executor.progress_snapshot().at("continuous_exception");
-                    if (mode != "guard-only" && state.at("active") && state.at("elapsed_ms").get<int>() >= 80) ports.ready = true;
+                    if (mode != "guard-only" && state.at("active") && !ports.ready) {
+                        // Snapshot milliseconds are truncated; 79ms can become
+                        // 80ms inside tick. Present the late result explicitly
+                        // before the threshold tick instead of racing its clock.
+                        ports.before_ready_frame = ports.captures;
+                        std::this_thread::sleep_for(81ms);
+                        ports.ready = true;
+                    }
                     result = executor.tick();
                     const auto after = executor.progress_snapshot();
                     const auto recovery = after.at("observation_recovery");
@@ -1412,6 +1502,52 @@ int main(int argc, char **argv) {
             return 0;
         }
         if (argc == 2 && std::string(argv[1]) == "--selection-race") {
+            for (const auto *scope : {"combat", "chest", "navigation", "guild", "inn", "supply"}) {
+                struct ReclassifyPorts final : Ports {
+                    bool obsolete{};
+                    unsigned excluded_targets{};
+                    contracts::Observation recognize(const contracts::FrameEnvelope &f,
+                        const recognition::Request &r) override {
+                        auto o = Ports::recognize(f,r);
+                        if (r.recognizer_id == "old" && obsolete) o.outcome = contracts::RecognitionOutcome::NoHit;
+                        if (r.recognizer_id == "absent-scene") o.outcome = contracts::RecognitionOutcome::NoHit;
+                        if (r.recognizer_id == "fresh" && !obsolete) o.outcome = contracts::RecognitionOutcome::NoHit;
+                        if (r.recognizer_id == "unrelated-target") {
+                            ++excluded_targets; o.outcome = contracts::RecognitionOutcome::Error;
+                            o.error_code = "TARGET_OF_ABSENT_SCENE_EVALUATED";
+                        }
+                        return o;
+                    }
+                    runtime::OperationResult operate(const std::string &, const nlohmann::json &,
+                        const std::optional<contracts::FrameEnvelope> &, const std::optional<contracts::Observation> &,
+                        const std::string &) override {
+                        obsolete = true;
+                        return {runtime::OperationState::NotApplicable, "scene_changed_before_effect"};
+                    }
+                } ports;
+                const auto request = [](const char *id) {return recognition::Request{id,"1",{0,0,900,1600},
+                    recognition::CustomParameters{"WvdVision",nlohmann::json::object()}};};
+                workflow::FlowProgram p; p.revision=scope; p.root_definition="root";
+                workflow::Definition d; d.id="root"; d.entry="dispatch";
+                d.steps.emplace("dispatch",step("dispatch",workflow::Route{}, {"old","unrelated","fresh"}));
+                auto old=step("old",workflow::RegisteredOperation{"effect",nlohmann::json::object()},{"fresh"});
+                old.guard=request("old"); d.steps.emplace("old",std::move(old));
+                workflow::Input input{request("absent-scene"),request("unrelated-target"),{{"kind","Click"}},{0,0,900,1600}};
+                d.steps.emplace("unrelated",step("unrelated",std::move(input),{"unrelated-await"}));
+                d.steps.emplace("unrelated-await",step("unrelated-await",workflow::AwaitResult{request("fresh"),1s,0ms,1ms},{"fresh"}));
+                auto fresh=step("fresh",workflow::Finish{}); fresh.guard=request("fresh");
+                d.steps.emplace("fresh",std::move(fresh));p.definitions.emplace("root",std::move(d));
+                runtime::FlowExecutor executor(p,ports,2s);
+                runtime::TickResult result;
+                for (unsigned tick=0;tick<100;++tick) {
+                    result=executor.tick();
+                    if(result.state!=runtime::TickState::Progress && result.state!=runtime::TickState::Waiting) break;
+                    if(result.state==runtime::TickState::Waiting) std::this_thread::sleep_until(result.wake_at);
+                }
+                if(result.state != runtime::TickState::Completed || ports.excluded_targets ||
+                    executor.has_unresolved_input())
+                    throw std::runtime_error(std::string("SCENE_FIRST_RECLASSIFICATION:")+scope+":"+result.code);
+            }
             // 导航停止分类选中后，新帧进入战斗；执行器应重选，而非卡在旧 Observe。
             for (const char *mode : {"guarded", "unguarded", "flapping"}) {
                 struct RacePorts final : Ports {

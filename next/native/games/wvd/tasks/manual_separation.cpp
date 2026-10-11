@@ -75,7 +75,7 @@ CompiledWorkflow manual_separation(const WvdQuestDefinition &definition, const n
     const auto leap = graph.define_child("TimeLeap", navigation::time_leap_without_causality("BeautifulOre", "cursedwheel_dhi", allow_download));
     graph.call_child("Leap", leap, {"Leaped"});
     graph.confirm("Leaped", "manual.leap.done", "manual_leap_completed", C::any({inn, C::image("EdgeOfTown"), C::image("COS/COS")}), {"Terminal"});
-    const auto entry = graph.define_child("SecondEntry", navigation::enter_dungeon(second_plan));
+    const auto entry = graph.define_child("SecondEntry", navigation::enter_dungeon(second_plan, false, allow_download));
     graph.call_child("EnterSecond", entry, {"TraverseSecond"});
     const auto second = graph.define_child("SecondDungeon", second_route);
     graph.call_child("TraverseSecond", second, {"SecondPoints", "RouteIncomplete"});

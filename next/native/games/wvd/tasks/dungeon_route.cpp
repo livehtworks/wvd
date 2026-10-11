@@ -85,27 +85,23 @@ CompiledWorkflow traverse_dungeon(const WvdTaskPlan &plan, const J &profile,
     // 是无进展窗口，不能直接拿它截断可达 900 秒的有限子链。不是放宽帧 TTL。
     C graph("tasks.dungeon_route." + plan.definition().id, std::chrono::seconds{400} + chest_workflow.time_limit);
     graph.check_policy("navigation", {"wvd-network-retry", "wvd-pause", "wvd-download", "wvd-story", "wvd-blessing", "wvd-karma", "wvd-party-death", "wvd-party-defeat", "wvd-dialogue", "wvd-special-dialogue", "wvd-sandman"});
-    if (!allow_download) {
-        // 局部禁下载仍覆盖根策略；不因删除全量Common扫描而丢失原权限。
-        const auto deny = graph.define_child("DownloadPermission", recovery::handle_download_prompt(false));
-        graph.event_scope("Entry", J::array({J{{"id", "wvd-download"}, {"class", "exception"},
-            {"priority", 900}, {"source_node", "Entry"}, {"entry", deny},
-            {"detect", C::any({vision::download_button_zh_hant(), vision::download_button_en()})},
-            {"resume", {{"mode", "reobserve"}}}}}));
-    }
+    graph.require_inherited_events({"wvd-party-death", "wvd-party-defeat"});
     const J combat{{"mode", "combat_active"}};
     const auto chest = vision::chest_page_condition();
     const auto revive = C::image("RiseAgain");
     const auto encounter = C::any({combat, chest, revive});
     const J input_clear{{"mode", "input_clear"}, {"phase", "navigation"}};
     const auto map = C::all({C::image("mapFlag"), C::absent(encounter), input_clear});
-    const auto dungeon = C::all({C::image("dungFlag"), C::absent(C::image("mapFlag")),
-                                C::absent(encounter), C::absent(C::image("trait")), C::absent(C::image("recover")), input_clear});
+    const auto dungeon = C::all({J{{"mode", "auto_route_moving"}}, input_clear});
     const auto outside = C::all({C::any({C::image("Inn"), C::image("EdgeOfTown"), C::image("returntoTown"), C::image("returnText"),
                                         C::image("openworldmap"), C::image("worldmapflag")}),
                                  C::absent(C::image("mapFlag")), C::absent(encounter)});
     const auto inside = C::all({C::any({map, dungeon, encounter}), input_clear});
-    graph.route("Entry", candidates({"UnknownFrozen", "Outside", "Entered", "UnknownLeap", "UnknownTimeout", "UnknownLimit", "UnknownWait"}));
+    graph.route("Entry", candidates({"EnteredDungeon", "Outside", "Entered", "UnknownFrozen", "UnknownLeap", "UnknownTimeout", "UnknownLimit", "UnknownWait"}));
+    // Materialize the default at finish across the caller's business body;
+    // an Entry-only rule would disappear after inline append or a later step.
+    // Existing explicit scopes still win and child factories receive this bool.
+    recovery::preserve_download_permission(graph, allow_download);
     if (stopping) {
         graph.observe("TaskStop", stop, {"Terminal"});
     }
@@ -121,15 +117,18 @@ CompiledWorkflow traverse_dungeon(const WvdTaskPlan &plan, const J &profile,
     graph.poll("UnknownWait", 1000, {"Entry"});
     graph.hit_limit("UnknownWait", 128);
     graph.confirm("Entered", "dungeon.enter", "dungeon_entered", inside, {"Dispatch"});
-    J dispatch = {"UnknownFrozen"};
+    graph.confirm("EnteredDungeon", "dungeon.enter", "dungeon_entered", dungeon, {"EntryReady"});
+    graph.route("EntryReady", {"EntryNavigation", "Dispatch"});
+    graph.observe_business("EntryNavigation", C::business("/healing_required", false), {"SelectPoint"});
+    J dispatch = J::array();
     if (plan.route().back().harken_arrival) dispatch.push_back("HarkenCompleted");
     for (std::size_t i = 0; i < plan.route().size(); ++i)
-        if (plan.route()[i].shortcut_battle_wait_ms)
+        if (plan.route()[i].shortcut_battle)
             dispatch.push_back("ResumeTarget" + std::to_string(i));
-    for (const auto *name : {"Blocked", "Combat", "Chest", "Revive", "Outside", "HealingPanel", "Resume", "Map"})
+    for (const auto *name : {"Resume", "HealingPanel", "Map", "Combat", "Chest", "Revive", "Outside", "Blocked"})
         dispatch.push_back(name);
     if (plan.route().back().harken_arrival) dispatch.push_back("HarkenArrived");
-    for (const auto *name : {"UnknownLeap", "UnknownTimeout", "UnknownLimit", "UnknownWait"})
+    for (const auto *name : {"UnknownFrozen", "UnknownLeap", "UnknownTimeout", "UnknownLimit", "UnknownWait"})
         dispatch.push_back(name);
     graph.route("Dispatch", candidates(std::move(dispatch)));
     if (plan.route().back().harken_arrival) {
@@ -176,10 +175,13 @@ CompiledWorkflow traverse_dungeon(const WvdTaskPlan &plan, const J &profile,
     // 与旧 StateDungeon 一致，仅 Dungeon 分支调度角色恢复；已打开地图时不新增关闭地图动作。
     graph.observe("Map", map, {"SelectPoint"});
 
-    J points = candidates({"Blocked", "Combat", "Chest", "Revive", "Outside", "Finished"});
+    J points = J::array();
     for (std::size_t i = 0; i < plan.route().size(); ++i)
         points.push_back("Point" + std::to_string(i));
-    graph.route("SelectPoint", points);
+    points.push_back("Finished");
+    graph.route("SelectPoint", candidates({"NavigationReady", "Blocked", "Combat", "Chest", "Revive", "Outside", "Finished"}));
+    graph.observe("NavigationReady", automatic_target(plan.route().front()) ?
+        C::any({J{{"mode", "auto_route_moving"}}, map}) : C::any({dungeon, map}), points);
     graph.observe_business("Finished", C::business("/task_step", plan.route().size()), {"Terminal"});
     for (std::size_t i = 0; i < plan.route().size(); ++i) {
         const auto &target = plan.route()[i];
@@ -190,9 +192,9 @@ CompiledWorkflow traverse_dungeon(const WvdTaskPlan &plan, const J &profile,
         J normal{{"encounter", {"Dispatch"}}, {"blocked", {"Dispatch"}}};
         if (automatic) {
             normal["stopped"] = {"Dispatch"};
-            if (target.shortcut_battle_wait_ms) {
+            if (target.shortcut_battle) {
                 // 此标记路线不靠地图坐标证明完成；目标战斗复用同一Battle定义，
-                // 仅成功返回后等待，再以副本新帧确认。普通停止仍重新导航，不冒充击杀。
+                // 后续步骤由作者流程控制。普通停止不冒充击杀。
                 const auto active = C::all({C::business("/target_encounter/active", true),
                     C::business("/target_encounter/unit_matches", true),
                     C::business("/target_encounter/point", i)});
@@ -242,7 +244,7 @@ CompiledWorkflow traverse_dungeon(const WvdTaskPlan &plan, const J &profile,
                 graph.confirm("TargetReacquirePrepared" + suffix, "target.reacquire." + suffix,
                     "target_reacquire_prepared", C::all({active, C::absent(authorized), dungeon}), {"SelectPoint"}, i);
                 graph.poll("TargetWait" + suffix, 250, {"TargetDispatch" + suffix});
-                graph.wait("AfterTargetBattle" + suffix, *target.shortcut_battle_wait_ms,
+                graph.public_step("AfterTargetBattle" + suffix, "after-target-battle", J::object(),
                     {"Confirm" + suffix, "AfterTargetResult" + suffix});
                 // 战后可以立即出现宝箱或另一场遭遇；已成功的目标战斗不能因此
                 // 丢回未完成的导航点。未知/加载页只重观测，事件仍由原处理器接管。
@@ -282,9 +284,14 @@ CompiledWorkflow traverse_dungeon(const WvdTaskPlan &plan, const J &profile,
             candidates(std::move(completed_route)), normal);
         graph.observe_business("Point" + suffix, C::business("/task_step", i), {route});
         graph.confirm("Confirm" + suffix, "point." + suffix, "target_completed",
-            // 确认动作另取新帧。基础弹窗探针沿用已有并行实现，避免串行扫描耗尽
-            // 观察有效期；仍检查全部原有弹窗，不复用子图的旧帧或放宽TTL。
-            C::all({J{{"mode", "input_clear"}}, target.shortcut_battle_wait_ms ? inside : point_confirmation(target, map)}), {"Dispatch"}, i);
+            // Advancing an already settled target is bookkeeping, not an
+            // input or proof of the next page. The next route admits its scene.
+            target.shortcut_battle ?
+                C::all({C::business("/target_encounter/active", true),
+                    C::business("/target_encounter/unit_matches", true),
+                    C::business("/target_encounter/point", i),
+                    C::business("/target_encounter/phase", 3)}) :
+                C::all({J{{"mode", "input_clear"}}, point_confirmation(target, map)}), {"Dispatch"}, i);
     }
     if (plan.floor()) {
         const auto retreat = graph.define_child("WrongFloor", navigation::auto_route("dungFlag"));
@@ -296,7 +303,7 @@ CompiledWorkflow traverse_dungeon(const WvdTaskPlan &plan, const J &profile,
     for (const auto *name : {"UnknownFrozen", "UnknownLeap", "UnknownTimeout", "UnknownLimit"})
         graph.diagnostic_candidate(name);
     // 分类成功显式打断连续未知窗口，避免挪到末尾后遗留上一段未知历史。
-    for (const auto *name : {"Entered", "Outside", "Combat", "Chest", "Revive",
+    for (const auto *name : {"Entered", "EnteredDungeon", "NavigationReady", "Outside", "Combat", "Chest", "Revive",
                              "HealingPanel", "Resume", "Map"})
         graph.mark_known_scene(name);
     if (stopping) graph.mark_known_scene("TaskStop");

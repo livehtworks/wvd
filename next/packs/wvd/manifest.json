@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "source_commit": "6585f4075f5714ab522aa582993860c09af912c1",
-  "revision": "b664d128bea300e0f04a4974071abb57efb63dbc99d0c738c736951dc02328d0",
+  "revision": "93ec84f125e552d317202a652424c7b72df50f92791b7a774ea8dd06269193f6",
   "files": [
     {
       "path": "image/7000G/icantagreewithU.png",
@@ -4907,8 +4907,8 @@
     {
       "path": "parameters/public-flows.json",
       "source": "next/resources/authoring/public-flows.json",
-      "sha256": "78969e11b52f4323cde40b38a686ae1c4502ed714fd44c74b6f4d39a1ffa65c2",
-      "bytes": 116260,
+      "sha256": "f8418547b00475646864a8ab10ce4d449715a3cac5332f8ed420b1707ac8d815",
+      "bytes": 103439,
       "source_refs": [
         "authoring:public-flow-1"
       ]
@@ -4916,8 +4916,8 @@
     {
       "path": "parameters/semantic-assets.json",
       "source": "next/resources/authoring/semantic-assets.json",
-      "sha256": "5c89c513e2c0b36fd6d4e0391de90707e50af9a2be3b10ca65b90c6c4037383e",
-      "bytes": 86509,
+      "sha256": "f888eadb3c84ccc16badfc1e6fc671708eaafbe94f5d899151dd01f76f5dd90d",
+      "bytes": 84283,
       "source_refs": [
         "authoring:public-flow-1"
       ]

@@ -1,5 +1,6 @@
 #include "dungeon_entry.hpp"
 #include "world_travel.hpp"
+#include "games/wvd/recovery/boot.hpp"
 #include "games/wvd/vision/location_probes.hpp"
 #include <algorithm>
 #include <cmath>
@@ -30,12 +31,12 @@ J any_chunked(J conditions) {
     return any_chunked(std::move(groups));
 }
 }
-tasks::CompiledWorkflow enter_dungeon(const WvdTaskPlan &plan, bool direct_floor_entry) {
+tasks::CompiledWorkflow enter_dungeon(const WvdTaskPlan &plan, bool direct_floor_entry, bool allow_download) {
     const auto &steps = plan.entry_steps();
     if (steps.empty() || steps.size() > 64)
         throw std::runtime_error("DUNGEON_ENTRY_STEPS_INVALID");
     C graph("navigation.dungeon_entry");
-    graph.check_policy("navigation", {"wvd-network-retry", "wvd-download", "wvd-story", "wvd-dialogue"});
+    graph.check_policy("navigation", {"wvd-network-retry", "wvd-pause", "wvd-download", "wvd-party-death", "wvd-party-defeat", "wvd-story", "wvd-dialogue"});
     const auto inside = C::any({C::image("dungFlag"), C::image("mapFlag"), C::image("chestFlag"), J{{"mode", "combat_active"}}});
     const auto enter = C::image("GotoDung");
     J anchors{vision::city_screen(), C::image("openworldmap"), C::image("returntoTown")};
@@ -118,7 +119,7 @@ tasks::CompiledWorkflow enter_dungeon(const WvdTaskPlan &plan, bool direct_floor
         if (step.kind == EntryStep::Kind::WorldMap) {
             if (!step.world)
                 throw std::runtime_error("DUNGEON_ENTRY_WORLD_MISSING");
-            const auto child = graph.append(s + "World", travel_world(*step.world, WorldArrival::DungeonEntrance), next);
+            const auto child = graph.append(s + "World", travel_world(*step.world, WorldArrival::DungeonEntrance, allow_download), next);
             graph.route(s, {"Entered", child});
             continue;
         }
@@ -184,6 +185,7 @@ tasks::CompiledWorkflow enter_dungeon(const WvdTaskPlan &plan, bool direct_floor
         graph.observe(s + "Find", event ? selection : C::all({selection, C::absent(target)}), {action});
         graph.delay_after(s + "Find", static_cast<int>(step.interval_seconds * 1000));
     }
+    recovery::preserve_download_permission(graph, allow_download);
     return graph.finish();
 }
 }

@@ -108,6 +108,11 @@ struct ApplicationAssemblyTestAccess {
             {"offline-product", "offline-instance", "jp.co.drecom.wizardry.daphne", "", false},
             std::nullopt, false, std::nullopt, observer);
     }
+    static auto giant_graph(Application &app) {
+        const auto stored = app.profile_store_->load();
+        return app.compile_task_graph({{"resource_locale", "zh-Hant"}}, app.catalog_->at("GiantBounty"),
+            app.effective_profile_values("GiantBounty", stored), {});
+    }
     static runtime::NativeRunDefinition prepare_debug(Application &app, nlohmann::json stored, bool force_selected = true) {
         auto &values = stored["values"];
         if (force_selected) {
@@ -434,6 +439,10 @@ int main(int argc, char **argv) {
             require_closure(!catalog.at("semantic_resources").empty(), "FROZEN_SEMANTIC_LIBRARY_NOT_LOADED");
             const auto board = call(app, wvd::api::http::verb::get, "/api/v1/workflows/guild-open-bounty-page/builtin");
             require_closure(board.at("status") == "current", "FROZEN_PUBLIC_LIBRARY_NOT_LOADED");
+            const auto giant = A::giant_graph(app);
+            require_closure(giant.nodes.contains("Task_FirstDungeon_AfterTargetBattle0") &&
+                backend->connections == 0 && backend->captures == 0 && backend->inputs == 0,
+                "APPLICATION_GIANT_SNAPSHOT_MISSING_STEP_OR_TOUCHED_DEVICE");
             for (const auto &kind : {std::string("task"),std::string("workflow"),std::string("combat_debug")}) {
                 J request{{"request_id","prior-"+kind},{"profile_revision","obsolete"},{"flow_revision","obsolete"},
                     {"resource_locale","zh-Hant"},{"task_id","removed-task"},{"flow_id","removed-flow"}};

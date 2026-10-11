@@ -1,11 +1,12 @@
 #include "departure.hpp"
 #include "games/wvd/navigation/world_travel.hpp"
+#include "games/wvd/recovery/boot.hpp"
 #include "games/wvd/supply/inn.hpp"
 #include "games/wvd/supply/party.hpp"
 
 namespace wvd::games::tasks {
 CompiledWorkflow prepare_departure(const WvdTaskPlan &plan, const nlohmann::json &profile,
-                                   bool force_rest) {
+                                   bool force_rest, bool allow_download) {
     using C = PipelineCompiler;
     using J = nlohmann::json;
     C graph("tasks.departure." + plan.definition().id, std::chrono::seconds{180});
@@ -67,10 +68,11 @@ CompiledWorkflow prepare_departure(const WvdTaskPlan &plan, const nlohmann::json
     graph.click("OpenForRest", C::all({outside, open}), open, C::any({world, city}), {"Dispatch"});
     graph.observe("World", C::all({world, C::absent(inside)}), {"Travel"});
     if (plan.return_destination()) {
-        const auto travel = graph.append("ReturnCity", navigation::travel_world(*plan.return_destination(), navigation::WorldArrival::City), {"Dispatch"});
+        const auto travel = graph.append("ReturnCity", navigation::travel_world(*plan.return_destination(), navigation::WorldArrival::City, allow_download), {"Dispatch"});
         graph.route("Travel", {travel});
     } else
         graph.recovery("Travel", "departure.return_destination_missing");
+    recovery::preserve_download_permission(graph, allow_download);
     return graph.finish();
 }
 }

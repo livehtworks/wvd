@@ -5,7 +5,7 @@
 | 对象 | 职责与关键数据 | 生产者/消费者 | 属性与关联 |
 | --- | --- | --- | --- |
 | profile.json | 设备、任务、战斗、日志配置及revision | ProfileStore；工作台分区CAS保存/任务准备 | 用户权威；提交前核revision，不覆盖用户编辑 |
-| workflows/*.json | 用户流程、内置拷贝和本地revision | WorkflowRepository；编辑/编译/执行 | 用户权威，正式保存版本优先于包内默认 |
+| workflows/*.json | 用户流程、内置拷贝和本地revision；execution.checks.required声明业务职责，inherit声明允许继承的事件 | WorkflowRepository；编辑/编译/执行 | 用户权威，正式保存版本优先于包内默认；职责不是由继承白名单反推，仍以原revision CAS写入 |
 | workflows/.builtin | 内置来源、本地版本、last_sync回执 | WorkflowRepository | 与对应文档成单事务；GET不修补 |
 | workflows/.builtin-backups | 同步前准确文档及元数据 | 内置同步事务；人工恢复 | 不可变用户恢复依据，不自动清理 |
 | workflows/.builtin-transactions | pending意图/completed历史、前后版本/哈希 | 仓库写入/构造时恢复 | 有界核验完成或拒绝；禁止覆盖未知本地修改 |

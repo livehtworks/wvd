@@ -1,12 +1,37 @@
 # 当前执行注意项
 
+- test_native_author的真实supply-plan曾间歇退出0xC00000FD；af-stack3 CDB实栈确认测试main自身占0xd7120字节，叠加识别/OCR调用后溢出。供给入口与其余作者用例拆开后原测试及af8通过，不增大线程栈、不删除断言。单次复测通过不能排除这种临界栈错误，也不能将该测试入口问题归为产品历史内存增长；使用本地PDB避免CDB默认网络符号查询长等。
+
+- 完整巨人配置的CompiledWorkflow::validate曾发生0xC00000FD；CDB原栈定位到按步骤递归的visit，帧约944字节。2000节点回归进一步定位到compile_native_program的作用域节点visit。节点可达性、作用域内节点遍历及call_child局部计数收集统一使用显式工作栈；实际子调用仍保留原8层合同。不扩大线程栈，不以小配置通过代替正式配置组合验证，也不把编译期栈溢出归因为历史进程提交增长。
+
+- `--giant-linkage`的WVD_CLOSURE_ROOT必须先建立独立目录，入口不自动创建；否则场景断言/日志可通过，但ofstream轨迹不落盘。当前cp-giant-saved-261011前七种只有通过日志、末种有JSON，不能宣称完整轨迹交付。
+- 场景配方递归不得进入携带全部局部变量的大识别分派函数。当前候选实测evaluate_uncached栈帧0xCDA0、supply-plan返回0xC00000FD；开箱/再起移到小型非内联函数后cp5真实Service通过。不要扩大线程栈或深度上限掩盖；该栈故障不是历史PrivateUsage增长证据。
+
+- 用户已确认本次哈肯前彻底无交互卡死需由手机启动重置，并报告恢复。此类游戏侧卡死交给用户人工处理，不继续自动修复/反复重启，不把画面返回或用户重置当作脚本完成；恢复后等明确继续指令。该例外不退出网络弹窗、游戏/模拟器退出等既有异常恢复职责，不证明宿主退出或内存原因。
+
+- 返哈肯的静止检测不是正常插入出口：Moving若经StoppedExit交回RecoverReturn再重新创建导航，会丢失无进展窗口并反复点击。dungFlag返程保留同次Poll，楼层/祝福/郊外及遭遇优先；只有既有位置进展续期，持续静止按原60秒StalledExit恢复。标记/宝箱搜索的停止语义不变。记录见reviews/harken-stationary-loop-20261011.md；整段期限边缘4ms的ADB_TIMEOUT不能当连续设备断线证据。
+
+- 返城导航子流程中途的encounter出口不能代替返城Entry的出口：调用者选中迷宫到实际进入子流程之间可能已经遇怪，Entry须只读识别后交给同一个EncounterExit/RecoverReturn，不能原地等60秒重启游戏。宝箱边界复用chest_page_condition，不只认打开页；原帧、61051ms超时和实际Call回归见reviews/target-chest-settlement-20261011.md。
+
+- 独立合同输出目录应简短：`target-chest-settlement-20261011/contracts-accepted/builtin-transaction/.../<UUID>.metadata.json`达到261字符时，WorkflowRepository::read_plain_file使用普通CreateFileW路径导致WORKFLOW_READ_FAILED:backup。保留失败记录，以短的全新隔离根重跑同一合同；不改断言，不把缩短测试路径宣称为长路径生产修复。正式workflows目录当前较短，长路径适配是另行待修项。
+
+- 目标战斗正常返回迷宫后，下一新帧可能立即出现宝箱；pending_combat=false并不否定已完成战斗。正常结算入口记录settled_combat_sequence，上层宝箱结果只接受原目标同遭遇的待结算或已结算身份，不能重复统计，也不能把复活撤销当正常结算。现有target-chest-completion合同须覆盖该短暂迷宫转场，旧夹具只有直接宝箱的正例不足以保护它。现场与旧失败对照见reviews/target-chest-settlement-20261011.md。
+
+- 复核恢复延迟时区分OCR调用与推理：ocr_calls包含同帧缓存调用，不能按调用数直接宣称模型推理次数。已知迷宫/角色/恢复页面经死亡保护排除再起OCR，未知页保留原路径。独立供给夹具需要按ocr-models.json登记真实繁中模型，不能只复制图片manifest；给旧图片manifest对应的租约目录塞入额外模型会触发RESOURCE_NOT_IN_MANIFEST，应使用准确的独立成员清单。MSVC下std::string与nlohmann::json反向比较可报C7692，哈希比较两侧显式取string。
+- Windows承接本包：Python3.14在本机同一路径lstat与打开句柄fstat的ctime不同，原只读校验器误报FILE_CHANGED_DURING_READ。外部包原字节不改；独立适配保留dev/ino/size/mtime/mode/birthtime及完整内容哈希，回执明确标注适配。导入校验器禁用pycache写入，否则额外pyc会被包完整性检查拒绝。CRLF checkout须与规范Git blob区分，资源清单仍按原始载荷字节验证，不能以Git blob相同放行资源哈希。
+- V2测试集中内联使MSVC对象节数溢出C1128：共享页面测试移入独立.cpp，原入口/断言保留，test_native_author使用/bigobj；不删除测试或调整业务预期规避构建失败。资源生成事务先验证既有pack，不能用生成工具修补未经核对的坏载荷；本轮仅对明确LF匹配的文本做EOL规范化后再生成。
+- Windows定向夹具必须保证故障前提实际成立：Unknown计时用例原10ms/90ms安排会先触发合法场景重分类，现明确检查首次提交时计时已启动，再测试未知送达下不重启及局部期限。只调整受控测试时序，不改生产期限。Coordinator的直接Fail夹具必须移除旧正常后继；有guard及后继的是另一种恢复重查合同。共享工厂须装配原PublicStepScope，Handoff不能按RequireRecovery出口绑定。原帧Service租约还须登记测试目录中manifest、额外参数和锁定模型；不通过放宽租约检查排除缺成员错误。
+- 当前继续工作为基于d03a765及首份26文件补丁的离线修复。现行输入、Unknown和尽力补给语义统一引用`next/docs/core-contracts.md`；旧部署/100轮授权及历史失败指导不覆盖T0后的停止要求。后续回执见`docs/reviews/critical-followup-v2-20261010.md`，不把受控测试写成Windows/Service/现场通过。
+- 作者源、pack参数和manifest须作为同一候选核对。d03基线的semantic-assets参数已是84283字节，manifest却记录86509字节；首份补丁通过原生成器同步这项既有失配及public-flows变更。不要把旧manifest复原回来，也不能用部分缓存成员校验冒充完整资源包验证。
+- 现行堆比较资格以export_memory_stacks.ps1和measurement_endpoint.psm1为准：可比较已持有并确认的worker_joined_1/2，或同范围batch_payloads_released_1/2；两者不能混合，也不能把joined改名为整批释放。旧记录里只写batch端点的要求不覆盖新屏障合同；analysis_complete不等于comparison_eligible，更不等于已归因。
+
 - 活跃JSONL文件的Get-ChildItem.Length本轮曾显示0，收尾后同一文件实际有1970719/6366363字节且写入失败0；不能据目录枚举元数据宣称日志丢失。核对实际共享文件流长度/读取内容及result.details_complete。
 - T0：满宽HP条/角色模型/漩涡/右下X为救人现场，不能未经业务分类就新增关闭操作。hp_overlay/CloseHpOverlay误判并实际取消救人，用户已要求撤回；旧正例只证明图像/按钮匹配，不证明取消符合业务。删除这条新操作后，既有party_death中心点击逻辑保持；撤除验证不操作游戏，不自动恢复循环。证据及影响见reviews/restart-loop-20261010.md的T0事故节。
-- 已有处理器未执行时先查真实调用栈的checks.inherit/本地候选/父规则，不以“工厂存在”证明可达，也不能未查分支就新增处理器。补给过滤救人事件、ReconnectBoot过滤全部父事件且本地无救人，已在事故前冻结图确认。根Boot仍有全局事件，不能笼统说所有Boot都缺救人。公共保存JSON先按node ID/有序边核语义，数组顺序/布局/语言默认值差异不能当作动作分叉；不同技能/六人点位是参数化复用，不按编译后节点数算重复套数。
+- 已有处理器未执行时先查真实调用栈的checks.inherit/本地候选/父规则，不以“工厂存在”证明可达，也不能未查分支就新增处理器。事故前补给过滤救人事件、ReconnectBoot过滤全部父事件且本地无救人；首份离线补丁已补这两条链，现场保存版本仍需另核。根Boot仍有全局事件，不能笼统说所有Boot都缺救人。公共保存JSON先按node ID/有序边核语义，数组顺序/布局/语言默认值差异不能当作动作分叉；不同技能/六人点位是参数化复用，不按编译后节点数算重复套数。
 
 - 住宿退出菜单即步骤结束，不等待“背包補充完畢”或额外城市确认。正常信息页的箭头可随内容到y=1136，搜索整个下半屏而非固定小框；仍核场景及实际匹配中心。故事与信息页共用箭头形状，受控观察夹具不得把“非故事”强制设成“箭头不存在”。第9轮恢复日志已证明Boot Ready/Terminal结束，真正重复重启源于resume_event先判旧Leave超时再看恢复新帧；已修为先看resume_guard，NoHit才检查旧期限，未决输入保护不改。详见reviews/restart-loop-20261010.md。
 
-- 识别条件的结构深度和内部配方调用栈必须分开：入口校验八层布尔树，不能把revival_prompt→combat_active→本地化模板的内部调用算成新增作者层。布尔递归不得进入包含全部场景局部变量的大分派函数，否则只扩大递归限制会触发Windows栈溢出。编译识别请求时仅合并同类all/any包装，保留叶子顺序、Error与action_eligible，不短路/去重；菜单重试额外包装也须验证。回归必须让真实Service执行失败现场的完整条件、场景/目标/重试请求，而非只测独立叶子或受控Ports。
+- 识别条件的结构深度和内部配方调用栈必须分开：入口校验八层布尔树，不能把revival_prompt→combat_active→本地化模板的内部调用算成新增作者层。布尔递归不得进入包含全部场景局部变量的大分派函数，否则只扩大递归限制会触发Windows栈溢出。编译请求仅合并同类all/any包装、不删叶子；运行时求值以当前core-contracts为准：正常all遇NoHit终止，any/not子树保留输入资格汇总和Error。回归须让真实Service执行完整条件、场景/目标/重试请求，而非只测独立叶子或受控Ports。
 
 - 战斗/宝箱/导航转场必须结束旧页面处理并重新分派，不能要求捕获中间迷宫帧。宝箱阶段包括直接奖励页；奖励内容未观察不等于开箱处理未退出。目标战斗结束与副本结束分别确认，需保留目标/遭遇身份，不能把后来战斗归给旧目标。公共步骤从父页进入时再取新帧，已转场须走明确只读出口；未提交动作不记施放/开箱选人成功。网络等遮挡挂起未决输入，不能借普通交接清未决输入。确认战斗/宝箱互切时结清上一处理段，下一场用新遭遇序号，回迷宫不重复累计。
 
@@ -31,7 +56,7 @@
 - Windows事务备份叠加revision/UUID可超MAX_PATH；atomic_write使用已校验绝对路径的扩展Win32形式，不靠缩短用户路径规避。内置同步四个中断阶段、准确备份/CAS冲突已做隔离验证。
 - 内存端点只能比较同阶段；屏障默认off且绑定创建身份/request/run/gen/config/seq/单调时间。旧MonitorCurrentRound选项明确拒绝，不静默忽略。512MiB/20分钟是未来另行授权的上限，不是本轮已采集事实。
 
-- 排查恢复识别耗时时先分开wall_ns、exclusive_ns与worker_exclusive_ns；worker时间标明不可叠加墙钟。actual_matches是实际比对计数，不是不同模板或测试数量。all/any当前全部评估是既有Error传播契约；未完成受影响链审查不能直接全局短路或靠旧帧长缓存压计数。第8轮Heal约46.35秒/1199次是待整改证据，不是性能通过，详见docs/reviews/runtime-issues-handoff-20261009.md。
+- 排查恢复识别耗时时先分开wall_ns、exclusive_ns与worker_exclusive_ns；worker时间标明不可叠加墙钟。actual_matches是实际比对计数，不是不同模板或测试数量。不得靠跨失效截图缓存压计数，也不得把短路后的未执行Error说成已检查；正常all与any/not的资格边界须分别验收。第8轮Heal约46.35秒/1199次仍是历史失败证据，af8离线改善不冒充该现场同条件通过，详见reviews/action-first-chain-20261011.md与reviews/runtime-issues-handoff-20261009.md。
 - 性能趋势须比较同类节点而非仅比较整轮：旧版巨人前六轮时长8.49–19.03分钟、战斗Entry均值475–500ms，没有持续递增。外层选中即返回不表示复合条件按需计算。当前战斗改用combat_phase的局部阶段门禁，不改通用all/any契约；其可达资源同时进入collect_images与publisher的模型闭包，不能只登记模板而漏掉内部再起OCR。模型依赖按实际locale/phase展开一次；不能全阶段强制引入未使用语言。验证用真正的战斗菜单/详情原图；黑屏只能作未知反例，不能因历史文档称其战斗就算正例。新旧结果一致与match计数分别核对，不以热缓存耗时冒充实机提速。
 
 - 单击送达不是菜单切页成功。新增/修改菜单入口需声明同页重试，统一复用retry_menu_input；先查结果、同帧重认原页/按钮并排除阻挡，转场后不能沿用旧坐标。公用定义修改须同步发布资源和通过revision比较交换更新正式保存定义；只改工厂或包内JSON不足以修复用户流程。Auto脉冲、技能效果、领奖和物品转移按各自回执约束，不能自动套普通菜单重试。排查见docs/reviews/menu-input-retry-audit-20261009.md。
@@ -41,7 +66,7 @@
 
 - 未执行节点的选择不是业务承诺：BusinessConfirm、带条件Call、业务守卫等必须保留同层候选来源。NotApplicable保证尚未产生效果，可重选；Waiting表示操作可能已开始，不能退回重放。正常重选先于异常计时，过期Poll及60秒重启前复查共用局部候选规则；已发送输入仍核对后置。不得因重选重置原分派期限或把候选命中记成业务完成。目标战重启丢失身份后可处理当前战斗，但须另行重新导航，不能凭再起/战斗结束恢复目标击杀授权。
 
-- 正向观察/子调用返回也可能构成无输入循环，不能仅在Overlay事件存在时刷新截图。只读观察周期超过100ms即失效并按需重新采集，这不是点击生效期限；同周期子结果仍可交给父层，输入仍走原门禁。返哈肯的无路线与标记导航完成语义不同：先等旧提示消失，实际返程无路线进入navigation.harken_route_unavailable恢复，不能交stopped回原步骤；仍只由哈肯/退场证据确认返程成功。
+- 不得因识别超过100ms就作废截图或已选中的结果。4c466e1中的该规则会把识别成本误当成截图失效，已撤除并随af8候选完成独立实机一轮后正式部署，证据见reviews/action-first-chain-20261011.md。等待、输入、设备/连接/输入代次失效，以及再次回到同一个选路步骤时重新取图；仍有效的同帧同请求结果直接消费。120ms慢识别、只读循环换图、选中后身份失效均有定向回归；一次实机通过不证明所有异常场景。返哈肯的无路线与标记导航完成语义不同：先等旧提示消失，实际返程无路线进入navigation.harken_route_unavailable恢复，不能交stopped回原步骤；仍只由哈肯/退场证据确认返程成功。
 - 公共导航动作选中后、点击前也可能已到哈肯/遭遇等新场景；navigation-resume需先走只读交接，外层仍自行确认路线终点。新增auto_route_post特征须同步冻结资源依赖。正式保存定义优先于包内定义，改公共流程不能只改源码包；停止任务后备份旧文档、revision比较交换并回读。真实楼层菜单需完整OCR模型冻结包，不用缺模型的素材子集冒充生产识别。
 
 - 失去前台的像素不等于元数据坏帧：RunStore接受foreground_lost_pixels只限capture.foreground/GAME_NOT_FOREGROUND/recovery_entry来源，保存原始视口且input_authorization=false；其它像素类型仍严格校验。DIAGNOSTIC_IMAGES_INCOMPLETE仅表示已记录图片失败/配额不足，成功业务可续轮；事件、动作回执、日志、终态和未记录诊断错误仍阻断。生命周期实际恢复并取得新游戏帧后清旧异常计时，纯读取重试不清；Android启动耗时不能触发刚恢复后的再次60秒重启。

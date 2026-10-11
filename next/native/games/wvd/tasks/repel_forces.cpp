@@ -85,7 +85,7 @@ CompiledWorkflow repel_forces_cycle(const WvdQuestDefinition &definition, const 
     const auto rest = graph.define_child("Inn", supply::rest_at_inn(profile.at("ACTIVE_ROYALSUITE_REST").get<bool>(), true));
     graph.call_child("Rest", rest, {"Rested"});
     graph.confirm("Rested", "repel.rest", "repel_rested", inn, {"Enter"});
-    const auto enter = graph.define_child("EntryMenu", navigation::enter_dungeon(plan));
+    const auto enter = graph.define_child("EntryMenu", navigation::enter_dungeon(plan, false, allow_download));
     graph.call_child("Enter", enter, {"RoutePhase"});
     graph.observe("RoutePhase", phase(Phase::Route), {"Route"});
     const auto dungeon = graph.define_child("Dungeon", route);

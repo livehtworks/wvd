@@ -14,7 +14,8 @@ tasks::CompiledWorkflow reach_map_target(const MapTarget &target,
     if (target.target == "stay" || target.target == "dungFlag")
         throw std::runtime_error("MAP_TARGET_REQUIRES_AUTO_ROUTE");
     C graph("navigation.map_target");
-    graph.check_policy("navigation", {"wvd-network-retry", "wvd-pause", "wvd-download", "wvd-story", "wvd-blessing", "wvd-karma", "wvd-dialogue", "wvd-special-dialogue", "wvd-sandman"});
+    graph.check_policy("navigation", {"wvd-network-retry", "wvd-pause", "wvd-download", "wvd-story", "wvd-blessing", "wvd-karma", "wvd-party-death", "wvd-party-defeat", "wvd-dialogue", "wvd-special-dialogue", "wvd-sandman"});
+    graph.require_inherited_events({"wvd-party-death", "wvd-party-defeat"});
     const auto map = C::image("mapFlag"), dungeon = C::image("dungFlag");
     const J combat{{"mode", "combat_active"}};
     const auto chest = vision::chest_page_condition();

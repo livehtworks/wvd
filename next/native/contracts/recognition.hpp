@@ -71,4 +71,12 @@ inline PageAuthority page_authority(const Observation &observation) noexcept {
     return observation.outcome == RecognitionOutcome::Hit && observation.action_eligible
         ? PageAuthority::InputEligible : PageAuthority::ReadOnly;
 }
+// 场景只证明当前输入的完整前提；点击资格来自独立目标，不能要求只读业务条件
+// 本身可点击。两份观察都必须绑定本次帧，帧寿命及设备/策略许可仍由输入门核对。
+inline bool input_evidence_matches_frame(const Observation &scene, const Observation &target,
+                                         const FrameIdentity &frame) noexcept {
+    return frame.frame_id != 0 && scene.outcome == RecognitionOutcome::Hit &&
+        page_authority(target) == PageAuthority::InputEligible &&
+        scene.basis == frame && target.basis == frame;
+}
 } // namespace wvd::contracts

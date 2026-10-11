@@ -29,7 +29,7 @@ int combat_diagnostic_drive(const std::filesystem::path &root) {
     profile["STRATEGY"] = J::array({J{{"group_name", "diagnostic-drive"},
         {"complete_one_as_all", false}, {"skill_settings", J::array({skill})}}});
     const J menu{{"mode", "drive_menu"}}, button{{"mode", "drive_button"}},
-        detail{{"mode", "drive_detail"}}, defended{{"mode", "drive_defended"}};
+        detail{{"mode", "drive_detail"}}, attacked{{"mode", "drive_attacked"}};
     C graph("closure.combat_diagnostic_drive", 10s);
     graph.route("Entry", {"Prepare"});
     graph.combat_step("Prepare", menu, {{"operation", "prepare"},
@@ -38,17 +38,17 @@ int combat_diagnostic_drive(const std::filesystem::path &root) {
     graph.click("Open", menu, button, detail, {"UnexpectedDetail"});
     graph.postcondition_budget("Open", 2200);
     graph.retry_menu_input("Open", menu, 1000);
-    graph.failure_route("Open", {"Defend"});
+    graph.failure_route("Open", {"Attack"});
     graph.recovery("UnexpectedDetail", "FIXTURE_DETAIL_MUST_STAY_CLOSED");
-    graph.fixed_click("Defend", menu, defended, {570, 1200}, {"ConfirmDefend"});
-    graph.combat_step("ConfirmDefend", defended,
-        {{"operation", "defend_fallback_confirmed"}, {"index", 0}}, {"Terminal"});
+    graph.fixed_click("Attack", menu, attacked, {66, 1200}, {"ConfirmAttack"});
+    graph.combat_step("ConfirmAttack", attacked,
+        {{"operation", "attack_fallback_confirmed"}, {"index", 0}}, {"Terminal"});
     auto flow = graph.finish();
     const J paths{{"Open", J::array({J{{"flow_id", "combat-open-detail"}, {"node_id", "open"}}})}};
     auto program = games::tasks::compile_native_program(flow, paths, "native-test");
     class CombatBackend final : public devices::DeviceBackend {
       public:
-        std::atomic<unsigned> open_inputs{0}, defend_inputs{0};
+        std::atomic<unsigned> open_inputs{0}, attack_inputs{0};
         bool offline() const override { return true; }
         bool verified_access() const override { return true; }
         bool connect() override { return true; }
@@ -62,13 +62,13 @@ int combat_diagnostic_drive(const std::filesystem::path &root) {
             frame.captured_at = frame.capture_finished_at = std::chrono::steady_clock::now();
             frame.connection_generation = 1;
             frame.display_rotation = 0;
-            const auto color = defend_inputs ? 83 : 37;
+            const auto color = attack_inputs ? 83 : 37;
             frame.raw_bgr = std::make_shared<const std::vector<std::uint8_t>>(900 * 1600 * 3,
                 static_cast<std::uint8_t>(color));
             return frame;
         }
         bool execute(const contracts::Command &command) override {
-            if (command.x == 570 && command.y == 1200) ++defend_inputs;
+            if (command.x == 66 && command.y == 1200) ++attack_inputs;
             else ++open_inputs;
             return true;
         }
@@ -91,8 +91,8 @@ int combat_diagnostic_drive(const std::filesystem::path &root) {
                 return mode == "all" ? all : mode == "any" ? any : !any;
             }
             return mode == "portrait" || mode == "input_clear" || mode == "region_quiet" ||
-                mode == "drive_button" || (mode == "drive_menu" && !backend->defend_inputs) ||
-                (mode == "drive_defended" && backend->defend_inputs);
+                mode == "drive_button" || (mode == "drive_menu" && !backend->attack_inputs) ||
+                (mode == "drive_attacked" && backend->attack_inputs);
         };
         const bool hit = evaluate(condition);
         return J{{"schema", 1}, {"outcome", hit ? "Hit" : "NoHit"}, {"box", {400, 800, 50, 50}},
@@ -128,7 +128,7 @@ int combat_diagnostic_drive(const std::filesystem::path &root) {
     const auto snapshot = coordinator.snapshot();
     std::cout << "drive state=" << static_cast<int>(snapshot.state) << " reason=" << snapshot.reason << '\n';
     check(snapshot.state == contracts::RunState::Completed && snapshot.quiescent &&
-        backend->open_inputs >= 2 && backend->defend_inputs == 1, "DIAGNOSTIC_DRIVE_RESULT_OR_INPUT_COUNT");
+        backend->open_inputs >= 2 && backend->attack_inputs == 1, "DIAGNOSTIC_DRIVE_RESULT_OR_INPUT_COUNT");
     const auto diagnostics = coordinator.diagnostics();
     const auto &entries = diagnostics.at("entries");
     check(diagnostics.at("complete") == true && entries.size() == 2 &&
@@ -154,7 +154,7 @@ int combat_diagnostic_drive(const std::filesystem::path &root) {
         const auto &payload = event.at("payload");
         no_progress += event.at("type") == "input.result" && payload.value("outcome", "") == "no_progress";
         diagnostic_events += event.at("type") == "diagnostic.combat_no_progress";
-        defenses += event.at("type") == "combat" && payload.value("operation", "") == "defend_fallback_confirmed";
+        defenses += event.at("type") == "combat" && payload.value("operation", "") == "attack_fallback_confirmed";
     }
     check(no_progress == 1 && diagnostic_events == 2 && defenses == 1, "DIAGNOSTIC_DRIVE_PERMANENT_EVENTS_MISSING");
     std::cout << "combat diagnostic drive: actual no_progress, WVD defense, two original PNGs, Completed with skill retained\n";

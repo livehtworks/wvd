@@ -45,7 +45,7 @@ CompiledWorkflow giant_iteration(const WvdQuestDefinition &definition, const nlo
             C::all({scene, C::absent(J{{"mode", "blocking_screen"}})}), {"ReturnPhase", "RoutePhase"});
     graph.observe("ReturnPhase", C::business("/giant_route_completed", true), {"Return"});
     graph.observe("RoutePhase", C::business("/giant_route_completed", false), {"Enter"});
-    const auto enter = graph.append("DungeonEntry", navigation::enter_dungeon(plan), {"Traverse"});
+    const auto enter = graph.append("DungeonEntry", navigation::enter_dungeon(plan, false, allow_download), {"Traverse"});
     graph.route("Enter", {enter});
     const auto dungeon = graph.define_child("Dungeon", route);
     graph.call_child("Traverse", dungeon, {"AllPoints", "PrematureExit"});

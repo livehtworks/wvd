@@ -3,5 +3,6 @@
 #include "games/wvd/tasks/pipeline_compiler.hpp"
 
 namespace wvd::games::navigation {
-tasks::CompiledWorkflow enter_dungeon(const WvdTaskPlan &plan, bool direct_floor_entry = false);
+tasks::CompiledWorkflow enter_dungeon(const WvdTaskPlan &plan, bool direct_floor_entry = false,
+                                     bool allow_download = true);
 }

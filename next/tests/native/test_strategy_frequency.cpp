@@ -84,6 +84,46 @@ int main(int argc, char **argv) {
         check(actor_state.summary().at("combat_actor_recognized") == true &&
               actor_state.summary().at("has_prepared_skill") == true, "STABLE_FRAME_NOT_RESELECTED");
         check(games::business_condition(actor_state.summary(), actor_condition), "STABLE_FRAME_CONDITION_MISSED");
+        {
+            auto rescue_profile = profile;
+            rescue_profile["STRATEGY"][0]["skill_settings"] = J::array();
+            for (int i = 0; i < 6; ++i) {
+                auto buff = once, action = repeat;
+                buff["role_var"] = action["role_var"] = "rescue-" + std::to_string(i);
+                rescue_profile["STRATEGY"][0]["skill_settings"].push_back(buff);
+                rescue_profile["STRATEGY"][0]["skill_settings"].push_back(action);
+            }
+            games::WvdRunState rescued(rescue_profile, {"rescue-progress", 1,
+                std::make_shared<contracts::SteadyClock>()});
+            rescued.enter_segment(contracts::SegmentBoundary::Initial, 1, 0);
+            rescued.observe_combat();
+            const auto rescue_catalog = rescue_profile["STRATEGY"][0]["skill_settings"];
+            for (int i = 0; i < 6; ++i) {
+                rescued.prepare_skill({{"rescue-" + std::to_string(i), .99}}, rescue_catalog);
+                check(rescued.finish_prepared_skill(rescued.summary().at("prepared_skill_index"),
+                    games::SkillOutcome::Succeeded), "RESCUE_BUFF_NOT_CONSUMED");
+            }
+            const auto progress = rescued.summary().at("strategy");
+            rescued.prepare_skill({{"rescue-0", .99}}, rescue_catalog);
+            rescued.confirm_event("rescue-death", "party_death_observed", 1, 100);
+            check(!rescued.summary().at("has_prepared_skill").get<bool>(), "DEATH_KEPT_STALE_SELECTION");
+            rescued.confirm_event("rescue-clear", "party_death_cleared", 1, 101);
+            rescued.observe_combat();
+            check(rescued.summary().at("strategy") == progress, "SUCCESSFUL_RESCUE_RESET_STRATEGY");
+            for (int i = 0; i < 6; ++i) {
+                rescued.prepare_skill({{"rescue-" + std::to_string(i), .99}}, rescue_catalog);
+                check(rescued.summary().at("prepared_skill_index").get<int>() == i * 2 + 1,
+                    "SUCCESSFUL_RESCUE_REPLAYED_BUFF");
+            }
+            rescued.confirm_event("retry-observed", "revival_observed", 1, 102);
+            rescued.confirm_event("retry-confirmed", "resurrected", 1, 103);
+            rescued.observe_combat();
+            for (int i = 0; i < 6; ++i) {
+                rescued.prepare_skill({{"rescue-" + std::to_string(i), .99}}, rescue_catalog);
+                check(rescued.summary().at("prepared_skill_index").get<int>() == i * 2,
+                    "RISE_AGAIN_DID_NOT_RESET_STRATEGY");
+            }
+        }
         if (std::string(argv[1]) == "--configuration-contract") {
             check(!diagnostic_strategy.select({{"actor",.97},{"other",.81}}),"CONSUMED_ACTOR_SELECTED_OTHER");
             check(diagnostic_strategy.select({{"actor",.81},{"other",.97}})->skill.at("role_var")=="other",
@@ -125,14 +165,14 @@ int main(int argc, char **argv) {
         if (std::string(argv[1]) == "--fallback-contract") {
             strategy.reload(0);
             const auto selected = *strategy.select({{"actor", .95}});
-            check(strategy.consume(selected, games::SkillOutcome::DefendFallbackConfirmed), "DEFEND_FALLBACK_NOT_SETTLED");
+            check(strategy.consume(selected, games::SkillOutcome::AttackFallbackConfirmed), "ATTACK_FALLBACK_NOT_SETTLED");
             const auto preserved = *strategy.select({{"actor", .95}});
             check(preserved.skill == once && preserved.strategy_epoch != selected.strategy_epoch,
-                "DEFEND_FALLBACK_CONSUMED_UNCAST_SKILL");
+                "ATTACK_FALLBACK_CONSUMED_UNCAST_SKILL");
             games::CombatStrategy group(profile); group.reload(0);
-            group.consume(*group.select({{"actor", .95}}), games::SkillOutcome::DefendFallbackConfirmed);
-            check(!group.automatic(), "DEFEND_FALLBACK_COMPLETED_GROUP");
-            std::cout << "PASS: manual defend confirms action, preserves uncast skill and advances epoch; no profile IO.\n";
+            group.consume(*group.select({{"actor", .95}}), games::SkillOutcome::AttackFallbackConfirmed);
+            check(!group.automatic(), "ATTACK_FALLBACK_COMPLETED_GROUP");
+            std::cout << "PASS: manual attack confirms action, preserves uncast skill and advances epoch; no profile IO.\n";
             return 0;
         }
         const std::filesystem::path source = argv[1];

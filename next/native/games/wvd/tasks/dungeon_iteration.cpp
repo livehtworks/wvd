@@ -32,12 +32,12 @@ CompiledWorkflow dungeon_iteration(const WvdTaskPlan &plan, const nlohmann::json
     graph.hit_limit("ClearBlocking", 32);
     graph.observe("AlreadyInside", inside, {"Traverse"});
     graph.observe("Outside", outside, {"Prepare"});
-    const auto prepare = graph.append("Departure", prepare_departure(plan, profile), {"CountDeparture"},
+    const auto prepare = graph.append("Departure", prepare_departure(plan, profile, false, allow_download), {"CountDeparture"},
         {{"InsideExit", {"AlreadyInside"}}});
     graph.route("Prepare", {prepare});
     // 与旧 DungeonFarm 一致，在 EOT 前结算上一轮；从本内启动不伪造一次 EOT 结算。
     graph.confirm("CountDeparture", "farm.departure", "dungeon_completed", entrance, {"EnterDungeon"});
-    const auto enter = graph.append("Enter", navigation::enter_dungeon(plan), {"Traverse"});
+    const auto enter = graph.append("Enter", navigation::enter_dungeon(plan, false, allow_download), {"Traverse"});
     graph.route("EnterDungeon", {enter});
     const auto route = graph.define_child("Dungeon", dungeon_workflow);
     graph.call_child("Traverse", route, {"Terminal"});

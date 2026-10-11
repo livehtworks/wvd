@@ -43,7 +43,11 @@
       "deployed": false,
       "live_verified": false,
       "closed": false,
-      "remaining_risks": []
+      "remaining_risks": [],
+      "followup_packages": [
+        "RA02",
+        "RA05"
+      ]
     },
     {
       "id": "EX02",
@@ -77,7 +81,11 @@
       "deployed": false,
       "live_verified": false,
       "closed": false,
-      "remaining_risks": []
+      "remaining_risks": [],
+      "followup_packages": [
+        "RA02",
+        "RA05"
+      ]
     },
     {
       "id": "EX03",
@@ -110,6 +118,9 @@
       "closed": false,
       "remaining_risks": [
         "每个SDK HANDLE取得后/所有权转移前逐点bad_alloc、真实forward成功但响应超时，未逐一注入验证；源码RAII修正不能替代这些断言。"
+      ],
+      "followup_packages": [
+        "RA08"
       ]
     },
     {
@@ -144,7 +155,11 @@
       "deployed": false,
       "live_verified": false,
       "closed": false,
-      "remaining_risks": []
+      "remaining_risks": [],
+      "followup_packages": [
+        "RA02",
+        "RA05"
+      ]
     },
     {
       "id": "EX05",
@@ -168,14 +183,29 @@
         "next/native/games/wvd/vision/supply_scene_plan.hpp",
         "next/native/runtime/flow_executor_events.cpp",
         "next/native/runtime/native_execution_session.cpp",
-        "next/native/games/wvd/state.cpp"
+        "next/native/games/wvd/state.cpp",
+        "next/native/runtime/flow_executor.cpp"
       ],
       "result": "work-packages/WP08-result.json",
       "deployed": false,
       "live_verified": false,
       "closed": false,
       "remaining_risks": [
-        "不能把限定量化推广为原46.352秒/1199次现场已修复；繁中真实补给完整流程与语言切换尚未实测。"
+        "首份d03补丁已去掉FlowExecutor三处有效事件表消费端深拷贝，保留选中事件所有权；合成定向分配计数不解释原46.352秒/1199次或45MiB收尾增长。真实繁中完整流程、语言切换及分配净增仍未实测。"
+      ],
+      "guidance_errata": [
+        {
+          "date": "2026-10-10",
+          "reason": "继续修复更新现行指导；原始证据与历史回执保留，不把限定验证换成实机或归因完成。",
+          "previous_remaining_risks": [
+            "不能把限定量化推广为原46.352秒/1199次现场已修复；繁中真实补给完整流程与语言切换尚未实测。"
+          ]
+        }
+      ],
+      "followup_packages": [
+        "RA01",
+        "RA07",
+        "RA08"
       ]
     },
     {
@@ -218,6 +248,11 @@
       "closed": false,
       "remaining_risks": [
         "不能把限定量化推广为原46.352秒/1199次现场已修复；繁中真实补给完整流程与语言切换尚未实测。"
+      ],
+      "followup_packages": [
+        "RA01",
+        "RA07",
+        "RA08"
       ]
     },
     {
@@ -253,7 +288,21 @@
       "live_verified": false,
       "closed": false,
       "remaining_risks": [
-        "没有有效专属疗效素材时，治疗结果仍Unconfirmed，保持healing_required；不能声明治疗功能已实机闭环。"
+        "中立BusinessConfirm与业务binding的条件必须按当前候选组合核验；补给只消费已实际提交、退出面板并回到迷宫的尝试，不伪造疗效，effect_status=not_verified不单独阻断。"
+      ],
+      "guidance_errata": [
+        {
+          "date": "2026-10-10",
+          "reason": "继续修复更新现行指导；原始证据与历史回执保留，不把限定验证换成实机或归因完成。",
+          "previous_remaining_risks": [
+            "没有有效专属疗效素材时，治疗结果仍Unconfirmed，保持healing_required；不能声明治疗功能已实机闭环。"
+          ]
+        }
+      ],
+      "followup_packages": [
+        "RA02",
+        "RA03",
+        "RA06"
       ]
     },
     {
@@ -282,14 +331,29 @@
         "next/native/devices/native_input_gate.cpp",
         "next/native/runtime/flow_executor.cpp",
         "next/native/games/wvd/supply/dungeon_recover.cpp",
-        "next/native/games/wvd/state.cpp"
+        "next/native/games/wvd/state.cpp",
+        "next/native/contracts/recognition.hpp"
       ],
       "result": "work-packages/WP05-result.json",
       "deployed": false,
       "live_verified": false,
       "closed": false,
       "remaining_risks": [
-        "没有有效专属疗效素材时，治疗结果仍Unconfirmed，保持healing_required；不能声明治疗功能已实机闭环。"
+        "完整scene、独立target和同帧输入事实须在真实Service/正式门禁组合中核验，原期限与未决输入保护保留。疗效未验证不是新增推进门槛。"
+      ],
+      "guidance_errata": [
+        {
+          "date": "2026-10-10",
+          "reason": "继续修复更新现行指导；原始证据与历史回执保留，不把限定验证换成实机或归因完成。",
+          "previous_remaining_risks": [
+            "没有有效专属疗效素材时，治疗结果仍Unconfirmed，保持healing_required；不能声明治疗功能已实机闭环。"
+          ]
+        }
+      ],
+      "followup_packages": [
+        "RA02",
+        "RA03",
+        "RA06"
       ]
     },
     {
@@ -323,7 +387,11 @@
       "deployed": false,
       "live_verified": false,
       "closed": false,
-      "remaining_risks": []
+      "remaining_risks": [],
+      "followup_packages": [
+        "RA01",
+        "RA08"
+      ]
     },
     {
       "id": "AP02",
@@ -360,6 +428,9 @@
       "closed": false,
       "remaining_risks": [
         "并发换轮穷尽交错、两个run同id=1延迟PNG/前端复用的端到端回归未执行；身份绑定已实现但不宣称实机/浏览器压力通过。"
+      ],
+      "followup_packages": [
+        "RA08"
       ]
     },
     {
@@ -397,6 +468,9 @@
       "closed": false,
       "remaining_risks": [
         "并发换轮穷尽交错、两个run同id=1延迟PNG/前端复用的端到端回归未执行；身份绑定已实现但不宣称实机/浏览器压力通过。"
+      ],
+      "followup_packages": [
+        "RA08"
       ]
     },
     {
@@ -439,6 +513,9 @@
       "closed": false,
       "remaining_risks": [
         "并发换轮穷尽交错、两个run同id=1延迟PNG/前端复用的端到端回归未执行；身份绑定已实现但不宣称实机/浏览器压力通过。"
+      ],
+      "followup_packages": [
+        "RA08"
       ]
     },
     {
@@ -476,6 +553,9 @@
       "closed": false,
       "remaining_risks": [
         "并发换轮穷尽交错、两个run同id=1延迟PNG/前端复用的端到端回归未执行；身份绑定已实现但不宣称实机/浏览器压力通过。"
+      ],
+      "followup_packages": [
+        "RA08"
       ]
     },
     {
@@ -509,6 +589,9 @@
       "closed": false,
       "remaining_risks": [
         "每个SDK HANDLE取得后/所有权转移前逐点bad_alloc、真实forward成功但响应超时，未逐一注入验证；源码RAII修正不能替代这些断言。"
+      ],
+      "followup_packages": [
+        "RA08"
       ]
     },
     {
@@ -542,6 +625,9 @@
       "closed": false,
       "remaining_risks": [
         "每个SDK HANDLE取得后/所有权转移前逐点bad_alloc、真实forward成功但响应超时，未逐一注入验证；源码RAII修正不能替代这些断言。"
+      ],
+      "followup_packages": [
+        "RA08"
       ]
     },
     {
@@ -570,7 +656,11 @@
       "deployed": false,
       "live_verified": false,
       "closed": false,
-      "remaining_risks": []
+      "remaining_risks": [],
+      "followup_packages": [
+        "RA01",
+        "RA08"
+      ]
     },
     {
       "id": "AP09",
@@ -607,6 +697,9 @@
       "remaining_risks": [
         "整批16GiB准入边界尚未用最终候选完整故障夹具覆盖；额度源码已实现。32MiB采样上限后最后输入保留已用实际RunStore文件验证。",
         "2GiB是准入检查/预留政策，不是磁盘物理预分配；外部抢占磁盘仍可失败。"
+      ],
+      "followup_packages": [
+        "RA08"
       ]
     },
     {
@@ -644,6 +737,9 @@
       "remaining_risks": [
         "整批16GiB准入边界尚未用最终候选完整故障夹具覆盖；额度源码已实现。32MiB采样上限后最后输入保留已用实际RunStore文件验证。",
         "2GiB是准入检查/预留政策，不是磁盘物理预分配；外部抢占磁盘仍可失败。"
+      ],
+      "followup_packages": [
+        "RA08"
       ]
     },
     {
@@ -677,6 +773,11 @@
       "closed": false,
       "remaining_risks": [
         "没有覆盖所有源码可构造风险的逐点故障注入；未将43项批量改为closed。"
+      ],
+      "followup_packages": [
+        "RA05",
+        "RA06",
+        "RA08"
       ]
     },
     {
@@ -724,7 +825,24 @@
       "live_verified": false,
       "closed": false,
       "remaining_risks": [
-        "没有覆盖所有源码可构造风险的逐点故障注入；未将43项批量改为closed。"
+        "当前合同统一引用next/docs/core-contracts.md；编译、门禁、控制层和资源闭包仍需各自真实组合证据。历史报告不直接授权恢复循环，旧回执不覆盖后续源码；43项仍未全面关闭。"
+      ],
+      "guidance_errata": [
+        {
+          "date": "2026-10-10",
+          "reason": "继续修复更新现行指导；原始证据与历史回执保留，不把限定验证换成实机或归因完成。",
+          "previous_remaining_risks": [
+            "没有覆盖所有源码可构造风险的逐点故障注入；未将43项批量改为closed。"
+          ]
+        }
+      ],
+      "followup_packages": [
+        "RA03",
+        "RA05",
+        "RA06",
+        "RA08",
+        "RA01",
+        "RA04"
       ]
     },
     {
@@ -758,6 +876,11 @@
       "closed": false,
       "remaining_risks": [
         "没有覆盖所有源码可构造风险的逐点故障注入；未将43项批量改为closed。"
+      ],
+      "followup_packages": [
+        "RA05",
+        "RA06",
+        "RA08"
       ]
     },
     {
@@ -795,6 +918,9 @@
       "closed": false,
       "remaining_risks": [
         "真实负载短预检未执行；measurement comparison_eligible在本次真实采集维度仍false。"
+      ],
+      "followup_packages": [
+        "RA07"
       ]
     },
     {
@@ -829,6 +955,9 @@
       "remaining_risks": [
         "RESOURCE_UNRESOLVED：缺同阶段真实allocation-stack净增表，尚不能锁定实际owner/释放位置；free/VA快照不提供。",
         "真实符号化ETL的投影、地址复用/不同堆/ASLR与覆盖链未重跑。"
+      ],
+      "followup_packages": [
+        "RA07"
       ]
     },
     {
@@ -863,6 +992,9 @@
       "remaining_risks": [
         "RESOURCE_UNRESOLVED：缺同阶段真实allocation-stack净增表，尚不能锁定实际owner/释放位置；free/VA快照不提供。",
         "真实符号化ETL的投影、地址复用/不同堆/ASLR与覆盖链未重跑。"
+      ],
+      "followup_packages": [
+        "RA07"
       ]
     },
     {
@@ -906,6 +1038,9 @@
       "closed": false,
       "remaining_risks": [
         "每个SDK HANDLE取得后/所有权转移前逐点bad_alloc、真实forward成功但响应超时，未逐一注入验证；源码RAII修正不能替代这些断言。"
+      ],
+      "followup_packages": [
+        "RA08"
       ]
     },
     {
@@ -942,6 +1077,10 @@
       "closed": false,
       "remaining_risks": [
         "未量化真实复杂页面多文本框的全部分配成本；模型复用不证明长期PrivateUsage稳定。"
+      ],
+      "followup_packages": [
+        "RA07",
+        "RA08"
       ]
     },
     {
@@ -973,6 +1112,10 @@
       "closed": false,
       "remaining_risks": [
         "未量化真实复杂页面多文本框的全部分配成本；模型复用不证明长期PrivateUsage稳定。"
+      ],
+      "followup_packages": [
+        "RA07",
+        "RA08"
       ]
     },
     {
@@ -1006,6 +1149,9 @@
       "closed": false,
       "remaining_risks": [
         "所有获准builtin的最小发布包动态运行未穷尽；本次覆盖审核指出的隐式模式/模型拒绝，不用全包存在替代每模式证明。"
+      ],
+      "followup_packages": [
+        "RA08"
       ]
     },
     {
@@ -1042,6 +1188,10 @@
       "closed": false,
       "remaining_risks": [
         "未量化真实复杂页面多文本框的全部分配成本；模型复用不证明长期PrivateUsage稳定。"
+      ],
+      "followup_packages": [
+        "RA07",
+        "RA08"
       ]
     },
     {
@@ -1074,6 +1224,9 @@
       "closed": false,
       "remaining_risks": [
         "真实负载短预检未执行；measurement comparison_eligible在本次真实采集维度仍false。"
+      ],
+      "followup_packages": [
+        "RA07"
       ]
     },
     {
@@ -1108,6 +1261,9 @@
       "closed": false,
       "remaining_risks": [
         "libRenderer自然崩溃缺dump/符号化fault栈与厂商尺寸/线程/缓冲契约，root_cause=UNRESOLVED。"
+      ],
+      "followup_packages": [
+        "RA08"
       ]
     },
     {
@@ -1152,6 +1308,9 @@
       "remaining_risks": [
         "RESOURCE_UNRESOLVED：缺同阶段真实allocation-stack净增表，尚不能锁定实际owner/释放位置；free/VA快照不提供。",
         "真实符号化ETL的投影、地址复用/不同堆/ASLR与覆盖链未重跑。"
+      ],
+      "followup_packages": [
+        "RA07"
       ]
     },
     {
@@ -1185,6 +1344,9 @@
       "closed": false,
       "remaining_risks": [
         "所有获准builtin的最小发布包动态运行未穷尽；本次覆盖审核指出的隐式模式/模型拒绝，不用全包存在替代每模式证明。"
+      ],
+      "followup_packages": [
+        "RA08"
       ]
     },
     {
@@ -1220,6 +1382,9 @@
       "closed": false,
       "remaining_risks": [
         "估算票据不等于RSS或整个第三方分配器成本；实际Job总余量不可查询时拒绝，不用峰值猜。"
+      ],
+      "followup_packages": [
+        "RA08"
       ]
     },
     {
@@ -1249,7 +1414,11 @@
       "deployed": false,
       "live_verified": false,
       "closed": false,
-      "remaining_risks": []
+      "remaining_risks": [],
+      "followup_packages": [
+        "RA03",
+        "RA08"
+      ]
     },
     {
       "id": "R02",
@@ -1283,7 +1452,11 @@
       "deployed": false,
       "live_verified": false,
       "closed": false,
-      "remaining_risks": []
+      "remaining_risks": [],
+      "followup_packages": [
+        "RA03",
+        "RA08"
+      ]
     },
     {
       "id": "R03",
@@ -1291,7 +1464,7 @@
       "evidence": "X+C",
       "title": "恢复输入未生效，返回迷宫也能确认healing_completed",
       "work_package": "WP05",
-      "status": "contract_repaired_healing_effect_material_unresolved",
+      "status": "source_repaired_acceptance_partial",
       "fixed_by_this_audit": false,
       "sources": [
         {
@@ -1318,7 +1491,22 @@
       "live_verified": false,
       "closed": false,
       "remaining_risks": [
-        "没有有效专属疗效素材时，治疗结果仍Unconfirmed，保持healing_required；不能声明治疗功能已实机闭环。"
+        "恢复尝试与疗效分别记账：已实际尝试、关闭面板并回到当前迷宫可以继续；未发送不消费尝试，Unknown原输入不丢账，effect_status=not_verified不独立阻断。没有疗效证据不能宣称疗效成功，但不再要求为继续行进补专属疗效素材。"
+      ],
+      "guidance_errata": [
+        {
+          "date": "2026-10-10",
+          "reason": "继续修复更新现行指导；原始证据与历史回执保留，不把限定验证换成实机或归因完成。",
+          "previous_remaining_risks": [
+            "没有有效专属疗效素材时，治疗结果仍Unconfirmed，保持healing_required；不能声明治疗功能已实机闭环。"
+          ],
+          "previous_status": "contract_repaired_healing_effect_material_unresolved"
+        }
+      ],
+      "followup_packages": [
+        "RA02",
+        "RA03",
+        "RA06"
       ]
     },
     {
@@ -1361,6 +1549,12 @@
       "closed": false,
       "remaining_risks": [
         "不能把限定量化推广为原46.352秒/1199次现场已修复；繁中真实补给完整流程与语言切换尚未实测。"
+      ],
+      "followup_packages": [
+        "RA01",
+        "RA07",
+        "RA08",
+        "RA04"
       ]
     },
     {
@@ -1393,6 +1587,11 @@
       "closed": false,
       "remaining_risks": [
         "不能把限定量化推广为原46.352秒/1199次现场已修复；繁中真实补给完整流程与语言切换尚未实测。"
+      ],
+      "followup_packages": [
+        "RA01",
+        "RA07",
+        "RA08"
       ]
     },
     {
@@ -1431,6 +1630,9 @@
       "closed": false,
       "remaining_risks": [
         "所有获准builtin的最小发布包动态运行未穷尽；本次覆盖审核指出的隐式模式/模型拒绝，不用全包存在替代每模式证明。"
+      ],
+      "followup_packages": [
+        "RA08"
       ]
     },
     {
@@ -1464,14 +1666,29 @@
         "next/native/devices/native_input_gate.cpp",
         "next/native/runtime/flow_executor.cpp",
         "next/native/games/wvd/supply/dungeon_recover.cpp",
-        "next/native/games/wvd/state.cpp"
+        "next/native/games/wvd/state.cpp",
+        "next/native/contracts/recognition.hpp"
       ],
       "result": "work-packages/WP05-result.json",
       "deployed": false,
       "live_verified": false,
       "closed": false,
       "remaining_risks": [
-        "没有有效专属疗效素材时，治疗结果仍Unconfirmed，保持healing_required；不能声明治疗功能已实机闭环。"
+        "首份d03补丁已让执行器首次输入/补试与物理门共用scene Hit、独立target Hit且eligible、完整同帧身份判断；95个受控门禁判定与两语实际AutoOff请求已有回执。真实Service、原图、Windows和现场行为仍须按当前候选验证。"
+      ],
+      "guidance_errata": [
+        {
+          "date": "2026-10-10",
+          "reason": "继续修复更新现行指导；原始证据与历史回执保留，不把限定验证换成实机或归因完成。",
+          "previous_remaining_risks": [
+            "没有有效专属疗效素材时，治疗结果仍Unconfirmed，保持healing_required；不能声明治疗功能已实机闭环。"
+          ]
+        }
+      ],
+      "followup_packages": [
+        "RA02",
+        "RA03",
+        "RA06"
       ]
     },
     {
@@ -1506,7 +1723,11 @@
       "deployed": false,
       "live_verified": false,
       "closed": false,
-      "remaining_risks": []
+      "remaining_risks": [],
+      "followup_packages": [
+        "RA03",
+        "RA08"
+      ]
     },
     {
       "id": "R09",
@@ -1538,7 +1759,21 @@
       "live_verified": false,
       "closed": false,
       "remaining_risks": [
-        "没有覆盖所有源码可构造风险的逐点故障注入；未将43项批量改为closed。"
+        "核对Fordraig/Cave等休眠工厂的能力元数据、未公开状态与承接说明，并沿现有契约入口登记实际执行项；不擅自公开或删除工厂。"
+      ],
+      "guidance_errata": [
+        {
+          "date": "2026-10-10",
+          "reason": "继续修复更新现行指导；原始证据与历史回执保留，不把限定验证换成实机或归因完成。",
+          "previous_remaining_risks": [
+            "没有覆盖所有源码可构造风险的逐点故障注入；未将43项批量改为closed。"
+          ]
+        }
+      ],
+      "followup_packages": [
+        "RA05",
+        "RA06",
+        "RA08"
       ]
     }
   ],
@@ -1548,5 +1783,239 @@
   "final_receipt": "evidence/final-contracts-receipt.json",
   "deployment_executed": false,
   "live_run_executed": false,
-  "memory_attributed": false
+  "memory_attributed": false,
+  "current_guidance": {
+    "source_base_commit": "d03a7657b9ce5266842b26e3badbe08390e83d06",
+    "previous_delivered_patch_sha256": "ff17901134d38195af9ff265b3bda27b49d358eefd435fa06d5f9113a0bcab11",
+    "scope": "uncommitted offline candidate; original implementation_commit and result fields remain historical",
+    "contract": "next/docs/core-contracts.md",
+    "followup_report": "docs/reviews/critical-followup-v2-20261010.md",
+    "memory_status": "RESOURCE_UNRESOLVED"
+  },
+  "followup_v2_windows": {
+    "date": "2026-10-11",
+    "report": "../critical-followup-v2-20261010.md#十一2026-10-11-windows承接",
+    "module_regression_receipt": "next/.local/followup-v2-20261011/acceptance.json",
+    "product_inputs_sha256": "134747d460b9bc61c68a19422b4f6472acf92cdab3a4ac5e25ed7725d388487e",
+    "all_findings_closed": false,
+    "memory_attribution": "RESOURCE_UNRESOLVED",
+    "scope": "Module regressions are not per-finding completion; historical status and limits remain unchanged.",
+    "idle_deployed": true,
+    "saved_workflows_migrated": 5,
+    "game_accepted": false
+  },
+  "v2_package_findings": {
+    "schema": 1,
+    "baseline_commit": "d03a7657b9ce5266842b26e3badbe08390e83d06",
+    "candidate": "v2-d03a765-freeze04",
+    "scope": "V2 findings and refinements, including overlap with the historical 43; not 8 independent new incidents and not a declaration that the architecture audit is exhaustive",
+    "memory_attribution": "RESOURCE_UNRESOLVED",
+    "rows": [
+      {
+        "id": "V2-01",
+        "title": "Session 返回后的诊断异常保留发布引用并漏接输入事实",
+        "priority": "critical",
+        "status": "source_repaired_controlled_before_after_verified",
+        "files": [
+          "next/native/runtime/native_run_coordinator.cpp"
+        ],
+        "evidence": [
+          "validation/v2/control-cleanup/CHANGE_SUMMARY.md",
+          "validation/v2/control-cleanup/candidate02/RESULT.json"
+        ],
+        "verified": "同夹具只替换 Coordinator：V1 6/13，V2 13/13，257 assertions；原 pending/计数/原因及清理/持久化条件保留。",
+        "remaining": "真实 Application、Windows/Service/RunStore、更多停止线程交错与早期分配失败；不能归因历史45.1MiB。",
+        "packages": [
+          "RA02",
+          "RA05",
+          "RA07",
+          "RA08"
+        ],
+        "closed": false,
+        "live_verified": false
+      },
+      {
+        "id": "V2-02",
+        "title": "直接人工停止与 handler/重规划/重启元数据可混合并在 lowering 静默变义",
+        "priority": "critical",
+        "status": "source_repaired_controlled_before_after_verified",
+        "files": [
+          "next/native/authoring/event_policy.hpp",
+          "next/native/games/wvd/tasks/pipeline_compiler.cpp",
+          "next/native/workflow/program.cpp"
+        ],
+        "evidence": [
+          "validation/v2/call-contracts/RESULTS.md",
+          "validation/v2/call-contracts/candidate03/comparison.json",
+          "validation/v2/call-contracts/FINAL_RECEIPT.json"
+        ],
+        "verified": "同一测试头：31个非法组合旧实现接受、最终freeze04拒绝；18个合法对照两版通过。最终8个TU重新编译、39个实际仓库依赖核对；原before49未重跑，原输入与结果身份重核。",
+        "remaining": "完整业务职责声明、实际调用边与保存文档revision/CAS；结构合法不等于职责已接通。",
+        "packages": [
+          "RA01",
+          "RA02",
+          "RA05"
+        ],
+        "closed": false,
+        "live_verified": false
+      },
+      {
+        "id": "V2-03",
+        "title": "既有 allow_download 参数在内部工厂调用边遗漏",
+        "priority": "high",
+        "status": "source_repaired_parameter_edges_verified_task_scope_partial",
+        "files": [
+          "next/native/games/wvd/navigation/world_travel.cpp",
+          "next/native/games/wvd/navigation/dungeon_entry.cpp",
+          "next/native/games/wvd/tasks/departure.cpp",
+          "next/native/games/wvd/tasks"
+        ],
+        "evidence": [
+          "validation/v2/shared-handlers/propagation-check/results.json",
+          "validation/v2/shared-handlers/propagation-check/nineteen-call-edges.json",
+          "validation/v2/shared-handlers/after-03/run/scope-coverage.json",
+          "validation/v2/shared-handlers/RESULTS.md"
+        ],
+        "verified": "13个cpp实际语法编译通过，19条已有bool调用边贯穿；相关false工厂完整native步骤范围已核对。world实际Call/append及Party/Inn内联Await另有动态证据；gold_income顶层51步骤仍未覆盖，不能声称整任务权限已闭合。",
+        "remaining": "没有新增产品全局设置；任意矛盾父子配置不在本批保证内。 gold_income_cycle(false)最外阶段编排51步骤未挂拒绝，子工厂范围通过不替代顶层父处理器屏蔽；RA01/RA04须明确整任务职责并补具体证据。",
+        "packages": [
+          "RA01",
+          "RA04",
+          "RA05"
+        ],
+        "closed": false,
+        "live_verified": false
+      },
+      {
+        "id": "V2-04",
+        "title": "入口一步的拒绝规则离开 Entry 或 append 内联后失效，父处理器重新输入",
+        "priority": "critical",
+        "status": "source_repaired_controlled_scope_verified_task_scope_partial",
+        "files": [
+          "next/native/games/wvd/tasks/pipeline_compiler.cpp",
+          "next/native/games/wvd/tasks/pipeline_compiler.hpp",
+          "next/native/games/wvd/recovery/boot.cpp"
+        ],
+        "evidence": [
+          "validation/v2/shared-handlers/scope-01",
+          "validation/v2/shared-handlers/SCOPE_STATIC_REVIEW.json",
+          "validation/v2/shared-handlers/after-03/run/runtime-results.json",
+          "validation/v2/shared-handlers/after-03/run/default-scope-contracts.json",
+          "validation/v2/shared-handlers/inline-01/run",
+          "validation/v2/shared-handlers/RESULTS.md"
+        ],
+        "verified": "本轮未交付Entry-only候选在有checks的父流程+travel_world(false)中两语各产生1次祖先下载输入；最终world独立/Call/append禁下载为0、允许对照正常，退出后父规则恢复。30个主运行场景、11个结构断言、3个实际Party/Inn Await与共享失败补充通过；保留原13字段pending及共享失败原因。范围仅限已记录工厂/探针，scope-01不是d03实机证据。",
+        "remaining": "保留显式同id与disabled，默认策略不是全局输入权限覆盖。真实Service/现场保存定义仍待验收；编译期scope复制不是内存优化。 gold_income_cycle(false)最外阶段编排51步骤未挂拒绝，子工厂范围通过不替代顶层父处理器屏蔽；RA01/RA04须明确整任务职责并补具体证据。",
+        "packages": [
+          "RA01",
+          "RA04",
+          "RA05"
+        ],
+        "closed": false,
+        "live_verified": false
+      },
+      {
+        "id": "V2-05",
+        "title": "dungeon_route(false) 在创建 Entry 前绑定作用域，构造直接失败",
+        "priority": "high",
+        "status": "source_repaired_controlled_compile_verified",
+        "files": [
+          "next/native/games/wvd/tasks/dungeon_route.cpp"
+        ],
+        "evidence": [
+          "validation/v2/shared-handlers/before-03/run",
+          "validation/v2/shared-handlers/after-03/run/summary.json",
+          "validation/v2/shared-handlers/comparison-final/factory-comparison.json"
+        ],
+        "verified": "同一最终测试头的旧两语dungeon(false)构造报COMPILE_EVENT_SCOPE_INVALID；最终两语可真实native compile。71份最终工厂均构造/本地化/图验证/编译成功；持续事件范围由V2-04独立证明。",
+        "remaining": "工厂完整native图编译不等于真实Service或游戏执行；保存流程与Windows正式验收仍在RA01/RA05。",
+        "packages": [
+          "RA01",
+          "RA04",
+          "RA05"
+        ],
+        "closed": false,
+        "live_verified": false
+      },
+      {
+        "id": "V2-06",
+        "title": "多处相同页面动作独立实现，修复和参数容易漂移",
+        "priority": "high",
+        "status": "source_refactored_controlled_contracts_verified",
+        "files": [
+          "next/native/games/wvd/recovery/page_actions.hpp",
+          "next/native/games/wvd/recovery/boot.cpp",
+          "next/native/games/wvd/tasks/author_workflow.cpp",
+          "next/native/games/wvd/combat/auto_combat.cpp"
+        ],
+        "evidence": [
+          "validation/v2/shared-handlers/RESULTS.md",
+          "validation/v2/shared-handlers/comparison-final/handler-contracts.json",
+          "validation/v2/shared-handlers/comparison-final/full-differences.json",
+          "validation/v2/download/FINAL_RECEIPT.json"
+        ],
+        "verified": "下载5、Pause2、普通剧情6、补给提示2、角色关闭2、Auto清理2处共享当前compiler动作配方。168份完整动作节点逐字段相同；完整图45相同、24预期变化、2旧失败变成功。下载最终10/10场景通过。",
+        "remaining": "Inn按钮与付款后BACK、UnownedDetail更窄BACK仍分别保留；不能按名称合并业务。原帧和Service层验证未完成。",
+        "packages": [
+          "RA04",
+          "RA05"
+        ],
+        "closed": false,
+        "live_verified": false
+      },
+      {
+        "id": "V2-07",
+        "title": "公会 CloseReveal 缺少已有正确分支的战斗排除条件",
+        "priority": "high",
+        "status": "source_repaired_structure_and_metadata_verified",
+        "files": [
+          "next/native/games/wvd/tasks/bounty_visit.cpp",
+          "next/resources/authoring/public-flows.json",
+          "next/packs/wvd/parameters/public-flows.json"
+        ],
+        "evidence": [
+          "validation/v2/shared-handlers/comparison-final/guild-guard-contracts.json",
+          "validation/v2/shared-handlers/comparison-final/source-pack-diff.json",
+          "validation/v2/pack/candidate01/manifest-sync-receipt.json"
+        ],
+        "verified": "原生与公共作者CloseReveal加已有正确路径的!combat_active，完整reveal/post/next/原700ms不变，无新增X。两份public-flows字节相同，168动作合同对照及源/pack差异核对通过；manifest只同步相应身份，完整包因589份载荷未取得而未验证。",
+        "remaining": "事故原帧缺失；只能说明代码有缺口，不能据此推定每次旧误操作的现场原因。",
+        "packages": [
+          "RA03",
+          "RA04",
+          "RA05"
+        ],
+        "closed": false,
+        "live_verified": false
+      },
+      {
+        "id": "V2-08",
+        "title": "当前说明与历史未修条目、疗效要求及采集端点合同不一致",
+        "priority": "medium",
+        "status": "documentation_corrected",
+        "files": [
+          "docs/project-status.md",
+          "docs/execution-notes.md",
+          "docs/reviews/architecture-audit-20261010/ISSUE_INDEX.md",
+          "docs/reviews/architecture-audit-20261010/ISSUES.json",
+          "next/tools/heap_analyzer/README.md"
+        ],
+        "evidence": [
+          "REMAINING_43.json",
+          "work-packages/RA06.md",
+          "work-packages/RA07.md"
+        ],
+        "verified": "保留历史但更正当前候选状态、尽力补给不新增满额门槛、joined或batch同范围端点、当前latest_node路径。",
+        "remaining": "能力元数据、休眠工厂、真实CI和工具完整验收仍开放；未新采集，内存RESOURCE_UNRESOLVED。",
+        "packages": [
+          "RA06",
+          "RA07",
+          "RA08"
+        ],
+        "closed": false,
+        "live_verified": false
+      }
+    ],
+    "freeze_manifest_sha256": "adca7256bb032f9a6e01c97d7d041c7a61f9e295e451474518b1ad16864467bd"
+  }
 }

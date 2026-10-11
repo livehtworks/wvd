@@ -3,7 +3,9 @@
 #include "authoring/event_policy.hpp"
 #include "authoring/resource_locale.hpp"
 #include "authoring/workflow_validator.hpp"
+#include "games/wvd/vision/boot_probes.hpp"
 #include "games/wvd/vision/location_probes.hpp"
+#include "games/wvd/recovery/page_actions.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -38,6 +40,12 @@ J successors(const std::vector<const J *> &edges, const std::string &entry,
     for (const auto *edge : edges)
         result.push_back(pipeline_name(edge->at("to").get<std::string>(), entry, success_end));
     return result;
+}
+
+J author_menu_retry_ready(const J &parameters, const std::string &phase) {
+    const auto same_page = PipelineCompiler::all({parameters.at("scene"),
+        PipelineCompiler::absent(parameters.at("postcondition"))});
+    return vision::menu_retry_ready(same_page, phase.c_str());
 }
 } // namespace
 
@@ -80,6 +88,7 @@ AuthorWorkflowCompilation compile_author_workflow(const J &source,
     PipelineCompiler compiler("author." + flow_id, budget);
     if (document.at("execution").contains("checks")) {
         const auto &checks = document.at("execution").at("checks");
+        if (checks.contains("required")) compiler.require_inherited_events(checks.at("required"));
         compiler.check_policy(checks.at("phase").get<std::string>(),
             checks.at("inherit").get<std::vector<std::string>>(), checks.value("debounce_ms", 1000),
             checks.value("interval_ms", 1000), checks.value("protect_input", true));
@@ -115,7 +124,18 @@ AuthorWorkflowCompilation compile_author_workflow(const J &source,
                 compiler.observe(runtime_name, condition, next);
             } else if (type == "action") {
                 const auto operation = parameters.at("operation").get<std::string>();
-                if (operation == "click")
+                const auto download_prompt = recovery::page_actions::author_download_prompt(parameters);
+                if (download_prompt) {
+                    std::optional<recovery::page_actions::DownloadRetry> retry;
+                    if (parameters.contains("menu_retry_interval_ms"))
+                        retry = recovery::page_actions::DownloadRetry{
+                            recovery::page_actions::author_download_retry_ready(parameters, *download_prompt,
+                                document.at("execution").value("checks", J::object()).value("phase", "navigation")),
+                            static_cast<int>(parameters.at("menu_retry_interval_ms").get<std::int64_t>()),
+                            parameters.value("menu_retry_max_submissions", 0U)};
+                    recovery::page_actions::download(compiler, runtime_name, parameters.at("target"),
+                        parameters.at("postcondition"), next, std::move(retry));
+                } else if (operation == "click")
                     compiler.click(runtime_name, parameters.at("scene"), parameters.at("target"),
                                    parameters.at("postcondition"), next,
                                    parameters.value("offset", J::array({0, 0})));
@@ -135,11 +155,9 @@ AuthorWorkflowCompilation compile_author_workflow(const J &source,
                     fail("AUTHOR_ACTION_UNSUPPORTED", id + ":" + operation);
                 // 定义显式授权安全菜单重复，而不是按 flow_id 猜测动作含义。
                 // 复用唯一执行器的在途回执；结果已到或源页改变时不再点击。
-                if (parameters.contains("menu_retry_interval_ms"))
-                    compiler.retry_menu_input(runtime_name, vision::menu_retry_ready(
-                        PipelineCompiler::all({parameters.at("scene"),
-                            PipelineCompiler::absent(parameters.at("postcondition"))}),
-                        document.at("execution").value("checks", J::object()).value("phase", "navigation").c_str()),
+                if (parameters.contains("menu_retry_interval_ms") && !download_prompt)
+                    compiler.retry_menu_input(runtime_name, author_menu_retry_ready(parameters,
+                        document.at("execution").value("checks", J::object()).value("phase", "navigation")),
                         static_cast<int>(parameters.at("menu_retry_interval_ms").get<std::int64_t>()),
                         parameters.value("menu_retry_max_submissions", 0U));
                 if (parameters.contains("allowed_area"))
@@ -154,7 +172,7 @@ AuthorWorkflowCompilation compile_author_workflow(const J &source,
                     const auto reason = parameters.at("interrupted_reason").get<std::string>();
                     compiler.stop_if_interrupted_after(runtime_name, reason,
                         reason == "combat.skill_outcome_unconfirmed" ||
-                        reason == "combat.defend_outcome_unconfirmed");
+                        reason == "combat.attack_outcome_unconfirmed");
                 }
             } else if (type == "wait") {
                 // 等待由可取消的原生步骤持有，不阻塞停止链。

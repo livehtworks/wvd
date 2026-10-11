@@ -159,6 +159,7 @@ class FlowExecutor final {
         std::optional<std::vector<std::string>> returned_targets;
         std::optional<contracts::FrameEnvelope> selected_frame;
         std::optional<contracts::Observation> selected_observation;
+        std::optional<contracts::Observation> selected_input_scene;
         std::optional<SelectionOrigin> selection_origin;
         std::optional<ScopedEvent> event;
         std::optional<PendingInput> pending;
@@ -179,6 +180,7 @@ class FlowExecutor final {
     struct ObservationCycle {
         contracts::FrameEnvelope frame;
         std::optional<std::string> clear_overlay_scope;
+        std::set<const workflow::Step *> selection_points;
     };
     std::optional<ObservationCycle> observation_cycle_;
     nlohmann::json last_diagnostic_ = nullptr;
@@ -260,6 +262,7 @@ class FlowExecutor final {
     TickResult resume_event(Frame &frame, const workflow::Step &current);
     std::optional<TickResult> check_events(Frame &frame, const workflow::Step &current,
         const contracts::FrameEnvelope &image, workflow::EventClass category);
+    bool has_unknown_delivery() const noexcept;
     std::optional<TickResult> poll_wait_events(Frame &frame, const workflow::Step &current);
     // 仅在当前业务的候选/场景/目标/后置条件不符时调用；不把正常动画当成失败。
     std::optional<TickResult> check_unexpected(Frame &frame, const workflow::Step &current,

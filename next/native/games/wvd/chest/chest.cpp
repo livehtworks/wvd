@@ -1,4 +1,5 @@
 #include "chest.hpp"
+#include "games/wvd/vision/chest_probes.hpp"
 
 namespace wvd::games::chest {
 using C = tasks::PipelineCompiler;
@@ -9,21 +10,21 @@ tasks::CompiledWorkflow open_chest(int preferred_character, bool quick, std::uin
     // 实际受控识别链 33 次输入已耗时 240 秒；完整 quick + 普通重试不能
     // 继承旧短预算。总时间仍有界，父 Session 另持总预算，帧 TTL 不变。
     C graph("chest.open", std::chrono::seconds{quick ? 900 : 600});
-    graph.check_policy("chest", {"wvd-network-retry", "wvd-pause", "wvd-download"});
+    graph.check_policy("chest", {"wvd-network-retry", "wvd-pause", "wvd-download", "wvd-party-death", "wvd-party-defeat"});
+    graph.require_inherited_events({"wvd-party-death", "wvd-party-defeat"});
     const auto flag = C::image("chestFlag"), choose = C::image("whowillopenit"), opening = C::image("chestOpening");
-    auto reward = C::image("chest_reward_advance");
-    reward["roi"] = {730, 1330, 170, 270};
-    const J combat{{"mode", "combat_active"}};
-    const auto revive = C::image("RiseAgain"), ambush = C::image("ambush");
+    const auto reward = vision::chest_phase("reward");
+    const auto combat = vision::chest_phase("combat");
+    const auto revive = vision::chest_phase("revival"), ambush = vision::chest_phase("ambush");
     const auto interrupted = C::any({combat, revive, ambush});
-    const auto chest = C::all({C::any({flag, choose, opening}), C::absent(interrupted)});
-    const auto dungeon = C::all({C::image("dungFlag"), C::absent(interrupted), C::absent(chest), C::absent(reward)});
-    const auto post = C::any({reward, chest, dungeon, interrupted});
+    const auto chest = vision::chest_phase("active");
+    const auto dungeon = vision::chest_phase("dungeon");
+    const auto post = vision::chest_phase("post");
     // 打开动作必须看到下一阶段；原宝箱按钮仍在不能算成功，避免网络慢时重复点击。
-    const auto opened = C::any({choose, opening, reward, dungeon, interrupted});
-    graph.route("Entry", {"Reward", "Combat", "Revive", "Ambush", "Done", "Begin"});
+    const auto opened = vision::chest_phase("opened");
+    graph.route("Entry", {"Begin", "Reward", "Combat", "Revive", "Ambush", "Done"});
     graph.confirm("Begin", "chest.begin", "chest_observed", chest, quick ? J{"QuickOpen", "Dispatch"} : J{"Dispatch"});
-    graph.route("Dispatch", {"Reward", "Combat", "Revive", "Ambush", "Done", "Round0"});
+    graph.route("Dispatch", {"Round0", "Reward", "Combat", "Revive", "Ambush", "Done"});
     graph.observe("Reward", reward, {"RewardAdvance"});
     graph.public_step("RewardAdvance", "chest-reward-continue", J::object(), {"AfterReward"},
         {{"AdvancedExit", {"AfterReward"}}}, reward);
@@ -39,8 +40,8 @@ tasks::CompiledWorkflow open_chest(int preferred_character, bool quick, std::uin
     graph.confirm("Done", "chest.completed", "dungeon_resumed", dungeon, {"Terminal"});
     const J exits{"Reward", "Combat", "Revive", "Ambush", "Done"};
     auto after = [&](const std::string &next) {
-        auto choices = exits;
-        choices.push_back(next);
+        J choices{next};
+        for (const auto &exit : exits) choices.push_back(exit);
         return choices;
     };
     if (quick) {
@@ -54,9 +55,8 @@ tasks::CompiledWorkflow open_chest(int preferred_character, bool quick, std::uin
         const J position{258 + (role % 3) * 258, 1161 + (role / 3) * 184};
         for (unsigned i = 0; i < 3; ++i) {
             const auto suffix = std::to_string(i);
-            auto choices = exits;
-            choices.push_back("QuickRole" + suffix);
-            choices.push_back("QuickDisarm0");
+            J choices{"QuickRole" + suffix, "QuickDisarm0"};
+            for (const auto &exit : exits) choices.push_back(exit);
             graph.route("QuickRoute" + suffix, choices);
             graph.public_step("QuickRole" + suffix, "chest-choose-character", {{"x", position[0]}, {"y", position[1]}, {"delay_ms", i < 2 ? 200 : 1000}},
                 after(i < 2 ? "QuickRoute" + std::to_string(i + 1) : "QuickDisarm0"),
@@ -84,8 +84,8 @@ tasks::CompiledWorkflow open_chest(int preferred_character, bool quick, std::uin
     for (unsigned round = 0; round < 6; ++round) {
         const auto prefix = "Round" + std::to_string(round);
         const auto next_round = round < 5 ? "Round" + std::to_string(round + 1) : "RetryExit";
-        auto choices = exits;
-        choices.insert(choices.end(), {prefix + "Open", prefix + "Prepare", prefix + "Disarm0"});
+        J choices{prefix + "Open", prefix + "Prepare", prefix + "Disarm0"};
+        for (const auto &exit : exits) choices.push_back(exit);
         graph.route(prefix, choices);
         graph.click(prefix + "Open", chest, flag, opened, {prefix});
         graph.hit_limit(prefix + "Open", 3);

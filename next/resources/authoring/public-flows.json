@@ -1,6 +1,22 @@
 [
   {
     "schema": 1,
+    "flow": {"id": "after-target-battle", "name": "目标战斗结束后的步骤", "description": "默认直接继续；等待使用编辑器中的等待节点，由流程作者设置位置和时长。"},
+    "entry": "Entry",
+    "nodes": [
+      {"id": "Entry", "type": "route", "name": "进入后续步骤", "parameters": {}},
+      {"id": "Done", "type": "end", "name": "继续路线", "parameters": {"outcome": "success"}}
+    ],
+    "edges": [{"id": "next", "from": "Entry", "to": "Done", "outcome": "success", "order": 0}],
+    "layout": {"nodes": [{"node_id": "Entry", "x": 40, "y": 100}, {"node_id": "Done", "x": 260, "y": 100}], "viewport": {"x": 0, "y": 0, "zoom": 1}},
+    "execution": {"time_limit_ms": 60000, "resource_locale": "zh-Hant", "checks": {
+      "phase": "navigation", "inherit": ["wvd-network-retry", "wvd-pause", "wvd-download", "wvd-party-death", "wvd-party-defeat"],
+      "required": ["wvd-party-death", "wvd-party-defeat"], "debounce_ms": 1000, "interval_ms": 1000, "protect_input": true
+    }},
+    "interface": {"kind": "step", "category": "流程控制", "parameters": [], "handoffs": []}
+  },
+  {
+    "schema": 1,
     "flow": {
       "id": "city-enter-guild",
       "name": "进入公会",
@@ -301,8 +317,21 @@
         "parameters": {
           "operation": "click",
           "scene": {
-            "mode": "semantic",
-            "id": "guild.bounty.reveal.close"
+            "mode": "all",
+            "conditions": [
+              {
+                "mode": "semantic",
+                "id": "guild.bounty.reveal.close"
+              },
+              {
+                "mode": "not",
+                "conditions": [
+                  {
+                    "mode": "combat_active"
+                  }
+                ]
+              }
+            ]
           },
           "target": {
             "mode": "semantic",
@@ -3236,7 +3265,7 @@
     "schema": 1,
     "flow": {
       "id": "combat-select-target",
-      "name": "点击当前单体技能目标",
+      "name": "点击当前单体目标",
       "description": "只推进当前步骤，不消费外层路线目标；调用参数仅作用于本次实例。"
     },
     "entry": "target-entry",
@@ -3245,7 +3274,7 @@
       {"id": "target-advanced", "type": "recognition", "name": "目标选择页面已交接", "parameters": {"condition": {"mode": "all", "conditions": [
         {"mode": "input_clear"}, {"mode": "any", "conditions": [
           {"mode": "all", "conditions": [{"mode": "combat_active"}, {"mode": "not", "conditions": [{"mode": "prepared_actor"}]}]},
-          {"mode": "all", "conditions": [{"mode": "combat_active"}, {"mode": "not", "conditions": [{"mode": "semantic", "id": "combat.skill.detail"}]}]},
+          {"mode": "all", "conditions": [{"mode": "combat_active"}, {"mode": "not", "conditions": [{"mode": "skill_target", "candidate_index": 0, "attack_mode": false}]}]},
           {"mode": "template", "image": "notenoughsp", "threshold": 0.8},
           {"mode": "template", "image": "notenoughmp", "threshold": 0.8},
           {"mode": "all", "conditions": [{"mode": "not", "conditions": [{"mode": "combat_active"}]}, {"mode": "any", "conditions": [
@@ -3263,46 +3292,16 @@
         "name": "点击目标下方可达区域",
         "parameters": {
           "operation": "click",
-          "scene": {
-            "mode": "all",
-            "conditions": [
-              {
-                "mode": "all",
-                "conditions": [
-                  {
-                    "mode": "combat_active"
-                  },
-                  {
-                    "mode": "prepared_actor"
-                  },
-                  {
-                    "mode": "semantic",
-                    "id": "combat.skill.detail"
-                  }
-                ]
-              },
-              {
-                "mode": "not",
-                "conditions": [
-                  {
-                    "mode": "semantic",
-                    "id": "combat.skill.confirm"
-                  }
-                ]
-              },
-              {
-                "mode": "support_selection",
-                "expect": "absent"
-              }
-            ]
-          },
+          "scene": {"mode": "skill_target", "candidate_index": 0, "attack_mode": false},
           "target": {
             "mode": "skill_target",
-            "candidate_index": 0
+            "candidate_index": 0,
+            "attack_mode": false
           },
           "postcondition": {
             "mode": "combat_phase",
-            "phase": "target_handoff"
+            "phase": "target_handoff",
+            "attack_mode": false
           },
           "offset": [
             0,
@@ -3335,8 +3334,8 @@
         "outcome": "success",
         "order": 0
       },
-      {"id": "target-entry-advanced", "from": "target-entry", "to": "target-advanced", "outcome": "success", "order": 0},
-      {"id": "target-entry-action", "from": "target-entry", "to": "target", "outcome": "success", "order": 1},
+      {"id": "target-entry-advanced", "from": "target-entry", "to": "target-advanced", "outcome": "success", "order": 1},
+      {"id": "target-entry-action", "from": "target-entry", "to": "target", "outcome": "success", "order": 0},
       {"id": "target-advanced-return", "from": "target-advanced", "to": "target-advanced-exit", "outcome": "success", "order": 0}
     ],
     "layout": {
@@ -3394,7 +3393,15 @@
               "path": "/target/candidate_index"
             }
           ]
-        }
+        },
+        {"name": "attack_mode", "label": "普通攻击选敌", "type": "boolean", "default": false, "bindings": [
+          {"node": "target", "path": "/scene/attack_mode"},
+          {"node": "target", "path": "/target/attack_mode"},
+          {"node": "target", "path": "/postcondition/attack_mode"},
+          {"node": "target-advanced", "path": "/condition/conditions/1/conditions/1/conditions/1/conditions/0/attack_mode"}
+        ]},
+        {"name": "delay_ms", "label": "点击后观察间隔", "type": "integer", "default": 500, "min": 0, "max": 5000,
+          "bindings": [{"node": "target", "path": "/delay_after_ms"}]}
       ],
       "handoffs": ["AdvancedExit"]
     }
@@ -3488,17 +3495,32 @@
     },
     "entry": "choose-entry",
     "nodes": [
-      {"id": "choose-entry", "type": "route", "name": "重看当前开箱页面", "parameters": {}},
-      {"id": "choose-advanced", "type": "recognition", "name": "选人页面已交接", "parameters": {"condition": {"mode": "all", "conditions": [
-        {"mode": "input_clear"}, {"mode": "not", "conditions": [{"mode": "semantic", "id": "chest.choose.page"}]},
-        {"mode": "any", "conditions": [
-          {"mode": "combat_active"}, {"mode": "template", "image": "RiseAgain", "threshold": 0.8},
-          {"mode": "template", "image": "ambush", "threshold": 0.8},
-          {"mode": "template", "image": "chestOpening", "threshold": 0.8},
-          {"mode": "semantic", "id": "chest.reward.page"}, {"mode": "template", "image": "dungFlag", "threshold": 0.8}
-        ]}
-      ]}}},
-      {"id": "choose-advanced-exit", "type": "end", "name": "未选人，交回新页面", "parameters": {"outcome": "handoff", "port": "AdvancedExit"}},
+      {
+        "id": "choose-entry",
+        "type": "route",
+        "name": "重看当前开箱页面",
+        "parameters": {}
+      },
+      {
+        "id": "choose-advanced",
+        "type": "recognition",
+        "name": "选人页面已交接",
+        "parameters": {
+          "condition": {
+            "mode": "chest_phase",
+            "phase": "choose_handoff"
+          }
+        }
+      },
+      {
+        "id": "choose-advanced-exit",
+        "type": "end",
+        "name": "未选人，交回新页面",
+        "parameters": {
+          "outcome": "handoff",
+          "port": "AdvancedExit"
+        }
+      },
       {
         "id": "choose",
         "type": "action",
@@ -3506,225 +3528,12 @@
         "parameters": {
           "operation": "fixed_click",
           "scene": {
-            "mode": "all",
-            "conditions": [
-              {
-                "mode": "all",
-                "conditions": [
-                  {
-                    "mode": "any",
-                    "conditions": [
-                      {
-                        "mode": "semantic",
-                        "id": "chest.open.option"
-                      },
-                      {
-                        "mode": "semantic",
-                        "id": "chest.choose.page"
-                      },
-                      {
-                        "mode": "template",
-                        "image": "chestOpening",
-                        "threshold": 0.8
-                      }
-                    ]
-                  },
-                  {
-                    "mode": "not",
-                    "conditions": [
-                      {
-                        "mode": "any",
-                        "conditions": [
-                          {
-                            "mode": "combat_active"
-                          },
-                          {
-                            "mode": "template",
-                            "image": "RiseAgain",
-                            "threshold": 0.8
-                          },
-                          {
-                            "mode": "template",
-                            "image": "ambush",
-                            "threshold": 0.8
-                          }
-                        ]
-                      }
-                    ]
-                  }
-                ]
-              },
-              {
-                "mode": "semantic",
-                "id": "chest.choose.page"
-              }
-            ]
+            "mode": "chest_phase",
+            "phase": "choose"
           },
           "postcondition": {
-            "mode": "any",
-            "conditions": [
-              {
-                "mode": "semantic",
-                "id": "chest.reward.page"
-              },
-              {
-                "mode": "all",
-                "conditions": [
-                  {
-                    "mode": "any",
-                    "conditions": [
-                      {
-                        "mode": "semantic",
-                        "id": "chest.open.option"
-                      },
-                      {
-                        "mode": "semantic",
-                        "id": "chest.choose.page"
-                      },
-                      {
-                        "mode": "template",
-                        "image": "chestOpening",
-                        "threshold": 0.8
-                      }
-                    ]
-                  },
-                  {
-                    "mode": "not",
-                    "conditions": [
-                      {
-                        "mode": "any",
-                        "conditions": [
-                          {
-                            "mode": "combat_active"
-                          },
-                          {
-                            "mode": "template",
-                            "image": "RiseAgain",
-                            "threshold": 0.8
-                          },
-                          {
-                            "mode": "template",
-                            "image": "ambush",
-                            "threshold": 0.8
-                          }
-                        ]
-                      }
-                    ]
-                  }
-                ]
-              },
-              {
-                "mode": "all",
-                "conditions": [
-                  {
-                    "mode": "template",
-                    "image": "dungFlag",
-                    "threshold": 0.8
-                  },
-                  {
-                    "mode": "not",
-                    "conditions": [
-                      {
-                        "mode": "any",
-                        "conditions": [
-                          {
-                            "mode": "combat_active"
-                          },
-                          {
-                            "mode": "template",
-                            "image": "RiseAgain",
-                            "threshold": 0.8
-                          },
-                          {
-                            "mode": "template",
-                            "image": "ambush",
-                            "threshold": 0.8
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "mode": "not",
-                    "conditions": [
-                      {
-                        "mode": "all",
-                        "conditions": [
-                          {
-                            "mode": "any",
-                            "conditions": [
-                              {
-                                "mode": "semantic",
-                                "id": "chest.open.option"
-                              },
-                              {
-                                "mode": "semantic",
-                                "id": "chest.choose.page"
-                              },
-                              {
-                                "mode": "template",
-                                "image": "chestOpening",
-                                "threshold": 0.8
-                              }
-                            ]
-                          },
-                          {
-                            "mode": "not",
-                            "conditions": [
-                              {
-                                "mode": "any",
-                                "conditions": [
-                                  {
-                                    "mode": "combat_active"
-                                  },
-                                  {
-                                    "mode": "template",
-                                    "image": "RiseAgain",
-                                    "threshold": 0.8
-                                  },
-                                  {
-                                    "mode": "template",
-                                    "image": "ambush",
-                                    "threshold": 0.8
-                                  }
-                                ]
-                              }
-                            ]
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "mode": "not",
-                    "conditions": [
-                      {
-                        "mode": "semantic",
-                        "id": "chest.reward.page"
-                      }
-                    ]
-                  }
-                ]
-              },
-              {
-                "mode": "any",
-                "conditions": [
-                  {
-                    "mode": "combat_active"
-                  },
-                  {
-                    "mode": "template",
-                    "image": "RiseAgain",
-                    "threshold": 0.8
-                  },
-                  {
-                    "mode": "template",
-                    "image": "ambush",
-                    "threshold": 0.8
-                  }
-                ]
-              }
-            ]
+            "mode": "chest_phase",
+            "phase": "post"
           },
           "position": [
             258,
@@ -3751,15 +3560,45 @@
         "outcome": "success",
         "order": 0
       },
-      {"id": "choose-entry-advanced", "from": "choose-entry", "to": "choose-advanced", "outcome": "success", "order": 0},
-      {"id": "choose-entry-action", "from": "choose-entry", "to": "choose", "outcome": "success", "order": 1},
-      {"id": "choose-advanced-return", "from": "choose-advanced", "to": "choose-advanced-exit", "outcome": "success", "order": 0}
+      {
+        "id": "choose-entry-advanced",
+        "from": "choose-entry",
+        "to": "choose-advanced",
+        "outcome": "success",
+        "order": 1
+      },
+      {
+        "id": "choose-entry-action",
+        "from": "choose-entry",
+        "to": "choose",
+        "outcome": "success",
+        "order": 0
+      },
+      {
+        "id": "choose-advanced-return",
+        "from": "choose-advanced",
+        "to": "choose-advanced-exit",
+        "outcome": "success",
+        "order": 0
+      }
     ],
     "layout": {
       "nodes": [
-        {"node_id": "choose-entry", "x": -520, "y": 0},
-        {"node_id": "choose-advanced", "x": -260, "y": -120},
-        {"node_id": "choose-advanced-exit", "x": 0, "y": -120},
+        {
+          "node_id": "choose-entry",
+          "x": -520,
+          "y": 0
+        },
+        {
+          "node_id": "choose-advanced",
+          "x": -260,
+          "y": -120
+        },
+        {
+          "node_id": "choose-advanced-exit",
+          "x": 0,
+          "y": -120
+        },
         {
           "node_id": "choose",
           "x": 0,
@@ -3784,11 +3623,17 @@
         "inherit": [
           "wvd-network-retry",
           "wvd-pause",
-          "wvd-download"
+          "wvd-download",
+          "wvd-party-death",
+          "wvd-party-defeat"
         ],
         "debounce_ms": 1000,
         "interval_ms": 1000,
-        "protect_input": true
+        "protect_input": true,
+        "required": [
+          "wvd-party-death",
+          "wvd-party-defeat"
+        ]
       }
     },
     "interface": {
@@ -3838,7 +3683,9 @@
           ]
         }
       ],
-      "handoffs": ["AdvancedExit"]
+      "handoffs": [
+        "AdvancedExit"
+      ]
     }
   },
   {
@@ -3851,23 +3698,21 @@
     "entry": "entry",
     "nodes": [
       {
-        "id": "entry", "type": "route", "name": "先核对宝箱是否已进入下一页", "parameters": {}
+        "id": "entry",
+        "type": "route",
+        "name": "先核对宝箱是否已进入下一页",
+        "parameters": {}
       },
       {
-        "id": "advanced", "type": "recognition", "name": "已到奖励、战斗或迷宫，交回外层",
-        "parameters": {"condition": {"mode": "any", "conditions": [
-          {"mode": "semantic", "id": "chest.reward.page"},
-          {"mode": "combat_active"},
-          {"mode": "template", "image": "RiseAgain", "threshold": 0.8},
-          {"mode": "all", "conditions": [
-            {"mode": "template", "image": "dungFlag", "threshold": 0.8},
-            {"mode": "not", "conditions": [{"mode": "any", "conditions": [
-              {"mode": "semantic", "id": "chest.open.option"},
-              {"mode": "semantic", "id": "chest.choose.page"},
-              {"mode": "template", "image": "chestOpening", "threshold": 0.8}
-            ]}]}
-          ]}
-        ]}}
+        "id": "advanced",
+        "type": "recognition",
+        "name": "已到奖励、战斗或迷宫，交回外层",
+        "parameters": {
+          "condition": {
+            "mode": "chest_phase",
+            "phase": "handoff"
+          }
+        }
       },
       {
         "id": "disarm",
@@ -3876,235 +3721,12 @@
         "parameters": {
           "operation": "fixed_click",
           "scene": {
-            "mode": "all",
-            "conditions": [
-              {
-                "mode": "all",
-                "conditions": [
-                  {
-                    "mode": "any",
-                    "conditions": [
-                      {
-                        "mode": "semantic",
-                        "id": "chest.open.option"
-                      },
-                      {
-                        "mode": "semantic",
-                        "id": "chest.choose.page"
-                      },
-                      {
-                        "mode": "template",
-                        "image": "chestOpening",
-                        "threshold": 0.8
-                      }
-                    ]
-                  },
-                  {
-                    "mode": "not",
-                    "conditions": [
-                      {
-                        "mode": "any",
-                        "conditions": [
-                          {
-                            "mode": "combat_active"
-                          },
-                          {
-                            "mode": "template",
-                            "image": "RiseAgain",
-                            "threshold": 0.8
-                          },
-                          {
-                            "mode": "template",
-                            "image": "ambush",
-                            "threshold": 0.8
-                          }
-                        ]
-                      }
-                    ]
-                  }
-                ]
-              },
-              {
-                "mode": "any",
-                "conditions": [
-                  {
-                    "mode": "semantic",
-                    "id": "chest.choose.page"
-                  },
-                  {
-                    "mode": "template",
-                    "image": "chestOpening",
-                    "threshold": 0.8
-                  }
-                ]
-              }
-            ]
+            "mode": "chest_phase",
+            "phase": "disarm"
           },
           "postcondition": {
-            "mode": "any",
-            "conditions": [
-              {
-                "mode": "semantic",
-                "id": "chest.reward.page"
-              },
-              {
-                "mode": "all",
-                "conditions": [
-                  {
-                    "mode": "any",
-                    "conditions": [
-                      {
-                        "mode": "semantic",
-                        "id": "chest.open.option"
-                      },
-                      {
-                        "mode": "semantic",
-                        "id": "chest.choose.page"
-                      },
-                      {
-                        "mode": "template",
-                        "image": "chestOpening",
-                        "threshold": 0.8
-                      }
-                    ]
-                  },
-                  {
-                    "mode": "not",
-                    "conditions": [
-                      {
-                        "mode": "any",
-                        "conditions": [
-                          {
-                            "mode": "combat_active"
-                          },
-                          {
-                            "mode": "template",
-                            "image": "RiseAgain",
-                            "threshold": 0.8
-                          },
-                          {
-                            "mode": "template",
-                            "image": "ambush",
-                            "threshold": 0.8
-                          }
-                        ]
-                      }
-                    ]
-                  }
-                ]
-              },
-              {
-                "mode": "all",
-                "conditions": [
-                  {
-                    "mode": "template",
-                    "image": "dungFlag",
-                    "threshold": 0.8
-                  },
-                  {
-                    "mode": "not",
-                    "conditions": [
-                      {
-                        "mode": "any",
-                        "conditions": [
-                          {
-                            "mode": "combat_active"
-                          },
-                          {
-                            "mode": "template",
-                            "image": "RiseAgain",
-                            "threshold": 0.8
-                          },
-                          {
-                            "mode": "template",
-                            "image": "ambush",
-                            "threshold": 0.8
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "mode": "not",
-                    "conditions": [
-                      {
-                        "mode": "all",
-                        "conditions": [
-                          {
-                            "mode": "any",
-                            "conditions": [
-                              {
-                                "mode": "semantic",
-                                "id": "chest.open.option"
-                              },
-                              {
-                                "mode": "semantic",
-                                "id": "chest.choose.page"
-                              },
-                              {
-                                "mode": "template",
-                                "image": "chestOpening",
-                                "threshold": 0.8
-                              }
-                            ]
-                          },
-                          {
-                            "mode": "not",
-                            "conditions": [
-                              {
-                                "mode": "any",
-                                "conditions": [
-                                  {
-                                    "mode": "combat_active"
-                                  },
-                                  {
-                                    "mode": "template",
-                                    "image": "RiseAgain",
-                                    "threshold": 0.8
-                                  },
-                                  {
-                                    "mode": "template",
-                                    "image": "ambush",
-                                    "threshold": 0.8
-                                  }
-                                ]
-                              }
-                            ]
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "mode": "not",
-                    "conditions": [
-                      {
-                        "mode": "semantic",
-                        "id": "chest.reward.page"
-                      }
-                    ]
-                  }
-                ]
-              },
-              {
-                "mode": "any",
-                "conditions": [
-                  {
-                    "mode": "combat_active"
-                  },
-                  {
-                    "mode": "template",
-                    "image": "RiseAgain",
-                    "threshold": 0.8
-                  },
-                  {
-                    "mode": "template",
-                    "image": "ambush",
-                    "threshold": 0.8
-                  }
-                ]
-              }
-            ]
+            "mode": "chest_phase",
+            "phase": "post"
           },
           "position": [
             515,
@@ -4124,9 +3746,27 @@
       }
     ],
     "edges": [
-      {"id": "entry-advanced", "from": "entry", "to": "advanced", "outcome": "success", "order": 0},
-      {"id": "entry-disarm", "from": "entry", "to": "disarm", "outcome": "success", "order": 1},
-      {"id": "advanced-done", "from": "advanced", "to": "done", "outcome": "success", "order": 0},
+      {
+        "id": "entry-advanced",
+        "from": "entry",
+        "to": "advanced",
+        "outcome": "success",
+        "order": 1
+      },
+      {
+        "id": "entry-disarm",
+        "from": "entry",
+        "to": "disarm",
+        "outcome": "success",
+        "order": 0
+      },
+      {
+        "id": "advanced-done",
+        "from": "advanced",
+        "to": "done",
+        "outcome": "success",
+        "order": 0
+      },
       {
         "id": "edge_0",
         "from": "disarm",
@@ -4137,8 +3777,16 @@
     ],
     "layout": {
       "nodes": [
-        {"node_id": "entry", "x": 0, "y": 0},
-        {"node_id": "advanced", "x": 260, "y": -100},
+        {
+          "node_id": "entry",
+          "x": 0,
+          "y": 0
+        },
+        {
+          "node_id": "advanced",
+          "x": 260,
+          "y": -100
+        },
         {
           "node_id": "disarm",
           "x": 260,
@@ -4163,11 +3811,17 @@
         "inherit": [
           "wvd-network-retry",
           "wvd-pause",
-          "wvd-download"
+          "wvd-download",
+          "wvd-party-death",
+          "wvd-party-defeat"
         ],
         "debounce_ms": 1000,
         "interval_ms": 1000,
-        "protect_input": true
+        "protect_input": true,
+        "required": [
+          "wvd-party-death",
+          "wvd-party-defeat"
+        ]
       }
     },
     "interface": {
@@ -4445,11 +4099,17 @@
         "inherit": [
           "wvd-network-retry",
           "wvd-pause",
-          "wvd-download"
+          "wvd-download",
+          "wvd-party-death",
+          "wvd-party-defeat"
         ],
         "debounce_ms": 1000,
         "interval_ms": 1000,
-        "protect_input": true
+        "protect_input": true,
+        "required": [
+          "wvd-party-death",
+          "wvd-party-defeat"
+        ]
       }
     },
     "interface": {
@@ -4585,13 +4245,19 @@
           "wvd-story",
           "wvd-blessing",
           "wvd-karma",
+          "wvd-party-death",
+          "wvd-party-defeat",
           "wvd-dialogue",
           "wvd-special-dialogue",
           "wvd-sandman"
         ],
         "debounce_ms": 1000,
         "interval_ms": 1000,
-        "protect_input": true
+        "protect_input": true,
+        "required": [
+          "wvd-party-death",
+          "wvd-party-defeat"
+        ]
       }
     },
     "interface": {

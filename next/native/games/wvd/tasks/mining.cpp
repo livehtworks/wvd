@@ -35,7 +35,7 @@ CompiledWorkflow mining_iteration(const WvdQuestDefinition &definition, const nl
     const auto common = graph.define_child("Common", recovery::clear_common_screens(allow_download));
     graph.call_child("ClearBlocking", common, {"Entry"});
     graph.observe("RefillPending", C::business("/mining/refill_pending", true), {"Exit"});
-    const auto entry = graph.define_child("DungeonEntry", navigation::enter_dungeon(plan));
+    const auto entry = graph.define_child("DungeonEntry", navigation::enter_dungeon(plan, false, allow_download));
     graph.call_child("Enter", entry, {"Seek"});
     const auto seek = graph.define_child("TravelToMark", navigation::auto_route("mark_auto"));
     graph.call_child("Seek", seek, {"Blocked", "Mine", "PositionMissing"},
@@ -70,7 +70,7 @@ CompiledWorkflow mining_iteration(const WvdQuestDefinition &definition, const nl
     graph.fixed_click("ClosePrompt", C::all({C::any({no_pick, exhausted}), C::absent(blocked)}), exiting, {1, 1}, {"Exit"});
     graph.fixed_click("ExitSite", C::all({dungeon, C::absent(blocked)}), exiting, {1, 1}, {"Exit"});
     graph.observe("Refill", C::business("/mining/refill_pending", true), {"ReturnToCity"});
-    const auto travel = graph.define_child("WorldReturn", navigation::travel_world(*plan.return_destination(), navigation::WorldArrival::City));
+    const auto travel = graph.define_child("WorldReturn", navigation::travel_world(*plan.return_destination(), navigation::WorldArrival::City, allow_download));
     graph.call_child("ReturnToCity", travel, {"PartyReady", "Assemble"});
     graph.observe("PartyReady", C::business("/mining/party_ready", true), {"Rest"});
     const auto party = graph.define_child("Party", supply::assemble_party(std::string("FFXI/FFXIStone")));

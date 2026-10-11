@@ -128,6 +128,13 @@ Step translate(const std::string &id, const J &node, const J &paths,
             request(p.at("target_recognition")), p.at("command"),
             {area[0], area[1], area[2], area[3]}, std::nullopt,
             p.value("use_target_center", true), p.value("clip_target_to_area", false)};
+        // Input already checks this scene before its target. Retain a genuinely
+        // different author guard, but do not compile the same check twice.
+        if (node.value("recognizer", "") == "WvdVision" &&
+            node.contains("observation_args") && p.at("scene_recognition").contains("parameters") &&
+            node.at("observation_args") == p.at("scene_recognition").at("parameters") &&
+            node.value("roi", J::array({0, 0, 900, 1600})) == p.at("scene_recognition").at("roi"))
+            step.guard.reset();
         if (p.contains("target_offset")) {
             const auto offset = p.at("target_offset").get<std::vector<int>>();
             if (offset.size() != 2) throw std::runtime_error("NATIVE_ACTION_OFFSET_INVALID");
@@ -168,8 +175,13 @@ Step translate(const std::string &id, const J &node, const J &paths,
         else step.data = workflow::Return{"failure", reason};
     } else if (action == "Registered" && binding == "WvdConfirm") {
         const auto &p = node.at("operation_args");
-        step.data = workflow::BusinessConfirm{p.at("operation"),
-            request(p.at("confirmation")), p, "WvdConfirm"};
+        const auto condition = request(p.at("confirmation"));
+        if (node.value("recognizer", "") == "WvdVision" &&
+            node.contains("observation_args") && p.at("confirmation").contains("parameters") &&
+            node.at("observation_args") == p.at("confirmation").at("parameters") &&
+            node.value("roi", J::array({0, 0, 900, 1600})) == p.at("confirmation").at("roi"))
+            step.guard = condition;
+        step.data = workflow::BusinessConfirm{p.at("operation"), condition, p, "WvdConfirm"};
     } else if (action == "Registered" &&
                (binding == "WvdCombat" || binding == "WvdChest" ||
                 binding == "WvdUnknownLeap" || binding == "BusinessCheckpoint" ||
@@ -221,21 +233,25 @@ workflow::FlowProgram compile_native_program(const CompiledWorkflow &source,
                  budget != source.definition_budgets.end())
             definition.cumulative_budget = budget->second;
         std::set<std::string> seen;
-        std::function<void(const std::string &)> visit = [&](const std::string &id) {
-            if (!seen.insert(id).second) return;
+        std::vector<std::string> pending{root};
+        while (!pending.empty()) {
+            const auto id = std::move(pending.back());
+            pending.pop_back();
+            if (!seen.insert(id).second) continue;
             const auto &node = source.nodes.at(id);
+            std::vector<std::string> successors;
             if (node.value("binding", "") != "RequireRecovery" || !edges(node, "next").empty()) {
                 const auto [it, inserted] = owner.emplace(id, root);
                 if (!inserted && it->second != root)
                     throw std::runtime_error("NATIVE_SCOPE_OVERLAP:" + id);
             }
             for (const auto *field : {"next", "on_error"})
-                for (const auto &next : edges(node, field)) visit(next);
+                for (const auto &next : edges(node, field)) successors.push_back(next);
             if (node.value("binding", "") == "Call")
                 for (const auto &targets : node.at("operation_args").at("handoffs"))
-                    for (const auto &target : targets) visit(target.get<std::string>());
-        };
-        visit(root);
+                    for (const auto &target : targets) successors.push_back(target.get<std::string>());
+            pending.insert(pending.end(), successors.rbegin(), successors.rend());
+        }
         for (const auto &id : seen) {
             auto translated = translate(id, source.nodes.at(id), source_paths, source.event_scopes,
                                         root == source.entry);
@@ -283,6 +299,130 @@ workflow::FlowProgram compile_native_program(const CompiledWorkflow &source,
         }
     }
     program.validate();
+    (void)audit_event_responsibilities(source, program, false);
     return program;
+}
+
+nlohmann::json audit_event_responsibilities(const CompiledWorkflow &source,
+                                           const workflow::FlowProgram &program,
+                                           bool collect_report) {
+    using Rules = std::map<std::string, const workflow::EventRule *>;
+    const auto ids = [](const Rules &rules) {
+        J result = J::array();
+        for (const auto &[id, rule] : rules) { (void)rule; result.push_back(id); }
+        return result;
+    };
+    const auto merge = [](Rules &rules, const workflow::Step &step) {
+        for (const auto &id : step.disabled_events) rules.erase(id);
+        for (const auto &rule : step.event_policy) rules.insert_or_assign(rule.id, &rule);
+    };
+    // Requirements describe duties offered by the enclosing product. A factory
+    // compiled without that product records an undefined duty, never a fake pass.
+    std::set<std::string> offered;
+    const auto &root = program.definitions.at(program.root_definition);
+    for (const auto &rule : root.events) offered.insert(rule.id);
+    for (const auto &rule : root.steps.at(root.entry).event_policy) offered.insert(rule.id);
+    J report{{"calls", J::array()}, {"inline_owners", J::array()}, {"undefined", J::array()}};
+    std::set<std::string> visited;
+    std::function<void(const std::string &, const Rules &, const std::set<std::string> &,
+                       const std::set<std::string> &, const std::string &)> visit;
+    visit = [&](const std::string &name, const Rules &incoming,
+                const std::set<std::string> &active_handlers, const std::set<std::string> &advertised,
+                const std::string &caller) {
+        const auto &definition = program.definitions.at(name);
+        auto providers = advertised;
+        for (const auto &rule : definition.events) providers.insert(rule.id);
+        for (const auto &rule : definition.steps.at(definition.entry).event_policy) providers.insert(rule.id);
+        offered.insert(providers.begin(),providers.end());
+        Rules inherited = incoming;
+        if (name != program.root_definition && definition.checks)
+            for (auto it = inherited.begin(); it != inherited.end();)
+                if (!definition.checks->inherit.contains(it->first)) it = inherited.erase(it);
+                else ++it;
+        const auto inheritance = ids(inherited);
+        for (const auto &rule : definition.events) inherited.insert_or_assign(rule.id, &rule);
+        // Check before memoization: distinct callers can cut a required edge.
+        for (const auto &[entry, required] : source.event_responsibilities.items()) {
+            if (!definition.steps.contains(entry)) continue;
+            const auto members = source.event_responsibility_nodes.find(entry);
+            if (members == source.event_responsibility_nodes.end())
+                throw std::runtime_error("NATIVE_EVENT_RESPONSIBILITY_SCOPE_MISSING:" + entry);
+            auto effective = inherited;
+            merge(effective, definition.steps.at(entry));
+            for (const auto &duty : required) {
+                const auto id = duty.get<std::string>();
+                if (!providers.contains(id)) {
+                    if (collect_report)
+                        report["undefined"].push_back({{"entry", entry}, {"event", id}, {"caller", caller}});
+                } else if (!effective.contains(id) && !active_handlers.contains(id)) {
+                    throw std::runtime_error("NATIVE_EVENT_RESPONSIBILITY_MISSING:" + caller + "->" +
+                        name + "/" + entry + ":" + id + ":" + definition.steps.at(entry).source_path);
+                }
+                if (!providers.contains(id) || active_handlers.contains(id)) continue;
+                for (const auto &member : members->second) {
+                    if (!definition.steps.contains(member)) continue;
+                    const auto &node = definition.steps.at(member);
+                    if (std::holds_alternative<workflow::Fail>(node.data) ||
+                        std::holds_alternative<workflow::ExternalBlocked>(node.data) ||
+                        std::holds_alternative<workflow::Finish>(node.data) ||
+                        std::holds_alternative<workflow::Return>(node.data)) continue;
+                    auto local = inherited;
+                    merge(local,node);
+                    if (!local.contains(id))
+                        throw std::runtime_error("NATIVE_EVENT_RESPONSIBILITY_MISSING:" + caller + "->" +
+                            name + "/" + member + ":" + id + ":" + node.source_path);
+                }
+            }
+            if (collect_report)
+                report["inline_owners"].push_back({{"entry", entry}, {"owner", name}, {"caller", caller},
+                    {"source_path", definition.steps.at(entry).source_path}, {"required", required},
+                    {"effective", ids(effective)}, {"inline", entry != name}});
+        }
+        J signature{{"definition", name}, {"rules", J::array()}, {"active", active_handlers}, {"providers",providers}};
+        for (const auto &[id, rule] : inherited)
+            signature["rules"].push_back({id, rule->handler_definition, static_cast<int>(rule->disposition)});
+        if (!visited.insert(signature.dump()).second) return;
+        std::set<std::string> handler_edges;
+        for (const auto &[step_id, step] : definition.steps) {
+            auto effective = inherited;
+            merge(effective, step);
+            const auto call = [&](const std::string &target, const char *kind,
+                                  std::set<std::string> active) {
+                const auto &child = program.definitions.at(target);
+                Rules intersection = effective;
+                if (child.checks)
+                    for (auto it = intersection.begin(); it != intersection.end();)
+                        if (!child.checks->inherit.contains(it->first)) it = intersection.erase(it);
+                        else ++it;
+                J local = J::array();
+                for (const auto &rule : child.events) local.push_back(rule.id);
+                if (collect_report) report["calls"].push_back({{"parent", name}, {"step", step_id},
+                    {"source_path", step.source_path}, {"kind", kind}, {"child", target},
+                    {"parent_events", ids(effective)}, {"inherited", ids(intersection)},
+                    {"child_local_events", local}, {"child_disabled", child.steps.at(child.entry).disabled_events},
+                    {"active_handlers", active}, {"returns", step.next},
+                    {"handoffs", std::holds_alternative<workflow::Call>(step.data)
+                        ? J(std::get<workflow::Call>(step.data).handoffs) : J::object()}});
+                visit(target, effective, active, providers, name + "/" + step_id);
+            };
+            if (const auto *child = std::get_if<workflow::Call>(&step.data))
+                call(child->definition, "call", active_handlers);
+            for (const auto &[id, rule] : effective) {
+                if (rule->disposition != workflow::EventDisposition::Handle || active_handlers.contains(id)) continue;
+                auto active = active_handlers;
+                active.insert(id);
+                // Shared definition events have one handler edge per policy
+                // context; do not expand it again for every business node.
+                const auto key = J{{"event", id}, {"target", rule->handler_definition},
+                                   {"effective", ids(effective)}, {"active", active}}.dump();
+                if (!handler_edges.insert(key).second) continue;
+                call(rule->handler_definition, "event_handler", std::move(active));
+            }
+        }
+    };
+    visit(program.root_definition, {}, {}, offered, "root");
+    report["offered"] = offered;
+    report["complete"] = report.at("undefined").empty();
+    return report;
 }
 } // namespace wvd::games::tasks

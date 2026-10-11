@@ -108,7 +108,8 @@ tasks::CompiledWorkflow take_turn(const J &profile, const std::set<std::string> 
         graph.retry_menu_input(node, C::all({clear, C::image(image)}), 3000);
     }
     graph.observe("Ended", ended, {"Terminal"});
-    graph.observe("ActorChanged", C::all({battle, C::absent(actor)}), {"Terminal"});
+    if (!catalog.empty())
+        graph.observe("ActorChanged", C::all({battle, C::absent(actor)}), {"Terminal"});
     graph.observe("Automatic", C::all({battle, C::business("/strategy/automatic", true)}), {full_auto});
     // Generic gold buttons can be network Retry, not a skill confirmation.
     // Keep broad popup exclusion for input safety, but require skill-specific
@@ -151,13 +152,25 @@ tasks::CompiledWorkflow take_turn(const J &profile, const std::set<std::string> 
             {{"operation", "success"}, {"index", index}}, {"Terminal"});
         // Failed opening is not a cast or permission to enable Auto. The public
         // handoff and this input both require fresh proof of the same actor/menu.
-        const auto defended = C::all({finished, C::any({ended, C::absent(actor)})});
-        graph.fixed_click(prefix + "UnavailableDefend", C::all({menu, actor}), defended,
-            {513, 1200}, {prefix + "DefendFallbackDone"});
-        graph.retry_menu_input(prefix + "UnavailableDefend", C::all({menu, actor}), 3000);
-        graph.stop_if_interrupted_after(prefix + "UnavailableDefend", "combat.defend_outcome_unconfirmed", true);
-        graph.combat_step(prefix + "DefendFallbackDone", defended,
-            {{"operation", "defend_fallback_confirmed"}, {"index", index}}, {"Terminal"});
+        const auto attacked = C::all({finished, C::any({ended, C::absent(actor)})});
+        const auto attack_selection = C::all({menu, actor, C::absent(detail)});
+        graph.fixed_click(prefix + "UnavailableAttack", C::all({menu, actor}), C::any({clear, ended}),
+            {66, 1200}, {prefix + "AttackFallbackDone", "ActorChanged", "Ended", prefix + "AttackTarget0", "UnexpectedPopup"});
+        graph.retry_menu_input(prefix + "UnavailableAttack", C::all({menu, actor}), 1000);
+        graph.stop_if_interrupted_after(prefix + "UnavailableAttack", "combat.attack_outcome_unconfirmed", true);
+        graph.combat_step(prefix + "AttackFallbackDone", attacked,
+            {{"operation", "attack_fallback_confirmed"}, {"index", index}}, {"Terminal"});
+        // Attack and single-target skills share the public targeting recipe.
+        // Only the detail-page requirement differs; target authority stays independent.
+        for (int point = 0; point < 24; ++point) {
+            const auto name = prefix + "AttackTarget" + std::to_string(point);
+            J next{prefix + "AttackFallbackDone", "ActorChanged", "Ended"};
+            next.push_back(point < 23 ? prefix + "AttackTarget" + std::to_string(point + 1) : prefix + "UnavailableAttack");
+            graph.public_step(name, "combat-select-target",
+                {{"candidate_index", point}, {"attack_mode", true}, {"delay_ms", 100}}, next,
+                {{"AdvancedExit", {prefix + "AttackFallbackDone", "ActorChanged", "Ended", "UnexpectedPopup", prefix + "UnavailableAttack"}}},
+                attack_selection);
+        }
         const auto position = slot(skill_name);
         const int level = skill.at("skill_lvl");
         if (level < 1 || level > 9)
@@ -165,7 +178,7 @@ tasks::CompiledWorkflow take_turn(const J &profile, const std::set<std::string> 
         if (level > 1) graph.recovery(prefix + "LevelUnconfirmed", "combat.skill_level_unconfirmed");
         graph.observe_business("Select" + std::to_string(index), C::business("/prepared_skill_index", index), {prefix + "Open0"});
         const auto casting = C::all({battle, actor, detail});
-        // A confirmed resource error retries level one, then uses manual defend.
+        // A confirmed resource error retries level one, then uses manual attack.
         const int attempts = level == 1 ? 1 : 2;
         for (int attempt = 0; attempt < attempts; ++attempt) {
             const auto s = prefix + "Try" + std::to_string(attempt);
@@ -177,11 +190,11 @@ tasks::CompiledWorkflow take_turn(const J &profile, const std::set<std::string> 
             graph.route(prefix + "Open" + std::to_string(attempt), {s + "Disabled", s + "Open0"});
             graph.observe(s + "Disabled", unavailable, {s + "DisabledAgain", s + "Open0"});
             graph.delay_after(s + "Disabled", 250);
-            graph.observe(s + "DisabledAgain", unavailable, {prefix + "UnavailableDefend"});
+            graph.observe(s + "DisabledAgain", unavailable, {prefix + "UnavailableAttack"});
             // 详情打开由同一次公共调用等待并补点，原菜单不能充当成功回执。
             graph.public_step(s + "Open0", "combat-open-detail", {{"x", position[0]}, {"y", position[1]}},
                               {s + "Detail", s + "ResourceError", "Ended", "ActorChanged"},
-                              {{"UnavailableExit", {prefix + "UnavailableDefend"}},
+                              {{"UnavailableExit", {prefix + "UnavailableAttack"}},
                                {"AdvancedExit", {s + "Detail", s + "ResourceError", "Ended", "ActorChanged"}}}, C::all({menu, actor}));
             const auto levels = append_level_selection_steps(graph, s, use_level, casting,
                 target_choices, J{prefix + "LevelUnconfirmed"});
@@ -218,7 +231,7 @@ tasks::CompiledWorkflow take_turn(const J &profile, const std::set<std::string> 
             if (attempt + 1 < attempts)
                 graph.back(s + "ResourceError", errors, menu, {prefix + "Open" + std::to_string(attempt + 1)});
             else {
-                graph.back(s + "ResourceError", errors, menu, {prefix + "UnavailableDefend"});
+                graph.back(s + "ResourceError", errors, menu, {prefix + "UnavailableAttack"});
             }
         }
     }

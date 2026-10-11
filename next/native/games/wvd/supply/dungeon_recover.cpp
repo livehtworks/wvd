@@ -4,10 +4,11 @@ namespace wvd::games::supply {
 tasks::CompiledWorkflow recover_in_dungeon() {
     using C = tasks::PipelineCompiler;
     using J = nlohmann::json;
-    // 旧 31 次开角色每次已等待 2 秒，尚未计入识别、寻恢复和返回，不能继承 60 秒默认。
-    // 四分钟是本子图总预算，不延长输入帧 TTL；每个节点次数和取消门禁仍独立生效。
+    // Keep the existing recovery window; opening now observes the actual
+    // panel rather than treating an unchanged dungeon frame as completion.
     C graph("supply.dungeon_recover", std::chrono::seconds{240});
-    graph.check_policy("supply", {"wvd-network-retry", "wvd-pause", "wvd-download"});
+    graph.check_policy("supply", {"wvd-network-retry", "wvd-pause", "wvd-download", "wvd-party-death", "wvd-party-defeat"});
+    graph.require_inherited_events({"wvd-party-death", "wvd-party-defeat"});
     const auto phase = [](const char *name) { return J{{"mode","supply_context"},{"phase",name}}; };
     const auto interrupted = phase("interrupted");
     const auto trait = C::image("trait"), recover = C::image("recover");
@@ -15,8 +16,9 @@ tasks::CompiledWorkflow recover_in_dungeon() {
     const auto context = phase("context"), post = phase("post");
     const auto needed = C::business("/healing_required", true);
     // 无补给需求是无副作用的正常返回；不能为“什么都不做”扫描战斗/宝箱。
-    // 真正开始补给时 Requested/Begin 仍必须取得可操作场景证据。
-    graph.route("Entry", {"Unneeded", "Encounter", "ResumeAttempt", "Requested"});
+    // Begin owns both visual admission and the business request. A separate
+    // Requested observation only recaptures the unchanged page before Begin.
+    graph.route("Entry", {"Unneeded", "ResumeAttempt", "Begin", "Encounter"});
     graph.observe("Encounter", interrupted, {"EncounterExit"});
     graph.handoff("EncounterExit", "encounter");
     graph.observe_business("Unneeded", C::business("/healing_required", false), {"Terminal"});
@@ -25,18 +27,18 @@ tasks::CompiledWorkflow recover_in_dungeon() {
         C::business("/healing_submissions", 1)}), {"Recovered", "Back0"});
     // 业务条件只能选路，不提供视觉许可。确认动作重新截图证明场景，
     // confirm_event 在同一状态所有者中再次检查需求，不能跳过需求直接声明完成。
-    graph.observe("Requested", C::all({context, needed}), {"Begin"});
-    graph.confirm("Begin", "heal.request", "healing_requested", context,
-                   {"Encounter", "Ready", "Story", "Trait", "Open0"});
+    graph.confirm("Begin", "heal.request", "healing_requested", C::all({context, needed}),
+                   {"Open0", "Ready", "Story", "Trait", "Encounter"});
     auto story = C::image("story");
     story["roi"] = {676, 800, 220, 108};
     // 原版最多轮流尝试 31 次前排角色；每次都重新证明仍在地下城，而非盲点面板下的坐标。
     for (int i = 0; i <= 30; ++i) {
         const auto suffix = std::to_string(i);
-        graph.fixed_click("Open" + suffix, dungeon, post, {36 + (i % 3) * 286, 1425},
-            {"Encounter", "Ready", "Story", "Trait", i < 30 ? "Open" + std::to_string(i + 1) : "OpenFailed"});
+        graph.fixed_click("Open" + suffix, dungeon, C::any({panel, interrupted}), {36 + (i % 3) * 286, 1425},
+            {"Ready", "Story", "Trait", "Encounter", i < 30 ? "Open" + std::to_string(i + 1) : "OpenFailed"});
         graph.hit_limit("Open" + suffix, 1);
-        graph.delay_after("Open" + suffix, 2000);
+        graph.delay_after("Open" + suffix, 100);
+        graph.retry_menu_input("Open" + suffix, dungeon, 1000);
     }
     graph.recovery("OpenFailed", "supply.character_panel_not_opened");
     graph.observe("Ready", C::all({panel, recover}), {"Recover"});
@@ -48,14 +50,14 @@ tasks::CompiledWorkflow recover_in_dungeon() {
         {833, 843}, {"Encounter", "Ready", "SeekRecover"});
     graph.delay_after("SeekRecover", 1000);
     graph.fixed_click("Recover", C::all({panel, recover}), post, {600, 1200},
-        {"Encounter", "Recovered", "Back0"});
+        {"Recovered", "Back0", "Encounter"});
     graph.hit_limit("Recover", 1);
     graph.input_effect("Recover", "WvdHealingEffect");
     graph.delay_after("Recover", 1000);
     // 返回只在角色面板仍打开时执行；已回迷宫就结束返回操作并继续路线。
     for (int i = 0; i < 5; ++i) {
         graph.back("Back" + std::to_string(i), panel, post,
-            {"Encounter", "Recovered", i < 4 ? "Back" + std::to_string(i + 1) : "ReturnFailed"});
+            {"Recovered", "Encounter", i < 4 ? "Back" + std::to_string(i + 1) : "ReturnFailed"});
         graph.hit_limit("Back" + std::to_string(i), 1);
         graph.delay_after("Back" + std::to_string(i), 300);
     }

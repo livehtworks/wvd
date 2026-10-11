@@ -42,7 +42,7 @@ struct MapTarget {
     std::vector<std::array<int, 4>> regions;
     bool harken_arrival = false;
     // 标记处只有目标遭遇的路线：不打开地图，成功战斗回执才推进此任务点。
-    std::optional<int> shortcut_battle_wait_ms;
+    bool shortcut_battle{};
 };
 
 class WvdTaskPlan {
@@ -53,7 +53,7 @@ class WvdTaskPlan {
     WvdTaskPlan with_last_harken_arrival() const;
     WvdTaskPlan with_entry(const nlohmann::json &steps) const;
     WvdTaskPlan with_floor(const std::string &image) const;
-    WvdTaskPlan with_shortcut_battle(int wait_ms) const;
+    WvdTaskPlan with_shortcut_battle() const;
     nlohmann::json inspect() const;
     const std::vector<EntryStep> &entry_steps() const { return entry_; }
     const std::vector<MapTarget> &route() const { return route_; }
