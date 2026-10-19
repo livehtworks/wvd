@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <optional>
 #include <regex>
+#include <sstream>
 #include <set>
 #include <stdexcept>
 #include <string>
@@ -82,13 +83,48 @@ inline bool installed(const ShellReply &reply, const std::string &package) {
     return false;
 }
 inline std::string focus(const std::string &text) {
-    // mFocusedApp 不能证明当前焦点：锁屏/系统弹窗可能遮挡游戏。
-    // 多显示器焦点不一致时返回未知，不随意选择第一个游戏窗口。
-    static const std::regex expression(R"(mCurrentFocus\s*=\s*Window\{[^\r\n]*\s([A-Za-z0-9_.]+)/[^\r\n]*\})");
-    std::set<std::string> packages;
-    for (std::sregex_iterator i(text.begin(), text.end(), expression), end; i != end; ++i)
-        packages.insert((*i)[1].str());
-    return packages.size() == 1 ? *packages.begin() : std::string{};
+    // InputDispatcher 的焦点窗口才证明输入目标，FocusedApplications 不能代替它。
+    // 不再导出 WindowManager 的完整任务树：MuMu 15 的该路径已发生系统服务崩溃。
+    if (text.size() > 2ULL * 1024 * 1024) return {};
+    static const std::regex window(R"(displayId\s*=\s*([0-9]{1,5})\s*,\s*name\s*=\s*'([^'\r\n]*)')");
+    static const std::regex component(R"((?:^|\s)([A-Za-z0-9_.]+)/[A-Za-z0-9_.$]+(?:\s|\}|$))");
+    std::istringstream lines(text);
+    std::string line, found;
+    bool dispatcher{}, display{}, windows{}, in_windows{}, have_window{};
+    std::size_t section_indent{};
+    while (std::getline(lines, line)) {
+        const auto value = trim(line);
+        if (value == "Input Dispatcher State:") {
+            if (dispatcher) return {};
+            dispatcher = true;
+            continue;
+        }
+        if (!dispatcher) continue;
+        if (value.starts_with("FocusedDisplayId:")) {
+            if (display || trim(std::string_view(value).substr(17)) != "0") return {};
+            display = true;
+        }
+        if (value.starts_with("FocusedWindows:")) {
+            if (windows || value != "FocusedWindows:") return {};
+            windows = in_windows = true;
+            section_indent = line.find_first_not_of(" \t");
+            continue;
+        }
+        if (!in_windows || value.empty()) continue;
+        if (line.find_first_not_of(" \t") <= section_indent) {
+            in_windows = false;
+            continue;
+        }
+        std::smatch entry, package;
+        if (!std::regex_match(value, entry, window)) return {};
+        if (entry[1] != "0") continue;
+        const auto name = entry[2].str();
+        if (have_window || !std::regex_search(name, package, component) ||
+            !package_name(package[1].str())) return {};
+        found = package[1].str();
+        have_window = true;
+    }
+    return dispatcher && display && windows && have_window ? found : std::string{};
 }
 inline bool tun_up(const ShellReply &reply) {
     if (reply.exit_code != 0) {

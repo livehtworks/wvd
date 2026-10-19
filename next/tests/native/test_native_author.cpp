@@ -19,6 +19,7 @@
 #include "games/wvd/navigation/harken_exit.hpp"
 #include "games/wvd/navigation/return_city.hpp"
 #include "games/wvd/navigation/world_travel.hpp"
+#include "games/wvd/navigation/dungeon_entry.hpp"
 #include "games/wvd/navigation/auto_route.hpp"
 #include "games/wvd/combat/auto_combat.hpp"
 #include "games/wvd/combat/encounter.hpp"
@@ -97,7 +98,7 @@ struct Ports final : runtime::FlowPorts {
     std::vector<contracts::Command> commands;
     std::uint64_t epoch{}, captures{}, recognitions{};
     std::uint64_t generation{1};
-    bool stop{}, combat{}, blocker{}, ready{}, network{}, quiet{true};
+    bool stop{}, combat{}, blocker{}, ready{}, network{}, quiet{true}, observed_cleanup{true};
     explicit Ports(J profile = J::object()) : business(profile.empty()
             ? storage::LegacyConfigImporter(read("packs/wvd/parameters/legacy-config-fields.json"))
                 .parse({{"GENERAL", J::object()}}).values : std::move(profile),
@@ -214,6 +215,7 @@ struct Ports final : runtime::FlowPorts {
         return operations.execute(binding, p, frame, observation, path);
     }
     bool cancelled() const override { return stop; }
+    bool settle_observed_input() override { return observed_cleanup; }
     void scene(const std::string &name) {
         images.clear(); conditions.clear(); combat = blocker = ready = network = false;
         const bool city = name == "city";
@@ -279,6 +281,190 @@ struct Driver {
         std::cout << id << " PASS\n";
     }
 };
+void healing_close_contract(const J &profile) {
+    J documents = J::object();
+    for (const auto &document : read("resources/authoring/public-flows.json"))
+        documents[document.at("flow").at("id").get<std::string>()] = document;
+    const games::tasks::PublicFlowLibrary library(documents, read("resources/authoring/semantic-assets.json"));
+    const games::tasks::PublicStepScope public_steps([&](const auto &id, const auto &arguments) {
+        return library.compile_step(id, arguments, "zh-Hant");
+    });
+    const auto graph = games::supply::recover_in_dungeon();
+    C root("healing-close-contract");
+    const auto child = root.define_child("Heal", graph);
+    root.route("Entry", {"Run"});
+    root.call_child("Run", child, {"Terminal"}, {{"encounter", {"Terminal"}}, {"blocked", {"Terminal"}}});
+    const auto compiled = root.finish();
+    // Model the game's pages; execute the real recovery factory and executor.
+    for (const auto &scenario : {"two-back-close", "auto-dismiss", "notice-dismiss", "close-retry",
+            "battle-after-recover", "battle-after-back", "battle-before-close", "battle-after-close"}) {
+        auto d = std::make_unique<Driver>(compiled, profile);
+        d->ports.business.enter_dungeon();
+        d->ports.images = {"recover"};
+        unsigned backs{}, closes{};
+        std::optional<std::chrono::steady_clock::time_point> notice_until;
+        const std::string name = scenario;
+        d->ports.before_capture = [&] {
+            if (notice_until && std::chrono::steady_clock::now() >= *notice_until) {
+                d->ports.images = {"trait"}; notice_until.reset();
+            }
+        };
+        d->ports.after_input = [&](const std::string &path) {
+            if (path.find("CloseCharacter") != std::string::npos) {
+                ++closes;
+                const auto &command = d->ports.commands.back();
+                check(command.x == 66 && command.y == 1500, "HEAL_CLOSE_NOT_SHARED_BOTTOM_LEFT_X");
+                if (name == "close-retry" && closes == 1) return;
+                d->ports.images = {"dungFlag"};
+                if (name == "battle-after-close") { d->ports.images.clear(); d->ports.combat = true; }
+            } else if (d->ports.commands.back().key == 4) {
+                ++backs;
+                if (name == "auto-dismiss") d->ports.images = {"dungFlag"};
+                if ((name == "battle-after-back" && backs == 1) ||
+                    (name == "battle-before-close" && backs == 2)) {
+                    d->ports.images.clear(); d->ports.combat = true;
+                }
+            } else {
+                d->ports.images = {"trait"};
+                if (name == "battle-after-recover") { d->ports.images.clear(); d->ports.combat = true; }
+                if (name == "notice-dismiss") {
+                    d->ports.images.clear();
+                    notice_until = std::chrono::steady_clock::now() + 1300ms;
+                }
+            }
+        };
+        d->finish();
+        const bool battle = name.starts_with("battle-");
+        const unsigned expected_backs = name == "battle-after-recover" ? 0U :
+            (name == "auto-dismiss" || name == "battle-after-back") ? 1U : 2U;
+        const unsigned expected_closes = name == "close-retry" ? 2U :
+            (name == "auto-dismiss" || (battle && name != "battle-after-close")) ? 0U : 1U;
+        check(d->last.state == runtime::TickState::Completed && backs == expected_backs &&
+            closes == expected_closes, "HEAL_CLOSE_OR_INTERRUPT_FAILED:" + name + ":" + d->last.code);
+        check(d->ports.business.summary().at("healing_effect_status") == "not_verified",
+            "HEAL_CLOSE_INVENTED_HEALING_EFFECT:" + name);
+        if (!battle) check(d->ports.business.summary().at("healing_attempt_finished").get<bool>(),
+            "HEAL_CLOSED_WITHOUT_FINISHING_ATTEMPT:" + name);
+    }
+    auto unknown = std::make_unique<Driver>(compiled, profile);
+    unknown->ports.business.enter_dungeon(); unknown->ports.images = {"recover"};
+    unknown->ports.after_input = [&](const std::string &path) {
+        if (path.find("CloseCharacter") == std::string::npos) unknown->ports.images = {"trait"};
+    };
+    unknown->until([&] { return unknown->ports.commands.size() == 3; });
+    unknown->ports.submission_state = runtime::SubmissionState::Unresolved;
+    unknown->until([&] { return unknown->ports.commands.size() == 4; });
+    const auto started = std::chrono::steady_clock::now();
+    unknown->until([&] { return std::chrono::steady_clock::now() - started >= 3300ms; }, 4s);
+    check(unknown->ports.commands.size() == 4 &&
+        !unknown->executor.progress_snapshot().at("pending_inputs").empty(), "HEAL_UNKNOWN_CLOSE_REPLAYED");
+    for (const bool recovery_panel : {false, true}) {
+        auto no_heal_profile = profile;
+        no_heal_profile["RECOVER_WHEN_BEGINNING"] = false;
+        auto d = std::make_unique<Driver>(compiled, no_heal_profile);
+        d->ports.business.enter_dungeon();
+        check(!d->ports.business.summary().at("healing_required").get<bool>(), "NO_HEAL_FIXTURE_REQUIRED");
+        d->ports.images = {recovery_panel ? "recover" : "trait"};
+        d->ports.after_input = [&](const std::string &path) {
+            if (path.find("CloseCharacter") != std::string::npos) d->ports.images = {"dungFlag"};
+            else if (d->ports.commands.back().key == 4) d->ports.images = {"trait"};
+            else throw std::runtime_error("UNNEEDED_PANEL_REPEATED_HEAL");
+        };
+        d->finish();
+        check(d->last.state == runtime::TickState::Completed &&
+            d->ports.commands.size() == (recovery_panel ? 3U : 1U) &&
+            !d->ports.business.summary().at("healing_active").get<bool>(), "UNNEEDED_PANEL_NOT_CLOSED");
+    }
+    C chain("heal-navigation-panel-return");
+    const auto heal = chain.define_child("FirstHeal", graph);
+    const auto route = chain.define_child("ReturnRoute", games::navigation::auto_route("dungFlag"));
+    chain.route("Entry", {"Heal"});
+    chain.call_child("Heal", heal, {"Go"}, {{"encounter", {"Terminal"}}, {"blocked", {"Terminal"}}});
+    chain.call_child("Go", route, {"Terminal"},
+        {{"blocked", {"Go"}}, {"encounter", {"Terminal"}}, {"stopped", {"Go"}}});
+    const auto composed = chain.finish();
+    for (const std::string scenario : {"panel-return", "encounter", "unknown-navigation"}) {
+        auto d = std::make_unique<Driver>(composed, profile);
+        d->ports.business.enter_dungeon(); d->ports.images = {"recover"};
+        unsigned navigations{}, closes{}, heals{};
+        d->ports.semantic_leaf = [&](const J &probe) -> std::optional<bool> {
+            if (probe.value("mode", "") == "auto_route_moving")
+                return d->ports.images.contains("dungFlag") && !d->ports.images.contains("trait");
+            if (probe.value("mode", "") == "auto_route_post")
+                return !d->ports.images.empty() || d->ports.combat;
+            return std::nullopt;
+        };
+        d->ports.after_input = [&](const std::string &path) {
+            if (path.find("CloseCharacter") != std::string::npos) {
+                ++closes; d->ports.images = {"dungFlag"};
+            } else if (path.find("Choose") != std::string::npos) {
+                ++navigations;
+                if (navigations == 1) {
+                    d->ports.images = {"trait"};
+                    if (scenario == "encounter") { d->ports.images.clear(); d->ports.combat = true; }
+                    if (scenario == "unknown-navigation") {
+                        d->ports.submission_state = runtime::SubmissionState::Unresolved;
+                        d->ports.observed_cleanup = false;
+                    }
+                } else d->ports.images = {"harken_floor_move_zh_hant", "harken_floor_return_zh_hant"};
+            } else {
+                ++heals; d->ports.images = {"dungFlag"};
+            }
+        };
+        if (scenario == "unknown-navigation") {
+            d->finish();
+            check(navigations == 1 && closes == 0 && d->last.state == runtime::TickState::ExternalBlocked &&
+                d->last.code == "OBSERVED_RESULT_INPUT_CLEANUP_UNCONFIRMED" &&
+                !d->executor.progress_snapshot().at("pending_inputs").empty(),
+                "UNKNOWN_NAVIGATION_ALLOWED_PANEL_INPUT");
+        } else {
+            d->finish();
+            check(d->last.state == runtime::TickState::Completed && heals == 1 &&
+                navigations == (scenario == "encounter" ? 1U : 2U) &&
+                closes == (scenario == "encounter" ? 0U : 1U), "HEAL_NAVIGATION_PANEL_HANDOFF_FAILED");
+        }
+    }
+    std::cout << "PASS healing close and navigation: shared panel owner without new heal, interrupted navigation retries, encounters and unknown input protected\n";
+}
+int low_willpower_contract() {
+    games::WvdQuestCatalog quests(read("packs/wvd/parameters/legacy-quests.json"));
+    const auto graph = games::navigation::enter_dungeon(games::tasks::giant_bounty_plan(quests.at("GiantBounty")), true);
+    const auto warning = games::vision::low_willpower_warning();
+    for (const auto state : {runtime::SubmissionState::Accepted, runtime::SubmissionState::Unresolved}) {
+        Driver d(graph);
+        d.ports.images = {"fortressb10f"};
+        d.ports.submission_state = state;
+        d.until([&] { return !d.ports.inputs.empty(); });
+        const auto pending = d.executor.progress_snapshot().at("pending_inputs");
+        check(pending.size() == 1, "LOW_WILLPOWER_PENDING_NOT_ESTABLISHED");
+        d.ports.images.clear();
+        d.ports.conditions[warning.dump()] = true;
+        d.finish();
+        check(d.last.state == runtime::TickState::ExternalBlocked &&
+            d.last.code == "party.low_willpower_manual_required" && d.ports.inputs.size() == 1 &&
+            d.executor.progress_snapshot().at("pending_inputs") == pending,
+            "LOW_WILLPOWER_AWAIT_MUST_STOP_AND_RETAIN_RECEIPT");
+    }
+    Driver at_entry(graph);
+    at_entry.ports.conditions[warning.dump()] = true;
+    at_entry.finish();
+    check(at_entry.last.state == runtime::TickState::ExternalBlocked && at_entry.ports.inputs.empty(),
+        "LOW_WILLPOWER_INITIAL_PAGE_MUST_STOP_WITHOUT_INPUT");
+    Driver normal(graph);
+    normal.ports.images = {"dungFlag"};
+    normal.finish();
+    check(normal.last.state == runtime::TickState::Completed && normal.ports.inputs.empty(),
+        "LOW_WILLPOWER_NORMAL_ENTRY_REGRESSION");
+    for (const auto &boot : {games::recovery::wait_boot_ready(true), games::recovery::clear_common_screens(true)}) {
+        Driver d(boot);
+        d.ports.conditions[warning.dump()] = true;
+        d.finish();
+        check(d.last.state == runtime::TickState::ExternalBlocked && d.ports.inputs.empty() &&
+            d.last.code == "party.low_willpower_manual_required", "LOW_WILLPOWER_BOOT_MUST_NOT_RESTART");
+    }
+    std::cout << "PASS low-willpower entry/Await direct stop; full Sent/Unknown receipt retained; normal entry unchanged\n";
+    return 0;
+}
 int inn_transitions() {
     {
         Driver d(games::supply::rest_at_inn(false, true));
@@ -400,6 +586,7 @@ int transitions() {
 #include "download_retry_cases.hpp"
 #include "event_stop_contract_cases.hpp"
 #include "shared_page_actions_cases.hpp"
+#include "skill_level_cases.hpp"
 #if defined(_MSC_VER)
 __declspec(noinline)
 #endif
@@ -408,6 +595,16 @@ int run_author_cases(int argc, char **argv);
 // Keep real OCR calls off the stack frame containing unrelated author cases.
 int main(int argc, char **argv) {
     try {
+        // Keep complete-chain checks out of the large legacy test dispatcher
+        // stack frame; production graph compilation needs its normal stack.
+        if (argc == 3 && std::string(argv[1]) == "--giant-linkage") return closure::giant_linkage(argv[2]);
+        if (argc == 4 && std::string(argv[1]) == "--giant-linkage") return closure::giant_linkage(argv[2], argv[3]);
+        if (argc == 4 && std::string(argv[1]) == "--giant-recovery-chain") return closure::giant_linkage(argv[2], argv[3], true);
+        if (argc == 4 && std::string(argv[1]) == "--skill-level-contract")
+            return skill_level_contract_test::run(std::filesystem::absolute(argv[2]),
+                std::filesystem::absolute(argv[3]));
+        if (argc == 2 && std::string(argv[1]) == "--low-willpower-contract")
+            return closure::low_willpower_contract();
         if (argc == 2 && std::string(argv[1]) == "--event-stop-contract")
             return event_stop_contract::run();
         if (argc == 3 && std::string(argv[1]) == "--shared-page-actions")
@@ -776,6 +973,7 @@ int run_author_cases(int argc, char **argv) {
             auto profile=storage::LegacyConfigImporter(read("packs/wvd/parameters/legacy-config-fields.json"))
                 .parse({{"GENERAL",J::object()}}).values;
             profile["RECOVER_WHEN_BEGINNING"]=true;
+            healing_close_contract(profile);
             Driver driver(graph,profile);
             driver.ports.business.enter_dungeon();
             driver.ports.images={"recover"};
@@ -1499,8 +1697,6 @@ int run_author_cases(int argc, char **argv) {
             }
             return 0;
         }
-        if (argc == 3 && std::string(argv[1]) == "--giant-linkage") return closure::giant_linkage(argv[2]);
-        if (argc == 4 && std::string(argv[1]) == "--giant-linkage") return closure::giant_linkage(argv[2], argv[3]);
         if (argc == 4 && std::string(argv[1]) == "--memory-owners") return closure::memory_owner_census(argv[2], argv[3]);
         using J = nlohmann::json;
         if (argc == 2 && std::string(argv[1]) == "--death-transition") {
@@ -3603,8 +3799,11 @@ int run_author_cases(int argc, char **argv) {
         if (!zh_report.nodes.contains("CloseReceipt") ||
             !zh_report.nodes.contains("ReportConfirmed") ||
             !zh_report.nodes.contains("NoMoreReports") ||
-            zh_report.nodes.at("Report").at("next").front() != "CloseReceipt" ||
-            zh_report.nodes.at("ReportConfirmed").at("next").front() != "CheckReports" ||
+            zh_report.nodes.at("Report").at("next").front() != "ReportConfirmed" ||
+            zh_report.nodes.at("ReportConfirmed").at("next").front() != "CloseReceipt" ||
+            zh_report.nodes.at("CloseReceipt").at("next").front() != "CheckReports" ||
+            zh_report.nodes.at("ReportConfirmed").at("observation_args") !=
+                library.resource_condition("guild.report.receipt", "zh-Hant", authoring::ResourceUse::Observation) ||
             !zh_report.nodes.contains("RecheckEmpty") ||
             zh_report.nodes.at("PrepareReport").at("observation_args").dump()
                 .find("guild_bounty_card_header") == std::string::npos)

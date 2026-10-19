@@ -16,6 +16,7 @@
 #include "steel_trial.hpp"
 #include "task_plan.hpp"
 #include "games/wvd/quests/repel_forces.hpp"
+#include "games/wvd/quests/bounty_cycle.hpp"
 #include "games/wvd/quests/sleep_visits.hpp"
 #include <algorithm>
 #include <chrono>
@@ -60,14 +61,31 @@ std::size_t task_unit_count(const std::string &id, const J &values) {
 }
 
 std::function<std::optional<devices::LifecyclePlan>(const contracts::SessionResult &,
-    const contracts::BusinessRunState &, unsigned)> recovery_policy(devices::LifecycleTarget target) {
-    return [target = std::move(target)](const contracts::SessionResult &result,
+    const contracts::BusinessRunState &, unsigned)> recovery_policy(devices::LifecycleTarget target, bool resume_bounty) {
+    return [target = std::move(target), resume_bounty](const contracts::SessionResult &result,
         const contracts::BusinessRunState &business, unsigned attempt)
         -> std::optional<devices::LifecyclePlan> {
         if (result.end != contracts::SessionEnd::Failed || !result.quiescent ||
             attempt < 1) return std::nullopt;
         const auto facts = business.summary();
-        if (handoff_has_unconfirmed_effect(facts)) return std::nullopt;
+        const bool device_failure = result.reason == "device.instance_exited" ||
+            result.reason == "device.instance_restarted" || result.reason == "device.disconnected" ||
+            result.reason == "device.application_exited" || result.reason == "device.application_background";
+        auto unresolved_effects = facts;
+        if (resume_bounty && device_failure && result.unresolved_inputs.is_array() && result.unresolved_inputs.empty() &&
+            (!facts.at("bounty_cycle").at("active").get<bool>() || facts.at("bounty_cycle").at("unit_matches").get<bool>())) {
+            // Same-task recovery preserves these receipts for their existing
+            // owners. It is not the cross-task handoff checked by the shared guard.
+            // Any unresolved input still prevents this exception.
+            unresolved_effects["bounty_report_pending"] = false;
+            if (!facts.at("inn_payment").at("delivery_unknown").get<bool>())
+                unresolved_effects["inn_payment_pending"] = false;
+            const auto &bounty = facts.at("bounty_cycle");
+            if (bounty.at("active").get<bool>() && bounty.at("unit_matches").get<bool>() &&
+                bounty.at("phase") == static_cast<int>(quests::BountyCycle::Phase::Leap))
+                unresolved_effects["bounty_cycle"]["transfer_pending"] = false;
+        }
+        if (handoff_has_unconfirmed_effect(unresolved_effects)) return std::nullopt;
         const auto leap = facts.value("handoff_intent", J(nullptr));
         const bool deferred_leap = result.reason == "leap.unknown" && attempt == 1 &&
             leap.is_object() && leap.value("kind", "") == "wait_7300" &&

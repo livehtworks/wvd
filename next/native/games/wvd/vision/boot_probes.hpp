@@ -114,8 +114,11 @@ inline nlohmann::json boot_probes(bool transient, const std::string &locale = {}
     probes.push_back(outskirts_return_button());
     probes.push_back(harken_floor_menu());
     // 公会页也属于已启动的稳定游戏画面；从工作台直接运行子流程时不能卡在启动门禁。
+    probes.push_back(resource("guild.menu", "zh-Hant"));
     probes.push_back(resource("guild.commissions.page", "zh-Hant"));
     probes.push_back(resource("guild.bounties.page", "zh-Hant"));
+    probes.push_back(resource("guild.report.receipt", "zh-Hant"));
+    probes.push_back(resource("inn.standard.gold.confirmation", "zh-Hant"));
     // 底部既有关闭锚点只证明在游戏内的详情页，不判断城市、悬赏刷新或任务完成。
     // WANTED列表卡头与全屏“新的悬赏令”布局不同，不能强制复用列表卡头的ROI。
     probes.push_back(resource("guild.bounty.reveal.close", "zh-Hant"));

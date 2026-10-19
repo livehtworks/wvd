@@ -2,6 +2,7 @@
 #include "games/wvd/tasks/pipeline_compiler.hpp"
 
 namespace wvd::games::navigation {
-// 自动搜索的完成条件是明确的无目标提示；停止运动仅返回外层重观察，不提交任务步。
-tasks::CompiledWorkflow auto_route(const std::string &target);
+// 自动搜索按无目标提示或提交后的到达状态结束；单纯停止只交回外层。
+// handoff_destination让目标任务接收明确的导航结束，不把它当成战斗胜利。
+tasks::CompiledWorkflow auto_route(const std::string &target, bool handoff_destination = false);
 }

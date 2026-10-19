@@ -71,7 +71,23 @@ void DeviceSession::prepare_input_channel(std::stop_token stop) {
     require(!stop.stop_requested(), "INPUT_PREPARATION_CANCELLED");
     require(connected_ && control_, "DEVICE_INPUT_NOT_READY");
     require(!control_->unresolved(), "DEVICE_INPUT_RESULT_UNCONFIRMED");
-    if (!control_->connected()) control_->connect(15000ms, stop);
+    if (!control_->connected()) {
+        const auto before = control_->cleanup_status();
+        const auto started = std::chrono::steady_clock::now();
+        record({{"event", "input.channel_prepare"}, {"generation", generation_.load()},
+            {"previous_status", before}});
+        try {
+            require(control_->close(), "SCRCPY_CLEANUP_PENDING");
+            control_->connect(15000ms, stop);
+        } catch (const std::exception &error) {
+            record({{"event", "input.channel_prepare_failed"}, {"reason", error.what()},
+                {"control_status", control_->cleanup_status()}});
+            throw;
+        }
+        record({{"event", "input.channel_ready"}, {"generation", generation_.load()},
+            {"elapsed_ms", std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now() - started).count()}});
+    }
     require(!stop.stop_requested(), "INPUT_PREPARATION_CANCELLED");
 }
 void DeviceSession::record(nlohmann::json item) {
@@ -171,7 +187,7 @@ android::ShellReply DeviceSession::query(const std::string &command, int timeout
     }
 }
 std::string DeviceSession::foreground(std::stop_token stop) {
-    const auto answer = query("dumpsys window", 5000, stop);
+    const auto answer = query("dumpsys input", 5000, stop);
     require(answer.exit_code == 0, "FOREGROUND_QUERY_FAILED");
     return android::focus(answer.output);
 }
@@ -225,9 +241,9 @@ RawFrame DeviceSession::capture_impl(bool preview, std::stop_token stop) {
         finished - metadata_at_ > 1000ms || latest_size_ != size) {
         timing::Scope metadata_time(timing::Part::Metadata);
         metadata_at_ = {}; // 查询失败不得留下“刚刷新过”的半套元数据。
-        const auto focused = foreground(stop);
         const auto input = query("dumpsys input", 5000, stop);
         require(input.exit_code == 0, "VIEWPORT_QUERY_FAILED");
+        const auto focused = android::focus(input.output);
         const auto viewport = android::input_viewport(input.output);
         if (stop.stop_requested()) throw std::runtime_error("CAPTURE_CANCELLED");
         if (focused.empty() || !viewport || viewport->size != size)
@@ -351,7 +367,14 @@ bool DeviceSession::execute(const contracts::Command &command, std::stop_token s
     // 输入前已准备控制通道并重新取帧；此处不可握手后提交旧坐标。
     require(control_->connected(), "INPUT_CHANNEL_CHANGED_REOBSERVE_REQUIRED");
     if (stop.stop_requested()) return false;
-    control_->submit(command, latest_size_.width, latest_size_.height, stop);
+    try {
+        control_->submit(command, latest_size_.width, latest_size_.height, stop);
+    } catch (const std::exception &error) {
+        record({{"event", "input.transport_failed"}, {"reason", error.what()},
+            {"generation", generation_.load()}, {"command_kind", static_cast<int>(command.kind)},
+            {"control_status", control_->cleanup_status()}});
+        throw;
+    }
     return true; // TransportSubmitted, never a game-level confirmation.
 }
 
@@ -545,7 +568,10 @@ bool DeviceSession::vpn_ui_step(const std::string &package, bool &start_clicked,
     if (cancelled() || vpn_connected()) return false;
     // 先准备控制通道，再采当前授权界面，不能拿握手前的坐标迟到点击。
     if (!control_) throw std::runtime_error("SCRCPY_CONTROL_MISSING");
-    if (!control_->connected()) control_->connect(15000ms, {}, cancelled);
+    if (!control_->connected()) {
+        require(control_->close(), "SCRCPY_CLEANUP_PENDING");
+        control_->connect(15000ms, {}, cancelled);
+    }
     if (cancelled()) return false;
     const auto live_frame = capture();
     if (cancelled()) return false;

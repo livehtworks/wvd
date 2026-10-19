@@ -34,7 +34,7 @@ class ScrcpyControlClient final {
     // 仅在DeviceSession已核实对应安卓实例退出后调用；不能用于普通ADB断线。
     bool retire_exited_instance() noexcept;
     std::string cleanup_status() const;
-    bool connected() const { return ready_ && socket_ != INVALID_SOCKET; }
+    bool connected() const noexcept;
     bool unresolved() const { return unresolved_; }
 
   private:
@@ -47,6 +47,8 @@ class ScrcpyControlClient final {
     SOCKET socket_{INVALID_SOCKET};
     HANDLE child_{};
     bool forward_{}, uploaded_{}, winsock_{}, unresolved_{}, ready_{}, partial_frame_{};
+    std::size_t submission_bytes_{}, submission_messages_{};
+    int last_socket_error_{};
     bool forward_attempted_{};
     std::string forward_local_, forward_remote_;
     bool cleanup_unconfirmed_{}, held_{};
@@ -57,6 +59,6 @@ class ScrcpyControlClient final {
     void receive_exact(char *destination, std::size_t count, Clock::time_point deadline,
                        std::stop_token stop, const Cancellation &cancelled);
     void send_bytes(std::span<const std::uint8_t> bytes, Clock::time_point deadline,
-                    std::stop_token stop, const Cancellation &cancelled);
+                    std::stop_token stop, const Cancellation &cancelled, bool submission = false);
 };
 } // namespace wvd::devices

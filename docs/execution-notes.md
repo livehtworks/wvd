@@ -1,5 +1,17 @@
 # 当前执行注意项
 
+- 排查跳轮恢复时区分bounty_leap_prepared与实际QuickLeap/Leap输入。transfer_pending由准备事件设置，不等于DeliveryUnknown；恢复重选根入口后，仅原active/Leap/unit_matches一致时接回已有Leap，不重复准备。跨城Travel、单元错位和未知送达保护不变。旧版反例及提交前/后恢复验证见reviews/bounty-leap-reconnect-20261019.md。
+
+- manage_service的Start会在CandidateRoot写service-launch.json。隔离服务不得共用正式候选目录，否则会把后续快捷启动指针改成测试data-root/端口，即使正式进程仍正常运行。2026-10-19只读公会排查中已确认并依据正式服务身份恢复17654/data-root，保留独立恢复记录；后续使用独立候选副本或无共享启动配置的现有隔离测试入口，不改正式profile/workflows。
+
+- 2026-10-19恢复面板等待可被哈肯楼层菜单替换；不能将已知菜单下的输入结果超时称为游戏卡死。补给复用原harken_floor_menu，经既有encounter出口返回调用者，正常面板/迷宫仍优先，原任务点账目和Unknown输入保护不变。最后哈肯点已有target_completed后，父悬赏仅核同轮phase/unit/全部点数登记路线完成，不再次要求菜单持续显示；随后返城仍认新帧并处理遭遇，不能把路线完成当返城成功。原图回归使用test_recognition_methods的recorded-input-contract，独立pack须按ocr-models.json核对真实模型；父子交接另用giant_linkage的菜单消失/遇敌场景。证据见reviews/healing-harken-handoff-20261019.md及reviews/route-receipt-settlement-20261019.md。
+
+- FlowPorts的默认settle_observed_input返回true。受控用例模拟DeliveryUnknown且通道清理未确认时，必须明确返回false；否则一张合法后置帧会沿既有成功清理合同结清账目，不能用该夹具证明Unknown保留。真实执行器在false时返回OBSERVED_RESULT_INPUT_CLEANUP_UNCONFIRMED并保留pending；本轮healing-effect-contract验证导航面板不产生额外关闭输入，生产代码保护未放宽。
+
+- scrcpy断线复核须同时看真实socket/客户端状态和持有触摸/按键，不能只看ADB恢复或本地ready/socket句柄。真实TCP夹具发现远端关闭后本机send仍可能接受UP，不能据此清理未知持有输入；旧故障输入只在原结果证明或明确对应实例退出责任下处理。恢复空闲连接先按原close清理/握手再取图；正常非阻塞peek不增加截图/OCR/ADB操作。验收夹具只隔离ADB启动器，实际生产控制客户端和Windows TCP照常执行；sc-c1失败与sc-c3最终证据均保留，详见reviews/scrcpy-startup-reconnect-20261013.md。
+
+- MuMu15的完整dumpsys window导出在2026-10-19 17:33:20出现system_server SIGSEGV，实际栈为TaskUtils/TaskFragment/Task.toFullString/DisplayContent.dump/WindowManagerService.doDump，随后WVD元数据不可用、ADB closed；不要只按后面的传输错误归因。当前前台/输入上下文统一从dumpsys input的InputDispatcher焦点窗口读取，不能恢复完整窗口树查询或以FocusedApplications/FocusRequests代替窗口焦点。前后焦点、viewport、分段状态及完整输入身份仍核对；真实原文/反例见tests/fixtures/android-input和devices的--input-context。此例不证明其它无HUD哈肯转场也是系统崩溃，详见reviews/last-two-recoveries-20261019.md。
+
 - test_native_author的真实supply-plan曾间歇退出0xC00000FD；af-stack3 CDB实栈确认测试main自身占0xd7120字节，叠加识别/OCR调用后溢出。供给入口与其余作者用例拆开后原测试及af8通过，不增大线程栈、不删除断言。单次复测通过不能排除这种临界栈错误，也不能将该测试入口问题归为产品历史内存增长；使用本地PDB避免CDB默认网络符号查询长等。
 
 - 完整巨人配置的CompiledWorkflow::validate曾发生0xC00000FD；CDB原栈定位到按步骤递归的visit，帧约944字节。2000节点回归进一步定位到compile_native_program的作用域节点visit。节点可达性、作用域内节点遍历及call_child局部计数收集统一使用显式工作栈；实际子调用仍保留原8层合同。不扩大线程栈，不以小配置通过代替正式配置组合验证，也不把编译期栈溢出归因为历史进程提交增长。
@@ -50,6 +62,7 @@
 - HeapAnalyzer还原沿用其README的显式nuget.org源、locked-mode及独立派生包缓存；本机默认源只有VS Offline，省略source会报NU1101。不得改用户NuGet设置或解锁版本来绕过。
 - 不可变文件仍持有拒绝写入/删除的句柄时，按路径CreateHardLink会触发共享冲突。发布只对未公开暂存目录允许成员创建，源文件及已发布租约不放宽；从冻结句柄创建链接后核成员/哈希，再取得正常只读租约。不得释放活跃模型锁后链接可变源。
 - 当前工程画像/验收入口以AGENTS、next/docs/core-contracts、docs/data-authority为准；历史Python测试不是原生产品验收。原生构建运行期间不要改C++/头文件/CMake，避免混合产物身份。
+- `test_native_author` 的整链CLI直接从main分派，不进入大型 `run_author_cases`：2026-10-20 CDB确认该函数固定栈帧0xD2628，叠加完整工厂调用可耗尽测试进程栈。不要以增大生产栈、删验收或归因历史内存增长处理此测试入口问题。新增 `vision::resource` 使用须同时核对 `location_probes.hpp` 的资源登记；目录有素材不代表静态配方表已可调用。证据见reviews/giant-recovery-chain-20261020.md。
 - `next/tools/run_contracts.py`必须显式模块/基线与全新隔离根；源hash在构建前后/验证末尾核对，EXE hash也复核。旧flag证据只证明对应旧产物，不能覆盖后续源码修改。
 - Windows外部诊断进程使用原子Job归属及固定输出泵；GetProcessById退出码本机不可靠，使用原始HANDLE Wait/ExitCode。父进程退出不表示继承管道的后代退出；返回前只终止本Job后代并核active=0，不杀无关进程。
 - trace JSON/JSONL共享字节/行/记录/深度预算，严格UTF8；末尾无换行标partial，不吞掉。关闭输出后核hash/大小，collector完成标记在实际结果保存后写，deadline包含末段流式哈希。
@@ -245,7 +258,8 @@
 - 旧 Python 源码只读参考，不能 import 旧 `utils`/GUI 做 Smoke；它可能初始化日志或保存用户配置。历史 Maa 源码和证据保留在 `next/archive/`、`docs/archive/`，不参与当前编译。
 - 模板识别必须区分 Hit/NoHit/Error。OCR 当前锁定英文模型，不冒充繁中识别。图标点击中心只定位入口，不能用通用城市图标推断王城；王城塔楼背景是只读地点证据。
 - 菜单素材必须取淡入结束的稳定帧，再在另一张稳定帧核对。旅店“離開”曾从淡入阶段裁图，稳定画面分数仅0.76；重取稳定素材后独立帧0.996。不能靠降低阈值补偿坏素材。时序条件在同一帧的选路与输入复核必须返回一致结果，且不能仅靠重复读取旧帧累积静止时间。
-- 多个候选在同帧调用识别时，不能每个条件重建并丢弃所有模板叶子证据；模板复用须保持帧身份、ROI、语言、参数和有界内存。高等级技能不能在等级条未命中时放行默认等级，点击后须确认对应按钮选中态。滚动历史截图限频不代表实际取帧周期。
+- 多个候选在同帧调用识别时，不能每个条件重建并丢弃所有模板叶子证据；模板复用须保持帧身份、ROI、语言、参数和有界内存。高等级技能不能在等级条未命中时放行默认等级，点击后须确认对应按钮选中态。2026-10-19原帧证实水纹可使Lv3全标签在Lv5处取得0.9013，不能仅凭共用Lv和该处金色判断成功；原skill_level需在已定位标签内核对数字，原页面搜索范围不变。回归原图及来源在tests/fixtures/skill-level，独立证据在.local/lv3-261019。滚动历史截图限频不代表实际取帧周期。
+- 2026-10-19裸调用`test_native_author --skill <原图>`在等级检查前因未装配`chest-reward-continue`公共步骤退出（PUBLIC_STEP_LIBRARY_NOT_ASSEMBLED），未计为通过；本轮已通过的原帧入口是recognition模块的`--skill-level-contract`，运行目录与资源装配由现有run_contracts负责。实机等级确认以原图、对应输入结果和释放回执为证，不用旧CLI启动失败否定已取得的生产证据；该旧入口装配问题未在本轮扩展修复。
 - 语言排除的NoHit不是像素测量，不含`best_score/best_box`；同帧缓存换阈值时须保留排除结果，不能无条件读取分数或补假分数。candidate65首次实跑已暴露该消费者缺口，candidate66修复；对应定向检查必须包括同帧不同阈值，单模板/每次换帧检查不足以覆盖。
 - 大地图多个地点复用同类建筑图标，地点身份只能由名称证实；繁中地图还需以“關閉”及缩放 `+` 共同确认场景。名称模板的中心不是建筑点击点，不能直接替换旧 `City_*` 输入目标。
 - `next/resources/authoring/{semantic-assets,public-flows}.json` 是编辑源，运行时加载打包副本；`package_functional.py` 同步两份JSON及语义目录实际引用、位于`next/resources/images`的扩展源素材，并更新manifest成员哈希，随后校验繁中引用。既有旧素材没有该源时保持原包，不扫描日志/mod。发布后不得从活动作者源热读配方。语义资源的只读证据不可用作点击目标。准备阶段缺PNG会拒绝运行，HTTP请求已接受不等于任务已启动；须核对最终run状态和准备错误。

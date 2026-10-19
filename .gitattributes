@@ -2,3 +2,6 @@
 /next/resources/authoring/*.json text eol=lf
 /next/packs/wvd/parameters/*.json text eol=lf
 /next/packs/wvd/manifest.json text eol=lf
+
+# Recorded device output is verified against its original byte hash.
+/next/tests/fixtures/android-input/mumu15-input.txt -text

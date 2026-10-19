@@ -1308,6 +1308,8 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
         // 这里只作后置分类，绝不授权下一次输入；通用 any/all 的 Error 传播不变。
         if (!map && observe({{"mode", "template"}, {"image", "dungFlag"}, {"threshold", .8}}))
             return decision(true, allowed_rect, {{"stage", "dungeon"}});
+        if (observe(J{{"mode", "supply_context"}, {"phase", "panel"}}))
+            return decision(true, allowed_rect, {{"stage", "character_panel_handoff"}}, false);
         for (const auto &probe : auto_route_probes(bound.value("resource_locale", "")))
             if (observe(probe))
                 return decision(true, allowed_rect, {{"stage", probe.value("image", "combat_active")}});
@@ -2013,8 +2015,21 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
             auto result = one(name, args);
             attempts.push_back(result);
             if (result["outcome"] == "Hit") {
+                const auto found = rect(result.at("box"), image.size());
+                // Shared "Lv" strokes can make Lv5 match Lv3 during a touch ripple.
+                // Validate the numeral at that label, without narrowing the page search.
+                const int numeral_width = std::min(found.width, std::max(1, found.height * 3 / 4));
+                auto numeral_args = args;
+                numeral_args["crop"] = {found.width - numeral_width, 0, numeral_width, found.height};
+                numeral_args["roi"] = {found.x + found.width - numeral_width, found.y,
+                    numeral_width, found.height};
+                const auto numeral = one(name, numeral_args);
+                result["evidence"]["level_numeral"] = numeral;
+                if (numeral.at("outcome") == "Error") return numeral;
+                if (numeral.at("outcome") != "Hit")
+                    return decision(false, {}, {{"reason", "level_numeral_not_confirmed"},
+                        {"level", level}, {"match", result}});
                 if (p.value("selected", false)) {
-                    const auto found = rect(result.at("box"), image.size());
                     const auto center = cv::Point(found.x + found.width / 2, found.y + found.height / 2);
                     const auto button = cv::Rect(center.x - 55, center.y - 30, 110, 60) & allowed_rect;
                     cv::Mat hsv, gold;

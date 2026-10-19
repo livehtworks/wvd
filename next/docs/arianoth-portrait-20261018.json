@@ -1,0 +1,100 @@
+{
+  "role": "F 爱莉安诺特",
+  "name_confirmation": "User named ACTIVE character; original frame displays 愛莉安諾特",
+  "source_frame": "D:\\programcode\\python\\wvd\\next\\.local\\arianoth-261018\\current.png",
+  "source_frame_sha256": "78da7cdebf8224b8c195914c109f219fe376af0c46c06ebd9cfd6fa04708501e",
+  "verification_frame": "D:\\programcode\\python\\wvd\\next\\.local\\arianoth-261018\\verification.png",
+  "verification_frame_sha256": "624eb2bd0647ad543d0175e54625697aab12355f80bd7cc2b8de2eaa65a82116",
+  "viewport": [
+    900,
+    1600
+  ],
+  "source_crop": [
+    80,
+    61,
+    78,
+    43
+  ],
+  "search_roi": [
+    0,
+    35,
+    250,
+    120
+  ],
+  "template": "next/resources/images/spellskill/char/F 爱莉安诺特.png",
+  "template_sha256": "f6ac9b9074aee14c52eea7960a72e1cf5b8cb9259cba7b6208ff7dfe98d37003",
+  "verification": {
+    "score": 1.0,
+    "box": [
+      80,
+      61,
+      78,
+      43
+    ],
+    "threshold": 0.8
+  },
+  "closest_existing": [
+    {
+      "role": "F 伊亚玛斯",
+      "score": 0.7389118075370789,
+      "position": [
+        145,
+        0
+      ]
+    },
+    {
+      "role": "P 叶卡捷琳娜_alt",
+      "score": 0.7263983488082886,
+      "position": [
+        15,
+        4
+      ]
+    },
+    {
+      "role": "P 拉纳维尔_sp",
+      "score": 0.6849473118782043,
+      "position": [
+        70,
+        19
+      ]
+    },
+    {
+      "role": "F 雅蓓妮斯_alt",
+      "score": 0.6801435351371765,
+      "position": [
+        32,
+        5
+      ]
+    },
+    {
+      "role": "G 本杰明",
+      "score": 0.6746047139167786,
+      "position": [
+        145,
+        27
+      ]
+    }
+  ],
+  "scope": "Original pixels only; no threshold/ROI/runtime logic/profile changes; cross-frame check is not a general accuracy claim",
+  "native_validation": {
+    "data_root": "next/.local/arianoth-261018/validation-data",
+    "catalog_present": true,
+    "current_frame": "next/.local/arianoth-261018/native-probe-current.json",
+    "verification_frame": "next/.local/arianoth-261018/native-probe-verification.json",
+    "outcomes": ["Hit", "Hit"],
+    "action_eligible": [true, true],
+    "identity_basis": "full_portrait",
+    "game_inputs_sent": 0
+  },
+  "deployment": {
+    "candidate": "next/dist/wvd-next-native",
+    "instance_id": "C9F0EB83-7A8C-4C5B-A982-FF9BD16877EA",
+    "port": 17654,
+    "state": "Idle",
+    "run_id": 0,
+    "exe_sha256": "28c9511db33571074fa064803bc0ba992bed163334357601e163da8006fde3ff",
+    "product_inputs_sha256": "0061a6227dc627a5c2d49dfa0a1fd4ffe415dc061eb9d5786a0f82796e85bdef",
+    "unchanged_profile_workflow_files": 27,
+    "evidence": "next/.local/arianoth-261018/production-run.json"
+  }
+}

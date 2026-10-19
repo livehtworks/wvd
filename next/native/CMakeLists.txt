@@ -160,6 +160,10 @@ add_executable(test_native_devices EXCLUDE_FROM_ALL
   ../tests/native/test_native_devices.cpp)
 target_link_libraries(test_native_devices PRIVATE wvd_native_devices)
 target_compile_options(test_native_devices PRIVATE /utf-8 /W4 /EHsc)
+add_executable(test_scrcpy_connection EXCLUDE_FROM_ALL
+  ../tests/native/test_scrcpy_connection.cpp)
+target_link_libraries(test_scrcpy_connection PRIVATE wvd_native_devices)
+target_compile_options(test_scrcpy_connection PRIVATE /utf-8 /W4 /EHsc)
 add_executable(capture_stall_helper EXCLUDE_FROM_ALL
   ../tests/native/capture_stall_helper.cpp)
 target_compile_options(capture_stall_helper PRIVATE /utf-8 /W4 /EHsc)

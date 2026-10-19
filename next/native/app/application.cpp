@@ -1651,7 +1651,9 @@ runtime::NativeRunDefinition Application::assemble_task(const J &request, const 
         return games::wvd_operation_factory(dynamic_cast<games::WvdRunState &>(base),
             std::move(event), std::move(checkpoint));
     };
-    definition.recovery = games::tasks::recovery_policy(lifecycle);
+    definition.recovery = games::tasks::recovery_policy(lifecycle,
+        task.id == "GiantBounty" || task.id == "Scorpionesses" ||
+        task.id == "Scorpionesses_plus_6_hands" || task.id == "jier");
     if (handoff_source.is_object()) {
         definition.handoff_ready = [source = handoff_source](
             const contracts::SessionResult &last, const contracts::BusinessRunState &state) {

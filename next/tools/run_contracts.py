@@ -20,11 +20,18 @@ CASES = {
         (*FLOW_REGRESSIONS, "receipt-exception-safety", "exit-proof-causality", "input-effect-contract", "progress-contract",
          "unknown-input-manual-stop", "event-scope-copy-contract", "unknown-ancestor-reconnect-input")],
     "devices": [("test_native_devices", []), ("test_native_devices", ["--physical-gate-authority"]),
-        ("test_native_devices", ["--lifecycle-deadline"])],
+        ("test_native_devices", ["--input-context", "tests/fixtures/android-input/mumu15-input.txt"]),
+        ("test_native_devices", ["--lifecycle-deadline"]),
+        ("test_scrcpy_connection", ["{output}/scrcpy-connection"])],
     "recognition": [("test_native_author", ["--" + flag]) for flag in
         ("pressure-contract", "builtin-resource-closure", "healing-effect-contract", "target-chest-completion",
          "combat-open-repair", "single-auto-progress")] +
-        [("test_native_author", ["--public-download-retry", "{output}/public-download-retry"]),
+        [("test_native_author", ["--skill-level-contract", "{pack}", "{output}/skill-level"]),
+         ("test_recognition_methods", ["--recorded-input-contract", "{pack}",
+            "tests/fixtures/healing-harken/cases.json", "{output}/healing-harken"]),
+         ("test_recognition_methods", ["--recorded-input-contract", "{pack}",
+            "tests/fixtures/guild-boot/cases.json", "{output}/guild-boot"]),
+         ("test_native_author", ["--public-download-retry", "{output}/public-download-retry"]),
          ("test_native_author", ["--shared-page-actions", "{output}/shared-page-actions"]),
          ("test_native_ocr", ["--ctc-contract"]),
          ("test_native_ocr", ["--result-contract", ROOT / "resources/ocr/en_us"]),
@@ -35,6 +42,7 @@ CASES = {
          ("test_native_author", ["--leaf-plan-contract", "{output}/leaf-plan"]),
          ("test_native_author", ["--supply-plan-contract", "{pack}", "{output}/supply-plan"])],
     "app": [("test_native_author", ["--event-stop-contract"]),
+        ("test_native_author", ["--low-willpower-contract"]),
         ("test_native_application", ["--measurement-contract"]),
         ("test_native_application", ["--builtin-transaction", "{output}/builtin-transaction"]),
         ("test_native_application", ["--submission-history", "{output}/submission-history"]),
@@ -84,6 +92,18 @@ def materialize_pack(output):
         else:
             shutil.copyfile(source, destination)
     return target
+
+def materialize_recorded_models(pack):
+    models = json.loads((ROOT / "resources/recognition/ocr-models.json").read_text(encoding="utf-8"))["models"]
+    for model in models.values():
+        for name, member in model["files"].items():
+            source = ROOT / member["source"]
+            if hashlib.sha256(source.read_bytes()).hexdigest() != member["sha256"]:
+                raise RuntimeError("CONTRACT_OCR_MODEL_CHANGED:" + str(source))
+            target = pack / model["bundle_directory"] / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(source, target)
+
 
 def select_modules(changed):
     chosen = set()
@@ -157,6 +177,8 @@ def execute(modules, output):
         if source_identity()["product_inputs_sha256"] != frozen["product_inputs_sha256"]:
             raise RuntimeError("CONTRACT_SOURCE_CHANGED_DURING_BUILD")
         pack = materialize_pack(output) if modules & {"app","recognition"} else ROOT / "packs/wvd"
+        if any("--recorded-input-contract" in args for _, _, args in cases):
+            materialize_recorded_models(pack)
         for module, target, args in cases:
             flag = str(args[0]) if args and str(args[0]).startswith("--") else "base"
             run("contract-" + target + "-" + flag.lstrip("-"),

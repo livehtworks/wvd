@@ -1,0 +1,12 @@
+{
+  "instance": "43E2B469-365A-4D61-8A47-4B3204F4CE0E",
+  "run": 15,
+  "generation": 2,
+  "request_id": "giant-remaining-lv3-20261019-a4acdc45cc154b0cb5a994f7132025b6",
+  "before-open.png": {"frame": 338, "action_epoch": 80},
+  "harken-menu.png": {"frame": 381, "action_epoch": 81, "event": 3418},
+  "input": {"event": 3374, "position": [36, 1425], "sequence": 81},
+  "restart": {"event": 3417, "elapsed_ms": 62690},
+  "evidence": "next/.local/rr-261019/report.md",
+  "scope": "Original pixels; device transport only is isolated. Prior target completion is fixture setup; production Service, factory, gate, executor and business state run unchanged."
+}

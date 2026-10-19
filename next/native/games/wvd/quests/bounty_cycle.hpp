@@ -19,6 +19,7 @@ class BountyCycle {
     void returned(std::size_t unit);
     void reported(std::size_t unit, std::size_t reports);
     void complete(std::size_t unit, bool rested);
+    bool segment_complete(std::size_t unit) const;
     nlohmann::json summary(std::size_t unit, std::size_t reports) const;
   private:
     void require_phase(std::size_t unit, Phase expected) const;

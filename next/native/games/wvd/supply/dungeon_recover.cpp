@@ -1,4 +1,5 @@
 #include "dungeon_recover.hpp"
+#include "games/wvd/recovery/page_actions.hpp"
 
 namespace wvd::games::supply {
 tasks::CompiledWorkflow recover_in_dungeon() {
@@ -18,10 +19,14 @@ tasks::CompiledWorkflow recover_in_dungeon() {
     // 无补给需求是无副作用的正常返回；不能为“什么都不做”扫描战斗/宝箱。
     // Begin owns both visual admission and the business request. A separate
     // Requested observation only recaptures the unchanged page before Begin.
-    graph.route("Entry", {"Unneeded", "ResumeAttempt", "Begin", "Encounter"});
+    graph.route("Entry", {"UnneededPanel", "Unneeded", "ResumeAttempt", "Begin", "Encounter"});
     graph.observe("Encounter", interrupted, {"EncounterExit"});
     graph.handoff("EncounterExit", "encounter");
+    graph.observe("UnneededPanel", C::all({C::business("/healing_required", false), panel}),
+        {"CloseCharacter", "Back0"});
     graph.observe_business("Unneeded", C::business("/healing_required", false), {"Terminal"});
+    graph.observe("UnneededClosed", C::all({C::business("/healing_required", false), dungeon}),
+        {"Terminal"});
     // A cleared overlay resumes closing the old attempt, not another heal.
     graph.observe("ResumeAttempt", C::all({context, C::business("/healing_active", true),
         C::business("/healing_submissions", 1)}), {"Recovered", "Back0"});
@@ -55,13 +60,17 @@ tasks::CompiledWorkflow recover_in_dungeon() {
     graph.input_effect("Recover", "WvdHealingEffect");
     graph.delay_after("Recover", 1000);
     // 返回只在角色面板仍打开时执行；已回迷宫就结束返回操作并继续路线。
-    for (int i = 0; i < 5; ++i) {
+    for (int i = 0; i < 2; ++i) {
         graph.back("Back" + std::to_string(i), panel, post,
-            {"Recovered", "Encounter", i < 4 ? "Back" + std::to_string(i + 1) : "ReturnFailed"});
+            {"UnneededClosed", "Recovered", "Encounter", i == 0 ? "Back1" : "CloseAfterBack"});
         graph.hit_limit("Back" + std::to_string(i), 1);
         graph.delay_after("Back" + std::to_string(i), 300);
     }
-    graph.recovery("ReturnFailed", "supply.recover_panel_not_closed");
+    // A no-heal notice may disappear on its own. Recheck the page before X;
+    // an encounter owns the screen as soon as it interrupts the panel.
+    graph.route("CloseAfterBack", {"Recovered", "Encounter", "CloseCharacter"});
+    recovery::page_actions::close_character(graph, "CloseCharacter", C::any({dungeon, interrupted}),
+        {"Encounter", "UnneededClosed", "Recovered"});
     // Match legacy StateDungeon: attempt Recover, close its UI, continue. This
     // is not a health guarantee and must not be recorded as a healing effect.
     graph.confirm("Recovered", "heal.attempt.closed", "healing_attempt_finished", dungeon, {"Terminal"});

@@ -70,19 +70,25 @@ CompiledWorkflow report_bounties_zh_hant(const PublicFlowLibrary &library,
         J{{"location", 0}}, "zh-Hant");
     const auto board = graph.define_child("PublicBoard", opened.workflow);
     const auto exit = graph.define_child("LeaveBoard", leave_bounty_board(library, "zh-Hant"));
-    graph.route("Entry", {"Pending", "OpenBoard"});
-    graph.observe("Pending", C::business("/bounty_report_pending", true), {"Uncertain"});
+    graph.route("Entry", {"PendingReceipt", "RecordedReceipt", "OpenBoard"});
+    graph.observe("PendingReceipt", C::all({C::business("/bounty_report_pending", true), receipt}), {"ReportConfirmed"});
+    graph.observe("RecordedReceipt", C::all({C::business("/bounty_report_pending", false), receipt}), {"CloseReceipt"});
+    graph.observe("Pending", C::business("/bounty_report_pending", true), {"ResolvePending"});
+    graph.route("ResolvePending", {"PendingReceipt", "RetryReport", "Uncertain"});
+    graph.observe("RetryReport", C::all({page, completed, C::absent(receipt)}), {"Report"});
     graph.recovery("Uncertain", "quest.bounty_report_unconfirmed");
     // 与刷新、开轮前检查共用同一公共开页链，不再另外猜公会/委托/悬赏的位置。
     graph.call_child("OpenBoard", board, {"CheckReports"});
-    graph.route("CheckReports", {"PrepareReport", "EmptyCandidate"});
+    graph.route("CheckReports", {"Pending", "PrepareReport", "EmptyCandidate"});
     graph.confirm("PrepareReport", "bounty.report.prepare", "bounty_report_prepared",
         C::all({page, completed, C::absent(receipt)}), {"Report"});
-    graph.click("Report", C::all({page, completed}), completed, receipt, {"CloseReceipt"});
-    graph.click("CloseReceipt", receipt, close, C::all({page, C::absent(receipt)}), {"ReportConfirmed"});
-    graph.retry_menu_input("CloseReceipt", vision::menu_retry_ready(receipt));
+    graph.click("Report", C::all({page, completed}), completed, receipt, {"ReportConfirmed"});
+    // Record the visible receipt before dismissing it. Recovery can then close
+    // it without counting again; a missing receipt never proves submission.
     graph.confirm("ReportConfirmed", "bounty.report.receipt", "bounty_report_completed",
-        C::all({page, C::absent(receipt)}), {"CheckReports"});
+        receipt, {"CloseReceipt"});
+    graph.click("CloseReceipt", receipt, close, C::all({page, C::absent(receipt)}), {"CheckReports"});
+    graph.retry_menu_input("CloseReceipt", vision::menu_retry_ready(receipt));
     // 没有报告属于负证据：列表必须已加载，并跨新帧复核。等待不是点击期限，
     // 期间若报告出现，优先提交；网络/转场不允许通过此分支离开或跳轮。
     graph.observe("EmptyCandidate", no_report, {"RecheckEmpty"});

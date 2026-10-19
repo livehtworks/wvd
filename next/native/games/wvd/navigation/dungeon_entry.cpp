@@ -1,7 +1,10 @@
 #include "dungeon_entry.hpp"
 #include "world_travel.hpp"
 #include "games/wvd/recovery/boot.hpp"
+#include "games/wvd/recovery/low_willpower.hpp"
 #include "games/wvd/vision/location_probes.hpp"
+#include "games/wvd/vision/chest_probes.hpp"
+#include "games/wvd/vision/harken_probes.hpp"
 #include <algorithm>
 #include <cmath>
 #include <functional>
@@ -37,7 +40,13 @@ tasks::CompiledWorkflow enter_dungeon(const WvdTaskPlan &plan, bool direct_floor
         throw std::runtime_error("DUNGEON_ENTRY_STEPS_INVALID");
     C graph("navigation.dungeon_entry");
     graph.check_policy("navigation", {"wvd-network-retry", "wvd-pause", "wvd-download", "wvd-party-death", "wvd-party-defeat", "wvd-story", "wvd-dialogue"});
-    const auto inside = C::any({C::image("dungFlag"), C::image("mapFlag"), C::image("chestFlag"), J{{"mode", "combat_active"}}});
+    // Only entry owns this warning. Cover later selection steps and their Await,
+    // not just Entry; no handler may click through or restart the game.
+    recovery::preserve_low_willpower_stop(graph);
+    // These pages hand off to the route's existing encounter/Harken handling;
+    // seeing one does not confirm a route point or a completed battle.
+    const auto inside = C::any({C::image("dungFlag"), C::image("mapFlag"), vision::chest_page_condition(),
+        J{{"mode", "combat_active"}}, C::image("RiseAgain"), vision::harken_floor_menu()});
     const auto enter = C::image("GotoDung");
     J anchors{vision::city_screen(), C::image("openworldmap"), C::image("returntoTown")};
     if (!direct_floor_entry) anchors.push_back(enter);

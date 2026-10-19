@@ -17,7 +17,8 @@ CompiledWorkflow build_task_workflow(const WvdQuestDefinition &task, const J &va
     const std::set<std::string> &images, const BountyBuilder &bounty);
 std::size_t task_unit_count(const std::string &task_id, const J &values);
 std::function<std::optional<devices::LifecyclePlan>(const contracts::SessionResult &,
-    const contracts::BusinessRunState &, unsigned)> recovery_policy(devices::LifecycleTarget target);
+    const contracts::BusinessRunState &, unsigned)> recovery_policy(devices::LifecycleTarget target,
+                                                                  bool resume_bounty = false);
 bool handoff_ready(const contracts::SessionResult &last,
                    const contracts::BusinessRunState &state, const J &source);
 } // namespace wvd::games::tasks

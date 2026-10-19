@@ -1,0 +1,12 @@
+[
+  {"id":"guild-cold-boot","kind":"boot-guild","phase":"cold","locale":"zh-Hant",
+   "frame":"tests/fixtures/guild-boot/guild-menu.png","sha256":"0b35bea8e2e00cec8d991e9960b054f2bc4517553ec2f8f766cae19495684198"},
+  {"id":"guild-common-clear","kind":"boot-guild","phase":"common","locale":"zh-Hant",
+   "frame":"tests/fixtures/guild-boot/guild-menu.png","sha256":"0b35bea8e2e00cec8d991e9960b054f2bc4517553ec2f8f766cae19495684198"},
+  {"id":"guild-real-giant-entry","kind":"boot-guild","phase":"task","locale":"zh-Hant",
+   "frame":"tests/fixtures/guild-boot/guild-menu.png","sha256":"0b35bea8e2e00cec8d991e9960b054f2bc4517553ec2f8f766cae19495684198"},
+  {"id":"guild-recovery-giant-entry","kind":"boot-guild","phase":"recovery","locale":"zh-Hant",
+   "frame":"tests/fixtures/guild-boot/guild-menu.png","sha256":"0b35bea8e2e00cec8d991e9960b054f2bc4517553ec2f8f766cae19495684198"},
+  {"id":"harken-presentation-not-boot-ready","kind":"boot-guild","phase":"cold","locale":"zh-Hant","ready":false,
+   "frame":"tests/fixtures/guild-boot/harken-presentation.png","sha256":"ed4e8702289b815c2871366a3bf2774d658d1f775b853287828ce612bf23abbc"}
+]

@@ -3,8 +3,13 @@
 #include "games/wvd/tasks/public_flow_library.hpp"
 #include "games/wvd/tasks/public_step_scope.hpp"
 #include "games/wvd/tasks/locale_assets.hpp"
+#include "games/wvd/tasks/bounty_cycle.hpp"
+#include "games/wvd/tasks/dungeon_route.hpp"
+#include "games/wvd/navigation/dungeon_entry.hpp"
+#include "games/wvd/navigation/auto_route.hpp"
 #include "games/wvd/recovery/party_death.hpp"
 #include "games/wvd/recovery/boot.hpp"
+#include "games/wvd/supply/dungeon_recover.hpp"
 #include "games/wvd/combat/turn.hpp"
 #include "games/wvd/combat/auto_combat.hpp"
 #include "games/wvd/state.hpp"
@@ -44,13 +49,24 @@ class RecordedBackend final : public devices::DeviceBackend {
   public:
     explicit RecordedBackend(const cv::Mat &image) : pixels_(std::make_shared<const std::vector<std::uint8_t>>(
         image.data, image.data + image.total() * image.elemSize())) {}
+    void after_input(const cv::Mat &image) {
+        after_input_ = std::make_shared<const std::vector<std::uint8_t>>(
+            image.data, image.data + image.total() * image.elemSize());
+    }
+    void after_inputs(const std::vector<cv::Mat> &images) {
+        for (const auto &image : images)
+            after_inputs_.push_back(std::make_shared<const std::vector<std::uint8_t>>(
+                image.data, image.data + image.total() * image.elemSize()));
+    }
     std::vector<contracts::Command> commands;
     bool offline() const override { return true; }
     bool verified_access() const override { return true; }
     bool connect() override { return true; }
     devices::RawFrame capture() override {
         devices::RawFrame frame;
-        frame.raw_bgr = pixels_; frame.size = {900,1600};
+        frame.raw_bgr = after_input_ && !commands.empty() ? after_input_ : pixels_; frame.size = {900,1600};
+        if (!after_inputs_.empty() && !commands.empty())
+            frame.raw_bgr = after_inputs_.at(std::min(commands.size() - 1, after_inputs_.size() - 1));
         frame.device_id = "recorded-input"; frame.viewport_id = "900x1600";
         frame.foreground_application = "jp.co.drecom.wizardry.daphne";
         frame.connection_generation = 1; frame.display_rotation = 0;
@@ -61,6 +77,8 @@ class RecordedBackend final : public devices::DeviceBackend {
     bool execute(const contracts::Command &command) override { commands.push_back(command); return true; }
   private:
     std::shared_ptr<const std::vector<std::uint8_t>> pixels_;
+    std::shared_ptr<const std::vector<std::uint8_t>> after_input_;
+    std::vector<std::shared_ptr<const std::vector<std::uint8_t>>> after_inputs_;
 };
 }
 
@@ -98,14 +116,39 @@ int run(const std::filesystem::path &pack, const std::filesystem::path &cases,
         const auto image = cv::imread(image_path.string(), cv::IMREAD_COLOR);
         require(image.cols == 900 && image.rows == 1600 && image.type() == CV_8UC3, "RECORDED_INPUT_VIEWPORT_INVALID");
         const std::string locale = sample.at("locale");
-        const bool rescue = sample.at("rescue");
+        const bool rescue = sample.value("rescue", false);
         const bool attack_target = sample.value("kind", "") == "attack-target";
         auto case_profile = profile;
+        if (sample.value("kind", "") == "healing-close") case_profile["RECOVER_WHEN_BEGINNING"] = true;
+        if (sample.value("kind", "") == "healing-harken") case_profile["RECOVER_WHEN_BEGINNING"] = true;
+        if (sample.value("kind", "") == "navigation-panel") case_profile["RECOVER_WHEN_BEGINNING"] = false;
         if (attack_target) case_profile["STRATEGY"][0]["skill_settings"][0]["role_var"] = sample.at("role");
         const games::tasks::PublicStepScope public_steps([&](const std::string &id, const J &arguments) {
             return library.compile_step(id,arguments,locale);
         });
         RecordedBackend backend(image);
+        if (sample.contains("after_input_frame")) {
+            const auto path = std::filesystem::path(sample.at("after_input_frame").get<std::string>());
+            require(platform::file_sha256(path) == sample.at("after_input_sha256").get<std::string>(),
+                "RECORDED_AFTER_INPUT_HASH_CHANGED");
+            const auto after = cv::imread(path.string(), cv::IMREAD_COLOR);
+            require(after.cols == 900 && after.rows == 1600 && after.type() == CV_8UC3,
+                "RECORDED_AFTER_INPUT_VIEWPORT_INVALID");
+            backend.after_input(after);
+        }
+        if (sample.contains("after_inputs")) {
+            std::vector<cv::Mat> images;
+            for (const auto &next : sample.at("after_inputs")) {
+                const auto path = std::filesystem::path(next.at("frame").get<std::string>());
+                require(platform::file_sha256(path) == next.at("sha256").get<std::string>(),
+                    "RECORDED_SEQUENCE_HASH_CHANGED");
+                auto pixels = cv::imread(path.string(), cv::IMREAD_COLOR);
+                require(pixels.cols == 900 && pixels.rows == 1600 && pixels.type() == CV_8UC3,
+                    "RECORDED_SEQUENCE_VIEWPORT_INVALID");
+                images.push_back(std::move(pixels));
+            }
+            backend.after_inputs(images);
+        }
         contracts::InputPolicy policy;
         policy.device_id = "recorded-input"; policy.game_id = "wvd";
         policy.application_id = "jp.co.drecom.wizardry.daphne"; policy.viewport_id = "900x1600";
@@ -113,10 +156,197 @@ int run(const std::filesystem::path &pack, const std::filesystem::path &cases,
         policy.permissions = policy.capabilities = {contracts::ActionKind::Click,contracts::ActionKind::ClickKey,contracts::ActionKind::Swipe};
         games::WvdRunState business(case_profile,{"recorded-input",1,std::make_shared<contracts::SteadyClock>()});
         business.enter_segment(contracts::SegmentBoundary::Initial,1,0);
+        const bool boot_recovery = sample.value("kind", "") == "boot-guild" && sample.value("phase", "") == "recovery";
+        if (boot_recovery) business.enter_segment(contracts::SegmentBoundary::LifecycleRecovery,2,0);
         recognition::Service service(bundle,games::vision::native_handlers(manifest.value("aliases",J::object()),locale));
-        runtime::NativeFlowPorts ports(backend,service,business,policy,1,{});
+        runtime::NativeFlowPorts ports(backend,service,business,policy,boot_recovery ? 2 : 1,{});
         ports.set_operation_handler(games::wvd_operation_factory(business,[](const auto &,const auto &){},[](const auto &){})(ports));
         const auto frame = ports.capture();
+        if (sample.value("kind", "") == "boot-guild") {
+            const auto phase = sample.at("phase").get<std::string>();
+            const bool task = phase == "task" || phase == "recovery";
+            const bool expected_ready = sample.value("ready", true);
+            const auto ready = ports.recognize(frame, {"guild-boot-ready", "1", {0,0,900,1600},
+                recognition::CustomParameters{"WvdVision", {{"mode", "boot_ready"}}}});
+            require(ready.outcome == (expected_ready ? contracts::RecognitionOutcome::Hit : contracts::RecognitionOutcome::NoHit),
+                "GUILD_BOOT_READY_MISMATCH:" + ready.error_code);
+            auto graph = phase == "common" ? games::recovery::clear_common_screens(true) :
+                games::recovery::wait_boot_ready(true);
+            if (task) {
+                const games::WvdQuestCatalog quests(read(pack / "parameters/legacy-quests.json"));
+                graph = games::recovery::with_boot_recovery(games::tasks::bounty_cycle(
+                    quests.at("GiantBounty"), case_profile, {}, library, documents.at("guild-open-bounty-page"), locale), true);
+            }
+            games::tasks::localize_task_assets(graph, catalogue, locale);
+            const auto program = games::tasks::compile_native_program(graph, J::object(), "recorded-guild-boot");
+            runtime::FlowExecutor executor(program, ports, 30s);
+            runtime::TickResult result{runtime::TickState::Progress};
+            const auto started = std::chrono::steady_clock::now();
+            while (std::chrono::steady_clock::now() - started < (expected_ready ? 15s : 3s)) {
+                result = executor.tick();
+                if (!backend.commands.empty() || (result.state != runtime::TickState::Progress &&
+                    result.state != runtime::TickState::Waiting)) break;
+                std::this_thread::sleep_for(2ms);
+            }
+            const auto summary = business.summary();
+            results.push_back({{"id",sample.at("id")},{"ready",observation(ready)},
+                {"flow_code",result.code},{"state",int(result.state)},{"inputs",backend.commands.size()},
+                {"business",summary},{"progress",executor.progress_snapshot()},
+                {"elapsed_ms",std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::steady_clock::now()-started).count()}});
+            std::ofstream(output / "results.json") << results.dump(2);
+            if (task) {
+                require(backend.commands.size() == 1 && backend.commands.front().kind == contracts::ActionKind::Click &&
+                    backend.commands.front().x >= 690 && backend.commands.front().x <= 802 &&
+                    backend.commands.front().y >= 236 && backend.commands.front().y <= 294 &&
+                    summary.at("task_step") == 0 && summary.at("revivals") == 0 &&
+                    !summary.at("lifecycle_recovery_active").get<bool>(),
+                    "GUILD_BOOT_DID_NOT_REACH_EXISTING_BOUNTY_ENTRY:" + result.code);
+            } else require(backend.commands.empty() &&
+                ((result.state == runtime::TickState::Completed) == expected_ready),
+                "GUILD_BOOT_FALSE_INPUT_OR_HANDOFF:" + result.code);
+            ports.stop(); require(ports.cleanup(), "RECORDED_INPUT_CLEANUP_FAILED");
+            continue;
+        }
+        if (sample.value("kind", "") == "healing-harken") {
+            business.enter_dungeon();
+            const auto initial_step = sample.at("initial_step").get<unsigned>();
+            for (unsigned i = 0; i < initial_step; ++i) business.target_point_completed();
+            const games::WvdQuestCatalog quests(read(pack / "parameters/legacy-quests.json"));
+            auto graph = games::tasks::traverse_dungeon(
+                games::tasks::giant_bounty_plan(quests.at("GiantBounty")), case_profile, {});
+            graph.entry = "Heal"; // Resume the exact production caller suspended in the recorded fault.
+            games::tasks::localize_task_assets(graph, catalogue, locale);
+            const auto program = games::tasks::compile_native_program(graph, J::object(), "recorded-healing-harken");
+            runtime::FlowExecutor executor(program, ports, 20s);
+            runtime::TickResult result{runtime::TickState::Progress};
+            const auto started = std::chrono::steady_clock::now();
+            const bool completes = sample.at("completes");
+            const auto budget = completes ? 10s : 3s;
+            while (std::chrono::steady_clock::now() - started < budget) {
+                result = executor.tick();
+                if (result.state != runtime::TickState::Progress && result.state != runtime::TickState::Waiting) break;
+                std::this_thread::sleep_for(2ms);
+            }
+            const auto summary = business.summary();
+            const auto progress = executor.progress_snapshot();
+            results.push_back({{"id", sample.at("id")}, {"backend_calls", backend.commands.size()},
+                {"flow_code", result.code}, {"state", int(result.state)}, {"progress", progress},
+                {"business", summary}, {"elapsed_ms", std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::steady_clock::now() - started).count()}});
+            std::ofstream(output / "results.json") << results.dump(2);
+            require((result.state == runtime::TickState::Completed) == completes &&
+                backend.commands.size() == sample.at("inputs").get<unsigned>() &&
+                summary.at("task_step") == sample.at("final_step") &&
+                summary.at("healing_required").get<bool>() &&
+                summary.at("healing_submissions") == 0 && progress.at("pending_inputs").empty(),
+                "HEAL_HARKEN_NOT_HANDED_TO_ORIGINAL_ROUTE:" + result.code);
+            if (!backend.commands.empty()) require(backend.commands.front().kind == contracts::ActionKind::Click &&
+                backend.commands.front().x == 36 && backend.commands.front().y == 1425,
+                "HEAL_HARKEN_EXTRA_OR_WRONG_INPUT");
+            ports.stop(); require(ports.cleanup(), "RECORDED_INPUT_CLEANUP_FAILED");
+            continue;
+        }
+        if (sample.value("kind", "") == "navigation-panel") {
+            business.enter_dungeon();
+            require(!business.summary().at("healing_required").get<bool>(), "RECORDED_NAVIGATION_HAS_HEAL_DEMAND");
+            using C = games::tasks::PipelineCompiler;
+            C root("recorded.navigation-panel");
+            const auto child = root.define_child("Navigation", games::navigation::auto_route("dungFlag"));
+            root.route("Entry", {"Route"});
+            root.call_child("Route", child, {"Terminal"},
+                {{"blocked", {"Terminal"}}, {"encounter", {"Terminal"}}, {"stopped", {"Terminal"}}});
+            auto graph = root.finish();
+            games::tasks::localize_task_assets(graph, catalogue, locale);
+            const auto program = games::tasks::compile_native_program(graph, J::object(), "recorded-navigation-panel");
+            runtime::FlowExecutor executor(program, ports, 20s);
+            runtime::TickResult result{runtime::TickState::Progress};
+            const auto started = std::chrono::steady_clock::now();
+            while (std::chrono::steady_clock::now() - started < 15s) {
+                result = executor.tick();
+                if (result.state != runtime::TickState::Progress && result.state != runtime::TickState::Waiting) break;
+                std::this_thread::sleep_for(2ms);
+            }
+            require(result.state == runtime::TickState::Completed && backend.commands.size() == 2 &&
+                backend.commands[1].x == 66 && backend.commands[1].y == 1500 &&
+                executor.progress_snapshot().at("pending_inputs").empty() &&
+                !business.summary().at("healing_required").get<bool>() &&
+                business.summary().at("task_step") == 0,
+                "NAVIGATION_PANEL_DID_NOT_RETURN_TO_SHARED_OWNER:" + result.code);
+            results.push_back({{"id", sample.at("id")}, {"backend_calls", backend.commands.size()},
+                {"flow_code", result.code}, {"progress", executor.progress_snapshot()},
+                {"business", business.summary()}});
+            ports.stop(); require(ports.cleanup(), "RECORDED_INPUT_CLEANUP_FAILED");
+            std::ofstream saved(output / "results.json"); saved << results.dump(2);
+            require(bool(saved), "RECORDED_INPUT_EVIDENCE_WRITE_FAILED");
+            continue;
+        }
+        if (sample.value("kind", "") == "healing-close") {
+            business.enter_dungeon();
+            business.confirm_event("recorded.heal.request", "healing_requested", 1, 1);
+            business.healing_input_submitted(false);
+            auto graph = games::supply::recover_in_dungeon();
+            games::tasks::localize_task_assets(graph, catalogue, locale);
+            const auto program = games::tasks::compile_native_program(graph, J::object(), "recorded-healing-close");
+            runtime::FlowExecutor executor(program, ports, 10s);
+            runtime::TickResult result{runtime::TickState::Progress};
+            const auto started = std::chrono::steady_clock::now();
+            while (std::chrono::steady_clock::now() - started < 8s && backend.commands.size() < 3) {
+                result = executor.tick();
+                if (result.state != runtime::TickState::Progress && result.state != runtime::TickState::Waiting) break;
+                std::this_thread::sleep_for(2ms);
+            }
+            const bool expected = sample.at("close_allowed");
+            require(backend.commands.size() == (expected ? 3U : 0U), "HEAL_RECORDED_CLOSE_ADMISSION:" + result.code);
+            if (expected) require(backend.commands[0].key == 4 && backend.commands[1].key == 4 &&
+                backend.commands.back().kind == contracts::ActionKind::Click &&
+                backend.commands.back().x == 66 && backend.commands.back().y == 1500,
+                "HEAL_RECORDED_CLOSE_COORDINATES");
+            results.push_back({{"id",sample.at("id")},{"backend_calls",backend.commands.size()},
+                {"flow_code",result.code},{"progress",executor.progress_snapshot()}});
+            ports.stop(); require(ports.cleanup(), "RECORDED_INPUT_CLEANUP_FAILED");
+            std::ofstream saved(output / "results.json"); saved << results.dump(2);
+            require(bool(saved), "RECORDED_INPUT_EVIDENCE_WRITE_FAILED");
+            continue;
+        }
+        if (sample.value("kind", "") == "low-willpower") {
+            const auto detection = ports.recognize(frame, {"recorded.low-willpower", "1", {0,0,900,1600},
+                recognition::CustomParameters{"WvdVision", games::vision::low_willpower_warning()}});
+            const bool expected = sample.at("warning");
+            require(detection.outcome == (expected ? contracts::RecognitionOutcome::Hit :
+                contracts::RecognitionOutcome::NoHit), "LOW_WILLPOWER_RECORDED_DETECTION:" + detection.error_code +
+                ":" + detection.evidence.dump());
+            J row{{"id", sample.at("id")}, {"detection", observation(detection)}};
+            if (expected || sample.contains("after_input_frame")) {
+                games::WvdQuestCatalog quests(read(pack / "parameters/legacy-quests.json"));
+                auto graph = sample.value("phase", "entry") == "boot" ? games::recovery::wait_boot_ready(true) :
+                    games::navigation::enter_dungeon(games::tasks::giant_bounty_plan(quests.at("GiantBounty")), true);
+                games::tasks::localize_task_assets(graph, catalogue, locale);
+                const auto program = games::tasks::compile_native_program(graph, J::object(), "recorded-input");
+                runtime::FlowExecutor executor(program, ports, 10s);
+                const auto started = std::chrono::steady_clock::now();
+                runtime::TickResult result{runtime::TickState::Progress};
+                while (std::chrono::steady_clock::now() - started < 8s) {
+                    result = executor.tick();
+                    if (result.state != runtime::TickState::Progress && result.state != runtime::TickState::Waiting) break;
+                    std::this_thread::sleep_for(2ms);
+                }
+                const auto expected_inputs = sample.contains("after_input_frame") ? 1U : 0U;
+                require(result.state == runtime::TickState::ExternalBlocked &&
+                    result.code == "party.low_willpower_manual_required" && backend.commands.size() == expected_inputs,
+                    "LOW_WILLPOWER_ENTRY_DID_NOT_STOP_WITHOUT_EXTRA_INPUT:" + result.code);
+                const auto progress = executor.progress_snapshot();
+                if (expected_inputs) require(!progress.at("pending_inputs").empty(), "LOW_WILLPOWER_LOST_PENDING");
+                row.update({{"flow_code", result.code}, {"backend_calls", backend.commands.size()},
+                    {"progress", progress}, {"elapsed_ms", std::chrono::duration_cast<std::chrono::milliseconds>(
+                        std::chrono::steady_clock::now() - started).count()}});
+            }
+            ports.stop(); require(ports.cleanup(), "RECORDED_INPUT_CLEANUP_FAILED");
+            results.push_back(std::move(row));
+            std::ofstream saved(output / "results.json"); saved << results.dump(2);
+            require(bool(saved), "RECORDED_INPUT_EVIDENCE_WRITE_FAILED");
+            continue;
+        }
         for (const auto &condition : std::vector<J>{J{{"mode", "auto_route_moving"}},
                 J{{"mode", "supply_context"}, {"phase", "dungeon"}}}) {
             const auto result = ports.recognize(frame, {"recorded.not-dungeon", "1", {0,0,900,1600},

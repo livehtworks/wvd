@@ -1,13 +1,16 @@
 #include "auto_route.hpp"
 #include "games/wvd/vision/harken_probes.hpp"
 #include "games/wvd/vision/chest_probes.hpp"
+#include "games/wvd/supply/dungeon_recover.hpp"
 
 namespace wvd::games::navigation {
 using J = nlohmann::json;
 using C = tasks::PipelineCompiler;
-tasks::CompiledWorkflow auto_route(const std::string &target) {
+tasks::CompiledWorkflow auto_route(const std::string &target, bool handoff_destination) {
     if (target != "chest_auto" && target != "mark_auto" && target != "dungFlag" && target != "stay")
         throw std::runtime_error("AUTO_ROUTE_TARGET_INVALID");
+    if (handoff_destination && target != "mark_auto" && target != "chest_auto")
+        throw std::runtime_error("AUTO_ROUTE_DESTINATION_HANDOFF_INVALID");
     C graph("navigation.auto_route");
     graph.check_policy("navigation", {"wvd-network-retry", "wvd-pause", "wvd-download", "wvd-story", "wvd-blessing", "wvd-karma", "wvd-party-death", "wvd-party-defeat", "wvd-dialogue", "wvd-special-dialogue", "wvd-sandman"});
     graph.require_inherited_events({"wvd-party-death", "wvd-party-defeat"});
@@ -39,9 +42,20 @@ tasks::CompiledWorkflow auto_route(const std::string &target) {
         // stay 永远不是完成一个任务点，只有显式插入出口供外层继续等待。
         graph.observe("Outside", outside, {"Terminal"});
     } else {
+        // Carry a recognized destination result across the call boundary; a
+        // short-lived toast need not still exist when the caller resumes.
+        const auto destination = handoff_destination ? "DestinationFinished" : "Terminal";
+        if (handoff_destination) graph.handoff("DestinationFinished", "destination_finished");
+        // A character panel interrupts navigation, not the route objective.
+        // Return through the existing supply owner before the caller retries.
+        const auto cleanup = graph.define_child("PanelCleanup", supply::recover_in_dungeon());
+        graph.observe("Panel", {{"mode", "supply_context"}, {"phase", "panel"}}, {"RestorePanel"});
+        graph.call_child("RestorePanel", cleanup, {"PanelExit"},
+            {{"encounter", {"EncounterExit"}}, {"blocked", {"PanelExit"}}});
+        graph.handoff("PanelExit", "blocked");
         graph.observe("RecordedNoRoute", {{"mode", "confirmed_input_result"},
             {"classification", "navigation_no_route"}},
-            {target == "dungFlag" ? "RouteUnavailable" : "Terminal"});
+            {target == "dungFlag" ? "RouteUnavailable" : destination});
         auto button = C::image(target);
         button["roi"] = {680, 220, 220, 240};
         auto available = button;
@@ -54,40 +68,41 @@ tasks::CompiledWorkflow auto_route(const std::string &target) {
         if (target == "dungFlag") {
             // An old marker-navigation toast may still be fading. Observe its
             // disappearance before issuing the separate return-to-Harken input.
-            graph.route("Entry", {"Retreated", "OldNoRoute", "Ready", "Encounter", "CloseMap", "Expand"});
+            graph.route("Entry", {"Retreated", "OldNoRoute", "Ready", "Encounter", "Panel", "CloseMap", "Expand"});
             graph.observe("OldNoRoute", no_route, {"OldNoRouteWait"});
             graph.wait("OldNoRouteWait", 3000, {"OldNoRouteRecheck", "Entry"});
             graph.recovery("OldNoRouteRecheck", "navigation.harken_route_unavailable", no_route, {"Entry"});
             graph.recovery("RouteUnavailable", "navigation.harken_route_unavailable");
         } else
-            graph.route("Entry", {"RecordedNoRoute", "Done", "Ready", "Encounter", "Retreated", "CloseMap", "Expand"});
+            graph.route("Entry", {"RecordedNoRoute", "Done", "Ready", "Encounter", "Panel", "Retreated", "CloseMap", "Expand"});
         graph.observe("Retreated", retreated, {"Terminal"});
         // No route completes a search target, but never proves arrival at Harken.
-        graph.observe("Done", no_target, {target == "dungFlag" ? "RouteUnavailable" : "Terminal"});
+        graph.observe("Done", no_target, {target == "dungFlag" ? "RouteUnavailable" : destination});
         // 初始黑色按钮不证明到达；只有已提交导航之后才检查此终点。
         graph.observe("Arrived", target == "dungFlag" ? retreated :
-            C::all({moving, resume_unavailable, stopped}), {"Terminal"});
+            C::all({moving, resume_unavailable, stopped}), {destination});
         graph.back("CloseMap", C::all({map, C::absent(encounter)}), post, {"Entry"});
         graph.observe("Ready", C::all({moving, button}), {"Choose", "Unavailable"});
         graph.fixed_click("Expand", C::all({moving, C::absent(button)}),
-            C::any({encounter, retreated, no_target, C::all({moving, button})}), {762, 346}, {"Encounter", "Retreated", "Done", "Ready"});
+            C::any({encounter, retreated, no_target, J{{"mode", "supply_context"}, {"phase", "panel"}}, C::all({moving, button})}),
+            {762, 346}, {"Encounter", "Panel", "Retreated", "Done", "Ready"});
         graph.retry_menu_input("Expand", C::all({moving, C::absent(button)}), 3000);
         graph.hit_limit("Expand", 1);
         graph.click("Choose", C::all({moving, available}), button, post,
-                    {"RecordedNoRoute", "Done", "Encounter", "Retreated", "Arrived", "Resume", "Moving"});
+                    {"RecordedNoRoute", "Done", "Encounter", "Panel", "Retreated", "Arrived", "Resume", "Moving"});
         graph.hit_limit("Choose", 1);
         graph.retry_menu_input("Choose", C::all({moving, available}), 3000);
         if (target == "chest_auto") {
             graph.click("Unavailable", C::all({moving, button, C::absent(available)}), button, post,
-                        {"Encounter", "UnavailableExit"});
+                        {"Encounter", "Panel", "UnavailableExit"});
             graph.handoff("UnavailableExit", "unavailable");
         } else
             graph.observe("Unavailable", C::all({moving, C::absent(button)}), {"StoppedExit"});
-        graph.public_step("Resume", "navigation-resume", J::object(), {"RecordedNoRoute", "Done", "Encounter", "Retreated", "Arrived", "Moving"}, J::object(), C::all({moving, C::image("resume"), C::absent(resume_unavailable)}));
+        graph.public_step("Resume", "navigation-resume", J::object(), {"RecordedNoRoute", "Done", "Encounter", "Panel", "Retreated", "Arrived", "Moving"}, J::object(), C::all({moving, C::image("resume"), C::absent(resume_unavailable)}));
         graph.hit_limit("Resume", 1);
         // Stationary navigation is not arrival at Harken. Keep this invocation's
         // no-progress window instead of returning to the caller to click again.
-        J after_moving = {"RecordedNoRoute", "Done", "Encounter", "Retreated", "Arrived"};
+        J after_moving = {"RecordedNoRoute", "Done", "Encounter", "Panel", "Retreated", "Arrived"};
         if (target != "dungFlag") after_moving.push_back("Stopped");
         after_moving.push_back("Moving");
         const J progress{{"mode", "region_changed"}, {"channel", "navigation"}, {"roi", {650, 25, 225, 225}}};

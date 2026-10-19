@@ -49,6 +49,15 @@ ScrcpyControlClient::~ScrcpyControlClient() {
         if (child_) { CloseHandle(child_); child_ = nullptr; }
     }
 }
+bool ScrcpyControlClient::connected() const noexcept {
+    if (!ready_ || socket_ == INVALID_SOCKET) return false;
+    if (child_ && WaitForSingleObject(child_, 0) != WAIT_TIMEOUT) return false;
+    // ADB can recover while its old control socket is already closed. Peek
+    // without consuming server messages or waiting on the normal input path.
+    char byte{};
+    const int count = recv(socket_, &byte, 1, MSG_PEEK);
+    return count > 0 || (count == SOCKET_ERROR && WSAGetLastError() == WSAEWOULDBLOCK);
+}
 void ScrcpyControlClient::wait_socket(bool write, Clock::time_point deadline,
     std::stop_token stop, const Cancellation &cancelled) {
     for (;;) {
@@ -174,16 +183,21 @@ void ScrcpyControlClient::connect(std::chrono::milliseconds timeout, std::stop_t
     } catch (...) { close(); throw; }
 }
 void ScrcpyControlClient::send_bytes(std::span<const std::uint8_t> bytes, Clock::time_point deadline,
-    std::stop_token stop, const Cancellation &cancelled) {
+    std::stop_token stop, const Cancellation &cancelled, bool submission) {
     std::size_t offset{};
     try {
         while (offset < bytes.size()) {
             wait_socket(true, deadline, stop, cancelled);
             const int count = send(socket_, reinterpret_cast<const char *>(bytes.data() + offset),
                 static_cast<int>(bytes.size() - offset), 0);
-            if (count == SOCKET_ERROR && WSAGetLastError() == WSAEWOULDBLOCK) continue;
-            if (count <= 0) throw std::runtime_error("SCRCPY_SEND_UNRESOLVED");
+            const int error = count == SOCKET_ERROR ? WSAGetLastError() : 0;
+            if (error == WSAEWOULDBLOCK) continue;
+            if (count <= 0) {
+                if (submission) last_socket_error_ = error;
+                throw std::runtime_error("SCRCPY_SEND_UNRESOLVED");
+            }
             offset += static_cast<std::size_t>(count);
+            if (submission) submission_bytes_ += static_cast<std::size_t>(count);
             partial_frame_ = offset < bytes.size();
         }
     } catch (...) {
@@ -195,6 +209,8 @@ void ScrcpyControlClient::submit(const contracts::Command &command, int width, i
     std::stop_token stop, const Cancellation &cancelled) {
     check_cancel(stop, cancelled);
     if (!connected() || partial_frame_) throw std::runtime_error("SCRCPY_NOT_READY");
+    submission_bytes_ = submission_messages_ = 0;
+    last_socket_error_ = 0;
     const auto messages = scrcpy::encode(command, width, height);
     const auto transport_duration = command.kind == contracts::ActionKind::Swipe ? command.duration : 0;
     const auto deadline = Clock::now() + 5000ms + std::chrono::milliseconds{transport_duration};
@@ -204,7 +220,8 @@ void ScrcpyControlClient::submit(const contracts::Command &command, int width, i
     try {
         for (std::size_t i = 0; i < messages.size(); ++i) {
             const auto &message = messages[i];
-            send_bytes(message, deadline, stop, cancelled);
+            send_bytes(message, deadline, stop, cancelled, true);
+            ++submission_messages_;
             sent = true;
             if (message[0] == 2) {
                 if (message[1] == 1) held_ = false;
@@ -236,10 +253,12 @@ void ScrcpyControlClient::submit(const contracts::Command &command, int width, i
     } catch (...) { if (sent) unresolved_ = true; throw; }
 }
 bool ScrcpyControlClient::close() noexcept {
+    const bool peer_live = connected();
     ready_ = false;
     if (socket_ != INVALID_SOCKET) {
         // 半个报文不能再拼接另一条释放报文；保持“释放未确认”，不得伪报静止。
-        if (partial_frame_) cleanup_unconfirmed_ = true;
+        // Local send buffering after EOF does not prove Android received UP.
+        if (partial_frame_ || (!peer_live && (held_ || !held_keys_.empty()))) cleanup_unconfirmed_ = true;
         else {
             const auto deadline = Clock::now() + 1000ms;
             try {
@@ -322,7 +341,8 @@ std::string ScrcpyControlClient::cleanup_status() const {
         << ",uploaded=" << uploaded_ << ",socket=" << (socket_ != INVALID_SOCKET)
         << ",held=" << held_ << ",keys=" << held_keys_.size()
         << ",partial=" << partial_frame_ << ",unconfirmed=" << cleanup_unconfirmed_
-        << ",unresolved=" << unresolved_;
+        << ",unresolved=" << unresolved_ << ",submission_bytes=" << submission_bytes_
+        << ",submission_messages=" << submission_messages_ << ",socket_error=" << last_socket_error_;
     return out.str();
 }
 } // namespace wvd::devices

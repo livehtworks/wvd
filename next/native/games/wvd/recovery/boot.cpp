@@ -1,4 +1,5 @@
 #include "boot.hpp"
+#include "low_willpower.hpp"
 #include "party_death.hpp"
 #include "global_prompt.hpp"
 #include "karma_prompt.hpp"
@@ -28,10 +29,16 @@ J english_image(const char *name) {
     result["locale_only"] = "en";
     return result;
 }
+J inn_to_resume() {
+    return C::all({vision::inn_menu(), C::any({C::business("/inn_payment_pending", true),
+        C::all({C::business("/bounty_cycle/active", true), C::business("/bounty_cycle/unit_matches", true),
+            C::business("/inn_rest_completed", true)})}),
+        J{{"mode", "input_clear"}, {"phase", "supply"}}});
+}
 J ready_to_resume_task() {
     // Revival belongs to the task. Use the same guarded handoff at cold boot,
     // restart confirmation and reconnect resume; it does not confirm any old input.
-    return C::all({C::any({J{{"mode", "boot_ready"}}, C::image("RiseAgain")}),
+    return C::all({C::any({J{{"mode", "boot_ready"}}, C::image("RiseAgain"), inn_to_resume()}),
         C::absent(J{{"mode", "blocking_screen"}}), C::absent(vision::ordinary_story_page())});
 }
 J task_stop_condition(DialoguePolicy policy) {
@@ -94,6 +101,7 @@ tasks::CompiledWorkflow retry_network_prompt() {
 tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, DialoguePolicy policy = DialoguePolicy::Default,
                                     bool random_maze_events = true, bool reconnect = false) {
     C graph(common ? "recovery.common_screens" : "recovery.boot_ready", std::chrono::seconds{120});
+    preserve_low_willpower_stop(graph);
     // 冷启动是正常进场流程；标题/下载等正面回执表示进展。网络子图仍属exception，
     // 反复按重试只关闭弹窗，不能重置“未恢复业务现场”的连续异常窗口。
     graph.check_policy(common ? "exception" : "business", J::array(), 1000, 1000, false);
@@ -161,7 +169,10 @@ tasks::CompiledWorkflow boot_workflow(bool allow_download, bool common, Dialogue
     if (!common) {
         // 启动时可能停在旅店菜单；只退出菜单，不购买房间或推断住宿已完成。
         // 菜单消失且城市恢复才交还任务，不能把内部菜单当成城市就绪。
-        entry.insert(entry.begin(), {"CloseCharacter", "LeaveInnMenuZh", "LeaveInnMenu"});
+        entry.insert(entry.begin(), {"CloseCharacter", "ResumeInn", "LeaveInnMenuZh", "LeaveInnMenu"});
+        // Preserve the actual payment result for its owner before any generic
+        // menu cleanup. This observes readiness, never confirms payment itself.
+        graph.observe("ResumeInn", C::all({inn_to_resume(), ready}), {"Terminal"});
         const auto inn_menu = vision::inn_menu();
         const auto character = vision::character_page(), leave_zh = vision::inn_leave_zh();
         const auto left = C::any({C::all({vision::city_screen(), C::absent(inn_menu)}), character});

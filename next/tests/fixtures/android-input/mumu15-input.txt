@@ -1,0 +1,625 @@
+INPUT MANAGER (dumpsys input)
+
+Input properties:
+  velocitytracker_strategy (flag value) = default
+
+Input Manager State:
+  Display not interactive: {}
+  System UI Lights Out: true
+  Pointer Speed: 0
+  Display with Mouse Pointer Acceleration Disabled: {}
+  Pointer Gestures Enabled: true
+  Pointer Capture: Disabled, seq=0
+
+Event Hub State:
+  BuiltInKeyboardId: -2
+  Devices:
+    1: Xiaomi Joystick
+      Classes: KEYBOARD | CURSOR | DPAD | GAMEPAD | JOYSTICK | VIBRATOR | BATTERY | EXTERNAL
+      Path: /dev/input/event7
+      Enabled: true
+      Descriptor: f334d7240cd15b6779f86af0f21ff06cd5174eea
+      Location: 
+      ControllerNumber: 1
+      UniqueId: 
+      Identifier: bus=0x0003, vendor=0x1235, product=0x0001, version=0x0000, bluetoothAddress=<not set>
+      KeyLayoutFile: /system/usr/keylayout/Generic.kl
+      KeyCharacterMapFile: /system/usr/keychars/Generic.kcm
+      ConfigurationFile: 
+      VideoDevice: <none>
+      SysfsDevicePath: /sys/devices/virtual
+      KeyState (pressed): <none>
+      AbsState: ABS_X=0, ABS_Y=0, ABS_Z=0, ABS_RZ=0, ABS_GAS=0, ABS_BRAKE=0, ABS_HAT0X=0, ABS_HAT0Y=0
+    2: Xiaomi Mouse
+      Classes: CURSOR | BATTERY | EXTERNAL
+      Path: /dev/input/event6
+      Enabled: true
+      Descriptor: 31d5c422005eb13d7f2b228bbc65e2a117cda0e4
+      Location: 
+      ControllerNumber: 0
+      UniqueId: 
+      Identifier: bus=0x0003, vendor=0x1237, product=0x0001, version=0x0000, bluetoothAddress=<not set>
+      KeyLayoutFile: 
+      KeyCharacterMapFile: 
+      ConfigurationFile: 
+      VideoDevice: <none>
+      SysfsDevicePath: /sys/devices/virtual
+      KeyState (pressed): <none>
+    3: Xiaomi Keyboard
+      Classes: KEYBOARD | ALPHAKEY | BATTERY | EXTERNAL
+      Path: /dev/input/event5
+      Enabled: true
+      Descriptor: e7b96c0aaf6719167bd529d815b1ade1220cd34d
+      Location: 
+      ControllerNumber: 0
+      UniqueId: 
+      Identifier: bus=0x0003, vendor=0x1236, product=0x0001, version=0x0000, bluetoothAddress=<not set>
+      KeyLayoutFile: /system/usr/keylayout/Generic.kl
+      KeyCharacterMapFile: /system/usr/keychars/Generic.kcm
+      ConfigurationFile: 
+      VideoDevice: <none>
+      SysfsDevicePath: /sys/devices/virtual
+      KeyState (pressed): <none>
+    -1: Virtual
+      Classes: KEYBOARD | ALPHAKEY | DPAD | VIRTUAL
+      Path: <virtual>
+      Enabled: true
+      Descriptor: a718a782d34bc767f4689c232d64d527998ea7fd
+      Location: 
+      ControllerNumber: 0
+      UniqueId: <virtual>
+      Identifier: bus=0x0000, vendor=0x0000, product=0x0000, version=0x0000, bluetoothAddress=<not set>
+      KeyLayoutFile: /system/usr/keylayout/Generic.kl
+      KeyCharacterMapFile: /system/usr/keychars/Virtual.kcm
+      ConfigurationFile: 
+      VideoDevice: <none>
+      SysfsDevicePath: <none>
+    4: Xiaomi Touchscreen
+      Classes: TOUCH | TOUCH_MT | BATTERY
+      Path: /dev/input/event4
+      Enabled: true
+      Descriptor: e2af2aee625c3b6e5e9b6244f78a3667ab1b5c9e
+      Location: 
+      ControllerNumber: 0
+      UniqueId: 
+      Identifier: bus=0x0000, vendor=0x1234, product=0x0001, version=0x0000, bluetoothAddress=<not set>
+      KeyLayoutFile: 
+      KeyCharacterMapFile: 
+      ConfigurationFile: 
+      VideoDevice: <none>
+      SysfsDevicePath: /sys/devices/virtual
+      KeyState (pressed): <none>
+      AbsState: ABS_MT_SLOT=1, ABS_MT_POSITION_X=0, ABS_MT_POSITION_Y=0, ABS_MT_TRACKING_ID=0, ABS_MT_PRESSURE=0
+    5: Xiaomi integration
+      Classes: KEYBOARD
+      Path: /dev/input/event3
+      Enabled: true
+      Descriptor: 0417af3390d1355d03338e74cafeff9cd88bcf7b
+      Location: 
+      ControllerNumber: 0
+      UniqueId: 
+      Identifier: bus=0x0001, vendor=0x80ee, product=0xcafe, version=0x0702, bluetoothAddress=<not set>
+      KeyLayoutFile: /system/usr/keylayout/Generic.kl
+      KeyCharacterMapFile: /system/usr/keychars/Generic.kcm
+      ConfigurationFile: 
+      VideoDevice: <none>
+      SysfsDevicePath: /sys/devices/pci0000:00/0000:00:04.0
+      KeyState (pressed): <none>
+      AbsState: ABS_X=0, ABS_Y=0
+  Unattached video devices:
+    <none>
+
+Input Reader State (Nums of device: 6):
+  Device 6: Xiaomi Joystick
+    EventHub Devices: [ 1 ] 
+    Generation: 50
+    IsExternal: true
+    IsWaking: false
+    AssociatedDisplayPort: <none>
+    AssociatedDisplayUniqueIdByPort: <none>
+    AssociatedDisplayUniqueIdByDescriptor: <none>
+    HasMic:     false
+    Sources: KEYBOARD | DPAD | GAMEPAD | MOUSE | JOYSTICK
+    KeyboardType: 1
+    ControllerNum: 1
+    Motion Ranges:
+      X: source=MOUSE, min=0.000, max=899.000, flat=0.000, fuzz=0.000, resolution=0.000
+      Y: source=MOUSE, min=0.000, max=1599.000, flat=0.000, fuzz=0.000, resolution=0.000
+      PRESSURE: source=MOUSE, min=0.000, max=1.000, flat=0.000, fuzz=0.000, resolution=0.000
+      HAT_Y: source=JOYSTICK, min=-1.000, max=1.000, flat=0.000, fuzz=0.000, resolution=0.000
+      LTRIGGER: source=JOYSTICK, min=0.000, max=1.000, flat=0.000, fuzz=0.000, resolution=0.000
+      BRAKE: source=JOYSTICK, min=0.000, max=1.000, flat=0.000, fuzz=0.000, resolution=0.000
+      RTRIGGER: source=JOYSTICK, min=0.000, max=1.000, flat=0.000, fuzz=0.000, resolution=0.000
+      GAS: source=JOYSTICK, min=0.000, max=1.000, flat=0.000, fuzz=0.000, resolution=0.000
+      Z: source=JOYSTICK, min=-1.000, max=1.000, flat=0.000, fuzz=0.000, resolution=0.000
+      Y: source=JOYSTICK, min=-1.000, max=1.000, flat=0.000, fuzz=0.000, resolution=0.000
+      HAT_X: source=JOYSTICK, min=-1.000, max=1.000, flat=0.000, fuzz=0.000, resolution=0.000
+      RZ: source=JOYSTICK, min=-1.000, max=1.000, flat=0.000, fuzz=0.000, resolution=0.000
+      X: source=JOYSTICK, min=-1.000, max=1.000, flat=0.000, fuzz=0.000, resolution=0.000
+    Vibrator Input Mapper:
+      Vibrating: false
+    Keyboard Input Mapper:
+      Parameters:
+        OrientationAware: false
+        HandlesKeyRepeat: false
+      Orientation: Rotation0
+      KeyDowns: 0 keys currently down
+      MetaState: 0x0
+      KeyboardLayoutInfo: <not set>
+    Cursor Input Mapper:
+      Parameters:
+        HasAssociatedDisplay: true
+        Mode: POINTER
+        OrientationAware: false
+      XScale: 1.000
+      YScale: 1.000
+      XPrecision: 1.000
+      YPrecision: 1.000
+      HaveVWheel: false
+      HaveHWheel: false
+      WheelYVelocityControlParameters: scale=1.000, lowThreshold=15.000, highThreshold=50.000, acceleration=4.000
+      WheelXVelocityControlParameters: scale=1.000, lowThreshold=15.000, highThreshold=50.000, acceleration=4.000
+      VWheelScale: 1.000
+      HWheelScale: 1.000
+      DisplayId: 0
+      Orientation: Rotation0
+      ButtonState: 0x00000000
+      Down: false
+      DownTime: 0
+    Joystick Input Mapper:
+      Axes:
+        HAT_Y: min=-1.00000, max=1.00000, flat=0.00000, fuzz=0.00000, resolution=0.00000
+          scale=1.00000, offset=-0.00000, highScale=1.00000, highOffset=-0.00000
+          rawAxis=17, rawMin=-1, rawMax=1, rawFlat=0, rawFuzz=0, rawResolution=0
+        LTRIGGER: min=0.00000, max=1.00000, flat=0.00000, fuzz=0.00000, resolution=0.00000
+          scale=1.00000, offset=0.00000, highScale=1.00000, highOffset=0.00000
+          rawAxis=10, rawMin=0, rawMax=1, rawFlat=0, rawFuzz=0, rawResolution=0
+        RTRIGGER: min=0.00000, max=1.00000, flat=0.00000, fuzz=0.00000, resolution=0.00000
+          scale=1.00000, offset=0.00000, highScale=1.00000, highOffset=0.00000
+          rawAxis=9, rawMin=0, rawMax=1, rawFlat=0, rawFuzz=0, rawResolution=0
+        Z: min=-1.00000, max=1.00000, flat=0.00000, fuzz=0.00000, resolution=0.00000
+          scale=0.00000, offset=-0.00000, highScale=0.00000, highOffset=-0.00000
+          rawAxis=2, rawMin=-1000000, rawMax=1000000, rawFlat=0, rawFuzz=0, rawResolution=0
+        Y: min=-1.00000, max=1.00000, flat=0.00000, fuzz=0.00000, resolution=0.00000
+          scale=0.00000, offset=-0.00000, highScale=0.00000, highOffset=-0.00000
+          rawAxis=1, rawMin=-1000000, rawMax=1000000, rawFlat=0, rawFuzz=0, rawResolution=0
+        HAT_X: min=-1.00000, max=1.00000, flat=0.00000, fuzz=0.00000, resolution=0.00000
+          scale=1.00000, offset=-0.00000, highScale=1.00000, highOffset=-0.00000
+          rawAxis=16, rawMin=-1, rawMax=1, rawFlat=0, rawFuzz=0, rawResolution=0
+        RZ: min=-1.00000, max=1.00000, flat=0.00000, fuzz=0.00000, resolution=0.00000
+          scale=0.00000, offset=-0.00000, highScale=0.00000, highOffset=-0.00000
+          rawAxis=5, rawMin=-1000000, rawMax=1000000, rawFlat=0, rawFuzz=0, rawResolution=0
+        X: min=-1.00000, max=1.00000, flat=0.00000, fuzz=0.00000, resolution=0.00000
+          scale=0.00000, offset=-0.00000, highScale=0.00000, highOffset=-0.00000
+          rawAxis=0, rawMin=-1000000, rawMax=1000000, rawFlat=0, rawFuzz=0, rawResolution=0
+    Input Controller:
+      RawLights:
+        Id:	 Name:	 Flags:	 Max brightness:	 Brightness
+      Batteries:
+        Id: 1        Name: battery      Capacity: 87
+      Status: Charging
+  Device 5: Xiaomi Mouse
+    EventHub Devices: [ 2 ] 
+    Generation: 51
+    IsExternal: true
+    IsWaking: false
+    AssociatedDisplayPort: <none>
+    AssociatedDisplayUniqueIdByPort: <none>
+    AssociatedDisplayUniqueIdByDescriptor: <none>
+    HasMic:     false
+    Sources: MOUSE
+    KeyboardType: 0
+    ControllerNum: 0
+    Motion Ranges:
+      X: source=MOUSE, min=0.000, max=899.000, flat=0.000, fuzz=0.000, resolution=0.000
+      Y: source=MOUSE, min=0.000, max=1599.000, flat=0.000, fuzz=0.000, resolution=0.000
+      PRESSURE: source=MOUSE, min=0.000, max=1.000, flat=0.000, fuzz=0.000, resolution=0.000
+      VSCROLL: source=MOUSE, min=-1.000, max=1.000, flat=0.000, fuzz=0.000, resolution=0.000
+      HSCROLL: source=MOUSE, min=-1.000, max=1.000, flat=0.000, fuzz=0.000, resolution=0.000
+    Cursor Input Mapper:
+      Parameters:
+        HasAssociatedDisplay: true
+        Mode: POINTER
+        OrientationAware: false
+      XScale: 1.000
+      YScale: 1.000
+      XPrecision: 1.000
+      YPrecision: 1.000
+      HaveVWheel: true
+      HaveHWheel: true
+      WheelYVelocityControlParameters: scale=1.000, lowThreshold=15.000, highThreshold=50.000, acceleration=4.000
+      WheelXVelocityControlParameters: scale=1.000, lowThreshold=15.000, highThreshold=50.000, acceleration=4.000
+      VWheelScale: 1.000
+      HWheelScale: 1.000
+      DisplayId: 0
+      Orientation: Rotation0
+      ButtonState: 0x00000000
+      Down: false
+      DownTime: 0
+    Input Controller:
+      RawLights:
+        Id:	 Name:	 Flags:	 Max brightness:	 Brightness
+      Batteries:
+        Id: 1        Name: battery      Capacity: 87
+      Status: Charging
+  Device 4: Xiaomi Keyboard
+    EventHub Devices: [ 3 ] 
+    Generation: 48
+    IsExternal: true
+    IsWaking: false
+    AssociatedDisplayPort: <none>
+    AssociatedDisplayUniqueIdByPort: <none>
+    AssociatedDisplayUniqueIdByDescriptor: <none>
+    HasMic:     false
+    Sources: KEYBOARD
+    KeyboardType: 2
+    ControllerNum: 0
+    Keyboard Input Mapper:
+      Parameters:
+        OrientationAware: false
+        HandlesKeyRepeat: false
+      Orientation: Rotation0
+      KeyDowns: 0 keys currently down
+      MetaState: 0x0
+      KeyboardLayoutInfo: <not set>
+    Input Controller:
+      RawLights:
+        Id:	 Name:	 Flags:	 Max brightness:	 Brightness
+      Batteries:
+        Id: 1        Name: battery      Capacity: 87
+      Status: Charging
+  Device -1: Virtual
+    EventHub Devices: [ -1 ] 
+    Generation: 41
+    IsExternal: false
+    IsWaking: false
+    AssociatedDisplayPort: <none>
+    AssociatedDisplayUniqueIdByPort: <none>
+    AssociatedDisplayUniqueIdByDescriptor: <none>
+    HasMic:     false
+    Sources: KEYBOARD | DPAD
+    KeyboardType: 2
+    ControllerNum: 0
+    Keyboard Input Mapper:
+      Parameters:
+        OrientationAware: false
+        HandlesKeyRepeat: false
+      Orientation: Rotation0
+      KeyDowns: 0 keys currently down
+      MetaState: 0x0
+      KeyboardLayoutInfo: <not set>
+  Device 3: Xiaomi Touchscreen
+    EventHub Devices: [ 4 ] 
+    Generation: 46
+    IsExternal: false
+    IsWaking: false
+    AssociatedDisplayPort: <none>
+    AssociatedDisplayUniqueIdByPort: <none>
+    AssociatedDisplayUniqueIdByDescriptor: <none>
+    HasMic:     false
+    Sources: TOUCHSCREEN
+    KeyboardType: 0
+    ControllerNum: 0
+    Motion Ranges:
+      X: source=TOUCHSCREEN, min=0.000, max=1599.001, flat=0.000, fuzz=0.000, resolution=0.000
+      Y: source=TOUCHSCREEN, min=0.000, max=899.001, flat=0.000, fuzz=0.000, resolution=0.000
+      PRESSURE: source=TOUCHSCREEN, min=0.000, max=1.000, flat=0.000, fuzz=0.000, resolution=0.000
+    Touch Input Mapper (mode - DIRECT):
+      Parameters:
+        GestureMode: MULTI_TOUCH
+        DeviceType: TOUCH_SCREEN
+        AssociatedDisplay: hasAssociatedDisplay=true, isExternal=false, displayId=''
+        OrientationAware: true
+        Orientation: Rotation0
+        UsiVersion: <not set>
+        EnableForInactiveViewport: false
+      Raw Touch Axes:
+        X: min=0, max=900, flat=0, fuzz=0, resolution=0
+        Y: min=0, max=1600, flat=0, fuzz=0, resolution=0
+        Pressure: unknown range
+        TouchMajor: unknown range
+        TouchMinor: unknown range
+        ToolMajor: unknown range
+        ToolMinor: unknown range
+        Orientation: unknown range
+        Distance: unknown range
+        TiltX: unknown range
+        TiltY: unknown range
+        TrackingId: min=0, max=65535, flat=0, fuzz=0, resolution=0
+        Slot: min=0, max=31, flat=0, fuzz=0, resolution=0
+      Calibration:
+        touch.size.calibration: NONE
+        touch.pressure.calibration: none
+        touch.orientation.calibration: none
+        touch.distance.calibration: none
+      Affine Transformation:
+        X scale: 1.000
+        X ymix: 0.000
+        X offset: 0.000
+        Y xmix: 0.000
+        Y scale: 1.000
+        Y offset: 0.000
+      Viewport INTERNAL: displayId=0, uniqueId=local:4619827820427265280, port=0, orientation=0, logicalFrame=[0, 0, 900, 1600], physicalFrame=[0, 0, 900, 1600], deviceSize=[900, 1600], isActive=[1]
+      DisplayBounds: 900x1600
+      PhysicalFrameInRotatedDisplay: Rect{0, 0, 900, 1600}
+      InputDeviceOrientation: Rotation0
+      Translation and Scaling Factors:
+        RawToDisplay Transform: (ROT_0) (SCALE )
+            0.9989  0.0000  0.0000
+            0.0000  0.9994  0.0000
+            0.0000  0.0000  1.0000
+        RawRotation Transform: (ROT_0) (IDENTITY)
+        OrientedXPrecision: 1.001
+        OrientedYPrecision: 1.001
+        GeometricScale: 0.999
+        PressureScale: 0.000
+        SizeScale: 0.000
+        OrientationScale: 0.000
+        DistanceScale: 0.000
+        HaveTilt: false
+        TiltXCenter: 0.000
+        TiltXScale: 0.000
+        TiltYCenter: 0.000
+        TiltYScale: 0.000
+      Last Raw Button State: 0x00000000
+      Last Raw Touch: pointerCount=0
+      Last Cooked Button State: 0x00000000
+      Last Cooked Touch: pointerCount=0
+      Stylus Fusion:
+        ExternalStylusPresence: NONE
+        Fused External Stylus Pointer ID: <not set>
+        External Stylus Data Timeout: 9223372036854775807
+        External Stylus Buttons Applied: 0x00000000
+      External Stylus State:
+        When: 0
+        Pressure: <not set>
+        Button State: 0x00000000
+        Tool Type: UNKNOWN
+    Input Controller:
+      RawLights:
+        Id:	 Name:	 Flags:	 Max brightness:	 Brightness
+      Batteries:
+        Id: 1        Name: battery      Capacity: 87
+      Status: Charging
+  Device 2: Xiaomi integration
+    EventHub Devices: [ 5 ] 
+    Generation: 49
+    IsExternal: false
+    IsWaking: false
+    AssociatedDisplayPort: <none>
+    AssociatedDisplayUniqueIdByPort: <none>
+    AssociatedDisplayUniqueIdByDescriptor: <none>
+    HasMic:     false
+    Sources: KEYBOARD
+    KeyboardType: 1
+    ControllerNum: 0
+    Keyboard Input Mapper:
+      Parameters:
+        OrientationAware: false
+        HandlesKeyRepeat: false
+      Orientation: Rotation0
+      KeyDowns: 0 keys currently down
+      MetaState: 0x0
+      KeyboardLayoutInfo: <not set>
+  NextTimeout: 9223372036854775807
+  Configuration:
+    ExcludedDeviceNames: [Power Button, Android Power Button, Sleep Button, AT Translated Set 2 keyboard, VirtualBox USB Tablet, VirtualBox mouse integration, PC Speaker, Video Bus, ImExPS/2 Generic Explorer Mouse]
+    VirtualKeyQuietTime: 0.0ms
+    PointerVelocityControlParameters: scale=1.000, lowThreshold=500.000, highThreshold=3000.000, acceleration=3.000
+    WheelVelocityControlParameters: scale=1.000, lowThreshold=15.000, highThreshold=50.000, acceleration=4.000
+    PointerGesture:
+      Enabled: true
+      QuietInterval: 100.0ms
+      DragMinSwitchSpeed: 50.0px/s
+      TapInterval: 150.0ms
+      TapDragInterval: 300.0ms
+      TapSlop: 20.0px
+      MultitouchSettleInterval: 100.0ms
+      MultitouchMinDistance: 15.0px
+      SwipeTransitionAngleCosine: 0.3
+      SwipeMaxWidthRatio: 0.2
+      MovementSpeedRatio: 0.8
+      ZoomSpeedRatio: 0.3
+      Viewports:
+        Viewport INTERNAL: displayId=0, uniqueId=local:4619827820427265280, port=0, orientation=0, logicalFrame=[0, 0, 900, 1600], physicalFrame=[0, 0, 900, 1600], deviceSize=[900, 1600], isActive=[1]
+
+UnwantedInteractionBlocker:
+  mPreferStylusOverTouchBlocker:
+    mActiveStyli: {}
+    mLastTouchEvents: 
+    mDevicesWithMixedToolType: {}
+    mCanceledDevices: {}
+  mEnablePalmRejection: 0
+  isPalmRejectionEnabled (flag value): 0
+  mPalmRejectors: None
+
+PointerChoreographer:
+  Show Touches Enabled: true
+  Stylus PointerIcon Enabled: true
+  MousePointerControllers:
+  0 :     PointerController:
+      Presentation: POINTER
+      Pointer Display ID: 0
+      Viewports:
+        DisplayViewport[id=0]
+          Width=900, Height=1600
+          Transform (ROT_0) (IDENTITY)
+      Spot Controllers:
+      Cursor Controller:
+          MouseCursorController:
+            viewport: Viewport INTERNAL: displayId=0, uniqueId=local:4619827820427265280, port=0, orientation=0, logicalFrame=[0, 0, 900, 1600], physicalFrame=[0, 0, 900, 1600], deviceSize=[900, 1600], isActive=[1]
+            stylusHoverMode: false
+            pointerFadeDirection: 0
+            updatePointerIcon: false
+            resourcesLoaded: true
+            requestedPointerType: 1
+            resolvedPointerType: 1000
+            skipScreenshot: false
+            animating: false
+  TouchPointerControllers:
+  StylusPointerControllers:
+  DrawingTabletControllers:
+
+
+Input Processor State:
+  Motion Classifier:
+    <nullptr>
+
+InputDeviceMetricsCollector:
+  Logged device IDs: {2, 3, 4, 5, 6}
+  Devices with active usage sessions: {}
+
+InputFilter:
+
+Input Dispatcher State:
+  DispatchEnabled: true
+  DispatchFrozen: false
+  InputFilterEnabled: false
+  FocusedDisplayId: 0
+  FocusedApplications:
+    displayId=0, name='ActivityRecord{35731451 u0 jp.co.drecom.wizardry.daphne/com.google.firebase.MessagingUnityPlayerActivity t275}', dispatchingTimeout=25000ms
+  FocusedWindows:
+    displayId=0, name='48cd6e7 jp.co.drecom.wizardry.daphne/com.google.firebase.MessagingUnityPlayerActivity'
+  FocusRequests:
+    displayId=0, name='48cd6e7 jp.co.drecom.wizardry.daphne/com.google.firebase.MessagingUnityPlayerActivity' result='OK'
+  Pointer Capture Requested: false
+  Current Window with Pointer Capture: None
+  TouchStates: <no displays touched>
+  Display: 0
+    logicalSize=900x1600
+        transform (ROT_0) (IDENTITY)
+        SurfaceOrientation: 0
+    Windows:
+      0: name=c5e1998 StatusBar, id=997, displayId=0, inputConfig=NOT_VISIBLE | NOT_FOCUSABLE | TRUSTED_OVERLAY, alpha=1, frame=[0,-36][900,0], globalScale=1, applicationInfo.name=, applicationInfo.token=<null>, touchableRegion=[0,-35][900,1], ownerPid=31873, ownerUid=10033, dispatchingTimeout=25000ms, token=0x74f4c68552d0, touchOcclusionMode=BLOCK_UNTRUSTED
+    transform (ROT_0) (TRANSLATE)
+        1.0000  0.0000  -0.0000
+        0.0000  1.0000  36.0000
+        0.0000  0.0000  1.0000
+      1: name=48cd6e7 jp.co.drecom.wizardry.daphne/com.google.firebase.MessagingUnityPlayerActivity, id=1051, displayId=0, inputConfig=0x0, alpha=1, frame=[0,0][900,1600], globalScale=1, applicationInfo.name=ActivityRecord{35731451 u0 jp.co.drecom.wizardry.daphne/com.google.firebase.MessagingUnityPlayerActivity t275}, applicationInfo.token=0x74f4768cd250, touchableRegion=[0,0][900,1600], ownerPid=33298, ownerUid=10050, dispatchingTimeout=25000ms, token=0x74f4c6881d90, touchOcclusionMode=BLOCK_UNTRUSTED, canOccludePresentation
+    transform (ROT_0) (IDENTITY)
+      2: name=41a142e SurfaceView[jp.co.drecom.wizardry.daphne/com.google.firebase.MessagingUnityPlayerActivity](BLAST)#1055, id=1055, displayId=0, inputConfig=NO_INPUT_CHANNEL, alpha=1, frame=[0,0][720,1280], globalScale=1, applicationInfo.name=, applicationInfo.token=<null>, touchableRegion=<empty>, ownerPid=33298, ownerUid=10050, dispatchingTimeout=5000ms, token=0x0, touchOcclusionMode=BLOCK_UNTRUSTED, canOccludePresentation
+    transform (ROT_0) (IDENTITY)
+      3: name=Background for 41a142e SurfaceView[jp.co.drecom.wizardry.daphne/com.google.firebase.MessagingUnityPlayerActivity]#1056, id=1056, displayId=0, inputConfig=NO_INPUT_CHANNEL, alpha=1, frame=[0,0][0,0], globalScale=1, applicationInfo.name=, applicationInfo.token=<null>, touchableRegion=<empty>, ownerPid=33298, ownerUid=10050, dispatchingTimeout=5000ms, token=0x0, touchOcclusionMode=BLOCK_UNTRUSTED, canOccludePresentation
+    transform (ROT_0) (IDENTITY)
+      4: name=59258a ActivityRecordInputSink jp.co.drecom.wizardry.daphne/com.google.firebase.MessagingUnityPlayerActivity, id=1046, displayId=0, inputConfig=NO_INPUT_CHANNEL | NOT_FOCUSABLE, alpha=1, frame=[0,0][0,0], globalScale=0, applicationInfo.name=, applicationInfo.token=<null>, touchableRegion=[-9000,-16000][9000,16000], ownerPid=30436, ownerUid=1000, dispatchingTimeout=0ms, token=0x0, touchOcclusionMode=BLOCK_UNTRUSTED
+    transform (ROT_0) (IDENTITY)
+      5: name=b993c1 ActivityRecordInputSink com.github.metacubex.clash.meta/com.github.kr328.clash.MainActivity, id=1028, displayId=0, inputConfig=NO_INPUT_CHANNEL | NOT_VISIBLE | NOT_FOCUSABLE | NOT_TOUCHABLE, alpha=1, frame=[-1680,0][-1680,0], globalScale=0, applicationInfo.name=, applicationInfo.token=<null>, touchableRegion=[-16000,-9000][16000,9000], ownerPid=30436, ownerUid=1000, dispatchingTimeout=0ms, token=0x0, touchOcclusionMode=BLOCK_UNTRUSTED
+    transform (ROT_0) (TRANSLATE)
+        1.0000  0.0000  1679.9805
+        0.0000  1.0000  -0.0000
+        0.0000  0.0000  1.0000
+      6: name=Dim layer#984, id=984, displayId=0, inputConfig=NO_INPUT_CHANNEL | NOT_VISIBLE, alpha=1, frame=[0,0][0,0], globalScale=1, applicationInfo.name=, applicationInfo.token=<null>, touchableRegion=<empty>, ownerPid=31873, ownerUid=10033, dispatchingTimeout=5000ms, token=0x0, touchOcclusionMode=BLOCK_UNTRUSTED
+    transform (ROT_0) (IDENTITY)
+      7: name=Dim layer#983, id=983, displayId=0, inputConfig=NO_INPUT_CHANNEL | NOT_VISIBLE, alpha=1, frame=[0,0][0,0], globalScale=1, applicationInfo.name=, applicationInfo.token=<null>, touchableRegion=<empty>, ownerPid=31873, ownerUid=10033, dispatchingTimeout=5000ms, token=0x0, touchOcclusionMode=BLOCK_UNTRUSTED
+    transform (ROT_0) (IDENTITY)
+      8: name=7771421 ActivityRecordInputSink app.lawnchair/.LawnchairLauncher, id=976, displayId=0, inputConfig=NO_INPUT_CHANNEL | NOT_VISIBLE | NOT_FOCUSABLE | NOT_TOUCHABLE, alpha=1, frame=[0,0][0,0], globalScale=0, applicationInfo.name=, applicationInfo.token=<null>, touchableRegion=[-16000,-9000][16000,9000], ownerPid=30436, ownerUid=1000, dispatchingTimeout=0ms, token=0x0, touchOcclusionMode=BLOCK_UNTRUSTED
+    transform (ROT_0) (IDENTITY)
+      9: name=Wallpaper BBQ wrapper#988, id=988, displayId=0, inputConfig=NO_INPUT_CHANNEL | NOT_VISIBLE, alpha=1, frame=[-80,-45][1680,945], globalScale=1, applicationInfo.name=, applicationInfo.token=<null>, touchableRegion=<empty>, ownerPid=31873, ownerUid=10033, dispatchingTimeout=5000ms, token=0x0, touchOcclusionMode=BLOCK_UNTRUSTED
+    transform (ROT_0) (SCALE TRANSLATE)
+        0.9091  -0.0000  72.7273
+        -0.0000  0.9091  40.9091
+        0.0000  0.0000  1.0000
+      10: name=29a2ba6 com.android.systemui.wallpapers.ImageWallpaper, id=987, displayId=0, inputConfig=NOT_VISIBLE | NOT_FOCUSABLE | NOT_TOUCHABLE | IS_WALLPAPER, alpha=1, frame=[-80,-45][-80,-45], globalScale=1, applicationInfo.name=, applicationInfo.token=<null>, touchableRegion=<empty>, ownerPid=31873, ownerUid=10033, dispatchingTimeout=25000ms, token=0x74f4c6854cd0, touchOcclusionMode=BLOCK_UNTRUSTED
+    transform (ROT_0) (SCALE TRANSLATE)
+        0.9091  -0.0000  72.7273
+        -0.0000  0.9091  40.9091
+        0.0000  0.0000  1.0000
+  Global monitors on display 0:
+    0: 'PointerEventDispatcher0', 
+  RecentQueue: length=10
+    MotionEvent, age=959600ms
+    MotionEvent, age=959600ms
+    MotionEvent, age=959184ms
+    MotionEvent, age=959183ms
+    MotionEvent, age=957507ms
+    MotionEvent, age=957506ms
+    MotionEvent, age=957051ms
+    MotionEvent, age=957050ms
+    KeyEvent, age=954989ms
+    KeyEvent, age=954988ms
+  PendingEvent: <none>
+  InboundQueue: <empty>
+  CommandQueue: <empty>
+  Connections:
+    619: channelName='c7a5502 com.github.metacubex.clash.meta/com.github.kr328.clash.MainActivityAlias', status=NORMAL, monitor=false, responsive=true
+    460: channelName='c5e1998 StatusBar', status=NORMAL, monitor=false, responsive=true
+    459: channelName='a67c45f NotificationShade', status=NORMAL, monitor=false, responsive=true
+    414: channelName='e530371 ScreenDecorOverlayBottom', status=NORMAL, monitor=false, responsive=true
+    502: channelName='fbf8d28 app.lawnchair/app.lawnchair.LawnchairLauncher', status=NORMAL, monitor=false, responsive=true
+    406: channelName='36000 InputMethod', status=NORMAL, monitor=false, responsive=true
+    403: channelName='29a2ba6 com.android.systemui.wallpapers.ImageWallpaper', status=NORMAL, monitor=false, responsive=true
+    464: channelName='98aa5a1 app.lawnchair/app.lawnchair.LawnchairLauncher', status=NORMAL, monitor=false, responsive=true
+    509: channelName='48cd6e7 jp.co.drecom.wizardry.daphne/com.google.firebase.MessagingUnityPlayerActivity', status=NORMAL, monitor=false, responsive=true
+    465: channelName='recents_animation_input_consumer', status=NORMAL, monitor=false, responsive=true
+    216: channelName='e92770c ShellDropTarget', status=NORMAL, monitor=false, responsive=true
+    409: channelName='c37429a ScreenDecorOverlay', status=NORMAL, monitor=false, responsive=true
+    193: channelName='PointerEventDispatcher0', status=NORMAL, monitor=true, responsive=true
+  TouchModePerDisplay:
+    Display: 0 TouchMode: 1
+  Configuration:
+    KeyRepeatDelay: 50ms
+    KeyRepeatTimeout: 400ms
+    LatencyTracker:
+      mTimelines.size() = 0
+      mEventTimes.size() = 0
+    LatencyAggregatorWithHistograms:
+     Histograms:
+      mLastSlowEventTime=0
+      mNumEventsSinceLastSlowEventReport = 0
+      mNumSkippedSlowEvents = 0
+  InputTracer: Disabled
+
+App Input Devices State:
+Uid: 10016, input device: 0x8
+Uid: 10046, input device: 0x8
+Uid: 10050, input device: 0x8
+Input Manager Service (Java) State:
+  mAdditionalDisplayInputProperties:
+    <none>
+  BatteryController:
+    State: Polling = false, Interactive = true
+    Listeners: 0 battery listeners
+    Device Monitors: 0 monitors
+  KbdBacklightController: 0 keyboard backlights
+  KeyboardLedController: 0 keyboard mic mute lights
+  KeyboardLedController: 0 keyboard volume mute lights
+  KeyGestureController:
+    mCurrentUserId = 0
+    mSystemPid = 30436
+    mPendingMetaAction = false
+    mPendingCapsLockToggle = false
+    mPendingHideRecentSwitcher = false
+    mSearchKeyBehavior = 0
+    mSettingsKeyBehavior = 0
+    mRingerToggleChord = 1
+    mPowerVolUpBehavior = 2
+    mKeyGestureEventListenerRecords = {}
+    mKeyGestureHandlerRecords = {}
+  Last handled KeyGestureEvents: 
+    KeyGestureEvent { deviceId = -1, keycodes = [4], modifierState = 0, keyGestureType = KEY_GESTURE_TYPE_BACK, action = 2, displayId = 0, flags = 0, appLaunchData = null }
+    KeyGestureEvent { deviceId = -1, keycodes = [4], modifierState = 0, keyGestureType = KEY_GESTURE_TYPE_BACK, action = 2, displayId = 0, flags = 0, appLaunchData = null }
+    KeyGestureEvent { deviceId = -1, keycodes = [4], modifierState = 0, keyGestureType = KEY_GESTURE_TYPE_BACK, action = 2, displayId = 0, flags = 0, appLaunchData = null }
+    KeyGestureEvent { deviceId = -1, keycodes = [4], modifierState = 0, keyGestureType = KEY_GESTURE_TYPE_BACK, action = 2, displayId = 0, flags = 0, appLaunchData = null }
+    KeyGestureEvent { deviceId = -1, keycodes = [4], modifierState = 0, keyGestureType = KEY_GESTURE_TYPE_BACK, action = 2, displayId = 0, flags = 0, appLaunchData = null }
+    KeyGestureEvent { deviceId = -1, keycodes = [4], modifierState = 0, keyGestureType = KEY_GESTURE_TYPE_BACK, action = 2, displayId = 0, flags = 0, appLaunchData = null }
+    KeyGestureEvent { deviceId = -1, keycodes = [4], modifierState = 0, keyGestureType = KEY_GESTURE_TYPE_BACK, action = 2, displayId = 0, flags = 0, appLaunchData = null }
+    KeyGestureEvent { deviceId = -1, keycodes = [4], modifierState = 0, keyGestureType = KEY_GESTURE_TYPE_BACK, action = 2, displayId = 0, flags = 0, appLaunchData = null }
+    KeyGestureEvent { deviceId = -1, keycodes = [4], modifierState = 0, keyGestureType = KEY_GESTURE_TYPE_BACK, action = 2, displayId = 0, flags = 0, appLaunchData = null }
+    KeyGestureEvent { deviceId = -1, keycodes = [4], modifierState = 0, keyGestureType = KEY_GESTURE_TYPE_BACK, action = 2, displayId = 0, flags = 0, appLaunchData = null }
+  KeyCombination rules:
+  AppLaunchShortcutManager:
+  InputGestureManager:
+    System Shortcuts:
+    Blocklisted Triggers:
+      KeyTrigger{mKeycode=KEYCODE_C, mModifierState=4096}
+      KeyTrigger{mKeycode=KEYCODE_SPACE, mModifierState=4096}
+      KeyTrigger{mKeycode=KEYCODE_SPACE, mModifierState=4097}
+      KeyTrigger{mKeycode=KEYCODE_A, mModifierState=4096}
+      KeyTrigger{mKeycode=KEYCODE_TAB, mModifierState=2}
+      KeyTrigger{mKeycode=KEYCODE_TAB, mModifierState=3}
+      KeyTrigger{mKeycode=KEYCODE_Z, mModifierState=4096}
+      KeyTrigger{mKeycode=KEYCODE_Y, mModifierState=4096}
+      KeyTrigger{mKeycode=KEYCODE_Z, mModifierState=4098}
+      KeyTrigger{mKeycode=KEYCODE_X, mModifierState=4096}
+      KeyTrigger{mKeycode=KEYCODE_V, mModifierState=4096}
+    Custom Gestures:

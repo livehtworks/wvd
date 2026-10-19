@@ -8,11 +8,11 @@ namespace wvd::devices::android {
 // 每段自己的状态也必须成功，不能让最后一个 printf 吞掉前面 dumpsys 的失败。
 inline constexpr std::string_view context_probe_command =
     "printf '__WVD_CTX_V1_BEGIN__\\n'; "
-    "dumpsys window; _wvd_ctx_a=$?; "
+    "dumpsys input; _wvd_ctx_a=$?; "
     "printf '\\n__WVD_CTX_V1_INPUT__\\n'; "
     "dumpsys input; _wvd_ctx_b=$?; "
     "printf '\\n__WVD_CTX_V1_END_FOCUS__\\n'; "
-    "dumpsys window; _wvd_ctx_c=$?; "
+    "dumpsys input; _wvd_ctx_c=$?; "
     "printf '\\n__WVD_CTX_V1_STATUS__:%d:%d:%d\\n' "
     "\"$_wvd_ctx_a\" \"$_wvd_ctx_b\" \"$_wvd_ctx_c\"";
 

@@ -1,0 +1,11 @@
+{
+  "file": "mumu15-input.txt",
+  "sha256": "1dae443d7940647a456233fdcd7f210511ca25c5c9f1ed3a58016dd97e84555d",
+  "source": "Read-only adb dumpsys input from the existing MuMu instance 2 after the completed 20261019 batch; no game input or loop start",
+  "observed_host_date": "2026-10-19",
+  "viewport": [900, 1600],
+  "rotation": 0,
+  "focused_display": 0,
+  "focused_package": "jp.co.drecom.wizardry.daphne",
+  "scope": "Recorded parser evidence, not a live input submission or crash reproduction"
+}

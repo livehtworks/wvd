@@ -1,4 +1,6 @@
 #include "devices/android_probe.hpp"
+#include "devices/android_context_query.hpp"
+#include "devices/android_viewport.hpp"
 #include "devices/scrcpy_codec.hpp"
 #include "devices/lifecycle_execution.hpp"
 #include "devices/metadata_read_fault.hpp"
@@ -7,6 +9,8 @@
 #include "platform/windows/memory_diagnostics.hpp"
 #include "platform/windows/mumu_binding.hpp"
 #include <iostream>
+#include <fstream>
+#include <iterator>
 #include <stdexcept>
 #include <thread>
 
@@ -19,7 +23,7 @@ class RecoveryPort final : public wvd::devices::LifecyclePort {
     int called{};
     int transient_failures{};
     int start_without_focus{};
-    bool timeout_after_effect{}, permanent_failure{};
+    bool timeout_after_effect{}, permanent_failure{}, exit_after_start{};
     std::optional<wvd::devices::LifecycleObservation> observe_lifecycle() override {
         return wvd::devices::LifecycleObservation{target, running, connected, game, true,
             generation, std::chrono::steady_clock::now(), game, exited};
@@ -38,6 +42,7 @@ class RecoveryPort final : public wvd::devices::LifecyclePort {
         if (op == wvd::devices::LifecycleOperation::RestartInstance) {
             exited = false; running = connected = true; ++generation;
         } else if (op == wvd::devices::LifecycleOperation::StartApplication) {
+            if (exit_after_start) { exited = true; running = connected = game = false; return true; }
             if (start_without_focus > 0) --start_without_focus;
             else game = true;
         }
@@ -53,6 +58,69 @@ void rejected(Call call, const char *reason) {
 
 int main(int argc, char **argv) {
     try {
+        if (argc == 3 && std::string(argv[1]) == "--input-context") {
+            namespace a = wvd::devices::android;
+            std::ifstream source(argv[2], std::ios::binary);
+            if (!source) throw std::runtime_error("INPUT_CONTEXT_FIXTURE_MISSING");
+            const std::string real{std::istreambuf_iterator<char>{source}, {}};
+            const auto viewport = a::input_viewport(real);
+            if (a::focus(real) != "jp.co.drecom.wizardry.daphne" || !viewport ||
+                viewport->size != wvd::contracts::Size{900,1600} || viewport->rotation != 0)
+                throw std::runtime_error("REAL_INPUT_CONTEXT_INVALID");
+            unsigned checked{1};
+            const auto check = [&](const std::string &text, const std::string &expected) {
+                ++checked;
+                if (a::focus(text) != expected) throw std::runtime_error("INPUT_FOCUS_CONTRACT_FAILED");
+            };
+            const std::string prefix = "Input Dispatcher State:\n  FocusedDisplayId: 0\n";
+            const std::string game = "    displayId=0, name='123 game.pkg/MainActivity'\n";
+            check(prefix + "  FocusedWindows:\n" + game, "game.pkg");
+            check(prefix + "  FocusedApplications:\n" + game +
+                "  FocusedWindows:\n    displayId=0, name='234 com.android.vpndialogs/ConfirmDialog'\n",
+                "com.android.vpndialogs");
+            check(prefix + "  FocusedWindows: <none>\n  FocusRequests:\n" + game, "");
+            check(prefix + "  FocusedApplications:\n" + game, "");
+            check(prefix + "  FocusedWindows:\n    displayId=0, name='StatusBar'\n", "");
+            check(prefix + "  FocusedWindows:\n" + game + game, "");
+            check(prefix + "  FocusedWindows:\n" + game +
+                "    displayId=0, name='234 other.pkg/Activity'\n", "");
+            check("Input Dispatcher State:\n  FocusedDisplayId: 1\n  FocusedWindows:\n" + game, "");
+            check("Input Dispatcher State:\n  FocusedWindows:\n" + game, "");
+            check(prefix + "  FocusedWindows:\n    displayId=1, name='123 game.pkg/Activity'\n", "");
+            check(prefix + "  FocusedWindows:\n" + game +
+                "  FocusRequests:\n    displayId=0, name='234 other.pkg/Activity' result='OK'\n", "game.pkg");
+            check("Input Dispatcher State:\r\n  FocusedDisplayId:   0\r\n  FocusedWindows:\r\n"
+                "    displayId = 0, name = '123 game.pkg/.Activity'\r\n", "game.pkg");
+            check(prefix + "  FocusedDisplayId: 0\n  FocusedWindows:\n" + game, "");
+            check("mCurrentFocus=Window{123 u0 game.pkg/Activity}\n", "");
+            const auto combine = [](const std::string &before, const std::string &middle,
+                                    const std::string &after) {
+                return "__WVD_CTX_V1_BEGIN__\n" + before + "\n__WVD_CTX_V1_INPUT__\n" + middle +
+                    "\n__WVD_CTX_V1_END_FOCUS__\n" + after + "\n__WVD_CTX_V1_STATUS__:0:0:0\n";
+            };
+            const auto joined = combine(real, real, real);
+            const auto parsed = a::parse_context_dump(joined);
+            if (!parsed || a::focus(std::string(parsed->before_focus)) != a::focus(real) ||
+                a::focus(std::string(parsed->after_focus)) != a::focus(real) ||
+                a::input_viewport(std::string(parsed->input)) != viewport)
+                throw std::runtime_error("INPUT_CONTEXT_SECTIONS_INVALID");
+            const auto changed = combine(real, real, prefix + "  FocusedWindows:\n"
+                "    displayId=0, name='234 other.pkg/Activity'\n");
+            const auto transition = a::parse_context_dump(changed);
+            if (!transition || a::focus(std::string(transition->before_focus)) ==
+                a::focus(std::string(transition->after_focus)))
+                throw std::runtime_error("INPUT_FOCUS_CHANGE_LOST");
+            if (a::parse_context_dump(joined + "__WVD_CTX_V1_INPUT__\n") ||
+                a::parse_context_dump(joined.substr(0, joined.size()-3)) ||
+                a::parse_context_dump(combine(real, real, "")))
+                throw std::runtime_error("INCOMPLETE_INPUT_CONTEXT_ACCEPTED");
+            const auto command = std::string(a::context_probe_command);
+            if (command.find("dumpsys window") != std::string::npos ||
+                command.find("dumpsys input") == std::string::npos)
+                throw std::runtime_error("FULL_WINDOW_DUMP_REINTRODUCED");
+            std::cout << "input context real fixture and " << checked << " focus checks passed\n";
+            return 0;
+        }
         if (argc == 2 && std::string(argv[1]) == "--physical-gate-authority") {
             using namespace wvd;
             struct Backend final : devices::DeviceBackend {
@@ -309,6 +377,19 @@ int main(int argc, char **argv) {
                 "PERMANENT_LIFECYCLE_FAILURE_RETRIED");
         }
         const auto owners = wvd::platform::sample_memory_owners();
+        {
+            RecoveryPort changed;
+            changed.running = changed.connected = true; changed.exit_after_start = true;
+            d::LifecyclePlan start{changed.target, {d::LifecycleOperation::StartApplication}, 1};
+            start.step_timeout = std::chrono::milliseconds(200);
+            std::string reason;
+            const auto events = [&](const std::string &name, const nlohmann::json &data) {
+                if (name == "lifecycle.retry_required") reason = data.value("reason", "");
+            };
+            if (d::execute_lifecycle_plan(start, changed, [] { return false; }, events) !=
+                d::LifecycleEnd::RetryRequired || reason != "DEVICE_STATE_CHANGED" || changed.called != 1)
+                throw std::runtime_error("LIFECYCLE_EXIT_WAITED_FOR_OLD_POSTCONDITION");
+        }
         {
             RecoveryPort delayed;
             delayed.running = delayed.connected = true;

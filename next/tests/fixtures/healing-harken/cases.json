@@ -1,0 +1,28 @@
+[
+  {
+    "id": "open-panel-interrupted-by-harken",
+    "kind": "healing-harken",
+    "locale": "zh-Hant",
+    "frame": "tests/fixtures/healing-harken/before-open.png",
+    "sha256": "32530e3c6d3e16d7ab43a2de31f26e56cb14bf21a2362965a3d8b02509f955b4",
+    "after_input_frame": "tests/fixtures/healing-harken/harken-menu.png",
+    "after_input_sha256": "bb6d5fcea7b2e7d702ea1ea51714f90fb7fc505f5d19b5aa50812179c6eca819",
+    "initial_step": 1, "final_step": 2, "inputs": 1, "completes": true
+  },
+  {
+    "id": "already-harken-no-recovery-click",
+    "kind": "healing-harken",
+    "locale": "zh-Hant",
+    "frame": "tests/fixtures/healing-harken/harken-menu.png",
+    "sha256": "bb6d5fcea7b2e7d702ea1ea51714f90fb7fc505f5d19b5aa50812179c6eca819",
+    "initial_step": 1, "final_step": 2, "inputs": 0, "completes": true
+  },
+  {
+    "id": "harken-cannot-skip-unfinished-target",
+    "kind": "healing-harken",
+    "locale": "zh-Hant",
+    "frame": "tests/fixtures/healing-harken/harken-menu.png",
+    "sha256": "bb6d5fcea7b2e7d702ea1ea51714f90fb7fc505f5d19b5aa50812179c6eca819",
+    "initial_step": 0, "final_step": 0, "inputs": 0, "completes": false
+  }
+]

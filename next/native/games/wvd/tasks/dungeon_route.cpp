@@ -96,7 +96,7 @@ CompiledWorkflow traverse_dungeon(const WvdTaskPlan &plan, const J &profile,
     const auto outside = C::all({C::any({C::image("Inn"), C::image("EdgeOfTown"), C::image("returntoTown"), C::image("returnText"),
                                         C::image("openworldmap"), C::image("worldmapflag")}),
                                  C::absent(C::image("mapFlag")), C::absent(encounter)});
-    const auto inside = C::all({C::any({map, dungeon, encounter}), input_clear});
+    const auto inside = C::all({C::any({map, dungeon, encounter, vision::harken_floor_menu()}), input_clear});
     graph.route("Entry", candidates({"EnteredDungeon", "Outside", "Entered", "UnknownFrozen", "UnknownLeap", "UnknownTimeout", "UnknownLimit", "UnknownWait"}));
     // Materialize the default at finish across the caller's business body;
     // an Entry-only rule would disappear after inline append or a later step.
@@ -118,7 +118,15 @@ CompiledWorkflow traverse_dungeon(const WvdTaskPlan &plan, const J &profile,
     graph.hit_limit("UnknownWait", 128);
     graph.confirm("Entered", "dungeon.enter", "dungeon_entered", inside, {"Dispatch"});
     graph.confirm("EnteredDungeon", "dungeon.enter", "dungeon_entered", dungeon, {"EntryReady"});
-    graph.route("EntryReady", {"EntryNavigation", "Dispatch"});
+    J entry_ready = J::array();
+    // Resume this target's existing receipt before the normal navigation path;
+    // restarting a game does not settle an interrupted target battle.
+    for (std::size_t i = 0; i < plan.route().size(); ++i)
+        if (plan.route()[i].shortcut_battle)
+            entry_ready.push_back("ResumeTarget" + std::to_string(i));
+    entry_ready.push_back("EntryNavigation");
+    entry_ready.push_back("Dispatch");
+    graph.route("EntryReady", std::move(entry_ready));
     graph.observe_business("EntryNavigation", C::business("/healing_required", false), {"SelectPoint"});
     J dispatch = J::array();
     if (plan.route().back().harken_arrival) dispatch.push_back("HarkenCompleted");
@@ -164,7 +172,7 @@ CompiledWorkflow traverse_dungeon(const WvdTaskPlan &plan, const J &profile,
 
     const auto heal = graph.define_child("Heal", supply::recover_in_dungeon());
     graph.observe("HealingPanel", C::all({C::any({C::image("trait"), C::image("recover")}),
-        C::absent(encounter), C::business("/healing_required", true)}), {"Heal"});
+        C::absent(encounter)}), {"Heal"});
     graph.confirm("Resume", "dungeon.resume", "dungeon_resumed", dungeon, {"Heal"});
     const bool bypass = profile.at("BYPASS_THE_WALL").get<bool>() && plan.definition().type == "dungeon";
     graph.call_child("Heal", heal, candidates({bypass ? "BypassWall" : "SelectPoint"}), {{"encounter", {"Dispatch"}}, {"blocked", {"Dispatch"}}});
@@ -187,7 +195,7 @@ CompiledWorkflow traverse_dungeon(const WvdTaskPlan &plan, const J &profile,
         const auto &target = plan.route()[i];
         const auto suffix = std::to_string(i);
         const bool automatic = automatic_target(target);
-        auto child = automatic ? navigation::auto_route(target.target)
+        auto child = automatic ? navigation::auto_route(target.target, target.shortcut_battle)
                                : navigation::reach_map_target(target, plan.floor());
         J normal{{"encounter", {"Dispatch"}}, {"blocked", {"Dispatch"}}};
         if (automatic) {
@@ -269,15 +277,17 @@ CompiledWorkflow traverse_dungeon(const WvdTaskPlan &plan, const J &profile,
         const auto route_definition = graph.define_child("Route" + suffix, child);
         const auto route = "CallRoute" + suffix;
         if (automatic && target.target != "dungFlag" && target.target != "stay") {
+            if (target.shortcut_battle)
+                normal["destination_finished"] = {"NavigationTerminated" + suffix};
             graph.confirm("NavigationTerminated" + suffix, "navigation.terminated." + suffix,
-                "target_navigation_terminated", {{"mode", "confirmed_input_result"},
+                "target_navigation_terminated", target.shortcut_battle ? input_clear : J{{"mode", "confirmed_input_result"},
                     {"classification", "navigation_no_route"}, {"consume", true}},
                 {"ConfirmNavigation" + suffix}, i);
             graph.confirm("ConfirmNavigation" + suffix, "point." + suffix, "target_completed",
                 C::all({input_clear, inside}), {"Dispatch"}, i);
         }
         J completed_route = {"Outside"};
-        if (automatic && target.target != "dungFlag" && target.target != "stay")
+        if (automatic && target.target != "dungFlag" && target.target != "stay" && !target.shortcut_battle)
             completed_route.push_back("NavigationTerminated" + suffix);
         completed_route.push_back("Confirm" + suffix);
         graph.call_child(route, route_definition,

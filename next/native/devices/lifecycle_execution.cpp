@@ -163,6 +163,12 @@ LifecycleEnd execute_lifecycle_plan(const LifecyclePlan &plan, LifecyclePort &po
                 confirmed = true;
                 break;
             }
+            if (operation != O::RestartInstance &&
+                (after.instance_exited || (operation != O::Reconnect && after.instance_running && !after.connected))) {
+                event("lifecycle.retry_required", {{"operation", operation_name},
+                    {"reason", "DEVICE_STATE_CHANGED"}, {"state", state_json(after)}});
+                return LifecycleEnd::RetryRequired;
+            }
             // Android can acknowledge am start before the task actually gains
             // focus. Recheck the bound target before bringing it forward again.
             if (operation == O::StartApplication && precondition(operation, after) &&

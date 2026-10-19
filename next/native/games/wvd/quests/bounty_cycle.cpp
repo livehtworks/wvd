@@ -67,12 +67,20 @@ void BountyCycle::complete(std::size_t unit, bool rested) {
     active_ = false;
     phase_ = Phase::Completed;
 }
+bool BountyCycle::segment_complete(std::size_t unit) const {
+    if (!sequence_) return false;
+    if (active_ && phase_ == Phase::FirstRoute) return unit == start_unit_;
+    if (active_ && hands_ && phase_ == Phase::SecondRoute) return unit == start_unit_ + 1;
+    if (active_ && phase_ == Phase::Reports) return unit == start_unit_ + (hands_ ? 2 : 1);
+    return !active_ && phase_ == Phase::Completed && unit == start_unit_ + (hands_ ? 3 : 2);
+}
 nlohmann::json BountyCycle::summary(std::size_t unit, std::size_t reports) const {
     const auto expected = initial_reports_ + (hands_ ? 2 : 1);
     const auto offset = phase_ <= Phase::Reveal ? 0u : phase_ <= Phase::FirstReturn ? 1u :
         phase_ <= Phase::SecondReturn ? 2u : hands_ ? 3u : 2u;
     return {{"active", active_}, {"phase", static_cast<int>(phase_)}, {"hands", hands_},
         {"unit_matches", active_ && unit == start_unit_ + offset},
+        {"segment_complete", segment_complete(unit)},
         {"rest_due", rest_due_}, {"transfer_pending", transfer_pending_}, {"completed_cycles", cycles_},
         {"reports_remaining", reports < expected ? expected - reports : 0}};
 }

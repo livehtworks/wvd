@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "source_commit": "6585f4075f5714ab522aa582993860c09af912c1",
-  "revision": "93ec84f125e552d317202a652424c7b72df50f92791b7a774ea8dd06269193f6",
+  "revision": "9b1833064634e9b3abcecf98f4f6f2caf15cc5cdd2e0040317a85588f3e49231",
   "files": [
     {
       "path": "image/7000G/icantagreewithU.png",
@@ -3886,6 +3886,15 @@
       "source_refs": []
     },
     {
+      "path": "image/spellskill/char/F 爱莉安诺特.png",
+      "source": "next/resources/images/spellskill/char/F 爱莉安诺特.png",
+      "sha256": "f6ac9b9074aee14c52eea7960a72e1cf5b8cb9259cba7b6208ff7dfe98d37003",
+      "bytes": 7536,
+      "source_refs": [
+        "next/docs/arianoth-portrait-20261018.json"
+      ]
+    },
+    {
       "path": "image/spellskill/char/F 狮樱.png",
       "source": "resources/images/spellskill/char/F 狮樱.png",
       "sha256": "ce0aae9746b3d39b5f1688bb854a314159fb0fdb74c7533df30d3ddebb645253",
@@ -4916,8 +4925,8 @@
     {
       "path": "parameters/semantic-assets.json",
       "source": "next/resources/authoring/semantic-assets.json",
-      "sha256": "f888eadb3c84ccc16badfc1e6fc671708eaafbe94f5d899151dd01f76f5dd90d",
-      "bytes": 84283,
+      "sha256": "c564bd6af8baea5f62d29c9600f6a91edd89ad15c2059d03fa523fa73e91d111",
+      "bytes": 84320,
       "source_refs": [
         "authoring:public-flow-1"
       ]

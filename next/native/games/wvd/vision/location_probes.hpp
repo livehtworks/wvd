@@ -15,7 +15,7 @@ inline nlohmann::json resource(const char *id, const char *locale = "") {
             "city.blacksmith.entry", "city.ruins.entry", "city.guild.entry",
             "city.ore_merchant.entry", "city.item_shop.entry", "city.edge.entry", "city.any"})
             values.emplace(name, assets.condition(name, ""));
-        for (const char *name : {"guild.commissions.page", "guild.bounties.page", "guild.bounty.reveal.close",
+        for (const char *name : {"guild.menu", "guild.commissions.page", "guild.bounties.page", "guild.bounty.reveal.close", "guild.report.receipt",
             "chest.open.option", "chest.choose.page", "inn.stay.option", "inn.standard.gold.confirmation", "purchase.premium.button",
             "combat.skill.detail", "combat.skill.confirm", "combat.menu.flee", "party.revival.action", "character.panel", "dungeon.recovery.panel", "dungeon.map.open", "navigation.no_route"})
             values.emplace(std::string(name) + "|zh-Hant", assets.condition(name, "zh-Hant"));
@@ -50,4 +50,15 @@ inline nlohmann::json ore_merchant_button() { return resource("city.ore_merchant
 inline nlohmann::json item_shop_button() { return resource("city.item_shop.entry"); }
 inline nlohmann::json edge_of_town_button() { return resource("city.edge.entry"); }
 inline nlohmann::json city_screen() { return resource("city.any"); }
+inline nlohmann::json low_willpower_warning() {
+    using J = nlohmann::json;
+    const auto text = [](const char *expected) {
+        return J{{"mode", "ocr"}, {"language", "zh-Hant"}, {"locale_only", "zh-Hant"},
+            {"expected", {expected}}, {"match", "contains"}, {"unique", false},
+            {"threshold", .9}, {"roi", {0, 400, 900, 800}}};
+    };
+    // The recorded warning has a variable actor name; require both stable clauses.
+    return {{"mode", "all"}, {"conditions", {
+        text("意志力較低迷"), text("對復活產生重大負面影響")}}};
+}
 }

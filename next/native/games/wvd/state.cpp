@@ -359,8 +359,17 @@ std::string WvdRunState::confirmation_id(const std::string &operation, const std
     // 不用帧号/代次作 ID：它们会让重试重复计数；也不能只用节点名吞掉第二场。
     // 真正生命周期恢复会重入旧 RestartableSequenceExecution 的 StateDungeon 调用。
     // 仅该局部路线开始新轮；住宿/善恶/专项开始回执仍保留，不能按 generation 全部重放。
-    if (event == "dungeon_entered" || event == "target_completed")
-        id += ":route:" + std::to_string(lifecycle_recovery_sequence_);
+    if (event == "dungeon_entered" || event == "target_completed") {
+        const auto bounty = bounty_cycle_.summary(unit_index_, bounty_reports_);
+        const bool continuing_bounty_route = bounty.at("active").get<bool>() &&
+            bounty.at("unit_matches").get<bool>() &&
+            (bounty.at("phase") == static_cast<int>(quests::BountyCycle::Phase::FirstRoute) ||
+             bounty.at("phase") == static_cast<int>(quests::BountyCycle::Phase::SecondRoute));
+        // A bounty route has durable point receipts within this unit. Recovery
+        // must not reset them; ordinary restartable dungeon tasks keep their policy.
+        if (!continuing_bounty_route)
+            id += ":route:" + std::to_string(lifecycle_recovery_sequence_);
+    }
     else if (event == "target_encounter_started")
         id += ":target:" + std::to_string(target_encounter_.phase > 0 && target_encounter_.phase < 4
             ? target_encounter_.attempt : target_attempt_sequence_ + 1) + ":combat:" +

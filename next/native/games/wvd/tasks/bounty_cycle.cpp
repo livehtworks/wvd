@@ -140,12 +140,16 @@ CompiledWorkflow bounty_cycle(const WvdQuestDefinition &definition, const J &pro
         C::absent(C::image("chestFlag"))});
     const auto outside = C::any({bounty_city, inn, edge, C::image("dungFlag"), C::image("returnText"),
         C::image("returntotown"), C::image("openworldmap")});
-    graph.route("Entry", {"PendingTransfer", "PendingPayment", "PendingReport", "Resume", "InspectBoard"});
+    graph.route("Entry", {"CompletedSegment", "ResumeLeapTransfer", "PendingTransfer", "PendingPayment", "PendingReport", "Resume", "InspectBoard"});
+    graph.observe("CompletedSegment", C::business("/bounty_cycle/segment_complete", true), {"Terminal"});
+    // Preparing a leap does not submit it. Re-enter the same navigation without
+    // preparing twice; its existing input protection governs any submitted leap.
+    graph.observe("ResumeLeapTransfer", C::all({phase(Phase::Leap),
+        C::business("/bounty_cycle/transfer_pending", true)}), {"Leap"});
     graph.observe("PendingTransfer", C::business("/bounty_cycle/transfer_pending", true), {"TransferUncertain"});
     graph.recovery("TransferUncertain", "quest.bounty_transfer_unconfirmed");
     graph.observe("PendingPayment", C::business("/inn_payment_pending", true), {"PaymentUncertain"});
-    graph.observe("PendingReport", C::business("/bounty_report_pending", true), {"ReportUncertain"});
-    graph.recovery("ReportUncertain", "quest.bounty_report_unconfirmed");
+    graph.observe("PendingReport", C::business("/bounty_report_pending", true), {"ResumeReport"});
     graph.observe("Resume", C::business("/bounty_cycle/active", true), {"Stage"});
     // 先收掉上一轮尚未提交的悬赏。仅报告按钮实际可见时才提交、住宿；
     // 无报告则退出公会直接开始本轮，不能把查看列表算作领取悬赏。
@@ -174,8 +178,8 @@ CompiledWorkflow bounty_cycle(const WvdQuestDefinition &definition, const J &pro
     // 服务重启不保留上一轮内存账目，但游戏可能仍在战斗/迷宫。
     // 先结束现场遭遇并返城，再查看可提交报告；不能凭此补记上一轮成功或直接跳轮。
     const J current_combat{{"mode", "combat_active"}};
-    graph.route("InspectBoard", locale == "zh-Hant" ? J{"InspectCombat", "InspectChest", "InspectRevive", "InspectDungeon", "CloseLateOldReveal", "InspectReady", "InspectOutside", "LeaveRuinsForInspection"}
-        : J{"InspectCombat", "InspectChest", "InspectRevive", "InspectDungeon", "InspectReady", "InspectOutside", "LeaveRuinsForInspection"});
+    graph.route("InspectBoard", locale == "zh-Hant" ? J{"InspectCombat", "InspectChest", "InspectRevive", "InspectHarken", "InspectDungeon", "CloseLateOldReveal", "InspectReceipt", "InspectReady", "InspectOutside", "LeaveRuinsForInspection"}
+        : J{"InspectCombat", "InspectChest", "InspectRevive", "InspectHarken", "InspectDungeon", "InspectReady", "InspectOutside", "LeaveRuinsForInspection"});
     // 复用正式副本中已定义的战斗子流程及其Return出口，不复制整张角色/技能图。
     const auto unfinished_battle = "FirstDungeon_" +
         first_route.nodes.at("Fight").at("operation_args").at("entry").get<std::string>();
@@ -196,6 +200,7 @@ CompiledWorkflow bounty_cycle(const WvdQuestDefinition &definition, const J &pro
         C::absent(C::image("chestFlag")), C::absent(C::image("RiseAgain"))}), {"ReturnForInspection"});
     const auto inspect_return = graph.define_child("InspectReturnCity", return_to_bounty_city(true, giant));
     graph.observe("InspectOutside", vision::outskirts_return_button(), {"ReturnForInspection"});
+    graph.observe("InspectHarken", vision::harken_floor_menu(), {"ReturnForInspection"});
     graph.call_child("ReturnForInspection", inspect_return, {"InspectBoard"},
         {{"encounter", {"RecoverReturn"}}, {"stopped", {"RecoverReturn"}}});
     if (locale == "zh-Hant") {
@@ -219,6 +224,10 @@ CompiledWorkflow bounty_cycle(const WvdQuestDefinition &definition, const J &pro
     graph.observe("OldReportReady", C::all({board_page, ready_report}), {"CollectOldReports"});
     const auto old_report = graph.define_child("OldBountyReport",
         visit_bounty_board(BountyVisit::Report, library, board_root, locale));
+    graph.call_child("ResumeReport", old_report, {"Resume", "RestAfterOldReports"});
+    if (locale == "zh-Hant")
+        graph.observe("InspectReceipt", library.resource_condition("guild.report.receipt", locale,
+            authoring::ResourceUse::Observation), {"CollectOldReports"});
     graph.call_child("CollectOldReports", old_report, {"RestAfterOldReports"});
     const auto old_rest = graph.define_child("OldBountyRest",
         supply::rest_at_inn(profile.at("ACTIVE_ROYALSUITE_REST").get<bool>(), true));
@@ -275,9 +284,13 @@ CompiledWorkflow bounty_cycle(const WvdQuestDefinition &definition, const J &pro
             const auto exit = graph.define_child("HarkenExit", navigation::reach_map_target(first_plan.route().back()));
             graph.call_child("LeaveByHarken", exit, {name + "RouteDone"}, {{"encounter", {"RecoveryRequired"}}, {"blocked", {"RecoveryRequired"}}});
         }
+        // Point receipts already prove Harken arrival. Healing may close its
+        // menu before this parent resumes; return navigation observes the new page.
         graph.confirm(name + "RouteDone", "bounty.route." + name, "bounty_route_completed",
             jier ? C::all({C::any({inn, guild, edge, C::image("returnText"), C::image("openworldmap")}), C::absent(map)})
-                 : plan.route().back().harken_arrival ? C::any({map, vision::harken_floor_menu()}) : map,
+                 : plan.route().back().harken_arrival ? C::all({
+                     phase(second ? Phase::SecondRoute : Phase::FirstRoute),
+                     C::business("/task_step", plan.route().size())}) : map,
             {name + "ReturnPhase"});
         graph.observe(name + "ReturnPhase", phase(second ? Phase::SecondReturn : Phase::FirstReturn), {name + "Return"});
         graph.call_child(name + "Return", return_guild, {name + "Returned"},
@@ -286,11 +299,13 @@ CompiledWorkflow bounty_cycle(const WvdQuestDefinition &definition, const J &pro
     }
     graph.recovery("Incomplete", "quest.bounty_route_incomplete");
     graph.observe("ReportsPhase", phase(Phase::Reports), {"Reports"});
-    graph.route("Reports", {"AllReported", "Deliver"});
+    // Even a recorded receipt may still be open after recovery. The report
+    // child owns its dismissal and guild exit before the parent advances.
+    graph.route("Reports", {"Deliver"});
     graph.observe("AllReported", C::business("/bounty_cycle/reports_remaining", 0), {"ReportsDone"});
     const auto report = graph.define_child("BountyReport",
         visit_bounty_board(BountyVisit::Report, library, board_root, locale));
-    graph.call_child("Deliver", report, {"Reports"});
+    graph.call_child("Deliver", report, {"AllReported", "Reports"});
     graph.hit_limit("Reports", 3);
     graph.hit_limit("Deliver", hands ? 2 : 1);
     graph.confirm("ReportsDone", "bounty.cycle.reports", "bounty_cycle_reported", edge, {"RestPhase"});

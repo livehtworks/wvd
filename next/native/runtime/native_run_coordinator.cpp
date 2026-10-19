@@ -792,6 +792,14 @@ void NativeRunCoordinator::drive(const NativeRunDefinition &definition,
                 auto plan = definition.recovery(recovery_result, *business, recovery_attempt + 1);
                 if (!plan) break;
                 devices::validate_lifecycle_plan(*plan);
+                // A changed device state replaces the remaining recovery plan,
+                // never the business receipt or the original recovery deadline.
+                const auto recovery_deadline = std::min(total_deadline,
+                    std::chrono::steady_clock::now() + plan->defer_for +
+                    plan->step_timeout * static_cast<std::int64_t>(plan->operations.size()));
+                bool recovery_ready = false;
+                while (plan && !stop_ && std::chrono::steady_clock::now() < recovery_deadline) {
+                devices::validate_lifecycle_plan(*plan);
                 const auto expected = plan->target;
                 using O = devices::LifecycleOperation;
                 std::vector<O> allowed;
@@ -815,8 +823,41 @@ void NativeRunCoordinator::drive(const NativeRunDefinition &definition,
                 auto executable_plan = *plan;
                 executable_plan.defer_for = 0ms;
                 const auto outcome = devices::execute_lifecycle_plan(executable_plan, *lifecycle,
-                    [this] { return stop_.load(); }, event, total_deadline);
-                if (outcome != devices::LifecycleEnd::ReadyForBoot) {
+                    [this] { return stop_.load(); }, event, recovery_deadline);
+                if (outcome == devices::LifecycleEnd::ReadyForBoot) {
+                    recovery_ready = true;
+                    break;
+                }
+                if (outcome != devices::LifecycleEnd::RetryRequired || stop_ ||
+                    std::chrono::steady_clock::now() >= recovery_deadline) break;
+                lifecycle->lifecycle_window(recovery_deadline);
+                std::optional<devices::LifecycleObservation> observed;
+                {
+                    ScopeExit reset_window{[lifecycle] { lifecycle->lifecycle_window({}); }};
+                    observed = lifecycle->observe_lifecycle();
+                }
+                if (stop_ || std::chrono::steady_clock::now() >= recovery_deadline || !observed) break;
+                const auto now = std::chrono::steady_clock::now();
+                require(observed->target.device_id == expected.device_id &&
+                    observed->target.instance_id == expected.instance_id &&
+                    observed->target.application_id == expected.application_id &&
+                    observed->target.vpn_application_id == expected.vpn_application_id &&
+                    observed->target.vpn_required == expected.vpn_required &&
+                    observed->observed_at <= now && now - observed->observed_at <= 2s &&
+                    !(observed->instance_exited && (observed->instance_running || observed->connected)) &&
+                    !(observed->connected && (!observed->instance_running || !observed->connection_generation)),
+                    "NATIVE_RECOVERY_OBSERVATION_INVALID");
+                const std::string next_reason = observed->instance_exited ? "device.instance_exited" :
+                    observed->instance_running && !observed->connected ? "device.disconnected" : "";
+                if (next_reason.empty() || next_reason == recovery_result.reason) break;
+                event("recovery.plan_reselected", {{"original_reason", last.reason},
+                    {"previous_reason", recovery_result.reason}, {"reason", next_reason},
+                    {"instance_exited", observed->instance_exited}, {"connected", observed->connected},
+                    {"business_input_replayed", false}});
+                recovery_result.reason = next_reason;
+                plan = definition.recovery(recovery_result, *business, recovery_attempt + 1);
+                }
+                if (!recovery_ready) {
                     failure = "NATIVE_RECOVERY_UNCONFIRMED";
                     break;
                 }

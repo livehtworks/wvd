@@ -1,0 +1,37 @@
+# 恢复面板退出修复
+
+## 依据
+
+用户2026-10-13明确要求：恢复两次返回后仍停在角色界面则点击左下X；提示可能自行消失，恢复期间遇敌应中断并进入战斗。旧src/script.py:3243附近为尽力恢复，五次PressReturn后返回主循环，没有recover_panel_not_closed硬停止。本轮采用用户指定的两次BACK加现有关闭动作，不照搬旧固定等待。
+
+故障证据next/.local/wvd-check-20261013-2001/：实例0DE7D06D/run2最后五次BACK均accepted，post允许原面板所以记录confirmed；五次后ReturnFailed终止。原图是角色强度页并显示连接中。不能据此断定“没必要恢复”提示曾出现，或认定网络/官方卡死是根因。
+
+## 修改
+
+next/native/games/wvd/supply/dungeon_recover.cpp撤出五次BACK后直接失败的出口，改为两次BACK后重新选择迷宫完成、遭遇交接、角色页关闭。关闭复用recovery/page_actions.hpp的close_character及其既有输入重试；X后置只接受迷宫/遭遇，不能以原角色页证明关闭。提示自行消失、BACK期间遇敌或X后遇敌均通过现有分派处理。恢复输入只记尝试，不以全员满血/资源充足为继续条件。
+
+没有新增关闭救人页的规则。未知送达不补点，原输入记录及真正多人死亡、低意志力保护继续生效。旧故障回执保留，不重写为成功。
+
+## 验证与部署
+
+hc-c1-261013的app/recognition共31个既有入口complete=true。healing-effect-contract覆盖自动消失、暂时提示、两次返回加X、X未生效重试、四个遇敌时点和Unknown输入，运行真实恢复工厂/执行器，页面观察受控。
+
+hc-real2-261013的五张原帧组合通过真实Service、NativeInputGate、完整恢复工厂和执行器；两张角色页均为两个BACK再一个(66,1500)点击，战斗/救人/低意志力页均无输入。设备后端隔离，所以不代表实机完成。独立战斗样本返回HANDOFF_REQUIRES_CALLER:encounter表明退出到既有交接；完整父调用接回已由受控执行器场景验证，不能把单独子流程当完整业务成功。
+
+首版原帧夹具直接改入口导致COMPILE_ORPHAN_NODE:Back0，未跳过验证；已改为从完整Entry进入、建立已有恢复尝试状态。该失败保留于hc-real1-261013。之后仅调整recorded_input_cases.cpp测试入口，31个入口所测生产源码未变；最终原帧回执产品输入为c8645bca8ddf5ef1cba93de44d8867b14a9f6738899b23144c01ea12f0274718/1301。正式构建/部署和续跑结果在完成后补记。
+
+完整build.py、package_functional.py及冻结候选Validate通过。部署候选hc-candidate-261013，EXE0922d74f137b4e9950f7ad0a3a87cbfd274d587fd96ee38cf2aed2b2d1cfc9fb，产品输入c8645bca8ddf5ef1cba93de44d8867b14a9f6738899b23144c01ea12f0274718/1301。原manage_service按身份关闭旧0DE7D06D服务，未重启模拟器或游戏。
+
+新实例02C237E9-695F-473A-999A-8A58BB37CFCC/PID32172/start_filetime134363693998639436，原17654/data-root保持。首次续跑run1由角色页关闭、迷宫返城、公会流程推进到新入副本。Boot_CloseCharacter事件15接受/20确认1466.3961毫秒，原帧2角色页→帧4迷宫，证明共享X在当前现场成功；这次实机入口是Boot，不冒充新恢复两次BACK路径的自然实测。
+
+## 续跑中的独立异常与当前状态
+
+首次请求giant-73-heal-close-20261013-89c4586e338f44119d5a061d9b2c036a随后以METADATA_TIMEOUT结束，成功0轮。其日志包含战斗/技能详情无进展后的既有游戏重启及device.instance_exited；最后RestartInstance恢复未完成。原帧、事件、动作时间和结果保存在next/.local/hc-261013/restart-timeout-run1/，不能把该结果写成自然模拟器崩溃归因，也不能声称恢复退出修复解决了这些独立问题。
+
+准备请求giant-73-heal-close-resume-20261013-1a59ff63cf72466a98b114a327ece26a失败DEVICE_START_OBSERVATION_UNCONFIRMED，没有创建新run。只读核实例2已启动、ADB在线后，空闲且无未决输入时通过原device/disconnect清理旧连接，再走Application启动；没有另建输入或生命周期路径。
+
+run2请求giant-73-heal-close-reconnected-20261013-2a08c9d4a4d74aa8bb5dbcce1c392ee0最终是代理维护停止，成功0轮。代理一度误判Pause没有处理，完整日志随后证实Boot_Pause事件300、ResumePause0接受307/结果312、PauseCleared318，之后已有真实战斗技能输入；保存原帧的真实Service回放也为Hit。没有据此修改Pause识别器或增设处理器。这次停止发生在Skill4Try0Confirm等待结果时，原Sent/delivery_unknown=false的13字段未决记录原样保留，未伪确认技能成功；释放完成、quiescent=true，新的只读截图已是下一行动角色正常战斗菜单。
+
+按用户本轮继续授权，最新请求giant-73-heal-close-final-20261013-745363e027c3447c8e036be249d9e60e已通过原入口实际Running/run3，出现新帧和技能输入/结果（例如事件543接受、547返回结果）。仍是原100目标的剩余73轮，前三个尝试不计成功。最终快照和账目引用next/.local/hc-261013/final-resume-confirmation.json；过去resume-confirmation.json仅为首次启动历史证据。没有把维护停止视为用户撤销继续授权，也没有清除旧输入账目。
+
+本轮目标累计27/100，仅续剩余73轮；原0DE7D06D/run1 Completed计1、run2失败不计，连同原26只计一次。profile/workflows共40份哈希未变，变更前哈希、旧批次账目、实机原帧及resume-confirmation.json保存在next/.local/hc-261013/。回滚使用旧完整候选next/.local/sc-candidate3-261013和原manage_service入口，保留原端口/data-root，不自动覆盖用户配置或启动旧批次。未commit/push；内存仍RESOURCE_UNRESOLVED。

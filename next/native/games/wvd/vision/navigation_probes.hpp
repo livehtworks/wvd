@@ -20,6 +20,7 @@ inline nlohmann::json auto_route_probes(const std::string &locale = {}) {
         probes.push_back(outskirts_return_button());
     }
     probes.push_back(navigation_no_route_probe(locale));
+    probes.push_back(J{{"mode", "supply_context"}, {"phase", "panel"}});
     return probes;
 }
 inline nlohmann::json auto_route_outside_probes() {

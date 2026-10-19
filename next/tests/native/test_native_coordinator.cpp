@@ -1,4 +1,5 @@
 #include "runtime/native_run_coordinator.hpp"
+#include "devices/adb_failure.hpp"
 #include "platform/windows/file_digest.hpp"
 #include <algorithm>
 #include <atomic>
@@ -697,7 +698,94 @@ int main(int argc, char **argv) {
                     if (event.at("type") == "recovery.input_interrupted") interrupted = true;
                 if (interrupted != admissible) throw std::runtime_error("EXIT_AUDIT_MISSING");
             }
-            std::cout << "instance exit: session-local skill resumed without replay; protected input preserved\n";
+            for (const std::string mode : {"start-exit", "transport-exit", "disconnected", "unchanged", "cancel", "wrong-target", "declined"}) {
+                class ChangedBackend final : public Backend, public devices::LifecyclePort {
+                  public:
+                    std::string mode;
+                    devices::LifecycleTarget target{"native-test", "2", "jp.co.drecom.wizardry.daphne", "", false};
+                    bool exited{}, connected{true}, game{true}, restored{};
+                    unsigned starts{}, stops{}, repairs{};
+                    std::uint64_t connection{1};
+                    std::function<void()> stop;
+                    bool offline() const override { return false; }
+                    devices::LifecyclePort *lifecycle_port() override { return this; }
+                    std::optional<devices::LifecycleObservation> observe_lifecycle() override {
+                        return devices::LifecycleObservation{target, !exited, connected, game, false,
+                            connection, std::chrono::steady_clock::now(), game, exited};
+                    }
+                    bool execute_lifecycle(devices::LifecycleOperation op, const devices::LifecycleTarget &,
+                        const std::function<bool()> &) override {
+                        using O = devices::LifecycleOperation;
+                        if (op == O::StopApplication) { ++stops; game = false; }
+                        if (op == O::RestartInstance || op == O::Reconnect) {
+                            ++repairs; exited = false; connected = true; ++connection;
+                        }
+                        if (op == O::StartApplication) {
+                            if (++starts > 1) { game = restored = true; return true; }
+                            if (mode == "unchanged") return false;
+                            connected = false; exited = mode != "disconnected";
+                            if (mode == "cancel") stop();
+                            if (mode == "wrong-target") { target.instance_id = "3"; return false; }
+                            if (mode == "transport-exit") {
+                                devices::AdbFailureInfo info; info.code = "ADB_TRANSPORT_FAILED";
+                                info.retryable_transport = true;
+                                throw devices::AdbCommandFailure(info);
+                            }
+                        }
+                        return true;
+                    }
+                };
+                auto source = std::make_shared<ChangedBackend>(); source->mode = mode;
+                auto graph = std::make_shared<workflow::FlowProgram>(*definition.units.front().program);
+                auto &root = graph->definitions.at("root"); root.entry = "dispatch";
+                recognition::Request ready{"wvd", "1", {0,0,900,1600},
+                    recognition::CustomParameters{"RecoveryFixture", nlohmann::json::object()}};
+                workflow::Step dispatch; dispatch.id = "dispatch"; dispatch.source_path = "dispatch";
+                dispatch.data = workflow::Route{}; dispatch.next = {"ready", "recover"};
+                root.steps.emplace(dispatch.id, std::move(dispatch));
+                workflow::Step found; found.id = "ready"; found.source_path = "ready";
+                found.data = workflow::Observe{ready}; found.guard = ready; found.next = {"checkpoint"};
+                root.steps.emplace(found.id, std::move(found));
+                workflow::Step failed; failed.id = "recover"; failed.source_path = "recover";
+                failed.data = workflow::Fail{"navigation.input_no_progress"};
+                root.steps.emplace(failed.id, std::move(failed));
+                runtime::NativeRunDefinition test;
+                test.request_id = "changed-" + mode; test.policy = definition.policy;
+                test.total_time_limit = 5s; test.create_state = definition.create_state; test.operations = definition.operations;
+                auto unit = definition.units.front(); unit.program = graph;
+                unit.recognizers["RecoveryFixture"] = [source](const auto &, auto, const auto &, const auto &, auto &) {
+                    return nlohmann::json{{"schema",1}, {"outcome", source->restored ? "Hit" : "NoHit"},
+                        {"box", {100,100,20,20}}, {"target",false}};
+                };
+                test.units.push_back(std::move(unit));
+                test.recovery = [target=source->target, mode](const auto &result, const auto &, unsigned attempt)
+                    -> std::optional<devices::LifecyclePlan> {
+                    using O = devices::LifecycleOperation;
+                    if (mode == "declined" && result.reason != "navigation.input_no_progress") return {};
+                    devices::LifecyclePlan plan{target, {}, attempt}; plan.step_timeout = 1s;
+                    if (result.reason == "device.instance_exited") plan.operations.push_back(O::RestartInstance);
+                    else if (result.reason == "device.disconnected") plan.operations.push_back(O::Reconnect);
+                    else if (result.reason == "navigation.input_no_progress") plan.operations.push_back(O::StopApplication);
+                    else throw std::runtime_error("UNEXPECTED_REPLAN_REASON");
+                    plan.operations.push_back(O::StartApplication);
+                    return plan;
+                };
+                runtime::NativeRunCoordinator run(data_root / test.request_id);
+                source->stop = [&run] { run.request_stop(); };
+                run.start(std::move(test), source);
+                if (!run.wait_for(5s)) throw std::runtime_error("CHANGED_RECOVERY_NOT_TERMINAL");
+                const bool success = mode == "start-exit" || mode == "transport-exit" || mode == "disconnected";
+                const auto ended = run.snapshot();
+                if ((ended.state == contracts::RunState::Completed) != success ||
+                    source->stops != 1 || source->repairs != (success ? 1u : 0u) ||
+                    source->starts != (success ? 2u : 1u) ||
+                    ended.sessions.at(0).at("flow_code") != "navigation.input_no_progress" ||
+                    !ended.unresolved_inputs.empty())
+                    throw std::runtime_error("RECOVERY_REPLAN_CONTRACT:" + mode + ":" + ended.reason);
+                if (mode == "cancel" && ended.state != contracts::RunState::UserStopped)
+                    throw std::runtime_error("RECOVERY_REPLAN_IGNORED_CANCEL");
+            }
+            std::cout << "instance exit: pending protections and changed recovery plans verified\n";
             return 0;
         }
         runtime::NativeRunCoordinator coordinator(data_root / "runs");

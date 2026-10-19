@@ -1,0 +1,29 @@
+{
+  "source": {
+    "instance_id": "C9F0EB83-7A8C-4C5B-A982-FF9BD16877EA",
+    "run_id": 1,
+    "generation": 2,
+    "request_id": "1352c5ab-88c1-49ca-8b89-26627c289aa4",
+    "role": "F 柚奈壬姬",
+    "skill": "千紫萬紅",
+    "requested_level": 3,
+    "actual_selected_level": 5,
+    "input_sequence": 18,
+    "input_position": [379, 1228],
+    "incident": "The touch ripple obscures Lv3, so full-label correlation chooses the gold Lv5 button instead. The unchanged Lv5 title, gold Lv5 button and SP cost establish the negative selected-Lv3 expectation."
+  },
+  "frames": [
+    {
+      "file": "selected5-before.png",
+      "frame_id": 88,
+      "sha256": "c2969b8b838b646acb6ee2e8e798ee922b63a2afc91dbfb17da56a0125289cfb",
+      "ripple": false
+    },
+    {
+      "file": "selected5-ripple.png",
+      "frame_id": 90,
+      "sha256": "29632a831cdba3d38d8af7a2c6da03440f73abba997882f32fa651398a67cc2c",
+      "ripple": true
+    }
+  ]
+}
