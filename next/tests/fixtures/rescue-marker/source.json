@@ -1,0 +1,8 @@
+{
+  "source": "WVD same 200-success target; original unedited recorded frames",
+  "new": "B28814C5-AE1A-4451-BB70-3A09680A1C69/run1 diagnostic frame408 before restart; epoch76 pending",
+  "old": "0BDB3888-A408-4044-9EDD-B917D404D33F/run1 diagnostic frame132 before restart; epoch15 pending",
+  "pause": "Fresh read-only Application capture after agent maintenance stop, 2026-10-20",
+  "assertions": "Both original rescue frames must authorize only original (450,800) center twice through Service/gate/executor. Marker erased, black, white, Pause and skill-detail counterexamples must reject input. No scene disappearance is treated as actual rescue success.",
+  "counterexamples": "blank and erase_marker mutate only isolated in-memory negative-test pixels; all original PNG files and SHA256 values are retained."
+}

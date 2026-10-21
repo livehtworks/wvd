@@ -1,0 +1,10 @@
+{
+  "source_instance": "3E95E158-0C27-4DE9-AE02-B735D8C17F22",
+  "source_run": 77,
+  "source_event": 4014,
+  "source_frame": 459,
+  "source_path": "Task_FirstDungeon_Heal_Open0@await",
+  "original_diagnostic": "diagnostics/1.png",
+  "sha256": "e18e36d98e451253a2f5878d5acd42d83ce8a306fd05f47fd97aee245c5945e4",
+  "scope": "Real reward pixels; recorded transport isolates delivery only. Harken continuation uses the existing recorded fixture, not a claim about the live reward outcome."
+}

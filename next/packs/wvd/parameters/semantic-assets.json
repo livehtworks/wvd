@@ -92,6 +92,18 @@
         "zh-Hant": {"condition": {"mode": "revival_prompt"}, "validation": "UNVERIFIED_REAL_FRAME"}
       }
     },
+    "party.rescue.marker": {
+      "label": "救人页圆形叉号外观",
+      "role": "observation",
+      "variants": {"shared": {
+        "condition": {"mode": "any", "conditions": [
+          {"mode": "template", "image": "someonedead", "threshold": 0.8},
+          {"mode": "template", "image": "party_rescue_marker_frame", "crop": [762, 1443, 91, 89], "threshold": 0.8}
+        ]},
+        "validation": "REAL_FRAME_REPORTED",
+        "source": "B28814C5/run1/frame408 original PNG, SHA256 9b2d2c4ecc1e294d8a930283bdfff29b4aa041a395760f5645ccef142f7b0cbc. Only the marker crop is matched; existing full-scene death guards remain mandatory."
+      }}
+    },
     "party.revival.action": {
       "label": "战斗失败后的再起",
       "role": "position",

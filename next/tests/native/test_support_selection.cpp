@@ -146,7 +146,8 @@ int main(int argc, char **argv) {
             return 0;
         }
         const bool popup_frames = argc == 5 && std::string(argv[1]) == "--popup-frames";
-        check(argc == 4 || popup_frames, "PASS_TWO_FRIEND_FRAMES_AND_ONE_ENEMY_FRAME");
+        const bool friend_frame = argc == 3 && std::string(argv[1]) == "--friend-frame";
+        check(argc == 4 || popup_frames || friend_frame, "PASS_TWO_FRIEND_FRAMES_AND_ONE_ENEMY_FRAME");
         auto profile = storage::LegacyConfigImporter(read("packs/wvd/parameters/legacy-config-fields.json"))
             .parse({{"GENERAL", J::object()}}).values;
         J rows = J::array();
@@ -224,7 +225,7 @@ int main(int argc, char **argv) {
         }
         const J support{{"mode", "support_selection"}}, absent{{"mode", "support_selection"}, {"expect", "absent"}};
         for (int i = 1; i <= 2; ++i) {
-            set_frame(cv::imread(argv[i]));
+            set_frame(cv::imread(argv[friend_frame ? 2 : i]));
             check(observe(support).outcome == O::Hit, "REAL_SUPPORT_MISSING");
             check(observe(absent).outcome == O::NoHit, "REAL_SUPPORT_ALLOWS_ENEMY");
             for (int slot = 0; slot < 6; ++slot) {
@@ -234,15 +235,17 @@ int main(int argc, char **argv) {
                     r.center->y < 1290 + slot / 3 * 175, "WRONG_CARD_CENTER");
             }
         }
-        set_frame(cv::imread(argv[3]));
-        check(observe(support).outcome == O::NoHit && observe(absent).outcome == O::Hit, "ENEMY_FALSE_SUPPORT");
+        if (!friend_frame) {
+            set_frame(cv::imread(argv[3]));
+            check(observe(support).outcome == O::NoHit && observe(absent).outcome == O::Hit, "ENEMY_FALSE_SUPPORT");
+        }
         // 明确标注的合成退化：遮住一张卡片，不得因结构不完整授权敌方选敌。
-        auto partial = cv::imread(argv[1]);
+        auto partial = cv::imread(argv[friend_frame ? 2 : 1]);
         cv::rectangle(partial, {40, 1110, 285, 180}, cv::Scalar(20, 20, 20), cv::FILLED);
         set_frame(partial);
         check(observe(support).outcome == O::NoHit && observe(absent).outcome == O::NoHit, "PARTIAL_GRID_ALLOWS_INPUT");
         // 只移卡片、保留标题与关闭位置，检查检测不是六个固定像素框。
-        auto shifted = cv::imread(argv[1]);
+        auto shifted = cv::imread(argv[friend_frame ? 2 : 1]);
         const auto cards = shifted(cv::Rect(40, 1110, 830, 360)).clone();
         cv::rectangle(shifted, {40, 1110, 830, 360}, cv::Scalar(20, 20, 20), cv::FILLED);
         cards.copyTo(shifted(cv::Rect(55, 1080, 830, 360)));
@@ -251,7 +254,8 @@ int main(int argc, char **argv) {
         check(moved.outcome == O::Hit && moved.center && moved.center->y < 1180, "SHIFTED_GRID_MISSING");
         set_frame(cv::Mat(1600, 900, CV_8UC3, cv::Scalar(0, 0, 0)));
         check(observe(support).outcome == O::NoHit && observe(absent).outcome == O::NoHit, "NO_DETAIL_ALLOWS_INPUT");
-        std::cout << "PASS real friend/enemy frames, six mapped centers, ambiguous exclusion, shifted layout, full production flow compilation. No device input.\n";
+        std::cout << (friend_frame ? "PASS real friendly frame, six centers, hidden/shifted/blank exclusions; no device input.\n" :
+            "PASS real friend/enemy frames, six mapped centers, ambiguous exclusion, shifted layout, full production flow compilation. No device input.\n");
         std::cout << root.string() << '\n';
     } catch (const std::exception &e) { std::cerr << e.what() << '\n'; return 1; }
 }

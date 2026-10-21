@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "source_commit": "6585f4075f5714ab522aa582993860c09af912c1",
-  "revision": "9b1833064634e9b3abcecf98f4f6f2caf15cc5cdd2e0040317a85588f3e49231",
+  "revision": "8fa878edfd6941dd2420021a714f6914a6c5b28d673a507eb571b5a015886221",
   "files": [
     {
       "path": "image/7000G/icantagreewithU.png",
@@ -3537,6 +3537,12 @@
       ]
     },
     {
+      "path": "image/party_rescue_marker_frame.png",
+      "source": "next/resources/images/party_rescue_marker_frame.png",
+      "sha256": "9b2d2c4ecc1e294d8a930283bdfff29b4aa041a395760f5645ccef142f7b0cbc",
+      "bytes": 1627338
+    },
+    {
       "path": "image/premium_purchase_green.png",
       "source": "next/resources/images/premium_purchase_green.png",
       "sha256": "3494a7b75544c41ed661d39697f463b55c219c2aa431efaf852f42923a83b3b3",
@@ -4925,8 +4931,8 @@
     {
       "path": "parameters/semantic-assets.json",
       "source": "next/resources/authoring/semantic-assets.json",
-      "sha256": "c564bd6af8baea5f62d29c9600f6a91edd89ad15c2059d03fa523fa73e91d111",
-      "bytes": 84320,
+      "sha256": "b43d00b8db244349b52edb1ede2afc088ceb3193f4972b24fa838dbaac5c615e",
+      "bytes": 84985,
       "source_refs": [
         "authoring:public-flow-1"
       ]

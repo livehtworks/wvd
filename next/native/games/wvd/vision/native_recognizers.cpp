@@ -1218,7 +1218,8 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
         const bool stop_only_selection = mode == "party_defeat" && locale == "zh-Hant";
         const J marker_probe = stop_only_selection
             ? J{{"mode", "multiple"}, {"image", "skull"}, {"roi", {0, 300, 900, 1300}}}
-            : J{{"mode", "template"}, {"image", mode == "party_death" ? "someonedead" : "multipeopledead"}};
+            : mode == "party_death" ? resource("party.rescue.marker")
+                : J{{"mode", "template"}, {"image", "multipeopledead"}};
         auto marker = evaluate_impl(bundle, pixels, marker_probe, bound, scope, cache, depth + 1, memo);
         check(marker.at("outcome") != "Error", "WVD_DEATH_RECOGNITION_ERROR");
         if (marker.at("outcome") != "Hit")

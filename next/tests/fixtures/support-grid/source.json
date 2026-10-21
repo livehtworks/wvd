@@ -1,0 +1,10 @@
+{
+  "frame": "alice-two-buff-corners.png",
+  "sha256": "b31570dfc5bbf1ca7ba6bb10392072557f10f567b7b4a2a9206fc05d75e87e82",
+  "prepare_frame": "alice-before-open.png",
+  "prepare_sha256": "b14e300cca95620f34b9eec6122397ccf14374511f34a363c085b1dcbdce56ec",
+  "prepare_source": "recent-frames/20261019T194138913_r11_f33.png; same run generation2, prepare event651 and opening attempt663",
+  "source": "runs/181ACEA2-92B3-45CF-AB8B-41920F9DF5B1/11/diagnostics/1.png",
+  "observed_host_date": "2026-10-20",
+  "scope": "Unmodified stall screenshot. Alice friendly selection with four complete contours; buffs join both upper corner contours. Six card borders remain visible."
+}

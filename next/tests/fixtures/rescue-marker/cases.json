@@ -1,0 +1,9 @@
+[
+  {"id":"rescue-new-timeout","locale":"zh-Hant","rescue":true,"min_inputs":2,"frame":"tests/fixtures/rescue-marker/run-new-timeout.png","sha256":"9b2d2c4ecc1e294d8a930283bdfff29b4aa041a395760f5645ccef142f7b0cbc"},
+  {"id":"rescue-old-timeout","locale":"zh-Hant","rescue":true,"min_inputs":2,"frame":"tests/fixtures/rescue-marker/run-old-timeout.png","sha256":"3e1f73f3efda3e81efa06cd26108690a6f4e21fbdfd2fcf313232c6bfdeaec25"},
+  {"id":"marker-erased","locale":"zh-Hant","rescue":false,"erase_marker":true,"frame":"tests/fixtures/rescue-marker/run-new-timeout.png","sha256":"9b2d2c4ecc1e294d8a930283bdfff29b4aa041a395760f5645ccef142f7b0cbc"},
+  {"id":"black-not-rescue","locale":"zh-Hant","rescue":false,"blank":0,"frame":"tests/fixtures/rescue-marker/run-new-timeout.png","sha256":"9b2d2c4ecc1e294d8a930283bdfff29b4aa041a395760f5645ccef142f7b0cbc"},
+  {"id":"white-not-rescue","locale":"zh-Hant","rescue":false,"blank":255,"frame":"tests/fixtures/rescue-marker/run-new-timeout.png","sha256":"9b2d2c4ecc1e294d8a930283bdfff29b4aa041a395760f5645ccef142f7b0cbc"},
+  {"id":"pause-not-rescue","locale":"zh-Hant","rescue":false,"frame":"tests/fixtures/rescue-marker/pause.png","sha256":"a554d11c100b61419582e337f672b664d70513e556a3f360f3ff1b09e5579cb5"},
+  {"id":"skill-detail-not-rescue","locale":"zh-Hant","rescue":false,"frame":"tests/fixtures/support-grid/alice-before-open.png","sha256":"b14e300cca95620f34b9eec6122397ccf14374511f34a363c085b1dcbdce56ec"}
+]

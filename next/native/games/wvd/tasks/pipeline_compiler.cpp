@@ -203,7 +203,7 @@ void collect_images(const J &value, std::set<std::string> &images, std::set<std:
             collect_images(vision::auto_route_outside_probes(), images, expanded_modes);
         }
         if (expand && (mode == "party_death" || mode == "party_defeat")) {
-            add_image("someonedead.png", images, expanded_modes);
+            collect_images(vision::resource("party.rescue.marker"), images, expanded_modes);
             if (mode == "party_defeat")
                 add_image(locale == "zh-Hant" ? "skull.png" : "multipeopledead.png", images, expanded_modes);
             collect_images(vision::boot_probes(false, locale, random_maze_events), images, expanded_modes);

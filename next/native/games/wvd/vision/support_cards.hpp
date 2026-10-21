@@ -35,7 +35,10 @@ inline SupportCards detect_support_cards(const cv::Mat &bgr, cv::Rect area) {
         result.candidates.push_back(r);
     }
     // 噪声过多不穷举，也不放宽判定；调用者记录为待确认并等待新帧。
-    if (result.candidates.size() < 5 || result.candidates.size() > 24) return result;
+    // Two same-row anchors plus a same-column anchor establish the grid.
+    // Buffs can join both upper corner contours; every other cell still needs
+    // its own four visible borders below.
+    if (result.candidates.size() < 3 || result.candidates.size() > 24) return result;
     const auto border_supported = [&](cv::Rect r) {
         r.x -= area.x; r.y -= area.y;
         // Buff icons can join a card contour. Require visible edges at the missing grid cell,
@@ -60,22 +63,23 @@ inline SupportCards detect_support_cards(const cv::Mat &bgr, cv::Rect area) {
         if (!similar(a, b) || std::abs(a.y - b.y) > a.height * .1 ||
             pitch < a.width * 1.01 || pitch > a.width * 1.35) continue;
         for (const auto lower : result.candidates) {
-            const int row_pitch = lower.y - a.y;
+            const int row_pitch = std::abs(lower.y - a.y);
             if (!similar(a, lower) || std::abs(lower.x - a.x) > a.width * .06 ||
                 row_pitch < a.height * 1.02 || row_pitch > a.height * 1.5) continue;
             // The upper-left contour can include buff icons. Any visible column
             // may anchor the grid; every inferred cell still needs four real borders.
             for (int anchor_col = 0; anchor_col < 3; ++anchor_col) {
                 const int origin_x = a.x - anchor_col * pitch;
+                const int origin_y = std::min(a.y, lower.y);
                 std::vector<cv::Rect> grid;
                 for (int row = 0; row < 2; ++row) for (int col = 0; col < 3; ++col) {
                     const auto match = std::find_if(result.candidates.begin(), result.candidates.end(), [&](cv::Rect r) {
                         return similar(a, r) && std::abs(r.x - origin_x - col * pitch) <= a.width * .06 &&
-                               std::abs(r.y - a.y - row * row_pitch) <= a.height * .1;
+                               std::abs(r.y - origin_y - row * row_pitch) <= a.height * .1;
                     });
                     if (match != result.candidates.end()) grid.push_back(*match);
                     else {
-                        const cv::Rect inferred(origin_x + col * pitch, a.y + row * row_pitch, a.width, a.height);
+                        const cv::Rect inferred(origin_x + col * pitch, origin_y + row * row_pitch, a.width, a.height);
                         if (border_supported(inferred)) grid.push_back(inferred);
                     }
                 }

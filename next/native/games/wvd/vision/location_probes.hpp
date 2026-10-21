@@ -13,7 +13,7 @@ inline nlohmann::json resource(const char *id, const char *locale = "") {
         std::map<std::string, nlohmann::json> values;
         for (const char *name : {"boot.announcement.page", "boot.announcement.close", "city.royal.identity", "city.fortress.identity", "city.inn.entry", "city.temple.entry",
             "city.blacksmith.entry", "city.ruins.entry", "city.guild.entry",
-            "city.ore_merchant.entry", "city.item_shop.entry", "city.edge.entry", "city.any"})
+            "city.ore_merchant.entry", "city.item_shop.entry", "city.edge.entry", "city.any", "party.rescue.marker"})
             values.emplace(name, assets.condition(name, ""));
         for (const char *name : {"guild.menu", "guild.commissions.page", "guild.bounties.page", "guild.bounty.reveal.close", "guild.report.receipt",
             "chest.open.option", "chest.choose.page", "inn.stay.option", "inn.standard.gold.confirmation", "purchase.premium.button",

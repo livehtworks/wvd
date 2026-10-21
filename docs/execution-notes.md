@@ -1,5 +1,18 @@
 # 当前执行注意项
 
+- 代理读取按2026-10-21用户要求减负：先读精简project-status及handoff-20261021，专项文档只读本任务相关段落；正常巡检不默认取图/看图，不重放长心跳上下文，不展开完整combat头像证据或长JSON。先文字序号/时间/步骤/回执，只有明确疑点需要像素才能区分原因时查看1张对应原帧，必要时才比较第2张；相同SHA不重复打开。本地证据保留不等于必须送入模型，生产截图/日志策略不关闭。
+- 原rescue-marker-resume-261020/inspect.ps1会复制最近原图且逐次复核全部完成回执，不是低成本文字摘要入口。恢复监控须先有新的人工要求；正常运行按游标读取新增事件和新增回执，保留既有已核账目，不每10分钟重新读全历史。真正终核、身份变化或账目不一致时再作完整审计；不得为省资源跳过异常诊断。
+
+- 救人标记不能仅凭素材名判断：someonedead实际为圆形X。2026-10-20两份真实救人超时原帧旧素材分数仅0.66/0.67；同一识别配方补原帧外观时，必须同步原生resource显式登记和compiler素材闭包，不能只改语义JSON。首候选漏登记在healing-effect-contract报invalid map key，保留于.local/rescue-boot-check-261020-1753/；不得吞错误或放宽门禁。Windows的rg路径参数不展开flow_executor*.cpp等通配符，应给目录并用-g过滤。
+
+- EVENT_DEPTH_LIMIT须先核对实际恢复调用栈。父救人/业务未结输入会使旧全栈menu_only为false，即使Boot自身只有可重选Title输入也不断压入新Boot；不能提高深度上限或清父账来消除失败。现有restart-during-boot回归增加父账保持/连续9次恢复/无回执/Unknown保护，基线失败和初版Unknown夹具预期错误均保留在.local/rescue-boot-fix-261020-1720/。保留故障现场不妨碍隔离诊断修复；不能把没有新日志的同一已停批次反复巡检当作持续修复。
+
+- 补给等待的宝箱阶段必须覆盖奖励/陷阱说明页：短暂迷宫后奖励可能迟到，旧三个开箱图标不能代替原chest_phase(reward)。复用该原配方并经原encounter交回Box，不能新增盲点或为等待调阈值/期限。原帧、完整Service/门禁/工厂回放及夹具前提失败见reviews/healing-reward-handoff-20261020.md；奖励步骤输入后直接切无HUD哈肯不符合其原后置，回放应提供实际迷宫中间帧，不放宽公共流程断言。
+
+- 只读巡检复制recent-frames时只选择最终扩展名为.png/.jpg/.jpeg的已发布文件，排除正在写入的.png.<UUID>.tmp；临时文件被占用不等于游戏、输入或截图归档故障，不因取证复制失败停止或重启循环。2026-10-20两次巡检已确认该并发窗口，修正后的巡检样例见next/.local/wvd-check-261020-0657/inspect.ps1。
+
+- 友方选人页的buff图标可能同时连接上排左右卡片轮廓，只剩上排中间及下排三个完整框。不能以完整轮廓少于5个就等待至重启：现有support_cards须允许下排水平锚点，缺失框仍逐条核实际四边，遮掉卡片不准推断点击。原帧及Service/门禁回归见tests/fixtures/support-grid和reviews/support-grid-buff-20261020.md。既有test_support_selection三图入口的第三图要求有X的敌方单体选择页；全体技能的取消/确认页没有X时，support_selection的present/absent均unknown，不能将该前提不符的传参失败当作友方误识别。
+
 - 排查跳轮恢复时区分bounty_leap_prepared与实际QuickLeap/Leap输入。transfer_pending由准备事件设置，不等于DeliveryUnknown；恢复重选根入口后，仅原active/Leap/unit_matches一致时接回已有Leap，不重复准备。跨城Travel、单元错位和未知送达保护不变。旧版反例及提交前/后恢复验证见reviews/bounty-leap-reconnect-20261019.md。
 
 - manage_service的Start会在CandidateRoot写service-launch.json。隔离服务不得共用正式候选目录，否则会把后续快捷启动指针改成测试data-root/端口，即使正式进程仍正常运行。2026-10-19只读公会排查中已确认并依据正式服务身份恢复17654/data-root，保留独立恢复记录；后续使用独立候选副本或无共享启动配置的现有隔离测试入口，不改正式profile/workflows。

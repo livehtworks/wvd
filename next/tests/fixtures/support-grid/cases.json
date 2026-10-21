@@ -1,0 +1,8 @@
+[
+  {"id":"alice-top-left","kind":"support-target","locale":"zh-Hant","role":"P 爱丽丝","target":"左上角色","target_area":[50,1120,314,1280],"frame":"tests/fixtures/support-grid/alice-two-buff-corners.png","sha256":"b31570dfc5bbf1ca7ba6bb10392072557f10f567b7b4a2a9206fc05d75e87e82"},
+  {"id":"alice-top-middle","kind":"support-target","locale":"zh-Hant","role":"P 爱丽丝","target":"中上角色","target_area":[324,1120,586,1280],"frame":"tests/fixtures/support-grid/alice-two-buff-corners.png","sha256":"b31570dfc5bbf1ca7ba6bb10392072557f10f567b7b4a2a9206fc05d75e87e82"},
+  {"id":"alice-top-right","kind":"support-target","locale":"zh-Hant","role":"P 爱丽丝","target":"右上角色","target_area":[598,1120,860,1280],"frame":"tests/fixtures/support-grid/alice-two-buff-corners.png","sha256":"b31570dfc5bbf1ca7ba6bb10392072557f10f567b7b4a2a9206fc05d75e87e82"},
+  {"id":"alice-bottom-left","kind":"support-target","locale":"zh-Hant","role":"P 爱丽丝","target":"左下角色","target_area":[50,1300,314,1457],"frame":"tests/fixtures/support-grid/alice-two-buff-corners.png","sha256":"b31570dfc5bbf1ca7ba6bb10392072557f10f567b7b4a2a9206fc05d75e87e82"},
+  {"id":"alice-bottom-middle","kind":"support-target","locale":"zh-Hant","role":"P 爱丽丝","target":"中下角色","target_area":[324,1300,586,1457],"frame":"tests/fixtures/support-grid/alice-two-buff-corners.png","sha256":"b31570dfc5bbf1ca7ba6bb10392072557f10f567b7b4a2a9206fc05d75e87e82"},
+  {"id":"alice-bottom-right","kind":"support-target","locale":"zh-Hant","role":"P 爱丽丝","target":"右下角色","target_area":[598,1300,860,1457],"frame":"tests/fixtures/support-grid/alice-two-buff-corners.png","sha256":"b31570dfc5bbf1ca7ba6bb10392072557f10f567b7b4a2a9206fc05d75e87e82"}
+]

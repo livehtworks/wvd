@@ -1,0 +1,43 @@
+[
+  {
+    "id": "already-reward-handed-to-original-chest",
+    "kind": "healing-reward",
+    "locale": "zh-Hant",
+    "frame": "tests/fixtures/healing-reward/run77-before-restart.png",
+    "sha256": "e18e36d98e451253a2f5878d5acd42d83ce8a306fd05f47fd97aee245c5945e4",
+    "after_inputs": [
+      {
+        "frame": "tests/fixtures/healing-harken/before-open.png",
+        "sha256": "32530e3c6d3e16d7ab43a2de31f26e56cb14bf21a2362965a3d8b02509f955b4"
+      },
+      {
+        "frame": "tests/fixtures/healing-harken/harken-menu.png",
+        "sha256": "bb6d5fcea7b2e7d702ea1ea51714f90fb7fc505f5d19b5aa50812179c6eca819"
+      }
+    ],
+    "initial_step": 1, "final_step": 2, "inputs": 2, "completes": true
+  },
+  {
+    "id": "open-panel-interrupted-by-reward",
+    "kind": "healing-reward",
+    "locale": "zh-Hant",
+    "frame": "tests/fixtures/healing-harken/before-open.png",
+    "sha256": "32530e3c6d3e16d7ab43a2de31f26e56cb14bf21a2362965a3d8b02509f955b4",
+    "after_inputs": [
+      {
+        "frame": "tests/fixtures/healing-reward/run77-before-restart.png",
+        "sha256": "e18e36d98e451253a2f5878d5acd42d83ce8a306fd05f47fd97aee245c5945e4"
+      },
+      {
+        "frame": "tests/fixtures/healing-harken/before-open.png",
+        "sha256": "32530e3c6d3e16d7ab43a2de31f26e56cb14bf21a2362965a3d8b02509f955b4"
+      },
+      {
+        "frame": "tests/fixtures/healing-harken/harken-menu.png",
+        "sha256": "bb6d5fcea7b2e7d702ea1ea51714f90fb7fc505f5d19b5aa50812179c6eca819"
+      }
+    ],
+    "opens_panel": true,
+    "initial_step": 1, "final_step": 2, "inputs": 3, "completes": true
+  }
+]

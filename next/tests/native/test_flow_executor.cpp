@@ -1774,6 +1774,107 @@ int main(int argc, char **argv) {
                 }
                 std::cout << "repeated boot " << scenario << ": " << result.code << '\n';
             }
+            // A non-menu parent receipt must survive repeated restartable Boot menus.
+            for (const std::string scenario : {"confirmed", "unconfirmed", "unknown"}) {
+                struct ParentPendingPorts final : MenuRetryPorts {
+                    std::string scenario;
+                    int recoveries{}, parent_reads{}, resumes{};
+                    bool cleanup_called{};
+                    contracts::FrameEnvelope capture() override {
+                        if (epoch > static_cast<std::uint64_t>(recoveries) && recoveries < 9)
+                            throw contracts::ObservationUnavailable({contracts::ReadFaultKind::ApplicationUnavailable,
+                                contracts::ReadFaultStage::Capture, "GAME_NOT_FOREGROUND", "boot.capture", {}, {}});
+                        return MenuRetryPorts::capture();
+                    }
+                    contracts::ObservationRecovery recover_observation(bool = false) override {
+                        ++recoveries;
+                        return {{}, true, true};
+                    }
+                    contracts::Observation recognize(const contracts::FrameEnvelope &frame,
+                                                       const recognition::Request &request) override {
+                        auto result = MenuRetryPorts::recognize(frame, request);
+                        if ((request.recognizer_id == "boot-ready" && recoveries < 9) ||
+                            request.recognizer_id == "boot-result")
+                            result.outcome = contracts::RecognitionOutcome::NoHit;
+                        if (request.recognizer_id == "parent-result") {
+                            ++parent_reads;
+                            if (scenario == "unconfirmed" || recoveries < 9)
+                                result.outcome = contracts::RecognitionOutcome::NoHit;
+                        }
+                        return result;
+                    }
+                    runtime::Submission submit(const contracts::Command &command,
+                        const contracts::Observation &context, const contracts::Observation &target,
+                        contracts::Box allowed, const std::string &source) override {
+                        const bool parent_unknown = scenario == "unknown" && epoch == 0;
+                        mode = parent_unknown ? "delivery_unknown" : "";
+                        return MenuRetryPorts::submit(command, context, target, allowed, source);
+                    }
+                    runtime::OperationResult operate(const std::string &binding, const nlohmann::json &,
+                        const std::optional<contracts::FrameEnvelope> &, const std::optional<contracts::Observation> &,
+                        const std::string &) override {
+                        if (binding == "Resume") ++resumes;
+                        return {runtime::OperationState::Done};
+                    }
+                    bool settle_observed_input() override { cleanup_called = true; return false; }
+                    bool cancelled() const override {
+                        return scenario == "unconfirmed" && recoveries == 9 && parent_reads >= 2;
+                    }
+                } ports;
+                ports.scenario = scenario;
+                const auto scene = probe("scene"), ready = probe("boot-ready");
+                const auto parent_result = probe("parent-result"), boot_result = probe("boot-result");
+                workflow::FlowProgram program; program.revision = "parent-pending-boot"; program.root_definition = "root";
+                workflow::Definition root; root.id = "root"; root.entry = "input";
+                root.steps.emplace("input", step("input", workflow::Input{scene, scene, {{"kind","Click"}}, {0,0,900,1600}}, {"await"}));
+                root.steps.emplace("await", step("await", workflow::AwaitResult{parent_result, 2s, 0ms, 1ms}, {"done"}));
+                root.steps.emplace("resumed", step("resumed", workflow::RegisteredOperation{"Resume", nlohmann::json::object()}, {"done"}));
+                root.steps.emplace("done", step("done", workflow::Finish{}));
+                workflow::EventRule restart; restart.id = "context-restart"; restart.detect = ready;
+                restart.handler_definition = "boot"; restart.on_device_restart = true;
+                restart.resume = workflow::ResumeMode::Replan; restart.replan_step = "resumed"; restart.resume_guard = ready;
+                root.events.push_back(restart);
+                workflow::Definition boot; boot.id = "boot"; boot.entry = "dispatch";
+                boot.steps.emplace("dispatch", step("dispatch", workflow::Route{}, {"ready", "title"}));
+                auto observed = step("ready", workflow::Observe{ready}, {"return"}); observed.guard = ready;
+                boot.steps.emplace("ready", std::move(observed));
+                workflow::Input title{scene, scene, {{"kind","Click"}}, {0,0,900,1600}};
+                title.retry = workflow::InputRetry{scene, 1s, 0};
+                boot.steps.emplace("title", step("title", std::move(title), {"await"}));
+                boot.steps.emplace("await", step("await", workflow::AwaitResult{boot_result, 2s, 0ms, 1ms}, {"return"}));
+                boot.steps.emplace("return", step("return", workflow::Return{"completed"}));
+                program.definitions.emplace("root", std::move(root));
+                program.definitions.emplace("boot", std::move(boot));
+                runtime::FlowExecutor executor(program, ports, 3s, {1s, 1ms, 5ms, 2s});
+                runtime::TickResult result;
+                nlohmann::json original_parent;
+                for (int i = 0; i < 1000; ++i) {
+                    result = executor.tick();
+                    const auto snapshot = executor.progress_snapshot();
+                    const auto &pending = snapshot.at("pending_inputs");
+                    if (!pending.empty() && pending.front().at("action_epoch") == 1) {
+                        if (original_parent.is_null()) original_parent = pending.front();
+                        require(pending.front() == original_parent, "REPEATED_BOOT_CHANGED_PARENT_RECEIPT");
+                    }
+                    require(snapshot.at("call_stack").size() <= 2, "REPEATED_BOOT_STACK_GREW:" + scenario);
+                    if (result.state != runtime::TickState::Progress && result.state != runtime::TickState::Waiting) break;
+                    if (result.state == runtime::TickState::Waiting) std::this_thread::sleep_until(result.wake_at);
+                }
+                const auto expected_recoveries = scenario == "unknown" ? 1 : 9;
+                require(ports.recoveries == expected_recoveries && ports.epoch == expected_recoveries && !original_parent.is_null(),
+                    "REPEATED_BOOT_DID_NOT_REUSE_HANDLER:" + scenario + ":" + result.code);
+                if (scenario == "confirmed")
+                    require(result.state == runtime::TickState::Completed && ports.resumes == 1 && !executor.has_unresolved_input(),
+                        "REPEATED_BOOT_PARENT_NOT_CONFIRMED:" + result.code);
+                else {
+                    require(ports.resumes == 0 && executor.has_unresolved_input(), "REPEATED_BOOT_LOST_PARENT:" + scenario);
+                    require(scenario == "unknown" ?
+                        result.state == runtime::TickState::ExternalBlocked && !ports.cleanup_called &&
+                            result.code == "INPUT_BLOCKED_BY_UNKNOWN_DELIVERY" :
+                        result.state == runtime::TickState::Cancelled, "REPEATED_BOOT_PARENT_PROTECTION:" + result.code);
+                }
+                std::cout << "parent pending repeated boot " << scenario << ": " << result.code << '\n';
+            }
             return 0;
         }
         if (argc == 2 && std::string(argv[1]) == "--exception-restart") {

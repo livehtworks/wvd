@@ -1654,14 +1654,15 @@ TickResult FlowExecutor::retry_observation() {
         // 普通菜单的旧页面许可随应用重启失效；恢复原候选集而非重启根业务。
         // 根业务可能已记录“准备跳轮”，清掉或重跑都会混淆真实副作用。
         // 实际跳轮/付款、送达未知仍保留原回执，走Boot后核对原后置条件。
-        const bool menu_only = std::all_of(stack_.begin(), stack_.end(), [&](const Frame &frame) {
+        const auto restartable_menu = [&](const Frame &frame) {
             if (!frame.pending) return true;
             const auto &pending = *frame.pending;
             const auto &source = program_.definitions.at(frame.definition).steps.at(pending.submitted_step);
             const auto &input = std::get<workflow::Input>(source.data);
             return !pending.delivery_unknown && input.retry &&
                 (input.effect_binding.empty() || !input.retry->restart_from.empty());
-        });
+        };
+        const bool menu_only = std::all_of(stack_.begin(), stack_.end(), restartable_menu);
         const auto &root = program_.definitions.at(program_.root_definition);
         const auto rule = std::find_if(root.events.begin(), root.events.end(),
             [](const workflow::EventRule &event) { return event.on_device_restart; });
@@ -1689,6 +1690,22 @@ TickResult FlowExecutor::retry_observation() {
                     {"source_path", pending.source_path}, {"definition", frame.definition},
                     {"interrupted_step", pending.submitted_step}, {"resume_step", frame.current}};
             }
+        }
+        // A parent receipt does not make Boot's own retryable menus non-restartable.
+        // Reuse this recovery slot without discarding or confirming that parent.
+        const auto previous_boot = std::find_if(stack_.begin(), stack_.end(), [&](const Frame &frame) {
+            return frame.event && frame.event->owner == 0 && frame.event->rule.on_device_restart &&
+                frame.event->rule.id == rule->id &&
+                frame.event->rule.handler_definition == rule->handler_definition;
+        });
+        if (previous_boot != stack_.end() &&
+            std::all_of(previous_boot, stack_.end(), restartable_menu)) {
+            for (auto frame = previous_boot; frame != stack_.end(); ++frame) {
+                if (!frame->pending) continue;
+                report_input_result(*frame->pending, "interrupted_by_application_restart", 0);
+                frame->pending.reset();
+            }
+            stack_.erase(previous_boot, stack_.end());
         }
         // 游戏重启后旧弹窗处理器已失效。仅回收无受保护回执的事件栈，保留业务调用栈。
         const auto active_event = std::find_if(stack_.begin(), stack_.end(),

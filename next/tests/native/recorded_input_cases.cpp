@@ -23,6 +23,7 @@
 #include <fstream>
 #include <iostream>
 #include <thread>
+#include <algorithm>
 
 namespace recorded_input_contract {
 using namespace wvd;
@@ -113,20 +114,35 @@ int run(const std::filesystem::path &pack, const std::filesystem::path &cases,
     for (const auto &sample : read(cases)) {
         const auto image_path = std::filesystem::path(sample.at("frame").get<std::string>());
         require(platform::file_sha256(image_path) == sample.at("sha256").get<std::string>(), "RECORDED_INPUT_HASH_CHANGED");
-        const auto image = cv::imread(image_path.string(), cv::IMREAD_COLOR);
+        auto image = cv::imread(image_path.string(), cv::IMREAD_COLOR);
         require(image.cols == 900 && image.rows == 1600 && image.type() == CV_8UC3, "RECORDED_INPUT_VIEWPORT_INVALID");
+        if (sample.contains("blank")) image.setTo(cv::Scalar::all(sample.at("blank").get<int>()));
+        if (sample.value("erase_marker", false)) image(cv::Rect(750, 1430, 115, 115)).setTo(cv::Scalar::all(0));
         const std::string locale = sample.at("locale");
         const bool rescue = sample.value("rescue", false);
         const bool attack_target = sample.value("kind", "") == "attack-target";
+        const bool support_target = sample.value("kind", "") == "support-target";
         auto case_profile = profile;
         if (sample.value("kind", "") == "healing-close") case_profile["RECOVER_WHEN_BEGINNING"] = true;
-        if (sample.value("kind", "") == "healing-harken") case_profile["RECOVER_WHEN_BEGINNING"] = true;
+        const bool healing_reward = sample.value("kind", "") == "healing-reward";
+        if (sample.value("kind", "") == "healing-harken" || healing_reward) case_profile["RECOVER_WHEN_BEGINNING"] = true;
         if (sample.value("kind", "") == "navigation-panel") case_profile["RECOVER_WHEN_BEGINNING"] = false;
-        if (attack_target) case_profile["STRATEGY"][0]["skill_settings"][0]["role_var"] = sample.at("role");
+        if (attack_target || support_target) case_profile["STRATEGY"][0]["skill_settings"][0]["role_var"] = sample.at("role");
+        if (support_target) case_profile["STRATEGY"][0]["skill_settings"][0]["target_var"] = sample.at("target");
         const games::tasks::PublicStepScope public_steps([&](const std::string &id, const J &arguments) {
             return library.compile_step(id,arguments,locale);
         });
-        RecordedBackend backend(image);
+        auto initial_image = image;
+        if (support_target) {
+            const auto source = read(image_path.parent_path() / "source.json");
+            const auto path = image_path.parent_path() / source.at("prepare_frame").get<std::string>();
+            require(platform::file_sha256(path) == source.at("prepare_sha256").get<std::string>(),
+                "RECORDED_SUPPORT_MENU_HASH_CHANGED");
+            initial_image = cv::imread(path.string(), cv::IMREAD_COLOR);
+            require(initial_image.size() == cv::Size(900,1600), "RECORDED_SUPPORT_MENU_INVALID");
+        }
+        RecordedBackend backend(initial_image);
+        if (support_target) backend.after_input(image);
         if (sample.contains("after_input_frame")) {
             const auto path = std::filesystem::path(sample.at("after_input_frame").get<std::string>());
             require(platform::file_sha256(path) == sample.at("after_input_sha256").get<std::string>(),
@@ -161,7 +177,61 @@ int run(const std::filesystem::path &pack, const std::filesystem::path &cases,
         recognition::Service service(bundle,games::vision::native_handlers(manifest.value("aliases",J::object()),locale));
         runtime::NativeFlowPorts ports(backend,service,business,policy,boot_recovery ? 2 : 1,{});
         ports.set_operation_handler(games::wvd_operation_factory(business,[](const auto &,const auto &){},[](const auto &){})(ports));
-        const auto frame = ports.capture();
+        auto frame = ports.capture();
+        if (support_target) {
+            std::set<std::string> portraits;
+            for (const auto &member : manifest.at("files")) {
+                const auto path = member.at("path").get<std::string>();
+                if (path.starts_with("image/spellskill/char/")) portraits.insert(path.substr(6));
+            }
+            auto graph = games::combat::take_turn(case_profile, portraits);
+            games::tasks::localize_task_assets(graph, catalogue, locale);
+            const auto prepared = ports.operate("WvdCombat", graph.nodes.at("Prepare").at("operation_args"),
+                frame, std::nullopt, "recorded.support.prepare");
+            std::ofstream(output / "prepare.json") << J{{"state", int(prepared.state)}, {"detail", prepared.detail},
+                {"business", business.summary()}, {"prepare", graph.nodes.at("Prepare").at("operation_args")}}.dump(2);
+            require(prepared.state == runtime::OperationState::Done && business.summary().at("has_prepared_skill") == true,
+                "RECORDED_SUPPORT_ACTOR_NOT_PREPARED");
+            const auto opening = games::tasks::compile_native_program(library.compile_step(
+                "combat-open-detail", {{"x",266},{"y",965}}, locale), J::object(), "recorded-support-open");
+            runtime::FlowExecutor opener(opening, ports, 15s);
+            runtime::TickResult opened{runtime::TickState::Progress};
+            const auto started = std::chrono::steady_clock::now();
+            while (std::chrono::steady_clock::now() - started < 10s) {
+                opened = opener.tick();
+                if (opened.state != runtime::TickState::Progress && opened.state != runtime::TickState::Waiting) break;
+                std::this_thread::sleep_for(2ms);
+            }
+            require(opened.state == runtime::TickState::Completed && backend.commands.size() == 1,
+                "RECORDED_SUPPORT_DETAIL_NOT_OPENED:" + opened.code);
+            frame = ports.capture();
+            const auto program = games::tasks::compile_native_program(graph, J::object(), "recorded-support");
+            const auto &input = std::get<workflow::Input>(program.definitions.at(program.root_definition).steps.at("Skill0Try0Support").data);
+            const auto scene = ports.recognize(frame, input.scene), target = ports.recognize(frame, input.target);
+            const auto enemy = ports.recognize(frame, {"recorded.support.not-enemy", "1", {0,0,900,1600},
+                recognition::CustomParameters{"WvdVision", {{"mode", "support_selection"}, {"expect", "absent"}}}});
+            results.push_back({{"id", sample.at("id")}, {"scene", observation(scene)},
+                {"target", observation(target)}, {"enemy", observation(enemy)}});
+            std::ofstream(output / "results.json") << results.dump(2);
+            require(scene.outcome == contracts::RecognitionOutcome::Hit && target.outcome == contracts::RecognitionOutcome::Hit &&
+                target.action_eligible && target.center && enemy.outcome == contracts::RecognitionOutcome::NoHit,
+                "RECORDED_SUPPORT_TARGET_MISSING");
+            const auto &expected = sample.at("target_area");
+            require(target.center->x >= expected[0].get<int>() && target.center->x < expected[2].get<int>() &&
+                target.center->y >= expected[1].get<int>() && target.center->y < expected[3].get<int>(),
+                "RECORDED_SUPPORT_WRONG_CARD");
+            contracts::Command command;
+            command.kind = contracts::ActionKind::Click;
+            command.x = target.center->x; command.y = target.center->y;
+            const auto submitted = ports.submit(command, scene, target, input.allowed_area, "recorded.support.target");
+            require(submitted.state == runtime::SubmissionState::Accepted && backend.commands.size() == 2,
+                "RECORDED_SUPPORT_GATE_REJECTED");
+            results.back().update({{"point", {command.x, command.y}}, {"backend_calls", backend.commands.size()},
+                {"scope", "Original menu preparation, public opening/confirmed result, friendly scene/target/gate; isolated transport only. Not a cast receipt."}});
+            ports.stop(); require(ports.cleanup(), "RECORDED_SUPPORT_CLEANUP_FAILED");
+            std::ofstream(output / "results.json") << results.dump(2);
+            continue;
+        }
         if (sample.value("kind", "") == "boot-guild") {
             const auto phase = sample.at("phase").get<std::string>();
             const bool task = phase == "task" || phase == "recovery";
@@ -208,7 +278,7 @@ int run(const std::filesystem::path &pack, const std::filesystem::path &cases,
             ports.stop(); require(ports.cleanup(), "RECORDED_INPUT_CLEANUP_FAILED");
             continue;
         }
-        if (sample.value("kind", "") == "healing-harken") {
+        if (sample.value("kind", "") == "healing-harken" || healing_reward) {
             business.enter_dungeon();
             const auto initial_step = sample.at("initial_step").get<unsigned>();
             for (unsigned i = 0; i < initial_step; ++i) business.target_point_completed();
@@ -241,7 +311,7 @@ int run(const std::filesystem::path &pack, const std::filesystem::path &cases,
                 summary.at("healing_required").get<bool>() &&
                 summary.at("healing_submissions") == 0 && progress.at("pending_inputs").empty(),
                 "HEAL_HARKEN_NOT_HANDED_TO_ORIGINAL_ROUTE:" + result.code);
-            if (!backend.commands.empty()) require(backend.commands.front().kind == contracts::ActionKind::Click &&
+            if (!backend.commands.empty() && (!healing_reward || sample.value("opens_panel", false))) require(backend.commands.front().kind == contracts::ActionKind::Click &&
                 backend.commands.front().x == 36 && backend.commands.front().y == 1425,
                 "HEAL_HARKEN_EXTRA_OR_WRONG_INPUT");
             ports.stop(); require(ports.cleanup(), "RECORDED_INPUT_CLEANUP_FAILED");
@@ -437,24 +507,29 @@ int run(const std::filesystem::path &pack, const std::filesystem::path &cases,
             runtime::FlowExecutor executor(death,ports,10s);
             auto result = runtime::TickResult{runtime::TickState::Progress};
             const auto deadline = std::chrono::steady_clock::now()+5s;
-            while (backend.commands.empty() && std::chrono::steady_clock::now()<deadline) {
+            const auto minimum_inputs = sample.value("min_inputs", std::size_t{1});
+            while (backend.commands.size() < minimum_inputs && std::chrono::steady_clock::now()<deadline) {
                 result = executor.tick();
                 require(result.state == runtime::TickState::Progress || result.state == runtime::TickState::Waiting,
                         "RECORDED_RESCUE_STOPPED:" + result.code);
                 std::this_thread::sleep_for(2ms);
             }
-            require(backend.commands.size()==1 && backend.commands.front().kind==contracts::ActionKind::Click &&
-                    backend.commands.front().x==450 && backend.commands.front().y==800,
+            require(backend.commands.size()==minimum_inputs &&
+                    std::all_of(backend.commands.begin(), backend.commands.end(), [](const auto &command) {
+                        return command.kind==contracts::ActionKind::Click && command.x==450 && command.y==800;
+                    }),
                     "RECORDED_RESCUE_NOT_ORIGINAL_CENTER");
-            rows.push_back({{"first_input",{450,800}},{"pending",executor.progress_snapshot()}});
+            rows.push_back({{"first_input",{450,800}},{"center_inputs",backend.commands.size()},
+                {"pending",executor.progress_snapshot()}});
         }
         ports.stop(); require(ports.cleanup(),"RECORDED_INPUT_CLEANUP_FAILED");
         results.push_back({{"id",sample.at("id")},{"frame",image_path.string()},{"sha256",sample.at("sha256")},
+            {"blank",sample.value("blank",J(nullptr))},{"erase_marker",sample.value("erase_marker",false)},
             {"locale",locale},{"rescue",rescue},{"backend_calls",backend.commands.size()},{"requests",rows}});
         std::ofstream saved(output / "results.json"); saved << results.dump(2);
         require(bool(saved),"RECORDED_INPUT_EVIDENCE_WRITE_FAILED");
     }
-    std::cout << "PASS recorded Service/gate/executor composition; rescue first center only, no game input. Cases=" << results.size() << '\n';
+    std::cout << "PASS recorded Service/gate/executor composition; rescue original center only, no game input. Cases=" << results.size() << '\n';
     return 0;
 }
 }

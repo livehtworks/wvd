@@ -636,6 +636,15 @@ int main(int argc, char **argv) {
                 check(panel_page == games::vision::SupplyPage::Panel && probes <= 2,
                     "NORMAL_PANEL_NOT_DIRECTLY_CLASSIFIED");
             }
+            const auto reward_page = games::vision::classify_supply_page([](const J &probe) {
+                return probe.value("mode", "") == "chest_phase" && probe.value("phase", "") == "reward";
+            });
+            check(reward_page == games::vision::SupplyPage::Interrupted &&
+                games::vision::supply_phase_matches(reward_page, "post") &&
+                !games::vision::supply_phase_matches(reward_page, "context"),
+                "REWARD_NOT_HANDED_TO_EXISTING_ENCOUNTER");
+            check(games::vision::classify_supply_page([](const J &) { return false; }) ==
+                games::vision::SupplyPage::Unknown, "UNKNOWN_SUPPLY_PAGE_WAS_ACCEPTED");
             const auto root=std::filesystem::absolute(argv[3]);
             check(!std::filesystem::exists(root),"NEW_ISOLATED_ROOT_REQUIRED");
             std::filesystem::create_directories(root);
