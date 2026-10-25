@@ -8,10 +8,12 @@
 #include <fstream>
 #include <iostream>
 #include <windows.h>
+#include "publication_t0_contract.hpp"
 
 namespace {
 using J = nlohmann::json;
 namespace fs = std::filesystem;
+namespace inspection = publication_t0_contract;
 void require(bool value, const char *message) { if (!value) throw std::runtime_error(message); }
 template<class Action> void rejects(Action action, const std::string &code) {
     try { action(); } catch (const std::exception &error) {
@@ -21,19 +23,19 @@ template<class Action> void rejects(Action action, const std::string &code) {
     throw std::runtime_error("EXPECTED_REJECTION:" + code);
 }
 void write(const fs::path &path, const std::string &text) {
-    fs::create_directories(path.parent_path());
-    std::ofstream output(path, std::ios::binary);
+    inspection::mkdirs_os(path.parent_path());
+    std::ofstream output(wvd::platform::extended_path(path), std::ios::binary);
     output.write(text.data(), text.size());
     output.close();
     require(bool(output), "FIXTURE_WRITE_FAILED");
 }
 bool staging_exists(const fs::path &root) {
-    for (const auto &entry : fs::directory_iterator(root))
+    for (const auto &entry : inspection::directories_os(root))
         if (entry.path().filename().string().find(".staging-") != std::string::npos) return true;
     return false;
 }
 std::pair<DWORD, std::uint64_t> file_identity(const fs::path &path) {
-    const auto file = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE,
+    const auto file = CreateFileW(wvd::platform::extended_path(path).c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE,
         nullptr, OPEN_EXISTING, 0, nullptr);
     require(file != INVALID_HANDLE_VALUE, "IDENTITY_OPEN_FAILED");
     BY_HANDLE_FILE_INFORMATION info{};
@@ -46,10 +48,12 @@ std::pair<DWORD, std::uint64_t> file_identity(const fs::path &path) {
 
 int main(int argc, char **argv) {
     try {
+        if (argc == 3 && std::string(argv[1]) == "--link-boundary-probe")
+            return publication_t0_contract::probe_links(fs::absolute(wvd::platform::path_from_utf8(argv[2])));
         require(argc == 2, "NEW_ISOLATED_ROOT_REQUIRED");
         const auto root = fs::absolute(wvd::platform::path_from_utf8(argv[1]));
-        require(!fs::exists(root), "TEST_ROOT_ALREADY_EXISTS");
-        fs::create_directories(root);
+        require(!inspection::exists_os(root), "TEST_ROOT_ALREADY_EXISTS");
+        inspection::mkdirs_os(root);
         const auto source = root / "source";
         write(source / "models/large.onnx", std::string(8 * 1024 * 1024 + 17, 'x'));
         write(source / "definition.json", "{\"schema\":1}");
@@ -100,18 +104,20 @@ int main(int argc, char **argv) {
                         "PUBLISHED_FILE_HASH_MISMATCH");
             require(!staging_exists(root), "STAGING_NOT_RENAMED");
             auto model = publication.bundle.root / "models/large.onnx";
-            const auto writer = CreateFileW(model.c_str(), GENERIC_WRITE,
+            const auto writer = CreateFileW(wvd::platform::extended_path(model).c_str(), GENERIC_WRITE,
                 FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, 0, nullptr);
             if (writer != INVALID_HANDLE_VALUE) CloseHandle(writer);
             require(writer == INVALID_HANDLE_VALUE, "TARGET_WRITE_LOCK_RELAXED");
-            require(!MoveFileExW(publication.bundle.root.c_str(), (root / "bad-rename").c_str(), 0),
+            require(!MoveFileExW(wvd::platform::extended_path(publication.bundle.root).c_str(), wvd::platform::extended_path(root / "bad-rename").c_str(), 0),
                     "TARGET_DELETE_LOCK_RELAXED");
+            publication.ownership->accept();
             const auto second = wvd::games::tasks::publish_native(workflow, baseline, root / "second", J::object());
             require(file_identity(model) == file_identity(second.bundle.root / "models/large.onnx"),
                     "MODEL_CONTENT_OBJECT_NOT_SHARED");
             require(file_identity(model) != file_identity(source / "models/large.onnx"),
                     "MUTABLE_SOURCE_LINKED_INTO_PUBLICATION");
             second.bundle.lease->verify_members();
+            second.ownership->accept();
             results.push_back({{"case", "immutable_content_object_shared_not_mutable_source"}, {"passed", true}});
             results.push_back({{"case", "identity_manifest_streaming_rename_and_lock"}, {"passed", true},
                                {"metrics", publication.preparation}});
@@ -122,7 +128,7 @@ int main(int argc, char **argv) {
             rejects([&] { lease.copy_member("models/large.onnx", root / "partial.onnx", [&] {
                 if (++calls == 5) throw std::runtime_error("PREPARATION_CANCELLED");
             }); }, "PREPARATION_CANCELLED");
-            require(fs::file_size(root / "partial.onnx") <= 65536 && lease.storage_stats().model_bytes == 0,
+            require(inspection::size_os(root / "partial.onnx") <= 65536 && lease.storage_stats().model_bytes == 0,
                     "COPY_CANCELLATION_UNBOUNDED");
             lease.copy_member("models/large.onnx", root / "copy.onnx");
             require(wvd::platform::file_sha256(root / "copy.onnx") == files.at("models/large.onnx"),
@@ -138,17 +144,17 @@ int main(int argc, char **argv) {
             rejects([&] { wvd::games::tasks::publish_native(workflow, baseline, destination, J::object(),
                 J::object(), nullptr, [&] {
                     if (std::string(mode) == "before_copy") { triggered = true; throw std::runtime_error("PREPARATION_CANCELLED"); }
-                    if (std::string(mode) == "after_rename" && fs::exists(destination)) {
+                    if (std::string(mode) == "after_rename" && inspection::exists_os(destination)) {
                         triggered = true; throw std::runtime_error("PREPARATION_CANCELLED");
                     }
-                    for (const auto &entry : fs::directory_iterator(root)) {
+                    for (const auto &entry : inspection::directories_os(root)) {
                         if (!entry.path().filename().string().starts_with(std::string(mode) + ".staging-")) continue;
-                        if (std::string(mode) == "during_copy" && fs::exists(entry.path() / "models/large.onnx") &&
-                            fs::file_size(entry.path() / "models/large.onnx") >= 65536) {
+                        if (std::string(mode) == "during_copy" && inspection::exists_os(entry.path() / "models/large.onnx") &&
+                            inspection::size_os(entry.path() / "models/large.onnx") >= 65536) {
                             triggered = true; throw std::runtime_error("PREPARATION_CANCELLED");
                         }
-                        if (std::string(mode) == "before_rename" && fs::exists(entry.path() / "program/identity.json")) {
-                            const auto handle = CreateFileW(entry.path().c_str(), DELETE, FILE_SHARE_READ,
+                        if (std::string(mode) == "before_rename" && inspection::exists_os(entry.path() / "program/identity.json")) {
+                            const auto handle = CreateFileW(wvd::platform::extended_path(entry.path()).c_str(), DELETE, FILE_SHARE_READ,
                                 nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, nullptr);
                             if (handle != INVALID_HANDLE_VALUE) {
                                 CloseHandle(handle);
@@ -159,8 +165,8 @@ int main(int argc, char **argv) {
                         }
                     }
                 }); }, "PREPARATION_CANCELLED");
-            require(triggered && !fs::exists(destination) && !staging_exists(root), "CANCELLED_PUBLICATION_LEFT_OUTPUT");
-            require(fs::exists(root / "normal/program/identity.json"), "OLDER_PUBLICATION_REMOVED");
+            require(triggered && !inspection::exists_os(destination) && !staging_exists(root), "CANCELLED_PUBLICATION_LEFT_OUTPUT");
+            require(inspection::exists_os(root / "normal/program/identity.json"), "OLDER_PUBLICATION_REMOVED");
             results.push_back({{"case", std::string("publication_cancel_") + mode}, {"passed", true}});
         }
         {
@@ -168,20 +174,21 @@ int main(int argc, char **argv) {
             bad.files.front().sha256 = std::string(64, '0');
             rejects([&] { wvd::games::tasks::publish_native(workflow, bad, root / "bad-hash", J::object()); },
                     "RESOURCE_HASH_MISMATCH");
-            require(!fs::exists(root / "bad-hash"), "BAD_HASH_PUBLISHED");
+            require(!inspection::exists_os(root / "bad-hash"), "BAD_HASH_PUBLISHED");
             results.push_back({{"case", "hash_mismatch_rejected"}, {"passed", true}});
         }
         {
-            const auto input = CreateFileW((source / "models/large.onnx").c_str(), GENERIC_READ,
+            const auto input = CreateFileW(wvd::platform::extended_path(source / "models/large.onnx").c_str(), GENERIC_READ,
                 FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
             require(input != INVALID_HANDLE_VALUE, "RAW_FIXTURE_OPEN_FAILED");
             struct Close { HANDLE handle; ~Close() { CloseHandle(handle); } } close{input};
-            rejects([&] { wvd::platform::handle_sha256(input, fs::file_size(source / "models/large.onnx") + 1); },
+            rejects([&] { wvd::platform::handle_sha256(input, inspection::size_os(source / "models/large.onnx") + 1); },
                     "INTEGRITY_READ_FAILED");
             rejects([&] { wvd::platform::copy_handle_sha256(input, input, 65536); }, "NATIVE_BUNDLE_WRITE_FAILED");
             results.push_back({{"case", "real_short_read_and_readonly_write_failure"}, {"passed", true}});
         }
-        write(root / "result.json", J{{"passed", true}, {"cases", results}, {"game_inputs", 0}}.dump(2));
+        const auto boundaries = publication_t0_contract::run(root / "t0-boundaries");
+        write(root / "result.json", J{{"passed", true}, {"cases", results}, {"t0_boundaries", boundaries}, {"game_inputs", 0}}.dump(2));
         std::cout << "Publication contract, bounded copy, cancellation, lock/rename and real I/O failures passed\n";
         return 0;
     } catch (const std::exception &error) { std::cerr << error.what() << '\n'; return 1; }

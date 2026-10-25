@@ -8,8 +8,58 @@
 #include <cstdint>
 #include <stdexcept>
 #include <functional>
+#include <exception>
 
 namespace wvd::platform {
+class BundleLinkError final : public std::runtime_error {
+  public:
+    static constexpr std::uint32_t too_many_links = 0xc0000265u;
+    explicit BundleLinkError(std::uint32_t status)
+        : std::runtime_error("NATIVE_BUNDLE_LINK_FAILED:NTSTATUS=" + std::to_string(status)), status_(status) {}
+    std::uint32_t ntstatus() const noexcept { return status_; }
+  private:
+    std::uint32_t status_;
+};
+class DirectoryCleanupPending final : public std::runtime_error {
+  public:
+    DirectoryCleanupPending(std::string primary, std::string cleanup, std::filesystem::path path);
+    const std::string &primary_error() const noexcept { return primary_; }
+    const std::string &cleanup_error() const noexcept { return cleanup_; }
+    const std::filesystem::path &path() const noexcept { return path_; }
+  private:
+    std::string primary_, cleanup_;
+    std::filesystem::path path_;
+};
+// The token is the only preparation-time deletion owner. A retained receipt
+// proves explicit Coordinator acceptance even after the worker has finished.
+class OwnedBundleDirectory final {
+  public:
+    struct Receipt {
+        std::filesystem::path path;
+        bool created{}, identity_confirmed{}, accepted{}, cleanup_pending{}, cleanup_attempted{}, marker_failed{};
+        std::string cleanup_error;
+        void require_clean_acceptance() const;
+    };
+    static std::unique_ptr<OwnedBundleDirectory> create(const std::filesystem::path &path);
+    static void require_no_pending(const std::filesystem::path &parent);
+    ~OwnedBundleDirectory() noexcept;
+    OwnedBundleDirectory(const OwnedBundleDirectory &) = delete;
+    OwnedBundleDirectory &operator=(const OwnedBundleDirectory &) = delete;
+    std::shared_ptr<const Receipt> receipt() const noexcept { return receipt_; }
+    void rename_to(const std::filesystem::path &destination);
+    void accept() noexcept;
+    void rollback();
+    [[noreturn]] void rethrow_with_cleanup(std::exception_ptr primary);
+  private:
+    friend struct OwnedBundleDirectoryTestAccess;
+    explicit OwnedBundleDirectory(std::filesystem::path path);
+    struct Impl;
+    std::unique_ptr<Impl> impl_;
+    std::shared_ptr<Receipt> receipt_;
+    static thread_local std::function<void(const char *)> fault_;
+    void note_cleanup_failure(const std::string &error) noexcept;
+    void remove_preparation_marker();
+};
 class MissingBundleMember final : public std::runtime_error {
   public:
     explicit MissingBundleMember(std::string member) : std::runtime_error("RESOURCE_NOT_IN_MANIFEST"), member_(std::move(member)) {}
@@ -35,6 +85,7 @@ class BundleLease final {
     void copy_member(const std::string &relative, const std::filesystem::path &destination,
                      const std::function<void()> &check_cancel = {}) const;
     void link_member(const std::string &relative, const std::filesystem::path &destination) const;
+    std::uint64_t member_size(const std::string &relative) const;
     const std::string &hash(const std::string &relative) const;
     const std::filesystem::path &root() const;
     const std::string &revision() const;
@@ -51,6 +102,9 @@ class BundleLease final {
     static std::filesystem::path checked_relative(const std::string &value);
 
   private:
+    friend struct BundleLeaseTestAccess;
+    static thread_local std::function<void(const char *)> copy_fault_;
+    static thread_local std::function<bool(const char *)> io_failure_;
     struct Impl;
     std::unique_ptr<Impl> impl_;
 };

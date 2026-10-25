@@ -7,6 +7,8 @@
 #include <array>
 #include <fstream>
 #include <cstdio>
+#include <limits>
+#include <regex>
 #include <windows.h>
 
 namespace wvd::storage {
@@ -53,6 +55,101 @@ struct DiagnosticDirectories {
         }
     }
 };
+constexpr std::uint64_t recent_count_limit = 240;
+constexpr std::uint64_t recent_byte_limit = 128ULL * 1024 * 1024;
+constexpr std::size_t recent_scan_limit = 4096;
+std::uint64_t file_identity(const BY_HANDLE_FILE_INFORMATION &info) {
+    return (std::uint64_t(info.nFileIndexHigh) << 32) | info.nFileIndexLow;
+}
+std::uint64_t file_bytes(const BY_HANDLE_FILE_INFORMATION &info) {
+    return (std::uint64_t(info.nFileSizeHigh) << 32) | info.nFileSizeLow;
+}
+// Every RunStore uses this same directory-identity lock. A new run/store cannot
+// reserve against a stale per-instance zero count while an old writer commits.
+struct RecentQuotaGuard {
+    DiagnosticDirectories directories;
+    HANDLE mutex{};
+    RecentQuotaGuard(const std::filesystem::path &directory, unsigned long &volume,
+                     std::uint64_t &identity, bool &known) {
+        directories.ancestors(directory.parent_path());
+        std::filesystem::create_directory(directory);
+        const auto info = directories.hold(directory);
+        if (known && (volume != info.dwVolumeSerialNumber || identity != file_identity(info)))
+            throw std::runtime_error("RECENT_FRAME_DIRECTORY_IDENTITY_CHANGED");
+        if (!known) {
+            volume = info.dwVolumeSerialNumber;
+            identity = file_identity(info);
+            known = true;
+        }
+        const auto name = L"Local\\WvdNext.Recent." + std::to_wstring(volume) + L"." + std::to_wstring(identity);
+        mutex = CreateMutexW(nullptr, FALSE, name.c_str());
+        if (!mutex) throw std::runtime_error("RECENT_FRAME_WRITER_LOCK_FAILED");
+        const auto waited = WaitForSingleObject(mutex, 0);
+        if (waited != WAIT_OBJECT_0 && waited != WAIT_ABANDONED) {
+            CloseHandle(mutex); mutex = nullptr;
+            throw std::runtime_error("RECENT_FRAME_WRITER_BUSY");
+        }
+    }
+    ~RecentQuotaGuard() { if (mutex) { ReleaseMutex(mutex); CloseHandle(mutex); } }
+};
+struct RecentFile {
+    std::filesystem::path path;
+    BY_HANDLE_FILE_INFORMATION identity{};
+    bool incomplete{};
+};
+struct RecentInventory {
+    std::vector<RecentFile> files;
+    std::uint64_t bytes{}, incomplete_count{}, incomplete_bytes{};
+};
+RecentInventory inspect_recent_files(const std::filesystem::path &directory) {
+    // atomic_write's own UUID temporary names are evidence, never committed
+    // pictures. Unknown entries are not assigned to this cache or deleted.
+    static const std::regex picture(R"(^[0-9]{8}T[0-9]{9}_r[0-9]+_f[0-9]+\.(png|jpg)$)");
+    static const std::regex temporary(R"(^[0-9]{8}T[0-9]{9}_r[0-9]+_f[0-9]+\.(png|jpg)\.[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\.tmp$)");
+    RecentInventory result;
+    for (const auto &entry : std::filesystem::directory_iterator(directory)) {
+        diagnostic_require(result.files.size() < recent_scan_limit, "RECENT_FRAME_SCAN_LIMIT");
+        const auto name = entry.path().filename().string();
+        const bool incomplete = std::regex_match(name, temporary);
+        diagnostic_require(incomplete || std::regex_match(name, picture), "RECENT_FRAME_UNKNOWN_ENTRY");
+        const auto handle = CreateFileW(platform::extended_path(entry.path()).c_str(), FILE_READ_ATTRIBUTES,
+            FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+        diagnostic_require(handle != INVALID_HANDLE_VALUE, "RECENT_FRAME_ENTRY_UNREADABLE");
+        BY_HANDLE_FILE_INFORMATION info{};
+        const bool verified = GetFileInformationByHandle(handle, &info) &&
+            !(info.dwFileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) &&
+            info.nNumberOfLinks == 1;
+        CloseHandle(handle);
+        diagnostic_require(verified, "RECENT_FRAME_ENTRY_IDENTITY_INVALID");
+        const auto bytes = file_bytes(info);
+        diagnostic_require(bytes <= std::numeric_limits<std::uint64_t>::max() - result.bytes,
+                           "RECENT_FRAME_SIZE_OVERFLOW");
+        result.bytes += bytes;
+        if (incomplete) { ++result.incomplete_count; result.incomplete_bytes += bytes; }
+        result.files.push_back({entry.path(), info, incomplete});
+    }
+    std::sort(result.files.begin(), result.files.end(), [](const auto &a, const auto &b) {
+        return a.path.filename() < b.path.filename();
+    });
+    return result;
+}
+void remove_recent_file(const RecentFile &file) {
+    const auto handle = CreateFileW(platform::extended_path(file.path).c_str(),
+        DELETE | FILE_READ_ATTRIBUTES, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
+        FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+    diagnostic_require(handle != INVALID_HANDLE_VALUE, "RECENT_FRAME_TRIM_FAILED");
+    BY_HANDLE_FILE_INFORMATION info{};
+    const bool same = GetFileInformationByHandle(handle, &info) &&
+        !(info.dwFileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) &&
+        info.dwVolumeSerialNumber == file.identity.dwVolumeSerialNumber &&
+        file_identity(info) == file_identity(file.identity) && file_bytes(info) == file_bytes(file.identity) &&
+        CompareFileTime(&info.ftLastWriteTime, &file.identity.ftLastWriteTime) == 0 && info.nNumberOfLinks == 1;
+    FILE_DISPOSITION_INFO disposition{TRUE};
+    const bool removed = same && SetFileInformationByHandle(handle, FileDispositionInfo,
+        &disposition, sizeof(disposition));
+    CloseHandle(handle);
+    diagnostic_require(removed, same ? "RECENT_FRAME_TRIM_FAILED" : "RECENT_FRAME_TRIM_IDENTITY_CHANGED");
+}
 std::string read_locked_file(const std::filesystem::path &file, std::size_t limit) {
     const auto handle = CreateFileW(file.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr,
         OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
@@ -289,6 +386,7 @@ RunStore::RunStore(const std::filesystem::path &root, const std::string &instanc
               {"default_interval_seconds", 60}, {"pause_interval_seconds", 120}}}}.dump(
             2),
         false);
+    revalidate_recent_frames();
     recent_worker_ = std::jthread([this] { recent_loop(); });
 }
 RunStore::~RunStore() { finish_recent_frames(); }
@@ -304,7 +402,7 @@ bool RunStore::save_recent_frame(const contracts::FrameEnvelope &frame, bool act
     try {
         std::unique_lock lock(recent_mutex_, std::try_to_lock);
         if (!lock.owns_lock()) { ++recent_dropped_; return false; }
-        if (recent_closed_) return false;
+        if (recent_closed_ || recent_blocked_.load()) return false;
         const auto now = diagnostic_clock_->now();
         if (action_evidence && recent_action_generation_ == frame.identity.generation &&
             recent_action_frame_ == frame.identity.frame_id) return true;
@@ -340,12 +438,82 @@ void RunStore::recent_loop() noexcept {
                 recent_pending_.pop_front();
             }
             const auto started = std::chrono::steady_clock::now();
-            try { if (write_recent_frame(pending.frame, pending.action_evidence)) ++recent_saved_; }
-            catch (...) { ++recent_failed_; }
+            try {
+                if (recent_blocked_.load()) { ++recent_dropped_; continue; }
+                if (write_recent_frame(pending.frame, pending.action_evidence)) ++recent_saved_;
+            } catch (const std::exception &error) {
+                ++recent_failed_;
+                block_recent_frames(error.what());
+                std::lock_guard lock(recent_mutex_);
+                recent_dropped_ += recent_pending_.size();
+                recent_pending_.clear();
+            } catch (...) {
+                ++recent_failed_;
+                block_recent_frames("RECENT_FRAME_WRITE_FAILED");
+                std::lock_guard lock(recent_mutex_);
+                recent_dropped_ += recent_pending_.size();
+                recent_pending_.clear();
+            }
             recent_work_ns_ += std::chrono::duration_cast<std::chrono::nanoseconds>(
                 std::chrono::steady_clock::now() - started).count();
-        } catch (...) { ++recent_failed_; return; }
+        } catch (...) { ++recent_failed_; block_recent_frames("RECENT_FRAME_WORKER_FAILED"); return; }
     }
+}
+void RunStore::block_recent_frames(const char *reason) noexcept {
+    recent_blocked_ = true;
+    try {
+        std::lock_guard lock(recent_state_mutex_);
+        std::string value = reason ? reason : "";
+        const bool safe = !value.empty() && value.size() <= 96 &&
+            std::all_of(value.begin(), value.end(), [](unsigned char c) {
+                return (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_';
+            });
+        recent_block_reason_ = safe ? value : "RECENT_FRAME_STORAGE_FAILED";
+    } catch (...) {}
+}
+bool RunStore::revalidate_recent_frames() noexcept {
+    try {
+        std::lock_guard disk(recent_disk_mutex_);
+        recent_occupancy_known_ = false;
+        std::unique_ptr<RecentQuotaGuard> guard;
+        RecentInventory inventory;
+        const auto attributes = GetFileAttributesW(platform::extended_path(recent_directory_).c_str());
+        const auto attribute_error = GetLastError();
+        if (attributes != INVALID_FILE_ATTRIBUTES) {
+            guard = std::make_unique<RecentQuotaGuard>(recent_directory_, recent_volume_,
+                recent_directory_id_, recent_directory_identity_known_);
+            inventory = inspect_recent_files(recent_directory_);
+        } else {
+            diagnostic_require(attribute_error == ERROR_FILE_NOT_FOUND || attribute_error == ERROR_PATH_NOT_FOUND,
+                               "RECENT_FRAME_DIRECTORY_UNREADABLE");
+            DiagnosticDirectories parents;
+            parents.ancestors(recent_directory_.parent_path());
+            diagnostic_require(!recent_directory_identity_known_, "RECENT_FRAME_DIRECTORY_IDENTITY_CHANGED");
+        }
+        recent_files_ = inventory.files.size(); recent_bytes_ = inventory.bytes;
+        recent_incomplete_files_ = inventory.incomplete_count; recent_incomplete_bytes_ = inventory.incomplete_bytes;
+        recent_occupancy_known_ = true;
+        diagnostic_require(inventory.incomplete_count == 0, "RECENT_FRAME_INCOMPLETE_ARTIFACTS");
+        diagnostic_require(inventory.files.size() <= recent_count_limit && inventory.bytes <= recent_byte_limit,
+                           "RECENT_FRAME_QUOTA_EXCEEDED");
+        {
+            std::lock_guard state(recent_state_mutex_);
+            recent_block_reason_.clear();
+        }
+        {
+            std::lock_guard queue(recent_mutex_);
+            if (recent_blocked_.load()) {
+                recent_dropped_ += recent_pending_.size();
+                recent_pending_.clear();
+                recent_action_generation_ = recent_action_frame_ = 0;
+                recent_last_ = {};
+            }
+            recent_blocked_ = false;
+        }
+        return true;
+    } catch (const std::exception &error) { block_recent_frames(error.what()); }
+    catch (...) { block_recent_frames("RECENT_FRAME_REVALIDATION_FAILED"); }
+    return false;
 }
 bool RunStore::write_recent_frame(const contracts::FrameEnvelope &frame, bool action_evidence) {
     const auto size = frame.identity.recognition_size;
@@ -365,9 +533,27 @@ bool RunStore::write_recent_frame(const contracts::FrameEnvelope &frame, bool ac
         : std::vector<int>{cv::IMWRITE_JPEG_QUALITY, 72}))
         throw std::runtime_error("RECENT_FRAME_ENCODE_FAILED");
     if (encoded.size() > 8 * 1024 * 1024) throw std::runtime_error("RECENT_FRAME_TOO_LARGE");
-    std::filesystem::create_directories(recent_directory_);
-    if (std::filesystem::is_symlink(recent_directory_))
-        throw std::runtime_error("RECENT_FRAME_DIRECTORY_LINK");
+    std::lock_guard disk(recent_disk_mutex_);
+    recent_occupancy_known_ = false;
+    RecentQuotaGuard guard(recent_directory_, recent_volume_, recent_directory_id_, recent_directory_identity_known_);
+    auto inventory = inspect_recent_files(recent_directory_);
+    recent_files_ = inventory.files.size(); recent_bytes_ = inventory.bytes;
+    recent_incomplete_files_ = inventory.incomplete_count; recent_incomplete_bytes_ = inventory.incomplete_bytes;
+    recent_occupancy_known_ = true;
+    diagnostic_require(inventory.incomplete_count == 0, "RECENT_FRAME_INCOMPLETE_ARTIFACTS");
+    auto count = inventory.files.size();
+    auto bytes = inventory.bytes;
+    std::size_t oldest = 0;
+    // Reserve a full final/temp slot before any new byte is created. A failed
+    // trim stops this writer; it never adds a picture before discovering this.
+    while (count >= recent_count_limit || bytes > recent_byte_limit - encoded.size()) {
+        diagnostic_require(oldest < inventory.files.size(), "RECENT_FRAME_QUOTA_UNAVAILABLE");
+        const auto &file = inventory.files[oldest++];
+        diagnostic_require(!file.incomplete, "RECENT_FRAME_INCOMPLETE_ARTIFACTS");
+        remove_recent_file(file);
+        --count; bytes -= file_bytes(file.identity);
+        recent_files_ = count; recent_bytes_ = bytes;
+    }
     SYSTEMTIME utc{};
     GetSystemTime(&utc);
     char name[100]{};
@@ -375,25 +561,22 @@ bool RunStore::write_recent_frame(const contracts::FrameEnvelope &frame, bool ac
         utc.wYear, utc.wMonth, utc.wDay, utc.wHour, utc.wMinute, utc.wSecond,
         utc.wMilliseconds, static_cast<unsigned long long>(run_),
         static_cast<unsigned long long>(frame.identity.frame_id), extension);
-    platform::atomic_write(recent_directory_ / name,
-        std::string(reinterpret_cast<const char *>(encoded.data()), encoded.size()), false);
-    std::vector<std::filesystem::directory_entry> files;
-    std::uintmax_t total_bytes = 0;
-    for (const auto &entry : std::filesystem::directory_iterator(recent_directory_)) {
-        if (!entry.is_regular_file() ||
-            (entry.path().extension() != ".jpg" && entry.path().extension() != ".png")) continue;
-        total_bytes += entry.file_size();
-        files.push_back(entry);
+    recent_occupancy_known_ = false;
+    try {
+        platform::atomic_write(recent_directory_ / name,
+            std::string(reinterpret_cast<const char *>(encoded.data()), encoded.size()), false);
+    } catch (...) {
+        const auto failure = std::current_exception();
+        try {
+            const auto after = inspect_recent_files(recent_directory_);
+            recent_files_ = after.files.size(); recent_bytes_ = after.bytes;
+            recent_incomplete_files_ = after.incomplete_count; recent_incomplete_bytes_ = after.incomplete_bytes;
+            recent_occupancy_known_ = true;
+        } catch (...) {}
+        std::rethrow_exception(failure);
     }
-    std::sort(files.begin(), files.end(), [](const auto &a, const auto &b) {
-        return a.path().filename() < b.path().filename();
-    });
-    constexpr std::uintmax_t byte_limit = 128ULL * 1024 * 1024;
-    for (std::size_t i = 0; i < files.size() &&
-        (files.size() - i > 240 || total_bytes > byte_limit); ++i) {
-        total_bytes -= files[i].file_size();
-        std::filesystem::remove(files[i].path());
-    }
+    recent_files_ = count + 1; recent_bytes_ = bytes + encoded.size();
+    recent_occupancy_known_ = true;
     return true;
 }
 J RunStore::save_diagnostic(const contracts::FrameEnvelope *frame, const DiagnosticRequest &request,
@@ -547,6 +730,8 @@ J RunStore::diagnostic_summary(bool wait_for_writer) const {
         view["update_pending"] = true;
         return view;
     }
+    std::string recent_reason;
+    { std::lock_guard state(recent_state_mutex_); recent_reason = recent_block_reason_; }
     J view{{"schema", 1}, {"entries", diagnostic_entries_}, {"bytes_saved", diagnostic_bytes_},
         {"event_history", {{"path", "execution-events.jsonl"}, {"rows", event_rows_},
             {"bytes", event_bytes_}, {"limit_bytes", 64ULL * 1024 * 1024},
@@ -573,6 +758,12 @@ J RunStore::diagnostic_summary(bool wait_for_writer) const {
             {"complete", timing_failed_ == 0 && timing_input_dropped_ == 0}}},
         {"recent_frames", {{"saved", recent_saved_.load()}, {"dropped", recent_dropped_.load()},
             {"failed", recent_failed_.load()}, {"worker_ns", recent_work_ns_.load()},
+            {"blocked", recent_blocked_.load()}, {"blocked_reason", recent_reason},
+            {"occupancy_known", recent_occupancy_known_.load()},
+            {"files", recent_files_.load()}, {"bytes", recent_bytes_.load()},
+            {"incomplete_files", recent_incomplete_files_.load()}, {"incomplete_bytes", recent_incomplete_bytes_.load()},
+            {"count_limit", recent_count_limit}, {"byte_limit", recent_byte_limit},
+            {"frame_bytes_limit", 8 * 1024 * 1024},
             {"pending_limit", 4}, {"inflight_limit", 1}, {"action_format", "png"}}},
         {"reserved_bytes", (diagnostic_rewards_ + diagnostic_failures_ + diagnostic_critical_) * diagnostic_limits_.frame_bytes},
         {"critical_attempts", diagnostic_critical_}, {"critical_limit", diagnostic_limits_.critical_failures},

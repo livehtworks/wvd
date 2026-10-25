@@ -9,12 +9,16 @@
 | workflows/.builtin | 内置来源、本地版本、last_sync回执 | WorkflowRepository | 与对应文档成单事务；GET不修补 |
 | workflows/.builtin-backups | 同步前准确文档及元数据 | 内置同步事务；人工恢复 | 不可变用户恢复依据，不自动清理 |
 | workflows/.builtin-transactions | pending意图/completed历史、前后版本/哈希 | 仓库写入/构造时恢复 | 有界核验完成或拒绝；禁止覆盖未知本地修改 |
-| requests/<request-id-sha256>.json | 原始请求意图、原run、接受/终态回执 | SubmissionStore/Application；重试查询 | 持久幂等事实，1MiB/条、256MiB总量；不因缓存淘汰遗忘，不重执行已接受意图 |
+| requests/<request-id-sha256>.json | 原始请求意图、原run、接受/终态回执 | SubmissionStore/Application；重试查询 | 持久幂等事实，1MiB/条、256MiB总量、65,536条；替换不增加条数。内部SHA/UUID临时文件共同计量；未完成/未知或超额时只读，旧ID仍按需核验读取，不重执行未知意图 |
 | runs/<instance>/<run>/ | run定义、result、事件、输入、诊断/计时/内存边界 | Coordinator/Session/RunStore；API/诊断工具 | 运行证据；instance/run/gen绑定，result.json才是根终态 |
-| published/<request>/ | 冻结IR、manifest及资源引用 | NativePublisher；Session | 派生不可变发布，失败只撤回本次未启动目录；活跃租约禁止修改/删除 |
-| published/asset-objects/<hash>/ | 从锁定原始字节复制的一份模型 | NativePublisher；同盘发布硬链接 | 派生内容缓存；不得硬链接用户可变原件，无自动历史删除 |
+| published/<request>/ | 冻结IR、manifest及资源引用 | NativePublisher；Coordinator/Session | 派生不可变发布，唯一所有权token随组装传递；明确接管前失败只按身份撤回本次目录，接管后即使快速完成也保留；活跃租约禁止修改/删除 |
+| published/asset-objects/<hash>/ | 从锁定原始字节复制的一份模型 | NativePublisher；同盘发布硬链接 | 派生内容缓存；仅系统真实STATUS_TOO_MANY_LINKS时从同一冻结租约流式复制；不得硬链接用户可变原件，无自动历史删除 |
+| published、asset-objects、asset-cache中的.cleanup-pending-*及本次staging | 改名前准备意图/源目标身份，或清理故障/残留现场；双错误另由原异常及Application状态报告 | OwnedBundleDirectory/Application；准备准入 | 派生事务留证；接管或完整撤回后才移除本次索引。遗留意图不是当前接管结论，阻止新准备，重启需核持久run/request引用，不猜所有权或批量清理 |
+| recent-frames/ | 全局普通JPG/动作PNG及内部未提交tmp | RunStore原有recent worker；诊断查询 | 可选有界诊断；240张/128MiB、单张8MiB、队列4张。先核身份/计量/回收预留再写；失败阻断新增，重建不清零，显式重新核验后才可恢复 |
 | asset-cache、active-snapshots、probe-snapshots | 冻结资源/自定义怪物、活动租约 | Application/BundleLease；编译/识别 | 派生缓存/快照，非配置权威；清理需核所有者 |
 | pack_root、resources/authoring | 默认流程、模板、模型锁、作者定义 | 资源生成；编译/语言闭包 | 源码权威，不在stage中隐式改写；生成事务保留旧输出 |
+| 候选旁的.<current>.transactions/；资源生成的.local/resource-generation/<pack>/ | writer.lock、transaction.json、prepared/previous身份和阶段 | resource_generation受限目录事务；package_functional及恢复 | 工具派生事务，复制前落意图；持锁恢复上一笔，历史及失败材料计量，不自动删除未知历史 |
+| 候选目录/service-launch.json | 已核验服务的data-root、端口与启动参数 | manage_service原入口；后续服务控制 | 新进程及owner核验成功后原子提交；失败保留旧字节，提交失败另报真实新进程，不自动杀掉或重启 |
 | 旧config.json、mod、dist | 旧配置/用户扩展/历史产物 | 明确入口只读导入 | 历史/用户资产，不原生双读双写，不覆盖、不删 |
 
 本轮没有迁移或改写正式数据。新requests历史只由原生Application写入，不复制猜测旧内存幂等表；进程退出留下preparing意图表示已接受但结果未知，不能自动重执行。达到总额度停止接受新意图，既有回执仍可读取；归档/清理需独立人工计划与授权。

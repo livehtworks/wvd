@@ -8,6 +8,7 @@
 #include <iostream>
 #include <thread>
 #include <opencv2/imgcodecs.hpp>
+#include "recent_frames_contract.hpp"
 
 namespace wvd::runtime {
 struct NativeCoordinatorTestAccess {
@@ -91,6 +92,10 @@ class BlockingBackend final : public Backend {
 
 int main(int argc, char **argv) {
     try {
+        if (argc == 3 && std::string(argv[1]) == "--recent-frame-quota")
+            return recent_frames_contract::run(std::filesystem::absolute(argv[2]));
+        if (argc == 3 && std::string(argv[1]) == "--recent-frame-reopen")
+            return recent_frames_contract::reopen(std::filesystem::absolute(argv[2]));
         const auto data_root = std::filesystem::temp_directory_path() /
             ("wvd-native-coordinator-" + wvd::platform::unique_id());
         std::filesystem::create_directories(data_root);

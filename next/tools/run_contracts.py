@@ -54,11 +54,14 @@ CASES = {
         ("test_native_application", ["--measurement-contract"]),
         ("test_native_application", ["--builtin-transaction", "{output}/builtin-transaction"]),
         ("test_native_application", ["--submission-history", "{output}/submission-history"]),
+        ("test_native_application", ["--submission-readonly", "{pack}", "{pack}/parameters/legacy-quests.json", "{output}/submission-readonly"]),
+        ("test_native_application", ["--preparation-ownership", "{pack}", "{pack}/parameters/legacy-quests.json", "{output}/preparation-ownership"]),
         ("test_native_application", ["--repository-read-oom", "{output}/repository-read-oom"]),
         ("test_native_application", ["--control-contract", "{pack}", "{pack}/parameters/legacy-quests.json", "{output}/control"]),
         ("test_native_publication", ["{output}/publication"]),
         ("test_native_coordinator", []),
         ("test_native_coordinator", ["--logging-boundary"]),
+        ("test_native_coordinator", ["--recent-frame-quota", "{output}/recent-frame-quota"]),
         ("test_native_coordinator", ["--combat-diagnostic"]),
         ("test_native_coordinator", ["--diagnostic-identity"]),
         ("test_native_coordinator", ["--instance-exit"]),
@@ -111,6 +114,34 @@ def materialize_recorded_models(pack):
             target = pack / model["bundle_directory"] / name
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(source, target)
+
+
+def materialize_preparation_models(pack):
+    """Declare real OCR bytes in the disposable Application publication fixture."""
+    if not pack.resolve().is_relative_to((ROOT / ".local").resolve()) or \
+            pack.resolve() == (ROOT / "packs/wvd").resolve():
+        raise RuntimeError("CONTRACT_PREPARATION_PACK_MUST_BE_ISOLATED")
+    materialize_recorded_models(pack)
+    manifest_path = pack / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    members = {row["path"]: row for row in manifest["files"]}
+    models = json.loads((ROOT / "resources/recognition/ocr-models.json").read_text(encoding="utf-8"))["models"]
+    for model in models.values():
+        for name, member in model["files"].items():
+            relative = model["bundle_directory"] + "/" + name
+            target = pack / relative
+            if relative in members and members[relative]["sha256"] != member["sha256"]:
+                raise RuntimeError("CONTRACT_PREPARATION_MODEL_CONFLICT:" + relative)
+            if relative not in members:
+                members[relative] = {"path": relative, "sha256": member["sha256"],
+                                     "source": member["source"], "bytes": target.stat().st_size,
+                                     "source_refs": []}
+    manifest["files"] = sorted(members.values(), key=lambda row: row["path"])
+    manifest.setdefault("source_revision", manifest["revision"])
+    identity = {"files": manifest["files"], "aliases": manifest.get("aliases", {})}
+    manifest["revision"] = hashlib.sha256(json.dumps(identity, sort_keys=True,
+        ensure_ascii=False, separators=(",", ":")).encode("utf-8")).hexdigest()
+    manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
 def select_modules(changed):
@@ -187,20 +218,31 @@ def execute(modules, output):
         pack = materialize_pack(output) if modules & {"app","recognition"} else ROOT / "packs/wvd"
         if any("--recorded-input-contract" in args for _, _, args in cases):
             materialize_recorded_models(pack)
+        preparation_pack = pack
+        if any("--preparation-ownership" in args for _, _, args in cases):
+            # Recorded-frame tests declare OCR members themselves. Keep their
+            # original manifest and give Application its own complete manifest.
+            preparation_pack = output / "preparation-fixture-pack"
+            shutil.copytree(pack, preparation_pack)
+            materialize_preparation_models(preparation_pack)
         for module, target, args in cases:
             flag = str(args[0]) if args and str(args[0]).startswith("--") else "base"
+            case_pack = preparation_pack if flag == "--preparation-ownership" else pack
+            # The true persisted 65,536-row boundary includes NTFS creation and
+            # two bounded startup scans; keep it in the official app contract.
+            case_timeout = 600 if flag in ("--submission-history", "--preparation-ownership") else 120
             run("contract-" + target + "-" + flag.lstrip("-"),
                 [ROOT / "build/native/Release" / (target + ".exe"),
-                 *[str(arg).replace("{output}", str(output)).replace("{pack}", str(pack)) for arg in args]], timeout_seconds=120)
+                 *[str(arg).replace("{output}", str(output)).replace("{pack}", str(case_pack)) for arg in args]], timeout_seconds=case_timeout)
             receipt["passed"].append([module, target, flag])
         if "tools" in modules:
             proof("tools", [sys.executable, "-m", "unittest", "discover", "-s", "tests",
                 "-p", "test_*analysis.py"], timeout_seconds=120)
             proof("resource-tools", [sys.executable, "-m", "unittest", "discover", "-s", "tests",
                 "-p", "test_build_resource_contract.py"], timeout_seconds=120)
-            for pattern in ("test_diagnostic_io.py", "test_crash_plan_contract.py"):
+            for pattern in ("test_diagnostic_io.py", "test_crash_plan_contract.py", "test_service_binding_contract.py"):
                 proof(pattern, [sys.executable, "-m", "unittest", "discover", "-s", "tests",
-                    "-p", pattern], timeout_seconds=120)
+                    "-p", pattern], timeout_seconds=150 if pattern == "test_service_binding_contract.py" else 120)
             for script in ("verify_bounded_trace_input.ps1", "verify_measurement_endpoints.ps1", "verify_trace_guards.ps1"):
                 proof(script, [shutil.which("pwsh.exe") or "pwsh.exe", "-NoProfile", "-File",
                     ROOT / "tests/tools" / script,

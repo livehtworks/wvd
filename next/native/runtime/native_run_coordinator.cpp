@@ -1,4 +1,5 @@
 #include "native_run_coordinator.hpp"
+#include <latch>
 #include "devices/lifecycle_execution.hpp"
 #include "platform/windows/memory_diagnostics.hpp"
 #include "platform/windows/file_digest.hpp"
@@ -260,30 +261,39 @@ contracts::RunSnapshot NativeRunCoordinator::start(
                                 {"logging", definition.logging.json()},
                                 {"viewport", definition.policy.viewport_id},
                                 {"observed_read_only_viewport", definition.policy.observed_read_only_viewport}};
+    const auto worker_gate = std::make_shared<std::latch>(1);
     auto store = std::make_shared<storage::RunStore>(data_root_, instance_id_, id, frozen,
         std::make_shared<contracts::SteadyClock>(), storage::DiagnosticLimits{}, definition.logging);
     auto journal = std::make_shared<storage::EventJournal>(instance_id_, id, event_capacity_,
         [target = store](const nlohmann::json &event) { target->append_event(event); });
+    contracts::RunSnapshot prepared_snapshot;
+    prepared_snapshot.run_id = id;
+    prepared_snapshot.state = contracts::RunState::Preparing;
+    prepared_snapshot.quiescent = false;
+    auto prepared_request = definition.request_id;
+    static_assert(std::is_nothrow_move_assignable_v<contracts::RunSnapshot>);
+    if (start_fault_) start_fault_("before_state_publication");
     {
         std::lock_guard lock(mutex_);
         require(!active_, "NATIVE_RUN_ACTIVE_OR_CLEANUP_PENDING");
+        snapshot_ = std::move(prepared_snapshot);
+        request_id_ = std::move(prepared_request);
         stop_ = false;
         active_ = true;
         execution_finished_ = false;
         terminal_recorded_ = false;
         worker_joined_=false; heap_maintenance_complete_=false; heap_maintenance_succeeded_=false;
-        snapshot_ = {};
-        snapshot_.run_id = id;
-        snapshot_.state = contracts::RunState::Preparing;
-        snapshot_.quiescent = false;
-        request_id_ = definition.request_id;
         lease_ = std::move(lease);
         journal_ = std::move(journal);
         store_ = std::move(store);
     }
+    auto *publication_owner = definition.publication_ownership.get();
+    const auto publication_receipt = publication_owner ? publication_owner->receipt() : nullptr;
     try {
+        if (start_fault_) start_fault_("before_worker");
         worker_ = std::jthread([this, definition = std::move(definition),
-                                backend = std::move(backend)]() mutable {
+                                backend = std::move(backend), worker_gate]() mutable {
+            worker_gate->wait();
             // 参数转换和最后的落盘也在边界内；异常不能逸出 jthread 入口。
             try { drive(definition, backend); }
             catch (...) { worker_failed(backend); }
@@ -292,6 +302,10 @@ contracts::RunSnapshot NativeRunCoordinator::start(
             backend.reset();
             record_memory_boundary("worker_definition_released");
         });
+        // The worker exists, but cannot touch the backend before this explicit
+        // acceptance point. Later snapshot/allocation failure cannot revoke it.
+        if (publication_owner) publication_owner->accept();
+        worker_gate->count_down();
     } catch (...) {
         std::lock_guard lock(mutex_);
         active_ = false;
@@ -303,6 +317,8 @@ contracts::RunSnapshot NativeRunCoordinator::start(
         complete_.notify_all();
         throw;
     }
+    if (publication_receipt) publication_receipt->require_clean_acceptance();
+    if (start_fault_) start_fault_("after_adoption");
     return snapshot();
 }
 

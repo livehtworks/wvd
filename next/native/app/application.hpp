@@ -110,6 +110,9 @@ class Application {
     J recognition_probe(const J &request);
     void start_device_job(std::string name, std::function<void()> job);
     bool run_active() const;
+    void require_preparation_ready() const;
+    [[noreturn]] void rethrow_preparation_failure(std::exception_ptr error,
+        const std::shared_ptr<const platform::OwnedBundleDirectory::Receipt> &receipt = {}) const;
 
     ApplicationPaths paths_;
     // 窄依赖便于隔离验收；正式实例只调用标准库，不创建容量监控线程。
@@ -145,6 +148,10 @@ class Application {
     // 序列化命令准入和设备所有权交接；重计算不占用它，停止仍可进入。
     mutable std::recursive_mutex command_mutex_;
     mutable std::mutex mutex_;
+    mutable J preparation_cleanup_ = nullptr;
+    mutable std::atomic<bool> preparation_cleanup_blocked_{false};
+    std::function<void(const char *)> preparation_fault_;
+    static thread_local std::function<void(const char *, const std::filesystem::path &)> cache_fault_;
     std::atomic<bool> cancel_operation_{false};
     std::atomic<std::uint64_t> stop_epoch_{0};
     std::atomic<bool> worker_publication_failed_{false};

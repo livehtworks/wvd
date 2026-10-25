@@ -102,7 +102,11 @@ def sync_authoring_resources():
                 raise RuntimeError("RESOURCE_SOURCE_CHANGED:" + row["path"])
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(source, target)
-    generate_transaction(ROOT / "packs/wvd", _generate_authoring_resources, seed_missing=seed_missing)
+    from resource_generation import _inventory
+    extra = _inventory([ROOT / "resources/images", ROOT / "resources/authoring"])
+    generate_transaction(ROOT / "packs/wvd", _generate_authoring_resources,
+                         seed_missing=seed_missing, additional_bytes=extra["logical_bytes"],
+                         additional_entries=extra["entry_count"])
 
 
 def source_identity():
@@ -244,7 +248,10 @@ def stage(target):
         archive = native / "archives" / item["filename"]
         if not archive.is_file() or archive.stat().st_size != item["size"] or sha256(archive) != item["sha256"]:
             raise RuntimeError("原生依赖未完成固定哈希校验: " + item["id"])
-    target.mkdir(parents=True, exist_ok=False)
+    # The directory transaction has already acquired and journaled this empty
+    # directory. Stage never claims or replaces a caller's nonempty directory.
+    if not target.is_dir() or any(target.iterdir()):
+        raise RuntimeError("CANDIDATE_STAGE_NOT_EMPTY")
     for name in ("automationd.exe", "wvd-capture-host.exe", "opencv_world4120.dll",
                  "onnxruntime.dll", "scrcpy-server-v3.3.4"):
         checked_copy(binary / name, target / name)
@@ -332,37 +339,95 @@ def stage(target):
     verified_build()  # 复制窗口内的源码/EXE/前端变化同样拒绝，不能记录成完整候选。
 
 
+def validate_candidate(target, *, previous=False):
+    """Verify persistent candidate bytes without starting a service or game."""
+    from resource_generation import _inventory
+    _inventory([target])
+    delivery = json.loads((target / "DELIVERY_STATUS.json").read_text(encoding="utf-8"))
+    build = delivery.get("build_input", {})
+    if delivery.get("engine") != "wvd_native" or delivery.get("status") != "BUILT_NOT_GAME_ACCEPTED" or \
+            build.get("state") != "BUILT" or not delivery.get("files") or \
+            not delivery.get("source_commit") or delivery.get("product_input_count", 0) <= 0:
+        raise RuntimeError("CANDIDATE_MARKER_INVALID")
+    for name in ("source_commit", "product_inputs_sha256", "product_input_count"):
+        if delivery.get(name) != build.get("source", {}).get(name):
+            raise RuntimeError("CANDIDATE_BUILD_IDENTITY_MISMATCH")
+    digest = delivery.get("product_inputs_sha256", "")
+    if len(digest) != 64 or any(c not in "0123456789abcdef" for c in digest):
+        raise RuntimeError("CANDIDATE_MARKER_INVALID")
+    members = {}
+    for row in delivery["files"]:
+        name = row["path"]
+        path = Path(name)
+        if not name or path.is_absolute() or ".." in path.parts or "\\" in name or ":" in name or name in members:
+            raise RuntimeError("CANDIDATE_MEMBER_PATH_INVALID")
+        if not (target / path).is_file() or sha256(target / path) != row["sha256"]:
+            raise RuntimeError("CANDIDATE_HASH_MISMATCH:" + name)
+        members[name] = row["sha256"]
+    binaries = ("automationd.exe", "wvd-capture-host.exe", "opencv_world4120.dll",
+                "onnxruntime.dll", "scrcpy-server-v3.3.4")
+    required = (*binaries, "web/index.html", "pack/manifest.json",
+                "pack/parameters/semantic-assets.json", "data/quest.json", "tools/manage_service.ps1")
+    if any(name not in members for name in required):
+        raise RuntimeError("CANDIDATE_REQUIRED_MEMBER_UNRECORDED")
+    for relative, identity in (("automationd.exe", "exe_sha256"), ("web/index.html", "web_index_sha256"),
+                               ("pack/manifest.json", "pack_manifest_sha256"),
+                               ("pack/parameters/semantic-assets.json", "resource_catalog_sha256")):
+        if members[relative] != delivery.get(identity):
+            raise RuntimeError("CANDIDATE_IDENTITY_HASH_MISMATCH")
+    artifacts = build.get("artifacts", {})
+    for name, digest in artifacts.items():
+        if name.startswith("build/Release/"):
+            relative = name[len("build/Release/"):]
+        elif name.startswith("web/dist/"):
+            relative = "web/" + name[len("web/dist/"):]
+        else:
+            raise RuntimeError("CANDIDATE_BUILD_ARTIFACT_PATH_INVALID")
+        if members.get(relative) != digest:
+            raise RuntimeError("CANDIDATE_BUILD_ARTIFACT_MISMATCH")
+    if any("build/Release/" + name not in artifacts for name in binaries) or "web/dist/index.html" not in artifacts:
+        raise RuntimeError("CANDIDATE_BUILD_ARTIFACT_MISSING")
+    manifest = json.loads((target / "pack/manifest.json").read_text(encoding="utf-8"))
+    if manifest["revision"] != delivery.get("pack_revision"):
+        raise RuntimeError("CANDIDATE_PACK_REVISION_MISMATCH")
+    seen = set()
+    for row in manifest["files"]:
+        name = "pack/" + row["path"]
+        if name in seen or members.get(name) != row["sha256"]:
+            raise RuntimeError("CANDIDATE_PACK_MEMBER_MISMATCH:" + name)
+        seen.add(name)
+    for folder in ("web", "pack"):
+        for path in (target / folder).rglob("*"):
+            if path.is_file() and path.relative_to(target).as_posix() not in members:
+                raise RuntimeError("CANDIDATE_UNRECORDED_MEMBER")
+
+
+def _stage_required_bytes():
+    from resource_generation import _inventory, _identity, _allocation_unit, TRANSACTION_MARGIN_BYTES
+    binaries = ROOT / "build/Release"
+    files = [binaries / name for name in ("automationd.exe", "wvd-capture-host.exe", "opencv_world4120.dll",
+                                          "onnxruntime.dll", "scrcpy-server-v3.3.4")]
+    files += [ROOT / "third_party/rapidocr_core/LICENSE", ROOT / ".local/native-deps/ort-unpacked/onnxruntime-win-x64-1.22.1/LICENSE",
+              ROOT / "resources/ocr/LICENSE-MaaCommonAssets", ROOT / "docs/third-party-notices.md",
+              ROOT / "tools/manage_service.ps1", ROOT / "packs/wvd/parameters/legacy-quests.json"]
+    # OCR aliases intentionally count independently: stage copies each logical member.
+    files += [ROOT / member["source"] for spec in OCR_MODELS.values() for member in spec["files"].values()]
+    for path in files:
+        if path.is_symlink() or not path.is_file():
+            raise RuntimeError("CANDIDATE_SOURCE_SIZE_UNKNOWN:" + str(path))
+    for path in (ROOT / "web/dist", ROOT / "packs/wvd"):
+        _identity(path)  # Missing source trees are unknown, never zero-sized.
+    inventory = _inventory([ROOT / "web/dist", ROOT / "packs/wvd"])
+    return sum(path.stat().st_size for path in files) + inventory["logical_bytes"] + \
+        (len(files) + inventory["entry_count"] + 8) * _allocation_unit(OUTPUT.parent) + TRANSACTION_MARGIN_BYTES
+
+
 def package():
+    from resource_generation import directory_transaction
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
-    staging = OUTPUT.with_name(OUTPUT.name + ".staging-" + uuid.uuid4().hex)
-    previous = OUTPUT.with_name(OUTPUT.name + ".previous-" + uuid.uuid4().hex)
-    try:
-        stage(staging)
-        if OUTPUT.exists():
-            if OUTPUT.is_symlink() or OUTPUT.is_junction() or not OUTPUT.is_dir():
-                raise RuntimeError("拒绝替换链接或非目录形式的候选")
-            marker = OUTPUT / "DELIVERY_STATUS.json"
-            if not marker.is_file() or json.loads(marker.read_text(encoding="utf-8")).get("engine") != "wvd_native":
-                raise RuntimeError("现有目录不是本脚本生成的原生候选，拒绝替换")
-            OUTPUT.rename(previous)
-        try:
-            for attempt in range(5):
-                try:
-                    staging.rename(OUTPUT)
-                    break
-                except PermissionError:
-                    if attempt == 4:
-                        raise
-                    time.sleep(0.5)
-        except BaseException:
-            if previous.exists() and not OUTPUT.exists():
-                previous.rename(OUTPUT)
-            raise
-    except BaseException:
-        if staging.is_dir() and not staging.is_symlink() and staging.parent.resolve() == OUTPUT.parent.resolve():
-            shutil.rmtree(staging)
-        raise
-    return OUTPUT
+    return directory_transaction(OUTPUT, stage, validate_candidate,
+        root=OUTPUT.parent / ("." + OUTPUT.name + ".transactions"), kind="candidate",
+        required_bytes=_stage_required_bytes, allow_initial=True)
 
 
 if __name__ == "__main__":

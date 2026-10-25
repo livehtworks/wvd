@@ -3,13 +3,32 @@
 #include "recognition/request.hpp"
 #include <filesystem>
 #include "platform/windows/preparation_timer.hpp"
+#include "platform/windows/bundle_lease.hpp"
+#include <optional>
 
 namespace wvd::games::tasks {
 struct NativePublication {
+    NativePublication(workflow::FlowProgram value, recognition::Bundle resources,
+        nlohmann::json id, nlohmann::json metrics)
+        : program(std::move(value)), bundle(std::move(resources)), identity(std::move(id)),
+          preparation(std::move(metrics)) {}
+    NativePublication(NativePublication &&) = default;
+    NativePublication &operator=(NativePublication &&) = default;
+    ~NativePublication() { bundle.lease.reset(); }
     workflow::FlowProgram program;
     recognition::Bundle bundle;
     nlohmann::json identity;
     nlohmann::json preparation = nlohmann::json::object();
+    std::unique_ptr<platform::OwnedBundleDirectory> ownership;
+  private:
+    friend struct NativePublicationTestAccess;
+    friend NativePublication publish_native(const CompiledWorkflow &, const recognition::Bundle &,
+        const std::filesystem::path &, const nlohmann::json &, const nlohmann::json &,
+        const recognition::Bundle *, const std::function<void()> &, const platform::PreparationObserver &);
+    static thread_local std::function<void(const char *)> fault_;
+    static thread_local std::optional<std::uint64_t> available_override_;
+    static void checked_add(std::uint64_t &total, std::uint64_t value);
+    static std::uint64_t rounded(std::uint64_t value);
 };
 
 NativePublication publish_native(const CompiledWorkflow &workflow,

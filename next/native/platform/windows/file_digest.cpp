@@ -1,4 +1,5 @@
 #include "file_digest.hpp"
+#include "runtime_files.hpp"
 #include <algorithm>
 #include <array>
 #include <fstream>
@@ -102,7 +103,7 @@ std::string bytes_sha256(std::span<const std::uint8_t> bytes) {
     return result;
 }
 std::string file_sha256(const std::filesystem::path &path) {
-    std::ifstream input(path, std::ios::binary);
+    std::ifstream input(extended_path(path), std::ios::binary);
     if (!input)
         throw std::runtime_error("RESOURCE_UNREADABLE");
     // 使用 Windows 系统密码 API；不再引入另一份散列实现或外部命令。

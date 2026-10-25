@@ -71,6 +71,8 @@ class RunStore {
                                   const DiagnosticRequest &request,
                                   const contracts::DiagnosticPixels *pixels = nullptr);
     bool save_recent_frame(const contracts::FrameEnvelope &frame, bool action_evidence = false) noexcept;
+    // Only an explicit disk/identity recheck may unblock the optional recent writer.
+    bool revalidate_recent_frames() noexcept;
     void finish_recent_frames() noexcept;
     nlohmann::json diagnostic_summary(bool wait_for_writer = false) const;
     void note_diagnostic_hook_failure() noexcept;
@@ -143,9 +145,18 @@ class RunStore {
     std::uint64_t recent_action_generation_{}, recent_action_frame_{};
     bool recent_closed_{};
     std::atomic<std::uint64_t> recent_saved_{}, recent_dropped_{}, recent_failed_{}, recent_work_ns_{};
+    std::atomic<bool> recent_blocked_{}, recent_occupancy_known_{};
+    std::atomic<std::uint64_t> recent_files_{}, recent_bytes_{}, recent_incomplete_files_{}, recent_incomplete_bytes_{};
+    mutable std::mutex recent_state_mutex_;
+    std::string recent_block_reason_;
+    std::mutex recent_disk_mutex_;
+    unsigned long recent_volume_{};
+    std::uint64_t recent_directory_id_{};
+    bool recent_directory_identity_known_{};
     std::jthread recent_worker_;
     void recent_loop() noexcept;
     bool write_recent_frame(const contracts::FrameEnvelope &frame, bool action_evidence);
+    void block_recent_frames(const char *reason) noexcept;
 };
 nlohmann::json snapshot_json(const contracts::RunSnapshot &snapshot);
 } // namespace wvd::storage

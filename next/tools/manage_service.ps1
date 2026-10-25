@@ -16,6 +16,22 @@ function Get-CandidateHash([string]$path) {
     try { return [BitConverter]::ToString($hasher.ComputeHash($stream)).Replace('-', '').ToLowerInvariant() }
     finally { $hasher.Dispose(); $stream.Dispose() }
 }
+function Assert-PlainDirectory([string]$path) {
+    $check = [IO.DirectoryInfo]::new($path)
+    while ($check) {
+        if (-not $check.Exists -or ($check.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+            throw "CANDIDATE_DIRECTORY_IDENTITY_INVALID: $($check.FullName)"
+        }
+        $check = $check.Parent
+    }
+}
+function Assert-PlainFile([string]$path) {
+    try { $item = Get-Item -LiteralPath $path -Force -ErrorAction Stop }
+    catch [System.Management.Automation.ItemNotFoundException] { return }
+    if ($item.PSIsContainer -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+        throw "CANDIDATE_FILE_IDENTITY_INVALID: $path"
+    }
+}
 function Assert-Candidate {
     $marker = Join-Path $CandidateRoot 'DELIVERY_STATUS.json'
     if (-not (Test-Path -LiteralPath $marker -PathType Leaf)) { throw 'CANDIDATE_MARKER_MISSING' }
@@ -90,9 +106,43 @@ function Assert-Candidate {
     } finally { $process.Dispose() }
 }
 # 预检在读取旧服务、申请数据锁和发送 shutdown 之前；Validate不写启动绑定。
+if ($Action -ne 'Stop' -or (Test-Path -LiteralPath $CandidateRoot)) { Assert-PlainDirectory $CandidateRoot }
+else { Assert-PlainDirectory (Split-Path -Parent $CandidateRoot) }
 if ($Action -ne 'Stop') { Assert-Candidate }
 if ($Action -eq 'Validate') { Write-Output 'CANDIDATE_VALIDATED_NOT_DEPLOYED'; return }
+# The launch binding belongs to the candidate, not to an individual data-root.
+# Hold this lock from its first read through successful service verification and
+# atomic commit, including calls selecting two different data directories.
+$bindingLock = $null
+$bindingDeadline = (Get-Date).AddSeconds($WaitSeconds)
+if ($Action -ne 'Stop' -or (Test-Path -LiteralPath $CandidateRoot)) { Assert-PlainDirectory $CandidateRoot }
+$bindingRoot = Join-Path (Split-Path -Parent $CandidateRoot) ('.' + (Split-Path -Leaf $CandidateRoot) + '.transactions')
+$null = New-Item -ItemType Directory -Force -Path $bindingRoot
+Assert-PlainDirectory $bindingRoot
+# Same stable writer lock as package_functional's directory transaction. The
+# directory containing the binding cannot be swapped while Start owns it.
+$bindingLockPath = Join-Path $bindingRoot 'writer.lock'
+while (-not $bindingLock) {
+    Assert-PlainFile $bindingLockPath
+    try { $bindingLock = [IO.File]::Open($bindingLockPath, 'OpenOrCreate', 'ReadWrite', 'None') }
+    catch [IO.IOException] {
+        if ((Get-Date) -ge $bindingDeadline) { throw 'SERVICE_BINDING_BUSY: no backend was launched.' }
+        Start-Sleep -Milliseconds 250
+    }
+}
+try {
+Assert-PlainFile $bindingLockPath
+if ($Action -ne 'Stop' -and ((Test-Path -LiteralPath (Join-Path $bindingRoot 'transaction.json')) -or
+    @(Get-ChildItem -LiteralPath $bindingRoot -Filter 'transaction.json.pending-*' -File | Select-Object -First 1).Count -or
+    @(Get-ChildItem -LiteralPath $bindingRoot -Filter 'prepared-*' | Select-Object -First 1).Count)) {
+    throw "CANDIDATE_TRANSACTION_PENDING: path=$bindingRoot; finish candidate recovery before service control."
+}
+if ($Action -ne 'Stop') { Assert-Candidate }
 $launchPath = Join-Path $CandidateRoot 'service-launch.json'
+Assert-PlainFile $launchPath
+$bindingExisted = Test-Path -LiteralPath $launchPath -PathType Leaf
+$bindingHash = if ($bindingExisted) { Get-CandidateHash $launchPath } else { $null }
+$launch = $null
 if (Test-Path -LiteralPath $launchPath -PathType Leaf) {
     $launch = Get-Content -LiteralPath $launchPath -Raw -Encoding UTF8 | ConvertFrom-Json
     if ($launch.service -ne 'automationd') { throw 'INVALID_LAUNCH_SETTINGS' }
@@ -120,6 +170,51 @@ function Assert-Owner($service) {
     # 提前打开进程句柄；等待的是这个实例本身，不会误认复用的 PID。
     $null = $process.Handle
     return $process
+}
+function Write-LaunchBindingBytes($stream, [byte[]]$bytes) {
+    $stream.Write($bytes, 0, $bytes.Length)
+}
+function Flush-LaunchBindingBytes($stream) { $stream.Flush($true) }
+function Publish-LaunchBindingBytes([string]$temporary, [string]$target, [bool]$replace) {
+    if ($replace) { [IO.File]::Replace($temporary, $target, [NullString]::Value) }
+    else { [IO.File]::Move($temporary, $target) }
+}
+function Commit-LaunchBinding($service) {
+    $null = Assert-Owner $service
+    if ($service.state -ne 'running' -or
+        $service.executable -ine (Join-Path $CandidateRoot 'automationd.exe')) {
+        throw 'SERVICE_BINDING_UNVERIFIED: binding was not changed.'
+    }
+    Assert-PlainFile $launchPath
+    $existsNow = Test-Path -LiteralPath $launchPath -PathType Leaf
+    if ($existsNow -ne $bindingExisted -or
+        ($existsNow -and (Get-CandidateHash $launchPath) -cne $bindingHash)) {
+        throw "SERVICE_BINDING_CHANGED: process_started=true pid=$($service.pid) instance=$($service.instance_id); binding was not changed."
+    }
+    if ($launch -and [IO.Path]::GetFullPath($launch.data_root).TrimEnd('\', '/') -ieq $DataRoot -and
+        [int]$launch.port -eq $Port) { return }
+    $settings = @{ service = 'automationd'; data_root = $DataRoot; port = $Port } | ConvertTo-Json
+    $temporary = "$launchPath.$([Guid]::NewGuid().ToString('N')).tmp"
+    $created = $false
+    $stream = $null
+    try {
+        $stream = [IO.File]::Open($temporary, 'CreateNew', 'Write', 'None')
+        $created = $true
+        $bytes = [Text.UTF8Encoding]::new($false).GetBytes($settings)
+        Write-LaunchBindingBytes $stream $bytes
+        Flush-LaunchBindingBytes $stream
+        $stream.Dispose(); $stream = $null
+        Publish-LaunchBindingBytes $temporary $launchPath $bindingExisted
+    } catch {
+        $primary = $_.Exception.Message
+        if ($stream) { $stream.Dispose(); $stream = $null }
+        $cleanup = ''
+        if ($created -and (Test-Path -LiteralPath $temporary)) {
+            try { Remove-Item -LiteralPath $temporary -ErrorAction Stop }
+            catch { $cleanup = '; cleanup_pending=' + $temporary + '; cleanup_error=' + $_.Exception.Message }
+        }
+        throw "SERVICE_BINDING_COMMIT_FAILED: process_started=true pid=$($service.pid) instance=$($service.instance_id); primary_error=$primary$cleanup"
+    } finally { if ($stream) { $stream.Dispose() } }
 }
 function Test-DataLocked {
     try {
@@ -168,6 +263,8 @@ while (-not $lock) {
         Start-Sleep -Milliseconds 250
     }
 }
+$launchAttempted = $false
+$launchReceipt = $null
 try {
     $service = Read-Service
     if (-not $service) { $service = Wait-PreviousCleanup }
@@ -175,6 +272,7 @@ try {
         $null = Assert-Owner $service
         if ($Action -eq 'Start' -and $service.state -ne 'stopping' -and
             $service.executable -ieq (Join-Path $CandidateRoot 'automationd.exe')) {
+            Commit-LaunchBinding $service
             if ($OpenBrowser) { Start-Process $url }
             $service | ConvertTo-Json -Compress
             return
@@ -184,11 +282,7 @@ try {
         throw 'PORT_OCCUPIED_WITHOUT_SERVICE_IDENTITY: no unrelated process was stopped.'
     }
     if ($Action -eq 'Stop') { return }
-    # 部署绑定只保存启动参数，不修改用户profile。打包的双击入口据此找到正式目录/端口。
-    $settings = @{ service = 'automationd'; data_root = $DataRoot; port = $Port } | ConvertTo-Json
-    $temporary = "$launchPath.$([Guid]::NewGuid().ToString('N')).tmp"
-    [IO.File]::WriteAllText($temporary, $settings, [Text.UTF8Encoding]::new($false))
-    Move-Item -LiteralPath $temporary -Destination $launchPath -Force
+    # The previous binding remains byte-for-byte intact until verification.
     $logs = Join-Path $DataRoot 'service-logs'
     $null = New-Item -ItemType Directory -Force -Path $logs
     $stamp = Get-Date -Format 'yyyyMMdd-HHmmss-fff'
@@ -198,9 +292,11 @@ try {
         '--pack-root', (Join-Path $CandidateRoot 'pack'), '--quests', (Join-Path $CandidateRoot 'data/quest.json'),
         '--port', $Port, '--no-browser')
     # 原生启动器只传必要句柄并立即退出，后台不挂在临时Shell的生命周期上。
+    $launchAttempted = $true
     $launched = & (Join-Path $CandidateRoot 'automationd.exe') @arguments 2> (Join-Path $logs "$stamp.launcher.err.log")
     if ($LASTEXITCODE -ne 0) { throw "SERVICE_LAUNCH_FAILED: logs=$logs\$stamp.launcher.err.log" }
     $receipt = $launched | ConvertFrom-Json
+    $launchReceipt = $receipt
     $process = Get-Process -Id $receipt.pid -ErrorAction Stop
     $null = $process.Handle
     $deadline = (Get-Date).AddSeconds($WaitSeconds)
@@ -210,6 +306,7 @@ try {
         if ($service) {
             $null = Assert-Owner $service
             if ($service.pid -ne $process.Id) { throw 'SERVICE_START_IDENTITY_MISMATCH' }
+            Commit-LaunchBinding $service
             if ($OpenBrowser) { Start-Process $url }
             $service | ConvertTo-Json -Compress
             return
@@ -217,4 +314,9 @@ try {
         Start-Sleep -Milliseconds 250
     } while ((Get-Date) -lt $deadline)
     throw "SERVICE_START_TIMEOUT: pid=$($process.Id); logs=$logs"
+} catch {
+    $started = if ($launchReceipt -and $launchReceipt.pid) { 'true' } elseif ($launchAttempted) { 'unconfirmed' } else { 'false' }
+    $startedPid = if ($launchReceipt) { $launchReceipt.pid } else { 'unconfirmed' }
+    throw "SERVICE_MANAGER_FAILED: process_started=$started pid=$startedPid; primary_error=$($_.Exception.Message)"
 } finally { $lock.Dispose() }
+} finally { $bindingLock.Dispose() }

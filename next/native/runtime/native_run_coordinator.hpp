@@ -4,6 +4,7 @@
 #include "contracts/run.hpp"
 #include "devices/backend.hpp"
 #include "platform/windows/runtime_files.hpp"
+#include "platform/windows/bundle_lease.hpp"
 #include "recognition/service.hpp"
 #include "runtime/native_execution_session.hpp"
 #include "storage/run_store.hpp"
@@ -32,6 +33,7 @@ struct NativeRunDefinition {
     NativeRunDefinition &operator=(const NativeRunDefinition &) = delete;
     NativeRunDefinition(NativeRunDefinition &&) = default;
     NativeRunDefinition &operator=(NativeRunDefinition &&) = default;
+    ~NativeRunDefinition() { units.clear(); }
     std::string request_id;
     nlohmann::json handoff_parent = nullptr;
     contracts::InputPolicy policy;
@@ -51,6 +53,9 @@ struct NativeRunDefinition {
         const contracts::SessionResult &, const contracts::BusinessRunState &, unsigned)> recovery;
     std::function<bool(const contracts::SessionResult &,
                        const contracts::BusinessRunState &)> handoff_ready;
+    // Declared last so move assignment replaces dependent leases first. The
+    // destructor clears units before an unaccepted token can withdraw a package.
+    std::unique_ptr<platform::OwnedBundleDirectory> publication_ownership;
 };
 
 // 控制面只保护短状态；设备与执行器由单个worker顺序拥有。
@@ -84,6 +89,7 @@ class NativeRunCoordinator final {
 
   private:
     friend struct NativeCoordinatorTestAccess;
+    std::function<void(const char *)> start_fault_;
     // 每个Session只保留当前动作的小型元数据；不持有历史帧或业务对象。
     struct CombatDiagnosticState {
         nlohmann::json selection = nlohmann::json::object();

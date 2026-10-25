@@ -13,6 +13,7 @@
 #include "workflow/serialization.hpp"
 #include <fstream>
 #include <set>
+#include <limits>
 
 namespace wvd::games::tasks {
 namespace {
@@ -27,13 +28,22 @@ platform::BundleLease::Manifest manifest(const recognition::Bundle &bundle) {
 void write_bytes(const std::filesystem::path &root, const std::string &relative,
                  const std::uint8_t *bytes, std::size_t count) {
     const auto path = root / platform::BundleLease::checked_relative(relative);
-    std::filesystem::create_directories(path.parent_path());
-    std::ofstream output(path, std::ios::binary | std::ios::trunc);
-    output.write(reinterpret_cast<const char *>(bytes), static_cast<std::streamsize>(count));
-    output.close();
-    if (!output) throw std::runtime_error("NATIVE_BUNDLE_WRITE_FAILED:" + relative);
+    std::filesystem::create_directories(platform::extended_path(path.parent_path()));
+    platform::atomic_write(path, std::string(reinterpret_cast<const char *>(bytes), count), false);
 }
 } // namespace
+thread_local std::function<void(const char *)> NativePublication::fault_;
+thread_local std::optional<std::uint64_t> NativePublication::available_override_;
+void NativePublication::checked_add(std::uint64_t &total, std::uint64_t value) {
+    if (value > (std::numeric_limits<std::uint64_t>::max)() - total)
+        throw std::runtime_error("NATIVE_PUBLICATION_BUDGET_OVERFLOW");
+    total += value;
+}
+std::uint64_t NativePublication::rounded(std::uint64_t value) {
+    if (value > (std::numeric_limits<std::uint64_t>::max)() - 4095)
+        throw std::runtime_error("NATIVE_PUBLICATION_BUDGET_OVERFLOW");
+    return (value + 4095) & ~std::uint64_t{4095};
+}
 
 NativePublication publish_native(const CompiledWorkflow &workflow,
     const recognition::Bundle &baseline, const std::filesystem::path &destination,
@@ -43,7 +53,7 @@ NativePublication publish_native(const CompiledWorkflow &workflow,
     platform::PreparationTimer input_timer("publisher_inputs", observer);
     if (check_cancel) check_cancel();
     workflow.validate();
-    if (!destination.is_absolute() || std::filesystem::exists(destination) ||
+    if (!destination.is_absolute() || std::filesystem::exists(platform::extended_path(destination)) ||
         !aliases.is_object() || !source_paths.is_object())
         throw std::runtime_error("NATIVE_PUBLICATION_ARGUMENT_INVALID");
     const auto base_manifest = manifest(baseline);
@@ -147,47 +157,63 @@ NativePublication publish_native(const CompiledWorkflow &workflow,
         }
     }
     if (check_cancel) check_cancel();
-    std::filesystem::create_directories(destination.parent_path());
+    // Admission counts logical aliases separately. The retained content object
+    // is counted once only when it is not present; no model bytes are loaded.
+    const auto checked_add = &NativePublication::checked_add;
+    const auto rounded = &NativePublication::rounded;
+    const auto program_text = workflow::serialize(program).dump(2);
+    const auto identity_text = identity.dump(2);
+    const auto provenance_text = mod ? image_sources.dump(2) : std::string{};
+    std::uint64_t required = 2ULL * 1024 * 1024 * 1024;
+    std::uint64_t logical_bytes{}, missing_object_bytes{};
+    std::set<std::string> new_objects;
+    for (const auto &[relative, hash] : published_manifest) {
+        const auto &source = selected_mod_paths.contains(relative) ? *mod_origin : origin;
+        const auto size = rounded(source.member_size(relative));
+        checked_add(logical_bytes, size);
+        if (relative.ends_with(".onnx") && new_objects.insert(hash).second &&
+            !std::filesystem::exists(platform::extended_path(destination.parent_path() / "asset-objects" / hash)))
+            checked_add(missing_object_bytes, size);
+    }
+    checked_add(required, logical_bytes);
+    checked_add(required, missing_object_bytes);
+    checked_add(required, rounded(program_text.size()));
+    checked_add(required, rounded(identity_text.size()));
+    checked_add(required, rounded(provenance_text.size()));
+    // Per-member metadata/ancestors plus a bounded rollback-record allowance.
+    if (published_manifest.size() > ((std::numeric_limits<std::uint64_t>::max)() / 4096) - 32)
+        throw std::runtime_error("NATIVE_PUBLICATION_BUDGET_OVERFLOW");
+    std::uint64_t overhead = (published_manifest.size() + 32) * 4096ULL;
+    checked_add(overhead, 65536);
+    checked_add(required, overhead);
+    auto volume = destination.parent_path();
+    while (!std::filesystem::exists(platform::extended_path(volume)) && volume != volume.parent_path()) volume = volume.parent_path();
+    std::error_code space_error;
+    const auto space = std::filesystem::space(platform::extended_path(volume), space_error);
+    const auto available = NativePublication::available_override_.value_or(space.available);
+    if (space_error || available == (std::numeric_limits<std::uint64_t>::max)())
+        throw std::runtime_error("NATIVE_PUBLICATION_SPACE_UNKNOWN");
+    if (available < required) throw std::runtime_error("NATIVE_PUBLICATION_SPACE_LOW");
+    preparation["space_admission"] = {{"required_bytes", required}, {"available_bytes", available},
+        {"logical_copy_bytes", logical_bytes}, {"missing_object_bytes", missing_object_bytes},
+        {"reserve_bytes", 2ULL * 1024 * 1024 * 1024}, {"is_reservation", false}};
+    if (NativePublication::fault_) NativePublication::fault_("after_space_admission");
+    platform::OwnedBundleDirectory::require_no_pending(destination.parent_path());
+    platform::OwnedBundleDirectory::require_no_pending(destination.parent_path() / "asset-objects");
+    std::filesystem::create_directories(platform::extended_path(destination.parent_path()));
     const auto staging = destination.parent_path() /
         (destination.filename().wstring() + L".staging-" + platform::path_from_utf8(platform::unique_id()).wstring());
-    if (!std::filesystem::create_directory(staging))
-        throw std::runtime_error("NATIVE_PUBLICATION_CREATE_FAILED");
-    bool renamed = false;
-    // Cleanup only this invocation's exclusive directory, never older published
-    // revisions. All temporary leases must be destroyed before rename/rollback.
-    struct OwnedPublication {
-        const std::filesystem::path &staging, &destination;
-        bool &renamed;
-        BY_HANDLE_FILE_INFORMATION identity{};
-        static BY_HANDLE_FILE_INFORMATION inspect(const std::filesystem::path &path) {
-            auto handle = CreateFileW(path.c_str(), FILE_READ_ATTRIBUTES, FILE_SHARE_READ,
-                nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
-            if (handle == INVALID_HANDLE_VALUE) throw std::runtime_error("NATIVE_PUBLICATION_IDENTITY_FAILED");
-            BY_HANDLE_FILE_INFORMATION info{};
-            const bool ok = GetFileInformationByHandle(handle, &info);
-            CloseHandle(handle);
-            if (!ok || (info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT))
-                throw std::runtime_error("NATIVE_PUBLICATION_IDENTITY_FAILED");
-            return info;
-        }
-        void rollback() const {
-            const auto &path = renamed ? destination : staging;
-            const auto now = inspect(path);
-            if (now.dwVolumeSerialNumber != identity.dwVolumeSerialNumber ||
-                now.nFileIndexHigh != identity.nFileIndexHigh || now.nFileIndexLow != identity.nFileIndexLow)
-                throw std::runtime_error("NATIVE_PUBLICATION_CLEANUP_IDENTITY_CHANGED");
-            std::error_code error;
-            std::filesystem::remove_all(path, error);
-            if (error) throw std::runtime_error("NATIVE_PUBLICATION_CLEANUP_FAILED:" + error.message());
-        }
-    } owned{staging, destination, renamed, OwnedPublication::inspect(staging)};
-    recognition::Bundle bundle{staging, revision, {}};
+    auto owned = platform::OwnedBundleDirectory::create(staging);
+    const auto ownership_receipt = owned->receipt();
+    recognition::Bundle bundle;
     try {
+    if (NativePublication::fault_) NativePublication::fault_("before_bundle_construction");
+    bundle = recognition::Bundle{staging, revision, {}};
     platform::PreparationTimer copy_timer("file_copy", observer);
     for (const auto &[relative, hash] : published_manifest) {
         if (check_cancel) check_cancel();
         const auto path = staging / platform::BundleLease::checked_relative(relative);
-        std::filesystem::create_directories(path.parent_path());
+        std::filesystem::create_directories(platform::extended_path(path.parent_path()));
         const auto &source = selected_mod_paths.contains(relative) ? *mod_origin : origin;
         if (!relative.ends_with(".onnx")) {
             source.copy_member(relative, path, check_cancel);
@@ -197,23 +223,28 @@ NativePublication publish_native(const CompiledWorkflow &workflow,
         // Copy once from the locked origin. Every run links the immutable,
         // content-addressed object, never the user's mutable source file.
         const auto objects = destination.parent_path() / "asset-objects";
-        std::filesystem::create_directories(objects);
+        std::filesystem::create_directories(platform::extended_path(objects));
         const auto object = objects / hash;
-        if (!std::filesystem::exists(object)) {
+        if (!std::filesystem::exists(platform::extended_path(object))) {
             const auto temporary = objects / (hash + ".staging-" + platform::unique_id());
-            std::filesystem::create_directory(temporary);
+            auto object_owner = platform::OwnedBundleDirectory::create(temporary);
             try {
                 source.copy_member(relative, temporary / "payload.onnx", check_cancel);
-                std::filesystem::rename(temporary, object);
+                object_owner->rename_to(object);
+                object_owner->accept(); // A verified immutable cache is retained.
+                object_owner->receipt()->require_clean_acceptance();
             } catch (...) {
-                std::error_code cleanup;
-                std::filesystem::remove_all(temporary, cleanup);
-                if (cleanup) throw std::runtime_error("NATIVE_ASSET_STAGING_CLEANUP_FAILED");
-                throw;
+                object_owner->rethrow_with_cleanup(std::current_exception());
             }
         }
         platform::BundleLease shared(object, hash, {{"payload.onnx", hash}}, check_cancel);
-        shared.link_member("payload.onnx", path);
+        try { shared.link_member("payload.onnx", path); }
+        catch (const platform::BundleLinkError &error) {
+            if (error.ntstatus() != platform::BundleLinkError::too_many_links) throw;
+            // The same frozen object handle, original CREATE_NEW and streamed
+            // verification are retained. All non-capacity errors remain errors.
+            shared.copy_member("payload.onnx", path, check_cancel);
+        }
         bundle.files.push_back({relative, hash});
     }
     preparation["file_copy"] = copy_timer.sample();
@@ -222,20 +253,17 @@ NativePublication publish_native(const CompiledWorkflow &workflow,
         (mod_origin ? mod_origin->storage_stats().model_bytes : 0);
     preparation["source_bytes"] = origin.hash_bytes() + (mod_origin ? mod_origin->hash_bytes() : 0);
     preparation["copy_buffer_bytes"] = 65536;
-    const auto program_text = workflow::serialize(program).dump(2);
     write_bytes(staging, "program/flow.json",
                 reinterpret_cast<const std::uint8_t *>(program_text.data()), program_text.size());
     bundle.files.push_back(
         {"program/flow.json", platform::file_sha256(staging / "program" / "flow.json")});
-    const auto identity_text = identity.dump(2);
     write_bytes(staging, "program/identity.json",
                 reinterpret_cast<const std::uint8_t *>(identity_text.data()), identity_text.size());
     bundle.files.push_back(
         {"program/identity.json", platform::file_sha256(staging / "program" / "identity.json")});
     if (mod) {
-        const auto provenance = image_sources.dump(2);
         write_bytes(staging, "parameters/image-sources.json",
-                    reinterpret_cast<const std::uint8_t *>(provenance.data()), provenance.size());
+                    reinterpret_cast<const std::uint8_t *>(provenance_text.data()), provenance_text.size());
         bundle.files.push_back(
             {"parameters/image-sources.json",
              platform::file_sha256(staging / "parameters" / "image-sources.json")});
@@ -253,9 +281,7 @@ NativePublication publish_native(const CompiledWorkflow &workflow,
         check_cancel();
     // No FILE_SHARE_DELETE relaxation: the staging lease above is gone. This
     // same-volume rename never replaces a concurrently created destination.
-    if (!MoveFileExW(staging.c_str(), destination.c_str(), MOVEFILE_WRITE_THROUGH))
-        throw std::runtime_error("NATIVE_PUBLICATION_RENAME_FAILED");
-    renamed = true;
+    owned->rename_to(destination);
     if (check_cancel)
         check_cancel();
     bundle.root = destination;
@@ -268,11 +294,20 @@ NativePublication publish_native(const CompiledWorkflow &workflow,
         check_cancel();
     preparation["target_validation"] = final_timer.sample();
     preparation["publish_native"] = total_timer.sample();
-    return {std::move(program), std::move(bundle), std::move(identity), std::move(preparation)};
+    NativePublication result{std::move(program), std::move(bundle), std::move(identity), std::move(preparation)};
+    result.ownership = std::move(owned);
+    return result;
     } catch (...) {
         const auto failure = std::current_exception();
         bundle.lease.reset();
-        owned.rollback();
+        if (owned) owned->rethrow_with_cleanup(failure);
+        if (ownership_receipt->cleanup_pending) {
+            std::string primary;
+            try { std::rethrow_exception(failure); }
+            catch (const std::exception &error) { primary = error.what(); }
+            catch (...) { primary = "NON_STANDARD_EXCEPTION"; }
+            throw platform::DirectoryCleanupPending(primary, ownership_receipt->cleanup_error, ownership_receipt->path);
+        }
         std::rethrow_exception(failure);
     }
 }

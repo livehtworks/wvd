@@ -6,6 +6,17 @@
 #include <objbase.h>
 
 namespace wvd::platform {
+std::mutex detail::AtomicWriteFaults::mutex_;
+detail::AtomicWriteFaults::Callback detail::AtomicWriteFaults::callback_;
+void detail::AtomicWriteFaults::install(Callback callback) {
+    std::lock_guard lock(mutex_);
+    callback_ = std::move(callback);
+}
+bool detail::AtomicWriteFaults::fail(AtomicWritePhase phase, const std::filesystem::path &target) {
+    Callback callback;
+    { std::lock_guard lock(mutex_); callback = callback_; }
+    return callback && callback(phase, target);
+}
 std::string unique_id() {
     GUID id{};
     if (FAILED(CoCreateGuid(&id)))
@@ -32,21 +43,28 @@ void atomic_write(const std::filesystem::path &target, const std::string &conten
                               FILE_ATTRIBUTE_NORMAL | FILE_FLAG_WRITE_THROUGH, nullptr);
     if (file == INVALID_HANDLE_VALUE)
         throw std::runtime_error("STORAGE_CREATE_FAILED");
+    struct CloseFile {
+        HANDLE &value;
+        ~CloseFile() { if (value != INVALID_HANDLE_VALUE) CloseHandle(value); }
+    } close{file};
     bool success = true;
     for (std::size_t position = 0; position < contents.size();) {
         DWORD written{};
         const auto size =
             static_cast<DWORD>(std::min<std::size_t>(contents.size() - position, 65536));
-        if (!WriteFile(file, contents.data() + position, size, &written, nullptr) || !written) {
+        if (detail::AtomicWriteFaults::fail(detail::AtomicWritePhase::Write, target) ||
+            !WriteFile(file, contents.data() + position, size, &written, nullptr) || !written) {
             success = false;
             break;
         }
         position += written;
     }
-    success = FlushFileBuffers(file) && success;
+    success = !detail::AtomicWriteFaults::fail(detail::AtomicWritePhase::Flush, target) &&
+        FlushFileBuffers(file) && success;
     CloseHandle(file);
+    file = INVALID_HANDLE_VALUE;
     // 失败时保留旧文件和本次 .tmp 证据，不用删除旧结果来伪造原子更新。
-    if (!success ||
+    if (!success || detail::AtomicWriteFaults::fail(detail::AtomicWritePhase::Commit, target) ||
         !MoveFileExW(temporary_path.c_str(), target_path.c_str(),
                      MOVEFILE_WRITE_THROUGH | (replace ? MOVEFILE_REPLACE_EXISTING : 0)))
         throw std::runtime_error("STORAGE_COMMIT_FAILED");

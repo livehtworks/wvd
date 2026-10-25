@@ -59,33 +59,6 @@ using namespace std::chrono_literals;
 namespace {
 using J = nlohmann::json;
 void require(bool condition, const char *code);
-void discard_unstarted_publication(runtime::NativeRunDefinition &definition,
-    recognition::Bundle &publication, const std::filesystem::path &expected) {
-    require(publication.root == expected && publication.lease, "PREPARATION_PUBLICATION_OWNERSHIP_INVALID");
-    publication.lease->verify_members();
-    const auto inspect = [](const std::filesystem::path &path) {
-        HANDLE handle = CreateFileW(path.c_str(), FILE_READ_ATTRIBUTES, FILE_SHARE_READ, nullptr,
-            OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
-        if (handle == INVALID_HANDLE_VALUE) throw std::runtime_error("PREPARATION_CLEANUP_IDENTITY_FAILED");
-        BY_HANDLE_FILE_INFORMATION info{};
-        const bool ok = GetFileInformationByHandle(handle, &info);
-        CloseHandle(handle);
-        if (!ok || (info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT))
-            throw std::runtime_error("PREPARATION_CLEANUP_IDENTITY_FAILED");
-        return info;
-    };
-    const auto before = inspect(expected);
-    definition.units.clear();
-    require(publication.lease.use_count() == 1, "PREPARATION_PUBLICATION_STILL_OWNED");
-    publication.lease.reset();
-    const auto after = inspect(expected);
-    require(before.dwVolumeSerialNumber == after.dwVolumeSerialNumber &&
-        before.nFileIndexHigh == after.nFileIndexHigh && before.nFileIndexLow == after.nFileIndexLow,
-        "PREPARATION_CLEANUP_IDENTITY_CHANGED");
-    std::error_code error;
-    std::filesystem::remove_all(expected, error);
-    if (error) throw std::runtime_error("PREPARATION_CLEANUP_FAILED:" + error.message());
-}
 void declare_portrait_assets(games::tasks::CompiledWorkflow &workflow,
                             const std::optional<recognition::Bundle> &validated) {
     auto &images = workflow.authoring["provided_portrait_images"] = J::array();
@@ -414,19 +387,23 @@ J selected_node_document(J document, const std::string &selected) {
 
 std::filesystem::path freeze_manifest_members(const std::filesystem::path &pack_root,
                                               const std::filesystem::path &data_root,
-                                              const J &manifest) {
+                                              const J &manifest,
+    const std::function<void(const char *, const std::filesystem::path &)> &fault) {
     const auto identity = J{{"revision", manifest.at("revision")},
                             {"files", manifest.at("files")}}.dump();
     const auto digest = platform::bytes_sha256(
         {reinterpret_cast<const std::uint8_t *>(identity.data()), identity.size()});
     const auto cache_root = platform::extended_path(data_root / "asset-cache");
     const auto destination = cache_root / digest;
+    platform::OwnedBundleDirectory::require_no_pending(cache_root);
     if (std::filesystem::is_directory(destination))
         return destination;
 
     const auto staging = cache_root / (digest + ".tmp-" + platform::unique_id());
-    std::filesystem::create_directories(staging);
+    std::filesystem::create_directories(cache_root);
+    auto owner = platform::OwnedBundleDirectory::create(staging);
     try {
+        if (fault) fault("cache.after_create", staging);
         for (const auto &file : manifest.at("files")) {
             const auto relative = platform::BundleLease::checked_relative(
                 file.at("path").get<std::string>());
@@ -434,22 +411,32 @@ std::filesystem::path freeze_manifest_members(const std::filesystem::path &pack_
             const auto target = staging / relative;
             require(std::filesystem::is_regular_file(source), "APPLICATION_ASSET_MISSING");
             std::filesystem::create_directories(target.parent_path());
+            if (fault) fault("cache.before_copy", target);
             require(std::filesystem::copy_file(source, target,
                                                 std::filesystem::copy_options::none),
                     "APPLICATION_ASSET_COPY_FAILED");
+            if (fault) fault("cache.before_hash", target);
             require(platform::file_sha256(target) == file.at("sha256").get<std::string>(),
                     "APPLICATION_ASSET_HASH_MISMATCH");
         }
-        std::filesystem::create_directories(cache_root);
-        std::filesystem::rename(staging, destination);
+        if (fault) fault("cache.before_rename", destination);
+        owner->rename_to(destination);
+        {
+            platform::BundleLease::Manifest members;
+            for (const auto &file : manifest.at("files"))
+                members.emplace(file.at("path").get<std::string>(), file.at("sha256").get<std::string>());
+            platform::BundleLease checked(destination, manifest.at("revision"), std::move(members));
+            checked.verify_members();
+        }
+        owner->accept();
+        owner->receipt()->require_clean_acceptance();
     } catch (...) {
-        std::error_code ignored;
-        std::filesystem::remove_all(staging, ignored);
-        throw;
+        owner->rethrow_with_cleanup(std::current_exception());
     }
     return destination;
 }
 } // namespace
+thread_local std::function<void(const char *, const std::filesystem::path &)> Application::cache_fault_;
 
 Application::J Application::load_json(const std::filesystem::path &path) const {
     std::ifstream input(path, std::ios::binary);
@@ -478,7 +465,7 @@ Application::Application(ApplicationPaths paths,
     }
     // 发布目录还包含 manifest 和界面描述，它们不属于运行资源成员。
     // 将清单成员冻结到独立快照，既保持严格完整性校验，也避免把元数据误判成注入文件。
-    author_bundle_.root = freeze_manifest_members(paths_.pack_root, paths_.data_root, manifest_);
+    author_bundle_.root = freeze_manifest_members(paths_.pack_root, paths_.data_root, manifest_, cache_fault_);
     auto quests = load_json(paths_.quest_catalog);
     catalog_ = std::make_unique<games::WvdQuestCatalog>(quests);
     const auto profile_path = paths_.data_root / "profile.json";
@@ -894,6 +881,12 @@ void Application::start_device_job(std::string name, std::function<void()> job) 
             try {
                 if (stopping_ || cancel_operation_) throw std::runtime_error("PREPARATION_CANCELLED");
                 job();
+            } catch (const platform::DirectoryCleanupPending &error) {
+                preparation_cleanup_blocked_ = true;
+                failure = error.what();
+                std::lock_guard lock(mutex_);
+                preparation_cleanup_ = {{"primary_error", error.primary_error()},
+                    {"cleanup_error", error.cleanup_error()}, {"cleanup_pending", platform::utf8(error.path())}};
             } catch (const std::exception &error) { failure = error.what(); }
               catch (...) { failure = "APPLICATION_OPERATION_EXCEPTION"; }
             J receipt, intent;
@@ -943,12 +936,46 @@ void Application::require_storage_space() const {
     // logs/timing/events (144 MiB), plus 256 MiB terminal/input reserve.
     require(available >= 2ULL * 1024 * 1024 * 1024, "RUN_STORAGE_SPACE_LOW");
 }
+void Application::require_preparation_ready() const {
+    require(!preparation_cleanup_blocked_, "PREPARATION_CLEANUP_PENDING");
+    {
+        std::lock_guard lock(mutex_);
+        require(preparation_cleanup_.is_null(), "PREPARATION_CLEANUP_PENDING");
+    }
+    platform::OwnedBundleDirectory::require_no_pending(paths_.data_root / "published");
+    platform::OwnedBundleDirectory::require_no_pending(paths_.data_root / "published" / "asset-objects");
+    platform::OwnedBundleDirectory::require_no_pending(paths_.data_root / "asset-cache");
+}
+[[noreturn]] void Application::rethrow_preparation_failure(std::exception_ptr error,
+    const std::shared_ptr<const platform::OwnedBundleDirectory::Receipt> &receipt) const {
+    if (receipt && receipt->cleanup_pending) preparation_cleanup_blocked_ = true;
+    std::string primary;
+    try { std::rethrow_exception(error); }
+    catch (const std::exception &failure) { primary = failure.what(); }
+    catch (...) { primary = "APPLICATION_OPERATION_EXCEPTION"; }
+    if (receipt && receipt->cleanup_pending) {
+        platform::DirectoryCleanupPending pending(primary, receipt->cleanup_error, receipt->path);
+        { std::lock_guard lock(mutex_); preparation_cleanup_ = {{"primary_error", pending.primary_error()},
+            {"cleanup_error", pending.cleanup_error()}, {"cleanup_pending", platform::utf8(pending.path())},
+            {"marker_failed", receipt->marker_failed}}; }
+        throw pending;
+    }
+    try { std::rethrow_exception(error); }
+    catch (const platform::DirectoryCleanupPending &pending) {
+        preparation_cleanup_blocked_ = true;
+        { std::lock_guard lock(mutex_); preparation_cleanup_ = {{"primary_error", pending.primary_error()},
+            {"cleanup_error", pending.cleanup_error()}, {"cleanup_pending", platform::utf8(pending.path())}}; }
+        throw;
+    }
+}
 
 Application::J Application::queue_run(const std::string &kind, const J &request,
                                       const J &identity, std::function<J()> prepare, std::uint64_t stop_epoch) {
     std::lock_guard command(command_mutex_);
     const auto id = checked_request_id(request);
     if (auto prior = submission_store_->replay(id, identity)) return *prior;
+    submission_store_->require_writable();
+    require_preparation_ready();
     require_storage_space();
     {
         std::lock_guard lock(mutex_);
@@ -1024,27 +1051,42 @@ std::optional<recognition::Bundle> Application::portrait_bundle(const J &values,
     result.root = paths_.data_root / "asset-cache" / ("portraits-" + result.revision);
     result.snapshot_parent = paths_.data_root / "active-snapshots";
     if (!persist) return result;
+    std::unique_ptr<platform::OwnedBundleDirectory> owner;
+    try {
     if (!std::filesystem::exists(result.root)) {
+        require_preparation_ready();
         const auto staging = result.root.parent_path() / ("portraits-tmp-" + platform::unique_id());
-        std::filesystem::create_directories(staging);
-        try {
+        std::filesystem::create_directories(staging.parent_path());
+        owner = platform::OwnedBundleDirectory::create(staging);
             for (const auto &[path, bytes] : images) {
                 const auto target = staging / platform::BundleLease::checked_relative(path);
                 std::filesystem::create_directories(target.parent_path());
-                std::ofstream out(target, std::ios::binary);
-                out.write(reinterpret_cast<const char *>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
-                out.close(); require(bool(out), "ENEMY_PORTRAIT_WRITE_FAILED");
+                if (cache_fault_) cache_fault_("portrait.before_copy", target);
+                platform::atomic_write(target,
+                    std::string(reinterpret_cast<const char *>(bytes.data()), bytes.size()), false);
             }
-            std::filesystem::rename(staging, result.root);
-        } catch (...) {
-            std::error_code ignored; std::filesystem::remove_all(staging, ignored); throw;
-        }
+            if (cache_fault_) cache_fault_("portrait.before_rename", result.root);
+            owner->rename_to(result.root);
     }
     platform::BundleLease::Manifest members;
     for (const auto &file : result.files) members.emplace(file.relative_path, file.sha256);
+    if (cache_fault_) cache_fault_("portrait.before_validate", result.root);
     result.lease = std::make_shared<platform::BundleLease>(result.root, result.revision, members);
     result.lease->verify_members();
+    if (owner) {
+        owner->accept();
+        owner->receipt()->require_clean_acceptance();
+    }
     return result;
+    } catch (...) {
+        const auto failure = std::current_exception();
+        result.lease.reset();
+        if (owner) {
+            try { owner->rethrow_with_cleanup(failure); }
+            catch (...) { rethrow_preparation_failure(std::current_exception(), owner->receipt()); }
+        }
+        std::rethrow_exception(failure);
+    }
 }
 
 Application::J Application::start_combat_debug(const J &request) {
@@ -1052,6 +1094,8 @@ Application::J Application::start_combat_debug(const J &request) {
     const auto stop_epoch = stop_epoch_.load();
     const J intent{{"kind", "combat_debug"}, {"request", request}};
     if (auto prior = submission_store_->replay(checked_request_id(request), intent)) return *prior;
+    submission_store_->require_writable();
+    require_preparation_ready();
     const auto stored = profile_store_->load();
     require(request.at("profile_revision") == stored.at("revision"), "PROFILE_REVISION_MISMATCH");
     const auto name = request.at("strategy_name").get<std::string>();
@@ -1110,6 +1154,8 @@ Application::J Application::start_task(const J &request) {
     const auto stop_epoch = stop_epoch_.load();
     const J intent{{"kind", "task"}, {"request", request}};
     if (auto prior = submission_store_->replay(checked_request_id(request), intent)) return *prior;
+    submission_store_->require_writable();
+    require_preparation_ready();
     auto frozen = request;
     frozen["request_id"] = checked_request_id(request);
     const auto stored = profile_store_->load();
@@ -1161,6 +1207,8 @@ Application::J Application::start_workflow(const std::string &flow_id, const J &
     const auto stop_epoch = stop_epoch_.load();
     const J intent{{"kind", "workflow"}, {"flow_id", flow_id}, {"request", request}};
     if (auto prior = submission_store_->replay(checked_request_id(request), intent)) return *prior;
+    submission_store_->require_writable();
+    require_preparation_ready();
     require(request.value("mode", "workflow") == "workflow" || request.value("mode", "workflow") == "selected_node", "WORKFLOW_MODE_INVALID");
     auto frozen = request;
     frozen["request_id"] = checked_request_id(request);
@@ -1412,6 +1460,7 @@ Application::J Application::run_status() const {
     const auto view = coordinator_->read_view();
     const auto &snapshot = view.snapshot;
     auto value = storage::snapshot_json(snapshot);
+    value["request_history"] = submission_store_->status();
     value["server_instance_id"] = view.instance_id;
     value["request_id"] = view.request_id;
     value["events"] = view.journal ? view.journal->latest_node() : J{{"events", J::array()}};
@@ -1439,6 +1488,7 @@ Application::J Application::run_status() const {
     value["diagnostics"] = std::move(diagnostics);
     {
         std::lock_guard lock(mutex_);
+        value["preparation_cleanup"] = preparation_cleanup_;
         value["coherent"] = snapshot.run_id == active_run_id_;
         if (snapshot.run_id != active_run_id_) return value;
         // Status polling only needs the visible nodes. Borrow the immutable
@@ -1574,6 +1624,7 @@ runtime::NativeRunDefinition Application::assemble_task(const J &request, const 
     const devices::LifecycleTarget &lifecycle, std::optional<J> frozen_values,
     bool continuation, std::optional<games::tasks::CompiledWorkflow> prepared,
     const platform::PreparationObserver &diagnostic) {
+    require_preparation_ready();
     const auto observer = diagnostic ? diagnostic : preparation_observer(stored);
     if (stopping_ || cancel_operation_) throw std::runtime_error("PREPARATION_CANCELLED");
     const auto &stored_values = stored.at("values");
@@ -1607,6 +1658,9 @@ runtime::NativeRunDefinition Application::assemble_task(const J &request, const 
     auto publication = games::tasks::publish_native(workflow, author_bundle_,
         destination, aliases_, J::object(), portraits ? &*portraits : nullptr,
         [this] { require(!stopping_ && !cancel_operation_, "PREPARATION_CANCELLED"); }, observer);
+    const auto ownership = publication.ownership->receipt();
+    try {
+    if (preparation_fault_) preparation_fault_("task.after_publication");
     const auto &root = publication.program.definitions.at(publication.program.root_definition);
     require(root.steps.contains(workflow.checkpoint), "NATIVE_CHECKPOINT_MISSING");
     const auto checkpoint_source = root.steps.at(workflow.checkpoint).source_path;
@@ -1623,6 +1677,7 @@ runtime::NativeRunDefinition Application::assemble_task(const J &request, const 
         definition.preparation = std::move(workflow.preparation);
         definition.preparation.update(publication.preparation);
     }
+    if (preparation_fault_) preparation_fault_("task.before_units");
     definition.units.assign(count, unit);
     definition.policy = {lifecycle.device_id, "wvd", "jp.co.drecom.wizardry.daphne",
         unit.bundle.revision, "900x1600", {900, 1600},
@@ -1660,34 +1715,43 @@ runtime::NativeRunDefinition Application::assemble_task(const J &request, const 
             return games::tasks::handoff_ready(last, state, source);
         };
     }
+    definition.publication_ownership = std::move(publication.ownership);
     return definition;
+    } catch (...) {
+        const auto failure = std::current_exception();
+        publication.bundle.lease.reset();
+        try {
+            if (publication.ownership) publication.ownership->rethrow_with_cleanup(failure);
+            std::rethrow_exception(failure);
+        } catch (...) { rethrow_preparation_failure(std::current_exception(), ownership); }
+    }
 }
 contracts::RunSnapshot Application::start_prepared_run(runtime::NativeRunDefinition definition,
     const std::shared_ptr<devices::DeviceConnection> &backend) {
     // Called under command_mutex_: both task and authoring entry points share
     // the final cancellation/ownership gate and unpublished-directory rollback.
-    const auto request_id = definition.request_id;
-    recognition::Bundle unpublished{definition.units.front().bundle.root, "unstarted", {}};
-    unpublished.lease = definition.units.front().bundle.lease;
-    auto preparation = std::move(definition.preparation);
-    platform::PreparationTimer start_timer;
-    contracts::RunSnapshot snapshot;
+    const auto ownership = definition.publication_ownership ? definition.publication_ownership->receipt() : nullptr;
     try {
+        auto preparation = std::move(definition.preparation);
+        platform::PreparationTimer start_timer;
         require(!stopping_ && !cancel_operation_, "PREPARATION_CANCELLED");
+        if (preparation_fault_) preparation_fault_("before_coordinator");
         { std::lock_guard lock(mutex_); preview_lease_.reset(); }
-        snapshot = coordinator_->start(std::move(definition), backend);
+        auto snapshot = coordinator_->start(std::move(definition), backend);
+        if (!preparation.empty()) {
+            preparation["coordinator_start"] = start_timer.sample();
+            coordinator_->record_preparation(preparation);
+        }
+        return snapshot;
     } catch (...) {
-        const auto current = coordinator_->request_snapshot(request_id);
-        if (!current || current->quiescent)
-            discard_unstarted_publication(definition, unpublished, paths_.data_root / "published" / request_id);
-        throw;
+        const auto failure = std::current_exception();
+        definition.units.clear();
+        try {
+            if (definition.publication_ownership)
+                definition.publication_ownership->rethrow_with_cleanup(failure);
+            std::rethrow_exception(failure);
+        } catch (...) { rethrow_preparation_failure(std::current_exception(), ownership); }
     }
-    unpublished.lease.reset();
-    if (!preparation.empty()) {
-        preparation["coordinator_start"] = start_timer.sample();
-        coordinator_->record_preparation(preparation);
-    }
-    return snapshot;
 }
 Application::J Application::prepare_task(const J &request, const J &stored,
     std::shared_ptr<devices::DeviceConnection> backend,
@@ -1698,6 +1762,8 @@ Application::J Application::prepare_task(const J &request, const J &stored,
     backend->set_vpn_required(stored.at("values").at("AUTO_START_CLASH").get<bool>());
     auto definition = assemble_task(request, stored, backend->lifecycle_target(),
         std::move(frozen_values), handoff_parent.is_object(), std::move(prepared));
+    const auto ownership = definition.publication_ownership->receipt();
+    try {
     definition.handoff_parent = std::move(handoff_parent);
     const auto &stored_values = stored.at("values");
     const auto selected = stored_values.at("FARM_TARGET").is_string()
@@ -1721,6 +1787,14 @@ Application::J Application::prepare_task(const J &request, const J &stored,
     result.update({{"accepted", true}, {"task_id", task_id},
                    {"task_name", task.source.value("questName", task_id)}, {"request_id", request_id}});
     return result;
+    } catch (...) {
+        const auto failure = std::current_exception();
+        definition.units.clear();
+        try {
+            if (definition.publication_ownership) definition.publication_ownership->rethrow_with_cleanup(failure);
+            std::rethrow_exception(failure);
+        } catch (...) { rethrow_preparation_failure(std::current_exception(), ownership); }
+    }
 }
 
 void Application::watch_task_session(const J &request, const J &stored, J source_values,
@@ -2067,6 +2141,8 @@ Application::J Application::prepare_workflow(const std::string &flow_id, const J
     J source_paths = J::object();
     auto definition = assemble_workflow(request, stored, std::move(document),
         backend->lifecycle_target(), &pipeline_to_node, library_snapshot, &source_paths, std::move(prepared));
+    const auto ownership = definition.publication_ownership->receipt();
+    try {
     const auto request_id = definition.request_id;
     std::lock_guard handoff(command_mutex_);
     const auto snapshot = start_prepared_run(std::move(definition), backend);
@@ -2086,6 +2162,14 @@ Application::J Application::prepare_workflow(const std::string &flow_id, const J
     result["workflow_revision"] = workflow_revision;
     result["request_id"] = request_id;
     return result;
+    } catch (...) {
+        const auto failure = std::current_exception();
+        definition.units.clear();
+        try {
+            if (definition.publication_ownership) definition.publication_ownership->rethrow_with_cleanup(failure);
+            std::rethrow_exception(failure);
+        } catch (...) { rethrow_preparation_failure(std::current_exception(), ownership); }
+    }
 }
 
 Application::PreparedWorkflow Application::compile_workflow_graph(
@@ -2146,6 +2230,7 @@ runtime::NativeRunDefinition Application::assemble_workflow(
     const J &request, const J &stored, J document, const devices::LifecycleTarget &lifecycle,
     std::map<std::string, std::string> *pipeline_to_node, const J &library_snapshot, J *source_paths,
     std::optional<PreparedWorkflow> prepared) {
+    require_preparation_ready();
     auto graph = prepared ? std::move(*prepared) : compile_workflow_graph(request, stored, document, library_snapshot);
     auto &executable = graph.executable;
     const auto &values = graph.values;
@@ -2161,6 +2246,9 @@ runtime::NativeRunDefinition Application::assemble_workflow(
         destination, aliases_, provenance, portraits ? &*portraits : nullptr,
         [this] { require(!stopping_ && !cancel_operation_, "PREPARATION_CANCELLED"); },
         preparation_observer(stored));
+    const auto ownership = publication.ownership->receipt();
+    try {
+    if (preparation_fault_) preparation_fault_("workflow.after_publication");
     const auto &root = publication.program.definitions.at(publication.program.root_definition);
     require(root.steps.contains(executable.checkpoint), "NATIVE_CHECKPOINT_MISSING");
     const auto checkpoint_source = root.steps.at(executable.checkpoint).source_path;
@@ -2170,6 +2258,7 @@ runtime::NativeRunDefinition Application::assemble_workflow(
     definition.logging = storage::LoggingPolicy::from_profile(stored);
     if (definition.logging.performance && definition.logging.accepts(storage::LogLevel::Info))
         definition.preparation = std::move(publication.preparation);
+    if (preparation_fault_) preparation_fault_("workflow.before_units");
     definition.units.push_back({std::make_shared<const wvd::workflow::FlowProgram>(std::move(publication.program)),
         std::move(publication.bundle), games::vision::native_handlers(aliases_, locale,
             executable.dialogue_policy, executable.random_maze_events),
@@ -2208,7 +2297,16 @@ runtime::NativeRunDefinition Application::assemble_workflow(
         for (const auto &[pipeline, node] : graph.pipeline_to_node)
             (*pipeline_to_node)["Task_" + pipeline] = node;
     }
+    definition.publication_ownership = std::move(publication.ownership);
     return definition;
+    } catch (...) {
+        const auto failure = std::current_exception();
+        publication.bundle.lease.reset();
+        try {
+            if (publication.ownership) publication.ownership->rethrow_with_cleanup(failure);
+            std::rethrow_exception(failure);
+        } catch (...) { rethrow_preparation_failure(std::current_exception(), ownership); }
+    }
 }
 
 Application::J Application::stop_run(std::optional<std::uint64_t> requested_run_id,

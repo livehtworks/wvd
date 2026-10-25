@@ -6,6 +6,7 @@
 #include "platform/windows/bundle_lease.hpp"
 #include "platform/windows/memory_diagnostics.hpp"
 #include "devices/lifecycle_execution.hpp"
+#include "submission_store_contract.hpp"
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
 #include <iostream>
@@ -40,6 +41,9 @@ void operator delete(void *value, std::size_t) noexcept { std::free(value); }
 
 namespace wvd::runtime {
 struct NativeCoordinatorTestAccess {
+    static void start_fault(NativeRunCoordinator &coordinator, std::function<void(const char *)> fault) {
+        coordinator.start_fault_ = std::move(fault);
+    }
     static void image_failure(NativeRunCoordinator &coordinator, bool recorded = true) {
         storage::DiagnosticRequest request;
         request.run_id = coordinator.snapshot_.run_id; request.generation = 1;
@@ -50,9 +54,24 @@ struct NativeCoordinatorTestAccess {
 };
 }
 
+namespace wvd::platform {
+struct OwnedBundleDirectoryTestAccess {
+    static void fault(std::function<void(const char *)> callback) { OwnedBundleDirectory::fault_ = std::move(callback); }
+};
+}
+
 namespace wvd::app {
 // 仅测试替换磁盘查询依赖；生产 API 不暴露容量覆盖或离线开关。
 struct ApplicationAssemblyTestAccess {
+    static auto stored(Application &app) { return app.profile_store_->load(); }
+    static void preparation_fault(Application &app, std::function<void(const char *)> fault) {
+        app.preparation_fault_ = std::move(fault);
+    }
+    static void cache_fault(std::function<void(const char *, const std::filesystem::path &)> fault) {
+        Application::cache_fault_ = std::move(fault);
+    }
+    static void preparation_ready(Application &app) { app.require_preparation_ready(); }
+    static auto cleanup_status(Application &app) { std::lock_guard lock(app.mutex_); return app.preparation_cleanup_; }
     static void receipt(Application &app, const std::string &id, const nlohmann::json &intent, std::uint64_t run) {
         app.submission_store_->save(id, intent, nlohmann::json{{"request_id",id},{"state","completed"},{"run_id",run}}, false);
     }
@@ -102,9 +121,9 @@ struct ApplicationAssemblyTestAccess {
         return app.start_prepared_run(std::move(definition), backend);
     }
     static runtime::NativeRunDefinition prepare_giant(Application &app, const nlohmann::json &stored,
-        const platform::PreparationObserver &observer = {}) {
+        const platform::PreparationObserver &observer = {}, const std::string &request_id = "p01-giant-preparation") {
         return app.assemble_task({{"task_id", "GiantBounty"}, {"resource_locale", "zh-Hant"},
-            {"request_id", "p01-giant-preparation"}}, stored,
+            {"request_id", request_id}}, stored,
             {"offline-product", "offline-instance", "jp.co.drecom.wizardry.daphne", "", false},
             std::nullopt, false, std::nullopt, observer);
     }
@@ -322,6 +341,272 @@ wvd::runtime::NativeRunDefinition closure_definition(const std::filesystem::path
     };
     return result;
 }
+std::vector<std::uint64_t> ownership_file_id(const std::filesystem::path &path) {
+    const auto h = CreateFileW(path.c_str(), FILE_READ_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE,
+        nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+    require_closure(h != INVALID_HANDLE_VALUE, "OWNERSHIP_TEST_OPEN_FAILED");
+    BY_HANDLE_FILE_INFORMATION info{}; const auto ok = GetFileInformationByHandle(h, &info); CloseHandle(h);
+    require_closure(ok != FALSE, "OWNERSHIP_TEST_IDENTITY_FAILED");
+    return {info.dwVolumeSerialNumber, info.nFileIndexHigh, info.nFileIndexLow};
+}
+void require_delete_share_denial(const std::filesystem::path &path) {
+    const auto probe = CreateFileW(path.c_str(), DELETE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+        nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, nullptr);
+    const auto error = GetLastError();
+    if (probe != INVALID_HANDLE_VALUE) CloseHandle(probe);
+    require_closure(probe == INVALID_HANDLE_VALUE && error == ERROR_SHARING_VIOLATION,
+        "OWNERSHIP_TEST_DELETE_NOT_ACTUALLY_DENIED:" + std::to_string(error));
+}
+__declspec(noinline) int preparation_ownership_contract(const std::filesystem::path &pack,
+    const std::filesystem::path &quests, const std::filesystem::path &root) {
+    using A = wvd::app::ApplicationAssemblyTestAccess;
+    using C = wvd::runtime::NativeCoordinatorTestAccess;
+    using Owner = wvd::platform::OwnedBundleDirectory;
+    require_closure(!std::filesystem::exists(root), "PREPARATION_OWNERSHIP_ROOT_MUST_BE_FRESH");
+    std::filesystem::create_directories(root);
+    J proof = J::array();
+    {
+        const auto data = root / "application";
+        auto backend = std::make_shared<OfflineConnection>(pack);
+        wvd::app::Application app({data, pack, {}, quests}, backend);
+        auto &coordinator = A::coordinator(app);
+        const auto published = data / "published"; std::filesystem::create_directories(published);
+        const auto history = published / "historical-completed";
+        auto history_owner = Owner::create(history);
+        auto history_definition = closure_definition(history, "historical-completed");
+        const auto history_receipt = history_owner->receipt();
+        history_definition.publication_ownership = std::move(history_owner);
+        A::commit(app, std::move(history_definition), backend);
+        require_closure(coordinator.wait_for_worker(5s) && coordinator.collect_finished_worker(), "HISTORY_WORKER_NOT_RELEASED");
+        require_closure(history_receipt->accepted && coordinator.snapshot().state == wvd::contracts::RunState::Completed,
+            "HISTORY_NOT_ACTUALLY_ADOPTED_AND_COMPLETED");
+        const auto old_hash = wvd::platform::file_sha256(history / "marker.txt");
+        const auto old_id = ownership_file_id(history / "marker.txt");
+        const auto historical_unchanged = [&] {
+            require_closure(wvd::platform::file_sha256(history / "marker.txt") == old_hash &&
+                ownership_file_id(history / "marker.txt") == old_id, "PREPARATION_CHANGED_HISTORICAL_PACKAGE");
+        };
+        const auto stored = A::stored(app);
+        const auto original_captures = backend->captures.load(), original_connections = backend->connections.load();
+        for (const std::string phase : {"task.after_publication", "task.before_units", "workflow.after_publication", "workflow.before_units"}) {
+            bool reached{};
+            A::preparation_fault(app, [&](const char *at) {
+                if (phase == at) { reached = true; throw std::runtime_error("ASSEMBLY_FAULT:" + phase); }
+            });
+            bool failed{}; std::string actual_error;
+            try {
+                if (phase.starts_with("task.")) { auto prepared = A::prepare_giant(app, stored); }
+                else { auto prepared = A::prepare_debug(app, stored); }
+            } catch (const std::exception &e) { actual_error = e.what(); failed = actual_error == "ASSEMBLY_FAULT:" + phase; }
+            A::preparation_fault(app, {});
+            const auto target = published / (phase.starts_with("task.") ? "p01-giant-preparation" : "combat-editor-debug");
+            require_closure(reached && failed && !std::filesystem::exists(target), "ASSEMBLY_FAILURE_LEFT_PUBLICATION:" + phase +
+                ";hook_reached=" + std::to_string(reached) + ";target_exists=" + std::to_string(std::filesystem::exists(target)) +
+                ";actual_error=" + actual_error);
+            require_closure(backend->inputs == 0 && backend->captures == original_captures && backend->connections == original_connections,
+                "ASSEMBLY_FAILURE_REACHED_DEVICE:" + phase);
+            historical_unchanged();
+            proof.push_back({{"case", phase}, {"publication_removed", true}, {"new_inputs", 0}, {"history_unchanged", true}});
+        }
+        for (const std::string phase : {"before_coordinator", "before_state_publication", "before_worker"}) {
+            const auto target = published / ("unaccepted-" + phase);
+            auto owner = Owner::create(target); const auto receipt = owner->receipt();
+            auto definition = closure_definition(target, "unaccepted-" + phase);
+            definition.publication_ownership = std::move(owner);
+            bool reached{};
+            const auto inject = [&](const char *at) {
+                if (phase == at) { reached = true; throw std::runtime_error("BEFORE_ADOPTION_FAULT:" + phase); }
+            };
+            if (phase == "before_coordinator") A::preparation_fault(app, inject);
+            else C::start_fault(coordinator, inject);
+            bool failed{};
+            try { A::commit(app, std::move(definition), backend); }
+            catch (const std::exception &e) { failed = std::string(e.what()) == "BEFORE_ADOPTION_FAULT:" + phase; }
+            A::preparation_fault(app, {}); C::start_fault(coordinator, {});
+            require_closure(reached && failed && !receipt->accepted && !receipt->cleanup_pending &&
+                !std::filesystem::exists(target), "PRE_ADOPTION_FAILURE_DID_NOT_WITHDRAW:" + phase);
+            require_closure(backend->inputs == 0 && backend->captures == original_captures && backend->connections == original_connections,
+                "PRE_ADOPTION_FAILURE_STARTED_WORKER:" + phase);
+            historical_unchanged();
+            proof.push_back({{"case", phase}, {"accepted", receipt->accepted}, {"publication_removed", true}, {"new_inputs", 0}});
+        }
+        {
+            const auto target = published / "accepted-snapshot-error";
+            auto owner = Owner::create(target); const auto receipt = owner->receipt();
+            auto definition = closure_definition(target, "accepted-snapshot-error");
+            definition.publication_ownership = std::move(owner);
+            bool worker_completed{};
+            C::start_fault(coordinator, [&](const char *at) {
+                if (std::string(at) != "after_adoption") return;
+                worker_completed = coordinator.wait_for_worker(5s) &&
+                    coordinator.snapshot().state == wvd::contracts::RunState::Completed;
+                throw std::runtime_error("AFTER_ADOPTION_SNAPSHOT_FAULT");
+            });
+            bool failed{};
+            try { A::commit(app, std::move(definition), backend); }
+            catch (const std::exception &e) { failed = std::string(e.what()) == "AFTER_ADOPTION_SNAPSHOT_FAULT"; }
+            C::start_fault(coordinator, {});
+            require_closure(coordinator.collect_finished_worker(), "ACCEPTED_WORKER_NOT_COLLECTED_AFTER_START_THROW");
+            require_closure(failed && worker_completed && receipt->accepted && std::filesystem::exists(target / "marker.txt") &&
+                !receipt->cleanup_attempted && coordinator.snapshot().quiescent, "ACCEPTED_COMPLETED_PACKAGE_WITHDRAWN");
+            historical_unchanged();
+            proof.push_back({{"case", "accepted-fast-worker-snapshot-error"}, {"accepted", true},
+                {"worker_completed", worker_completed}, {"package_retained", true}, {"quiescent", true}});
+        }
+        {
+            HANDLE held = INVALID_HANDLE_VALUE;
+            const auto target = published / "p01-giant-preparation";
+            A::preparation_fault(app, [&](const char *at) {
+                if (std::string(at) != "task.after_publication") return;
+                held = CreateFileW(target.c_str(), GENERIC_READ, FILE_SHARE_READ,
+                    nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, nullptr);
+                require_closure(held != INVALID_HANDLE_VALUE, "ASSEMBLY_CLEANUP_LOCK_FAILED");
+                require_delete_share_denial(target);
+                throw std::runtime_error("ASSEMBLY_PRIMARY_FAILURE");
+            });
+            std::string primary, cleanup;
+            try { auto prepared = A::prepare_giant(app, stored); }
+            catch (const wvd::platform::DirectoryCleanupPending &e) { primary = e.primary_error(); cleanup = e.cleanup_error(); }
+            A::preparation_fault(app, {});
+            if (held != INVALID_HANDLE_VALUE) CloseHandle(held);
+            require_closure(primary.find("ASSEMBLY_PRIMARY_FAILURE") != std::string::npos && !cleanup.empty() &&
+                std::filesystem::exists(target), "ASSEMBLY_PRIMARY_OR_CLEANUP_ERROR_LOST");
+            const auto before = submission_contract::entry_count(published);
+            submission_contract::rejects([&] { auto prepared = A::prepare_giant(app, stored, {},
+                "p01-distinct-request-after-cleanup-failure"); }, "PREPARATION_CLEANUP_PENDING");
+            require_closure(submission_contract::entry_count(published) == before, "CLEANUP_PENDING_RETRY_CREATED_NEW_UUID");
+            const auto status = A::cleanup_status(app);
+            require_closure(status.at("primary_error").get<std::string>().find("ASSEMBLY_PRIMARY_FAILURE") != std::string::npos &&
+                !status.at("cleanup_error").get<std::string>().empty(), "ASSEMBLY_CLEANUP_NOT_DIAGNOSABLE");
+            historical_unchanged();
+            proof.push_back({{"case", "assembly-primary-plus-real-cleanup-share-denial"}, {"primary_error", primary},
+                {"cleanup_error", cleanup}, {"retry_blocked", true}, {"status", status}});
+        }
+    }
+    {
+        using O = wvd::platform::OwnedBundleDirectoryTestAccess;
+        const auto data = root / "accepted-index-application";
+        const auto published = data / "published";
+        const auto target = published / "accepted-index-removal-failure";
+        std::shared_ptr<const Owner::Receipt> accepted_receipt;
+        std::string primary, cleanup;
+        std::uint64_t completed_run{};
+        std::string retained_hash;
+        std::vector<std::uint64_t> retained_id;
+        const auto assert_blocked_api = [](wvd::app::Application &app, const std::string &id) {
+            bool blocked{};
+            try { call(app, wvd::api::http::verb::post, "/api/v1/runs/start",
+                {{"request_id", id}, {"task_id", "GiantBounty"}, {"resource_locale", "zh-Hant"}}); }
+            catch (const std::exception &error) {
+                blocked = std::string(error.what()).find("PREPARATION_CLEANUP_PENDING") != std::string::npos;
+            }
+            require_closure(blocked, "ACCEPTED_INDEX_NEW_UUID_NOT_REJECTED_BY_REAL_API");
+        };
+        {
+            auto backend = std::make_shared<OfflineConnection>(pack);
+            wvd::app::Application app({data, pack, {}, quests}, backend);
+            auto &coordinator = A::coordinator(app);
+            std::filesystem::create_directories(published);
+            auto owner = Owner::create(published / ("accepted-index.staging-" + wvd::platform::unique_id()));
+            owner->rename_to(target);
+            accepted_receipt = owner->receipt();
+            auto definition = closure_definition(target, "accepted-index-removal-failure");
+            definition.publication_ownership = std::move(owner);
+            O::fault([](const char *phase) {
+                if (std::string(phase) == "before_prepare_marker_remove")
+                    throw std::runtime_error("ACCEPTED_INDEX_REMOVE_INJECTED");
+                if (std::string(phase) == "before_cleanup_marker") throw std::bad_alloc();
+            });
+            try { A::commit(app, std::move(definition), backend); }
+            catch (const wvd::platform::DirectoryCleanupPending &error) {
+                primary = error.primary_error(); cleanup = error.cleanup_error();
+            }
+            O::fault({});
+            require_closure(primary.find("OWNED_DIRECTORY_ACCEPT_INDEX_FAILED") != std::string::npos &&
+                cleanup.find("ACCEPTED_INDEX_REMOVE_INJECTED") != std::string::npos &&
+                accepted_receipt->accepted && accepted_receipt->cleanup_pending && accepted_receipt->marker_failed,
+                "ACCEPTED_INDEX_ERROR_OR_ADOPTION_STATE_LOST:" + primary + ";cleanup=" + cleanup);
+            require_closure(coordinator.wait_for_worker(5s) && coordinator.collect_finished_worker() &&
+                coordinator.snapshot().state == wvd::contracts::RunState::Completed && coordinator.snapshot().quiescent,
+                "ACCEPTED_INDEX_ERROR_INTERRUPTED_WORKER");
+            completed_run = coordinator.snapshot().run_id;
+            require_closure(std::filesystem::exists(target / "marker.txt") && !accepted_receipt->cleanup_attempted,
+                "ACCEPTED_INDEX_ERROR_WITHDREW_ACCEPTED_PACKAGE");
+            retained_hash = wvd::platform::file_sha256(target / "marker.txt");
+            retained_id = ownership_file_id(target / "marker.txt");
+            const auto before = submission_contract::entry_count(published);
+            const auto captures = backend->captures.load(), connections = backend->connections.load();
+            assert_blocked_api(app, "accepted-index-distinct-next");
+            require_closure(submission_contract::entry_count(published) == before &&
+                coordinator.snapshot().run_id == completed_run && backend->inputs == 0 && backend->captures == captures &&
+                backend->connections == connections, "ACCEPTED_INDEX_ERROR_NEW_REQUEST_GREW_OR_TOUCHED_DEVICE");
+            const auto status = A::cleanup_status(app);
+            require_closure(status.at("primary_error").get<std::string>().find("OWNED_DIRECTORY_ACCEPT_INDEX_FAILED") != std::string::npos &&
+                status.at("cleanup_error").get<std::string>().find("ACCEPTED_INDEX_REMOVE_INJECTED") != std::string::npos,
+                "ACCEPTED_INDEX_APPLICATION_DIAGNOSIS_INACCURATE");
+        }
+        require_closure(accepted_receipt->accepted && std::filesystem::exists(target / "marker.txt"),
+            "ACCEPTED_INDEX_OWNER_DESTRUCTION_REMOVED_HISTORY");
+        {
+            auto backend = std::make_shared<OfflineConnection>(pack);
+            wvd::app::Application reopened({data, pack, {}, quests}, backend);
+            const auto before = submission_contract::entry_count(published);
+            assert_blocked_api(reopened, "accepted-index-after-restart");
+            require_closure(submission_contract::entry_count(published) == before &&
+                wvd::platform::file_sha256(target / "marker.txt") == retained_hash &&
+                ownership_file_id(target / "marker.txt") == retained_id && backend->inputs == 0 &&
+                backend->captures == 0 && backend->connections == 0,
+                "ACCEPTED_INDEX_RESTART_BYPASSED_DURABLE_BLOCK_OR_CHANGED_HISTORY");
+        }
+        proof.push_back({{"case", "accepted-index-removal-plus-marker-allocation-failure"}, {"accepted", true},
+            {"primary_error", primary}, {"cleanup_error", cleanup}, {"worker_completed", true},
+            {"run_id", completed_run}, {"package_retained_after_owner_destroy", true}, {"new_uuid_blocked_after_restart", true}});
+    }
+    for (const std::string phase : {"cache.before_copy", "cache.before_hash", "cache.before_rename"}) {
+        const auto case_root = root / phase.substr(6);
+        const auto small_pack = case_root / "pack"; std::filesystem::create_directories(small_pack / "parameters");
+        std::filesystem::copy_file(pack / "parameters/legacy-config-fields.json", small_pack / "parameters/legacy-config-fields.json");
+        { std::ofstream file(small_pack / "asset.bin", std::ios::binary); file << "isolated-cache-source"; }
+        { std::ofstream file(small_pack / "manifest.json"); file << J{{"revision", "cache-fixture"}, {"files", J::array({
+            {{"path", "asset.bin"}, {"sha256", wvd::platform::file_sha256(small_pack / "asset.bin")}}})}}.dump(); }
+        const auto source_sha = wvd::platform::file_sha256(small_pack / "asset.bin");
+        const auto data = case_root / "data";
+        std::filesystem::path staging, collision; HANDLE held = INVALID_HANDLE_VALUE; bool reached{};
+        A::cache_fault([&](const char *at, const std::filesystem::path &path) {
+            if (std::string(at) == "cache.after_create") staging = path;
+            if (phase != at) return;
+            reached = true;
+            held = CreateFileW(staging.c_str(), GENERIC_READ, FILE_SHARE_READ,
+                nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, nullptr);
+            require_closure(held != INVALID_HANDLE_VALUE, "CACHE_CLEANUP_LOCK_FAILED");
+            require_delete_share_denial(staging);
+            if (phase == "cache.before_copy") std::filesystem::create_directory(path);
+            if (phase == "cache.before_hash") { std::ofstream file(path, std::ios::binary); file << "wrong-cache-copy"; }
+            if (phase == "cache.before_rename") {
+                collision = path; std::filesystem::create_directory(collision);
+                std::ofstream marker(collision / "external-marker"); marker << "must-preserve";
+            }
+        });
+        std::string primary, cleanup;
+        try { wvd::app::Application failed({data, small_pack, {}, quests}, std::make_shared<OfflineConnection>(pack)); }
+        catch (const wvd::platform::DirectoryCleanupPending &e) { primary = e.primary_error(); cleanup = e.cleanup_error(); }
+        A::cache_fault({}); if (held != INVALID_HANDLE_VALUE) CloseHandle(held);
+        require_closure(reached && !primary.empty() && !cleanup.empty() && std::filesystem::exists(staging),
+            "CACHE_FAILURE_LOST_PRIMARY_CLEANUP_OR_STAGING:" + phase);
+        const auto cache_root = data / "asset-cache"; const auto before = submission_contract::entry_count(cache_root);
+        submission_contract::rejects([&] { wvd::app::Application retried({data, small_pack, {}, quests},
+            std::make_shared<OfflineConnection>(pack)); }, "PREPARATION_CLEANUP_PENDING");
+        require_closure(submission_contract::entry_count(cache_root) == before &&
+            wvd::platform::file_sha256(small_pack / "asset.bin") == source_sha, "CACHE_FAILURE_RETRY_GREW_OR_CHANGED_SOURCE");
+        if (!collision.empty()) require_closure(submission_contract::read_text(collision / "external-marker") == "must-preserve",
+            "CACHE_RENAME_FAILURE_OVERWROTE_DESTINATION");
+        proof.push_back({{"case", phase}, {"primary_error", primary}, {"cleanup_error", cleanup},
+            {"staging", staging.string()}, {"retry_blocked", true}, {"source_unchanged", true}});
+    }
+    std::ofstream(root / "results.json") << proof.dump(2);
+    std::cout << "PASS actual Application/Coordinator: assembly ownership, pre-adoption rollback, accepted fast worker retained, cache dual-error barriers\n";
+    return 0;
+}
 int closure_application(const std::filesystem::path &pack, const std::filesystem::path &quests) {
     using A = wvd::app::ApplicationAssemblyTestAccess;
     const auto *configured = std::getenv("WVD_CLOSURE_ROOT");
@@ -398,6 +683,60 @@ int closure_application(const std::filesystem::path &pack, const std::filesystem
 
 int main(int argc, char **argv) {
     try {
+        if (argc == 5 && std::string(argv[1]) == "--preparation-ownership")
+            return preparation_ownership_contract(std::filesystem::absolute(argv[2]),
+                std::filesystem::absolute(argv[3]), std::filesystem::absolute(argv[4]));
+        if (argc == 4 && std::string(argv[1]) == "--submission-crash")
+            return submission_contract::interrupted(std::filesystem::absolute(argv[2]), std::string(argv[3]) == "replace");
+        if (argc == 5 && std::string(argv[1]) == "--submission-readonly") {
+            using A = wvd::app::ApplicationAssemblyTestAccess;
+            const auto root = std::filesystem::absolute(argv[4]);
+            require_closure(!std::filesystem::exists(root), "SUBMISSION_APP_ROOT_MUST_BE_FRESH");
+            const auto pack = std::filesystem::absolute(argv[2]), quests = std::filesystem::absolute(argv[3]);
+            const J request{{"request_id", "historical"}, {"task_id", "GiantBounty"}, {"resource_locale", "zh-Hant"}};
+            const J intent{{"kind", "task"}, {"request", request}};
+            {
+                auto backend = std::make_shared<OfflineConnection>(pack);
+                wvd::app::Application app({root / "data", pack, {}, quests}, backend);
+                A::receipt(app, "historical", intent, 42);
+            }
+            const auto history = root / "data/requests";
+            const auto old_path = submission_contract::record(history, "historical");
+            const auto before = submission_contract::read_text(old_path);
+            auto unknown_request = request; unknown_request["request_id"] = "unknown-history";
+            {
+                wvd::storage::SubmissionStore history_store(history);
+                history_store.save("unknown-history", {{"kind", "task"}, {"request", unknown_request}},
+                    {{"request_id", "unknown-history"}, {"state", "preparing"}}, false);
+            }
+            auto temporary = old_path; temporary += "." + wvd::platform::unique_id() + ".tmp";
+            { std::ofstream out(temporary); out << "unfinished"; }
+            auto backend = std::make_shared<OfflineConnection>(pack);
+            wvd::app::Application app({root / "data", pack, {}, quests}, backend);
+            const auto status = call(app, wvd::api::http::verb::get, "/api/v1/runs/current").at("request_history");
+            require_closure(status.at("read_only") == true && status.at("pending_count") == 1 &&
+                status.at("pending_intent_count") == 1,
+                "READONLY_APP_NOT_DIAGNOSABLE");
+            const auto replay = call(app, wvd::api::http::verb::post, "/api/v1/runs/start", request);
+            require_closure(replay.at("run_id") == 42 && replay.at("replayed") == true, "READONLY_APP_OLD_ID_UNREADABLE");
+            const auto unknown_replay = call(app, wvd::api::http::verb::post, "/api/v1/runs/start", unknown_request);
+            require_closure(unknown_replay.at("state") == "preparing" && unknown_replay.at("replayed") == true,
+                "READONLY_APP_UNKNOWN_RESULT_REEXECUTED");
+            auto next = request; next["request_id"] = "new-intent";
+            bool rejected{};
+            try { call(app, wvd::api::http::verb::post, "/api/v1/runs/start", next); }
+            catch (const std::exception &e) { rejected = std::string(e.what()).find("REQUEST_HISTORY_READ_ONLY") != std::string::npos; }
+            require_closure(rejected && backend->connections == 0 && backend->captures == 0 && backend->inputs == 0,
+                "READONLY_APP_STARTED_UNKNOWN_INTENT");
+            require_closure(submission_contract::read_text(old_path) == before && std::filesystem::exists(temporary),
+                "READONLY_APP_CHANGED_AUTHORITY_OR_TEMP");
+            std::ofstream(root / "results.json") << J{{"old_run", 42}, {"new_intent_rejected", true},
+                {"device_connections", backend->connections.load()}, {"captures", backend->captures.load()}, {"inputs", backend->inputs.load()},
+                {"unknown_state_preserved", unknown_replay.at("state")},
+                {"old_bytes_unchanged", true}, {"temp_preserved", true}}.dump(2);
+            std::cout << "PASS actual Application: readonly history replay, new intent rejected before device/run/input\n";
+            return 0;
+        }
         if (argc == 3 && std::string(argv[1]) == "--repository-read-oom") {
             const auto root = std::filesystem::absolute(argv[2]);
             require_closure(!std::filesystem::exists(root), "NEW_ISOLATED_ROOT_REQUIRED");
@@ -480,7 +819,7 @@ int main(int argc, char **argv) {
             const auto root = std::filesystem::absolute(argv[2]);
             require_closure(!std::filesystem::exists(root), "SUBMISSION_ROOT_MUST_BE_FRESH");
             {
-                wvd::storage::SubmissionStore store(root);
+                wvd::storage::SubmissionStore store(root / "durable");
                 for (unsigned i = 0; i < 300; ++i) {
                     const auto id = "request-" + std::to_string(i);
                     const J intent{{"task_id", "GiantBounty"}, {"profile_revision", "original"}};
@@ -488,7 +827,7 @@ int main(int argc, char **argv) {
                     store.save(id, intent, {{"state", "submitted"}, {"run_id", i + 1}, {"request_id", id}}, true);
                 }
             }
-            wvd::storage::SubmissionStore restarted(root);
+            wvd::storage::SubmissionStore restarted(root / "durable");
             const J original{{"task_id", "GiantBounty"}, {"profile_revision", "original"}};
             const auto replay = restarted.replay("request-0", original);
             require_closure(replay && replay->at("run_id") == 1 && replay->at("replayed") == true,
@@ -499,6 +838,7 @@ int main(int argc, char **argv) {
             require_closure(conflict, "DIFFERENT_INTENT_REUSED_ID");
             require_closure(!restarted.replay("new-request", original), "NEW_REQUEST_REFUSED_BY_HISTORY");
             std::cout << "PASS production durable receipts: 300 completed intents, process restart, original run, identity conflict\n";
+            submission_contract::run(root / "boundaries");
             return 0;
         }
         if(argc==2 && std::string(argv[1])=="--measurement-contract") {
