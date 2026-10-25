@@ -2,7 +2,7 @@
 
 ## 范围与基线
 
-- 用户授权：按`wvd-t0-audit-01e5042.zip`工作包修复、离线验收和交付审阅。不是部署、恢复200轮、恢复监控或自动提交推送授权。
+- 最初授权：按`wvd-t0-audit-01e5042.zip`修复、离线验收和交付审阅，不含自动部署/恢复循环/提交。该阶段证据保留如下；用户随后另行明确授权提交、推送、构建打包部署，并确认新的200轮从0开始，见文末发布记录。监控未获恢复指令，保持暂停。
 - 基线：`01e5042e34b8a9fb66039450bda8c6335bff5ad6`；修复分支：`codex/t0-lifecycle-repair-20261025`。ZIP的520项源码Git对象逐项核对一致，见`next/.local/t0-repair-261025/baseline/package-source-check.json`。
 - 用户原有三份文档修改与`.vscode`已在`baseline/`保全；正式配置40项哈希、正式服务状态也已保存。测试都使用全新`next/.local/t0-repair-261025/`或合同运行器明确创建的可丢弃目录。
 - 唯一执行链仍为Application → NativeRunCoordinator → NativeExecutionSession → FlowExecutor。没有外部循环、自动重启守护器、GC或游戏业务调整。
@@ -81,7 +81,7 @@
 
 最终调用`python tools/run_contracts.py --module app --module tools --module web --output .local/t0-repair-261025/contracts-final-a4`，完整通过app18入口及工具/前端12阶段，回执complete=true；没有把a3失败的发布测试算作成功。a4深目录发布另有21项边界、准备生命周期13项、请求18项、recent11项实际证据。独立磁盘核对确认历史/私有复制的file ID及SHA、1024真实容量、复制内第三检查点取消、320字符普通DOS完整发布、重启后tmp计量与阻断。
 
-最终正式现场核对：40项profile/workflows哈希、原交接文档和`.vscode/settings.json`保持；HEAD不变，索引没有暂存项。原PID22208、创建filetime134370861777540010、EXE SHA256仍为`1b71deb345ea58aac2f4c6281b0dac066236c7c73afc3d1ecdfffd80bfff740d`，run94仍Completed/quiescent、repeat inactive、监控PAUSED。详见`protected-state-final.json`；未部署或触发新轮。
+17:45离线阶段终核：40项profile/workflows哈希、原交接文档和`.vscode/settings.json`保持；当时HEAD不变、索引没有暂存项。原PID22208、创建filetime134370861777540010、EXE SHA256为`1b71deb345ea58aac2f4c6281b0dac066236c7c73afc3d1ecdfffd80bfff740d`，run94 Completed/quiescent、repeat inactive、监控PAUSED。详见`protected-state-final.json`；该时点未部署或触发新轮，后续新授权执行另记。
 
 ### 证据索引（含保留的中间失败）
 
@@ -112,10 +112,27 @@
 | formal-readonly-inventory.json | 正式历史只读清单：56份请求/29,550字节，未见内部tmp、未知项或preparing/unknown；published 1295项、asset-objects 3项、asset-cache 46项均未见准备阻断材料。只是有界只读盘点，不是新二进制正式验收 |
 | protected-state-check-a1.json | 40项正式配置、原交接文档、.vscode及原服务状态与基线一致；监控PAUSED |
 
-### 交付边界
+### 离线交付时边界（后续新授权见下）
 
 修复不改正式profile/workflows、旧资产或`.vscode`，不清理正式发布历史。构建、完整候选打包、部署与实机是独立事实；本次没有部署、游戏输入、恢复循环/监控或commit/push。旧导航无进展及MuMu内部崩溃不在此次工作包修复结论内。
 
-新版本未在正式data-root运行；隔离测试中历史包的ID/SHA/nlinks保护加上正式目录只读盘点，不能替代后续正式部署前的身份、配置及历史预检。未通过重启旧服务试探修复。
+截至离线交付，新版本未在正式data-root运行；隔离测试中历史包保护及正式目录只读盘点不能替代部署前身份、配置及历史预检。离线阶段未通过重启旧服务试探修复。
 
-本轮构建证据指官方合同入口的CMake聚合目标（含automationd）及前端构建；没有运行完整发布构建生成新的BUILT交付回执，也没有生成/部署完整产品候选。WP04的候选stage替身只验证真实事务及恢复，不宣称候选内容验收或游戏长期稳定。
+离线阶段构建证据指官方合同入口的CMake聚合目标及前端构建，未生成发布BUILT回执。WP04的stage替身只验证真实事务/恢复，不宣称完整候选或游戏长期稳定；以下后续正式发布独立列证。
+
+## 后续授权发布与新200轮（2026-10-25）
+
+用户明确要求commit/push个人远端、构建打包部署正式服务，并在询问账目后确认“重新从0完成200轮”。不沿旧70/200、22/200或40/200续算，不恢复监控。
+
+- 修复提交：`66568fb28c6693f4c39bb3c6d89562fe7e39fb51`，33文件，已推送`fork/codex/t0-lifecycle-repair-20261025`；`.vscode`没有纳入提交。
+- 原完整`tools/build.py`完成依赖、资源、npm、CMake、web/native构建，`.local/build-input.json`为BUILT，产品输入仍为上述04361624…/1336项。默认打包被旧dist历史的交付格式校验拦住，保留原失败而不声明该命令整体成功。
+- dist旁有97份历史，62份缺有效新式交付字段或完整标记。全部只读保留；原受限inventory核定98个根、87,334项、14,825,767,070逻辑字节，无不可计量或reparse项。没有替旧产物补标记、放宽验证或删除目录。
+- 明确选取新版本目标`next/.local/t0-candidate-261025/`，通过原`package_functional.package()`及同一目录事务生成全新合法候选；额外保守准入含上述历史逻辑占用及元数据，要求17,545,527,633可用字节，实测145,372,815,360。该步骤未改生产源码，旧默认输出仍保留其原阻断。
+- 完整候选含619个登记成员，pack revision `ae872c30e2608fac2075d727c84c8214c0d84dc40eb49712a9b659ff0aedbfa7`，EXE SHA256 `284e860b078f9e91599ac00f083b21d322359311c5118a1814ef9a0be1c3de34`。原管理入口Validate通过后，才执行Deploy。
+- 旧候选独立回滚预检通过；41份profile/workflows文件（含元数据）已逐字节备份。部署前核旧run94 Completed、三业务单元、result_saved/quiescent、pending为空。原服务BAA009E9/PID22208经原shutdown入口确认退出，再启动同一data-root和17654上的新版；没有并行后台。
+- 新实例`9F2AF8E0-F5BB-4EBC-BAF1-2DA16D6D7653`，PID47024、创建filetime134374039039026061。新服务已核owner/PID/EXE及running，`service-launch.json`成功绑定原正式data-root/17654；启动后请求仓库56旧记录、非只读、无未完成材料。profile/workflows及旧run94 SHA不变。
+- 新根`giant-200-t0-20261025-b0ad41332a754a33b4d900f14f3b2424`，GiantBounty/zh-Hant/repeat_count200，原MuMu实例2，原profile revision不变。唯一请求提交前保存目标/配置哈希/身份和旧模型对象链接数；未重跑旧启动脚本。
+- 20:18实际确认run1 Running、repeat active/target200/completed0；首轮已有1/3业务单元完成并进入generation2，实际backend输入17、拒绝0、pending为空、无连续异常。generation2是业务单元推进，不据此宣称游戏重启。
+- 正式旧检测模型从1023增至1024链接后，第二别名实际成为不同FileID的独立复制；共享对象/两个别名SHA均为`8fe4bf6abfb20402357827f2efc964c8b28cf980e29fe09a99b742ae29725fa9`。这是正式旧历史上的容量回退实证，不是新测试data-root替代证明。
+
+发布证据：`next/.local/t0-release-261025/`的`release-confirmation.json`、`candidate-identity.json`、预检/部署日志、41文件快照与`rollback-plan.json`；新目标账本、唯一启动回执、实际运行确认及模型FileID/SHA证明在`next/.local/giant-200-t0-261025/`。监控仍PAUSED；未完成200成功轮，不宣称旧导航或模拟器问题已根治。
