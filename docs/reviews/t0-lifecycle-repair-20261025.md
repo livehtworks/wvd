@@ -133,6 +133,7 @@
 - 新实例`9F2AF8E0-F5BB-4EBC-BAF1-2DA16D6D7653`，PID47024、创建filetime134374039039026061。新服务已核owner/PID/EXE及running，`service-launch.json`成功绑定原正式data-root/17654；启动后请求仓库56旧记录、非只读、无未完成材料。profile/workflows及旧run94 SHA不变。
 - 新根`giant-200-t0-20261025-b0ad41332a754a33b4d900f14f3b2424`，GiantBounty/zh-Hant/repeat_count200，原MuMu实例2，原profile revision不变。唯一请求提交前保存目标/配置哈希/身份和旧模型对象链接数；未重跑旧启动脚本。
 - 20:18实际确认run1 Running、repeat active/target200/completed0；首轮已有1/3业务单元完成并进入generation2，实际backend输入17、拒绝0、pending为空、无连续异常。generation2是业务单元推进，不据此宣称游戏重启。
+- 20:25终核已完成1/200、run2 Running。run1已从正式磁盘核对Completed、3业务单元、result_saved/quiescent、请求归属及SHA，证明首个完整成功轮次；`first-success.json`保存回执索引，剩199为该时点差额，不另行提交199次或另开批次。
 - 正式旧检测模型从1023增至1024链接后，第二别名实际成为不同FileID的独立复制；共享对象/两个别名SHA均为`8fe4bf6abfb20402357827f2efc964c8b28cf980e29fe09a99b742ae29725fa9`。这是正式旧历史上的容量回退实证，不是新测试data-root替代证明。
 
 发布证据：`next/.local/t0-release-261025/`的`release-confirmation.json`、`candidate-identity.json`、预检/部署日志、41文件快照与`rollback-plan.json`；新目标账本、唯一启动回执、实际运行确认及模型FileID/SHA证明在`next/.local/giant-200-t0-261025/`。监控仍PAUSED；未完成200成功轮，不宣称旧导航或模拟器问题已根治。

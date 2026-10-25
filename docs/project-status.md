@@ -10,7 +10,7 @@
 ## 当前操作边界
 
 - T0六包源码及离线验收已完成并以`66568fb28c6693f4c39bb3c6d89562fe7e39fb51`推送个人远端`fork/codex/t0-lifecycle-repair-20261025`。66原生入口及12工具/前端阶段证据见[修复验收及发布](reviews/t0-lifecycle-repair-20261025.md)。2026-10-25按用户新授权完成构建、打包及正式部署，`.vscode`排除并保持。
-- 新的独立200成功轮次已从0启动，不计任何旧批次：根`giant-200-t0-20261025-b0ad41332a754a33b4d900f14f3b2424`，GiantBounty/zh-Hant，账本及确认在`next/.local/giant-200-t0-261025/`。20:18核当前run1/Running、0/200，首轮已完成1/3业务单元、当前generation2，已有实际输入、无pending及连续异常；generation变化不自动计作重启。`wvd`监控继续PAUSED。
+- 新的独立200成功轮次已从0启动，不计任何旧批次：根`giant-200-t0-20261025-b0ad41332a754a33b4d900f14f3b2424`，GiantBounty/zh-Hant，账本在`next/.local/giant-200-t0-261025/`。20:25核1/200：run1磁盘Completed、三业务单元、result_saved/quiescent（`first-success.json`），run2 Running、已完成1/3业务单元、无pending。generation变化不自动计作重启；监控继续PAUSED。
 - 本聊天恢复根`giant-200-resume-20261025-9dfea98c3b21429d8018e359838bb7da`已核run2–71共70份完整成功；run72为UserStopped/STOP_REQUESTED、仅1单元，排除。后续手动根`75f3dc44-1896-4e66-a3ce-ba69dc7bab99`已核run73–94共22份完整成功；两段各自原始目标为200，按根请求分开记录，不自行合并。界面新失败请求的completed_cycles=0不代表旧回执丢失。
 - T0原因为3221226085/STATUS_TOO_MANY_LINKS，非设备错误。正式新首轮已触达真实上限：检测模型共享对象及首别名同ID、1024链接，第二别名为独立ID复制，三者SHA均`8fe4bf6a…25fa9`，原正式历史不删改。实证见新账本`live-model-capacity-proof.json`。
 - 上一目标已取消，历史成功仍为40/200：3E95E158/run73–83共11份 + E65BF7A4/run1–29共29份；run30为UserStopped/STOP_REQUESTED、1业务单元，启动前核result_saved/quiescent且pending为空。旧40、剩160及更早100目标均不计入新200。
