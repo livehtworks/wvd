@@ -1,0 +1,261 @@
+{
+  "schema": 1,
+  "incident": "T0-STORAGE-LIFECYCLE-20261026",
+  "exported_at": "2026-10-26T20:05:47.807216+08:00",
+  "audit_source_commit": "205692c7bdea73634e780f1af0c70eef4fa62d0c",
+  "status": "confirmed_remediation_open",
+  "scope": "D:/programcode/python/wvd; other worktree metadata separately identified",
+  "filesystem": {
+    "files": 1911793,
+    "directories": 155145,
+    "logical_bytes": 314224605004,
+    "physical_allocated_bytes": null,
+    "reclaimable_bytes": null,
+    "errors": 0,
+    "skipped_reparse_points": 48,
+    "git_tracked_files_at_audit": 2267,
+    "selected_buckets": {
+      "next/.local": {
+        "files": 1781632,
+        "directories": 147370,
+        "logical_bytes": 290637208171,
+        "unique_file_bytes": null,
+        "hardlink_names": null
+      },
+      "next/.local/c11-flow-product": {
+        "files": 923634,
+        "directories": 43333,
+        "logical_bytes": 193765524466,
+        "unique_file_bytes": null,
+        "hardlink_names": null
+      },
+      "next/.local/c11-flow-product/data": {
+        "files": 825589,
+        "directories": 38318,
+        "logical_bytes": 171340169130,
+        "unique_file_bytes": null,
+        "hardlink_names": null
+      },
+      "next/.local/c11-flow-product/data/published": {
+        "files": 789906,
+        "directories": 35552,
+        "logical_bytes": 158248851245,
+        "unique_file_bytes": null,
+        "hardlink_names": null
+      },
+      "next/.local/c11-flow-product/data/runs": {
+        "files": 8063,
+        "directories": 1580,
+        "logical_bytes": 9313249987,
+        "unique_file_bytes": null,
+        "hardlink_names": null
+      },
+      "next/.local/m2-runs": {
+        "files": 52175,
+        "directories": 31294,
+        "logical_bytes": 23324970652,
+        "unique_file_bytes": null,
+        "hardlink_names": null
+      },
+      "next/.local/t0-repair-261025": {
+        "files": 231730,
+        "directories": 4110,
+        "logical_bytes": 5611715006,
+        "unique_file_bytes": null,
+        "hardlink_names": null
+      },
+      "next/dist": {
+        "files": 103569,
+        "directories": 5446,
+        "logical_bytes": 17430837801,
+        "unique_file_bytes": null,
+        "hardlink_names": null
+      },
+      "next/build": {
+        "files": 1227,
+        "directories": 395,
+        "logical_bytes": 5223093297,
+        "unique_file_bytes": null,
+        "hardlink_names": null
+      }
+    }
+  },
+  "published_layout": {
+    "snapshot_directories": 1334,
+    "repeat_named_directories": 1150,
+    "other_snapshot_directories": 184,
+    "asset_object_directory_count": 1,
+    "sample_relative_path": "next/.local/c11-flow-product/data/published/repeat-00389291c45e51170b2d983a8f46a1cbfe5a36b85da507b74d75c2b51bdd0ef7",
+    "sample_files": 600,
+    "sample_logical_bytes": 142935642
+  },
+  "published_model_identity_audit": {
+    "checked_at": "2026-10-26T19:55:46.532579+08:00",
+    "scope": "D:\\programcode\\python\\wvd\\next\\.local\\c11-flow-product\\data\\published",
+    "model_path_names": 4397,
+    "model_logical_bytes": 90357990530,
+    "unique_model_fileids": 2272,
+    "unique_model_content_bytes": 36341950454,
+    "groups": {
+      "2423224": {
+        "names": 2198,
+        "logical_bytes": 5326246352,
+        "unique_bytes": 2847288200,
+        "unique_objects": 1175
+      },
+      "8956702": {
+        "names": 1335,
+        "logical_bytes": 11957197170,
+        "unique_bytes": 7022054368,
+        "unique_objects": 784
+      },
+      "84577022": {
+        "names": 864,
+        "logical_bytes": 73074547008,
+        "unique_bytes": 26472607886,
+        "unique_objects": 313
+      }
+    },
+    "shared_model_fileids": 3,
+    "errors": [],
+    "limits": [
+      "os.stat FileID deduplication for ONNX payloads only, not a full repository allocated-space/reclaimability scan.",
+      "No content is read, modified, or removed. Shared links outside this scope may exist."
+    ]
+  },
+  "t0_contract_directories": [
+    {
+      "Path": "contracts-final-a2",
+      "Files": 72045,
+      "LogicalGiB": 1.038
+    },
+    {
+      "Path": "contracts-final-a3",
+      "Files": 72046,
+      "LogicalGiB": 1.038
+    },
+    {
+      "Path": "contracts-final-a4",
+      "Files": 71841,
+      "LogicalGiB": 1.076
+    }
+  ],
+  "dist_headers": {
+    "roles": {
+      "transaction": 1,
+      "other": 14,
+      "previous": 105,
+      "staging": 1
+    },
+    "history_invalid_header": 71
+  },
+  "other_worktree": {
+    "modified_paths": 17,
+    "staged_paths": 15,
+    "unstaged_paths": 4
+  },
+  "formal_configuration": {
+    "baseline_files": 41,
+    "changed_files": 0
+  },
+  "batch_checkpoint": {
+    "service_instance": "9F2AF8E0-F5BB-4EBC-BAF1-2DA16D6D7653",
+    "current_run_id": 40,
+    "state": "UserStopped",
+    "verified_successes": 39,
+    "target": 200,
+    "repeat_active": false
+  },
+  "asset_audit": {
+    "manifest_members": 593,
+    "image_members": 591,
+    "semantic_resources": 148,
+    "semantic_template_names": 176,
+    "source_missing_count": 24,
+    "source_different_count": 0,
+    "empty_source_refs_count": 295
+  },
+  "local_evidence_digests": [
+    {
+      "relative_path": "next/.local/consolidation-inventory-20261026/filesystem.json",
+      "sha256": "260cdc579ecd00defb2ab08d4e18718f440db6cf5cbb23d4965e2ca1bef25dbe",
+      "bytes": 1085341
+    },
+    {
+      "relative_path": "next/.local/consolidation-inventory-20261026/metadata-quality-probe.json",
+      "sha256": "6122206aead741257136a58a8ab9276c98be587135fbc178b429ec6552348c79",
+      "bytes": 327
+    },
+    {
+      "relative_path": "next/.local/consolidation-inventory-20261026/published-layout.json",
+      "sha256": "d562ddc75727bc5ff820f2a9019c2cca4f96fb0ec3ef3fcc79634b0cfce52607",
+      "bytes": 359
+    },
+    {
+      "relative_path": "next/.local/consolidation-inventory-20261026/model-space-proof.json",
+      "sha256": "657a8ff1376a875eb4d4555d3212d57b4020e2b2d035ab688245198d04e71a3c",
+      "bytes": 1046
+    },
+    {
+      "relative_path": "next/.local/consolidation-inventory-20261026/t0-file-counts.json",
+      "sha256": "3a284b4ae2e47c3db175f511297b33c7b745110523f2061de60e813e19e876fd",
+      "bytes": 21055
+    },
+    {
+      "relative_path": "next/.local/consolidation-inventory-20261026/git.json",
+      "sha256": "2f878978b4a0990edfd4d24ca7967fa8199d35ecfbcb63b058ea49f9124a2bad",
+      "bytes": 2438
+    },
+    {
+      "relative_path": "next/.local/consolidation-inventory-20261026/dist-headers.json",
+      "sha256": "6a5ff75828fb498206944838b4c7ba527b780f7d5f797cb856b0790d7c07fe9f",
+      "bytes": 30004
+    },
+    {
+      "relative_path": "next/.local/consolidation-inventory-20261026/other-worktree.json",
+      "sha256": "7b449e905e233680f2c85d98a38430076d344a91ba75af37d4cc6ad20a7723af",
+      "bytes": 1215
+    },
+    {
+      "relative_path": "next/.local/consolidation-inventory-20261026/other-worktree-sizes.json",
+      "sha256": "5b715985b16fb19b02353d834a5a5eea078a61846fc01cc4fb37b42455f977a6",
+      "bytes": 379
+    },
+    {
+      "relative_path": "next/.local/consolidation-inventory-20261026/configuration-comparison.json",
+      "sha256": "f174eb8d992d1a3f019d542d97415425676a7cfde2f9b728db0c2c6d643e82c6",
+      "bytes": 54
+    },
+    {
+      "relative_path": "next/.local/consolidation-inventory-20261026/live-and-receipts.json",
+      "sha256": "633c03a11229c61a177272702ef0e4833ed4cf77a90d9f45a4d832c720bf2b7c",
+      "bytes": 23596
+    },
+    {
+      "relative_path": "next/.local/consolidation-inventory-20261026/asset-reference-audit.json",
+      "sha256": "7f4c05001594a418ff43b81b5cf00937d8ff44caf2cc842926f4b2500588ad11",
+      "bytes": 110262
+    },
+    {
+      "relative_path": "next/.local/consolidation-inventory-20261026/source-path-corrections.json",
+      "sha256": "ca5612b32fad7a604727c1860225033c593dc13cf2e4afb3c36eba1d55186281",
+      "bytes": 5588
+    },
+    {
+      "relative_path": "next/.local/consolidation-inventory-20261026/build-symbols.json",
+      "sha256": "bc06659bd7d28a82ba062e03b65d361309869737b0afd562c3eb527709ad67ed",
+      "bytes": 700
+    },
+    {
+      "relative_path": "next/.local/consolidation-inventory-20261026/document-audit.json",
+      "sha256": "c449a22fc5e3471c7e90776ca021762e95e7564db3a0b8f2f05adc665e8ce4ff",
+      "bytes": 49289
+    }
+  ],
+  "limits": [
+    "Logical bytes count path names, including shared hardlinks. No full physical allocation or reclaimability measurement.",
+    "Only ONNX file identities were deduplicated with os.stat; invalid DirEntry identity estimates are discarded.",
+    "Local logs, screenshots, dumps, profile/workflow bodies and large fixtures are excluded from this Git evidence summary.",
+    "Directory roles and historic names are evidence, not deletion approval or proof of successful game cycles."
+  ]
+}
