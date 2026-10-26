@@ -1,8 +1,7 @@
 name: Build Executable and Create Release
 
 on:
-  push:
-    branches: [ master ]
+  workflow_dispatch:
 
 jobs:
   build:
@@ -40,7 +39,7 @@ jobs:
           exit 1
         }
 
-    # The following steps will now always run for every push to master.
+    # The following steps run only when explicitly dispatched.
     - name: Set up Python
       uses: actions/setup-python@v4
       with:

@@ -2,6 +2,15 @@ name: Native Product Contracts
 on:
   pull_request:
     paths: ['next/**', '.github/workflows/native-contracts.yml', '.gitattributes']
+  push:
+    branches: [master]
+    paths:
+      - 'next/**'
+      - '!next/docs/**'
+      - '!next/**/README.md'
+      - '!next/**/AGENTS.md'
+      - '.github/workflows/native-contracts.yml'
+      - '.gitattributes'
   workflow_dispatch:
 permissions:
   contents: read
@@ -33,11 +42,27 @@ jobs:
       - name: Affected Production Contracts
         shell: pwsh
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
         run: |
-          $eolChanged = if ($env:BASE_SHA) { git diff --name-only $env:BASE_SHA -- .gitattributes } else { $null }
-          if ($env:BASE_SHA -and -not $eolChanged) {
-            python next/tools/run_contracts.py --changed-from $env:BASE_SHA --output next/.local/ci-contracts
+          $baseSha = switch ($env:EVENT_NAME) {
+            'pull_request' { $env:PR_BASE_SHA }
+            'push' { $env:PUSH_BEFORE_SHA }
+            default { $null }
+          }
+          $validBase = $baseSha -match '^[0-9a-fA-F]{40}$' -and $baseSha -ne ('0' * 40)
+          if ($validBase) {
+            git cat-file -e "$baseSha^{commit}" 2>$null
+            $validBase = $LASTEXITCODE -eq 0
+          }
+          $eolChanged = $null
+          if ($validBase) {
+            $eolChanged = git diff --name-only $baseSha -- .gitattributes
+            $validBase = $LASTEXITCODE -eq 0
+          }
+          if ($validBase -and -not $eolChanged) {
+            python next/tools/run_contracts.py --changed-from $baseSha --output next/.local/ci-contracts
           } else {
             python next/tools/run_contracts.py --module runtime --module devices --module recognition --module app --module tools --module web --output next/.local/ci-contracts
           }

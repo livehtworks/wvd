@@ -3,6 +3,7 @@ import argparse
 import collections
 import json
 import re
+import stat
 from pathlib import Path
 
 
@@ -18,6 +19,50 @@ def walk(value, path=""):
     elif isinstance(value, list):
         for index, child in enumerate(value):
             yield from walk(child, path + "/" + str(index))
+
+
+def latest_publication(runtime):
+    """Select a request's program, never a shared/private directory.
+
+    This is a structural audit selection, not a replacement for BundleLease's
+    cryptographic layout validation. Invalid newest requests fail explicitly.
+    """
+    published = runtime / "published"
+    if not published.is_dir():
+        return None
+    candidates = []
+    for count, path in enumerate(published.iterdir(), 1):
+        if count > 5000:
+            raise RuntimeError("PUBLICATION_AUDIT_ENTRY_LIMIT")
+        if path.name == "asset-objects" or not re.fullmatch(r"[A-Za-z0-9_-]+", path.name):
+            continue
+        info = path.lstat()
+        if stat.S_ISLNK(info.st_mode) or getattr(info, "st_file_attributes", 0) & 0x400:
+            raise RuntimeError("PUBLICATION_AUDIT_REPARSE:" + path.name)
+        if stat.S_ISDIR(info.st_mode):
+            candidates.append((info.st_mtime_ns, path.name, path))
+    if not candidates:
+        return None
+    chosen = max(candidates)[2]
+    for path, directory in ((chosen / "program", True), (chosen / "program/flow.json", False),
+                            (chosen / "program/identity.json", False)):
+        info = path.lstat()
+        if (stat.S_ISLNK(info.st_mode) or getattr(info, "st_file_attributes", 0) & 0x400 or
+                not (stat.S_ISDIR(info.st_mode) if directory else stat.S_ISREG(info.st_mode))):
+            raise RuntimeError("PUBLICATION_AUDIT_PROGRAM_INVALID:" + str(path))
+    marker = chosen / "publication-layout.json"
+    if marker.exists() or marker.is_symlink():
+        info = marker.lstat()
+        if not stat.S_ISREG(info.st_mode) or getattr(info, "st_file_attributes", 0) & 0x400:
+            raise RuntimeError("PUBLICATION_AUDIT_LAYOUT_INVALID")
+        layout = read(marker)
+        if (not isinstance(layout, dict) or type(layout.get("schema")) is not int or layout["schema"] != 1 or
+                layout.get("kind") != "shared_resource_set" or
+                any(not re.fullmatch(r"[0-9a-f]{64}", str(layout.get(key, "")))
+                    for key in ("resource_digest", "program_revision")) or
+                read(chosen / "program/flow.json").get("revision") != layout["program_revision"]):
+            raise RuntimeError("PUBLICATION_AUDIT_LAYOUT_INVALID")
+    return chosen
 
 
 def audit(root, runtime):
@@ -72,9 +117,9 @@ def audit(root, runtime):
                  ("pack_parameters", root / "next/packs/wvd/parameters")]
     if runtime:
         json_sets.append(("saved_workflows", runtime / "workflows"))
-        published = sorted((runtime / "published").iterdir(), key=lambda p: p.stat().st_mtime, reverse=True)
+        published = latest_publication(runtime)
         if published:
-            json_sets.append(("latest_published", published[0] / "program"))
+            json_sets.append(("latest_published", published / "program"))
     json_counts = {}
     for surface, base in json_sets:
         files = sorted(base.rglob("*.json"))

@@ -21,6 +21,7 @@ import package_functional
 import build
 import run_contracts
 import resource_generation
+import audit_locale_wiring
 
 
 class BuildResourceContract(unittest.TestCase):
@@ -49,6 +50,48 @@ class BuildResourceContract(unittest.TestCase):
                 self.assertEqual(run_contracts.changed_paths("HEAD"), paths)
             self.assertEqual(run_contracts.select_modules(["next/tools/prepare_native.py"]), set(run_contracts.CASES))
             self.assertEqual(run_contracts.select_modules(["next/tests/tools/trace.ps1"]), {"tools"})
+
+    def test_documentation_module_selection_uses_real_git_changes(self):
+        with tempfile.TemporaryDirectory(prefix="wvd-doc-module-") as directory:
+            root = Path(directory)
+            def git(*arguments):
+                return subprocess.run(["git", *arguments], cwd=root, check=True, timeout=10,
+                                      stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            git("init")
+            git("config", "user.name", "isolated-fixture")
+            git("config", "user.email", "fixture@example.invalid")
+            documents = ("README.md", "AGENTS.md", "docs/report.json", "next/README.md",
+                         "next/docs/contract.md", "next/packs/wvd/README.md", "next/native/AGENTS.md")
+            for name in documents:
+                path = root / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("baseline", encoding="utf-8")
+            git("add", ".")
+            git("commit", "-m", "isolated documentation baseline")
+            for name in documents:
+                (root / name).write_text("updated", encoding="utf-8")
+            with patch.object(run_contracts, "ROOT", root / "next"):
+                paths = run_contracts.changed_paths("HEAD")
+                self.assertEqual(set(paths), set(documents))
+                self.assertEqual(run_contracts.select_modules(paths), set())
+                git("add", ".")
+                self.assertEqual(run_contracts.changed_paths("HEAD"), paths)
+                self.assertEqual(run_contracts.select_modules(paths), set())
+                source = root / "next/native/storage/added.cpp"
+                source.parent.mkdir(parents=True)
+                source.write_text("// consumed source", encoding="utf-8")
+                expected = {"app", "devices", "runtime"}
+                self.assertEqual(run_contracts.select_modules(run_contracts.changed_paths("HEAD")), expected)
+                git("add", "next/native/storage/added.cpp")
+                self.assertEqual(run_contracts.select_modules(run_contracts.changed_paths("HEAD")), expected)
+            for path in ("next/packs/wvd/manifest.json", "next/web/package-lock.json",
+                         "next/resources/data.json", "next/tools/prepare_native.py",
+                         "next/tools/dependencies.py", "next/tools/dependency_tree.py",
+                         "next/tools/verify_build_dependencies.py", "next/tools/resource_generation.py",
+                         "next/tools/package_functional.py", "next/tools/run_contracts.py"):
+                with self.subTest(path=path):
+                    self.assertEqual(run_contracts.select_modules([*documents, path]), set(run_contracts.CASES)
+                                     if not path.startswith("next/web/") else {"web", "app"})
 
     def test_documentation_is_provenance_not_product_input(self):
         with tempfile.TemporaryDirectory(prefix="wvd-source-proof-") as directory:
@@ -171,6 +214,92 @@ class BuildResourceContract(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "RESOURCE_MEMBER_CHANGED"):
                 generate_transaction(pack, lambda prepared: None, seed_missing=seed)
             self.assertEqual((pack / "image.png").read_bytes(), b"unexpected existing edits")
+
+    def test_next_author_source_mapping_restores_member_and_rejects_changed_source(self):
+        with tempfile.TemporaryDirectory(prefix="wvd-next-source-") as directory:
+            repo = Path(directory)
+            root = repo / "next"
+            pack = root / "packs/wvd"
+            pack.mkdir(parents=True)
+            author = root / "resources/authoring"
+            author.mkdir(parents=True)
+            payloads = {"parameters/semantic-assets.json": b'{"resources":{}}',
+                        "parameters/public-flows.json": b'[]',
+                        "image/character_panel_zh_hant.png": b"locked-source-fixture"}
+            rows = []
+            for name, payload in payloads.items():
+                source = ("next/resources/images/character_panel_zh_hant.png" if name.startswith("image/")
+                          else "next/resources/authoring/" + Path(name).name)
+                origin = repo / source
+                origin.parent.mkdir(parents=True, exist_ok=True)
+                origin.write_bytes(payload)
+                rows.append({"path": name, "source": source, "sha256": hashlib.sha256(payload).hexdigest(),
+                             "bytes": len(payload)})
+                if not name.startswith("image/"):
+                    target = pack / name
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_bytes(payload)
+            manifest = {"files": rows, "aliases": {}, "revision": "fixture"}
+            (pack / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+            with patch.object(package_functional, "ROOT", root):
+                package_functional.sync_authoring_resources()
+                self.assertEqual((pack / "image/character_panel_zh_hant.png").read_bytes(),
+                                 payloads["image/character_panel_zh_hant.png"])
+                validate_pack(pack)
+                saved_manifest = (pack / "manifest.json").read_bytes()
+                (pack / "image/character_panel_zh_hant.png").unlink()
+                (root / "resources/images/character_panel_zh_hant.png").write_bytes(b"changed source")
+                with self.assertRaisesRegex(RuntimeError, "RESOURCE_SOURCE_CHANGED"):
+                    package_functional.sync_authoring_resources()
+                self.assertEqual((pack / "manifest.json").read_bytes(), saved_manifest)
+
+
+class LocalePublicationSelectionContract(unittest.TestCase):
+    def publication(self, runtime, name, shared=False):
+        path = runtime / "published" / name
+        (path / "program").mkdir(parents=True)
+        revision = "a" * 64
+        (path / "program/flow.json").write_text(json.dumps({"revision": revision}), encoding="utf-8")
+        (path / "program/identity.json").write_text("{}", encoding="utf-8")
+        if shared:
+            (path / "publication-layout.json").write_text(json.dumps({"schema": 1,
+                "kind": "shared_resource_set", "resource_digest": "b" * 64,
+                "program_revision": revision}), encoding="utf-8")
+        return path
+
+    def test_private_newer_directory_is_not_latest_request(self):
+        with tempfile.TemporaryDirectory(prefix="wvd-locale-selection-") as directory:
+            root = Path(directory)
+            chosen = self.publication(root, "request-one")
+            os.utime(chosen, ns=(10**9, 10**9))
+            for name in ("asset-objects", ".asset-sets", "request.staging-owned"):
+                (root / "published" / name).mkdir()
+                os.utime(root / "published" / name, ns=(2 * 10**9, 2 * 10**9))
+            self.assertEqual(audit_locale_wiring.latest_publication(root), chosen)
+
+    def test_legal_staging_named_request_remains_selectable(self):
+        with tempfile.TemporaryDirectory(prefix="wvd-locale-selection-") as directory:
+            root = Path(directory)
+            chosen = self.publication(root, "staging-demo", shared=True)
+            self.assertEqual(audit_locale_wiring.latest_publication(root), chosen)
+
+    def test_newest_bad_layout_is_not_silently_replaced_with_legacy(self):
+        for bad in ("directory", "wrong-revision", "wrong-kind"):
+            with self.subTest(bad=bad), tempfile.TemporaryDirectory(prefix="wvd-locale-selection-") as directory:
+                root = Path(directory)
+                old = self.publication(root, "old")
+                os.utime(old, ns=(1, 1))
+                newest = self.publication(root, "new", shared=True)
+                marker = newest / "publication-layout.json"
+                if bad == "directory":
+                    marker.unlink()
+                    marker.mkdir()
+                else:
+                    data = json.loads(marker.read_text(encoding="utf-8"))
+                    data["program_revision" if bad == "wrong-revision" else "kind"] = "c" * 64
+                    marker.write_text(json.dumps(data), encoding="utf-8")
+                with self.assertRaisesRegex(RuntimeError, "PUBLICATION_AUDIT_LAYOUT_INVALID"):
+                    audit_locale_wiring.latest_publication(root)
 
 
 class DirectoryFailureContract(unittest.TestCase):

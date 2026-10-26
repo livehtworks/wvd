@@ -2,6 +2,9 @@
 import argparse
 import hashlib
 import json
+import os
+import stat
+import uuid
 import re
 import shutil
 import subprocess
@@ -9,6 +12,8 @@ import sys
 from pathlib import Path
 from build import ROOT, cmake_path, run
 from package_functional import source_identity
+
+ARTIFACT_TRASH_ROOT = Path(ROOT.anchor) / "trash/wvd-contract-artifacts"
 
 FLOW_REGRESSIONS = (
     "recovery-recheck", "linkage-closure", "positive-loop-frame", "child-result-frame",
@@ -147,6 +152,8 @@ def materialize_preparation_models(pack):
 def select_modules(changed):
     chosen = set()
     for path in changed:
+        if path.startswith(("docs/", "next/docs/")) or Path(path).name in ("README.md", "AGENTS.md"):
+            continue
         if path.startswith("next/native/runtime/") or path.startswith("next/native/workflow/"):
             chosen.update(("runtime", "app"))
         elif path.startswith("next/native/devices/"): chosen.update(("devices", "runtime", "app"))
@@ -176,10 +183,157 @@ def changed_paths(base):
     return sorted({item.decode("utf-8", errors="surrogateescape")
                    for item in (modified + untracked).split(b"\0") if item})
 
+def atomic_artifact_json(path, value):
+    """Flush a new sibling before atomic replacement; directory power-loss durability is not guaranteed."""
+    temporary = path.with_name(path.name + "." + uuid.uuid4().hex + ".tmp")
+    try:
+        with temporary.open("x", encoding="utf-8", newline="\n") as stream:
+            json.dump(value, stream, indent=2)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+    finally:
+        if temporary.exists():
+            temporary.unlink()  # Only this call's exclusive, reconstructible temporary.
+
+
+def measure_contract_artifacts(source, max_files=65536, max_member_bytes=1024, max_total_bytes=65536 * 1024):
+    """Bound enumeration and reads in an exclusively owned output with no concurrent writers."""
+    inventory_rows, samples = [], []
+    size = 0
+    sample_names = {hashlib.sha256(name.encode()).hexdigest() + ".json"
+                    for name in ("history-0", "65536th")}
+    with os.scandir(source) as entries:
+        for entry in entries:
+            if len(inventory_rows) >= max_files:
+                raise RuntimeError("CONTRACT_ARTIFACT_FILE_COUNT_LIMIT")
+            member = entry.stat(follow_symlinks=False)
+            if (not stat.S_ISREG(member.st_mode) or
+                getattr(member, "st_file_attributes", 0) & 0x400):
+                raise RuntimeError("CONTRACT_ARTIFACT_REPARSE_OR_NONREGULAR:" + entry.name)
+            if not re.fullmatch(r"[0-9a-f]{64}\.json", entry.name):
+                raise RuntimeError("CONTRACT_ARTIFACT_UNEXPECTED_MEMBER:" + entry.name)
+            # Windows DirEntry metadata omits nlink; obtain this one field once per file.
+            links = os.stat(entry.path, follow_symlinks=False).st_nlink if os.name == "nt" else member.st_nlink
+            if links != 1 or member.st_size > max_member_bytes:
+                raise RuntimeError("CONTRACT_ARTIFACT_MEMBER_NOT_OWNED_OR_BOUNDED:" + entry.name)
+            with open(entry.path, "rb") as stream:
+                data = stream.read(min(max_member_bytes, max_total_bytes - size) + 1)
+            if len(data) > max_member_bytes or size + len(data) > max_total_bytes:
+                raise RuntimeError("CONTRACT_ARTIFACT_BYTE_LIMIT:" + entry.name)
+            if len(data) != member.st_size:
+                raise RuntimeError("CONTRACT_ARTIFACT_MEMBER_CHANGED:" + entry.name)
+            size += len(data)
+            digest = hashlib.sha256(data).hexdigest()
+            inventory_rows.append((entry.name, len(data), digest))
+            if entry.name in sample_names:
+                body = json.loads(data)
+                if (body.get("schema") != 1 or body.get("receipt", {}).get("state") != "completed" or
+                    hashlib.sha256(body["request_id"].encode()).hexdigest() + ".json" != entry.name):
+                    raise RuntimeError("CONTRACT_ARTIFACT_SAMPLE_INVALID:" + entry.name)
+                samples.append({"name": entry.name, "sha256": digest, "bytes": len(data), "record": body})
+    inventory = hashlib.sha256()
+    for name, length, digest in sorted(inventory_rows):
+        inventory.update((name + "\0" + str(length) + "\0" + digest + "\n").encode())
+    return len(inventory_rows), size, inventory.hexdigest(), samples, sample_names
+
+
+def checked_artifact_path(path, directory=True):
+    """Reject links/reparse ancestors before handling this run's owned fixture."""
+    path = Path(os.path.abspath(path))
+    for part in (*reversed(path.parents), path):
+        if not os.path.lexists(part):
+            continue
+        info = part.lstat()
+        if stat.S_ISLNK(info.st_mode) or getattr(info, "st_file_attributes", 0) & 0x400:
+            raise RuntimeError("CONTRACT_ARTIFACT_REPARSE:" + str(part))
+        if part != path and not stat.S_ISDIR(info.st_mode):
+            raise RuntimeError("CONTRACT_ARTIFACT_ANCESTOR_NOT_DIRECTORY:" + str(part))
+    info = path.lstat()
+    if (not (stat.S_ISDIR(info.st_mode) if directory else stat.S_ISREG(info.st_mode)) or not info.st_ino):
+        raise RuntimeError("CONTRACT_ARTIFACT_IDENTITY_INVALID:" + str(path))
+    return {"device": info.st_dev, "file_id": info.st_ino}
+
+
+def finish_contract_artifacts(output, receipt):
+    """Move a successful boundary in this exclusive run; no concurrent writers are supported."""
+    lifecycle = {"schema": 1, "owner": receipt["artifact_owner"], "source": receipt["source"],
+                 "binaries": receipt["binaries"], "moves": [], "errors": [], "complete": False,
+                 "persistence": "file-fsync-and-atomic-replace; directory power-loss durability not guaranteed",
+                 "writer_assumption": "exclusive run output; no concurrent writers"}
+    receipt["artifact_lifecycle"] = lifecycle
+    journal = output / "artifact-lifecycle.json"
+    def persist():
+        atomic_artifact_json(journal, lifecycle)
+    passed = ["app", "test_native_application", "--submission-history"] in receipt["passed"]
+    if not passed:
+        lifecycle["complete"] = True
+        lifecycle["retained_reason"] = "submission-history did not complete successfully"
+        persist()
+        return
+    source = output / "submission-history/boundaries/real-constant"
+    move = {"source": str(source), "state": "retained"}
+    lifecycle["moves"].append(move)
+    try:
+        # ROOT/.local containment is lexical and every existing ancestor is checked.
+        relative = output.relative_to(ROOT / ".local")
+        if not relative.parts or ".." in relative.parts:
+            raise RuntimeError("CONTRACT_ARTIFACT_OUTPUT_NOT_OWNED")
+        if (receipt["artifact_owner"]["output"] != str(output) or receipt["data_root"] != str(output) or
+            checked_artifact_path(output) != receipt["artifact_owner"]["directory_identity"]):
+            raise RuntimeError("CONTRACT_ARTIFACT_OUTPUT_IDENTITY_CHANGED")
+        identity = checked_artifact_path(source)
+        results = source.parent / "results.json"
+        checked_artifact_path(results, directory=False)
+        rows = json.loads(results.read_text(encoding="utf-8"))
+        result = next(row for row in rows if row.get("case") == "real-constant-65535-65536-next-and-restart")
+        status = result["status"]
+        if status["read_only"] or status["count_limit"] != 65536:
+            raise RuntimeError("CONTRACT_ARTIFACT_BOUNDARY_EVIDENCE_INVALID")
+        count, size, inventory_digest, samples, sample_names = measure_contract_artifacts(source)
+        if (count > 65536 or count != status["committed_count"] or
+            {row["name"] for row in samples} != sample_names):
+            raise RuntimeError("CONTRACT_ARTIFACT_MEASUREMENT_MISMATCH")
+        destination = ARTIFACT_TRASH_ROOT / relative / "submission-history/boundaries/real-constant"
+        # Creating parents is allowed only after all existing destination ancestors pass.
+        ancestor = destination.parent
+        while not os.path.lexists(ancestor):
+            ancestor = ancestor.parent
+        checked_artifact_path(ancestor)
+        if os.path.lexists(destination):
+            raise RuntimeError("CONTRACT_ARTIFACT_TRASH_CONFLICT:" + str(destination))
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        checked_artifact_path(destination.parent)
+        if destination.parent.stat().st_dev != source.stat().st_dev:
+            raise RuntimeError("CONTRACT_ARTIFACT_CROSS_VOLUME")
+        move.update({"destination": str(destination), "directory_identity": identity,
+                     "file_count": count, "logical_bytes": size, "inventory_sha256": inventory_digest,
+                     "samples": samples, "results_sha256": hashlib.sha256(results.read_bytes()).hexdigest(),
+                     "restore": {"from": str(destination), "to": str(source)}, "state": "prepared"})
+        persist()
+        if (checked_artifact_path(output) != receipt["artifact_owner"]["directory_identity"] or
+            checked_artifact_path(source) != identity):
+            raise RuntimeError("CONTRACT_ARTIFACT_IDENTITY_CHANGED")
+        source.rename(destination)
+        move["state"] = "moved"
+        if (checked_artifact_path(output) != receipt["artifact_owner"]["directory_identity"] or
+            checked_artifact_path(destination) != identity):
+            raise RuntimeError("CONTRACT_ARTIFACT_MOVED_IDENTITY_CHANGED")
+        lifecycle["complete"] = True
+    except Exception as error:
+        lifecycle["errors"].append(str(error))
+        move["residual_path"] = str(source if source.exists() else Path(move.get("destination", source)))
+    persist()
+
+
 def execute(modules, output):
-    output = output.absolute()
+    output = Path(os.path.abspath(output))
     if output.exists() or not output.is_relative_to(ROOT / ".local"):
         raise RuntimeError("NEW_ISOLATED_ROOT_UNDER_NEXT_LOCAL_REQUIRED")
+    ancestor = output.parent
+    while not os.path.lexists(ancestor):
+        ancestor = ancestor.parent
+    checked_artifact_path(ancestor)
     output.mkdir(parents=True)
     frozen = source_identity()
     cases = [(module, target, args) for module in CASES if module in modules for target, args in CASES[module]]
@@ -195,9 +349,16 @@ def execute(modules, output):
             build_targets = ["audit_correctness_targets"] if {"app","runtime","devices","recognition"} <= modules else targets
             run("contract-build", [cmake_path(), "--build", "--preset", "windows-release", "--target", *build_targets])
         except Exception as error:
-            (output / "receipt.json").write_text(json.dumps({"source": frozen, "binaries": {},
+            failed_receipt = {"source": frozen, "binaries": {},
                 "modules": sorted(modules), "passed": [], "complete": False, "build_error": str(error),
-                "device_actions": False, "data_root": str(output)}, indent=2), encoding="utf-8")
+                "device_actions": False, "data_root": str(output),
+                "artifact_lifecycle": {"complete": True, "moves": [], "errors": [],
+                    "retained_reason": "build failed before any cases ran"}}
+            try:
+                atomic_artifact_json(output / "receipt.json", failed_receipt)
+            except Exception as receipt_error:
+                print("CONTRACT_BUILD_RECEIPT_WRITE_FAILED:" + str(receipt_error) +
+                      "; original_build_error=" + str(error), file=sys.stderr)
             raise
     def binary_hash(target):
         directory = ROOT / ("build/Release" if target in {"automationd","test_head_response"} else "build/native/Release")
@@ -206,10 +367,20 @@ def execute(modules, output):
     identity_targets = targets + (["automationd", "test_head_response"] if targets and
         {"app","runtime","devices","recognition"} <= modules else [])
     receipt = {"source": frozen, "binaries": {}, "modules": sorted(modules), "passed": [],
-               "data_root": str(output), "device_actions": False, "complete": False}
+               "data_root": str(output), "device_actions": False, "complete": False,
+               "artifact_owner": {"id": str(uuid.uuid4()), "pid": os.getpid(), "output": str(output),
+                                  "directory_identity": checked_artifact_path(output)},
+               "artifact_budget": {"boundary_max_files": 65536, "boundary_max_bytes": 65536 * 1024},
+               "owned_artifacts": [{"case": "--submission-history", "path": str(output /
+                   "submission-history/boundaries/real-constant"), "disposition": "same-volume-trash-after-case-pass"}],
+               "reproduction": {"command": [sys.executable, str(ROOT / "tools/run_contracts.py"),
+                   *[item for module in sorted(modules) for item in ("--module", module)],
+                   "--output", "<new-root-under-next/.local>"], "fresh_output_required": True}}
     def proof(label, command, cwd=ROOT, timeout_seconds=120):
         run("contract-" + label, command, cwd, timeout_seconds)
         receipt["passed"].append(["tool-or-web", label])
+    # Establish this run's owner and exact artifact scope before creating fixtures.
+    atomic_artifact_json(output / "receipt.json", receipt)
     try:
         binaries = {target: binary_hash(target) for target in identity_targets}
         receipt["binaries"] = binaries
@@ -240,7 +411,7 @@ def execute(modules, output):
                 "-p", "test_*analysis.py"], timeout_seconds=120)
             proof("resource-tools", [sys.executable, "-m", "unittest", "discover", "-s", "tests",
                 "-p", "test_build_resource_contract.py"], timeout_seconds=120)
-            for pattern in ("test_diagnostic_io.py", "test_crash_plan_contract.py", "test_service_binding_contract.py"):
+            for pattern in ("test_contract_artifact_lifecycle.py", "test_diagnostic_io.py", "test_crash_plan_contract.py", "test_service_binding_contract.py"):
                 proof(pattern, [sys.executable, "-m", "unittest", "discover", "-s", "tests",
                     "-p", pattern], timeout_seconds=150 if pattern == "test_service_binding_contract.py" else 120)
             for script in ("verify_bounded_trace_input.ps1", "verify_measurement_endpoints.ps1", "verify_trace_guards.ps1"):
@@ -277,7 +448,28 @@ def execute(modules, output):
         receipt["validation_error"] = str(error)
         raise
     finally:
-        (output / "receipt.json").write_text(json.dumps(receipt, indent=2), encoding="utf-8")
+        # Preserve the validation receipt before any artifact movement; failures stay separate.
+        receipt["validation_complete"] = receipt["complete"]
+        def persist_receipt():
+            try:
+                atomic_artifact_json(output / "receipt.json", receipt)
+            except Exception as error:
+                receipt.setdefault("artifact_receipt_errors", []).append(str(error))
+                print("CONTRACT_ARTIFACT_RECEIPT_WRITE_FAILED:" + str(error), file=sys.stderr)
+        persist_receipt()
+        # Never move fixtures if their pre-move validation receipt could not be saved.
+        if not receipt.get("artifact_receipt_errors"):
+            try:
+                finish_contract_artifacts(output, receipt)
+            except Exception as cleanup_error:
+                receipt["artifact_cleanup_error"] = str(cleanup_error)
+        cleanup_failed = (receipt.get("artifact_cleanup_error") or receipt.get("artifact_receipt_errors") or
+                          receipt.get("artifact_lifecycle", {}).get("errors"))
+        receipt["complete"] = receipt["validation_complete"] and not bool(cleanup_failed)
+        persist_receipt()
+        cleanup_failed = cleanup_failed or receipt.get("artifact_receipt_errors")
+        if cleanup_failed and "validation_error" not in receipt:
+            raise RuntimeError("CONTRACT_ARTIFACT_CLEANUP_FAILED:" + str(cleanup_failed))
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
