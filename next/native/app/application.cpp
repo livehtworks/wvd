@@ -1,5 +1,6 @@
 #include "application.hpp"
 #include "publication_maintenance.hpp"
+#include "repeat_request_id.hpp"
 
 #include "games/wvd/chest/chest.hpp"
 #include "games/wvd/combat/encounter.hpp"
@@ -1928,18 +1929,13 @@ void Application::watch_task_session(const J &request, const J &stored, J source
             if (snapshot->outcome_category != "handoff_ready") {
                 if (request.value("repeat", false)) {
                     const auto &business = snapshot->business;
-                    const auto cycle = business.value("bounty_cycle", J::object());
                     if (snapshot->state != contracts::RunState::Completed)
                         throw std::runtime_error(snapshot->reason.empty() ? "REPEAT_CYCLE_NOT_COMPLETED" : snapshot->reason);
                     // 点击前上下文失效会被记录为拒绝，但没有发送输入，执行器可重新观察。
                     // 是否续轮由最终业务/清理回执决定，不能因这种已恢复的拒绝再终止成功轮。
-                    require(snapshot->state == contracts::RunState::Completed &&
-                        snapshot->completed_business_units == 3 &&
-                        std::all_of(snapshot->secondary_errors.begin(), snapshot->secondary_errors.end(),
-                            [](const auto &error) { return error == "DIAGNOSTIC_IMAGES_INCOMPLETE"; }) && snapshot->details_complete &&
-                        cycle.value("completed_cycles", 0) == 1 && cycle.value("reports_remaining", -1) == 0 &&
-                        !business.value("bounty_report_pending", true) &&
-                        !business.value("inn_payment_pending", true), "REPEAT_CYCLE_NOT_CLEAN");
+                    require(clean_repeat_cycle(snapshot->state == contracts::RunState::Completed,
+                        snapshot->completed_business_units,snapshot->details_complete,snapshot->secondary_errors,business),
+                        "REPEAT_CYCLE_NOT_CLEAN");
                     ++completed;
                     bool batch_complete=false;
                     {
@@ -1974,8 +1970,7 @@ void Application::watch_task_session(const J &request, const J &stored, J source
                     if (stop.stop_requested() || stopping_ || cancel_operation_) return;
                     require_batch_continuation(budget_bytes);
                     auto next_request = request;
-                    request_id = "repeat-" + games::tasks::digest_handoff_json(
-                        {{"session", session_request_id}, {"cycle", completed + 1}});
+                    request_id = repeat_request_id(session_request_id,completed + 1);
                     next_request["request_id"] = request_id;
                     {
                         std::lock_guard lock(mutex_);

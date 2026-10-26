@@ -1,5 +1,6 @@
 #pragma once
 #include "app/publication_maintenance.hpp"
+#include "app/repeat_request_id.hpp"
 #include "app/service_instance.hpp"
 #include "games/wvd/tasks/native_publisher.hpp"
 #include "platform/windows/fixed_directory_move.hpp"
@@ -131,7 +132,7 @@ inline void unchanged_history(const fs::path &root, const J &plan) {
             if (entry.is_regular_file()) actual[platform::utf8(entry.path().lexically_relative(root))] = platform::file_sha256(entry.path());
     check(actual == plan.at("fixture_raw_history"),"C09_RAW_REQUEST_RUN_BYTES_CHANGED");
 }
-inline int cli_fixture(const fs::path &root) {
+inline games::tasks::NativePublication tiny_seed(const fs::path &root) {
     check(root.is_absolute() && !fs::exists(root), "C09_CLI_FRESH_ROOT_REQUIRED");
     fs::create_directories(root);
     recognition::Bundle baseline{root / "input", "c09-tiny-original", {}};
@@ -145,6 +146,10 @@ inline int cli_fixture(const fs::path &root) {
     mod.files.push_back({"image/unused.png",platform::file_sha256(mod.root / "image/unused.png")});
     auto source = games::tasks::publish_native(compiler.finish(),baseline,root / "seed/published/one",J::object(),J::object(),&mod);
     source.ownership->accept(); source.ownership->receipt()->require_clean_acceptance();
+    return source;
+}
+inline int cli_fixture(const fs::path &root) {
+    auto source = tiny_seed(root);
     const auto data = root / "data";
     const auto plan = fixture(data,*source.bundle.lease);
     check(!fs::exists(data / ".publication-maintenance.json") && !fs::exists(data / ".publication-maintenance-journal.json") &&
@@ -160,6 +165,157 @@ inline int cli_fixture(const fs::path &root) {
     write(root / "result.json",result.dump(2));
     std::cout << result.dump() << '\n';
     return 0;
+}
+inline J repeat_fixture(const fs::path &root) {
+    auto source = tiny_seed(root);
+    const auto data = root / "data";
+    const std::string session = "repeat-fixture-root";
+    fs::create_directories(data / "requests"); fs::create_directories(data / "runs");
+    for (std::uint64_t cycle = 1; cycle <= 3; ++cycle) {
+        const auto id = app::repeat_request_id(session,cycle);
+        for (const auto &[name,hash] : source.bundle.lease->manifest()) {
+            (void)hash; const auto target = data / "published" / id / platform::BundleLease::checked_relative(name);
+            fs::create_directories(target.parent_path()); source.bundle.lease->copy_member(name,target);
+        }
+        const J definition{{"engine_kind","wvd_native"},{"game_id","wvd"},{"device_id","isolated"},{"viewport","900x1600"},
+            {"request_id",id},{"program_revision",source.program.revision},{"pack_revision",source.program.revision},
+            {"program_schema",workflow::FlowProgram::schema},{"unit_count",3},{"unique_program_count",1},
+            {"unit_program_owners",J::array({0,0,0})},{"handoff_parent",nullptr}};
+        storage::RunStore store(data / "runs","repeat-fixture",cycle,definition);
+        contracts::RunSnapshot snapshot; snapshot.run_id = cycle; snapshot.generation = 1;
+        snapshot.state = cycle == 3 ? contracts::RunState::UserStopped : contracts::RunState::Completed;
+        snapshot.completed_business_units = cycle == 3 ? 1 : 3;
+        snapshot.quiescent = true; snapshot.result_saved = true; snapshot.details_complete = true;
+        snapshot.business = {{"bounty_cycle",{{"completed_cycles",cycle == 3 ? 0 : 1},{"reports_remaining",cycle == 3 ? 1 : 0},
+            {"phase",cycle == 3 ? 3 : 9},{"active",cycle == 3}}},{"bounty_report_pending",cycle == 3},{"inn_payment_pending",false}};
+        contracts::SessionResult terminal; store.save_terminal(snapshot,terminal);
+    }
+    {
+        storage::SubmissionStore store(data / "requests");
+        store.save(session,{{"kind","task"},{"request",{{"request_id",session},{"task_id","GiantBounty"},{"repeat",true},{"repeat_count",3}}}},
+            {{"accepted",true},{"kind","start_task"},{"request_id",session},{"state","submitted"},{"run_id",1}},false);
+    }
+    write(root / "web/index.html","<!doctype html><title>Isolated repeat maintenance</title>");
+    const J result{{"data_root",platform::utf8(data)},{"root_request_id",session},{"successful_cycle",2},
+        {"successful_request_id",app::repeat_request_id(session,2)},{"stopped_cycle",3},{"stopped_request_id",app::repeat_request_id(session,3)},
+        {"web_root",platform::utf8(root / "web")},{"missing_pack_root",platform::utf8(root / "missing-pack")},
+        {"missing_quests",platform::utf8(root / "missing-quests.json")},{"history_fixture","real RunStore/SubmissionStore; no game execution"}};
+    write(root / "result.json",result.dump(2)); return result;
+}
+inline void repeat_cases(const fs::path &root) {
+    check(app::repeat_request_id("giant-200-t0-20261025-b0ad41332a754a33b4d900f14f3b2424",39) ==
+        "repeat-58ab3883665bd519fdc6fc126c9a0fea95c25c619e0e0e09778112d2c95efb6b","C09_WATCHER_IDENTITY_CHANGED");
+    const auto fixture = repeat_fixture(root);
+    const auto data = platform::path_from_utf8(fixture.at("data_root"));
+    const auto session = fixture.at("root_request_id").get<std::string>();
+    const auto child = fixture.at("successful_request_id").get<std::string>();
+    const auto stopped = fixture.at("stopped_request_id").get<std::string>();
+    const auto hint = M::RepeatEvidence{session,2};
+    const auto plan = [&](const std::string &id, const M::RepeatEvidence &evidence) { return M::execute(data,"plan",id,{},evidence); };
+    check(plan(session,{session,1}).at("history").at("run_count") == 1,"C09_REPEAT_ROOT_CYCLE_ONE");
+    const auto prefix = plan(child,hint);
+    check(prefix.at("history").at("run_count") == 2,"C09_REPEAT_PREFIX_NOT_COMPLETE");
+    rejects([&] { M::execute(data,"plan",session); },"PUBLICATION_REPEAT_HISTORY_UNKNOWN");
+    rejects([&] { plan(child,{session,1}); },"PUBLICATION_REPEAT_ID_MISMATCH");
+    rejects([&] { plan(child,{"wrong-root",2}); },"PUBLICATION_REPEAT_ID_MISMATCH");
+    rejects([&] { plan(stopped,{session,3}); },"PUBLICATION_RUN_NOT_SETTLED");
+    const auto one = data / "runs/repeat-fixture/1";
+    fs::rename(one,data / "held-root-run");
+    rejects([&] { plan(child,hint); },"PUBLICATION_REPEAT_PREFIX_MISSING");
+    fs::rename(data / "held-root-run",one);
+    const auto two = data / "runs/repeat-fixture/2";
+    const auto record = [&] { for (const auto &entry : fs::directory_iterator(data / "requests")) return entry.path(); throw std::runtime_error("C09_REPEAT_ROOT_RECORD_MISSING"); }();
+    fs::rename(record,data / "held-parent.json");
+    rejects([&] { plan(child,hint); },"PUBLICATION_MAINTENANCE_READ_FAILED");
+    fs::rename(data / "held-parent.json",record);
+    {
+        storage::SubmissionStore store(data / "requests");
+        store.save(child,{{"kind","task"},{"request",{{"request_id",child},{"repeat",false}}}},
+            {{"accepted",true},{"run_id",2},{"state","submitted"}},false);
+    }
+    rejects([&] { plan(child,hint); },"PUBLICATION_REPEAT_RELATION_CONFLICT");
+    for (const auto &entry : fs::directory_iterator(data / "requests"))
+        if (read(entry.path()).at("request_id") == child) { fs::rename(entry.path(),data / "held-internal-record.json"); break; }
+    const auto original_row = read(record);
+    std::ifstream original_record_input(record,std::ios::binary);
+    const std::string original_record_bytes((std::istreambuf_iterator<char>(original_record_input)),{});
+    original_record_input.close();
+    for (const auto &location : {"request","receipt"}) {
+        auto wrong_id = original_row;
+        if (std::string(location) == "request") wrong_id["intent"]["request"]["request_id"] = "different-root";
+        else wrong_id["receipt"]["request_id"] = "different-root";
+        platform::atomic_write(record,wrong_id.dump(2),true);
+        rejects([&] { plan(child,hint); },"PUBLICATION_REPEAT_ROOT_NOT_ACCEPTED");
+    }
+    platform::atomic_write(record,original_record_bytes,true);
+    auto short_target = original_row; short_target["intent"]["request"]["repeat_count"] = 1;
+    platform::atomic_write(record,short_target.dump(2),true);
+    rejects([&] { plan(child,hint); },"PUBLICATION_REPEAT_TARGET_INVALID");
+    platform::atomic_write(record,original_record_bytes,true);
+    const auto definition_path = two / "run.json";
+    const auto original_definition = read(definition_path);
+    auto wrong_frozen = original_definition; wrong_frozen["definition"]["device_id"] = "different-device";
+    platform::atomic_write(definition_path,wrong_frozen.dump(2),true);
+    rejects([&] { plan(child,hint); },"PUBLICATION_REPEAT_FROZEN_MISMATCH");
+    platform::atomic_write(definition_path,original_definition.dump(2),true);
+    const auto result_path = two / "result.json";
+    const auto original_result = read(result_path);
+    const std::vector<std::pair<std::string,J>> faults{
+        {"units",J{{"completed_business_units",1}}},{"warning",J{{"secondary_errors",J::array({"OTHER_ERROR"})}}},
+        {"business",J{{"business",{{"bounty_cycle",{{"completed_cycles",0},{"reports_remaining",1}}},
+            {"bounty_report_pending",false},{"inn_payment_pending",false}}}}}};
+    for (const auto &[name,patch] : faults) {
+        (void)name; auto bad = original_result; bad.update(patch); platform::atomic_write(result_path,bad.dump(2),true);
+        rejects([&] { plan(child,hint); },"PUBLICATION_REPEAT_CYCLE_NOT_CLEAN");
+    }
+    platform::atomic_write(result_path,original_result.dump(2),true);
+    // Target 3 is Completed but its middle prefix item 2 is stopped.
+    const auto third_path = data / "runs/repeat-fixture/3/result.json"; const auto third = read(third_path);
+    auto complete_third = original_result; complete_third["run_id"] = 3; platform::atomic_write(third_path,complete_third.dump(2),true);
+    {
+        storage::SubmissionStore store(data / "requests");
+        store.save(child,{{"kind","task"},{"request",{{"request_id",child},{"repeat",false}}}},
+            {{"accepted",true},{"run_id",2},{"state","submitted"}},false);
+    }
+    rejects([&] { plan(stopped,{session,3}); },"PUBLICATION_REPEAT_RELATION_CONFLICT");
+    for (const auto &entry : fs::directory_iterator(data / "requests"))
+        if (read(entry.path()).at("request_id") == child) { fs::rename(entry.path(),data / "held-middle-conflict-record.json"); break; }
+    fs::rename(two,data / "held-middle-run");
+    rejects([&] { plan(stopped,{session,3}); },"PUBLICATION_REPEAT_PREFIX_MISSING");
+    fs::rename(data / "held-middle-run",two);
+    auto stopped_middle = original_result; stopped_middle["state"] = "UserStopped"; platform::atomic_write(result_path,stopped_middle.dump(2),true);
+    rejects([&] { plan(stopped,{session,3}); },"PUBLICATION_RUN_NOT_SETTLED");
+    platform::atomic_write(result_path,original_result.dump(2),true); platform::atomic_write(third_path,third.dump(2),true);
+    {
+        auto duplicate = original_definition.at("definition");
+        storage::RunStore store(data / "runs","repeat-fixture",4,duplicate);
+        contracts::RunSnapshot snapshot; snapshot.run_id=4; snapshot.generation=1; snapshot.state=contracts::RunState::Completed;
+        snapshot.completed_business_units=3; snapshot.quiescent=true; snapshot.result_saved=true; snapshot.details_complete=true;
+        snapshot.business=original_result.at("business"); contracts::SessionResult terminal; store.save_terminal(snapshot,terminal);
+    }
+    rejects([&] { plan(child,hint); },"PUBLICATION_REPEAT_RELATION_CONFLICT");
+    fs::rename(data / "runs/repeat-fixture/4",data / "held-duplicate-run");
+    check(plan(child,hint).at("history") == prefix.at("history"),"C09_REPEAT_HISTORY_NOT_RESTORED");
+    const auto root_converted = M::execute(data,"convert",session,{},M::RepeatEvidence{session,1});
+    check(M::execute(data,"rollback",root_converted.at("transaction_id")).at("phase") == "rolled_back","C09_REPEAT_ROOT_ROLLBACK");
+    const auto converted = M::execute(data,"convert",child,{},hint);
+    const auto global_path = data / ".publication-maintenance-journal.json";
+    const auto global = read(global_path); auto corrupt_hint = global;
+    corrupt_hint["transactions"][converted.at("transaction_id").get<std::string>()]["history"]["repeat"]["cycle"] = 0;
+    platform::atomic_write(global_path,corrupt_hint.dump(),true);
+    blocked([&] { M::require_no_pending(data); },"C09_CORRUPT_REPEAT_HINT_ACCEPTED");
+    platform::atomic_write(global_path,global.dump(),true);
+    auto root_changed = original_row; root_changed["intent"]["request"]["repeat_count"] = 4;
+    platform::atomic_write(record,root_changed.dump(2),true);
+    rejects([&] { M::execute(data,"finish",converted.at("transaction_id")); },"PUBLICATION_HISTORY_CHANGED");
+    rejects([&] { M::execute(data,"rollback",converted.at("transaction_id")); },"PUBLICATION_HISTORY_CHANGED");
+    platform::atomic_write(record,original_record_bytes,true);
+    const auto rolled = M::execute(data,"rollback",converted.at("transaction_id"));
+    check(rolled.at("phase") == "rolled_back","C09_REPEAT_ROLLBACK_FAILED");
+    M::require_no_pending(data);
+    write(root / "repeat-result.json",J{{"passed",true},{"prefix_count",2},{"stopped_cycle_preserved",3},
+        {"registered_history",converted.at("history")},{"trash_namespace",prefix.at("trash_namespace")},
+        {"internal_submission_records",0},{"root_cycle_one_supported",true},{"parent_change_blocks_finish_and_rollback",true}}.dump(2));
 }
 inline int run(const fs::path &root) {
     check(root.is_absolute() && !fs::exists(root), "C09_FRESH_ROOT_REQUIRED");
@@ -313,6 +469,10 @@ inline int run(const fs::path &root) {
     rejects([&] { platform::move_fixed_directory(moves / "source",moves / "link/child",source_id); },"PUBLICATION_MOVE_DIRECTORY_INVALID");
     check(platform::fixed_directory_identity(moves / "source") == source_id && fs::is_directory(moves / "occupied"),"C09_MOVE_REJECTION_DELETED");
     results.push_back({{"move","occupied_identity_and_real_reparse_rejected"}});
+    repeat_cases(root / "repeat-contract");
+    const auto repeat_result = read(root / "repeat-contract/repeat-result.json");
+    trash_roots.push_back(platform::path_from_utf8(repeat_result.at("trash_namespace")));
+    results.push_back({{"repeat_prefix_contract",repeat_result}});
     std::uint64_t bytes{}; unsigned files{};
     const auto count_tree = [&](const fs::path &tree) {
         if (!fs::exists(tree)) return;

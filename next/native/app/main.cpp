@@ -31,26 +31,40 @@ int wmain(int argc, wchar_t **argv) {
         bool maintenance = false;
         for (int i = 1; i < argc; ++i) if (std::wstring(argv[i]) == L"--maintenance-publication") maintenance = true;
         if (maintenance) {
-            std::string command, request, transaction;
+            std::string command, request, transaction, repeat_root;
+            std::optional<wvd::app::PublicationMaintenance::RepeatEvidence> repeat;
+            std::uint64_t cycle{};
             std::filesystem::path maintenance_root;
             std::set<std::wstring> seen;
             for (int i = 1; i < argc; ++i) {
                 const std::wstring option(argv[i]);
                 if ((option != L"--maintenance-publication" && option != L"--data-root" &&
-                    option != L"--request-id" && option != L"--transaction-id") ||
+                    option != L"--request-id" && option != L"--transaction-id" &&
+                    option != L"--root-request-id" && option != L"--cycle") ||
                     !seen.insert(option).second || i + 1 >= argc)
                     throw std::runtime_error("PUBLICATION_MAINTENANCE_ARGUMENT_INVALID");
                 const std::filesystem::path value(argv[++i]);
                 if (option == L"--data-root") maintenance_root = value;
                 else if (option == L"--maintenance-publication") command = wvd::platform::utf8(value);
                 else if (option == L"--request-id") request = wvd::platform::utf8(value);
+                else if (option == L"--root-request-id") repeat_root = wvd::platform::utf8(value);
+                else if (option == L"--cycle") {
+                    const auto text = wvd::platform::utf8(value);
+                    const auto [end,error] = std::from_chars(text.data(),text.data()+text.size(),cycle);
+                    if (error != std::errc{} || end != text.data()+text.size())
+                        throw std::runtime_error("PUBLICATION_MAINTENANCE_ARGUMENT_INVALID");
+                }
                 else transaction = wvd::platform::utf8(value);
             }
             const bool by_request = command == "plan" || command == "convert";
             if (maintenance_root.empty() || (by_request ? request.empty() || !transaction.empty() : transaction.empty() || !request.empty()))
                 throw std::runtime_error("PUBLICATION_MAINTENANCE_ARGUMENT_INVALID");
+            if (seen.contains(L"--root-request-id") != seen.contains(L"--cycle") ||
+                (seen.contains(L"--cycle") && (!by_request || repeat_root.empty())))
+                throw std::runtime_error("PUBLICATION_MAINTENANCE_ARGUMENT_INVALID");
+            if (seen.contains(L"--cycle")) repeat = wvd::app::PublicationMaintenance::RepeatEvidence{repeat_root,cycle};
             std::cout << wvd::app::PublicationMaintenance::execute(maintenance_root, command,
-                by_request ? request : transaction).dump() << '\n';
+                by_request ? request : transaction,{},repeat).dump() << '\n';
             return 0;
         }
         unsigned short port = 17652;

@@ -842,6 +842,10 @@ int closure_application(const std::filesystem::path &pack, const std::filesystem
 
 int main(int argc, char **argv) {
     try {
+        if (argc == 3 && std::string(argv[1]) == "--publication-maintenance-repeat-cli-fixture") {
+            const auto fixture = publication_maintenance_contract::repeat_fixture(std::filesystem::absolute(wvd::platform::path_from_utf8(argv[2])));
+            std::cout << fixture.dump() << '\n'; return 0;
+        }
         if (argc == 3 && std::string(argv[1]) == "--publication-maintenance-cli-fixture")
             return publication_maintenance_contract::cli_fixture(std::filesystem::absolute(wvd::platform::path_from_utf8(argv[2])));
         if (argc == 3 && std::string(argv[1]) == "--publication-maintenance")

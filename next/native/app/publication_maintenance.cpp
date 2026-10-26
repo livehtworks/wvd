@@ -1,5 +1,6 @@
 #include "publication_maintenance.hpp"
 #include "service_instance.hpp"
+#include "repeat_request_id.hpp"
 #include "games/wvd/tasks/native_publisher.hpp"
 #include "platform/windows/fixed_directory_move.hpp"
 #include "platform/windows/bundle_lease.hpp"
@@ -41,7 +42,7 @@ std::string digest(const std::string &value) {
     return platform::bytes_sha256({reinterpret_cast<const std::uint8_t *>(value.data()), value.size()});
 }
 // Bounded disk reads deny concurrent write/delete and reject reparse files.
-J read(const fs::path &path) {
+J read(const fs::path &path, std::string *raw_sha256 = nullptr) {
     HANDLE handle = CreateFileW(platform::extended_path(path).c_str(), GENERIC_READ,
         FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
     need(handle != INVALID_HANDLE_VALUE, "PUBLICATION_MAINTENANCE_READ_FAILED");
@@ -59,6 +60,7 @@ J read(const fs::path &path) {
             "PUBLICATION_MAINTENANCE_READ_FAILED");
         offset += count;
     }
+    if (raw_sha256) *raw_sha256 = digest(bytes);
     return J::parse(bytes);
 }
 J snapshot(const fs::path &path, bool legacy) {
@@ -87,51 +89,113 @@ bool no_pending(const J &value) {
     } else if (value.is_array()) { for (const auto &item : value) if (!no_pending(item)) return false; }
     return true;
 }
-J eligibility(const fs::path &root, const std::string &id, const std::string &revision) {
+using Repeat = PublicationMaintenance::RepeatEvidence;
+std::optional<Repeat> repeat_hint(const J &history) {
+    if (!history.contains("repeat")) return {};
+    const auto &evidence = history.at("repeat");
+    return Repeat{evidence.at("root_request_id").get<std::string>(),evidence.at("cycle").get<std::uint64_t>()};
+}
+J eligibility(const fs::path &root, const std::string &id, const std::string &revision,
+    const std::optional<Repeat> &repeat = {}) {
     need(present(root / "requests") && present(root / "runs"), "PUBLICATION_HISTORY_UNKNOWN");
-    storage::SubmissionStore requests(root / "requests");
-    requests.require_writable();
+    storage::SubmissionStore requests(root / "requests"); requests.require_writable();
     const auto status = requests.status();
     need(status.at("scan_complete") == true && status.at("capacity_known") == true &&
         status.at("pending_count") == 0 && status.at("pending_intent_count") == 0 && status.at("unknown_entries") == 0,
         "PUBLICATION_HISTORY_UNKNOWN");
-    const auto row = read(root / "requests" / (digest(id) + ".json"));
-    need(row.at("schema") == 1 && row.at("request_id") == id && row.at("intent").is_object() &&
-        row.at("receipt").is_object() && no_pending(row), "PUBLICATION_REQUEST_NOT_SETTLED");
+    const auto root_id = repeat ? repeat->root_request_id : id;
+    identifier(root_id);
+    std::map<std::string,std::uint64_t> expected;
+    if (repeat) {
+        need(repeat->cycle > 0 && repeat->cycle <= 65536,"PUBLICATION_REPEAT_PREFIX_LIMIT");
+        need(repeat_request_id(root_id,repeat->cycle) == id,"PUBLICATION_REPEAT_ID_MISMATCH");
+        for (std::uint64_t cycle = 1; cycle <= repeat->cycle; ++cycle) {
+            const auto expected_id = repeat_request_id(root_id,cycle);
+            if (cycle > 1) need(!present(root / "requests" / (digest(expected_id) + ".json")),"PUBLICATION_REPEAT_RELATION_CONFLICT");
+            need(expected.emplace(expected_id,cycle).second,"PUBLICATION_REPEAT_RELATION_CONFLICT");
+        }
+    }
+    std::string record_sha;
+    const auto row = read(root / "requests" / (digest(root_id) + ".json"),&record_sha);
+    need(row.at("schema") == 1 && row.at("request_id") == root_id && row.at("intent").is_object() &&
+        row.at("receipt").is_object() && no_pending(row),"PUBLICATION_REQUEST_NOT_SETTLED");
     const auto &intent = row.at("intent");
-    need(intent.contains("request") && intent.at("request").is_object() &&
-        !intent.at("request").value("repeat", false), "PUBLICATION_REPEAT_HISTORY_UNKNOWN");
-    J runs = J::array();
-    std::size_t visited{};
+    need(intent.contains("request") && intent.at("request").is_object(),"PUBLICATION_REPEAT_HISTORY_UNKNOWN");
+    std::uint64_t target{};
+    if (repeat) {
+        const auto &request = intent.at("request");
+        need(intent.at("kind") == "task" && request.at("request_id") == root_id &&
+            (request.at("task_id") == "GiantBounty" || request.at("task_id") == "Scorpionesses") &&
+            request.at("repeat") == true && request.at("repeat_count").is_number_integer() &&
+            row.at("receipt").at("kind") == "start_task" && row.at("receipt").at("request_id") == root_id &&
+            row.at("receipt").at("accepted") == true && row.at("receipt").contains("run_id"),"PUBLICATION_REPEAT_ROOT_NOT_ACCEPTED");
+        const auto count = request.at("repeat_count").get<std::int64_t>();
+        need(count >= 1 && count <= 1000000 && repeat->cycle <= static_cast<std::uint64_t>(count),"PUBLICATION_REPEAT_TARGET_INVALID");
+        target = static_cast<std::uint64_t>(count);
+    } else need(!intent.at("request").value("repeat",false),"PUBLICATION_REPEAT_HISTORY_UNKNOWN");
+    struct SavedRun { J definition,result; std::string definition_sha,result_sha; };
+    std::map<std::uint64_t,std::vector<SavedRun>> prefix;
+    J runs = J::array(); std::size_t visited{};
     platform::fixed_directory_identity(root / "runs");
     for (const auto &instance : fs::directory_iterator(platform::extended_path(root / "runs"))) {
         platform::fixed_directory_identity(instance.path());
         for (const auto &entry : fs::directory_iterator(instance.path())) {
-            need(++visited <= 65536, "PUBLICATION_HISTORY_SCAN_LIMIT");
+            need(++visited <= 65536,"PUBLICATION_HISTORY_SCAN_LIMIT");
             platform::fixed_directory_identity(entry.path());
             const auto run_path = root / "runs" / instance.path().filename() / entry.path().filename();
-            const auto definition = read(run_path / "run.json");
-            need(definition.at("schema") == 1 && definition.at("definition").contains("request_id"), "PUBLICATION_HISTORY_UNKNOWN");
+            std::string definition_sha;
+            const auto definition = read(run_path / "run.json",&definition_sha);
+            need(definition.at("schema") == 1 && definition.at("definition").contains("request_id"),"PUBLICATION_HISTORY_UNKNOWN");
             const auto &frozen = definition.at("definition");
-            // Handoff or other unknown references anywhere make the closure uncertain.
-            need(no_pending(frozen), "PUBLICATION_HISTORY_PENDING_REFERENCE");
-            if (frozen.at("request_id") != id) continue;
+            need(no_pending(frozen),"PUBLICATION_HISTORY_PENDING_REFERENCE");
+            const auto request_id = frozen.at("request_id").get<std::string>();
+            if (repeat ? !expected.contains(request_id) : request_id != id) continue;
             need(frozen.at("program_revision") == revision && frozen.at("pack_revision") == revision &&
-                frozen.at("unique_program_count") == 1, "PUBLICATION_HISTORY_REVISION_MISMATCH");
+                frozen.at("unique_program_count") == 1,"PUBLICATION_HISTORY_REVISION_MISMATCH");
             const auto result = storage::RunStore::read_summary(run_path);
-            need(result.at("state") == "Completed" && result.at("result_saved") == true &&
-                result.at("quiescent") == true && result.at("details_complete") == true &&
-                result.at("storage_error") == "" && no_pending(result) &&
-                result.at("run_id") == definition.at("run_id"), "PUBLICATION_RUN_NOT_SETTLED");
-            runs.push_back({{"instance", definition.at("instance")}, {"run_id", definition.at("run_id")},
-                {"definition_sha256",digest(definition.dump())}, {"result_sha256",digest(result.dump())}});
+            need(result.at("state") == "Completed" && result.at("result_saved") == true && result.at("quiescent") == true &&
+                result.at("details_complete") == true && result.at("storage_error") == "" && no_pending(result) &&
+                result.at("run_id") == definition.at("run_id"),"PUBLICATION_RUN_NOT_SETTLED");
+            if (repeat) {
+                need(frozen.at("unit_count") == 3 && clean_repeat_cycle(true,result.at("completed_business_units").get<std::uint64_t>(),
+                    result.at("details_complete").get<bool>(),result.at("secondary_errors").get<std::vector<std::string>>(),result.at("business")),
+                    "PUBLICATION_REPEAT_CYCLE_NOT_CLEAN");
+                need(definition.at("instance") == platform::utf8(instance.path().filename()) &&
+                    std::to_string(definition.at("run_id").get<std::uint64_t>()) == platform::utf8(entry.path().filename()),
+                    "PUBLICATION_REPEAT_RUN_PATH_MISMATCH");
+                std::string result_sha;
+                need(read(run_path / "result.json",&result_sha) == result,"PUBLICATION_HISTORY_CHANGED");
+                prefix[expected.at(request_id)].push_back({definition,result,definition_sha,result_sha});
+            } else runs.push_back({{"instance",definition.at("instance")},{"run_id",definition.at("run_id")},
+                {"definition_sha256",digest(definition.dump())},{"result_sha256",digest(result.dump())}});
         }
     }
-    need(!runs.empty(), "PUBLICATION_HISTORY_ORPHAN");
-    need(row.at("receipt").contains("run_id") && std::any_of(runs.begin(), runs.end(), [&](const auto &run) {
-        return run.at("run_id") == row.at("receipt").at("run_id");
-    }), "PUBLICATION_REQUEST_RUN_MISMATCH");
-    return {{"request_record_sha256",digest(row.dump())}, {"runs_sha256",digest(runs.dump())}, {"run_count",runs.size()}};
+    if (!repeat) {
+        need(!runs.empty(),"PUBLICATION_HISTORY_ORPHAN");
+        need(row.at("receipt").contains("run_id") && std::any_of(runs.begin(),runs.end(),[&](const auto &run) {
+            return run.at("run_id") == row.at("receipt").at("run_id");
+        }),"PUBLICATION_REQUEST_RUN_MISMATCH");
+        return {{"request_record_sha256",digest(row.dump())},{"runs_sha256",digest(runs.dump())},{"run_count",runs.size()}};
+    }
+    need(prefix.size() == repeat->cycle,"PUBLICATION_REPEAT_PREFIX_MISSING");
+    for (const auto &[cycle,records] : prefix) { (void)cycle; need(records.size() == 1,"PUBLICATION_REPEAT_RELATION_CONFLICT"); }
+    const auto &anchor = prefix.at(1).front();
+    need(anchor.definition.at("run_id") == row.at("receipt").at("run_id"),"PUBLICATION_REQUEST_RUN_MISMATCH");
+    const auto &parent = anchor.definition.at("definition");
+    need(parent.at("engine_kind") == "wvd_native" && parent.at("game_id") == "wvd","PUBLICATION_REPEAT_FROZEN_MISMATCH");
+    J ordered = J::array();
+    for (const auto &[cycle,records] : prefix) {
+        const auto &record = records.front(); const auto &frozen = record.definition.at("definition");
+        need(record.definition.at("instance") == anchor.definition.at("instance"),"PUBLICATION_REPEAT_INSTANCE_MISMATCH");
+        for (const auto *key : {"engine_kind","game_id","device_id","viewport","unit_count","program_schema",
+            "unique_program_count","unit_program_owners","program_revision","pack_revision"})
+            need(frozen.at(key) == parent.at(key),"PUBLICATION_REPEAT_FROZEN_MISMATCH");
+        ordered.push_back({{"cycle",cycle},{"request_id",frozen.at("request_id")},{"instance",record.definition.at("instance")},
+            {"run_id",record.definition.at("run_id")},{"definition_sha256",record.definition_sha},{"result_sha256",record.result_sha}});
+    }
+    return {{"request_record_sha256",digest(row.dump())},{"runs_sha256",digest(ordered.dump())},{"run_count",ordered.size()},
+        {"repeat",{{"root_request_id",root_id},{"cycle",repeat->cycle},{"target",target},{"root_record_sha256",record_sha},
+            {"anchor_definition_sha256",anchor.definition_sha},{"anchor_result_sha256",anchor.result_sha}}}};
 }
 bool terminal(const J &journal) { return journal.at("phase") == "committed" || journal.at("phase") == "rolled_back"; }
 fs::path trash_namespace_for(const fs::path &root, std::string id) {
@@ -161,6 +225,19 @@ void validate_entry(const std::string &root_id, const fs::path &space, const std
         journal.at("old").at("manifest_sha256").is_string() && journal.at("old").at("resources_sha256").is_string() &&
         journal.at("old").at("raw_controls").is_object() && journal.at("history").at("run_count").get<std::uint64_t>() > 0 &&
         journal.at("history").at("runs_sha256").is_string(), "PUBLICATION_MAINTENANCE_JOURNAL_INVALID");
+    if (const auto hint = repeat_hint(journal.at("history"))) {
+        identifier(hint->root_request_id);
+        const auto &evidence = journal.at("history").at("repeat");
+        need(hint->cycle > 0 && hint->cycle <= 65536 && hint->cycle <= evidence.at("target").get<std::uint64_t>() &&
+            evidence.at("target").get<std::uint64_t>() <= 1000000 && journal.at("history").at("run_count") == hint->cycle &&
+            repeat_request_id(hint->root_request_id,hint->cycle) == journal.at("request_id").get<std::string>(),
+            "PUBLICATION_MAINTENANCE_REPEAT_EVIDENCE_INVALID");
+        for (const auto *field : {"root_record_sha256","anchor_definition_sha256","anchor_result_sha256"}) {
+            const auto hash = evidence.at(field).get<std::string>();
+            need(hash.size() == 64 && std::all_of(hash.begin(),hash.end(),[](unsigned char c) {
+                return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'); }),"PUBLICATION_MAINTENANCE_REPEAT_EVIDENCE_INVALID");
+        }
+    }
 }
 J load_global(const fs::path &root) {
     const auto root_id = platform::fixed_directory_identity(root);
@@ -262,7 +339,7 @@ struct Transaction {
         const bool old_trash = at(trash, old_id);
         need(old_home != old_trash, "PUBLICATION_MAINTENANCE_OLD_LOCATION_UNKNOWN");
         old_verified(old_home ? original : trash);
-        need(eligibility(root, value.at("request_id"), value.at("old").at("revision")) == value.at("history"),
+        need(eligibility(root, value.at("request_id"), value.at("old").at("revision"),repeat_hint(value.at("history"))) == value.at("history"),
             "PUBLICATION_HISTORY_CHANGED");
         { const auto global = load_global(root);
           const auto sentinel = read(root / sentinel_name);
@@ -310,6 +387,8 @@ struct Transaction {
         save("committed");
     }
     void rollback() {
+        need(eligibility(root,value.at("request_id"),value.at("old").at("revision"),repeat_hint(value.at("history"))) == value.at("history"),
+            "PUBLICATION_HISTORY_CHANGED");
         if (!value.contains("trash_id")) need(!present(trash.parent_path()),"PUBLICATION_MAINTENANCE_TRASH_ID_UNKNOWN");
         else need(platform::fixed_directory_identity(trash.parent_path()) == value.at("trash_id").get<std::string>(),"PUBLICATION_MAINTENANCE_TRASH_ID_MISMATCH");
         const auto old_id = value.at("old").at("directory_id").get<std::string>();
@@ -357,17 +436,18 @@ void PublicationMaintenance::require_no_pending(const fs::path &input) {
     }
 }
 J PublicationMaintenance::execute(const fs::path &input, const std::string &command,
-    const std::string &id, const Progress &progress) {
+    const std::string &id, const Progress &progress, const std::optional<RepeatEvidence> &repeat) {
     const auto root = ordinary(input);
     need(!input.empty() && present(root),"PUBLICATION_MAINTENANCE_EXISTING_ROOT_REQUIRED");
     platform::fixed_directory_identity(root); identifier(id);
     need(command == "plan" || command == "convert" || command == "status" || command == "finish" || command == "rollback",
         "PUBLICATION_MAINTENANCE_COMMAND_INVALID");
+    need(!repeat || command == "plan" || command == "convert","PUBLICATION_MAINTENANCE_ARGUMENT_INVALID");
     ServiceInstance exclusive(root);
     if (command == "plan" || command == "convert") {
         require_no_pending(root);
         const auto old = snapshot(root / "published" / id,true);
-        const auto history = eligibility(root,id,old.at("revision"));
+        const auto history = eligibility(root,id,old.at("revision"),repeat);
         J plan{{"schema",1},{"request_id",id},{"old",old},{"history",history},
             {"data_root_id",platform::fixed_directory_identity(root)},{"trash_namespace",platform::utf8(trash_namespace(root))}};
         if (command == "plan") return plan;
