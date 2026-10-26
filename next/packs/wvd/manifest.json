@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "source_commit": "6585f4075f5714ab522aa582993860c09af912c1",
-  "revision": "8fa878edfd6941dd2420021a714f6914a6c5b28d673a507eb571b5a015886221",
+  "revision": "6e756fe42f4f15541ed28cd338bbf23fcf31754ab560c7a7d528eaf1db65cea2",
   "files": [
     {
       "path": "image/7000G/icantagreewithU.png",
@@ -1486,7 +1486,7 @@
     },
     {
       "path": "image/character_panel_zh_hant.png",
-      "source": "resources/images/character_panel_zh_hant.png",
+      "source": "next/resources/images/character_panel_zh_hant.png",
       "sha256": "36178184484b01a7a2448fa6dee96c1d96b4a7096d7c94e35d8c3fcabb7317ae",
       "bytes": 16094,
       "source_refs": []
@@ -1774,91 +1774,91 @@
     },
     {
       "path": "image/combat_level1_label.png",
-      "source": "resources/images/combat_level1_label.png",
+      "source": "next/resources/images/combat_level1_label.png",
       "sha256": "6d2c6bfe6955f8632ac0220905bfb91e9413f2d4d8e4aaddbadb135db6a40916",
       "bytes": 3696,
       "source_refs": []
     },
     {
       "path": "image/combat_level2_label.png",
-      "source": "resources/images/combat_level2_label.png",
+      "source": "next/resources/images/combat_level2_label.png",
       "sha256": "acdf1441d9c955901e453a6b5bb6acb7922551a88d36b42d76fc264ce78fce6b",
       "bytes": 4044,
       "source_refs": []
     },
     {
       "path": "image/combat_level3_label.png",
-      "source": "resources/images/combat_level3_label.png",
+      "source": "next/resources/images/combat_level3_label.png",
       "sha256": "120518e4c1a4a44effd64ee9a3d6ea252ed111b95a2fcae05401c8f979fcfb38",
       "bytes": 4536,
       "source_refs": []
     },
     {
       "path": "image/combat_level4_label.png",
-      "source": "resources/images/combat_level4_label.png",
+      "source": "next/resources/images/combat_level4_label.png",
       "sha256": "296969df05ba961a7be0bf69f8893c092b6bc7c1ab7ec2c9e86f39ba7f6023fd",
       "bytes": 3778,
       "source_refs": []
     },
     {
       "path": "image/combat_level5_label.png",
-      "source": "resources/images/combat_level5_label.png",
+      "source": "next/resources/images/combat_level5_label.png",
       "sha256": "0373edf0339053039f3aeedf158296278c5aed422ea168a721ed29001f368b20",
       "bytes": 4014,
       "source_refs": []
     },
     {
       "path": "image/combat_level6_label.png",
-      "source": "resources/images/combat_level6_label.png",
+      "source": "next/resources/images/combat_level6_label.png",
       "sha256": "7d9c9a1b9618b0a80422493752e7dcc0fe480c0cdfc390ef3de4c827f80069ac",
       "bytes": 3970,
       "source_refs": []
     },
     {
       "path": "image/combat_level7_label.png",
-      "source": "resources/images/combat_level7_label.png",
+      "source": "next/resources/images/combat_level7_label.png",
       "sha256": "924c9ee8621c563db58ee97dc05087eeac74a769f7233cc8791f578e19b90c77",
       "bytes": 3888,
       "source_refs": []
     },
     {
       "path": "image/combat_scorpion_portrait.png",
-      "source": "resources/images/combat_scorpion_portrait.png",
+      "source": "next/resources/images/combat_scorpion_portrait.png",
       "sha256": "81e87efb6cf574d9833828741cbefe95e69235442c9f11501e06534ee6d8f30f",
       "bytes": 8188,
       "source_refs": []
     },
     {
       "path": "image/combat_skill_confirm_zh_hant.png",
-      "source": "resources/images/combat_skill_confirm_zh_hant.png",
+      "source": "next/resources/images/combat_skill_confirm_zh_hant.png",
       "sha256": "64ec000d02ab6abfba0dce16ee3ec083788baf50110d603da8c5f11be749a216",
       "bytes": 19353,
       "source_refs": []
     },
     {
       "path": "image/combat_skill_detail_zh_hant.png",
-      "source": "resources/images/combat_skill_detail_zh_hant.png",
+      "source": "next/resources/images/combat_skill_detail_zh_hant.png",
       "sha256": "8dc095f162c3b79a88326cfdde46de4bed07a7dd870f718a2f44acfb9dad7579",
       "bytes": 8561,
       "source_refs": []
     },
     {
       "path": "image/combat_special_skull.png",
-      "source": "resources/images/combat_special_skull.png",
+      "source": "next/resources/images/combat_special_skull.png",
       "sha256": "ea4cbbc658ef22d73bf8f3557a403b9105ab53bf1ec30a51d09d3d27c9300ab8",
       "bytes": 2615,
       "source_refs": []
     },
     {
       "path": "image/combat_speed_off_zh_hant.png",
-      "source": "resources/images/combat_speed_off_zh_hant.png",
+      "source": "next/resources/images/combat_speed_off_zh_hant.png",
       "sha256": "fa0d211be9f8e70b9259d2cd0803a404e8737bb67289b8d4ae8a5150e1f2931e",
       "bytes": 2996,
       "source_refs": []
     },
     {
       "path": "image/combat_speed_on_zh_hant.png",
-      "source": "resources/images/combat_speed_on_zh_hant.png",
+      "source": "next/resources/images/combat_speed_on_zh_hant.png",
       "sha256": "69f5cfbe9f4bc993769d3e5a00cb07f9a197662dacf2dd29451baddbaf976b95",
       "bytes": 2998,
       "source_refs": []
@@ -2668,7 +2668,7 @@
     },
     {
       "path": "image/guild_bounty_card_header.png",
-      "source": "resources/images/guild_bounty_card_header.png",
+      "source": "next/resources/images/guild_bounty_card_header.png",
       "sha256": "01f375303230812132b53061f5fe92f2d4d4a99a5465c227c7fa51fdba4a4dfa",
       "bytes": 16169,
       "source_refs": [
@@ -2677,7 +2677,7 @@
     },
     {
       "path": "image/guild_bounty_selected_zh_hant.png",
-      "source": "resources/images/guild_bounty_selected_zh_hant.png",
+      "source": "next/resources/images/guild_bounty_selected_zh_hant.png",
       "sha256": "cc994ccd2d838c784cc3018268aece59de3a8352ad14aea12d99f185f60b89f2",
       "bytes": 8673,
       "source_refs": [
@@ -2722,7 +2722,7 @@
     },
     {
       "path": "image/guild_leave_zh_hant.png",
-      "source": "resources/images/guild_leave_zh_hant.png",
+      "source": "next/resources/images/guild_leave_zh_hant.png",
       "sha256": "c62e39f232f5a1be9387adee9c343db9663ae976db07e1eaaa335a3158ababd0",
       "bytes": 9114,
       "source_refs": [
@@ -2731,7 +2731,7 @@
     },
     {
       "path": "image/guild_list_back_zh_hant.png",
-      "source": "resources/images/guild_list_back_zh_hant.png",
+      "source": "next/resources/images/guild_list_back_zh_hant.png",
       "sha256": "2784c08c5126a4c8dc00e8045ffd0ed3914e5adb405a7c303b746923d8e00746",
       "bytes": 5075,
       "source_refs": [
@@ -2740,21 +2740,21 @@
     },
     {
       "path": "image/guild_report_ready_zh_hant.png",
-      "source": "resources/images/guild_report_ready_zh_hant.png",
+      "source": "next/resources/images/guild_report_ready_zh_hant.png",
       "sha256": "0ee99873d95f0416fccf0505a57bb448efc7314fb52fcbe1030257704fcf04c5",
       "bytes": 15057,
       "source_refs": []
     },
     {
       "path": "image/guild_report_receipt_close_zh_hant.png",
-      "source": "resources/images/guild_report_receipt_close_zh_hant.png",
+      "source": "next/resources/images/guild_report_receipt_close_zh_hant.png",
       "sha256": "91bfc0ad52ab8bb9ad3a6b2cdba444622470e4035b1c0f0318a67c3e275c0de4",
       "bytes": 10087,
       "source_refs": []
     },
     {
       "path": "image/guild_report_receipt_zh_hant.png",
-      "source": "resources/images/guild_report_receipt_zh_hant.png",
+      "source": "next/resources/images/guild_report_receipt_zh_hant.png",
       "sha256": "b2351a05832758e93790e68479670186109bbb73f628a59919ad42035f41accf",
       "bytes": 16365,
       "source_refs": []
@@ -3142,14 +3142,14 @@
     },
     {
       "path": "image/network_error_zh_hant.png",
-      "source": "resources/images/network_error_zh_hant.png",
+      "source": "next/resources/images/network_error_zh_hant.png",
       "sha256": "604543a8b97cc258924ff4265d417d4daf4613f86d1859185d7bd88644a56801",
       "bytes": 46604,
       "source_refs": []
     },
     {
       "path": "image/network_retry_zh_hant.png",
-      "source": "resources/images/network_retry_zh_hant.png",
+      "source": "next/resources/images/network_retry_zh_hant.png",
       "sha256": "e33568f98550a7f46ce1615ec91fecd3e07f851dc37419d87b0631f27a2e0208",
       "bytes": 5574,
       "source_refs": []
@@ -3602,7 +3602,7 @@
     },
     {
       "path": "image/recovery_panel_zh_hant.png",
-      "source": "resources/images/recovery_panel_zh_hant.png",
+      "source": "next/resources/images/recovery_panel_zh_hant.png",
       "sha256": "0dcda546cbfaae845b9c58cdeeca02d02fac35db201c654d690bc9d5d02cdb9b",
       "bytes": 18360,
       "source_refs": []
