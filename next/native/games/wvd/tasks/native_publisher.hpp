@@ -24,7 +24,8 @@ struct NativePublication {
     friend struct NativePublicationTestAccess;
     friend NativePublication publish_native(const CompiledWorkflow &, const recognition::Bundle &,
         const std::filesystem::path &, const nlohmann::json &, const nlohmann::json &,
-        const recognition::Bundle *, const std::function<void()> &, const platform::PreparationObserver &);
+        const recognition::Bundle *, const std::function<void()> &, const platform::PreparationObserver &,
+        const std::function<void(const nlohmann::json &)> &);
     static thread_local std::function<void(const char *)> fault_;
     static thread_local std::optional<std::uint64_t> available_override_;
     static void checked_add(std::uint64_t &total, std::uint64_t value);
@@ -36,5 +37,6 @@ NativePublication publish_native(const CompiledWorkflow &workflow,
     const nlohmann::json &aliases, const nlohmann::json &source_paths = nlohmann::json::object(),
     const recognition::Bundle *mod = nullptr,
     const std::function<void()> &check_cancel = {},
-    const platform::PreparationObserver &observer = {});
+    const platform::PreparationObserver &observer = {},
+    const std::function<void(const nlohmann::json &)> &admit_storage = {});
 } // namespace wvd::games::tasks

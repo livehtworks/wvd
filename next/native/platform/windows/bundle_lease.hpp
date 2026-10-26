@@ -99,6 +99,15 @@ class BundleLease final {
     std::size_t file_count() const;
     std::size_t directory_count() const;
     std::uint64_t directory_checks() const;
+    // Only paths backed by this live lease may escape to path-only consumers.
+    const std::filesystem::path &physical_member(const std::string &relative) const;
+    const Manifest &manifest() const;
+    const std::string &resource_digest() const;
+    std::uint64_t resource_bytes() const;
+    std::uint64_t control_bytes() const;
+    static std::shared_ptr<BundleLease> open_publication(const std::filesystem::path &root,
+        const std::function<void()> &check_cancel = {});
+    static std::uint64_t retained_resource_bytes(const std::filesystem::path &published);
     static std::filesystem::path checked_relative(const std::string &value);
 
   private:
@@ -107,5 +116,7 @@ class BundleLease final {
     static thread_local std::function<bool(const char *)> io_failure_;
     struct Impl;
     std::unique_ptr<Impl> impl_;
+    BundleLease(std::filesystem::path root, std::string revision, Manifest manifest,
+        const std::function<void()> &check_cancel, bool physical);
 };
 } // namespace wvd::platform

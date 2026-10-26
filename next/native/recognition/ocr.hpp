@@ -20,6 +20,9 @@ class OcrEngine final {
     explicit OcrEngine(const std::filesystem::path &model_root,
         std::shared_ptr<platform::MemoryDiagnostics> diagnostics = {},
         std::shared_ptr<const platform::BundleLease> files = {});
+    OcrEngine(const std::filesystem::path &det, const std::filesystem::path &rec,
+        const std::filesystem::path &keys, std::shared_ptr<platform::MemoryDiagnostics> diagnostics,
+        std::shared_ptr<const platform::BundleLease> files);
     ~OcrEngine();
     OcrEngine(const OcrEngine &) = delete;
     OcrEngine &operator=(const OcrEngine &) = delete;

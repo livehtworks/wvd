@@ -9,6 +9,7 @@
 #include <iostream>
 #include <windows.h>
 #include "publication_t0_contract.hpp"
+#include "resource_set_contract.hpp"
 
 namespace {
 using J = nlohmann::json;
@@ -30,8 +31,8 @@ void write(const fs::path &path, const std::string &text) {
     require(bool(output), "FIXTURE_WRITE_FAILED");
 }
 bool staging_exists(const fs::path &root) {
-    for (const auto &entry : inspection::directories_os(root))
-        if (entry.path().filename().string().find(".staging-") != std::string::npos) return true;
+    for (const auto &entry : inspection::recursive_os(root))
+        if (entry.is_directory() && entry.path().filename().string().find(".staging-") != std::string::npos) return true;
     return false;
 }
 std::pair<DWORD, std::uint64_t> file_identity(const fs::path &path) {
@@ -48,6 +49,11 @@ std::pair<DWORD, std::uint64_t> file_identity(const fs::path &path) {
 
 int main(int argc, char **argv) {
     try {
+        if (argc == 4 && std::string(argv[1]) == "--resource-sets-ocr")
+            return resource_set_contract::ocr(fs::absolute(wvd::platform::path_from_utf8(argv[2])),
+                fs::absolute(wvd::platform::path_from_utf8(argv[3])));
+        if (argc == 3 && std::string(argv[1]) == "--resource-sets-contract")
+            return resource_set_contract::run(fs::absolute(wvd::platform::path_from_utf8(argv[2])));
         if (argc == 3 && std::string(argv[1]) == "--link-boundary-probe")
             return publication_t0_contract::probe_links(fs::absolute(wvd::platform::path_from_utf8(argv[2])));
         require(argc == 2, "NEW_ISOLATED_ROOT_REQUIRED");
@@ -100,10 +106,10 @@ int main(int argc, char **argv) {
             require(publication.bundle.lease->storage_stats().model_bytes == 0, "TARGET_MODEL_CACHE_LOADED");
             publication.bundle.lease->verify_members();
             for (const auto &file : publication.bundle.files)
-                require(wvd::platform::file_sha256(publication.bundle.root / file.relative_path) == file.sha256,
+                require(wvd::platform::file_sha256(publication.bundle.lease->physical_member(file.relative_path)) == file.sha256,
                         "PUBLISHED_FILE_HASH_MISMATCH");
             require(!staging_exists(root), "STAGING_NOT_RENAMED");
-            auto model = publication.bundle.root / "models/large.onnx";
+            auto model = publication.bundle.lease->physical_member("models/large.onnx");
             const auto writer = CreateFileW(wvd::platform::extended_path(model).c_str(), GENERIC_WRITE,
                 FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, 0, nullptr);
             if (writer != INVALID_HANDLE_VALUE) CloseHandle(writer);
@@ -112,7 +118,7 @@ int main(int argc, char **argv) {
                     "TARGET_DELETE_LOCK_RELAXED");
             publication.ownership->accept();
             const auto second = wvd::games::tasks::publish_native(workflow, baseline, root / "second", J::object());
-            require(file_identity(model) == file_identity(second.bundle.root / "models/large.onnx"),
+            require(file_identity(model) == file_identity(second.bundle.lease->physical_member("models/large.onnx")),
                     "MODEL_CONTENT_OBJECT_NOT_SHARED");
             require(file_identity(model) != file_identity(source / "models/large.onnx"),
                     "MUTABLE_SOURCE_LINKED_INTO_PUBLICATION");
@@ -138,7 +144,9 @@ int main(int argc, char **argv) {
             results.push_back({{"case", "copy_cancel_rewind_and_no_overwrite"}, {"passed", true}});
         }
         for (const auto &mode : {"before_copy", "during_copy", "before_rename", "after_rename"}) {
-            const auto destination = root / mode;
+            const auto area = root / (std::string(mode) + "-area");
+            inspection::mkdirs_os(area);
+            const auto destination = area / mode;
             bool triggered = false;
             bool staged_lock_observed = false;
             rejects([&] { wvd::games::tasks::publish_native(workflow, baseline, destination, J::object(),
@@ -147,10 +155,11 @@ int main(int argc, char **argv) {
                     if (std::string(mode) == "after_rename" && inspection::exists_os(destination)) {
                         triggered = true; throw std::runtime_error("PREPARATION_CANCELLED");
                     }
-                    for (const auto &entry : inspection::directories_os(root)) {
-                        if (!entry.path().filename().string().starts_with(std::string(mode) + ".staging-")) continue;
-                        if (std::string(mode) == "during_copy" && inspection::exists_os(entry.path() / "models/large.onnx") &&
-                            inspection::size_os(entry.path() / "models/large.onnx") >= 65536) {
+                    for (const auto &entry : inspection::recursive_os(area)) {
+                        if (!entry.is_directory()) continue;
+                        if (std::string(mode) != "during_copy" && !entry.path().filename().string().starts_with(std::string(mode) + ".staging-")) continue;
+                        if (std::string(mode) == "during_copy" && inspection::exists_os(entry.path() / "payload/models/large.onnx") &&
+                            inspection::size_os(entry.path() / "payload/models/large.onnx") >= 65536) {
                             triggered = true; throw std::runtime_error("PREPARATION_CANCELLED");
                         }
                         if (std::string(mode) == "before_rename" && inspection::exists_os(entry.path() / "program/identity.json")) {

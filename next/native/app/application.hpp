@@ -36,6 +36,9 @@ class Application {
     J load_json(const std::filesystem::path &path) const;
     J profile() const;
     void require_storage_space() const;
+    static std::uint64_t publication_budget(const std::filesystem::path &data,
+        std::uint64_t retained_request_run_bytes, const J &cost);
+    static void require_batch_continuation(std::uint64_t retained_budget_bytes);
     J effective_profile_values(const std::string &task_id) const;
     J effective_profile_values(const std::string &task_id, const J &stored) const;
     J queue_run(const std::string &kind, const J &request, const J &identity,
@@ -57,7 +60,8 @@ class Application {
                                          std::optional<J> frozen_values = std::nullopt,
                                          bool continuation = false,
                                          std::optional<games::tasks::CompiledWorkflow> prepared = std::nullopt,
-                                         const platform::PreparationObserver &observer = {});
+                                         const platform::PreparationObserver &observer = {},
+                                         std::uint64_t retained_request_run_bytes = 0);
     runtime::NativeRunDefinition assemble_workflow(const J &request, const J &stored, J document,
                                              const devices::LifecycleTarget &target,
                                              std::map<std::string, std::string> *pipeline_to_node = nullptr,
@@ -71,7 +75,8 @@ class Application {
                    std::shared_ptr<devices::DeviceConnection> backend,
                    std::optional<J> frozen_values = std::nullopt,
                    J handoff_parent = nullptr,
-                   std::optional<games::tasks::CompiledWorkflow> prepared = std::nullopt);
+                   std::optional<games::tasks::CompiledWorkflow> prepared = std::nullopt,
+                   std::uint64_t retained_request_run_bytes = 0);
     void watch_task_session(const J &request, const J &stored, J source_values,
                             std::shared_ptr<devices::DeviceConnection> backend,
                             std::string request_id, std::shared_ptr<std::atomic<int>> start_signal);

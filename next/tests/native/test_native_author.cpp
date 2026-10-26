@@ -1091,17 +1091,12 @@ int run_author_cases(int argc, char **argv) {
             std::string(argv[1]) == "--revival-cancel-revoked")) {
             using namespace closure;
             const auto root = std::filesystem::absolute(argv[2]);
-            const auto identity = read((root / "program/identity.json").string().c_str());
-            recognition::Bundle bundle{root, "combat-phase-recorded", {}};
+            const auto lease = platform::BundleLease::open_publication(root);
+            const auto identity = J::parse(lease->bytes("program/identity.json"));
+            recognition::Bundle bundle{root, lease->revision(), {}};
+            bundle.lease = lease;
+            for (const auto &[path, hash] : lease->manifest()) bundle.files.push_back({path, hash});
             bundle.snapshot_parent = std::filesystem::temp_directory_path() / ("wvd-combat-phase-" + platform::unique_id());
-            for (const auto &file : std::filesystem::recursive_directory_iterator(root)) {
-                if (!file.is_regular_file()) continue;
-                const auto relative = std::filesystem::relative(file.path(), root).generic_string();
-                const auto hash = platform::file_sha256(file.path());
-                if (identity.at("source_files").contains(relative))
-                    check(identity.at("source_files").at(relative) == hash, "PHASE_RESOURCE_CHANGED:" + relative);
-                bundle.files.push_back({relative, hash});
-            }
             recognition::Service service(bundle, games::vision::native_handlers(identity.at("aliases"), "zh-Hant",
                 games::recovery::DialoguePolicy::Default, false));
             if (std::string(argv[1]) == "--revival-cancel-revoked") {
@@ -1205,17 +1200,12 @@ int run_author_cases(int argc, char **argv) {
         if (argc == 5 && std::string(argv[1]) == "--inn-exit-frames") {
             using namespace closure;
             const auto root = std::filesystem::absolute(argv[2]);
-            const auto identity = read((root / "program/identity.json").string().c_str());
-            recognition::Bundle bundle{root, "inn-exit-recorded", {}};
+            const auto lease = platform::BundleLease::open_publication(root);
+            const auto identity = J::parse(lease->bytes("program/identity.json"));
+            recognition::Bundle bundle{root, lease->revision(), {}};
+            bundle.lease = lease;
+            for (const auto &[path, hash] : lease->manifest()) bundle.files.push_back({path, hash});
             bundle.snapshot_parent = std::filesystem::temp_directory_path() / ("wvd-inn-exit-" + platform::unique_id());
-            for (const auto &file : std::filesystem::recursive_directory_iterator(root)) {
-                if (!file.is_regular_file()) continue;
-                const auto relative = std::filesystem::relative(file.path(), root).generic_string();
-                const auto hash = platform::file_sha256(file.path());
-                if (identity.at("source_files").contains(relative))
-                    check(identity.at("source_files").at(relative) == hash, "RECORDED_RESOURCE_CHANGED:" + relative);
-                bundle.files.push_back({relative, hash});
-            }
             recognition::Service service(bundle, games::vision::native_handlers(identity.at("aliases"), "zh-Hant",
                 games::recovery::DialoguePolicy::Default, false));
             const auto inn = games::supply::rest_at_inn(false, true);
@@ -1262,18 +1252,13 @@ int run_author_cases(int argc, char **argv) {
             using namespace closure;
             using O = contracts::RecognitionOutcome;
             const auto root = std::filesystem::absolute(argv[2]);
-            const auto identity = read((root / "program/identity.json").string().c_str());
-            const auto program = read((root / "program/flow.json").string().c_str());
-            recognition::Bundle bundle{root, "condition-depth-recorded", {}};
+            const auto lease = platform::BundleLease::open_publication(root);
+            const auto identity = J::parse(lease->bytes("program/identity.json"));
+            const auto program = J::parse(lease->bytes("program/flow.json"));
+            recognition::Bundle bundle{root, lease->revision(), {}};
+            bundle.lease = lease;
+            for (const auto &[path, hash] : lease->manifest()) bundle.files.push_back({path, hash});
             bundle.snapshot_parent = std::filesystem::temp_directory_path() / ("wvd-condition-depth-" + platform::unique_id());
-            for (const auto &file : std::filesystem::recursive_directory_iterator(root)) {
-                if (!file.is_regular_file()) continue;
-                const auto relative = std::filesystem::relative(file.path(), root).generic_string();
-                const auto hash = platform::file_sha256(file.path());
-                if (identity.at("source_files").contains(relative))
-                    check(identity.at("source_files").at(relative) == hash, "RECORDED_RESOURCE_CHANGED:" + relative);
-                bundle.files.push_back({relative, hash});
-            }
             recognition::Service service(bundle, games::vision::native_handlers(identity.at("aliases"), "zh-Hant",
                 games::recovery::DialoguePolicy::Default, false));
             const auto pixels = cv::imread(argv[3]);
@@ -2375,7 +2360,8 @@ int run_author_cases(int argc, char **argv) {
                 const auto selected = games::vision::resolve_image_source(source_bundle, aliases, name);
                 const auto target = bundle.root / selected.relative_path;
                 std::filesystem::create_directories(target.parent_path());
-                std::filesystem::copy_file(source_bundle.root / selected.relative_path, target);
+                if (source_bundle.lease) source_bundle.lease->copy_member(selected.relative_path, target);
+                else std::filesystem::copy_file(source_bundle.root / selected.relative_path, target);
                 bundle.files.push_back({selected.relative_path, platform::file_sha256(target)});
             }
             for (const auto *locale : {"zh-Hant", "en"}) {
@@ -3517,7 +3503,8 @@ int run_author_cases(int argc, char **argv) {
                 if (!copied.insert(selected.relative_path).second) continue;
                 const auto target = sample_root / selected.relative_path;
                 std::filesystem::create_directories(target.parent_path());
-                std::filesystem::copy_file(bundle.root / selected.relative_path, target);
+                if (bundle.lease) bundle.lease->copy_member(selected.relative_path, target);
+                else std::filesystem::copy_file(bundle.root / selected.relative_path, target);
                 sample_bundle.files.push_back({selected.relative_path, wvd::platform::file_sha256(target)});
             }
             auto service = std::make_unique<wvd::recognition::Service>(sample_bundle,

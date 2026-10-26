@@ -49,6 +49,7 @@
 #include <array>
 #include <charconv>
 #include <fstream>
+#include <limits>
 #include <opencv2/imgcodecs.hpp>
 #include <windows.h>
 
@@ -59,6 +60,35 @@ using namespace std::chrono_literals;
 namespace {
 using J = nlohmann::json;
 void require(bool condition, const char *code);
+constexpr std::uint64_t retained_limit = 16ULL * 1024 * 1024 * 1024;
+void budget_add(std::uint64_t &total, std::uint64_t value) {
+    require(value <= retained_limit && total <= retained_limit - value, "BATCH_STORAGE_LIMIT");
+    total += value;
+}
+std::uint64_t storage_tree_bytes(const std::filesystem::path &root) {
+    if (!std::filesystem::exists(platform::extended_path(root))) return 0;
+    require(!(GetFileAttributesW(platform::extended_path(root).c_str()) & FILE_ATTRIBUTE_REPARSE_POINT),
+        "BATCH_STORAGE_INVENTORY_INVALID");
+    std::uint64_t bytes = 0;
+    std::size_t entries = 0;
+    for (const auto &entry : std::filesystem::recursive_directory_iterator(platform::extended_path(root))) {
+        require(++entries <= 65536 &&
+            !(GetFileAttributesW(entry.path().c_str()) & FILE_ATTRIBUTE_REPARSE_POINT),
+            "BATCH_STORAGE_INVENTORY_INVALID");
+        if (entry.is_regular_file()) budget_add(bytes, entry.file_size());
+        else require(entry.is_directory(), "BATCH_STORAGE_INVENTORY_INVALID");
+    }
+    return bytes;
+}
+std::uint64_t retained_storage_bytes(const std::filesystem::path &data) {
+    std::uint64_t bytes = platform::BundleLease::retained_resource_bytes(data / "published");
+    // Persistent caches remain chargeable across batches, including verified
+    // sets retained after a request rolls back. No SHA/FileID discount here.
+    for (const auto &root : {data / "published" / "asset-objects",
+                             data / "asset-cache", data / "active-snapshots"})
+        budget_add(bytes, storage_tree_bytes(root));
+    return bytes;
+}
 void declare_portrait_assets(games::tasks::CompiledWorkflow &workflow,
                             const std::optional<recognition::Bundle> &validated) {
     auto &images = workflow.authoring["provided_portrait_images"] = J::array();
@@ -436,6 +466,21 @@ std::filesystem::path freeze_manifest_members(const std::filesystem::path &pack_
     return destination;
 }
 } // namespace
+std::uint64_t Application::publication_budget(const std::filesystem::path &data,
+    std::uint64_t retained_request_run_bytes, const J &cost) {
+    auto budget = retained_storage_bytes(data);
+    budget_add(budget, retained_request_run_bytes);
+    budget_add(budget, cost.at("metadata_bytes").get<std::uint64_t>());
+    budget_add(budget, cost.at("overhead_bytes").get<std::uint64_t>());
+    if (cost.at("resource_new").get<bool>()) {
+        budget_add(budget, cost.at("resource_bytes").get<std::uint64_t>());
+        budget_add(budget, cost.at("resource_manifest_bytes").get<std::uint64_t>());
+    }
+    return budget;
+}
+void Application::require_batch_continuation(std::uint64_t retained_budget_bytes) {
+    require(retained_budget_bytes <= retained_limit - 2ULL * 1024 * 1024 * 1024, "BATCH_STORAGE_RESERVE_LOW");
+}
 thread_local std::function<void(const char *, const std::filesystem::path &)> Application::cache_fault_;
 
 Application::J Application::load_json(const std::filesystem::path &path) const {
@@ -944,6 +989,7 @@ void Application::require_preparation_ready() const {
     }
     platform::OwnedBundleDirectory::require_no_pending(paths_.data_root / "published");
     platform::OwnedBundleDirectory::require_no_pending(paths_.data_root / "published" / "asset-objects");
+    platform::OwnedBundleDirectory::require_no_pending(paths_.data_root / "published" / ".asset-sets");
     platform::OwnedBundleDirectory::require_no_pending(paths_.data_root / "asset-cache");
 }
 [[noreturn]] void Application::rethrow_preparation_failure(std::exception_ptr error,
@@ -1623,7 +1669,7 @@ games::tasks::CompiledWorkflow Application::compile_task_graph(const J &request,
 runtime::NativeRunDefinition Application::assemble_task(const J &request, const J &stored,
     const devices::LifecycleTarget &lifecycle, std::optional<J> frozen_values,
     bool continuation, std::optional<games::tasks::CompiledWorkflow> prepared,
-    const platform::PreparationObserver &diagnostic) {
+    const platform::PreparationObserver &diagnostic, std::uint64_t retained_request_run_bytes) {
     require_preparation_ready();
     const auto observer = diagnostic ? diagnostic : preparation_observer(stored);
     if (stopping_ || cancel_operation_) throw std::runtime_error("PREPARATION_CANCELLED");
@@ -1657,7 +1703,9 @@ runtime::NativeRunDefinition Application::assemble_task(const J &request, const 
     const auto portraits = portrait_bundle(values);
     auto publication = games::tasks::publish_native(workflow, author_bundle_,
         destination, aliases_, J::object(), portraits ? &*portraits : nullptr,
-        [this] { require(!stopping_ && !cancel_operation_, "PREPARATION_CANCELLED"); }, observer);
+        [this] { require(!stopping_ && !cancel_operation_, "PREPARATION_CANCELLED"); }, observer, [&](const J &cost) {
+            (void)publication_budget(paths_.data_root, retained_request_run_bytes, cost);
+        });
     const auto ownership = publication.ownership->receipt();
     try {
     if (preparation_fault_) preparation_fault_("task.after_publication");
@@ -1756,12 +1804,12 @@ contracts::RunSnapshot Application::start_prepared_run(runtime::NativeRunDefinit
 Application::J Application::prepare_task(const J &request, const J &stored,
     std::shared_ptr<devices::DeviceConnection> backend,
     std::optional<J> frozen_values, J handoff_parent,
-    std::optional<games::tasks::CompiledWorkflow> prepared) {
+    std::optional<games::tasks::CompiledWorkflow> prepared, std::uint64_t retained_request_run_bytes) {
     require_storage_space();
     require(bool(backend), "DEVICE_NOT_CONNECTED");
     backend->set_vpn_required(stored.at("values").at("AUTO_START_CLASH").get<bool>());
     auto definition = assemble_task(request, stored, backend->lifecycle_target(),
-        std::move(frozen_values), handoff_parent.is_object(), std::move(prepared));
+        std::move(frozen_values), handoff_parent.is_object(), std::move(prepared), {}, retained_request_run_bytes);
     const auto ownership = definition.publication_ownership->receipt();
     try {
     definition.handoff_parent = std::move(handoff_parent);
@@ -1826,7 +1874,7 @@ void Application::watch_task_session(const J &request, const J &stored, J source
         const auto work = [&] {
         try {
           std::uint64_t completed = 0;
-          std::uintmax_t batch_bytes = 0;
+          std::uint64_t batch_bytes = 0, request_run_bytes = 0, budget_bytes = 0;
           constexpr std::uintmax_t batch_limit = 16ULL * 1024 * 1024 * 1024;
           const auto session_request_id = request_id;
           while (!stop.stop_requested() && !stopping_ && !cancel_operation_) {
@@ -1847,23 +1895,33 @@ void Application::watch_task_session(const J &request, const J &stored, J source
                 snapshot->storage_error.empty(), "HANDOFF_SOURCE_NOT_COMMITTED");
             // Account retained run facts and resource references, not just one
             // file's limit. Never delete history to make a new round admissible.
-            for (const auto &directory : {coordinator_->run_directory(), paths_.data_root / "published" / request_id}) {
-                std::size_t entries{};
-                if (!std::filesystem::exists(directory)) continue;
-                for (const auto &entry : std::filesystem::recursive_directory_iterator(directory)) {
-                    require(++entries <= 65536 &&
-                        !(GetFileAttributesW(entry.path().c_str()) & FILE_ATTRIBUTE_REPARSE_POINT), "BATCH_STORAGE_INVENTORY_INVALID");
-                    if (entry.is_regular_file()) {
-                        const auto bytes = entry.file_size();
-                        require(bytes <= batch_limit && batch_bytes <= batch_limit - bytes, "BATCH_STORAGE_LIMIT");
-                        batch_bytes += bytes;
-                    }
-                }
+            const auto published = paths_.data_root / "published" / request_id;
+            const auto publication = platform::BundleLease::open_publication(published);
+            const auto request_bytes = storage_tree_bytes(published);
+            const auto run_bytes = storage_tree_bytes(coordinator_->run_directory());
+            budget_add(request_run_bytes, request_bytes);
+            budget_add(request_run_bytes, run_bytes);
+            // Old field remains the cumulative path-reference measure.
+            // It may exceed the physical budget after resource sharing.
+            const auto logical_add = [&](std::uint64_t value) {
+                require(batch_bytes <= (std::numeric_limits<std::uint64_t>::max)() - value,
+                    "BATCH_STORAGE_OVERFLOW");
+                batch_bytes += value;
+            };
+            for (const auto &[name, hash] : publication->manifest()) {
+                (void)hash;
+                logical_add(publication->member_size(name));
             }
+            logical_add(run_bytes);
+            budget_bytes = retained_storage_bytes(paths_.data_root);
+            budget_add(budget_bytes, request_run_bytes);
             {
                 std::lock_guard lock(mutex_);
                 repeat_status_["retained_reference_bytes"] = batch_bytes;
+                repeat_status_["retained_budget_bytes"] = budget_bytes;
+                repeat_status_["retained_budget_basis"] = "unique_resource_sets_request_run_v1";
                 repeat_status_["batch_storage_limit_bytes"] = batch_limit;
+                repeat_status_["batch_storage_reserve_bytes"] = 2ULL * 1024 * 1024 * 1024;
             }
             if (snapshot->outcome_category != "handoff_ready") {
                 if (request.value("repeat", false)) {
@@ -1912,8 +1970,7 @@ void Application::watch_task_session(const J &request, const J &stored, J source
                     for (int i = 0; i < 100 && !stop.stop_requested() && !stopping_ && !cancel_operation_; ++i)
                         std::this_thread::sleep_for(100ms);
                     if (stop.stop_requested() || stopping_ || cancel_operation_) return;
-                    require(batch_bytes <= batch_limit - 2ULL * 1024 * 1024 * 1024,
-                        "BATCH_STORAGE_RESERVE_LOW");
+                    require_batch_continuation(budget_bytes);
                     auto next_request = request;
                     request_id = "repeat-" + games::tasks::digest_handoff_json(
                         {{"session", session_request_id}, {"cycle", completed + 1}});
@@ -1922,7 +1979,7 @@ void Application::watch_task_session(const J &request, const J &stored, J source
                         std::lock_guard lock(mutex_);
                         repeat_status_["state"] = "starting";
                     }
-                    prepare_task(next_request, stored, backend, source_values);
+                    prepare_task(next_request, stored, backend, source_values, nullptr, std::nullopt, request_run_bytes);
                     {
                         std::lock_guard lock(mutex_);
                         repeat_status_["state"] = "running";
@@ -1968,7 +2025,7 @@ void Application::watch_task_session(const J &request, const J &stored, J source
             update("starting", lineage);
             if (stop.stop_requested() || stopping_ || cancel_operation_) return;
             const auto started = prepare_task({{"task_id", "7000G"}, {"request_id", next_id}},
-                stored, backend, next_values, lineage);
+                stored, backend, next_values, lineage, std::nullopt, request_run_bytes);
             update("started", {{"run_id", started.at("run_id")},
                 {"request_id", next_id}, {"source_run_id", snapshot->run_id}});
             // 既有转金币交接完整保留，但它不是蝎女一轮成功，不能交接后自动重刷蝎女。

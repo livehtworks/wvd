@@ -1,3 +1,4 @@
+#include "workflow/serialization.hpp"
 #include "app/application.hpp"
 #include "games/wvd/tasks/public_step_scope.hpp"
 #include "games/wvd/combat/debug.hpp"
@@ -15,6 +16,7 @@
 #include <future>
 #include <cstdlib>
 #include <new>
+#include <limits>
 #include <windows.h>
 #include <dbghelp.h>
 #pragma comment(lib, "dbghelp.lib")
@@ -63,6 +65,11 @@ struct OwnedBundleDirectoryTestAccess {
 namespace wvd::app {
 // 仅测试替换磁盘查询依赖；生产 API 不暴露容量覆盖或离线开关。
 struct ApplicationAssemblyTestAccess {
+    static std::uint64_t budget(const std::filesystem::path &root, std::uint64_t retained, const nlohmann::json &cost) {
+        return Application::publication_budget(root, retained, cost);
+    }
+    static void continue_batch(std::uint64_t retained) { Application::require_batch_continuation(retained); }
+
     static auto stored(Application &app) { return app.profile_store_->load(); }
     static void preparation_fault(Application &app, std::function<void(const char *)> fault) {
         app.preparation_fault_ = std::move(fault);
@@ -165,6 +172,13 @@ struct ApplicationAssemblyTestAccess {
         { std::lock_guard lock(app.mutex_); app.active_run_id_ = app.coordinator_->snapshot().run_id; }
         app.watch_task_session({{"task_id", "Scorpionesses"}, {"repeat", true}, {"repeat_count", 2}},
             nlohmann::json::object(), nlohmann::json::object(), backend, id, std::make_shared<std::atomic<int>>(1));
+    }
+    static void watch_budget(Application &app, const std::shared_ptr<devices::DeviceConnection> &backend,
+        const std::string &id, const nlohmann::json &stored) {
+        { std::lock_guard lock(app.mutex_); app.active_run_id_ = app.coordinator_->snapshot().run_id; }
+        app.watch_task_session({{"task_id","GiantBounty"},{"resource_locale","zh-Hant"},
+            {"repeat",true},{"repeat_count",2}}, stored, app.effective_profile_values("GiantBounty",stored),
+            backend,id,std::make_shared<std::atomic<int>>(1));
     }
     static nlohmann::json queue(Application &app, const std::string &id, int &prepared) {
         return app.queue_run("closure", {{"request_id", id}}, {{"fixture", "closure"}}, [&prepared] {
@@ -313,7 +327,7 @@ wvd::runtime::NativeRunDefinition closure_definition(const std::filesystem::path
     { std::ofstream marker(root / "marker.txt"); marker << "closure-only"; }
     recognition::Bundle bundle{root, "closure", {{"marker.txt", platform::file_sha256(root / "marker.txt")}}};
     workflow::FlowProgram program;
-    program.revision = "closure"; program.root_definition = "root";
+    program.revision = "pending"; program.root_definition = "root";
     workflow::Definition flow; flow.id = "root"; flow.entry = "checkpoint";
     const auto source = J::array({{{"flow_id", "closure"}, {"node_id", "checkpoint"}}}).dump();
     workflow::Step checkpoint; checkpoint.id = "checkpoint"; checkpoint.source_path = source;
@@ -321,10 +335,22 @@ wvd::runtime::NativeRunDefinition closure_definition(const std::filesystem::path
     workflow::Step finish; finish.id = "finish"; finish.source_path = J::array({{{"flow_id", "closure"}, {"node_id", "finish"}}}).dump(); finish.data = workflow::Finish{};
     flow.steps.emplace(checkpoint.id, checkpoint); flow.steps.emplace(finish.id, finish);
     program.definitions.emplace(flow.id, std::move(flow));
+    const J identity{{"engine_kind", "wvd_native"}, {"program_schema", workflow::FlowProgram::schema},
+        {"source_revision", "closure-source"}, {"source_files", {{"marker.txt", bundle.files.front().sha256}}},
+        {"mod_revision", nullptr}, {"mod_files", J::object()}, {"image_sources", J::object()},
+        {"aliases", J::object()}, {"authoring", J::object()}, {"definition", "closure"},
+        {"program", workflow::serialize(program)}};
+    const auto material = identity.dump();
+    program.revision = bundle.revision = platform::bytes_sha256({reinterpret_cast<const std::uint8_t *>(material.data()), material.size()});
+    std::filesystem::create_directories(root / "program");
+    { std::ofstream output(root / "program/identity.json"); output << identity.dump(2); }
+    { std::ofstream output(root / "program/flow.json"); output << workflow::serialize(program).dump(2); }
+    bundle.files.push_back({"program/identity.json", platform::file_sha256(root / "program/identity.json")});
+    bundle.files.push_back({"program/flow.json", platform::file_sha256(root / "program/flow.json")});
     runtime::NativeRunDefinition result; result.request_id = id;
     result.policy.device_id = "offline-product"; result.policy.game_id = "wvd";
     result.policy.application_id = "jp.co.drecom.wizardry.daphne";
-    result.policy.pack_revision = "closure"; result.policy.viewport_id = "900x1600";
+    result.policy.pack_revision = program.revision; result.policy.viewport_id = "900x1600";
     result.policy.allowed_scenes.insert("wvd");
     const auto frozen = std::make_shared<const workflow::FlowProgram>(std::move(program));
     for (int n = 0; n < 3; ++n) result.units.push_back({frozen, bundle, {}, source, 5s});
@@ -607,6 +633,138 @@ __declspec(noinline) int preparation_ownership_contract(const std::filesystem::p
     std::cout << "PASS actual Application/Coordinator: assembly ownership, pre-adoption rollback, accepted fast worker retained, cache dual-error barriers\n";
     return 0;
 }
+int resource_application_batch(const std::filesystem::path &pack, const std::filesystem::path &quests,
+    const std::filesystem::path &root) {
+    using namespace wvd;
+    using A = app::ApplicationAssemblyTestAccess;
+    using C = runtime::NativeCoordinatorTestAccess;
+    require_closure(!std::filesystem::exists(root), "RESOURCE_APP_BATCH_FRESH_ROOT_REQUIRED");
+    std::filesystem::create_directories(root);
+    auto backend = std::make_shared<OfflineConnection>(pack);
+    const auto data = root / "data";
+    app::Application application({data,pack,{},quests},backend);
+    auto stored = A::stored(application);
+    stored["values"]["AUTO_START_CLASH"] = false;
+    stored["values"]["ACTIVE_BEG_MONEY"] = false;
+    auto logging = storage::LoggingPolicy::from_profile(stored);
+    logging.memory = false; logging.performance = false; stored["logging"] = logging.json();
+    auto first = A::prepare_giant(application,stored,{},"batch-first");
+    auto resources = first.units.front().bundle;
+    auto identity = J::parse(resources.lease->bytes("program/identity.json"));
+    const auto digest = resources.lease->resource_digest();
+    const auto resource_bytes = resources.lease->resource_bytes();
+    const auto model_path = resources.lease->physical_member("model/ocr/det.onnx");
+    const auto model_id = ownership_file_id(model_path);
+    const auto links = [&](const std::filesystem::path &path) {
+        const auto handle = CreateFileW(platform::extended_path(path).c_str(),FILE_READ_ATTRIBUTES,
+            FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE,nullptr,OPEN_EXISTING,0,nullptr);
+        require_closure(handle != INVALID_HANDLE_VALUE,"BATCH_LINKS_OPEN_FAILED");
+        BY_HANDLE_FILE_INFORMATION info{};const auto ok=GetFileInformationByHandle(handle,&info);CloseHandle(handle);
+        require_closure(ok != FALSE,"BATCH_LINKS_READ_FAILED");return info.nNumberOfLinks;
+    };
+    const auto model_links = links(model_path);
+    // The external business is the pre-existing three-checkpoint fixture.
+    // Publisher, layout binding, Application scheduling, RunStore and joins stay real.
+    auto external = closure_definition(root / "external-business-fixture","external");
+    auto program = *external.units.front().program; program.revision="pending";
+    identity["program"] = workflow::serialize(program);
+    identity["authoring"] = J::object(); identity["definition"]="isolated-business-budget";
+    const auto material=identity.dump();
+    program.revision=resources.revision=platform::bytes_sha256({reinterpret_cast<const std::uint8_t *>(material.data()),material.size()});
+    first.units.clear();resources.lease.reset(); // No metadata is rewritten while leased.
+    const auto write_json = [&](const std::string &name,const J &value) {
+        std::ofstream output(platform::extended_path(resources.root / platform::BundleLease::checked_relative(name)),std::ios::binary|std::ios::trunc);
+        output << value.dump(2);output.close();require_closure(bool(output),"BATCH_FIXTURE_WRITE_FAILED");
+    };
+    write_json("program/identity.json",identity);write_json("program/flow.json",workflow::serialize(program));
+    { std::ifstream input(platform::extended_path(resources.root / "publication-layout.json"));
+      auto layout=J::parse(input);input.close();layout["program_revision"]=program.revision;write_json("publication-layout.json",layout); }
+    for(auto &file:resources.files) if(file.relative_path=="program/identity.json"||file.relative_path=="program/flow.json")
+        file.sha256=platform::file_sha256(resources.root / platform::BundleLease::checked_relative(file.relative_path));
+    resources.lease=platform::BundleLease::open_publication(resources.root);
+    require_closure(resources.lease->revision()==program.revision && resources.lease->resource_digest()==digest,
+        "BATCH_REBOUND_FIXTURE_REJECTED_OR_CHANGED_RESOURCES");
+    const auto frozen=std::make_shared<const workflow::FlowProgram>(std::move(program));
+    first.units.assign(3,{frozen,resources,{},external.units.front().checkpoint_source_path,5s});
+    first.policy.pack_revision=resources.revision;first.startup.reset();first.total_time_limit=15s;
+    first.create_state=std::move(external.create_state);first.operations=std::move(external.operations);
+    first.recovery={};first.handoff_ready={};first.logging=logging;
+    auto &coordinator=A::coordinator(application);
+    const auto started=A::commit(application,std::move(first),backend);resources.lease.reset();
+    require_closure(coordinator.wait_for(10s),"BATCH_FIRST_NOT_QUIESCENT");
+    const auto terminal=coordinator.snapshot();
+    require_closure(terminal.state==contracts::RunState::Completed && terminal.completed_business_units==3 &&
+        terminal.result_saved && terminal.quiescent && terminal.storage_error.empty() && terminal.business.at("bounty_cycle").at("completed_cycles")==1 &&
+        !terminal.business.value("bounty_report_pending",true) && !terminal.business.value("inn_payment_pending",true),"BATCH_FIRST_NOT_CLEAN");
+    std::atomic<std::uint64_t> second_adopted{};
+    C::start_fault(coordinator,[&](const char *phase) {
+        if(std::string_view(phase)=="after_adoption") {
+            second_adopted=coordinator.snapshot().run_id;coordinator.request_stop();
+        }
+    });
+    struct ResetHook {runtime::NativeRunCoordinator &coordinator;~ResetHook(){C::start_fault(coordinator,{});}} reset{coordinator};
+    const auto tree_bytes = [](const std::filesystem::path &path) {
+        std::uint64_t size=0;if(!std::filesystem::exists(platform::extended_path(path)))return size;
+        for(const auto &entry:std::filesystem::recursive_directory_iterator(platform::extended_path(path))) {
+            require_closure(!(GetFileAttributesW(entry.path().c_str())&FILE_ATTRIBUTE_REPARSE_POINT),"BATCH_TEST_REPARSE");
+            if(entry.is_regular_file())size+=entry.file_size();
+        }return size;
+    };
+    const auto cache_bytes = [&] {
+        std::uint64_t bytes=0;for(const auto &path:{data/"published/.asset-sets",data/"published/asset-objects",data/"asset-cache",data/"active-snapshots"})bytes+=tree_bytes(path);return bytes;
+    };
+    A::watch_budget(application,backend,"batch-first",stored);
+    J before;
+    const auto deadline=std::chrono::steady_clock::now()+90s;
+    while(std::chrono::steady_clock::now()<deadline) {
+        before=call(application,api::http::verb::get,"/api/v1/runs/current");
+        if(before.at("repeat").value("state","")=="waiting")break;
+        std::this_thread::sleep_for(20ms);
+    }
+    const auto first_view=coordinator.read_view();
+    require_closure(before.at("repeat").at("state")=="waiting" && before.at("repeat").at("completed_cycles")==1 &&
+        first_view.request_id=="batch-first" && first_view.snapshot.run_id==started.run_id && first_view.worker_joined,
+        "BATCH_FIRST_WAITING_NOT_BOUND_TO_SOURCE");
+    const auto first_run=first_view.store->directory();
+    const auto stable_first_run=tree_bytes(first_run), before_cache=cache_bytes();
+    J after;
+    while(std::chrono::steady_clock::now()<deadline) {
+        after=call(application,api::http::verb::get,"/api/v1/runs/current");
+        if(!after.at("repeat").value("active",true))break;
+        std::this_thread::sleep_for(20ms);
+    }
+    const auto second_view=coordinator.read_view();
+    require_closure(second_adopted!=0 && second_view.snapshot.run_id==second_adopted && second_view.snapshot.run_id!=started.run_id &&
+        second_view.request_id!="batch-first" && second_view.snapshot.state==contracts::RunState::UserStopped &&
+        second_view.snapshot.result_saved && second_view.snapshot.quiescent && second_view.snapshot.storage_error.empty() && second_view.worker_joined &&
+        !after.at("repeat").value("active",true) && after.at("repeat").at("completed_cycles")==1,
+        "BATCH_SECOND_NOT_ACTUAL_ADOPTED_STOPPED_JOINED_RUN:"+after.dump());
+    const auto second_root=data/"published"/second_view.request_id;
+    const auto second=platform::BundleLease::open_publication(second_root);
+    require_closure(second->resource_digest()==digest && second->resource_bytes()==resource_bytes &&
+        ownership_file_id(second->physical_member("model/ocr/det.onnx"))==model_id && links(model_path)==model_links,
+        "BATCH_RESOURCE_DIGEST_FILEID_OR_LINKS_CHANGED");
+    const auto after_cache=cache_bytes();
+    require_closure(after.at("repeat").at("retained_reference_bytes").get<std::uint64_t>()>
+        before.at("repeat").at("retained_reference_bytes").get<std::uint64_t>(),"BATCH_LOGICAL_REFERENCE_DID_NOT_GROW");
+    require_closure(after.at("repeat").at("retained_budget_bytes").get<std::uint64_t>()>
+        before.at("repeat").at("retained_budget_bytes").get<std::uint64_t>(),"BATCH_RETAINED_BUDGET_DID_NOT_GROW");
+    const auto ref_delta=after.at("repeat").at("retained_reference_bytes").get<std::uint64_t>()-before.at("repeat").at("retained_reference_bytes").get<std::uint64_t>();
+    const auto budget_delta=after.at("repeat").at("retained_budget_bytes").get<std::uint64_t>()-before.at("repeat").at("retained_budget_bytes").get<std::uint64_t>();
+    const auto marker=std::filesystem::file_size(second_root/"publication-layout.json");
+    require_closure(after_cache==before_cache && tree_bytes(first_run)==stable_first_run && ref_delta>budget_delta &&
+        ref_delta-budget_delta==resource_bytes-marker,"BATCH_LOGICAL_AND_RETAINED_GROWTH_NOT_DISTINCT");
+    const auto stable_second=tree_bytes(second_view.store->directory());std::this_thread::sleep_for(100ms);
+    require_closure(stable_second==tree_bytes(second_view.store->directory()),"BATCH_TERMINAL_FACTS_STILL_WRITING");
+    std::ofstream(root/"result.json")<<J{{"passed",true},{"first_business","existing external three-checkpoint fixture"},
+        {"first",before},{"second",after},{"first_run_id",started.run_id},{"second_run_id",second_view.snapshot.run_id},
+        {"second_request_id",second_view.request_id},{"second_state","UserStopped"},{"completed_cycles",1},
+        {"resource_digest",digest},{"resource_bytes",resource_bytes},{"reference_delta",ref_delta},{"budget_delta",budget_delta},
+        {"new_marker_bytes",marker},{"other_cache_delta",0},{"file_id",model_id},{"links",model_links},
+        {"game_success_claimed",false},{"real_device_actions",0}}.dump(2);
+    std::cout<<"PASS actual Application two-publication continuation, first external fixture Completed, second adopted UserStopped, distinct logical/budget growth\n";
+    return 0;
+}
 int closure_application(const std::filesystem::path &pack, const std::filesystem::path &quests) {
     using A = wvd::app::ApplicationAssemblyTestAccess;
     const auto *configured = std::getenv("WVD_CLOSURE_ROOT");
@@ -648,7 +806,7 @@ int closure_application(const std::filesystem::path &pack, const std::filesystem
             const auto path = coordinator.run_directory() / (fault == "timing" ? "action-timing.jsonl" : "result.json");
             std::filesystem::create_directory(path);
         };
-        coordinator.start(closure_definition(root / (fault + "-bundle"), fault, inject_fault), isolated_backend);
+        coordinator.start(closure_definition(root / fault / "published" / fault, fault, inject_fault), isolated_backend);
         require_closure(coordinator.wait_for(15s), "SPACE_FIXTURE_NOT_QUIESCENT");
         const auto terminal = coordinator.snapshot();
         if (fault == "space") require_closure(terminal.completed_business_units == 3 && terminal.result_saved, "SPACE_COMPLETED_SOURCE_REQUIRED:" + terminal.reason);
@@ -683,6 +841,38 @@ int closure_application(const std::filesystem::path &pack, const std::filesystem
 
 int main(int argc, char **argv) {
     try {
+        if (argc == 5 && std::string(argv[1]) == "--resource-app-batch")
+            return resource_application_batch(std::filesystem::absolute(argv[2]),std::filesystem::absolute(argv[3]),std::filesystem::absolute(argv[4]));
+        if (argc == 3 && std::string(argv[1]) == "--resource-budget") {
+            using A = wvd::app::ApplicationAssemblyTestAccess;
+            const auto root = std::filesystem::absolute(argv[2]);
+            require_closure(!std::filesystem::exists(root), "RESOURCE_BUDGET_FRESH_ROOT_REQUIRED");
+            std::filesystem::create_directories(root / "asset-cache/retained");
+            { std::ofstream output(root / "asset-cache/retained/payload"); output << "12345"; }
+            const J hit{{"resource_new",false},{"resource_bytes",100},{"resource_manifest_bytes",20},
+                {"metadata_bytes",7},{"overhead_bytes",11}};
+            require_closure(A::budget(root, 13, hit) == 36, "BUDGET_REUSE_OR_PERSISTENT_CACHE_MISCOUNTED");
+            auto first = hit; first["resource_new"] = true;
+            require_closure(A::budget(root, 13, first) == 156, "BUDGET_NEW_RESOURCE_OMITTED");
+            constexpr std::uint64_t GiB = 1024ULL*1024*1024;
+            A::continue_batch(14*GiB);
+            submission_contract::rejects([&] { A::continue_batch(14*GiB+1); }, "BATCH_STORAGE_RESERVE_LOW");
+            submission_contract::rejects([&] { A::budget(root,16*GiB,hit); }, "BATCH_STORAGE_LIMIT");
+            submission_contract::rejects([&] { A::budget(root,(std::numeric_limits<std::uint64_t>::max)(),hit); }, "BATCH_STORAGE_LIMIT");
+            bool unknown = false;
+            try { auto cost=hit;cost.erase("metadata_bytes");A::budget(root,0,cost); } catch(const std::exception &) { unknown=true; }
+            require_closure(unknown,"BUDGET_UNKNOWN_TREATED_AS_ZERO");
+            std::filesystem::create_directories(root / "published/.asset-sets" / std::string(64,'0'));
+            { std::ofstream output(root / "published/.asset-sets" / std::string(64,'0') / "manifest.json"); output << "{}"; }
+            bool unclosed=false;
+            try { A::budget(root,0,hit); } catch(const std::exception &) { unclosed=true; }
+            require_closure(unclosed,"BUDGET_UNCLOSED_MANIFEST_ACCEPTED");
+
+            std::ofstream(root / "result.json") << J{{"passed",true},{"reuse_budget",36},{"first_budget",156},
+                {"continue_threshold_bytes",14*GiB},{"hard_limit_bytes",16*GiB},{"unknown_rejected",true}}.dump(2);
+            std::cout << "PASS resource budget persistent cache, unique hit/new cost, 14/16GiB, overflow and unknown\n";
+            return 0;
+        }
         if (argc == 5 && std::string(argv[1]) == "--preparation-ownership")
             return preparation_ownership_contract(std::filesystem::absolute(argv[2]),
                 std::filesystem::absolute(argv[3]), std::filesystem::absolute(argv[4]));
@@ -931,7 +1121,7 @@ int main(int argc, char **argv) {
             wvd::app::Application app({root / "data", std::filesystem::absolute(argv[2]), {}, std::filesystem::absolute(argv[3])}, backend);
             auto &coordinator = A::coordinator(app);
             std::atomic<bool> entered{false}, release{false};
-            auto definition = closure_definition(root / "bundle", "stop-release", [&] {
+            auto definition = closure_definition(root / "data/published/stop-release", "stop-release", [&] {
                 entered = true;
                 while (!release) std::this_thread::sleep_for(5ms);
             });
@@ -1048,8 +1238,7 @@ int main(int argc, char **argv) {
                 const auto id = performance ? "p01-start-log-on" : "p01-start-log-off";
                 auto ready = closure_definition(root / "published" / id, id);
                 auto &bundle = ready.units.front().bundle;
-                bundle.lease = std::make_shared<wvd::platform::BundleLease>(bundle.root, bundle.revision,
-                    wvd::platform::BundleLease::Manifest{{"marker.txt", bundle.files.front().sha256}});
+                bundle.lease = wvd::platform::BundleLease::open_publication(bundle.root);
                 ready.logging.performance = performance;
                 ready.preparation = {{"fixture", "logging-switch-only"}};
                 (void)wvd::app::ApplicationAssemblyTestAccess::commit(app, std::move(ready), offline);
@@ -1132,7 +1321,7 @@ int main(int argc, char **argv) {
                 const auto value = J::parse(identity);
                 std::map<std::string, std::string> files;
                 for (const auto &file : bundle.files) {
-                    require_closure(wvd::platform::file_sha256(bundle.root / wvd::platform::BundleLease::checked_relative(file.relative_path)) == file.sha256,
+                    require_closure(wvd::platform::file_sha256(bundle.lease->physical_member(file.relative_path)) == file.sha256,
                                     "CURRENT_PUBLISHED_HASH_INVALID");
                     files.emplace(file.relative_path, file.sha256);
                 }

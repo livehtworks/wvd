@@ -9,6 +9,7 @@
 #include <windows.h>
 #include <winternl.h>
 #include <cstring>
+#include <limits>
 #include <json.hpp>
 
 namespace wvd::platform {
@@ -362,8 +363,12 @@ struct BundleLease::Impl {
     std::filesystem::path root;
     std::string revision, id;
     Manifest manifest;
-    std::map<std::string, std::unique_ptr<Held>> files;
+    std::map<std::string, std::shared_ptr<Held>> files;
     std::map<std::filesystem::path, std::unique_ptr<Held>> directories;
+    std::vector<std::shared_ptr<BundleLease>> parts;
+    std::vector<std::unique_ptr<Held>> anchors;
+    std::string resource_digest;
+    std::uint64_t resource_bytes{}, control_bytes{};
     std::uint64_t hashed_bytes{};
     mutable std::uint64_t directory_checks{};
     std::set<std::string> members() const {
@@ -409,6 +414,61 @@ std::filesystem::path BundleLease::checked_relative(const std::string &value) {
 }
 BundleLease::BundleLease(std::filesystem::path root, std::string revision, Manifest manifest,
                          const std::function<void()> &check_cancel)
+    : BundleLease(std::move(root), std::move(revision), std::move(manifest), check_cancel, false) {}
+namespace {
+using J = nlohmann::json;
+bool digest_valid(const std::string &value) {
+    return value.size() == 64 && std::all_of(value.begin(), value.end(), [](char c) {
+        return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f');
+    });
+}
+J held_json(Held &file, std::uint64_t limit, const std::function<void()> &cancel = {}) {
+    require(file.checked_size() <= limit, "PUBLICATION_CONTROL_TOO_LARGE");
+    const auto hash = handle_sha256(file.handle, file.checked_size(), cancel);
+    const auto &bytes = file.verified_bytes(hash, cancel);
+    return J::parse(bytes);
+}
+BundleLease::Manifest identity_resources(const J &identity) {
+    auto files = identity.at("source_files").get<BundleLease::Manifest>();
+    const auto mods = identity.at("mod_files").get<BundleLease::Manifest>();
+    require(!files.empty() && identity.at("source_revision").is_string() &&
+        !identity.at("source_revision").get<std::string>().empty(), "PUBLICATION_SOURCE_IDENTITY_INVALID");
+    require(identity.at("mod_revision").is_null() ? mods.empty() :
+        (identity.at("mod_revision").is_string() && !identity.at("mod_revision").get<std::string>().empty() && !mods.empty()),
+        "PUBLICATION_MOD_IDENTITY_INVALID");
+    for (const auto &[path, hash] : mods) {
+        (void)hash;
+        BundleLease::checked_relative(path);
+        require(path.starts_with("image/"), "NATIVE_MOD_NOT_IMAGE");
+    }
+    for (const auto &[name, source] : identity.at("image_sources").items()) {
+        (void)name;
+        const auto kind = source.at("source").get<std::string>();
+        const auto path = source.at("path").get<std::string>();
+        const auto hash = source.at("sha256").get<std::string>();
+        require(kind == "baseline" || kind == "mod", "PUBLICATION_IMAGE_SOURCE_INVALID");
+        const auto &from = kind == "mod" ? mods : identity.at("source_files").get<BundleLease::Manifest>();
+        require(from.contains(path) && from.at(path) == hash, "PUBLICATION_IMAGE_SOURCE_INVALID");
+        if (kind == "mod") files[path] = hash;
+    }
+    return files;
+}
+std::string json_digest(const J &value) {
+    const auto text = value.dump();
+    return bytes_sha256({reinterpret_cast<const std::uint8_t *>(text.data()), text.size()});
+}
+void check_program(const J &identity, const J &flow, const std::string &revision) {
+    require(json_digest(identity) == revision, "PUBLICATION_IDENTITY_MISMATCH");
+    auto program = identity.at("program");
+    require(identity.at("engine_kind") == "wvd_native" && identity.at("program_schema") == program.at("program_schema"),
+        "PUBLICATION_PROGRAM_SCHEMA_INVALID");
+    require(program.at("revision") == "pending", "PUBLICATION_IDENTITY_PROGRAM_INVALID");
+    program["revision"] = revision;
+    require(program == flow, "PUBLICATION_PROGRAM_MISMATCH");
+}
+}
+BundleLease::BundleLease(std::filesystem::path root, std::string revision, Manifest manifest,
+                         const std::function<void()> &check_cancel, bool physical)
     : impl_(std::make_unique<Impl>()) {
     auto &s = *impl_;
     require(!revision.empty() && !manifest.empty(), "BUNDLE_MANIFEST_INVALID");
@@ -416,6 +476,87 @@ BundleLease::BundleLease(std::filesystem::path root, std::string revision, Manif
     s.revision = std::move(revision);
     s.id = unique_id();
     s.manifest = std::move(manifest);
+    if (!physical && std::filesystem::exists(extended_path(s.root / "publication-layout.json"))) {
+        // Pin the marker before interpreting it. No fallback is possible after
+        // the explicit marker has been observed, including parse failures.
+        // Ancestors must resist rename, while sibling requests/sets may still
+        // be added. The two strict physical parts separately freeze their own
+        // directories and files without FILE_SHARE_WRITE.
+        for (const auto &path : ancestors(s.root)) s.anchors.push_back(std::make_unique<Held>(path, true, FILE_READ_ATTRIBUTES));
+        auto marker = std::make_unique<Held>(s.root / "publication-layout.json", false);
+        const auto layout = held_json(*marker, 65536, check_cancel);
+        require(layout.is_object() && layout.size() == 4 && layout.at("schema") == 1 &&
+            layout.at("kind") == "shared_resource_set" && layout.at("program_revision") == s.revision,
+            "PUBLICATION_LAYOUT_INVALID");
+        s.resource_digest = layout.at("resource_digest").get<std::string>();
+        require(digest_valid(s.resource_digest), "PUBLICATION_RESOURCE_DIGEST_INVALID");
+        const auto shared_root = s.root.parent_path() / ".asset-sets" / s.resource_digest;
+        for (const auto &path : ancestors(shared_root)) s.anchors.push_back(std::make_unique<Held>(path, true, FILE_READ_ATTRIBUTES));
+        auto description = std::make_unique<Held>(shared_root / "manifest.json", false);
+        const auto resource = held_json(*description, 16ULL * 1024 * 1024, check_cancel);
+        require(resource.is_object() && resource.size() == 2 && resource.at("schema") == 1 &&
+            resource.at("files").is_array() && json_digest(resource) == s.resource_digest,
+            "PUBLICATION_RESOURCE_MANIFEST_INVALID");
+        Manifest shared_manifest{{"manifest.json", bytes_sha256(description->content)}};
+        Manifest resources;
+        std::string previous;
+        for (const auto &file : resource.at("files")) {
+            require(file.is_object() && file.size() == 3, "PUBLICATION_RESOURCE_MANIFEST_INVALID");
+            const auto path = file.at("path").get<std::string>();
+            checked_relative(path);
+            const auto normalized = fold(checked_relative(path));
+            require(normalized != L"publication-layout.json" && normalized != L"program/flow.json" && normalized != L"program/identity.json",
+                "NATIVE_PUBLICATION_RESERVED_PATH");
+            require(previous.empty() || previous < path, "PUBLICATION_RESOURCE_ORDER_INVALID");
+            previous = path;
+            const auto hash = file.at("sha256").get<std::string>();
+            require(digest_valid(hash) && resources.emplace(path, hash).second,
+                "PUBLICATION_RESOURCE_MANIFEST_INVALID");
+            shared_manifest.emplace("payload/" + path, hash);
+        }
+        auto shared = std::shared_ptr<BundleLease>(new BundleLease(shared_root, s.resource_digest,
+            std::move(shared_manifest), check_cancel, true));
+        Manifest request_manifest{{"publication-layout.json", bytes_sha256(marker->content)}};
+        for (const auto &name : {"program/flow.json", "program/identity.json"}) {
+            require(s.manifest.contains(name), "PUBLICATION_PROGRAM_MISSING");
+            request_manifest.emplace(name, s.manifest.at(name));
+        }
+        if (s.manifest.contains("parameters/image-sources.json") && !resources.contains("parameters/image-sources.json"))
+            request_manifest.emplace("parameters/image-sources.json", s.manifest.at("parameters/image-sources.json"));
+        auto request = std::shared_ptr<BundleLease>(new BundleLease(s.root, s.revision,
+            std::move(request_manifest), check_cancel, true));
+        const auto id = J::parse(request->bytes("program/identity.json"));
+        check_program(id, J::parse(request->bytes("program/flow.json")), s.revision);
+        require(identity_resources(id) == resources, "PUBLICATION_IDENTITY_RESOURCES_MISMATCH");
+        const bool has_mod = !id.at("mod_revision").is_null();
+        require(has_mod == request->manifest().contains("parameters/image-sources.json"),
+            "PUBLICATION_PROVENANCE_INVALID");
+        if (has_mod) require(J::parse(request->bytes("parameters/image-sources.json")) == id.at("image_sources"),
+            "PUBLICATION_PROVENANCE_INVALID");
+        Manifest logical = resources;
+        for (const auto &[name, hash] : request->manifest()) {
+            if (name == "publication-layout.json") continue;
+            require(logical.emplace(name, hash).second, "PUBLICATION_LOGICAL_COLLISION");
+            s.files.emplace(name, request->impl_->files.at(name));
+        }
+        require(logical == s.manifest, "PUBLICATION_LOGICAL_MANIFEST_MISMATCH");
+        std::set<std::wstring> logical_names;
+        for (const auto &[name, hash] : logical)
+            require(logical_names.insert(fold(checked_relative(name))).second, "BUNDLE_CASE_COLLISION");
+        for (const auto &file : resource.at("files")) {
+            const auto name = file.at("path").get<std::string>();
+            require(file.at("bytes").is_number_unsigned() &&
+                file.at("bytes").get<std::uint64_t>() == shared->member_size("payload/" + name),
+                "PUBLICATION_RESOURCE_SIZE_MISMATCH");
+            s.resource_bytes += shared->member_size("payload/" + name);
+            s.files.emplace(name, shared->impl_->files.at("payload/" + name));
+        }
+        s.control_bytes = marker->checked_size() + description->checked_size();
+        s.hashed_bytes = request->hash_bytes() + shared->hash_bytes();
+        s.parts = {std::move(request), std::move(shared)};
+        verify_members();
+        return;
+    }
     // 连同祖先检查 reparse，避免 canonical 把链接证据抹掉。
     for (const auto &p : ancestors(s.root)) {
         auto attributes = GetFileAttributesW(p.c_str());
@@ -446,6 +587,17 @@ BundleLease::BundleLease(std::filesystem::path root, std::string revision, Manif
                 "BUNDLE_MANIFEST_INVALID");
         s.files.emplace(relative, std::make_unique<Held>(s.root / path, false));
     }
+    if (physical) {
+        std::set<std::filesystem::path> expected{s.root};
+        for (const auto &[relative, hash] : s.manifest) {
+            (void)hash;
+            for (auto path = (s.root / checked_relative(relative)).parent_path(); path != s.root; path = path.parent_path())
+                expected.insert(path);
+        }
+        require(expected.size() == s.directories.size() &&
+            std::all_of(s.directories.begin(), s.directories.end(), [&](const auto &item) { return expected.contains(item.first); }),
+            "PUBLICATION_DIRECTORY_NOT_IN_MANIFEST");
+    }
     // 全部文件锁定后才读取同一对象的内容，不重新按路径打开另一个文件计算哈希。
     for (auto &[relative, file] : s.files) {
         if (check_cancel) check_cancel();
@@ -462,6 +614,11 @@ BundleLease::~BundleLease() = default;
 void BundleLease::verify_members() const {
     auto &s = *impl_;
     ++s.directory_checks;
+    if (!s.parts.empty()) {
+        for (const auto &part : s.parts) part->verify_members();
+        for (const auto &anchor : s.anchors) anchor->verify_identity();
+        return;
+    }
     std::set<std::string> expected;
     for (const auto &[name, _] : s.manifest)
         expected.insert(name);
@@ -579,6 +736,15 @@ const std::string &BundleLease::identity() const { return impl_->id; }
 std::uint64_t BundleLease::hash_bytes() const { return impl_->hashed_bytes; }
 BundleLease::StorageStats BundleLease::storage_stats() const {
     StorageStats result;
+    if (!impl_->parts.empty()) {
+        for (const auto &part : impl_->parts) {
+            const auto value = part->storage_stats();
+            result.size_bytes += value.size_bytes; result.capacity_bytes += value.capacity_bytes;
+            result.model_bytes += value.model_bytes; result.image_bytes += value.image_bytes;
+            result.json_bytes += value.json_bytes; result.other_bytes += value.other_bytes;
+        }
+        return result;
+    }
     for (const auto &[name, file] : impl_->files) {
         std::lock_guard lock(file->content_mutex);
         const auto size = file->content.size();
@@ -592,6 +758,80 @@ BundleLease::StorageStats BundleLease::storage_stats() const {
     return result;
 }
 std::size_t BundleLease::file_count() const { return impl_->files.size(); }
-std::size_t BundleLease::directory_count() const { return impl_->directories.size(); }
+std::size_t BundleLease::directory_count() const {
+    auto result = impl_->directories.size();
+    for (const auto &part : impl_->parts) result += part->directory_count();
+    return result;
+}
 std::uint64_t BundleLease::directory_checks() const { return impl_->directory_checks; }
+const std::filesystem::path &BundleLease::physical_member(const std::string &relative) const {
+    require_member(relative);
+    impl_->files.at(relative)->verify_identity();
+    return impl_->files.at(relative)->path;
+}
+const BundleLease::Manifest &BundleLease::manifest() const { return impl_->manifest; }
+const std::string &BundleLease::resource_digest() const { return impl_->resource_digest; }
+std::uint64_t BundleLease::resource_bytes() const { return impl_->resource_bytes; }
+std::uint64_t BundleLease::control_bytes() const { return impl_->control_bytes; }
+std::uint64_t BundleLease::retained_resource_bytes(const std::filesystem::path &published) {
+    const auto sets = published / ".asset-sets";
+    if (!std::filesystem::exists(extended_path(sets))) return 0;
+    OwnedBundleDirectory::require_no_pending(sets);
+    std::vector<std::unique_ptr<Held>> anchors;
+    for (const auto &path : ancestors(sets)) anchors.push_back(std::make_unique<Held>(path, true, FILE_READ_ATTRIBUTES));
+    std::uint64_t total = 0;
+    std::size_t count = 0;
+    for (const auto &entry : std::filesystem::directory_iterator(extended_path(sets))) {
+        require(++count <= 65536 && entry.is_directory(), "PUBLICATION_RESOURCE_PRIVATE_ROOT_INVALID");
+        const auto digest = utf8(entry.path().filename());
+        require(digest_valid(digest), "PUBLICATION_RESOURCE_PRIVATE_ROOT_INVALID");
+        const auto root = sets / entry.path().filename();
+        auto pinned = std::make_unique<Held>(root, true);
+        Held description(root / "manifest.json", false);
+        const auto resource = held_json(description, 16ULL * 1024 * 1024);
+        require(resource.is_object() && resource.size() == 2 && resource.at("schema") == 1 &&
+            resource.at("files").is_array() && json_digest(resource) == digest,
+            "PUBLICATION_RESOURCE_MANIFEST_INVALID");
+        Manifest files{{"manifest.json", bytes_sha256(description.content)}};
+        std::string previous;
+        for (const auto &file : resource.at("files")) {
+            require(file.is_object() && file.size() == 3, "PUBLICATION_RESOURCE_MANIFEST_INVALID");
+            const auto path = file.at("path").get<std::string>();
+            checked_relative(path);
+            require(previous.empty() || previous < path, "PUBLICATION_RESOURCE_ORDER_INVALID");
+            previous = path;
+            require(files.emplace("payload/" + path, file.at("sha256").get<std::string>()).second,
+                "PUBLICATION_RESOURCE_MANIFEST_INVALID");
+        }
+        BundleLease set(root, digest, std::move(files), {}, true);
+        for (const auto &file : resource.at("files"))
+            require(file.at("bytes").is_number_unsigned() && file.at("bytes").get<std::uint64_t>() ==
+                set.member_size("payload/" + file.at("path").get<std::string>()), "PUBLICATION_RESOURCE_SIZE_MISMATCH");
+        require(total <= (std::numeric_limits<std::uint64_t>::max)() - set.hash_bytes(), "NATIVE_PUBLICATION_BUDGET_OVERFLOW");
+        total += set.hash_bytes();
+    }
+    return total;
+}
+std::shared_ptr<BundleLease> BundleLease::open_publication(const std::filesystem::path &root,
+    const std::function<void()> &check_cancel) {
+    std::vector<std::unique_ptr<Held>> anchors;
+    for (const auto &path : ancestors(root)) anchors.push_back(std::make_unique<Held>(path, true, FILE_READ_ATTRIBUTES));
+    Held identity(root / "program/identity.json", false), flow(root / "program/flow.json", false);
+    const auto id = held_json(identity, 256ULL * 1024 * 1024, check_cancel);
+    const auto program = held_json(flow, 256ULL * 1024 * 1024, check_cancel);
+    const auto revision = json_digest(id);
+    check_program(id, program, revision);
+    auto files = identity_resources(id);
+    require(files.emplace("program/identity.json", bytes_sha256(identity.content)).second &&
+        files.emplace("program/flow.json", bytes_sha256(flow.content)).second, "PUBLICATION_LOGICAL_COLLISION");
+    std::unique_ptr<Held> provenance;
+    if (!id.at("mod_revision").is_null()) {
+        provenance = std::make_unique<Held>(root / "parameters/image-sources.json", false);
+        require(held_json(*provenance, 256ULL * 1024 * 1024, check_cancel) == id.at("image_sources"),
+            "PUBLICATION_PROVENANCE_INVALID");
+        require(files.emplace("parameters/image-sources.json", bytes_sha256(provenance->content)).second,
+            "PUBLICATION_LOGICAL_COLLISION");
+    }
+    return std::make_shared<BundleLease>(root, revision, std::move(files), check_cancel);
+}
 } // namespace wvd::platform

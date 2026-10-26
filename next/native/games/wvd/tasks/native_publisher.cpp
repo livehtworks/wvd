@@ -14,6 +14,7 @@
 #include <fstream>
 #include <set>
 #include <limits>
+#include <cwctype>
 
 namespace wvd::games::tasks {
 namespace {
@@ -48,7 +49,8 @@ std::uint64_t NativePublication::rounded(std::uint64_t value) {
 NativePublication publish_native(const CompiledWorkflow &workflow,
     const recognition::Bundle &baseline, const std::filesystem::path &destination,
     const J &aliases, const J &source_paths, const recognition::Bundle *mod,
-    const std::function<void()> &check_cancel, const platform::PreparationObserver &observer) {
+    const std::function<void()> &check_cancel, const platform::PreparationObserver &observer,
+    const std::function<void(const J &)> &admit_storage) {
     platform::PreparationTimer total_timer("publish_native", observer);
     platform::PreparationTimer input_timer("publisher_inputs", observer);
     if (check_cancel) check_cancel();
@@ -164,28 +166,50 @@ NativePublication publish_native(const CompiledWorkflow &workflow,
     const auto program_text = workflow::serialize(program).dump(2);
     const auto identity_text = identity.dump(2);
     const auto provenance_text = mod ? image_sources.dump(2) : std::string{};
-    std::uint64_t required = 2ULL * 1024 * 1024 * 1024;
-    std::uint64_t logical_bytes{}, missing_object_bytes{};
-    std::set<std::string> new_objects;
+    for (const auto &[relative, hash] : published_manifest) {
+        (void)hash;
+        auto name = platform::BundleLease::checked_relative(relative).generic_wstring();
+        std::transform(name.begin(), name.end(), name.begin(), [](wchar_t c) { return std::towlower(c); });
+        if (name == L"publication-layout.json" || name == L"program/flow.json" || name == L"program/identity.json" ||
+            (mod && name == L"parameters/image-sources.json")) throw std::runtime_error("NATIVE_PUBLICATION_RESERVED_PATH");
+    }
+    J resource{{"schema", 1}, {"files", J::array()}};
+    std::uint64_t logical_bytes{}, physical_copy_bytes{};
     for (const auto &[relative, hash] : published_manifest) {
         const auto &source = selected_mod_paths.contains(relative) ? *mod_origin : origin;
-        const auto size = rounded(source.member_size(relative));
+        const auto size = source.member_size(relative);
         checked_add(logical_bytes, size);
-        if (relative.ends_with(".onnx") && new_objects.insert(hash).second &&
-            !std::filesystem::exists(platform::extended_path(destination.parent_path() / "asset-objects" / hash)))
-            checked_add(missing_object_bytes, size);
+        checked_add(physical_copy_bytes, rounded(size));
+        resource["files"].push_back({{"path", relative}, {"sha256", hash}, {"bytes", size}});
     }
-    checked_add(required, logical_bytes);
+    const auto resource_text = resource.dump();
+    const auto resource_digest = platform::bytes_sha256({reinterpret_cast<const std::uint8_t *>(resource_text.data()), resource_text.size()});
+    const auto sets = destination.parent_path() / ".asset-sets";
+    const auto shared_root = sets / resource_digest;
+    // Pending recovery evidence blocks reuse as well as first materialization.
+    platform::OwnedBundleDirectory::require_no_pending(destination.parent_path());
+    platform::OwnedBundleDirectory::require_no_pending(destination.parent_path() / "asset-objects");
+    platform::OwnedBundleDirectory::require_no_pending(sets);
+    platform::OwnedBundleDirectory::require_no_pending(shared_root);
+    const bool shared_exists = std::filesystem::exists(platform::extended_path(shared_root));
+    const auto layout_text = J{{"schema", 1}, {"kind", "shared_resource_set"},
+        {"resource_digest", resource_digest}, {"program_revision", revision}}.dump();
+    std::uint64_t required = 2ULL * 1024 * 1024 * 1024;
+    const std::uint64_t missing_object_bytes = shared_exists ? 0 : physical_copy_bytes;
     checked_add(required, missing_object_bytes);
     checked_add(required, rounded(program_text.size()));
     checked_add(required, rounded(identity_text.size()));
     checked_add(required, rounded(provenance_text.size()));
-    // Per-member metadata/ancestors plus a bounded rollback-record allowance.
+    checked_add(required, rounded(layout_text.size()));
+    if (!shared_exists) checked_add(required, rounded(resource_text.size()));
     if (published_manifest.size() > ((std::numeric_limits<std::uint64_t>::max)() / 4096) - 32)
         throw std::runtime_error("NATIVE_PUBLICATION_BUDGET_OVERFLOW");
     std::uint64_t overhead = (published_manifest.size() + 32) * 4096ULL;
     checked_add(overhead, 65536);
     checked_add(required, overhead);
+    if (admit_storage) admit_storage({{"resource_digest", resource_digest}, {"resource_bytes", logical_bytes},
+        {"resource_new", !shared_exists}, {"metadata_bytes", program_text.size() + identity_text.size() + provenance_text.size() + layout_text.size()},
+        {"resource_manifest_bytes", resource_text.size()}, {"overhead_bytes", overhead}});
     auto volume = destination.parent_path();
     while (!std::filesystem::exists(platform::extended_path(volume)) && volume != volume.parent_path()) volume = volume.parent_path();
     std::error_code space_error;
@@ -210,43 +234,36 @@ NativePublication publish_native(const CompiledWorkflow &workflow,
     if (NativePublication::fault_) NativePublication::fault_("before_bundle_construction");
     bundle = recognition::Bundle{staging, revision, {}};
     platform::PreparationTimer copy_timer("file_copy", observer);
-    for (const auto &[relative, hash] : published_manifest) {
-        if (check_cancel) check_cancel();
-        const auto path = staging / platform::BundleLease::checked_relative(relative);
-        std::filesystem::create_directories(platform::extended_path(path.parent_path()));
-        const auto &source = selected_mod_paths.contains(relative) ? *mod_origin : origin;
-        if (!relative.ends_with(".onnx")) {
-            source.copy_member(relative, path, check_cancel);
-            bundle.files.push_back({relative, hash});
-            continue;
-        }
-        // Copy once from the locked origin. Every run links the immutable,
-        // content-addressed object, never the user's mutable source file.
-        const auto objects = destination.parent_path() / "asset-objects";
-        std::filesystem::create_directories(platform::extended_path(objects));
-        const auto object = objects / hash;
-        if (!std::filesystem::exists(platform::extended_path(object))) {
-            const auto temporary = objects / (hash + ".staging-" + platform::unique_id());
-            auto object_owner = platform::OwnedBundleDirectory::create(temporary);
-            try {
-                source.copy_member(relative, temporary / "payload.onnx", check_cancel);
-                object_owner->rename_to(object);
-                object_owner->accept(); // A verified immutable cache is retained.
-                object_owner->receipt()->require_clean_acceptance();
-            } catch (...) {
-                object_owner->rethrow_with_cleanup(std::current_exception());
+    platform::BundleLease::Manifest shared_manifest{{"manifest.json", platform::bytes_sha256(
+        {reinterpret_cast<const std::uint8_t *>(resource_text.data()), resource_text.size()})}};
+    for (const auto &[relative, hash] : published_manifest) shared_manifest.emplace("payload/" + relative, hash);
+    if (!shared_exists) {
+        std::filesystem::create_directories(platform::extended_path(sets));
+        const auto temporary = sets / (resource_digest + ".staging-" + platform::unique_id());
+        auto shared_owner = platform::OwnedBundleDirectory::create(temporary);
+        try {
+            for (const auto &[relative, hash] : published_manifest) {
+                (void)hash;
+                if (check_cancel) check_cancel();
+                const auto path = temporary / "payload" / platform::BundleLease::checked_relative(relative);
+                std::filesystem::create_directories(platform::extended_path(path.parent_path()));
+                const auto &source = selected_mod_paths.contains(relative) ? *mod_origin : origin;
+                source.copy_member(relative, path, check_cancel);
             }
-        }
-        platform::BundleLease shared(object, hash, {{"payload.onnx", hash}}, check_cancel);
-        try { shared.link_member("payload.onnx", path); }
-        catch (const platform::BundleLinkError &error) {
-            if (error.ntstatus() != platform::BundleLinkError::too_many_links) throw;
-            // The same frozen object handle, original CREATE_NEW and streamed
-            // verification are retained. All non-capacity errors remain errors.
-            shared.copy_member("payload.onnx", path, check_cancel);
-        }
-        bundle.files.push_back({relative, hash});
+            write_bytes(temporary, "manifest.json", reinterpret_cast<const std::uint8_t *>(resource_text.data()), resource_text.size());
+            { platform::BundleLease verified(temporary, resource_digest, shared_manifest, check_cancel); }
+            shared_owner->rename_to(shared_root);
+            shared_owner->accept();
+            shared_owner->receipt()->require_clean_acceptance();
+        } catch (...) { shared_owner->rethrow_with_cleanup(std::current_exception()); }
     }
+    // Validate the entire retained set on every hit, not merely its directory name.
+    auto shared = std::make_shared<platform::BundleLease>(shared_root, resource_digest, shared_manifest, check_cancel);
+    for (const auto &[relative, hash] : published_manifest) bundle.files.push_back({relative, hash});
+    preparation["resource_digest"] = resource_digest;
+    preparation["resource_bytes"] = logical_bytes;
+    preparation["resource_reused"] = shared_exists;
+    if (NativePublication::fault_) NativePublication::fault_("after_resource_set");
     preparation["file_copy"] = copy_timer.sample();
     preparation["source_model_bytes_after_copy"] =
         origin.storage_stats().model_bytes +
@@ -268,6 +285,8 @@ NativePublication publish_native(const CompiledWorkflow &workflow,
             {"parameters/image-sources.json",
              platform::file_sha256(staging / "parameters" / "image-sources.json")});
     }
+    write_bytes(staging, "publication-layout.json", reinterpret_cast<const std::uint8_t *>(layout_text.data()), layout_text.size());
+    if (NativePublication::fault_) NativePublication::fault_("after_layout_marker");
     preparation["files"] = bundle.files.size();
     if (check_cancel)
         check_cancel();

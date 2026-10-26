@@ -33,11 +33,13 @@ contracts::Box bounds(const std::vector<cv::Point> &points, cv::Size size) {
 OcrEngine::OcrEngine(const std::filesystem::path &model_root,
     std::shared_ptr<platform::MemoryDiagnostics> diagnostics,
     std::shared_ptr<const platform::BundleLease> files)
+    : OcrEngine(model_root / "det.onnx", model_root / "rec.onnx", model_root / "keys.txt",
+        std::move(diagnostics), std::move(files)) {}
+OcrEngine::OcrEngine(const std::filesystem::path &det, const std::filesystem::path &rec,
+    const std::filesystem::path &keys, std::shared_ptr<platform::MemoryDiagnostics> diagnostics,
+    std::shared_ptr<const platform::BundleLease> files)
     : diagnostics_(std::move(diagnostics)), files_(std::move(files)) {
     if (diagnostics_) diagnostics_->owner_boundary("initialize.begin", "ocr", lifetime_.id());
-    const auto det = model_root / "det.onnx";
-    const auto rec = model_root / "rec.onnx";
-    const auto keys = model_root / "keys.txt";
     if (!std::filesystem::is_regular_file(det) || !std::filesystem::is_regular_file(rec) ||
         !std::filesystem::is_regular_file(keys))
         throw std::runtime_error("OCR_MODEL_MISSING");

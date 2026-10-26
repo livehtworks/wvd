@@ -93,7 +93,8 @@ struct Fixture {
     std::string model = std::string(3 * 65536 + 17, 'm'), hash;
     recognition::Bundle baseline;
     games::tasks::CompiledWorkflow workflow;
-    explicit Fixture(fs::path area, bool seed_object = true) : root(std::move(area)) {
+    explicit Fixture(fs::path area, bool seed_object = true, std::size_t model_bytes = 3 * 65536 + 17)
+        : root(std::move(area)), model(model_bytes, 'm') {
         source = root / "source"; published = root / "published";
         write(source / "models/a.onnx", model); write(source / "models/b.onnx", model);
         write(source / "definition.json", "{\"schema\":1}");
@@ -175,33 +176,23 @@ inline J run(const fs::path &root) {
     check(std::wstring(filesystem) == L"NTFS", "T0_REAL_NTFS_REQUIRED");
     J cases = J::array();
     {
-        Reset reset; Fixture f(root / "real-link-limit"); auto padding = f.fill_links(1022);
-        const auto initial = info(f.object); auto both_linked = f.publish("boundary-1022-both-link");
-        const auto first_a = both_linked.bundle.root / "models/a.onnx", first_b = both_linked.bundle.root / "models/b.onnx";
-        check(info(f.object).links == 1024 && same_file(info(first_a), info(f.object)) && same_file(info(first_b), info(f.object)) &&
-            platform::file_sha256(first_a) == f.hash && platform::file_sha256(first_b) == f.hash,
-            "T0_OBSERVED_1022_BOUNDARY_DID_NOT_ALLOW_TWO_LINKS");
-        cases.push_back({{"case", "P01-P02-host-observed-1022-allows-two-alias-links"}, {"before", initial.json()},
-            {"object_after", info(f.object).json()}, {"first_alias", info(first_a).json()}, {"second_alias", info(first_b).json()},
-            {"external_literal_P02", "Incorrect on this host: 1022 does not force the second alias to copy; actual NTSTATUS determines fallback"},
-            {"independent_probe", "next/.local/t0-repair-261025/ntfs-native-link-limit-a1/receipt.json"},
-            {"retained_literal_P02_failure", "next/.local/t0-repair-261025/wp01-publication-a1"}});
-        both_linked.ownership->accept(); both_linked.bundle.lease.reset();
-        check(!padding.empty() && remove_os(padding.back()) && info(f.object).links == 1023, "T0_FIXTURE_CANNOT_RESTORE_1023");
-        padding.pop_back();
-        const auto before_fallback = info(f.object); auto history = f.publish("boundary-success");
-        const auto a = history.bundle.root / "models/a.onnx", b = history.bundle.root / "models/b.onnx";
-        check(info(f.object).links == 1024 && same_file(info(a), info(f.object)) && !same_file(info(b), info(f.object)) &&
+        Reset reset; Fixture f(root / "real-link-limit", true, 8193); f.fill_links(1024);
+        const auto original = info(f.object);
+        auto first = f.publish("boundary-success");
+        const auto a = first.bundle.lease->physical_member("models/a.onnx");
+        const auto b = first.bundle.lease->physical_member("models/b.onnx");
+        const auto old_a = info(a), old_b = info(b);
+        check(info(f.object).links == 1024 && !same_file(info(a), original) && !same_file(info(b), original) &&
             platform::file_sha256(a) == f.hash && platform::file_sha256(b) == f.hash,
-            "T0_ALIAS_BOUNDARY_DID_NOT_LINK_THEN_COPY");
-        check(history.bundle.lease->root() == history.bundle.root &&
-            history.preparation.at("source_model_bytes_after_copy") == 0 &&
-            history.preparation.at("copy_buffer_bytes") == 65536 && history.bundle.lease->storage_stats().model_bytes == 0,
-            "T0_FALLBACK_EAGER_BUFFER_OR_ROOT_CHANGED");
-        cases.push_back({{"case", "P01-P02-host-observed-1023-first-link-1024-second-copy"}, {"before", before_fallback.json()},
-            {"object_after", info(f.object).json()}, {"first_alias", info(a).json()}, {"second_alias", info(b).json()},
-            {"sha256", f.hash}, {"admission", history.preparation.at("space_admission")}});
-        history.ownership->accept(); history.bundle.lease.reset();
+            "T0_SHARED_SET_DEPENDS_ON_OLD_LINK_CAPACITY");
+        first.ownership->accept();
+        auto second = f.publish("boundary-reuse");
+        check(same_file(old_a, info(second.bundle.lease->physical_member("models/a.onnx"))) &&
+            same_file(old_b, info(second.bundle.lease->physical_member("models/b.onnx"))) &&
+            info(a).links == old_a.links && info(b).links == old_b.links &&
+            first.preparation.at("source_model_bytes_after_copy") == 0 &&
+            first.bundle.lease->storage_stats().model_bytes == 0, "T0_SHARED_REUSE_CHANGED_OBJECTS");
+        second.ownership->accept();
         {
             platform::BundleLease shared(f.object.parent_path(), f.hash, {{"payload.onnx", f.hash}});
             bool exact = false;
@@ -209,44 +200,32 @@ inline J run(const fs::path &root) {
             catch (const platform::BundleLinkError &e) { exact = e.ntstatus() == platform::BundleLinkError::too_many_links; }
             check(exact && !exists_os(f.root / "capacity-rejected.onnx"), "T0_RAW_STATUS_NOT_PRESERVED");
         }
-        const auto old_a = info(a), old_b = info(b), old_first_a = info(first_a), old_first_b = info(first_b);
-        check(!padding.empty() && remove_os(padding.back()) && info(f.object).links == 1023, "T0_FIXTURE_CANNOT_RESTORE_1023");
-        padding.pop_back();
         bool late = false;
         rejects([&] { f.publish("later-failure", [&] {
             const auto stage = f.staging("later-failure");
             if (!stage.empty() && exists_os(stage / "program/identity.json")) { late = true; throw std::runtime_error("T0_LATE_FAILURE"); }
         }); }, "T0_LATE_FAILURE");
-        check(late && info(f.object).links == 1023 && !has_staging(f.published) &&
-            same_file(old_a, info(a)) && same_file(old_b, info(b)) && platform::file_sha256(a) == f.hash && platform::file_sha256(b) == f.hash &&
-            same_file(old_first_a, info(first_a)) && same_file(old_first_b, info(first_b)) &&
-            platform::file_sha256(first_a) == f.hash && platform::file_sha256(first_b) == f.hash,
-            "T0_ROLLBACK_CHANGED_HISTORY_OR_LEAKED_LINK");
-        cases.push_back({{"case", "P03-late-failure-restores-nlinks-and-history"}, {"object_after", info(f.object).json()}});
-        // Retain the verified history; bring only the test's own padding slot
-        // back to the limit for fallback cancellation/I/O fault tests.
-        f.fill_links(1024);
+        check(late && info(f.object).links == 1024 && !has_staging(f.published) &&
+            same_file(old_a, info(a)) && same_file(old_b, info(b)), "T0_ROLLBACK_CHANGED_HISTORY");
+        cases.push_back({{"case", "P01-P03-shared-set-replaces-per-request-links-at-old-capacity"},
+            {"old_object", original.json()}, {"resource_a", old_a.json()}, {"resource_b", old_b.json()}});
         for (const auto mode : {std::string("cancel"), std::string("write"), std::string("flush")}) {
-            bool copying = false; int checkpoints = 0; bool injected = false;
+            Fixture fresh(root / ("shared-initial-" + mode), false);
+            bool copying = false, injected = false; int checkpoints = 0;
             platform::BundleLeaseTestAccess::copy_fault([&](const char *phase) {
-                const auto stage = f.staging(mode);
-                if (std::string_view(phase) == "before_copy" && !stage.empty() && exists_os(stage / "models/a.onnx")) copying = true;
+                if (std::string_view(phase) == "before_copy") copying = true;
             });
             platform::BundleLeaseTestAccess::io_fault([&](const char *phase) {
                 if (copying && mode == phase) { injected = true; return true; } return false;
             });
             const auto code = mode == "cancel" ? "PREPARATION_CANCELLED" : mode == "write" ? "NATIVE_BUNDLE_WRITE_FAILED" : "NATIVE_BUNDLE_FLUSH_FAILED";
-            rejects([&] { f.publish(mode, [&] {
+            rejects([&] { fresh.publish(mode, [&] {
                 if (copying && mode == "cancel" && ++checkpoints == 3) { injected = true; throw std::runtime_error("PREPARATION_CANCELLED"); }
             }); }, code);
             platform::BundleLeaseTestAccess::copy_fault({}); platform::BundleLeaseTestAccess::io_fault({});
-            check(injected && !has_staging(f.published) && info(f.object).links == 1024 &&
-                same_file(old_a, info(a)) && same_file(old_b, info(b)) && platform::file_sha256(a) == f.hash &&
-                same_file(old_first_a, info(first_a)) && same_file(old_first_b, info(first_b)) &&
-                platform::file_sha256(first_a) == f.hash && platform::file_sha256(first_b) == f.hash,
-                "T0_FALLBACK_FAILURE_LEAKED_OR_CHANGED_HISTORY");
-            cases.push_back({{"case", "P05-P13-fallback-" + mode}, {"injected", true}, {"copy_checkpoints", checkpoints},
-                {"object_after", info(f.object).json()}, {"published", false}});
+            check(injected && !has_staging(fresh.published) && same_file(old_a, info(a)) && same_file(old_b, info(b)),
+                "T0_SHARED_COPY_FAILURE_LEAKED_OR_CHANGED_HISTORY");
+            cases.push_back({{"case", "P05-P13-shared-copy-" + mode}, {"injected", true}});
         }
     }
     {
@@ -254,9 +233,9 @@ inline J run(const fs::path &root) {
         platform::BundleLeaseTestAccess::copy_fault([&](const char *phase) {
             if (std::string_view(phase) != "before_copy") return;
             before_copy_reached = true;
-            if (!exists_os(f.object.parent_path().parent_path())) return;
-            for (const auto &entry : directories_os(f.object.parent_path().parent_path()))
-                if (entry.path().filename().string().find(".staging-") != std::string::npos && exists_os(entry.path() / "payload.onnx")) copying = true;
+            if (!exists_os(f.published / ".asset-sets")) return;
+            for (const auto &entry : directories_os(f.published / ".asset-sets"))
+                if (entry.path().filename().string().find(".staging-") != std::string::npos && exists_os(entry.path() / "payload/models/a.onnx")) copying = true;
         });
         try {
             rejects([&] { f.publish("cancel", [&] {
@@ -367,7 +346,7 @@ inline J run(const fs::path &root) {
         struct Close { HANDLE &handle; ~Close() { if (handle != INVALID_HANDLE_VALUE) CloseHandle(handle); } } close{held};
         DWORD delete_open_error{}; bool cleanup_record_failed = false;
         platform::OwnedBundleDirectoryTestAccess::fault([&](const char *phase) {
-            if (std::string_view(phase) == "after_rename") throw std::runtime_error("T0_AFTER_FINAL_RENAME");
+            if (std::string_view(phase) == "after_rename" && exists_os(destination)) throw std::runtime_error("T0_AFTER_FINAL_RENAME");
             if (std::string_view(phase) == "before_cleanup") {
                 held = CreateFileW(platform::extended_path(destination).c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
                     FILE_FLAG_BACKUP_SEMANTICS, nullptr);
@@ -395,8 +374,19 @@ inline J run(const fs::path &root) {
         }
         platform::OwnedBundleDirectoryTestAccess::fault({});
         const auto markers = pending_sidecars(f.published);
-        check(both && cleanup_record_failed && exists_os(destination / "models/a.onnx") && !has_staging(f.published) && markers.size() == 1,
+        check(both && cleanup_record_failed && exists_os(destination / "program/identity.json") && !has_staging(f.published) && markers.size() == 1,
             "T0_FINAL_RENAME_LOST_DURABLE_PENDING_INDEX:path=" + platform::utf8(destination));
+        {
+            const auto failed = platform::BundleLease::open_publication(destination);
+            platform::BundleLease::Manifest expected;
+            for (const auto &file : f.baseline.files) expected.emplace(file.relative_path, file.sha256);
+            for (const auto &name : {"program/identity.json", "program/flow.json"})
+                expected.emplace(name, platform::file_sha256(destination / platform::BundleLease::checked_relative(name)));
+            check(failed->manifest() == expected && !failed->resource_digest().empty() &&
+                platform::file_sha256(failed->physical_member("models/a.onnx")) == f.hash &&
+                platform::file_sha256(failed->physical_member("models/b.onnx")) == f.hash,
+                "T0_RETAINED_PENDING_PUBLICATION_CHANGED_LOGICAL_MEMBERS_OR_HASHES");
+        } // Inspection lease is released before the blocked-preparation retry.
         const auto marker_hash = platform::file_sha256(markers.front());
         rejects([&] { platform::OwnedBundleDirectory::require_no_pending(f.published); }, "PREPARATION_CLEANUP_PENDING");
         rejects([&] { f.publish("must-not-retry"); }, "PREPARATION_CLEANUP_PENDING");
@@ -405,7 +395,7 @@ inline J run(const fs::path &root) {
     }
     {
         Reset reset; Fixture f(root / "accepted-sidecar-remove-failure"); auto publication = f.publish("accepted");
-        const auto destination = publication.bundle.root; const auto original = info(destination / "models/a.onnx");
+        const auto destination = publication.bundle.root; const auto model_path = publication.bundle.lease->physical_member("models/a.onnx"); const auto original = info(model_path);
         auto receipt = publication.ownership->receipt();
         platform::OwnedBundleDirectoryTestAccess::fault([](const char *phase) {
             if (std::string_view(phase) == "before_prepare_marker_remove") throw std::runtime_error("T0_ACCEPT_INDEX_REMOVE_FAILURE");
@@ -422,14 +412,14 @@ inline J run(const fs::path &root) {
         }
         check(acceptance_error, "T0_ACCEPT_REMOVAL_FAILURE_DUAL_ERROR_NOT_REPORTED:path=" + platform::utf8(destination));
         publication.bundle.lease.reset(); publication.ownership.reset(); platform::OwnedBundleDirectoryTestAccess::fault({});
-        check(pending_sidecars(f.published).size() == 1 && same_file(original, info(destination / "models/a.onnx")) &&
-            platform::file_sha256(destination / "models/a.onnx") == f.hash, "T0_ACCEPT_REMOVAL_FAILURE_DELETED_PACKAGE_OR_INDEX");
+        check(pending_sidecars(f.published).size() == 1 && same_file(original, info(model_path)) &&
+            platform::file_sha256(model_path) == f.hash, "T0_ACCEPT_REMOVAL_FAILURE_DELETED_PACKAGE_OR_INDEX");
         rejects([&] { platform::OwnedBundleDirectory::require_no_pending(f.published); }, "PREPARATION_CLEANUP_PENDING");
         rejects([&] { f.publish("must-not-retry"); }, "PREPARATION_CLEANUP_PENDING");
         cases.push_back({{"case", "P11-accepted-package-retained-and-durable-sidecar-blocks-after-index-removal-failure"},
             {"accepted", receipt->accepted}, {"cleanup_pending", receipt->cleanup_pending}, {"marker_failed", receipt->marker_failed},
             {"acceptance_dual_error_reported", acceptance_error},
-            {"package_file", info(destination / "models/a.onnx").json()}});
+            {"package_file", info(model_path).json()}});
     }
     {
         Reset reset; Fixture f(root / "prepare-sidecar-create-failure");
@@ -442,7 +432,9 @@ inline J run(const fs::path &root) {
         cases.push_back({{"case", "P11-pre-rename-index-creation-failure-withdraws-owned-stage"}});
     }
     {
-        Reset reset; Fixture f(root / "admission"); auto probe = f.publish("probe");
+        Reset reset; Fixture f(root / "admission");
+        { auto seed = f.publish("seed"); seed.ownership->accept(); }
+        auto probe = f.publish("probe");
         const auto admission = probe.preparation.at("space_admission");
         const auto required = admission.at("required_bytes").get<std::uint64_t>();
         check(admission.at("logical_copy_bytes").get<std::uint64_t>() >= 2 * f.model.size() &&
@@ -514,8 +506,8 @@ inline J run(const fs::path &root) {
         auto full = games::tasks::publish_native(f.workflow, f.baseline, full_destination, J::object());
         full.bundle.lease->verify_members();
         check(full.bundle.root == full_destination && full.bundle.lease->root() == full_destination &&
-            platform::file_sha256(full_destination / "models/a.onnx") == f.hash &&
-            platform::file_sha256(full_destination / "models/b.onnx") == f.hash &&
+            platform::file_sha256(full.bundle.lease->physical_member("models/a.onnx")) == f.hash &&
+            platform::file_sha256(full.bundle.lease->physical_member("models/b.onnx")) == f.hash &&
             full.bundle.lease->storage_stats().model_bytes == 0, "T0_DOS_LONG_FULL_PUBLICATION_ROOT_HASH_OR_STORAGE_CHANGED");
         full.ownership->accept(); full.ownership->receipt()->require_clean_acceptance();
         cases.push_back({{"case", "P14-ordinary-DOS-over260-full-publication-and-frozen-manifest"},
