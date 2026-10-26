@@ -102,6 +102,8 @@ class BundleLease final {
     // Only paths backed by this live lease may escape to path-only consumers.
     const std::filesystem::path &physical_member(const std::string &relative) const;
     const Manifest &manifest() const;
+    // Available only after the production publication identity validator ran.
+    const Manifest &publication_resources() const;
     const std::string &resource_digest() const;
     std::uint64_t resource_bytes() const;
     std::uint64_t control_bytes() const;

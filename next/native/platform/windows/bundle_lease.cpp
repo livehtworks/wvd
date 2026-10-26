@@ -363,6 +363,8 @@ struct BundleLease::Impl {
     std::filesystem::path root;
     std::string revision, id;
     Manifest manifest;
+    Manifest publication_resources;
+    bool publication_validated{};
     std::map<std::string, std::shared_ptr<Held>> files;
     std::map<std::filesystem::path, std::unique_ptr<Held>> directories;
     std::vector<std::shared_ptr<BundleLease>> parts;
@@ -822,6 +824,7 @@ std::shared_ptr<BundleLease> BundleLease::open_publication(const std::filesystem
     const auto revision = json_digest(id);
     check_program(id, program, revision);
     auto files = identity_resources(id);
+    const auto resources = files;
     require(files.emplace("program/identity.json", bytes_sha256(identity.content)).second &&
         files.emplace("program/flow.json", bytes_sha256(flow.content)).second, "PUBLICATION_LOGICAL_COLLISION");
     std::unique_ptr<Held> provenance;
@@ -832,6 +835,13 @@ std::shared_ptr<BundleLease> BundleLease::open_publication(const std::filesystem
         require(files.emplace("parameters/image-sources.json", bytes_sha256(provenance->content)).second,
             "PUBLICATION_LOGICAL_COLLISION");
     }
-    return std::make_shared<BundleLease>(root, revision, std::move(files), check_cancel);
+    auto result = std::make_shared<BundleLease>(root, revision, std::move(files), check_cancel);
+    result->impl_->publication_resources = resources;
+    result->impl_->publication_validated = true;
+    return result;
+}
+const BundleLease::Manifest &BundleLease::publication_resources() const {
+    require(impl_->publication_validated, "PUBLICATION_IDENTITY_NOT_VALIDATED");
+    return impl_->publication_resources;
 }
 } // namespace wvd::platform

@@ -1,6 +1,7 @@
 #include "api/http_server.hpp"
 #include "app/application.hpp"
 #include "app/service_instance.hpp"
+#include "app/publication_maintenance.hpp"
 #include "contracts/version.hpp"
 #include "platform/windows/path_utf8.hpp"
 #include "platform/windows/process.hpp"
@@ -9,6 +10,7 @@
 #include <csignal>
 #include <iostream>
 #include <string>
+#include <set>
 #include <windows.h>
 #include <shellapi.h>
 
@@ -26,6 +28,31 @@ BOOL WINAPI console_control(DWORD type) {
 
 int wmain(int argc, wchar_t **argv) {
     try {
+        bool maintenance = false;
+        for (int i = 1; i < argc; ++i) if (std::wstring(argv[i]) == L"--maintenance-publication") maintenance = true;
+        if (maintenance) {
+            std::string command, request, transaction;
+            std::filesystem::path maintenance_root;
+            std::set<std::wstring> seen;
+            for (int i = 1; i < argc; ++i) {
+                const std::wstring option(argv[i]);
+                if ((option != L"--maintenance-publication" && option != L"--data-root" &&
+                    option != L"--request-id" && option != L"--transaction-id") ||
+                    !seen.insert(option).second || i + 1 >= argc)
+                    throw std::runtime_error("PUBLICATION_MAINTENANCE_ARGUMENT_INVALID");
+                const std::filesystem::path value(argv[++i]);
+                if (option == L"--data-root") maintenance_root = value;
+                else if (option == L"--maintenance-publication") command = wvd::platform::utf8(value);
+                else if (option == L"--request-id") request = wvd::platform::utf8(value);
+                else transaction = wvd::platform::utf8(value);
+            }
+            const bool by_request = command == "plan" || command == "convert";
+            if (maintenance_root.empty() || (by_request ? request.empty() || !transaction.empty() : transaction.empty() || !request.empty()))
+                throw std::runtime_error("PUBLICATION_MAINTENANCE_ARGUMENT_INVALID");
+            std::cout << wvd::app::PublicationMaintenance::execute(maintenance_root, command,
+                by_request ? request : transaction).dump() << '\n';
+            return 0;
+        }
         unsigned short port = 17652;
         std::filesystem::path root, data_root, pack_root, legacy_config, quests, stdout_log, stderr_log;
         bool open_browser = true;
@@ -100,6 +127,7 @@ int wmain(int argc, wchar_t **argv) {
         if (!stdout_log.empty() || !stderr_log.empty())
             throw std::runtime_error("log paths are only valid with --launch");
         wvd::app::ServiceInstance instance(data_root);
+        wvd::app::PublicationMaintenance::require_no_pending(std::filesystem::absolute(data_root));
         wvd::app::Application application({std::filesystem::absolute(data_root),
                                            std::filesystem::absolute(pack_root),
                                            legacy_config.empty() ? legacy_config

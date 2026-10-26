@@ -8,6 +8,7 @@
 #include "platform/windows/memory_diagnostics.hpp"
 #include "devices/lifecycle_execution.hpp"
 #include "submission_store_contract.hpp"
+#include "publication_maintenance_contract.hpp"
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
 #include <iostream>
@@ -841,6 +842,12 @@ int closure_application(const std::filesystem::path &pack, const std::filesystem
 
 int main(int argc, char **argv) {
     try {
+        if (argc == 3 && std::string(argv[1]) == "--publication-maintenance-cli-fixture")
+            return publication_maintenance_contract::cli_fixture(std::filesystem::absolute(wvd::platform::path_from_utf8(argv[2])));
+        if (argc == 3 && std::string(argv[1]) == "--publication-maintenance")
+            return publication_maintenance_contract::run(std::filesystem::absolute(wvd::platform::path_from_utf8(argv[2])));
+        if (argc == 6 && std::string(argv[1]) == "--publication-maintenance-child")
+            return publication_maintenance_contract::child(std::filesystem::absolute(wvd::platform::path_from_utf8(argv[2])),argv[3],argv[4],argv[5]);
         if (argc == 5 && std::string(argv[1]) == "--resource-app-batch")
             return resource_application_batch(std::filesystem::absolute(argv[2]),std::filesystem::absolute(argv[3]),std::filesystem::absolute(argv[4]));
         if (argc == 3 && std::string(argv[1]) == "--resource-budget") {

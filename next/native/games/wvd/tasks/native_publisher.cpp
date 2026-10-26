@@ -33,17 +33,121 @@ void write_bytes(const std::filesystem::path &root, const std::string &relative,
     platform::atomic_write(path, std::string(reinterpret_cast<const char *>(bytes), count), false);
 }
 } // namespace
-thread_local std::function<void(const char *)> NativePublication::fault_;
-thread_local std::optional<std::uint64_t> NativePublication::available_override_;
-void NativePublication::checked_add(std::uint64_t &total, std::uint64_t value) {
+namespace {
+void add_bytes(std::uint64_t &total, std::uint64_t value) {
     if (value > (std::numeric_limits<std::uint64_t>::max)() - total)
         throw std::runtime_error("NATIVE_PUBLICATION_BUDGET_OVERFLOW");
     total += value;
 }
-std::uint64_t NativePublication::rounded(std::uint64_t value) {
+std::uint64_t allocation(std::uint64_t value) {
     if (value > (std::numeric_limits<std::uint64_t>::max)() - 4095)
         throw std::runtime_error("NATIVE_PUBLICATION_BUDGET_OVERFLOW");
     return (value + 4095) & ~std::uint64_t{4095};
+}
+std::uint64_t metadata_overhead(std::size_t files) {
+    if (files > ((std::numeric_limits<std::uint64_t>::max)() / 4096) - 32)
+        throw std::runtime_error("NATIVE_PUBLICATION_BUDGET_OVERFLOW");
+    auto overhead = (files + 32) * 4096ULL; add_bytes(overhead,65536); return overhead;
+}
+J admit_space(std::filesystem::path volume, std::uint64_t missing, const std::vector<std::uint64_t> &metadata,
+    std::size_t count, std::uint64_t logical, std::optional<std::uint64_t> available_override,
+    std::uint64_t transaction_bytes = 0) {
+    std::uint64_t required = 2ULL * 1024 * 1024 * 1024;
+    add_bytes(required,missing);
+    for (const auto bytes : metadata) add_bytes(required,allocation(bytes));
+    add_bytes(required,metadata_overhead(count)); add_bytes(required,allocation(transaction_bytes));
+    while (!std::filesystem::exists(platform::extended_path(volume)) && volume != volume.parent_path()) volume = volume.parent_path();
+    std::error_code error;
+    const auto space = std::filesystem::space(platform::extended_path(volume),error);
+    const auto available = available_override.value_or(space.available);
+    if (error || available == (std::numeric_limits<std::uint64_t>::max)()) throw std::runtime_error("NATIVE_PUBLICATION_SPACE_UNKNOWN");
+    if (available < required) throw std::runtime_error("NATIVE_PUBLICATION_SPACE_LOW");
+    return {{"required_bytes",required},{"available_bytes",available},{"logical_copy_bytes",logical},
+        {"missing_object_bytes",missing},{"transaction_bytes",transaction_bytes},
+        {"reserve_bytes",2ULL*1024*1024*1024},{"is_reservation",false}};
+}
+std::shared_ptr<platform::BundleLease> materialize_set(const std::filesystem::path &sets,
+    const std::string &digest, const std::string &text, const platform::BundleLease::Manifest &resources,
+    const std::function<const platform::BundleLease &(const std::string &)> &source,
+    const std::function<void()> &check) {
+    const auto target = sets / digest;
+    platform::OwnedBundleDirectory::require_no_pending(sets);
+    platform::BundleLease::Manifest manifest{{"manifest.json", digest}};
+    for (const auto &[relative, hash] : resources) manifest.emplace("payload/" + relative, hash);
+    if (!std::filesystem::exists(platform::extended_path(target))) {
+        std::filesystem::create_directories(platform::extended_path(sets));
+        const auto temporary = sets / (digest + ".staging-" + platform::unique_id());
+        auto owner = platform::OwnedBundleDirectory::create(temporary);
+        try {
+            for (const auto &[relative, hash] : resources) {
+                (void)hash;
+                if (check) check();
+                const auto path = temporary / "payload" / platform::BundleLease::checked_relative(relative);
+                std::filesystem::create_directories(platform::extended_path(path.parent_path()));
+                source(relative).copy_member(relative, path, check);
+            }
+            write_bytes(temporary, "manifest.json", reinterpret_cast<const std::uint8_t *>(text.data()), text.size());
+            { platform::BundleLease verified(temporary, digest, manifest, check); }
+            owner->rename_to(target); owner->accept(); owner->receipt()->require_clean_acceptance();
+        } catch (...) { owner->rethrow_with_cleanup(std::current_exception()); }
+    }
+    return std::make_shared<platform::BundleLease>(target, digest, manifest, check);
+}
+}
+J admit_existing_publication(const platform::BundleLease &source, const std::filesystem::path &stage,
+    std::uint64_t transaction_bytes) {
+    if (!source.resource_digest().empty()) throw std::runtime_error("PUBLICATION_ALREADY_SHARED");
+    const auto &resources = source.publication_resources();
+    J descriptor{{"schema",1},{"files",J::array()}};
+    std::uint64_t logical{}, copies{};
+    for (const auto &[relative,hash] : resources) {
+        const auto bytes = source.member_size(relative); add_bytes(logical,bytes); add_bytes(copies,allocation(bytes));
+        descriptor["files"].push_back({{"path",relative},{"sha256",hash},{"bytes",bytes}});
+    }
+    const auto text = descriptor.dump();
+    const auto digest = platform::bytes_sha256({reinterpret_cast<const std::uint8_t *>(text.data()),text.size()});
+    const auto sets = stage.parent_path() / ".asset-sets";
+    platform::OwnedBundleDirectory::require_no_pending(sets);
+    const bool present = std::filesystem::exists(platform::extended_path(sets / digest));
+    const auto marker = J{{"schema",1},{"kind","shared_resource_set"},{"resource_digest",digest},{"program_revision",source.revision()}}.dump();
+    std::vector<std::uint64_t> metadata{marker.size(),present ? 0 : text.size()};
+    for (const auto &[name,hash] : source.manifest()) { (void)hash; if (!resources.contains(name)) metadata.push_back(source.member_size(name)); }
+    auto result = admit_space(stage.parent_path(),present ? 0 : copies,metadata,resources.size(),logical,
+        NativePublication::available_override_,transaction_bytes);
+    result["resource_digest"] = digest; return result;
+}
+void prepare_existing_publication(const platform::BundleLease &source, const std::filesystem::path &stage) {
+    (void)admit_existing_publication(source,stage,0);
+    if (!source.resource_digest().empty()) throw std::runtime_error("PUBLICATION_ALREADY_SHARED");
+    const auto &resources = source.publication_resources();
+    J descriptor{{"schema", 1}, {"files", J::array()}};
+    for (const auto &[relative, hash] : resources)
+        descriptor["files"].push_back({{"path",relative},{"sha256",hash},{"bytes",source.member_size(relative)}});
+    const auto text = descriptor.dump();
+    const auto digest = platform::bytes_sha256({reinterpret_cast<const std::uint8_t *>(text.data()), text.size()});
+    auto shared = materialize_set(stage.parent_path() / ".asset-sets", digest, text, resources,
+        [&](const std::string &) -> const platform::BundleLease & { return source; }, {});
+    for (const auto &[relative, hash] : source.manifest()) {
+        (void)hash;
+        if (resources.contains(relative)) continue;
+        const auto target = stage / platform::BundleLease::checked_relative(relative);
+        std::filesystem::create_directories(platform::extended_path(target.parent_path()));
+        source.copy_member(relative, target);
+    }
+    const auto marker = J{{"schema",1},{"kind","shared_resource_set"},
+        {"resource_digest",digest},{"program_revision",source.revision()}}.dump();
+    write_bytes(stage, "publication-layout.json", reinterpret_cast<const std::uint8_t *>(marker.data()), marker.size());
+    auto verified = platform::BundleLease::open_publication(stage);
+    if (verified->manifest() != source.manifest() || verified->revision() != source.revision())
+        throw std::runtime_error("PUBLICATION_CONVERSION_MISMATCH");
+}
+thread_local std::function<void(const char *)> NativePublication::fault_;
+thread_local std::optional<std::uint64_t> NativePublication::available_override_;
+void NativePublication::checked_add(std::uint64_t &total, std::uint64_t value) {
+    add_bytes(total,value);
+}
+std::uint64_t NativePublication::rounded(std::uint64_t value) {
+    return allocation(value);
 }
 
 NativePublication publish_native(const CompiledWorkflow &workflow,
@@ -194,33 +298,14 @@ NativePublication publish_native(const CompiledWorkflow &workflow,
     const bool shared_exists = std::filesystem::exists(platform::extended_path(shared_root));
     const auto layout_text = J{{"schema", 1}, {"kind", "shared_resource_set"},
         {"resource_digest", resource_digest}, {"program_revision", revision}}.dump();
-    std::uint64_t required = 2ULL * 1024 * 1024 * 1024;
     const std::uint64_t missing_object_bytes = shared_exists ? 0 : physical_copy_bytes;
-    checked_add(required, missing_object_bytes);
-    checked_add(required, rounded(program_text.size()));
-    checked_add(required, rounded(identity_text.size()));
-    checked_add(required, rounded(provenance_text.size()));
-    checked_add(required, rounded(layout_text.size()));
-    if (!shared_exists) checked_add(required, rounded(resource_text.size()));
-    if (published_manifest.size() > ((std::numeric_limits<std::uint64_t>::max)() / 4096) - 32)
-        throw std::runtime_error("NATIVE_PUBLICATION_BUDGET_OVERFLOW");
-    std::uint64_t overhead = (published_manifest.size() + 32) * 4096ULL;
-    checked_add(overhead, 65536);
-    checked_add(required, overhead);
+    const auto overhead = metadata_overhead(published_manifest.size());
     if (admit_storage) admit_storage({{"resource_digest", resource_digest}, {"resource_bytes", logical_bytes},
         {"resource_new", !shared_exists}, {"metadata_bytes", program_text.size() + identity_text.size() + provenance_text.size() + layout_text.size()},
         {"resource_manifest_bytes", resource_text.size()}, {"overhead_bytes", overhead}});
-    auto volume = destination.parent_path();
-    while (!std::filesystem::exists(platform::extended_path(volume)) && volume != volume.parent_path()) volume = volume.parent_path();
-    std::error_code space_error;
-    const auto space = std::filesystem::space(platform::extended_path(volume), space_error);
-    const auto available = NativePublication::available_override_.value_or(space.available);
-    if (space_error || available == (std::numeric_limits<std::uint64_t>::max)())
-        throw std::runtime_error("NATIVE_PUBLICATION_SPACE_UNKNOWN");
-    if (available < required) throw std::runtime_error("NATIVE_PUBLICATION_SPACE_LOW");
-    preparation["space_admission"] = {{"required_bytes", required}, {"available_bytes", available},
-        {"logical_copy_bytes", logical_bytes}, {"missing_object_bytes", missing_object_bytes},
-        {"reserve_bytes", 2ULL * 1024 * 1024 * 1024}, {"is_reservation", false}};
+    preparation["space_admission"] = admit_space(destination.parent_path(), missing_object_bytes,
+        {program_text.size(),identity_text.size(),provenance_text.size(),layout_text.size(),shared_exists ? 0 : resource_text.size()},
+        published_manifest.size(),logical_bytes,NativePublication::available_override_);
     if (NativePublication::fault_) NativePublication::fault_("after_space_admission");
     platform::OwnedBundleDirectory::require_no_pending(destination.parent_path());
     platform::OwnedBundleDirectory::require_no_pending(destination.parent_path() / "asset-objects");
@@ -234,31 +319,10 @@ NativePublication publish_native(const CompiledWorkflow &workflow,
     if (NativePublication::fault_) NativePublication::fault_("before_bundle_construction");
     bundle = recognition::Bundle{staging, revision, {}};
     platform::PreparationTimer copy_timer("file_copy", observer);
-    platform::BundleLease::Manifest shared_manifest{{"manifest.json", platform::bytes_sha256(
-        {reinterpret_cast<const std::uint8_t *>(resource_text.data()), resource_text.size()})}};
-    for (const auto &[relative, hash] : published_manifest) shared_manifest.emplace("payload/" + relative, hash);
-    if (!shared_exists) {
-        std::filesystem::create_directories(platform::extended_path(sets));
-        const auto temporary = sets / (resource_digest + ".staging-" + platform::unique_id());
-        auto shared_owner = platform::OwnedBundleDirectory::create(temporary);
-        try {
-            for (const auto &[relative, hash] : published_manifest) {
-                (void)hash;
-                if (check_cancel) check_cancel();
-                const auto path = temporary / "payload" / platform::BundleLease::checked_relative(relative);
-                std::filesystem::create_directories(platform::extended_path(path.parent_path()));
-                const auto &source = selected_mod_paths.contains(relative) ? *mod_origin : origin;
-                source.copy_member(relative, path, check_cancel);
-            }
-            write_bytes(temporary, "manifest.json", reinterpret_cast<const std::uint8_t *>(resource_text.data()), resource_text.size());
-            { platform::BundleLease verified(temporary, resource_digest, shared_manifest, check_cancel); }
-            shared_owner->rename_to(shared_root);
-            shared_owner->accept();
-            shared_owner->receipt()->require_clean_acceptance();
-        } catch (...) { shared_owner->rethrow_with_cleanup(std::current_exception()); }
-    }
-    // Validate the entire retained set on every hit, not merely its directory name.
-    auto shared = std::make_shared<platform::BundleLease>(shared_root, resource_digest, shared_manifest, check_cancel);
+    auto shared = materialize_set(sets, resource_digest, resource_text, published_manifest,
+        [&](const std::string &relative) -> const platform::BundleLease & {
+            return selected_mod_paths.contains(relative) ? *mod_origin : origin;
+        }, check_cancel);
     for (const auto &[relative, hash] : published_manifest) bundle.files.push_back({relative, hash});
     preparation["resource_digest"] = resource_digest;
     preparation["resource_bytes"] = logical_bytes;

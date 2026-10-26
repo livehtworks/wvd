@@ -62,6 +62,7 @@ target_compile_options(wvd_native_rapid PRIVATE /utf-8 /EHsc)
 add_library(wvd_native_platform STATIC
   platform/windows/process.cpp platform/windows/file_digest.cpp
   platform/windows/runtime_files.cpp platform/windows/bundle_lease.cpp
+  platform/windows/fixed_directory_move.cpp
   platform/windows/mumu_binding.cpp platform/windows/metadata_query.cpp
   platform/windows/memory_diagnostics.cpp)
 target_include_directories(wvd_native_platform PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}"
@@ -196,7 +197,7 @@ add_custom_command(TARGET test_native_coordinator POST_BUILD
     "${WVD_OPENCV}/x64/vc16/bin/opencv_world4120.dll"
     "$<TARGET_FILE_DIR:test_native_coordinator>")
 
-add_library(wvd_native_application STATIC EXCLUDE_FROM_ALL app/application.cpp)
+add_library(wvd_native_application STATIC EXCLUDE_FROM_ALL app/application.cpp app/publication_maintenance.cpp)
 target_include_directories(wvd_native_application SYSTEM PRIVATE "${BOOST_ROOT}")
 target_link_libraries(wvd_native_application PUBLIC wvd_http wvd_native_runtime
   wvd_native_games PRIVATE shell32 comdlg32)

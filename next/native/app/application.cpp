@@ -1,4 +1,5 @@
 #include "application.hpp"
+#include "publication_maintenance.hpp"
 
 #include "games/wvd/chest/chest.hpp"
 #include "games/wvd/combat/encounter.hpp"
@@ -982,6 +983,7 @@ void Application::require_storage_space() const {
     require(available >= 2ULL * 1024 * 1024 * 1024, "RUN_STORAGE_SPACE_LOW");
 }
 void Application::require_preparation_ready() const {
+    PublicationMaintenance::require_no_pending(paths_.data_root);
     require(!preparation_cleanup_blocked_, "PREPARATION_CLEANUP_PENDING");
     {
         std::lock_guard lock(mutex_);
