@@ -1,0 +1,236 @@
+{
+  "schema": 1,
+  "at": "2026-10-26T23:52:07.152875+08:00",
+  "review_commit": "179cfd851877cba2f2df401d86a905ff9ae088f6",
+  "migration": {
+    "at": "2026-10-26T23:46:29.833492+08:00",
+    "volumes": {
+      "D:": {
+        "items": 1150,
+        "files": 871413,
+        "logical_bytes": 101783148563
+      },
+      "S:": {
+        "items": 2,
+        "files": 447,
+        "logical_bytes": 2150996452
+      }
+    },
+    "errors": [],
+    "permanent_deletion_count": 0,
+    "physical_reclaimed_bytes": 0,
+    "formal_data_moved": false,
+    "earlier_closed_item_hash_proofs_reused": 1146,
+    "newly_checked_item_hash_proofs": 6,
+    "note": "Same-volume renames; logical bytes are not allocated bytes or recovered disk space."
+  },
+  "restore": {
+    "entries": [
+      {
+        "restored_identity": "2601833944757569262:562949957362985",
+        "final_identity": "2601833944757569262:562949957362985",
+        "expected_files": 65536,
+        "measured_files": 65536,
+        "measured_logical_bytes": 7394452.0,
+        "trash_path": "D:\\trash\\wvd-consolidation-20261026\\programcode\\python\\wvd\\next\\.local\\t0-repair-261025\\contracts-final-a2\\submission-history\\boundaries\\real-constant",
+        "before_identity": "2601833944757569262:562949957362985",
+        "restored_and_checked": true,
+        "expected_logical_bytes": 7394452,
+        "original_path": "D:\\programcode\\python\\wvd\\next\\.local\\t0-repair-261025\\contracts-final-a2\\submission-history\\boundaries\\real-constant",
+        "samples": [
+          {
+            "matches": true,
+            "relative_path": "00009610ec1c67b859c5dad6422825a81759dbb51e8f6a291b9347358dd4330a.json",
+            "measured_sha256": "ba73334198038eec3ff0b4a347e0b10e5c2b7bdd4de328575cd73fce2ea569e4",
+            "expected_sha256": "ba73334198038eec3ff0b4a347e0b10e5c2b7bdd4de328575cd73fce2ea569e4"
+          },
+          {
+            "matches": true,
+            "relative_path": "0001d7b6dadb4a1b86b7241814885d9d84b2d124d6adcfaf5696ef876d6590d9.json",
+            "measured_sha256": "353d36e11c8fe4946b1bb858cf0f7f5270e4b1898c92a9702f18d89e73a62782",
+            "expected_sha256": "353d36e11c8fe4946b1bb858cf0f7f5270e4b1898c92a9702f18d89e73a62782"
+          },
+          {
+            "matches": true,
+            "relative_path": "fffea957b4d0917d287222409580e3fa78d90540ff12da1902573e3ca0083685.json",
+            "measured_sha256": "614e6c2417ccfa8dbb6e3943ebb437748904e4457b9993d2688971cc8c547604",
+            "expected_sha256": "614e6c2417ccfa8dbb6e3943ebb437748904e4457b9993d2688971cc8c547604"
+          },
+          {
+            "matches": true,
+            "relative_path": "ffff0dd89748bea0bdb027c6b0461eb5dd0e8e792ae21f35afcf91a87e6dd63d.json",
+            "measured_sha256": "aa72a9d383d341c069184463b3be69dd0b0a6618bd3bd49f4d8862ba62cf919d",
+            "expected_sha256": "aa72a9d383d341c069184463b3be69dd0b0a6618bd3bd49f4d8862ba62cf919d"
+          }
+        ]
+      },
+      {
+        "restored_identity": "9133972334504520857:10414574141730223",
+        "final_identity": "9133972334504520857:10414574141730223",
+        "expected_files": 3,
+        "measured_files": 3,
+        "measured_logical_bytes": 450932.0,
+        "trash_path": "S:\\trash\\wvd-consolidation-20261026\\codex_workspace\\codex-home\\worktrees\\critical-fixes-20261006\\wvd\\next\\web\\dist",
+        "before_identity": "9133972334504520857:10414574141730223",
+        "restored_and_checked": true,
+        "expected_logical_bytes": 450932,
+        "original_path": "S:\\codex_workspace\\codex-home\\worktrees\\critical-fixes-20261006\\wvd\\next\\web\\dist",
+        "samples": [
+          {
+            "matches": true,
+            "relative_path": "index.html",
+            "measured_sha256": "156c92f12ab3fd0bf63eaaeed6198ce247a07517260a17907b756b87bcb7811a",
+            "expected_sha256": "156c92f12ab3fd0bf63eaaeed6198ce247a07517260a17907b756b87bcb7811a"
+          }
+        ]
+      }
+    ],
+    "at": "2026-10-26T23:21:20.6021644+08:00",
+    "final_state": "both_returned_to_trash"
+  },
+  "authority": {
+    "at": "2026-10-26T23:46:34.605804+08:00",
+    "checks": {
+      "service_identity_unchanged": true,
+      "run_stopped_39_of_200": true,
+      "configuration_41_unchanged": true,
+      "other_worktree_17_versions_unchanged": true,
+      "monitor_paused": true,
+      "formal_exe_unchanged": true,
+      "formal_pdb_preserved": true
+    },
+    "configuration_changes": [],
+    "dirty_source_changes": [],
+    "service": {
+      "instance_id": "9F2AF8E0-F5BB-4EBC-BAF1-2DA16D6D7653",
+      "pid": 47024,
+      "process_start_filetime": "134374039039026061",
+      "executable": "D:\\programcode\\python\\wvd\\next\\.local\\t0-candidate-261025\\automationd.exe",
+      "data_root": "D:\\programcode\\python\\wvd\\next\\.local\\c11-flow-product\\data"
+    },
+    "run": {
+      "run_id": 40,
+      "state": "UserStopped",
+      "busy": false,
+      "quiescent": true,
+      "result_saved": true,
+      "repeat": {
+        "active": false,
+        "batch_storage_limit_bytes": 17179869184,
+        "completed_cycles": 39,
+        "reason": "",
+        "request_id": "giant-200-t0-20261025-b0ad41332a754a33b4d900f14f3b2424",
+        "retained_reference_bytes": 5775929358,
+        "state": "stopped",
+        "target_cycles": 200
+      }
+    }
+  },
+  "evidence": [
+    {
+      "path": "next/.local/consolidation-261026/package-admission.json",
+      "bytes": 1967,
+      "sha256": "c613f3df66d78cd63dce607d28c81309b95a7a9a3d4b7fedead1395598bf7fc7"
+    },
+    {
+      "path": "next/.local/consolidation-261026/document-integration.json",
+      "bytes": 2569,
+      "sha256": "4b1395192d82544b0f92f5bb3f5f1ff813af3a983748008d8fa337bf3eb28fd3"
+    },
+    {
+      "path": "next/.local/consolidation-261026/migration-confirmation.json",
+      "bytes": 576,
+      "sha256": "f8d79665cce2b10ed60e1cc8c53eb3324e38ff3995a3cf172ded81d810e248aa"
+    },
+    {
+      "path": "next/.local/consolidation-261026/local-disposition-manifest.json",
+      "bytes": 2930931,
+      "sha256": "def193d68217c23d059142624d550a291f03d715b3b9071b8e4cf1e8c8f0dadd"
+    },
+    {
+      "path": "next/.local/consolidation-261026/restore-smoke-result.json",
+      "bytes": 3248,
+      "sha256": "fe7da009217e3fd9dc585a3059835f801f07e90427b1c7d26ba3e21a24a14878"
+    },
+    {
+      "path": "next/.local/consolidation-261026/authority-final.json",
+      "bytes": 1212,
+      "sha256": "f93b5238a2db9657832789af985caee7b890f395b2b46a2b1814cb2e9e2f8208"
+    },
+    {
+      "path": "next/.local/consolidation-261026/symbol-pair.json",
+      "bytes": 425,
+      "sha256": "602ba9cefe35e2fa1c524682bb3cd4499a59ec6209981d56aae0768389881a97"
+    },
+    {
+      "path": "next/.local/consolidation-261026/old-worktree-backup/manifest.json",
+      "bytes": 24992,
+      "sha256": "6a45f3b2eee25e9e016a4add8726b77071c1782382e0e3d3360d2da8afd4e27c"
+    },
+    {
+      "path": "next/.local/consolidation-261026/C05-core-evidence-bridge.json",
+      "bytes": 2958,
+      "sha256": "d186bf3b01ac529ee1d427a638e207e2481e7a053467a7ad1652a17272138eb9"
+    },
+    {
+      "path": "next/.local/consolidation-261026/tools-validation/review-fixes-freeze.json",
+      "bytes": 1070,
+      "sha256": "ae053f7bab270f31d4fd006362170cd16dd7d00f08712e1009c0c1fdd69b2981"
+    },
+    {
+      "path": "next/.local/consolidation-261026/asset-source-correction.json",
+      "bytes": 1331,
+      "sha256": "491c9b67752d1eacd153711f966a8d0121f280b062bdb94a5382b33ffe32e6e9"
+    },
+    {
+      "path": "next/.local/consolidation-261026/resource-generations-classification.json",
+      "bytes": 1797,
+      "sha256": "1ad59610dff37bd9d8ea0923ad6dbc727009e8d040f1c4537f39c70859b24ce5"
+    },
+    {
+      "path": "next/.local/consolidation-261026/retained-items.json",
+      "bytes": 17091,
+      "sha256": "fea88c9e9e5ac72fab7afe54cc79b51c2e2f7b936e7e8142e8b041083e347430"
+    },
+    {
+      "path": "next/.local/consolidation-261026/full-build-receipt.json",
+      "bytes": 1242,
+      "sha256": "20ccd940c121d85d4f7d1dff4fb57f9ceebcf83ae320035a2f32cb299dc101c5"
+    },
+    {
+      "path": "next/.local/consolidation-261026/new-default-symbol-pair.json",
+      "bytes": 417,
+      "sha256": "3776eaebf89fd8524eabdf2e7aa7fee27d674ae72bd82258b6c3ea191d5952d1"
+    },
+    {
+      "path": "next/.local/consolidation-261026/current-fixtures-retired.json",
+      "bytes": 304,
+      "sha256": "0cdef05588559b2cbb7fdbae213237d04c441912c04a20b4db65dd617b96c73e"
+    },
+    {
+      "path": "next/.local/consolidation-261026/resources-evidence-extraction.json",
+      "bytes": 11969,
+      "sha256": "8aa6b02a5350c8ef570f0401f7376f90cecd1fda0494e8aab487a4ed4bade392"
+    },
+    {
+      "path": "next/.local/consolidation-261026/resources-build/receipt-layout-consumers-a8.json",
+      "bytes": 3353,
+      "sha256": "7fcdc6ccd0c9c8ed5e7c0a7e55d16c1f17b6dd6ee4bbdf1e07b32cf0aecef941"
+    },
+    {
+      "path": "next/.local/consolidation-261026/protected-resources-evidence/resources-checks-final-a3/receipt-continuation-a8.json",
+      "bytes": 10584,
+      "sha256": "e1491634a8ae1bdecf046d9a161d85fba2541953add98fd3e64ccf3c08da470c"
+    }
+  ],
+  "restore_manifests": [
+    "D:/trash/wvd-consolidation-20261026/RESTORE-MANIFEST.json",
+    "S:/trash/wvd-consolidation-20261026/RESTORE-MANIFEST.json"
+  ],
+  "limits": [
+    "Same-volume moves reclaim zero disk space.",
+    "Allocated/MFT bytes not measured; logical bytes are separate.",
+    "No production history migration, service deployment, game execution or monitor resume.",
+    "C08 final identity/validation is tracked separately; old passed tests do not prove untested new behavior."
+  ]
+}

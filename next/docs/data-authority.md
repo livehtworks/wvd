@@ -1,5 +1,9 @@
 # 当前数据权威
 
+统一入口为 [根数据职责](../../docs/data-authority.md)；本页补充具体字段与消费关系，沿用同一运行和生命周期所有者。现行职责按 `179cfd851877cba2f2df401d86a905ff9ae088f6` 核对，本地数量/服务状态仅引用2026-10-26盘点。后续保留与归档整改见 [收束计划](../../docs/work-packages/consolidation-20261026.md) 及 [任务登记](../../docs/work-packages/consolidation-20261026-tasks.json)；文档补全不代表已实现回收或改变正式数据保存规则。
+
+下表保留正式部署的数据解释。新候选源码另已实现`published/.asset-sets/<digest>/payload`及其manifest，派生资源集由NativePublisher唯一写入，BundleLease组合冻结并供Service/OCR/运行会话消费；请求自己的program/flow.json、identity.json及publication-layout.json保留身份和集合绑定。该候选已通过限定离线验收，但未部署或转换正式历史；C09继续保护原requests/runs权威，不增加归档数据库或另一份索引权威。
+
 收尾堆诊断的heap_summary_before/after记录HeapSummary可用性、完整性、堆数、失败数、allocated/committed/reserved及微秒耗时；per_heap以同进程堆地址区分主堆与其它堆，最多64条，包含各自API失败和耗时，失败的字节数为null。仍由原RunStore按memory/info写入同一固定生命周期槽；关闭采集时跳过逐堆查询，空闲页回收仍执行。不增加配置或另一运行所有者，不将堆内部提交当进程PrivateUsage。停止请求不等于收尾完成，原Application监视线程必须等任务线程终态、join及批次释放后才结束。独立ProcDump诊断转储可能含用户配置/进程内容，仅保留在忽略的next/.local，禁止当普通报告提交或上传；无效小转储及超时原始日志保留负证据，不改变正式结果。
 
 现有analyze_memory_owners可读取--run-directory与较早的--compare-run-directory，在权威数据外输出同进程/同维护边界的heap_comparison派生数字；输入只读，禁止在任一输入目录写报告。PID/创建/协调器/run顺序与采样完整性共同门控，比较成功不修改业务结果或宣称全部分配栈已归因。per_heap_comparison另核每侧最多64个唯一地址、主堆身份、逐堆成功和总量一致；记录存活分配/内部提交/保留量差及原统计耗时。新出现/消失地址单列，缺失侧保留null，不补0；同地址也可能已被复用，不等于同一分配所有者。旧日志缺逐堆记录时明确该部分不完整，不影响独立核验已有总量。
@@ -8,7 +12,7 @@
 
 准备性能标量在原`diagnostics.jsonl`记录一次`preparation.completed`，由NativeRunCoordinator唯一写入，受performance开关及info级别控制；分段墙钟/线程CPU及文件/字节/节点数不进入program identity或profile。Application的既有operation只读摘要即时保留具名阶段开始/完成及current_phase，job结束保留该固定大小摘要，不复制到submission历史；开关关闭或warn以上不生成。隔离准备探针在独立临时目录逐阶段flush phase-events.jsonl，不写正式日志或新增数据权威。未启动验证和只读发布盘点只在权威data外写派生报告，不创建正式临时Schema，不赋予清理历史包权限。
 
-项目没有数据库。旧版 `config.json`、`mod`、`logs` 和 `dist/wvd` 仍归旧 Python 程序及用户所有，新版不回写或清理。独立候选默认只写 `%LOCALAPPDATA%/WvdNext`，测试必须显式指定独立可丢弃的 `--data-root`。
+项目没有数据库。旧版 `config.json`、`mod`、`logs` 和 `dist/wvd` 仍归旧 Python 程序及用户所有，新版不回写或清理。无已保存绑定或显式参数时，独立候选的默认data-root为 `%LOCALAPPDATA%/WvdNext`；实际服务以已核验的 `service-launch.json`、启动参数及服务身份为准。2026-10-26盘点的正式data-root是 `next/.local/c11-flow-product/data`，不能把工具默认值当作该正式实例。测试必须显式指定独立可丢弃的 `--data-root`，不得借正式候选写测试启动绑定。
 
 | 文件/目录 | 权威与职责 | 写入者 | 读取者 |
 | --- | --- | --- | --- |
@@ -17,9 +21,13 @@
 | `profile.json`中的`strategy_settings_version=2` | 统一六个友方目标和两种频次；默认值、有效值、隐藏任务覆盖和导入文档一并规范化。运行副本的移除不回写此配置。 | `ProfileStore`一次性迁移/创建/CAS保存 | 配置接口、战斗编译及结算 |
 | `strategy-settings-v1-<revision>.json` | 迁移前profile原文的恢复备份，不是活动配置、不自动读取、不自动清理。包含用户配置，不能当可丢弃测试产物。 | `ProfileStore`迁移写前创建并核对已有备份 | 人工回滚 |
 | `workflows/*.json` | 作者流程和公共定义唯一权威；引用删除保护、CAS revision。 | `WorkflowRepository` 经 `Application` | 工作台、闭包快照与原生编译器 |
+| `workflows/.builtin`、`.builtin-backups`、`.builtin-transactions` | 内置来源/本地版本及同步回执、同步前准确备份、pending/completed事务意图。与对应用户文档保持事务关系；GET不修补，恢复核版本/哈希，不覆盖未知本地修改，备份不自动清理。 | `WorkflowRepository`内置同步及恢复 | 原仓库接口、人工恢复 |
+| `requests/<request-id-sha256>.json` | 原请求意图、原run及接受/终态回执，持久幂等权威。1MiB/条、256MiB总量、65,536条；替换不增加条数，内部SHA/UUID临时文件共同计量。未完成/未知或超额时只读，旧ID仍按需核验读取，不重执行未知意图。 | `SubmissionStore` / `Application` | 重试查询、请求与run恢复核对 |
 | `asset-cache/` | 按候选 manifest 从只读资源包冻结的派生资产，非源素材权威。 | `Application` 的 manifest 冻结过程 | 发布器、识别服务 |
 | `asset-cache/portraits-<digest>/` | 从profile嵌入PNG派生的只读、内容寻址图像包；与既有发布器一起冻结，不能反向回写profile或作为独立素材注册表。解码前检查PNG头和尺寸，发布核对哈希。 | `Application::portrait_bundle` | 原生发布器、运行租约 |
-| `published/<request_id>/` | 本次编译封存的程序与资源身份；不可替代作者原文档。先在本次唯一staging复制/校验，释放临时锁后同盘rename，再按最终路径冻结；未启动取消只撤回本次目录，既有包不自动清理。 | `publish_native`，最终未启动回滚由Application门禁 | 本次 `NativeRunDefinition` |
+| `published/<request_id>/` | 本次编译封存的程序与资源身份，不替代作者原文档。先在本次唯一staging复制/校验，释放临时锁后同盘rename，再按最终路径冻结；唯一所有权token随组装传递，明确接管前的取消/失败只按身份撤回本次目录。接管后即使快速完成也保留，活动租约禁止修改/删除；现行行为没有历史自动退出。 | `NativePublisher` / `publish_native`；准备撤回由Application门禁 | 本次 `NativeRunDefinition`、Coordinator/Session |
+| `published/asset-objects/<hash>/` | 从锁定原始字节复制的派生模型对象，同盘发布优先创建硬链接；仅真实 `STATUS_TOO_MANY_LINKS` 时从同一冻结租约流式复制。不得硬链接用户可变原件；链接容量回退不等于历史存储治理。 | `NativePublisher` | 发布成员、运行租约 |
+| `published`、`asset-objects`、`asset-cache`中的`.cleanup-pending-*`及本次staging | 改名前准备意图、源/目标身份或清理故障现场。接管或完整撤回后才移除本次索引；遗留意图不是当前接管结论，阻止新准备，重启需核持久run/request引用。双错误分别报告，不猜所有权或批量清理。 | `OwnedBundleDirectory` / `Application` | 准备准入、恢复和故障核对 |
 | `active-snapshots/` | 运行时物化快照，供原生会话读取；不是用户编辑入口。 | Bundle 发布/租约 | 识别与诊断 |
 | `runs/<instance>/<run_id>/run.json`、`events.json`、`result.json` | 分别记录请求、活动事件和最终结果；只有 `result.json` 是持久化终态证据，`events.json` 不能反推业务完成。 | `RunStore`/`NativeRunCoordinator` | 工作台历史与诊断 |
 | `runs/.../execution-events.jsonl` | 正式运行的逐项执行事件审计，先落盘再进入有界UI事件环；每轮64MiB上限，丢弃/失败计入`result.diagnostics.event_history`。终态仍只以`result.json`为权威，文件不提前写成功终态。与run/instance/seq关联，不是测试数据。 | `EventJournal`的唯一RunStore写入回调 | 只读计时分析器、故障排查 |
@@ -30,11 +38,17 @@
 | `runs/.../recognition-memory.log`及运行诊断文件 | 资源调查标量及必要故障证据；原memory/debug开关下附OCR owner ID及初始化/销毁begin/end私有内存/句柄配对，按run/generation关联，无新日志权威。配对差为进程观察差，非独占分配栈；普通采样限频，故障即时。只读归因工具的输出是独立诊断报告，不回写运行文件。 | Recognition/MemoryDiagnostics | 用户与诊断 |
 | 显式独立证据目录中的`allocations.etl`、`identity.json`、`checkpoints.json`、`collector-health.json`、`analysis/`及摘要 | 有限WPR取证及派生分配栈差分，不是正式业务数据。绑定PID/创建时间/instance/EXE/PDB，冻结采集与导出profile；PID快照只覆盖启用后栈。HeapAndVirtualAlloc模式为全系统VA后筛目标；用户明确指定的HeapSnapshots模式不采VA、不导出VA表。Collect要求空闲并显式提交有限任务；Monitor只读观察既有batch及真实worker_joined，不拥有或停止游戏，中途接入的首轮单列partial。最多2轮/20分钟/512MiB跟踪，导出另限120秒/128MiB；缺栈/丢失/容量/身份变化明确失败，归因未完成保留UNRESOLVED。证据目录必须在正式data之外，不写profile、workflows、RunStore表或日志结构。 | 显式调用`collect_memory_stacks.ps1`，WPR保存；`export_memory_stacks.ps1`只读派生 | 用户、WPA及故障报告 |
 | `legacy-import/` | 首次导入时对旧配置的私有副本，不回写源 `config.json`。 | 显式初次导入 | `ProfileStore` 初始化 |
+| 候选旁的`.<current>.transactions/`及源码工作区`.local/resource-generation/<pack>/` | 工具目录事务的writer.lock、journal、prepared/previous身份与阶段；复制前落意图，持锁恢复上一笔，历史及失败材料参与计量。保留previous不表示已实施历史上限或退出策略；未知历史不自动删除。 | `resource_generation`，由原资源生成/打包入口调用 | `package_functional`及事务恢复 |
+| 候选目录`service-launch.json` | 已核验服务的data-root、端口绑定，属于该候选而非任意测试data-root。新服务及owner核验后原子提交；失败保留旧字节，提交失败另报真实已启动进程，不自动杀掉或重启。 | `manage_service.ps1`原入口 | 启动/停止/部署入口 |
 | 源码 `resources/authoring/semantic-assets.json` | 素材语言、默认 condition 和显式 alternatives 的唯一人工配方源；流程只持有资源ID及可选method。 | 源码维护 | 作者目录、编译期展开、包同步 |
 | 源码 `resources/recognition/ocr-models.json` | OCR来源、语言、SHA256、包路径的唯一锁；`.local/native-deps/ocr-zh-Hant`仅为可重建下载缓存。发布的`pack/model/ocr`为只读模型。 | 源码维护；prepare工具写缓存 | 构建、打包、发布器、识别Service |
 | 源码 `packs/wvd/parameters/legacy-quests.json` | 内置任务目录及入口/路线声明；`_TIME_LEAP={target,chapter}`是任务内独立跳轮步骤，悬赏编译时优先于外部默认跳轮，不写入或覆盖profile。`GiantBounty`与旧第七区刷巨人是不同任务。候选`data/quest.json`是同源只读副本，不是用户运行数据。 | 源码维护；打包生成只读副本 | `WvdQuestCatalog`、`WvdTaskPlan`、任务编译器、工作台目录 |
 
 候选目录的 `pack/`、`data/quest.json`、`web/` 是构建产物和只读输入，不能拿运行数据覆盖。历史 Maa 发布包及其诊断保留在旧目录或 Git 归档，只读展示，不作为新运行入口。当前结构以 `Application`、`ProfileStore`、`WorkflowRepository` 和 `RunStore` 的实际路径为准；旧阶段数据说明见 `archive/data-authority-maa-20260924.md`。
+
+作者资源生成通过 `package_functional.sync_authoring_resources()` 调用现有受限目录事务；`build.py`在冻结构建输入前显式调用。当前 `stage()`只校验作者资产、构建身份并向事务拥有的空候选输出，不隐式回写作者源或源码包。两种操作的产物与恢复责任不能合并为“打包时顺带同步”。
+
+上表“永久异常原帧”沿用现行保存语义，明确其不参与 `recent-frames` 滚动淘汰。本次不将其改成自动过期，也不授权删除正式故障证据。运行历史的有界保留及引用退出属于待实施方案，须保留终态、输入未知、诊断索引、查询及恢复链；不能以“派生”“归档”或“永久”任一名称替代逐项职责和退出依据。
 
 战斗调试文档仅在请求内存中生成，不写入`workflows/`。运行冻结指定已保存方案，不修改profile，也不接启动、重启或副本循环；调试回执、停止和诊断复用原协调器及RunStore。
 

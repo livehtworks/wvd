@@ -1,15 +1,26 @@
 # 项目当前事实
 
+## 本轮收束入口与状态
+
+- 唯一执行计划：[维护阶段收束计划](work-packages/consolidation-20261026.md)；可变任务状态及证据入口：[任务登记](work-packages/consolidation-20261026-tasks.json)。用户已授权执行工作包及把确认废弃的材料移到所在盘符根trash；正在实施，不将文档集成、同盘搬移或代码已写记作T0关闭。
+- 本轮审阅固定提交为 `179cfd851877cba2f2df401d86a905ff9ae088f6`，该提交仅包含6份报告、摘要及当前文档。盘点原始基线仍是 `205692c7bdea73634e780f1af0c70eef4fa62d0c`，不把后续文档提交写回历史基线。
+- 下列本地数量、候选及服务身份截至2026-10-26盘点：主扫描19:32–19:45、模型补核19:55、运行状态核对20:04，均为Asia/Shanghai；不是本次文档整理重新实测的现场。后续有副作用操作前重核相关身份，不复用历史PID操作。
+- 该快照中当前批次为39/200，run40为UserStopped且仅1业务单元，不计成功；循环停止、监控PAUSED。另一个工作区17个未提交路径、正式41份配置及原批次账本仍须保护，具体证据见盘点报告与任务登记。
+- `next/dist`在2026-10-26盘点有105个previous、1个staging，其中71个缺有效当前标记头；下文97份/62份为2026-10-25发布时的历史口径。两组时间不同，不将旧数值继续用作当前清理清单。
+- 本轮已按精确清单迁移1,152项、871,860文件、约96.80GiB逻辑量到D/S盘各自根trash；未永久删除，同盘移动释放空间0。六套本轮新增大夹具也已迁出，只保留必要小证据。完整结果/恢复顺序见[执行报告](reviews/consolidation-execution-20261026.md)，本地journal与每盘RESTORE-MANIFEST.json可逐项恢复。
+- C02文档选择器、C03的24处素材来源修正、C04的CI触发及C05成功夹具收尾均已定向验证；没有运行线上Actions。C08共享资源源码及限定离线验收通过，原完整build/default package通过，619成员、产品输入f6144a09…be459/1338；新EXE2fbdd0cd…、匹配PDB保留于当前build。候选不是游戏验收。
+- 正式候选仍为`.local/t0-candidate-261025`，EXE284e860b…及其PDB（`consolidation-261026/protected-release/`）保留；默认`next/dist/wvd-next-native`现为本轮新候选。正式服务/41配置/另一工作区17处版本未变，39/200停止、监控PAUSED。C09正式历史兼容/退出未实施，requests/runs/published不移动，T0仍OPEN；不可自动续跑或恢复监控。
+
 ## 接手入口
 
-- 2026-10-21交接见 [工作交接](handoff-20261021.md)。先读本页；只有处理对应问题时才打开专项报告、日志或图片。
+- 先读本页及本轮计划/任务登记；2026-10-21的 [工作交接](handoff-20261021.md) 保留为历史入口，只有处理对应问题时才打开相关专项报告、日志或图片。
 - 当前产品在 `next/`，C++20/CMake、Vue、OpenCV、ONNX Runtime。Maa及旧Python链不参与当前构建运行；历史源码和用户资产保留。
 - 唯一执行链：Application → NativeRunCoordinator → NativeExecutionSession → FlowExecutor。Application拥有批次，Coordinator拥有根运行及Session生命周期；没有旁路执行器或外部循环守护器。
 - 正式 `profile.json`、`workflows/` 是配置及用户流程权威，见 [数据职责](data-authority.md)。[核心合同](../next/docs/core-contracts.md)及[执行注意项](execution-notes.md)按主题查阅。
 
 ## 当前操作边界
 
-- 2026-10-26完成[维护阶段收束盘点](reviews/consolidation-inventory-20261026.md)，确认191万文件及292.644 GiB逻辑量，已单列[T0产物生命周期事故](reviews/t0-storage-lifecycle-20261026.md)：1,334份发布快照、大夹具与旧候选持续累积，整改未完成。用户已明确授权将事故/盘点报告及相关当前文档commit/push到个人远端；未执行分支合并、trash迁移或发布流程切换，不将报告交付记作事故关闭。
+- 2026-10-26完成[维护阶段收束盘点](reviews/consolidation-inventory-20261026.md)，确认191万文件及292.644 GiB逻辑量，已单列[T0产物生命周期事故](reviews/t0-storage-lifecycle-20261026.md)：1,334份发布快照、大夹具与旧候选持续累积，整改未完成。当次仅将事故/盘点报告及相关当前文档commit/push到个人远端；后续执行结果见本页顶部，不将报告交付或工程迁移记作事故关闭。
 - T0六包源码及离线验收已完成并以`66568fb28c6693f4c39bb3c6d89562fe7e39fb51`推送个人远端`fork/codex/t0-lifecycle-repair-20261025`。66原生入口及12工具/前端阶段证据见[修复验收及发布](reviews/t0-lifecycle-repair-20261025.md)。2026-10-25按用户新授权完成构建、打包及正式部署，`.vscode`排除并保持。
 - 新的独立200成功轮次根为`giant-200-t0-20261025-b0ad41332a754a33b4d900f14f3b2424`，GiantBounty/zh-Hant，不计旧批次。2026-10-26收束盘点已核当前实例run1–39共39份Completed/三业务单元/result_saved/quiescent；run40为UserStopped、仅1单元且已保存/静止，不计成功。原内部repeat已停止、busy=false，监控PAUSED；不据停止状态推断操作者，不自动续跑。原账本保留于`next/.local/giant-200-t0-261025/`，本次40份回执路径/SHA及服务身份见`next/.local/consolidation-inventory-20261026/live-and-receipts.json`。
 - 本聊天恢复根`giant-200-resume-20261025-9dfea98c3b21429d8018e359838bb7da`已核run2–71共70份完整成功；run72为UserStopped/STOP_REQUESTED、仅1单元，排除。后续手动根`75f3dc44-1896-4e66-a3ce-ba69dc7bab99`已核run73–94共22份完整成功；两段各自原始目标为200，按根请求分开记录，不自行合并。界面新失败请求的completed_cycles=0不代表旧回执丢失。
@@ -23,7 +34,7 @@
 
 - 当前正式候选为`next/.local/t0-candidate-261025/`，端口17654、原正式data-root不变；实例`9F2AF8E0-F5BB-4EBC-BAF1-2DA16D6D7653`，部署核PID47024、start_filetime134374039039026061。后续仍重核实时身份，不能按历史PID操作。
 - 新EXE SHA256为`284e860b078f9e91599ac00f083b21d322359311c5118a1814ef9a0be1c3de34`；产品输入`04361624…41c132`、1336项，代码提交66568fb。BUILT回执和619成员交付清单、预检/部署及41份配置未变证据在`next/.local/t0-release-261025/`。
-- 默认dist旁97份旧历史中62份缺少有效新格式交付标记，原打包入口如实拒绝；全部保留。已只读清点87,334项、14,825,767,070逻辑字节并另作保守空间准入，随后以同一原打包事务生成上述全新版本候选，没有修改旧标记或放宽校验。
+- 2026-10-25发布时默认dist旁97份旧历史中62份缺少有效新格式交付标记，原打包入口如实拒绝；当时全部保留。该次只读清点87,334项、14,825,767,070逻辑字节并另作保守空间准入，随后以同一原打包事务生成上述全新版本候选，没有修改旧标记或放宽校验。2026-10-26口径见本页顶部和盘点报告。
 - 原`next/.local/rescue-marker-candidate-261020/`已通过回滚预检并保留；旧实例BAA009E9/PID22208经原管理接口确认退出。旧run94回执SHA保持，未覆盖profile/workflows。回滚方案及快照在发布证据目录，出现输入/数据未知时不得盲回滚。
 - 已部署修复：友方选人双排锚点/缺框四边与唯一布局；补给等待交回迟到宝箱奖励；同owner同规则Boot恢复栈复用且保留父账；救人圆形X原帧外观补充，仍由原party_death门禁及中心动作处理。
 - 旧候选历史识别/app离线39入口、Boot修复runtime/app离线34入口通过，均不是游戏轮数。本轮另有正式首轮发布及运行/实际输入证据；尚未完成200成功轮，不冒称全批或旧导航故障已根治。

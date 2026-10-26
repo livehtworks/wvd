@@ -1,7 +1,17 @@
 # 当前执行注意项
 
+## 本轮收束入口与验证边界
+
+- 本轮范围、顺序、完成条件以 [收束计划](work-packages/consolidation-20261026.md) 及 [任务登记](work-packages/consolidation-20261026-tasks.json) 为准；先查 [当前事实](project-status.md)，再读下方有关条目。下方历史记录保留当时日期与证据，不把旧PID、旧批次或曾获授权当成当前现场及新动作许可。
+- **文档选择器已修并定向验证。** `run_contracts.select_modules()`与`source_identity()`排除`docs/`、`next/docs/`及任意层README.md/AGENTS.md；真实Git的文档、暂存/未跟踪及混合源码场景已验证。真实源码、资源、依赖或合同入口变更仍按实际影响验证，计划输出不能替代对应行为验收。
+- `source_identity()`区分产品输入与文档来源；文档HEAD改变不等于产品二进制失效。复用既有证据须核适用的输入/二进制/依赖身份和验收范围；无法证明的部分标未验，不因此无预算重建全部夹具。全新隔离根仍是测试隔离要求，结束后的大夹具去向按同一任务记录，不能靠复用污染目录或删弱真实边界节约成本。
+- 原始盘点保留2026-10-26的时点；本轮迁移结果见任务登记和[执行报告](reviews/consolidation-execution-20261026.md)。同盘trash移动释放空间为0，不能以逻辑字节冒充实占或回收量。默认候选、正式候选、EXE/PDB配对及启动绑定分别核验；`-Action Validate`不代表部署或游戏验收。旧候选不得补造标记，匹配符号保全前不得清理对应build。
+- Windows本机`DirEntry.stat()`可能缺少有效FileID/链接数；目录身份和容量去重须使用`os.stat()`或Win32实证。真实拒删测试先确认DELETE-open返回32；只读元数据句柄不一定复现生产租约。迁移遇到重解析点只处理已证实普通的兄弟子树，不递归跟随链接。完整恢复清单同时保存在每个盘符的trash根。
+
+## 按问题查阅的执行记录
+
 - 2026-10-26已确认[T0产物生命周期事故](reviews/t0-storage-lifecycle-20261026.md)：发布历史与隔离测试/候选持续累积。新增长期运行、大文件边界或完整构建/验收前，先核本轮文件/空间增量、输出位置、必要证据集合和结束后的处置，优先复用仍有效的验证；不得靠不断新建目录或永久保留每轮完整树代替收尾。核心边界仍须真实验证，不删测试、不改弱断言。正式历史/未知所有权不得盲删，必须形成有引用依据和恢复位置的处置清单。现有配额不等于全工作区有界，不能将局部通过写作治理完成。Windows DirEntry.stat本机FileID/链接数为0，禁止用其去重容量；逻辑量、FileID去重内容量和实占/可回收量分开报告。
-- 代理读取按2026-10-21用户要求减负：先读精简project-status及handoff-20261021，专项文档只读本任务相关段落；正常巡检不默认取图/看图，不重放长心跳上下文，不展开完整combat头像证据或长JSON。先文字序号/时间/步骤/回执，只有明确疑点需要像素才能区分原因时查看1张对应原帧，必要时才比较第2张；相同SHA不重复打开。本地证据保留不等于必须送入模型，生产截图/日志策略不关闭。
+- 代理读取按2026-10-21用户要求减负：先读精简project-status及本轮计划/任务登记，handoff-20261021只按需查历史；专项文档只读本任务相关段落。正常巡检不默认取图/看图，不重放长心跳上下文，不展开完整combat头像证据或长JSON。先文字序号/时间/步骤/回执，只有明确疑点需要像素才能区分原因时查看1张对应原帧，必要时才比较第2张；相同SHA不重复打开。本地证据保留不等于必须送入模型，生产截图/日志策略不关闭。
 - 原rescue-marker-resume-261020/inspect.ps1会复制最近原图且逐次复核全部完成回执，不是低成本文字摘要入口。恢复监控须先有新的人工要求；正常运行按游标读取新增事件和新增回执，保留既有已核账目，不每10分钟重新读全历史。真正终核、身份变化或账目不一致时再作完整审计；不得为省资源跳过异常诊断。
 - 重启检查同时筛选FlowExecutor的`observation.recovery`和Coordinator的`recovery.plan`、`lifecycle.*`；后者以同generation的StopApplication/StartApplication真实confirmed区分游戏主动重启，不能只搜`bound_game.restart`或用generation/失败会话数推算次数。2026-10-22 run1已验证上述两类事件不等价；运行中execution-events.jsonl尚为空、API事件环resync时须保留缺口并结合已落盘诊断，不宣称无重启。
 - `NATIVE_BUNDLE_LINK_FAILED:NTSTATUS=3221226085`对应`0xC0000265/STATUS_TOO_MANY_LINKS`，不是通用缺资源。实测可从1023增加至1024，再加才容量错误；双别名失败回滚后恢复1023。仅按实际系统错误从同一冻结租约复制回退，不按预读计数分支；重启不减少链接，不能擅删正式历史。2026-10-25修复已正式部署，首轮1024链接及独立复制的同SHA实证见`.local/giant-200-t0-261025/live-model-capacity-proof.json`；原诊断及离线补证仍保留。
@@ -237,7 +247,7 @@
 - 启动阶段曾将网络重试、下载和加载累计计入120秒，下载100%仍被`OBSERVATION_PHASE_TIMEOUT:wvd.boot`截断。现为未知页面无进展窗口，已识别动作/子流程分别用自身期限，普通Poll不得刷新窗口。若用控制节点包装输入，必须保留原识别字段和按钮消失时的重新选路，否则会把正常转场锁进单一旧按钮。`--boot-progress`覆盖这三项，不连接设备。
 - 繁中网络错误有居中单按钮和“返回标题＋右侧重试”双按钮两种布局。重试ROI须覆盖按钮行`[100,800,700,220]`，原右界640会裁掉右侧84像素文字而漏识别；正文和文字共同确认，点击匹配中心，不降阈值或固定点中央。原生探针、作者语义源、生成包同时更新；窄入口`--network-layouts <单按钮PNG> <双按钮PNG> <住宿确认负例PNG>`核对命中与点位。
 
-- `package_functional.stage()`会先同步作者源并回写`next/packs/wvd`副本，不是纯输出目录复制。独立stage前后核对源/副本差异；仅恢复可证明由本次stage产生的副本改动，不覆盖作者源或用户修改。候选采用同步后的资源，身份报告需区分stage时diff与最终文档修改后的diff。
+- **历史行为，已被2026-10-25 T0修复替代：** 旧 `package_functional.stage()`曾同步作者源并回写 `next/packs/wvd`，当时需要区分stage产生的diff与后续文档diff。当前 `stage()`先校验作者资产和已完成构建，只向事务拥有的空候选目录输出；作者资源同步由 `sync_authoring_resources()`沿 `generate_transaction()`显式完成，`build.py`在冻结构建输入前调用。不得继续按旧说明恢复/改写源码包，也不得把仅打包当成已执行作者资源同步。
 - 作者页保存包含PUT与后续目录刷新。验证保存落盘应等待写锁释放及成功提示，不能把保存按钮disabled当作完成（保存中同样disabled），否则独立核对GET可能触发既有`WORKFLOW_REPOSITORY_BUSY`。正式CAS为HTTP400加`PROFILE_CONFLICT`，不得凭通用409假设修改接口。
 
 - ddc3366收束使用显式 `WVD_CLOSURE_ROOT` 与18754/18755两个隔离端口，正式API必须是本轮新建数据根；closure服务没有离线参数，禁止放行设备/运行POST。本轮测试替身只在C++测试目标内，UI受控响应不得透传未登记请求。端口被占用就查明归属，不连接17654或杀未知进程。
@@ -283,7 +293,7 @@
 - 2026-10-19裸调用`test_native_author --skill <原图>`在等级检查前因未装配`chest-reward-continue`公共步骤退出（PUBLIC_STEP_LIBRARY_NOT_ASSEMBLED），未计为通过；本轮已通过的原帧入口是recognition模块的`--skill-level-contract`，运行目录与资源装配由现有run_contracts负责。实机等级确认以原图、对应输入结果和释放回执为证，不用旧CLI启动失败否定已取得的生产证据；该旧入口装配问题未在本轮扩展修复。
 - 语言排除的NoHit不是像素测量，不含`best_score/best_box`；同帧缓存换阈值时须保留排除结果，不能无条件读取分数或补假分数。candidate65首次实跑已暴露该消费者缺口，candidate66修复；对应定向检查必须包括同帧不同阈值，单模板/每次换帧检查不足以覆盖。
 - 大地图多个地点复用同类建筑图标，地点身份只能由名称证实；繁中地图还需以“關閉”及缩放 `+` 共同确认场景。名称模板的中心不是建筑点击点，不能直接替换旧 `City_*` 输入目标。
-- `next/resources/authoring/{semantic-assets,public-flows}.json` 是编辑源，运行时加载打包副本；`package_functional.py` 同步两份JSON及语义目录实际引用、位于`next/resources/images`的扩展源素材，并更新manifest成员哈希，随后校验繁中引用。既有旧素材没有该源时保持原包，不扫描日志/mod。发布后不得从活动作者源热读配方。语义资源的只读证据不可用作点击目标。准备阶段缺PNG会拒绝运行，HTTP请求已接受不等于任务已启动；须核对最终run状态和准备错误。
+- `next/resources/authoring/{semantic-assets,public-flows}.json` 是编辑源，运行时加载打包副本；`package_functional.sync_authoring_resources()`通过显式生成事务同步两份JSON及语义目录实际引用、位于`next/resources/images`的扩展源素材，并更新manifest成员哈希，随后校验繁中引用。当前 `stage()`只校验并输出候选，不隐式生成。既有旧素材没有该源时保持原包，不扫描日志/mod。发布后不得从活动作者源热读配方。语义资源的只读证据不可用作点击目标。准备阶段缺PNG会拒绝运行，HTTP请求已接受不等于任务已启动；须核对最终run状态和准备错误。
 - 改动公共作者流程的节点时，同步检查 `interface.parameters[].bindings`、边与布局引用；删掉旧节点但保留参数绑定会在实际编译时报 `FLOW_BINDING_NODE_MISSING`。打包后，已有用户流程须经正式 API 检查 `update_available` 并以版本校验同步，不能只更新内置 JSON。
 - 构建期生成的原生动态探针带语义源 SHA256；打包会与当前源目录校验，若只改 `semantic-assets.json` 未重新配置/构建则拒绝发布，不允许 EXE 探针与资源包各用一版。
 - 原生语义目录由`next/native/CMakeLists.txt`从作者源完整生成，同时提供模板语言索引；`vision/location_probes.hpp`的resource缓存仍需注册实际使用的ID及语言。新增C++配方引用时不能只改JSON；漏缓存注册可能报`COMPILE_IMAGE_SCAN:...invalid map<K, T> key`。语言分类必须核对图片内容：NEXT/Pause/Auto及无文字图标可能跨语言共用；不按英文文件名或`_zh_hant`后缀猜语言，不将未分类mod自动禁用。改目录须同步资源、重新configure/build再打包。

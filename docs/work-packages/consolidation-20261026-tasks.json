@@ -1,0 +1,789 @@
+{
+  "schema": 1,
+  "project": "livehtworks/wvd",
+  "prepared_on": "2026-10-26",
+  "timezone": "Asia/Shanghai",
+  "review_commit": "179cfd851877cba2f2df401d86a905ff9ae088f6",
+  "inventory_commit": "205692c7bdea73634e780f1af0c70eef4fa62d0c",
+  "plan": "consolidation-20261026.md",
+  "delivery": {
+    "artifact_prepared": true,
+    "repository_integrated": true,
+    "production_source_changed": true,
+    "cleanup_executed": true,
+    "committed_or_pushed": false,
+    "deployed": false,
+    "incident_status": "OPEN"
+  },
+  "current_request_scope": [
+    "execute_consolidation_work_package",
+    "move_confirmed_disposable_material_to_same_drive_root_trash",
+    "preserve_formal_data_and_uncommitted_changes"
+  ],
+  "authorization_rule": "本包不新增生产写入、迁移、提交/推送、部署、游戏或监控权限；已有会话授权按实际范围持续有效，不重复请求。",
+  "status_values": [
+    "planned",
+    "in_progress",
+    "verification",
+    "done",
+    "blocked"
+  ],
+  "execution": {
+    "active_task": "C10 integration / C09 authorization boundary",
+    "owner": "Codex",
+    "branch": "codex/t0-lifecycle-repair-20261025",
+    "started_at": "2026-10-26T20:59:49.490078+08:00",
+    "latest_evidence": "D:\\programcode\\python\\wvd\\next\\.local\\consolidation-261026\\migration-confirmation.json",
+    "authorization_reference": "User consolidation request: 本地/远程等做一轮收束、合好分支; latest request adopts work package and corresponding-drive trash cleanup. Formal service switch/history migration/game/monitor are separate.",
+    "code_commits": {
+      "tools": "9589d788d87eb0f6e2aca8fe0a125cf30dfde4e3",
+      "asset": "be1b96256ff798db34574dab7847cef4263216ea",
+      "native": "0f46244176d079eadb75968e24e80f2794a8a193"
+    }
+  },
+  "artifact_budget": {
+    "state": "per_phase_budgets_and_owned_payloads_closed",
+    "output_root": "D:\\programcode\\python\\wvd\\next\\.local\\consolidation-261026",
+    "worst_case_copy_bytes": 3145728,
+    "available_volume_bytes": 136990777344,
+    "necessary_evidence": [
+      "package admission and doc verification",
+      "17 source/index/worktree backups",
+      "service and 41 configuration hashes",
+      "symbol GUID+Age receipt",
+      "exact trash migration journal"
+    ],
+    "disposition_after": "Small execution evidence retained; paired PDB moved without copying; confirmed bulk artifacts renamed to same-drive trash.",
+    "rule": "开展大写入前从清单/case推导并填写，未知不当零；纯文档交付不执行大夹具",
+    "initial_phase_estimate_only": {
+      "expected_new_files": 90,
+      "expected_logical_bytes": 3145728
+    },
+    "later_phase_budgets_and_results": [
+      "C08 current fixtures <1GiB path payload; final whole tree 1038063532B, actual allocated bytes unknown.",
+      "Current six fixture roots retired: 8245 files /1044579394B; includes inventory metadata and earlier failed fixtures; 27 necessary evidence files /2242845B retained.",
+      "Current original incremental build worst increment2GiB plus candidate512MiB, free-volume preflight recorded in full-build-receipt.json.",
+      "Formal PDB moved, not copied; one current build retained with new default pair."
+    ]
+  },
+  "tasks": [
+    {
+      "id": "D00",
+      "title": "集成文档基线与单一任务登记",
+      "status": "done",
+      "depends_on": [],
+      "model_assignment": "GPT-6.1 Sol",
+      "owner": "Codex",
+      "started_at": "2026-10-26T20:59:49.490078+08:00",
+      "finished_at": "2026-10-26T20:59:49.490078+08:00",
+      "implementation_commit": null,
+      "validation": [
+        "13 baseline blobs and candidate SHA verified; git apply --check and apply; CRLF normalization accounted"
+      ],
+      "evidence": [
+        "next/.local/consolidation-261026/package-admission.json",
+        "next/.local/consolidation-261026/document-integration.json"
+      ],
+      "artifacts_remaining": [],
+      "blocker": null,
+      "next_action": "C01",
+      "artifact_prepared": true,
+      "scope_definition": "consolidation-20261026.md 第4节 D00"
+    },
+    {
+      "id": "C01",
+      "title": "核本机基线并保全唯一材料",
+      "status": "done",
+      "depends_on": [
+        "D00"
+      ],
+      "model_assignment": "GPT-6.1 Sol；差异承接争议由 GPT-6 Astra 复核",
+      "owner": "Codex",
+      "started_at": "2026-10-26T20:59:49.490078+08:00",
+      "finished_at": "2026-10-26T21:09:54.504852+08:00",
+      "implementation_commit": null,
+      "validation": [
+        "17 HEAD/index/worktree paths preserved and byte-readback verified; original dirty checkout retained rather than falsely declared integrated",
+        "41 configuration hashes unchanged, real service/binding verified",
+        "EXE/PDB GUID+Age f75103ce-903b-4757-b8f3-dd20d5e78eac/158 matched; SHA retained; PDB moved to protected-release"
+      ],
+      "evidence": [
+        "next/.local/consolidation-261026/old-worktree-backup/manifest.json",
+        "next/.local/consolidation-261026/symbol-pair.json",
+        "next/.local/consolidation-261026/authority-baseline.json"
+      ],
+      "artifacts_remaining": [
+        "next/.local/consolidation-261026/old-worktree-backup/",
+        "next/.local/consolidation-261026/protected-release/automationd.pdb"
+      ],
+      "blocker": null,
+      "next_action": "C02/C03/C04 and protected C06 migration",
+      "artifact_prepared": false,
+      "scope_definition": "consolidation-20261026.md 第4节 C01"
+    },
+    {
+      "id": "C02",
+      "title": "修正文档变化触发全模块回归",
+      "status": "done",
+      "depends_on": [
+        "C01"
+      ],
+      "model_assignment": "GPT-6.1 Sol",
+      "owner": "Codex consolidation_tools",
+      "started_at": null,
+      "finished_at": "2026-10-26T21:09:54.504852+08:00",
+      "implementation_commit": "9589d788d87eb0f6e2aca8fe0a125cf30dfde4e3",
+      "validation": [
+        "3 targeted real-git selector tests passed; documentation-only, mixed storage, core tool/manifest coverage preserved"
+      ],
+      "evidence": [
+        "next/.local/consolidation-261026/tools-validation/selector-tests.log"
+      ],
+      "artifacts_remaining": [],
+      "blocker": null,
+      "next_action": "C05",
+      "artifact_prepared": false,
+      "scope_definition": "consolidation-20261026.md 第4节 C02"
+    },
+    {
+      "id": "C03",
+      "title": "修24条素材来源并补引用证据",
+      "status": "done",
+      "depends_on": [
+        "C01"
+      ],
+      "model_assignment": "GPT-6.1 Sol",
+      "owner": "Codex",
+      "started_at": "2026-10-26T21:09:54.504852+08:00",
+      "finished_at": "2026-10-26T22:25:35.634620+08:00",
+      "implementation_commit": "be1b96256ff798db34574dab7847cef4263216ea",
+      "validation": [
+        "24 mapped source paths corrected, exact PNG/path/hash/bytes and aliases unchanged, revision recalculated",
+        "Actual isolated sync_authoring_resources source restore and corrupt-source rejection PASS",
+        "591-image conservative reference inventory; 274+21 and17+21 verified; four original portraits retained rather than falsely retired"
+      ],
+      "evidence": [
+        "next/.local/consolidation-261026/asset-source-correction.json",
+        "next/.local/consolidation-261026/C03-source-restore.log",
+        "docs/reviews/evidence/asset-reference-closure-20261026.json"
+      ],
+      "artifacts_remaining": [],
+      "blocker": null,
+      "next_action": "C06/C08; metadata requires new product build identity",
+      "artifact_prepared": false,
+      "scope_definition": "consolidation-20261026.md 第4节 C03"
+    },
+    {
+      "id": "C04",
+      "title": "隔离旧Python发布触发并完善原生验证触发",
+      "status": "done",
+      "depends_on": [
+        "C01",
+        "C02"
+      ],
+      "model_assignment": "GPT-6.1 Sol",
+      "owner": "Codex consolidation_tools",
+      "started_at": null,
+      "finished_at": "2026-10-26T21:09:54.504852+08:00",
+      "implementation_commit": "9589d788d87eb0f6e2aca8fe0a125cf30dfde4e3",
+      "validation": [
+        "workflow BaseLoader/static event validation and 8 real-git PowerShell baseline scenarios passed; legacy jobs bytes unchanged; no Actions dispatched"
+      ],
+      "evidence": [
+        "next/.local/consolidation-261026/tools-validation/workflow-validation.json"
+      ],
+      "artifacts_remaining": [],
+      "blocker": null,
+      "next_action": "C06/C10",
+      "artifact_prepared": false,
+      "scope_definition": "consolidation-20261026.md 第4节 C04"
+    },
+    {
+      "id": "C05",
+      "title": "测试产物收尾及既有大夹具处置",
+      "status": "done",
+      "depends_on": [
+        "C02"
+      ],
+      "model_assignment": "GPT-6.1 Sol",
+      "owner": "Codex consolidation_tools",
+      "started_at": "2026-10-26T21:09:54.504852+08:00",
+      "finished_at": "2026-10-26T22:25:35.634620+08:00",
+      "implementation_commit": "9589d788d87eb0f6e2aca8fe0a125cf30dfde4e3",
+      "validation": [
+        "16 small real-filesystem and failure-contract tests after Astra review PASS",
+        "Original storage/count/atomic core source verified identical by Git blob, original true65536 proof reused",
+        "Prepared journals use fsync+atomic replacement; counts/read budgets enforced before scan growth; primary errors kept separate",
+        "Three repeated real-constant trees196608 files moved to same-drive trash, exact IDs/counts/sample hashes confirmed"
+      ],
+      "evidence": [
+        "next/.local/consolidation-261026/tools-validation/review-fixes-freeze.json",
+        "next/.local/consolidation-261026/C05-core-evidence-bridge.json",
+        "next/.local/consolidation-261026/local-disposition-manifest.json"
+      ],
+      "artifacts_remaining": [],
+      "blocker": null,
+      "next_action": "C06/C10; retain explicit no-power-loss-directory-durability and exclusive-output preconditions",
+      "artifact_prepared": false,
+      "scope_definition": "consolidation-20261026.md 第4节 C05"
+    },
+    {
+      "id": "C06",
+      "title": "候选和构建收束及非正式材料迁移",
+      "status": "done",
+      "depends_on": [
+        "C01",
+        "C03",
+        "C05"
+      ],
+      "model_assignment": "GPT-6.1 Sol；候选引用争议由 GPT-6 Astra 复核",
+      "owner": "Codex",
+      "started_at": "2026-10-26T21:09:54.504852+08:00",
+      "finished_at": "2026-10-26T23:52:06.800235+08:00",
+      "implementation_commit": null,
+      "validation": [
+        "1152 exact moves: source absent and directory/file identity retained; necessary SHA proofs verified, earlier terminal-item proofs reused at final check.",
+        "Actual D65536+S3 reverse restore, measured count/bytes/SHA/FileID and re-retirement PASS.",
+        "Original full build and default package PASS; 619-member candidate and new EXE/PDB pair verified.",
+        "Formal service/configuration and 17 dirty worktree/index versions unchanged; no deletion; same-volume physical reclaimed=0."
+      ],
+      "evidence": [
+        "D:\\programcode\\python\\wvd\\next\\.local\\consolidation-261026\\migration-confirmation.json",
+        "D:\\programcode\\python\\wvd\\next\\.local\\consolidation-261026\\local-disposition-manifest.json",
+        "D:\\programcode\\python\\wvd\\next\\.local\\consolidation-261026\\restore-smoke-result.json",
+        "D:\\programcode\\python\\wvd\\next\\.local\\consolidation-261026\\authority-final.json",
+        "D:\\programcode\\python\\wvd\\next\\.local\\consolidation-261026\\full-build-receipt.json",
+        "D:\\programcode\\python\\wvd\\next\\.local\\consolidation-261026\\new-default-symbol-pair.json",
+        "D:\\programcode\\python\\wvd\\next\\.local\\consolidation-261026\\current-fixtures-retired.json",
+        "D:\\programcode\\python\\wvd\\next\\.local\\consolidation-261026\\retained-items.json"
+      ],
+      "artifacts_remaining": [
+        "Current formal/rollback candidates and paired symbols",
+        "One current incremental build and locked dependencies",
+        "Necessary small execution/failed-test evidence; unresolved user/diagnostic material explicitly retained"
+      ],
+      "blocker": null,
+      "next_action": "Completed engineering garbage disposition; formal history is governed by separate C09, not classified as garbage.",
+      "artifact_prepared": false,
+      "scope_definition": "consolidation-20261026.md 第4节 C06"
+    },
+    {
+      "id": "C07",
+      "title": "冻结运行资源复用与历史承接合同",
+      "status": "done",
+      "depends_on": [
+        "C01"
+      ],
+      "model_assignment": "GPT-6 Astra",
+      "owner": "Codex consolidation_contract (GPT-6 Astra)",
+      "started_at": null,
+      "finished_at": "2026-10-26T21:09:54.504852+08:00",
+      "implementation_commit": "0f46244176d079eadb75968e24e80f2794a8a193",
+      "validation": [
+        "Consumer and old/new layout contract frozen; root/revision semantics retained; real current run resource/program sizes measured; C08 pending, not deployed"
+      ],
+      "evidence": [
+        "docs/work-packages/consolidation-20261026-resource-contract.md"
+      ],
+      "artifacts_remaining": [],
+      "blocker": null,
+      "next_action": "C08",
+      "artifact_prepared": false,
+      "scope_definition": "consolidation-20261026.md 第4节 C07"
+    },
+    {
+      "id": "C08",
+      "title": "实现运行资源复用与可信计量",
+      "status": "done",
+      "depends_on": [
+        "C03",
+        "C05",
+        "C07"
+      ],
+      "model_assignment": "GPT-6.1 Sol 实施，GPT-6 Astra 复核引用与恢复",
+      "owner": "Codex consolidation_resources",
+      "started_at": "2026-10-26T21:09:54.504852+08:00",
+      "finished_at": "2026-10-26T23:52:06.800235+08:00",
+      "implementation_commit": "0f46244176d079eadb75968e24e80f2794a8a193",
+      "validation": [
+        "Source f6144a09a5926a6dba14dc7892aa66e866f53e24ec60eb843427e542ee8be459 /1338; a8 source bridge validated.",
+        "200 small publications/22 boundary groups; 14/16GiB budget; real two-language OCR; original OCR pool; legacy BundleLease/publication; ownership and actual two-preparation App watcher passed.",
+        "Final original full build/default package passed without product-input changes; no formal deployment or game acceptance."
+      ],
+      "evidence": [
+        "D:\\programcode\\python\\wvd\\next\\.local\\consolidation-261026\\resources-build\\receipt-layout-consumers-a8.json",
+        "D:\\programcode\\python\\wvd\\next\\.local\\consolidation-261026\\resources-build\\receipt-ocr-pool.json",
+        "D:\\programcode\\python\\wvd\\next\\.local\\consolidation-261026\\protected-resources-evidence\\resources-checks-final-a3\\receipt.json",
+        "D:\\programcode\\python\\wvd\\next\\.local\\consolidation-261026\\protected-resources-evidence\\resources-checks-final-a3\\receipt-continuation-a8.json",
+        "D:\\programcode\\python\\wvd\\next\\.local\\consolidation-261026\\protected-resources-evidence\\resources-checks-final-a3\\app-batch\\result.json",
+        "D:\\programcode\\python\\wvd\\next\\.local\\consolidation-261026\\protected-resources-evidence\\resources-inventory-final\\receipt.json",
+        "D:\\programcode\\python\\wvd\\next\\.local\\consolidation-261026\\resources-evidence-extraction.json"
+      ],
+      "artifacts_remaining": [
+        "Small receipts and source snapshots retained; all six large generated fixture roots moved to same-volume trash.",
+        "Recorded-frame CLI adapted and compiled; its actual frame sample was not rerun."
+      ],
+      "blocker": null,
+      "next_action": "Source and limited offline acceptance complete; deploy/history changes remain separate C09.",
+      "artifact_prepared": false,
+      "scope_definition": "consolidation-20261026.md 第4节 C08"
+    },
+    {
+      "id": "C09",
+      "title": "正式历史保留与受控归档承接",
+      "status": "blocked",
+      "depends_on": [
+        "C07",
+        "C08"
+      ],
+      "model_assignment": "GPT-6 Astra 负责保留合同，GPT-6.1 Sol 实施",
+      "owner": "Codex consolidation_contract",
+      "started_at": null,
+      "finished_at": null,
+      "implementation_commit": null,
+      "validation": [],
+      "evidence": [
+        "docs/work-packages/consolidation-20261026-history-contract.md"
+      ],
+      "artifacts_remaining": [],
+      "blocker": "Formal service still original 66568fb; new reader not deployed and formal lease exit/history reference transaction not verified. No production migration has run.",
+      "next_action": "Obtain narrowly scoped formal-service switch authorization after concrete new candidate is reviewable; then verify lease exit and exact per-history references before any migration. Keep requests/runs at original authority.",
+      "artifact_prepared": false,
+      "scope_definition": "consolidation-20261026.md 第4节 C09"
+    },
+    {
+      "id": "C10",
+      "title": "整合验收与个人主线交付",
+      "status": "in_progress",
+      "depends_on": [
+        "D00",
+        "C01",
+        "C02",
+        "C03",
+        "C04",
+        "C05",
+        "C06"
+      ],
+      "model_assignment": "GPT-6.1 Sol；跨模块差异由 GPT-6 Astra 复核",
+      "owner": "Codex",
+      "started_at": "2026-10-26T23:52:06.800235+08:00",
+      "finished_at": null,
+      "implementation_commit": null,
+      "validation": [
+        "Original complete build, default package and 619 delivery members passed; product inputs unchanged f614/1338."
+      ],
+      "evidence": [
+        "D:\\programcode\\python\\wvd\\next\\.local\\consolidation-261026\\full-build-receipt.json",
+        "D:\\programcode\\python\\wvd\\next\\.local\\consolidation-261026\\new-default-symbol-pair.json"
+      ],
+      "artifacts_remaining": [],
+      "blocker": null,
+      "next_action": "Commit reviewed paths by purpose, fast-forward personal master and push fork under original consolidation/branch convergence request; exclude .vscode and unrelated dirty worktree/upstream.",
+      "artifact_prepared": false,
+      "scope_definition": "consolidation-20261026.md 第4节 C10"
+    },
+    {
+      "id": "C11",
+      "title": "事故关闭与维护交接",
+      "status": "blocked",
+      "depends_on": [
+        "C01",
+        "C02",
+        "C03",
+        "C04",
+        "C05",
+        "C06",
+        "C07",
+        "C08",
+        "C09",
+        "C10"
+      ],
+      "model_assignment": "GPT-6 Astra 复核，GPT-6.1 Sol 更新记录",
+      "owner": "Codex",
+      "started_at": "2026-10-26T23:52:06.800235+08:00",
+      "finished_at": null,
+      "implementation_commit": null,
+      "validation": [],
+      "evidence": [],
+      "artifacts_remaining": [],
+      "blocker": "C09 and complete formal historical lifecycle remain OPEN; offline candidate and engineering cleanup do not close T0.",
+      "next_action": "Astra review accepts C08 limited offline evidence; close only A3 after owned new fixtures have been retired, keep remaining incident branches OPEN.",
+      "artifact_prepared": false,
+      "scope_definition": "consolidation-20261026.md 第4节 C11"
+    }
+  ],
+  "incident_items": [
+    {
+      "id": "A1",
+      "tasks": [
+        "C01",
+        "C06",
+        "C09"
+      ],
+      "status": "OPEN",
+      "evidence": [
+        "docs/reviews/consolidation-execution-20261026.md"
+      ],
+      "closed_at": null
+    },
+    {
+      "id": "A2",
+      "tasks": [
+        "C07",
+        "C08",
+        "C09"
+      ],
+      "status": "OPEN",
+      "evidence": [
+        "docs/reviews/consolidation-execution-20261026.md"
+      ],
+      "closed_at": null
+    },
+    {
+      "id": "A3",
+      "tasks": [
+        "C02",
+        "C05"
+      ],
+      "status": "CLOSED",
+      "evidence": [
+        "D:\\programcode\\python\\wvd\\next\\.local\\consolidation-261026\\C05-core-evidence-bridge.json",
+        "D:\\programcode\\python\\wvd\\next\\.local\\consolidation-261026\\tools-validation\\review-fixes-freeze.json",
+        "D:\\programcode\\python\\wvd\\next\\.local\\consolidation-261026\\current-fixtures-retired.json"
+      ],
+      "closed_at": "2026-10-26T23:52:06.800235+08:00"
+    },
+    {
+      "id": "A4",
+      "tasks": [
+        "C01",
+        "C04",
+        "C06",
+        "C10"
+      ],
+      "status": "OPEN",
+      "evidence": [
+        "docs/reviews/consolidation-execution-20261026.md"
+      ],
+      "closed_at": null
+    },
+    {
+      "id": "A5",
+      "tasks": [
+        "C06",
+        "C09"
+      ],
+      "status": "OPEN",
+      "evidence": [
+        "docs/reviews/consolidation-execution-20261026.md"
+      ],
+      "closed_at": null
+    },
+    {
+      "id": "A6",
+      "tasks": [
+        "D00",
+        "C02",
+        "C05",
+        "C08",
+        "C09"
+      ],
+      "status": "OPEN",
+      "evidence": [
+        "docs/reviews/consolidation-execution-20261026.md"
+      ],
+      "closed_at": null
+    }
+  ],
+  "local_snapshot": {
+    "source": "2026-10-26盘点，未在本包重新核现场",
+    "protected_configuration_files": 41,
+    "other_worktree_modified_paths": 17,
+    "current_batch_verified_successes": 39,
+    "current_batch_target": 200,
+    "current_run40_state": "UserStopped",
+    "monitor": "PAUSED",
+    "physical_allocated_bytes": null,
+    "reclaimable_bytes": null
+  },
+  "asset_facts": {
+    "source": "固定提交Git树/JSON复核",
+    "manifest_members": 593,
+    "png_members": 591,
+    "source_refs_empty_array": 274,
+    "source_refs_missing": 21,
+    "active_template_images_among_empty_or_missing": 38,
+    "source_corrections_count": 24,
+    "source_corrections": [
+      {
+        "manifest_path": "image/character_panel_zh_hant.png",
+        "old_source": "resources/images/character_panel_zh_hant.png",
+        "new_source": "next/resources/images/character_panel_zh_hant.png",
+        "expected_sha256": "36178184484b01a7a2448fa6dee96c1d96b4a7096d7c94e35d8c3fcabb7317ae",
+        "expected_bytes": 16094,
+        "source_git_blob": "f9dc9d1852d9c0e16a76df46811a2781a6f3d78f",
+        "pack_git_blob": "f9dc9d1852d9c0e16a76df46811a2781a6f3d78f",
+        "state": "done"
+      },
+      {
+        "manifest_path": "image/combat_level1_label.png",
+        "old_source": "resources/images/combat_level1_label.png",
+        "new_source": "next/resources/images/combat_level1_label.png",
+        "expected_sha256": "6d2c6bfe6955f8632ac0220905bfb91e9413f2d4d8e4aaddbadb135db6a40916",
+        "expected_bytes": 3696,
+        "source_git_blob": "db2b0ee7ae9006ac0fe5a5c7411994b2fed6b94d",
+        "pack_git_blob": "db2b0ee7ae9006ac0fe5a5c7411994b2fed6b94d",
+        "state": "done"
+      },
+      {
+        "manifest_path": "image/combat_level2_label.png",
+        "old_source": "resources/images/combat_level2_label.png",
+        "new_source": "next/resources/images/combat_level2_label.png",
+        "expected_sha256": "acdf1441d9c955901e453a6b5bb6acb7922551a88d36b42d76fc264ce78fce6b",
+        "expected_bytes": 4044,
+        "source_git_blob": "31864ecd0a8489fc33da9cb770d4ce0cc55d3423",
+        "pack_git_blob": "31864ecd0a8489fc33da9cb770d4ce0cc55d3423",
+        "state": "done"
+      },
+      {
+        "manifest_path": "image/combat_level3_label.png",
+        "old_source": "resources/images/combat_level3_label.png",
+        "new_source": "next/resources/images/combat_level3_label.png",
+        "expected_sha256": "120518e4c1a4a44effd64ee9a3d6ea252ed111b95a2fcae05401c8f979fcfb38",
+        "expected_bytes": 4536,
+        "source_git_blob": "9a8d071f55a4261913bd6f12d724cf22aaae6e9b",
+        "pack_git_blob": "9a8d071f55a4261913bd6f12d724cf22aaae6e9b",
+        "state": "done"
+      },
+      {
+        "manifest_path": "image/combat_level4_label.png",
+        "old_source": "resources/images/combat_level4_label.png",
+        "new_source": "next/resources/images/combat_level4_label.png",
+        "expected_sha256": "296969df05ba961a7be0bf69f8893c092b6bc7c1ab7ec2c9e86f39ba7f6023fd",
+        "expected_bytes": 3778,
+        "source_git_blob": "c6eea9d2697517d2350c177769d2d8b7155e2c97",
+        "pack_git_blob": "c6eea9d2697517d2350c177769d2d8b7155e2c97",
+        "state": "done"
+      },
+      {
+        "manifest_path": "image/combat_level5_label.png",
+        "old_source": "resources/images/combat_level5_label.png",
+        "new_source": "next/resources/images/combat_level5_label.png",
+        "expected_sha256": "0373edf0339053039f3aeedf158296278c5aed422ea168a721ed29001f368b20",
+        "expected_bytes": 4014,
+        "source_git_blob": "d2c6dc450ee474bc1efb7a13df88d21e5776f0e6",
+        "pack_git_blob": "d2c6dc450ee474bc1efb7a13df88d21e5776f0e6",
+        "state": "done"
+      },
+      {
+        "manifest_path": "image/combat_level6_label.png",
+        "old_source": "resources/images/combat_level6_label.png",
+        "new_source": "next/resources/images/combat_level6_label.png",
+        "expected_sha256": "7d9c9a1b9618b0a80422493752e7dcc0fe480c0cdfc390ef3de4c827f80069ac",
+        "expected_bytes": 3970,
+        "source_git_blob": "3f192cae25e66fd7700650a4a3cad07dbd047c96",
+        "pack_git_blob": "3f192cae25e66fd7700650a4a3cad07dbd047c96",
+        "state": "done"
+      },
+      {
+        "manifest_path": "image/combat_level7_label.png",
+        "old_source": "resources/images/combat_level7_label.png",
+        "new_source": "next/resources/images/combat_level7_label.png",
+        "expected_sha256": "924c9ee8621c563db58ee97dc05087eeac74a769f7233cc8791f578e19b90c77",
+        "expected_bytes": 3888,
+        "source_git_blob": "971ee0a352cd2142815abcbfcbbe98ed19036f81",
+        "pack_git_blob": "971ee0a352cd2142815abcbfcbbe98ed19036f81",
+        "state": "done"
+      },
+      {
+        "manifest_path": "image/combat_scorpion_portrait.png",
+        "old_source": "resources/images/combat_scorpion_portrait.png",
+        "new_source": "next/resources/images/combat_scorpion_portrait.png",
+        "expected_sha256": "81e87efb6cf574d9833828741cbefe95e69235442c9f11501e06534ee6d8f30f",
+        "expected_bytes": 8188,
+        "source_git_blob": "c15b778cb4eb9a7dca2783b4b3d0a45e8df2b7dc",
+        "pack_git_blob": "c15b778cb4eb9a7dca2783b4b3d0a45e8df2b7dc",
+        "state": "done"
+      },
+      {
+        "manifest_path": "image/combat_skill_confirm_zh_hant.png",
+        "old_source": "resources/images/combat_skill_confirm_zh_hant.png",
+        "new_source": "next/resources/images/combat_skill_confirm_zh_hant.png",
+        "expected_sha256": "64ec000d02ab6abfba0dce16ee3ec083788baf50110d603da8c5f11be749a216",
+        "expected_bytes": 19353,
+        "source_git_blob": "568cc5ecc7600d7d1cb9766de2cf15d3407b0ce5",
+        "pack_git_blob": "568cc5ecc7600d7d1cb9766de2cf15d3407b0ce5",
+        "state": "done"
+      },
+      {
+        "manifest_path": "image/combat_skill_detail_zh_hant.png",
+        "old_source": "resources/images/combat_skill_detail_zh_hant.png",
+        "new_source": "next/resources/images/combat_skill_detail_zh_hant.png",
+        "expected_sha256": "8dc095f162c3b79a88326cfdde46de4bed07a7dd870f718a2f44acfb9dad7579",
+        "expected_bytes": 8561,
+        "source_git_blob": "68d54eddd7f45882b6cf54acc9b3a8435e643887",
+        "pack_git_blob": "68d54eddd7f45882b6cf54acc9b3a8435e643887",
+        "state": "done"
+      },
+      {
+        "manifest_path": "image/combat_special_skull.png",
+        "old_source": "resources/images/combat_special_skull.png",
+        "new_source": "next/resources/images/combat_special_skull.png",
+        "expected_sha256": "ea4cbbc658ef22d73bf8f3557a403b9105ab53bf1ec30a51d09d3d27c9300ab8",
+        "expected_bytes": 2615,
+        "source_git_blob": "223555116dc2ee69c941c3e040510e88b7d018ce",
+        "pack_git_blob": "223555116dc2ee69c941c3e040510e88b7d018ce",
+        "state": "done"
+      },
+      {
+        "manifest_path": "image/combat_speed_off_zh_hant.png",
+        "old_source": "resources/images/combat_speed_off_zh_hant.png",
+        "new_source": "next/resources/images/combat_speed_off_zh_hant.png",
+        "expected_sha256": "fa0d211be9f8e70b9259d2cd0803a404e8737bb67289b8d4ae8a5150e1f2931e",
+        "expected_bytes": 2996,
+        "source_git_blob": "3d0b2d648390faba9fae4a8236edf1c1ed182959",
+        "pack_git_blob": "3d0b2d648390faba9fae4a8236edf1c1ed182959",
+        "state": "done"
+      },
+      {
+        "manifest_path": "image/combat_speed_on_zh_hant.png",
+        "old_source": "resources/images/combat_speed_on_zh_hant.png",
+        "new_source": "next/resources/images/combat_speed_on_zh_hant.png",
+        "expected_sha256": "69f5cfbe9f4bc993769d3e5a00cb07f9a197662dacf2dd29451baddbaf976b95",
+        "expected_bytes": 2998,
+        "source_git_blob": "42d412208d047f0acf2e99a35482a058bb5560dc",
+        "pack_git_blob": "42d412208d047f0acf2e99a35482a058bb5560dc",
+        "state": "done"
+      },
+      {
+        "manifest_path": "image/guild_bounty_card_header.png",
+        "old_source": "resources/images/guild_bounty_card_header.png",
+        "new_source": "next/resources/images/guild_bounty_card_header.png",
+        "expected_sha256": "01f375303230812132b53061f5fe92f2d4d4a99a5465c227c7fa51fdba4a4dfa",
+        "expected_bytes": 16169,
+        "source_git_blob": "647c89efe0dd051b1a5f369ae15da07e2003aeb5",
+        "pack_git_blob": "647c89efe0dd051b1a5f369ae15da07e2003aeb5",
+        "state": "done"
+      },
+      {
+        "manifest_path": "image/guild_bounty_selected_zh_hant.png",
+        "old_source": "resources/images/guild_bounty_selected_zh_hant.png",
+        "new_source": "next/resources/images/guild_bounty_selected_zh_hant.png",
+        "expected_sha256": "cc994ccd2d838c784cc3018268aece59de3a8352ad14aea12d99f185f60b89f2",
+        "expected_bytes": 8673,
+        "source_git_blob": "67b1928f4ba78db1fbb81d3cba92ff84e7216a10",
+        "pack_git_blob": "67b1928f4ba78db1fbb81d3cba92ff84e7216a10",
+        "state": "done"
+      },
+      {
+        "manifest_path": "image/guild_leave_zh_hant.png",
+        "old_source": "resources/images/guild_leave_zh_hant.png",
+        "new_source": "next/resources/images/guild_leave_zh_hant.png",
+        "expected_sha256": "c62e39f232f5a1be9387adee9c343db9663ae976db07e1eaaa335a3158ababd0",
+        "expected_bytes": 9114,
+        "source_git_blob": "17f2e9612c0d5ec775098461770c96c0c5b17878",
+        "pack_git_blob": "17f2e9612c0d5ec775098461770c96c0c5b17878",
+        "state": "done"
+      },
+      {
+        "manifest_path": "image/guild_list_back_zh_hant.png",
+        "old_source": "resources/images/guild_list_back_zh_hant.png",
+        "new_source": "next/resources/images/guild_list_back_zh_hant.png",
+        "expected_sha256": "2784c08c5126a4c8dc00e8045ffd0ed3914e5adb405a7c303b746923d8e00746",
+        "expected_bytes": 5075,
+        "source_git_blob": "7fd99519952017cdb89e6cd766b5a95e63ff7f1c",
+        "pack_git_blob": "7fd99519952017cdb89e6cd766b5a95e63ff7f1c",
+        "state": "done"
+      },
+      {
+        "manifest_path": "image/guild_report_ready_zh_hant.png",
+        "old_source": "resources/images/guild_report_ready_zh_hant.png",
+        "new_source": "next/resources/images/guild_report_ready_zh_hant.png",
+        "expected_sha256": "0ee99873d95f0416fccf0505a57bb448efc7314fb52fcbe1030257704fcf04c5",
+        "expected_bytes": 15057,
+        "source_git_blob": "ec20167f69346016c2db0a56241afd0483c2f45c",
+        "pack_git_blob": "ec20167f69346016c2db0a56241afd0483c2f45c",
+        "state": "done"
+      },
+      {
+        "manifest_path": "image/guild_report_receipt_close_zh_hant.png",
+        "old_source": "resources/images/guild_report_receipt_close_zh_hant.png",
+        "new_source": "next/resources/images/guild_report_receipt_close_zh_hant.png",
+        "expected_sha256": "91bfc0ad52ab8bb9ad3a6b2cdba444622470e4035b1c0f0318a67c3e275c0de4",
+        "expected_bytes": 10087,
+        "source_git_blob": "6fd5256708e2fea5550123adce1024734af66e5d",
+        "pack_git_blob": "6fd5256708e2fea5550123adce1024734af66e5d",
+        "state": "done"
+      },
+      {
+        "manifest_path": "image/guild_report_receipt_zh_hant.png",
+        "old_source": "resources/images/guild_report_receipt_zh_hant.png",
+        "new_source": "next/resources/images/guild_report_receipt_zh_hant.png",
+        "expected_sha256": "b2351a05832758e93790e68479670186109bbb73f628a59919ad42035f41accf",
+        "expected_bytes": 16365,
+        "source_git_blob": "a6f4fb979e14cc1f1f7bc042bf561807b4f7b155",
+        "pack_git_blob": "a6f4fb979e14cc1f1f7bc042bf561807b4f7b155",
+        "state": "done"
+      },
+      {
+        "manifest_path": "image/network_error_zh_hant.png",
+        "old_source": "resources/images/network_error_zh_hant.png",
+        "new_source": "next/resources/images/network_error_zh_hant.png",
+        "expected_sha256": "604543a8b97cc258924ff4265d417d4daf4613f86d1859185d7bd88644a56801",
+        "expected_bytes": 46604,
+        "source_git_blob": "9ab2d8c37ffdb9effa9d6907f4e95eb7da3dc9b1",
+        "pack_git_blob": "9ab2d8c37ffdb9effa9d6907f4e95eb7da3dc9b1",
+        "state": "done"
+      },
+      {
+        "manifest_path": "image/network_retry_zh_hant.png",
+        "old_source": "resources/images/network_retry_zh_hant.png",
+        "new_source": "next/resources/images/network_retry_zh_hant.png",
+        "expected_sha256": "e33568f98550a7f46ce1615ec91fecd3e07f851dc37419d87b0631f27a2e0208",
+        "expected_bytes": 5574,
+        "source_git_blob": "1fe7569d5a1553558302a053ca2ce0bc6e30c01d",
+        "pack_git_blob": "1fe7569d5a1553558302a053ca2ce0bc6e30c01d",
+        "state": "done"
+      },
+      {
+        "manifest_path": "image/recovery_panel_zh_hant.png",
+        "old_source": "resources/images/recovery_panel_zh_hant.png",
+        "new_source": "next/resources/images/recovery_panel_zh_hant.png",
+        "expected_sha256": "0dcda546cbfaae845b9c58cdeeca02d02fac35db201c654d690bc9d5d02cdb9b",
+        "expected_bytes": 18360,
+        "source_git_blob": "333f32ef7b30a7f0d65f987b6ad37ce1590efb37",
+        "pack_git_blob": "333f32ef7b30a7f0d65f987b6ad37ce1590efb37",
+        "state": "done"
+      }
+    ]
+  },
+  "local_disposition_manifest": {
+    "path": "next/.local/consolidation-261026/local-disposition-manifest.json",
+    "state": "all_explicit_approved_items_moved",
+    "approved_items": 1152,
+    "executed_items": 1152,
+    "rule": "Exact recoverable same-volume moves, no permanent deletion. cap-data was moved first; inventory remaining-parent restores before cap-data. Unknown/formal authorities are preserved.",
+    "summary": {
+      "at": "2026-10-26T23:46:29.833492+08:00",
+      "volumes": {
+        "D:": {
+          "items": 1150,
+          "files": 871413,
+          "logical_bytes": 101783148563
+        },
+        "S:": {
+          "items": 2,
+          "files": 447,
+          "logical_bytes": 2150996452
+        }
+      },
+      "errors": [],
+      "permanent_deletion_count": 0,
+      "physical_reclaimed_bytes": 0,
+      "formal_data_moved": false,
+      "earlier_closed_item_hash_proofs_reused": 1146,
+      "newly_checked_item_hash_proofs": 6,
+      "note": "Same-volume renames; logical bytes are not allocated bytes or recovered disk space."
+    }
+  }
+}

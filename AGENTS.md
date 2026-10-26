@@ -1,11 +1,20 @@
-# 项目画像
+# 项目画像与执行边界
 
 - 本仓库是巫术 Daphne 自动化工具的个人维护 fork；当前产品在 `next/`，统一底座是 C++20/CMake、Vue、OpenCV、ONNX Runtime，Maa不参与当前构建。
 - 唯一执行链为 Application → NativeRunCoordinator → NativeExecutionSession → FlowExecutor。Application拥有批次/线程入口，Coordinator拥有根运行与Session生命周期；禁止添加旁路执行器或外部循环守护器。
 - 当前设备链是MuMu IPC取图、ADB元数据/生命周期、scrcpy输入；识别视口900x1600，语言由配置明确选择，不混扫英文与繁中。
-- 当前data-root的 `profile.json` 和 `workflows/` 是原生配置/用户流程权威；`src/`、旧config、mod与dist保留为历史/用户资产，不参与原生运行，不得覆盖或清理。数据职责见 `docs/data-authority.md`。
-- `origin` 指向原作者，`fork` 指向个人仓库；只有明确要求时提交或推送，推送明确指定个人远端。
-- 当前事实入口：`docs/project-status.md`。执行构建、测试或诊断前读取 `docs/execution-notes.md`。
-- 当前构建：在 `next/` 使用 `tools/build.py` 的依赖校验/配置/构建入口，Release在 `next/build/native/Release/`；冻结打包入口 `tools/package_functional.py`。构建、打包、部署和实机通过是四种独立事实。
-- 定向离线回归：`python tools/run_contracts.py --module <runtime|devices|recognition|app|tools|web> --output <全新next/.local子目录>`；可先 `--plan`。修改模块不得静默省略对应回归，必须独立可丢弃data-root，不连接设备或默认服务端口。
-- 核心合同见 `next/docs/core-contracts.md`；用户任务清单和当前代码仍是验收权威，不以全量测试数量替代真实业务交付。
+- 当前data-root的 `profile.json` 和 `workflows/` 是原生配置/用户流程权威；职责以 [数据职责](docs/data-authority.md) 为入口，详细诊断字段按需查阅，不新增双写或另一个权威。
+- `src/`、旧config、mod与根dist保留为历史/用户资产，不参与原生运行；没有明确承接及处置范围时不得覆盖或清理。
+- 接手先读 [当前事实](docs/project-status.md)、[本轮收束计划](docs/work-packages/consolidation-20261026.md) 及 [任务登记](docs/work-packages/consolidation-20261026-tasks.json)，再读 `docs/execution-notes.md` 中与当前任务相关的条目；历史交接只作证据，不反复全文加载。
+- 只推进本轮任务规定的文件、调用链、数据与验收范围；新发现的问题先登记证据和依赖，不自行扩大到架构、接口、技术栈、上游同步或其他项目。
+- 已有会话授权按其真实范围继续执行，不重复要求用户批准同一动作；方案文档、历史授权和已完成状态本身不新增清理正式历史、停服务、运行游戏、发布或推送权限。
+- 开始产出前明确输出路径、预计文件/字节增量、必要证据及结束后的去向。逻辑大小、FileID去重内容量、实际分配与可回收量分开报告，未知值不作零值。
+- 复用证据须核产品输入、相关二进制、依赖及适用条件；纯文档HEAD变化本身不要求重新构建。真实受影响行为仍需对应验证，不能用无关历史PASS替代。
+- 构建入口仍为 `next/tools/build.py`，冻结打包为 `next/tools/package_functional.py`；`automationd`、`test_head_response` 位于 `next/build/Release/`，其他原生合同测试位于 `next/build/native/Release/`。构建、打包、部署和实机通过分别记录。
+- 在 `next/` 执行定向离线回归：`python tools/run_contracts.py --module <模块> --output .local/<本轮新目录>`，可先 `--plan`。只选择本次实际影响的模块；当前文档选择器缺口见执行注意项，不能把计划输出直接当作合理验证范围。
+- 每轮测试使用全新、独立、可丢弃的data-root，不连接设备或默认服务端口；保留核心真实边界及原断言。验收后保留回执、失败证据和必要复现材料，对已认领的可重建大夹具按任务清单收尾，不永久保留每轮完整树。
+- 清理前核所有者、实际引用、未结副作用、活动租约、事务及恢复位置；未知项只停止该项及其依赖，继续无关且已明确的工作。不凭日期、目录名、重复SHA或空静态引用删除。
+- 正式配置、业务回执、未提交修改、当前/已核回滚候选及匹配EXE/PDB优先保护；既有历史保留行为不因整理文档而改变。归档和有界保留的工程改动按计划单独验收，不增设外部清理守护器。
+- `origin` 指向原作者，`fork` 指向个人仓库；提交/推送须在当前已授权范围内，推送显式指定个人远端。主分支触发行为未落实前不得以快进代替发布核对；上游同步单列。
+- 核心合同见 `next/docs/core-contracts.md`；用户任务、实际代码及可核验证据决定验收，不以全量用例数量、一次空间充足或一次游戏成功替代完整交付。
+- 结束时更新原任务登记中的结果、证据、剩余依赖与停止原因；区分已确认事实、推断、未验项。计划交付、工程整理完成和T0关闭是不同状态，不能互相替代。

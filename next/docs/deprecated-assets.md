@@ -1,12 +1,35 @@
 # 废弃素材与待确认清单
 
+## 2026-10-26 当前复核状态
+
+复核基线为 `179cfd851877cba2f2df401d86a905ff9ae088f6`。本页登记素材的已知引用、替代证据与未确认事项。2026-10-26执行C03已修正24条来源元数据并重算manifest revision；没有删除、搬移图片或改变PNG字节。具体推进、验收及停止条件见 [收束计划](../../docs/work-packages/consolidation-20261026.md)，来源事实见 [收束盘点](../../docs/reviews/consolidation-inventory-20261026.md)，资产和正式配置职责见 [持久数据职责](../../docs/data-authority.md)。
+
+| 当前核查项 | 已确认事实 | 整理结论 |
+| --- | --- | --- |
+| 包成员 | manifest 共 593 个成员，其中 PNG 591 张 | 旧 508 张计数不再代表当前全包 |
+| 语义配方 | 148 项语义资源直接引用 176 个不同模板名 | 需将当前配方引用纳入索引 |
+| `source_refs` 为空或缺失 | 274 条空数组、21 条缺字段，共 295 张 PNG | 不据此判废 |
+| 上项中的有效反例 | 38 张仍被当前语义模板直接引用：17 条空数组、21 条缺字段 | 这 38 张不能按旧空索引移出包 |
+| 来源路径错误 | 24 条已按精确映射改为 `next/resources/images/…`；实际源大小/SHA与包成员一致 | 已修元数据；593成员、591PNG的path/hash/bytes和aliases不变 |
+| Next 源中未入包的头像原图 | `monster-portraits/cyclops.png`、`dark_enemy_candidate.png`、`red_hair_serpent.png`、`scorpion.png` | 用户头像、嵌入配置和来源用途未核清，继续保留 |
+
+当前有效引用的反例包括 `character_panel_zh_hant`、`combat_skill_confirm_zh_hant`、`guild_report_ready_zh_hant`、`network_retry_zh_hant`、`recovery_panel_zh_hant`、`shared_close_cross`。空数组与缺字段都不足以证明运行时未使用；也不能仅以相同 SHA、名称相近或未入包为依据去除来源。
+
+`inn_icon`、`guild_icon`、`edge_of_town_icon`、`ruins_icon` 的形状模板替代关系仍保留为候选证据，尚未证明它们已从旧工程、用户扩展、manifest 和测试的全部引用中退出。`supportSkillCheck.png` 已退出 Next 旧识别流程，但基线中的 `src/script.py` 仍有调用，继续保留源图与包副本；不通过删除旧功能或弱化测试来完成整理。
+
+当前[逐图引用证据](../../docs/reviews/evidence/asset-reference-closure-20261026.json)已覆盖591张包内PNG：记录语义配方、原生/流程/测试/旧Python的精确字面量样例、语言分类、旧空/缺索引及4张头像原图的当前配置嵌入比对。统计复核为295=274空数组+21缺字段，38=17+21；字面量扫描不能证明动态名称、用户扩展或历史来源全部退出，因此没有把无命中图片改成废弃。隔离小夹具实际执行`sync_authoring_resources`，已证明正确Next来源可恢复缺失成员，源字节变化仍拒绝。本页不授权永久删除，原图用途未证实退出时继续保留。
+
+## 历史索引记录（含 2026-10-03 补充）
+
+以下保留旧扫描的计数、候选表、逐项列表与补充日期，标题层级作归类调整。原文中的“当前”“本次”指该历史扫描范围，不表示 2026-10-26 的全量结果；本轮未用旧列表执行清理。
+
 本清单按 `next/packs/wvd/manifest.json` 当前索引生成；只登记，不删除、不移出构建。
 `source_refs` 是静态引用索引，动态路径只覆盖清单列出的有界候选；无引用不等于运行时一定不用。
 每次改动入口或资源清单后重新核对，不把旧结果当作永久删除授权。
 
 本次索引图片 508 张：已替换旧模板 4 张；有静态/动态/别名引用 293 张；待确认 211 张。
 
-## 已由新版入口替换
+### 已由新版入口替换
 
 2026-10-03补充：`image/supportSkillCheck.png`已由`support_selection`边框布局识别替换，退出Next原生战斗与公共选敌流程；原图包含变化数值，当前友方实帧仅0.4349。旧Python仍可能使用，文件不删除；历史发布快照不改写。以下计数属于原扫描快照，不是本次重新全量索引。
 
@@ -19,7 +42,7 @@
 | `image/edge_of_town_icon.png` | city.edge.entry 已改用 edge_of_town_icon_shape.png |
 | `image/ruins_icon.png` | city.ruins.entry 及原生跳轮入口已改用 ruins_icon_shape.png |
 
-## 待确认：无静态引用（210）
+### 待确认：无静态引用（210）
 
 这些文件不能仅凭清单标成废弃；迁移或清理前需核查旧工程动态拼接、配置/mod 引用和实际运行入口。
 例如 `image/Economy.png` 仍由内置英文旅店流程使用，索引中的空引用并不等于源码未使用。
@@ -235,13 +258,13 @@
 - `image/whowillyougiveitto.png`
 - `image/wraped.png`
 
-## 待确认：显式未分类（1）
+### 待确认：显式未分类（1）
 
 这些文件不能仅凭清单标成废弃；迁移或清理前需核查旧工程动态拼接、配置/mod 引用和实际运行入口。
 
 - `image/boot_attention_zh.png`
 
-## 使用边界
+### 使用边界
 
 - 不自动清理以上素材；确认退役必须先证明没有生产入口、配置或 mod 使用。
 - 新增或恢复引用时，必须从待确认列表移除并同步资源清单。
