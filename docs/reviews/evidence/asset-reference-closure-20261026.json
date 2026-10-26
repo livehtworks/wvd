@@ -10821,6 +10821,10 @@
       "semantic_template_reference": false,
       "literal_reference_samples": [
         {
+          "path": "next/tests/test_contract_artifact_lifecycle.py",
+          "line": 35
+        },
+        {
           "path": "next/tests/test_run_timing_analysis.py",
           "line": 55
         },

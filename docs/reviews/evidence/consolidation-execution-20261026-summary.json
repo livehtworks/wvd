@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "at": "2026-10-26T23:52:07.152875+08:00",
+  "at": "2026-10-27T00:00:49.310730+08:00",
   "review_commit": "179cfd851877cba2f2df401d86a905ff9ae088f6",
   "migration": {
     "at": "2026-10-26T23:46:29.833492+08:00",
@@ -89,7 +89,7 @@
     "final_state": "both_returned_to_trash"
   },
   "authority": {
-    "at": "2026-10-26T23:46:34.605804+08:00",
+    "at": "2026-10-27T00:00:08.326539+08:00",
     "checks": {
       "service_identity_unchanged": true,
       "run_stopped_39_of_200": true,
@@ -153,9 +153,14 @@
       "sha256": "fe7da009217e3fd9dc585a3059835f801f07e90427b1c7d26ba3e21a24a14878"
     },
     {
+      "path": "next/.local/consolidation-261026/restore-collision-result.json",
+      "bytes": 399,
+      "sha256": "a4a2cc7eac5358b2ac2f78d4abd42c3a4d8885cbd8a7284ac3ece281c44187f5"
+    },
+    {
       "path": "next/.local/consolidation-261026/authority-final.json",
       "bytes": 1212,
-      "sha256": "f93b5238a2db9657832789af985caee7b890f395b2b46a2b1814cb2e9e2f8208"
+      "sha256": "9f766f67167ee8c64f9a69cce97f36c9e7fdd9a3ba2ca01a5cc639a676abead4"
     },
     {
       "path": "next/.local/consolidation-261026/symbol-pair.json",
@@ -232,5 +237,17 @@
     "Allocated/MFT bytes not measured; logical bytes are separate.",
     "No production history migration, service deployment, game execution or monitor resume.",
     "C08 final identity/validation is tracked separately; old passed tests do not prove untested new behavior."
-  ]
+  ],
+  "delivery": {
+    "artifact_prepared": true,
+    "repository_integrated": true,
+    "production_source_changed": true,
+    "cleanup_executed": true,
+    "committed_or_pushed": true,
+    "deployed": false,
+    "incident_status": "OPEN",
+    "engineering_milestone": "completed"
+  },
+  "first_integrated_pushed_commit": "cc8e040073d8c81b0af15339a42c398618266749",
+  "user_scope_decision": "本轮止于工程收束，正式服务保持不变；不开循环或监控"
 }

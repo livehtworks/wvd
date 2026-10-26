@@ -11,9 +11,10 @@
     "repository_integrated": true,
     "production_source_changed": true,
     "cleanup_executed": true,
-    "committed_or_pushed": false,
+    "committed_or_pushed": true,
     "deployed": false,
-    "incident_status": "OPEN"
+    "incident_status": "OPEN",
+    "engineering_milestone": "completed"
   },
   "current_request_scope": [
     "execute_consolidation_work_package",
@@ -29,7 +30,7 @@
     "blocked"
   ],
   "execution": {
-    "active_task": "C10 integration / C09 authorization boundary",
+    "active_task": "engineering_completed_user_ends_round",
     "owner": "Codex",
     "branch": "codex/t0-lifecycle-repair-20261025",
     "started_at": "2026-10-26T20:59:49.490078+08:00",
@@ -39,7 +40,12 @@
       "tools": "9589d788d87eb0f6e2aca8fe0a125cf30dfde4e3",
       "asset": "be1b96256ff798db34574dab7847cef4263216ea",
       "native": "0f46244176d079eadb75968e24e80f2794a8a193"
-    }
+    },
+    "finished_at": "2026-10-26T23:58:16.138319+08:00",
+    "first_integrated_pushed_commit": "cc8e040073d8c81b0af15339a42c398618266749",
+    "user_scope_decision": "本轮止于工程收束，正式服务保持不变；不开循环或监控",
+    "final_check_at": "2026-10-27T00:00:49.581932+08:00",
+    "restore_manifest_sha256": "def193d68217c23d059142624d550a291f03d715b3b9071b8e4cf1e8c8f0dadd"
   },
   "artifact_budget": {
     "state": "per_phase_budgets_and_owned_payloads_closed",
@@ -76,7 +82,7 @@
       "owner": "Codex",
       "started_at": "2026-10-26T20:59:49.490078+08:00",
       "finished_at": "2026-10-26T20:59:49.490078+08:00",
-      "implementation_commit": null,
+      "implementation_commit": "cc8e040073d8c81b0af15339a42c398618266749",
       "validation": [
         "13 baseline blobs and candidate SHA verified; git apply --check and apply; CRLF normalization accounted"
       ],
@@ -101,7 +107,7 @@
       "owner": "Codex",
       "started_at": "2026-10-26T20:59:49.490078+08:00",
       "finished_at": "2026-10-26T21:09:54.504852+08:00",
-      "implementation_commit": null,
+      "implementation_commit": "cc8e040073d8c81b0af15339a42c398618266749",
       "validation": [
         "17 HEAD/index/worktree paths preserved and byte-readback verified; original dirty checkout retained rather than falsely declared integrated",
         "41 configuration hashes unchanged, real service/binding verified",
@@ -240,7 +246,7 @@
       "owner": "Codex",
       "started_at": "2026-10-26T21:09:54.504852+08:00",
       "finished_at": "2026-10-26T23:52:06.800235+08:00",
-      "implementation_commit": null,
+      "implementation_commit": "cc8e040073d8c81b0af15339a42c398618266749",
       "validation": [
         "1152 exact moves: source absent and directory/file identity retained; necessary SHA proofs verified, earlier terminal-item proofs reused at final check.",
         "Actual D65536+S3 reverse restore, measured count/bytes/SHA/FileID and re-retirement PASS.",
@@ -346,15 +352,15 @@
         "docs/work-packages/consolidation-20261026-history-contract.md"
       ],
       "artifacts_remaining": [],
-      "blocker": "Formal service still original 66568fb; new reader not deployed and formal lease exit/history reference transaction not verified. No production migration has run.",
-      "next_action": "Obtain narrowly scoped formal-service switch authorization after concrete new candidate is reviewable; then verify lease exit and exact per-history references before any migration. Keep requests/runs at original authority.",
+      "blocker": "User explicitly selected 本轮止于工程收束，正式服务保持不变; formal reader deployment/history migration deferred.",
+      "next_action": "Keep formal service/data unchanged. Re-enter only on a new explicit request for formal switch/history lifecycle, with original contracts and exact reference/lease checks.",
       "artifact_prepared": false,
       "scope_definition": "consolidation-20261026.md 第4节 C09"
     },
     {
       "id": "C10",
       "title": "整合验收与个人主线交付",
-      "status": "in_progress",
+      "status": "done",
       "depends_on": [
         "D00",
         "C01",
@@ -367,10 +373,12 @@
       "model_assignment": "GPT-6.1 Sol；跨模块差异由 GPT-6 Astra 复核",
       "owner": "Codex",
       "started_at": "2026-10-26T23:52:06.800235+08:00",
-      "finished_at": null,
-      "implementation_commit": null,
+      "finished_at": "2026-10-26T23:58:16.138319+08:00",
+      "implementation_commit": "cc8e040073d8c81b0af15339a42c398618266749",
       "validation": [
-        "Original complete build, default package and 619 delivery members passed; product inputs unchanged f614/1338."
+        "Original complete build, default package and 619 delivery members passed; product inputs unchanged f614/1338.",
+        "Local master fast-forwarded from d2d97d2 to integration delivery; personal fork/master and repair branch atomically pushed from324c36e/179cfd8 to cc8e040.",
+        "Only personal fork updated; upstream origin, .vscode and other dirty worktree excluded."
       ],
       "evidence": [
         "D:\\programcode\\python\\wvd\\next\\.local\\consolidation-261026\\full-build-receipt.json",
@@ -378,7 +386,7 @@
       ],
       "artifacts_remaining": [],
       "blocker": null,
-      "next_action": "Commit reviewed paths by purpose, fast-forward personal master and push fork under original consolidation/branch convergence request; exclude .vscode and unrelated dirty worktree/upstream.",
+      "next_action": "Engineering milestone completed; user explicitly ends this round before formal deployment.",
       "artifact_prepared": false,
       "scope_definition": "consolidation-20261026.md 第4节 C10"
     },
@@ -406,8 +414,8 @@
       "validation": [],
       "evidence": [],
       "artifacts_remaining": [],
-      "blocker": "C09 and complete formal historical lifecycle remain OPEN; offline candidate and engineering cleanup do not close T0.",
-      "next_action": "Astra review accepts C08 limited offline evidence; close only A3 after owned new fixtures have been retired, keep remaining incident branches OPEN.",
+      "blocker": "Engineering milestone completed; T0 historical lifecycle branches remain OPEN because user ends this round before formal service/history changes.",
+      "next_action": "Keep A1/A2/A4/A5/A6 OPEN and A3 CLOSED; no further current-round production work.",
       "artifact_prepared": false,
       "scope_definition": "consolidation-20261026.md 第4节 C11"
     }

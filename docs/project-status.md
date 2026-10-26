@@ -10,6 +10,7 @@
 - 本轮已按精确清单迁移1,152项、871,860文件、约96.80GiB逻辑量到D/S盘各自根trash；未永久删除，同盘移动释放空间0。六套本轮新增大夹具也已迁出，只保留必要小证据。完整结果/恢复顺序见[执行报告](reviews/consolidation-execution-20261026.md)，本地journal与每盘RESTORE-MANIFEST.json可逐项恢复。
 - C02文档选择器、C03的24处素材来源修正、C04的CI触发及C05成功夹具收尾均已定向验证；没有运行线上Actions。C08共享资源源码及限定离线验收通过，原完整build/default package通过，619成员、产品输入f6144a09…be459/1338；新EXE2fbdd0cd…、匹配PDB保留于当前build。候选不是游戏验收。
 - 正式候选仍为`.local/t0-candidate-261025`，EXE284e860b…及其PDB（`consolidation-261026/protected-release/`）保留；默认`next/dist/wvd-next-native`现为本轮新候选。正式服务/41配置/另一工作区17处版本未变，39/200停止、监控PAUSED。C09正式历史兼容/退出未实施，requests/runs/published不移动，T0仍OPEN；不可自动续跑或恢复监控。
+- 工程整理里程碑已完成，代码/素材/工具/文档按目的提交并普通快进至个人master，与修复分支一起推送fork。用户明确本轮止于工程收束、正式服务保持不变；C09和T0整体关闭不在本轮继续执行，默认新候选不等于正式已切换。
 
 ## 接手入口
 
