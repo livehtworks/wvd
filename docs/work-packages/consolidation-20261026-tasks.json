@@ -17,9 +17,12 @@
     "engineering_milestone": "completed"
   },
   "current_request_scope": [
-    "execute_consolidation_work_package",
-    "move_confirmed_disposable_material_to_same_drive_root_trash",
-    "preserve_formal_data_and_uncommitted_changes"
+    "disable_all_personal_repository_online_ci",
+    "resolve_formal_history_lifecycle_item2",
+    "resolve_old_worktree_and_retained_material_item3",
+    "defer_disk_reclamation_item4",
+    "defer_historical_game_emulator_faults_item5",
+    "do_not_start_game_loop_or_monitor"
   ],
   "authorization_rule": "本包不新增生产写入、迁移、提交/推送、部署、游戏或监控权限；已有会话授权按实际范围持续有效，不重复请求。",
   "status_values": [
@@ -30,7 +33,7 @@
     "blocked"
   ],
   "execution": {
-    "active_task": "engineering_completed_user_ends_round",
+    "active_task": "C09 original full build and real CLI isolation; item3 completed",
     "owner": "Codex",
     "branch": "codex/t0-lifecycle-repair-20261025",
     "started_at": "2026-10-26T20:59:49.490078+08:00",
@@ -45,7 +48,8 @@
     "first_integrated_pushed_commit": "cc8e040073d8c81b0af15339a42c398618266749",
     "user_scope_decision": "本轮止于工程收束，正式服务保持不变；不开循环或监控",
     "final_check_at": "2026-10-27T00:00:49.581932+08:00",
-    "restore_manifest_sha256": "def193d68217c23d059142624d550a291f03d715b3b9071b8e4cf1e8c8f0dadd"
+    "restore_manifest_sha256": "def193d68217c23d059142624d550a291f03d715b3b9071b8e4cf1e8c8f0dadd",
+    "followup_report": "docs/reviews/consolidation-followup-20261027.md"
   },
   "artifact_budget": {
     "state": "per_phase_budgets_and_owned_payloads_closed",
@@ -200,9 +204,10 @@
       ],
       "artifacts_remaining": [],
       "blocker": null,
-      "next_action": "C06/C10",
+      "next_action": "User retired online CI; keep repository and both workflows disabled, local validation only.",
       "artifact_prepared": false,
-      "scope_definition": "consolidation-20261026.md 第4节 C04"
+      "scope_definition": "consolidation-20261026.md 第4节 C04",
+      "current_resolution": "cloud automation explicitly retired after original trigger work; historical failure not claimed fixed"
     },
     {
       "id": "C05",
@@ -337,24 +342,35 @@
     {
       "id": "C09",
       "title": "正式历史保留与受控归档承接",
-      "status": "blocked",
+      "status": "in_progress",
       "depends_on": [
         "C07",
         "C08"
       ],
       "model_assignment": "GPT-6 Astra 负责保留合同，GPT-6.1 Sol 实施",
-      "owner": "Codex consolidation_contract",
-      "started_at": null,
+      "owner": "Codex",
+      "started_at": "2026-10-27T02:00:33.511074+08:00",
       "finished_at": null,
-      "implementation_commit": null,
-      "validation": [],
+      "implementation_commit": "2af5cc0d94c1eb16ac0bc2ae5d7ebebeaf824bab",
+      "validation": [
+        "a5 real C++ subprocess interruption/recovery suite passed; actual313026B/352files across data+17trash namespaces.",
+        "a6 two test-file-only helper bridge keeps 11 production inputs and10 product libraries unchanged; original kill cases not rerun.",
+        "b3 repeat real RunStore/SubmissionStore prefix/parent/conflict and recovery negative suite PASS; independent source review no blockers.",
+        "Original full build/default619-member package passed, source849f719b/1344; actual repeat CLI root/internal conversion+finish+rollback and original directory identity/authority bytes PASS; Stopped refused. Original manage_service Validate passed, not deployed."
+      ],
       "evidence": [
-        "docs/work-packages/consolidation-20261026-history-contract.md"
+        "next/.local/consolidation-261026/history-maintenance-build-a5/receipt.json",
+        "next/.local/consolidation-261026/history-maintenance-checks-a5/result.json",
+        "next/.local/consolidation-261026/history-maintenance-cli-helper-a6/receipt.json",
+        "next/.local/consolidation-261026/history-repeat-build-b3/receipt.json",
+        "next/.local/consolidation-261026/history-repeat-full-build-20261027/receipt.json",
+        "next/.local/consolidation-261026/history-repeat-cli-smoke-20261027-02/receipt.json",
+        "next/.local/consolidation-261026/history-repeat-default-symbol-pair-20261027.json"
       ],
       "artifacts_remaining": [],
-      "blocker": "User explicitly selected 本轮止于工程收束，正式服务保持不变; formal reader deployment/history migration deferred.",
-      "next_action": "Keep formal service/data unchanged. Re-enter only on a new explicit request for formal switch/history lifecycle, with original contracts and exact reference/lease checks.",
-      "artifact_prepared": false,
+      "blocker": "Formal service/data remain unchanged under prior explicit user decision; one-request maintenance window requires its scope changed. Archive whereabouts also pending clarification.",
+      "next_action": "On explicit maintenance decision only, recheck live identity/config, stop through manage_service, locked plan/budget<=512MiB+2GiB reserve, convert/rollback/reconvert one clean cycle39, deploy idle new reader. Do not bulk migrate, start game loop, or monitor.",
+      "artifact_prepared": true,
       "scope_definition": "consolidation-20261026.md 第4节 C09"
     },
     {
@@ -414,8 +430,8 @@
       "validation": [],
       "evidence": [],
       "artifacts_remaining": [],
-      "blocker": "Engineering milestone completed; T0 historical lifecycle branches remain OPEN because user ends this round before formal service/history changes.",
-      "next_action": "Keep A1/A2/A4/A5/A6 OPEN and A3 CLOSED; no further current-round production work.",
+      "blocker": "C09 formal migration/service takeover not executed; archived original tree whereabouts pending clarification. Neither local tests nor historical trash move PASS closes production T0.",
+      "next_action": "Review actual authorized formal migration evidence before closing production lifecycle branches; do not equate tiny tests/trash moves with T0 closure.",
       "artifact_prepared": false,
       "scope_definition": "consolidation-20261026.md 第4节 C11"
     }
@@ -793,5 +809,57 @@
       "newly_checked_item_hash_proofs": 6,
       "note": "Same-volume renames; logical bytes are not allocated bytes or recovered disk space."
     }
+  },
+  "follow_up_issues": [
+    {
+      "id": "CI-01",
+      "status": "RETIRED_BY_USER",
+      "confirmed": "Native Actions run40354209693 fails fixed SHA verification for resources/ocr/en_us/keys.txt before production contracts execute.",
+      "evidence": "https://github.com/livehtworks/wvd/actions/runs/40354209693",
+      "local_log": "next/.local/consolidation-261026/remaining-audit-20261027/ci-job.log",
+      "local_git_blob_and_file_match_pin": true,
+      "hypothesis_not_proven": "Windows checkout EOL differs; .gitattributes currently does not cover the English dictionary; runner actual bytes not captured.",
+      "required_next": "Prove runner byte/EOL difference and fix source checkout consistency without weakening the pin.",
+      "resolution": "User explicitly prohibits online CI; repository Actions disabled and both workflows disabled_manually. No hash weakening or cloud rerun. Local validation remains."
+    },
+    {
+      "id": "CI-02",
+      "status": "RETIRED_BY_USER",
+      "confirmed": "Locked Dependencies emitted prepare_native OCR hash traceback but step conclusion=success; later npm/cmake success masked native failure. Affected Production Contracts failed at repeated dependency validation.",
+      "evidence": "https://github.com/livehtworks/wvd/actions/runs/40354209693",
+      "required_next": "Propagate each native command nonzero exit in dependency and related CI steps; verify on actual CI.",
+      "resolution": "User explicitly prohibits online CI; repository Actions disabled and both workflows disabled_manually. No hash weakening or cloud rerun. Local validation remains."
+    }
+  ],
+  "remaining_review": {
+    "date": "2026-10-27",
+    "scope": "Read-only service/repository/CI review; no product source changes, deploy, game, monitor or CI rerun.",
+    "knowledge_updated_uncommitted": true,
+    "other_worktree_17": "Backed up and preserved; no integration claimed.",
+    "formal_history": "C09 remains deferred by user choice; T0 OPEN."
+  },
+  "followup_20261027": {
+    "online_ci": "repository enabled=false, 2 workflows disabled_manually",
+    "item3": "Effective changes all carried; historical archive/roundtrip passed, but final recheck finds S old-worktree and D retained50 archive roots absent. Independent17 three-version backups intact. Current original whereabouts awaiting user clarification; no prune or invented restore.",
+    "item3_evidence": [
+      "old-worktree-adoption-review-20261027.json",
+      "old-worktree-retirement-20261027.json",
+      "retained-retirement-manifest-20261027.json"
+    ],
+    "item2": "C09 ordinary+repeat code/tiny tests, original complete build/default package, actual repeat automationd CLI and original Validate passed. Formal unchanged; explicit one-request/512MiB maintenance proposal awaiting change to previous keep-service-unchanged decision.",
+    "formal_control_metadata_stat": {
+      "request_roots": 1334,
+      "bytes": 48011096376,
+      "max_request_bytes": 50669110,
+      "eligibility_not_yet_proven": true
+    },
+    "deferred": [
+      "disk reclaim/clearing trash",
+      "historical navigation/emulator fault work"
+    ],
+    "candidate_exe_sha256": "ea388844b1788e73710dd2333092aa7567f4d6dc0cb2ed2c7c3cba75fed09ecb",
+    "source_commit": "2af5cc0d94c1eb16ac0bc2ae5d7ebebeaf824bab",
+    "test_retirement": "43 owned roots/1169 regularfiles/1060701 logical bytes moved same-volume; small evidence retained.18 earlier namespace sources missing/unresolved, not counted as moved.",
+    "previous_candidates": "2 registered previous candidates retained: no applicable independent original retirement entry; complete lease/symbol recovery binding not yet verified; no speculative deletion."
   }
 }

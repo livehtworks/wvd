@@ -1,0 +1,111 @@
+{
+  "at": "2026-10-27T02:58:54.848365+08:00",
+  "source_commit": "2af5cc0d94c1eb16ac0bc2ae5d7ebebeaf824bab",
+  "product_inputs_sha256": "849f719b335149be10c6f9868985bdd10a43691716328a2f64d5125d69afa8ce",
+  "product_input_count": 1344,
+  "candidate_exe_sha256": "ea388844b1788e73710dd2333092aa7567f4d6dc0cb2ed2c7c3cba75fed09ecb",
+  "formal_deployed": false,
+  "formal_history_converted": 0,
+  "game_started": false,
+  "monitor_started": false,
+  "ci_disabled": true,
+  "archive_current_whereabouts": "unconfirmed; historical moves passed, final archive roots absent",
+  "independent_17_three_version_backups_intact": true,
+  "evidence": [
+    {
+      "path": "next/.local/consolidation-261026/github-actions-disabled-20261027.json",
+      "bytes": 41,
+      "sha256": "6238d985fb886a7285be758ed110baf1fbf50b3469380f1ce27995b655cc20b8"
+    },
+    {
+      "path": "next/.local/consolidation-261026/github-workflows-disabled-20261027.json",
+      "bytes": 267,
+      "sha256": "8b35dcedf701213ae738be704514ffc6be7915c772f78fbc78fddc0dc0bc837d"
+    },
+    {
+      "path": "next/.local/consolidation-261026/old-worktree-adoption-review-20261027.json",
+      "bytes": 18026,
+      "sha256": "90acc5e7638f388a7037d8ea482ce3c95f9f758173b05849e6c96c8794fe9330"
+    },
+    {
+      "path": "next/.local/consolidation-261026/old-worktree-retirement-20261027.json",
+      "bytes": 5885,
+      "sha256": "9ac57052adf7a2b582e31075c70a95d896b8877af34d81041bb7ee1c7d93e4c6"
+    },
+    {
+      "path": "next/.local/consolidation-261026/retained-retirement-manifest-20261027.json",
+      "bytes": 124526,
+      "sha256": "55a82477e9ce7c283a9ea387a13fc4f82b6cedbad9cfe676572bcc1f69acea7f"
+    },
+    {
+      "path": "next/.local/consolidation-261026/authority-final.json",
+      "bytes": 2643,
+      "sha256": "dfad0740d255db3064948d1f1660824cfefcf749e2563f1da0534c8ae432e64a"
+    },
+    {
+      "path": "next/.local/consolidation-261026/history-maintenance-build-a5/receipt.json",
+      "bytes": 9807,
+      "sha256": "c3489421a819e5437b80b0aacf8162d5b2613491dd75e3e9f1efdf1bb3dd5f15"
+    },
+    {
+      "path": "next/.local/consolidation-261026/history-maintenance-cli-smoke-20261027/receipt.json",
+      "bytes": 3361,
+      "sha256": "d060af7aa816aaeab61e2bddea648a0bd4fd3a3bd3c87533024a24e47388f7a5"
+    },
+    {
+      "path": "next/.local/consolidation-261026/history-repeat-build-b3/receipt.json",
+      "bytes": 12498,
+      "sha256": "a2d8d22fc4e7606ebf88e35ea75efcac937da41439b879705eca3c8abe69a66c"
+    },
+    {
+      "path": "next/.local/consolidation-261026/history-repeat-full-build-20261027/receipt.json",
+      "bytes": 1143,
+      "sha256": "5b2cd6561b30c760febaadaffa590028c12797ab87fc31f03dc1c39cbf2522b0"
+    },
+    {
+      "path": "next/.local/consolidation-261026/history-repeat-cli-smoke-20261027/receipt.json",
+      "bytes": 1268,
+      "sha256": "6c394e80cd7f54436e2c0af80326d012bdd4625bc49232e42916f5cf141dccb2"
+    },
+    {
+      "path": "next/.local/consolidation-261026/history-repeat-cli-smoke-20261027-02/receipt.json",
+      "bytes": 2636,
+      "sha256": "c4b971026a1f7de31774624cb67a2d52745b1fbfde1ee18480a35e3e51a94cbf"
+    },
+    {
+      "path": "next/.local/consolidation-261026/history-repeat-default-symbol-pair-20261027.json",
+      "bytes": 417,
+      "sha256": "5ec93da9dcac4c71c5ced030fca8853fbbe7616d3644108b6a501b4f617f3e42"
+    },
+    {
+      "path": "next/.local/consolidation-261026/history-repeat-candidate-validate-20261027.log",
+      "bytes": 34,
+      "sha256": "910ced80e990bd2f48ec82289531a28c43b73dee01b969afe2de6b3844249e08"
+    },
+    {
+      "path": "next/.local/consolidation-261026/history-real-repeat-preflight-20261027.json",
+      "bytes": 14017,
+      "sha256": "7eeb658e8d50f6728c23e46f4f04f9b31aa49d358db10a6baa9907459e1a7126"
+    },
+    {
+      "path": "next/.local/consolidation-261026/history-control-size-20261027.json",
+      "bytes": 339057,
+      "sha256": "228f35425226df0e08b3944e3e699eba46fc0a65ce0f6e4550afa8148fd2c977"
+    },
+    {
+      "path": "next/.local/consolidation-261026/c09-fixture-retirement-20261027.json",
+      "bytes": 643,
+      "sha256": "1e7091aa023427bb26b9144f46a0dfeb177f6bc2ab06eff02d1eeccf28f55dd6"
+    },
+    {
+      "path": "next/.local/consolidation-261026/c09-repeat-cli-02-restore-supplement.json",
+      "bytes": 7244,
+      "sha256": "95982d5f9182880efafe00308f6e711b3b1f7c113d9a9cadb912c12f43f32951"
+    },
+    {
+      "path": "next/.local/consolidation-261026/c09-default-previous-readonly-20261027.json",
+      "bytes": 1919,
+      "sha256": "2073a58f3341dcf92d9ecfde0d3bd56b4f3c04561eab5b1356d719de026a687b"
+    }
+  ]
+}
