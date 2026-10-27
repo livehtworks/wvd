@@ -4,7 +4,7 @@ param(
     [Parameter(Mandatory)][string]$EvidenceRoot,
     [Parameter(Mandatory)][string]$Cdb,
     [Parameter(Mandatory)][string]$Pdb,
-    [Parameter(Mandatory)][string]$SymbolCache,
+    [string]$SymbolCache,
     [int]$Port=17654,
     [switch]$AllocationSizes
 )
@@ -15,6 +15,17 @@ Initialize-TraceInterop
 if(-not ('WvdMemoryRegions' -as [type])) { Add-Type -Path (Join-Path $PSScriptRoot 'memory_region_layout.cs') }
 $root=[IO.Path]::GetFullPath($EvidenceRoot)
 if(Test-Path -LiteralPath $root){throw 'FRESH_HEAP_LAYOUT_EVIDENCE_REQUIRED'}
+$SymbolCache=if($SymbolCache){[IO.Path]::GetFullPath($SymbolCache)}else{Join-Path $root 'symbol-cache'}
+$private=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../.local')).TrimEnd('\','/')
+if(-not $SymbolCache.StartsWith($private+[IO.Path]::DirectorySeparatorChar,'OrdinalIgnoreCase') -and
+   -not $SymbolCache.StartsWith($root.TrimEnd('\','/')+[IO.Path]::DirectorySeparatorChar,'OrdinalIgnoreCase')) {
+    throw 'HEAP_SYMBOL_CACHE_OUTSIDE_OWNED_OUTPUT'
+}
+$cacheAncestor=[IO.DirectoryInfo]::new($SymbolCache)
+while($cacheAncestor) {
+    if($cacheAncestor.Exists -and ($cacheAncestor.Attributes -band [IO.FileAttributes]::ReparsePoint)) {throw 'HEAP_SYMBOL_CACHE_REPARSE_FORBIDDEN'}
+    $cacheAncestor=$cacheAncestor.Parent
+}
 $url="http://127.0.0.1:$Port"
 function State {
     $service=Invoke-RestMethod "$url/api/v1/service" -TimeoutSec 3

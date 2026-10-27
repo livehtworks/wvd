@@ -108,6 +108,26 @@ function Read-TraceJson {
         finally {$reader.Dispose()}
     } finally {$file.Dispose()}
 }
+function Get-WvdToolEnvironment {
+    $root=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..')).TrimEnd('\','/')
+    $config=Get-Content -LiteralPath (Join-Path $PSScriptRoot 'tool-paths.json') -Raw -Encoding utf8 | ConvertFrom-Json
+    $environment=@{}
+    foreach($entry in $config.PSObject.Properties) {
+        $path=[IO.Path]::GetFullPath((Join-Path $root ([string]$entry.Value)))
+        if(-not $path.StartsWith($root+[IO.Path]::DirectorySeparatorChar+'.local'+[IO.Path]::DirectorySeparatorChar,'OrdinalIgnoreCase')) {
+            throw 'TOOL_STATE_PATH_OUTSIDE_PRIVATE_ROOT'
+        }
+        $ancestor=[IO.DirectoryInfo]::new($path)
+        while($ancestor) {
+            if($ancestor.Exists -and ($ancestor.Attributes -band [IO.FileAttributes]::ReparsePoint)) {throw 'TOOL_STATE_REPARSE_FORBIDDEN'}
+            $ancestor=$ancestor.Parent
+        }
+        [IO.Directory]::CreateDirectory($path) | Out-Null
+        $environment[$entry.Name]=$path
+    }
+    return $environment
+}
+
 function Invoke-TraceTool {
     param([string]$Executable, [string[]]$Arguments, [string]$Log,
           [int]$TimeoutSeconds = 20, [string]$OutputRoot, [long]$OutputLimit = 128MB,
@@ -127,7 +147,7 @@ function Invoke-TraceTool {
         Add-Type -Path @((Join-Path $PSScriptRoot 'owned_trace_process.cs'),(Join-Path $PSScriptRoot 'bounded_trace_output.cs'))
     }
     try {
-        $process = [WvdTraceProcess]::Start($Executable,$Arguments)
+        $process = [WvdTraceProcess]::Start($Executable,$Arguments,(Get-WvdToolEnvironment))
         $started = $true
         $pump = [WvdTraceOutput]::new($process, $Log, [Math]::Min($OutputLimit,128MB))
         $watch=[Diagnostics.Stopwatch]::StartNew()

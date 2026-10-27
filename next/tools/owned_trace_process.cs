@@ -1,5 +1,7 @@
 using System;
 using System.ComponentModel;
+using System.Collections;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
@@ -77,12 +79,26 @@ public sealed class WvdTraceProcess : IDisposable {
         }
         return result.Append('\\',slashes*2).Append('"').ToString();
     }
-    public static WvdTraceProcess Start(string executable,string[] arguments) {
+    public static WvdTraceProcess Start(string executable,string[] arguments,IDictionary overrides) {
         var owned=new WvdTraceProcess();
         IntPtr readOut=IntPtr.Zero,writeOut=IntPtr.Zero,readErr=IntPtr.Zero,writeErr=IntPtr.Zero;
         IntPtr readIn=IntPtr.Zero,writeIn=IntPtr.Zero,attributes=IntPtr.Zero,handles=IntPtr.Zero,jobs=IntPtr.Zero;
-        var info=new ProcessInfo(); bool initialized=false;
+        var info=new ProcessInfo(); bool initialized=false; IntPtr environment=IntPtr.Zero;
         try {
+            // Pass an explicit Unicode child environment; never mutate the
+            // collector's or user's global TEMP/cache/symbol settings.
+            var variables=new SortedDictionary<string,string>(StringComparer.OrdinalIgnoreCase);
+            foreach(DictionaryEntry entry in Environment.GetEnvironmentVariables())
+                variables[(string)entry.Key]=(string)entry.Value;
+            foreach(DictionaryEntry entry in overrides) {
+                var name=(string)entry.Key; var value=(string)entry.Value;
+                if(name.Length==0 || name.IndexOfAny(new[]{'=', '\0'})>=0 || value.IndexOf('\0')>=0)
+                    throw new ArgumentException("TRACE_CHILD_ENVIRONMENT_INVALID");
+                variables[name]=value;
+            }
+            var block=new StringBuilder();
+            foreach(var entry in variables) block.Append(entry.Key).Append('=').Append(entry.Value).Append('\0');
+            block.Append('\0'); environment=Marshal.StringToHGlobalUni(block.ToString());
             owned.job=CreateJobObjectW(IntPtr.Zero,null); Check(owned.job!=IntPtr.Zero,"TRACE_JOB_CREATE_FAILED");
             var limits=new ExtendedLimit(); limits.basic.flags=0x2000;
             Check(SetInformationJobObject(owned.job,9,ref limits,Marshal.SizeOf<ExtendedLimit>()),"TRACE_JOB_LIMIT_FAILED");
@@ -110,7 +126,7 @@ public sealed class WvdTraceProcess : IDisposable {
                 arguments.Length==4 && arguments[0]=="/d" && arguments[1]=="/s" && arguments[2]=="/c")
                 command.Append(" /d /s /c \"").Append(arguments[3]).Append('"');
             else foreach(var argument in arguments) command.Append(' ').Append(Quote(argument));
-            Check(CreateProcessW(executable,command,IntPtr.Zero,IntPtr.Zero,true,0x08080004,IntPtr.Zero,null,ref startup,out info),"TRACE_CHILD_CREATE_FAILED");
+            Check(CreateProcessW(executable,command,IntPtr.Zero,IntPtr.Zero,true,0x08080404,environment,null,ref startup,out info),"TRACE_CHILD_CREATE_FAILED");
             owned.process=Process.GetProcessById((int)info.pid);
             owned.nativeProcess=info.process; info.process=IntPtr.Zero;
             owned.StandardOutput=new FileStream(new SafeFileHandle(readOut,true),FileAccess.Read,16384,false); readOut=IntPtr.Zero;
@@ -126,6 +142,7 @@ public sealed class WvdTraceProcess : IDisposable {
             if(attributes!=IntPtr.Zero) Marshal.FreeHGlobal(attributes);
             if(handles!=IntPtr.Zero) Marshal.FreeHGlobal(handles);
             if(jobs!=IntPtr.Zero) Marshal.FreeHGlobal(jobs);
+            if(environment!=IntPtr.Zero) Marshal.FreeHGlobal(environment);
         }
     }
     public void Kill(bool tree) { CloseOwnedTree(); }

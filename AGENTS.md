@@ -8,7 +8,7 @@
 - 接手先读 [当前事实](docs/project-status.md)、[本轮收束计划](docs/work-packages/consolidation-20261026.md) 及 [任务登记](docs/work-packages/consolidation-20261026-tasks.json)，再读 `docs/execution-notes.md` 中与当前任务相关的条目；历史交接只作证据，不反复全文加载。
 - 只推进本轮任务规定的文件、调用链、数据与验收范围；新发现的问题先登记证据和依赖，不自行扩大到架构、接口、技术栈、上游同步或其他项目。
 - 已有会话授权按其真实范围继续执行，不重复要求用户批准同一动作；方案文档、历史授权和已完成状态本身不新增清理正式历史、停服务、运行游戏、发布或推送权限。
-- 开始产出前明确输出路径、预计文件/字节增量、必要证据及结束后的去向。逻辑大小、FileID去重内容量、实际分配与可回收量分开报告，未知值不作零值。
+- 开始产出前明确输出路径、预计文件/字节增量、必要证据及结束后的去向。项目生成的缓存及临时产物放在项目`next/.local/`或本轮明确的输出目录，不在C盘等盘符根目录散建SymCache或其他缓存目录；第三方诊断工具也须显式指定缓存位置。逻辑大小、FileID去重内容量、实际分配与可回收量分开报告，未知值不作零值。
 - 复用证据须核产品输入、相关二进制、依赖及适用条件；纯文档HEAD变化本身不要求重新构建。真实受影响行为仍需对应验证，不能用无关历史PASS替代。
 - 构建入口仍为 `next/tools/build.py`，冻结打包为 `next/tools/package_functional.py`；`automationd`、`test_head_response` 位于 `next/build/Release/`，其他原生合同测试位于 `next/build/native/Release/`。构建、打包、部署和实机通过分别记录。
 - 在 `next/` 执行定向离线回归：`python tools/run_contracts.py --module <模块> --output .local/<本轮新目录>`，可先 `--plan`。只选择本次实际影响的模块；文档过滤已与source_identity对齐，细则见执行注意项，不能把计划输出直接当作合理验证范围。

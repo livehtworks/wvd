@@ -2,7 +2,7 @@
 [CmdletBinding()]
 param([Parameter(Mandatory)][string]$EvidenceRoot,[Parameter(Mandatory)][string]$PdbPath,
       [ValidateSet('analyze','inspect-incomplete')][string]$Mode='analyze',
-      [string]$AnalyzerPath=(Join-Path $PSScriptRoot 'heap_analyzer/bin/Release/net8.0/HeapAnalyzer.exe'),
+      [string]$AnalyzerPath=(Join-Path $PSScriptRoot '../build/dotnet/bin/HeapAnalyzer/Release/net8.0/HeapAnalyzer.exe'),
       [ValidatePattern('^[a-zA-Z0-9-]{1,64}$')][string]$OutputName='analysis-direct',
       [ValidateRange(128,4096)][int]$MemoryMiB=1024)
 $ErrorActionPreference='Stop'

@@ -7,8 +7,10 @@ import shutil
 import subprocess
 import sys
 import base64
+import argparse
 from datetime import datetime, timezone
 import package_functional
+from tool_environment import tool_environment
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -54,7 +56,8 @@ def run(name, command, cwd=ROOT, timeout_seconds=1200):
     script += " -TimeoutSeconds " + str(int(timeout_seconds)) + " -OutputLimit 67108864"
     encoded = base64.b64encode(script.encode("utf-16-le")).decode("ascii")
     result = subprocess.run([pwsh, "-NoProfile", "-EncodedCommand", encoded], cwd=cwd,
-                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=timeout_seconds + 15)
+                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=timeout_seconds + 15,
+                            env=tool_environment(ROOT))
     if result.returncode:
         print(result.stdout.decode("utf-8", errors="replace")[-2000:])
         if log.exists():
@@ -73,7 +76,8 @@ def build():
     for name, executable in (("node", shutil.which("node")), ("npm", npm)):
         if not executable:
             raise RuntimeError("找不到 " + name)
-        version = subprocess.check_output([executable, "--version"], text=True).strip().removeprefix("v")
+        version = subprocess.check_output([executable, "--version"], text=True,
+                                          env=tool_environment(ROOT)).strip().removeprefix("v")
         if version != lock["toolchain"][name]:
             raise RuntimeError(f"{name} 需要 {lock['toolchain'][name]}，实际 {version}")
     cmake = cmake_path()
@@ -90,9 +94,19 @@ def build():
     print("Maa-free Windows candidate ready; legacy wvd.exe/config/mod untouched.")
 
 
+def build_heap_analyzer():
+    project = ROOT / "tools/heap_analyzer/HeapAnalyzer.csproj"
+    run("heap-restore", ["dotnet", "restore", project, "--locked-mode",
+                         "--source", "https://api.nuget.org/v3/index.json"])
+    run("heap-build", ["dotnet", "build", project, "-c", "Release", "--no-restore"])
+
+
 if __name__ == "__main__":
     try:
-        build()
+        parser = argparse.ArgumentParser(description=__doc__)
+        parser.add_argument("--heap-analyzer", action="store_true", help="Build only the offline heap analysis tool")
+        args = parser.parse_args()
+        build_heap_analyzer() if args.heap_analyzer else build()
     except (OSError, RuntimeError, subprocess.SubprocessError) as error:
         print(str(error), file=sys.stderr)
         sys.exit(1)

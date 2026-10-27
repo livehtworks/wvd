@@ -1,0 +1,8 @@
+<Project>
+  <PropertyGroup Condition="'$(MSBuildProjectExtension)' == '.csproj'">
+    <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)build/dotnet/obj/$(MSBuildProjectName)/</BaseIntermediateOutputPath>
+    <BaseOutputPath>$(MSBuildThisFileDirectory)build/dotnet/bin/$(MSBuildProjectName)/</BaseOutputPath>
+    <RestorePackagesPath>$(MSBuildThisFileDirectory).local/cache/nuget</RestorePackagesPath>
+    <DefaultItemExcludes>$(DefaultItemExcludes);**/bin/**;**/obj/**</DefaultItemExcludes>
+  </PropertyGroup>
+</Project>

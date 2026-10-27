@@ -7,6 +7,7 @@ from pathlib import Path
 import tarfile
 import urllib.request
 from dependency_tree import verify_consumed_tree
+from tool_environment import PATHS, checked_directory
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -21,11 +22,13 @@ def prepare(readonly=False):
     cache = Path(
         os.environ.get(
             "WVD_NEXT_CACHE",
-            Path(os.environ.get("LOCALAPPDATA", Path.home() / ".cache"))
-            / "WvdNext/dependencies",
+            checked_directory(ROOT, PATHS["WVD_NEXT_CACHE"], create=False),
         )
     )
-    cache.mkdir(parents=True, exist_ok=True)
+    if cache.absolute() == Path(cache.absolute().anchor):
+        raise RuntimeError("DEPENDENCY_CACHE_MUST_NOT_BE_VOLUME_ROOT")
+    if not readonly:
+        cache.mkdir(parents=True, exist_ok=True)
     paths = {}
     consumed = {}
     for name in ("boost", "json"):

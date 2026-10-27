@@ -860,6 +860,66 @@
     "candidate_exe_sha256": "ea388844b1788e73710dd2333092aa7567f4d6dc0cb2ed2c7c3cba75fed09ecb",
     "source_commit": "2af5cc0d94c1eb16ac0bc2ae5d7ebebeaf824bab",
     "test_retirement": "43 owned roots/1169 regularfiles/1060701 logical bytes moved same-volume; small evidence retained.18 earlier namespace sources missing/unresolved, not counted as moved.",
-    "previous_candidates": "2 registered previous candidates retained: no applicable independent original retirement entry; complete lease/symbol recovery binding not yet verified; no speculative deletion."
+    "previous_candidates": "2 registered previous candidates retained: no applicable independent original retirement entry; complete lease/symbol recovery binding not yet verified; no speculative deletion.",
+    "symbol_cache_cleanup": {
+      "state": "relocated_and_verified",
+      "source": "C:/SymCache",
+      "source_absent": true,
+      "destination": "D:/programcode/python/wvd/next/.local/symbol-cache/legacy-wpa-20261006",
+      "files": 2,
+      "logical_bytes": 27732392,
+      "all_sha256_match": true,
+      "formal_service_or_data_changed": false,
+      "evidence": "next/.local/consolidation-261026/symbol-cache-relocation-20261027.json"
+    }
+  },
+  "root_artifact_audit_20261028": {
+    "checked_roots": [
+      "C:/",
+      "D:/",
+      "E:/",
+      "F:/",
+      "G:/",
+      "S:/"
+    ],
+    "immediate_entries": 149,
+    "root_errors": [],
+    "confirmed_project_owned_loose_artifacts": 0,
+    "moved_items": 0,
+    "deleted_items": 0,
+    "formal_service_calls": 0,
+    "previous_C_SymCache_absent": true,
+    "previous_cache_two_files_sha256_intact": true,
+    "unconfirmed_empty_cache": "D:/SymCache retained without ownership proof",
+    "evidence": "next/.local/root-artifact-audit-20261028/summary.json",
+    "cache_path_cause": {
+      "confirmed_old_config_gap": "1c89a08 export_memory_stacks sets _NT_SYMBOL_PATH/report output but omits _NT_SYMCACHE_PATH; WPA documented fallback is executable-drive root",
+      "C_exact_creator_receipt": "not retained; artifacts/mechanism consistent",
+      "D_exact_creator": "unconfirmed",
+      "current_analyzer_cache": "explicit output/symcache",
+      "evidence": "next/.local/root-artifact-audit-20261028/cache-path-provenance.json"
+    }
+  },
+  "tool_output_paths_20261028": {
+    "implemented": true,
+    "locally_verified": true,
+    "scope": "Current next/tools build/dependency/diagnostic subprocess paths and managed outputs; no runtime migration",
+    "configuration": "next/tools/tool-paths.json",
+    "report": "docs/reviews/tool-output-paths-20261028.md",
+    "evidence": "docs/reviews/evidence/tool-output-paths-20261028-summary.json",
+    "validation": {
+      "distinct_python_passed": 36,
+      "process_guards_passed": 19,
+      "real_tool_probes_passed": true,
+      "protected_files_unchanged": 46
+    },
+    "historical_extra_fixture_failure": "test_delivery_preflight.py lacks current OCR lock/hash, unchanged and recorded; not claimed PASS",
+    "delivery_remote": "fork",
+    "exclude": [
+      ".vscode"
+    ],
+    "formal_service_changed": false,
+    "loop_started": false,
+    "online_ci_started": false
   }
 }

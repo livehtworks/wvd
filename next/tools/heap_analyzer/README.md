@@ -5,8 +5,7 @@ Microsoft TraceProcessor 1.12.10 is pinned by `packages.lock.json`. HeapSnapshot
 buffered SDK data source, not a streaming or constant-memory implementation.
 
 ```powershell
-dotnet restore next/tools/heap_analyzer/HeapAnalyzer.csproj --locked-mode --source https://api.nuget.org/v3/index.json
-dotnet build next/tools/heap_analyzer/HeapAnalyzer.csproj --no-restore -c Release
+python next/tools/build.py --heap-analyzer
 next/tools/export_memory_stacks.ps1 -EvidenceRoot <evidence> -PdbPath <matching-pdb>
 ```
 
@@ -16,6 +15,12 @@ input hash, EXE/PDB GUID/Age/hash, tool hashes, SDK version and budget before wo
 The analyzer checks one process instance and pointer width and binds each snapshot
 by its actual timestamp, not by its ordinal position in a list. Missing SDK create
 time remains unknown; only actual OS before/after capture evidence can supplement it.
+
+The build entry sets child-only TEMP/TMP, npm, .NET/NuGet and SymCache locations
+from `next/tools/tool-paths.json`; user and system environment settings stay unchanged.
+`next/Directory.Build.props` places .NET intermediates and binaries under
+`next/build/dotnet/obj/<project>/` and `next/build/dotnet/bin/<project>/`.
+The default analyzer is `next/build/dotnet/bin/HeapAnalyzer/Release/net8.0/HeapAnalyzer.exe`.
 
 Defaults: 120 seconds, 1024 MiB private commit, 128 MiB output, system commit below
 98%. Windows Job Object enforces the analyzer commit limit before ETL reading;

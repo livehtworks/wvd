@@ -1,0 +1,13 @@
+{
+  "TEMP": ".local/tmp",
+  "TMP": ".local/tmp",
+  "TMPDIR": ".local/tmp",
+  "npm_config_cache": ".local/cache/npm",
+  "DOTNET_CLI_HOME": ".local/cache/dotnet-cli",
+  "NUGET_PACKAGES": ".local/cache/nuget",
+  "NUGET_HTTP_CACHE_PATH": ".local/cache/nuget-http",
+  "NUGET_PLUGINS_CACHE_PATH": ".local/cache/nuget-plugins",
+  "_NT_SYMCACHE_PATH": ".local/cache/symcache",
+  "PYTHONPYCACHEPREFIX": ".local/cache/pycache",
+  "WVD_NEXT_CACHE": ".local/cache/headers"
+}

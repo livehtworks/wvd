@@ -8,6 +8,7 @@ import subprocess
 import urllib.request
 import zipfile
 from dependency_tree import verify_consumed_tree
+from tool_environment import tool_environment
 
 ROOT = Path(__file__).resolve().parents[1]
 CACHE = ROOT / ".local/native-deps"
@@ -76,7 +77,7 @@ def prepare(readonly=False):
                                 "opencv/build/include/*",
                                 "opencv/build/x64/vc16/lib/opencv_world4120.lib",
                                 "opencv/build/x64/vc16/bin/opencv_world4120.dll"], check=True,
-                               stdout=subprocess.DEVNULL)
+                               stdout=subprocess.DEVNULL, env=tool_environment(ROOT))
             consumed[item["id"]] = verify_consumed_tree(archive, item["sha256"], CACHE / "opencv-unpacked",
                                  extract_opencv, "opencv/build/include/opencv2/opencv.hpp", readonly=readonly,
                                  consumed=lambda name: name.startswith("opencv/build/include/") or name in {

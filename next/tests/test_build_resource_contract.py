@@ -129,9 +129,34 @@ class BuildResourceContract(unittest.TestCase):
                     tools = isolated / "tools"
                     tools.mkdir()
                     source = Path(__file__).resolve().parents[1] / "tools"
-                    for name in ("memory_trace_support.psm1", "bounded_trace_output.cs", "owned_trace_process.cs"):
+                    for name in ("memory_trace_support.psm1", "bounded_trace_output.cs", "owned_trace_process.cs", "tool-paths.json"):
                         (tools / name).write_bytes((source / name).read_bytes())
                     build.run("short-owned", [sys.executable, "-c", "print('owned')"], cwd=isolated, timeout_seconds=5)
+                    # Exercise the real CreateProcess environment block and a
+                    # real descendant, including Unicode; no mocked launcher.
+                    probe = (
+                        "import json,os,pathlib,subprocess,sys,tempfile;"
+                        "fd,name=tempfile.mkstemp(prefix='路径-');os.close(fd);p=pathlib.Path(name);"
+                        "print(json.dumps({'temp':str(p),'symcache':os.environ['_NT_SYMCACHE_PATH'],"
+                        "'npm':os.environ['npm_config_cache'],'nuget':os.environ['NUGET_PACKAGES'],"
+                        "'unicode':os.environ['WVD_PATH_TEST_UNICODE']}));"
+                        "subprocess.run([sys.executable,'-c',\"import os;print('descendant='+os.environ['TEMP'])\"],check=True)"
+                    )
+                    before = dict(os.environ)
+                    with patch.dict(os.environ, {"WVD_PATH_TEST_UNICODE": "路径-验证", "TEMP": "C:/wrong-temp",
+                                                 "TMP": "C:/wrong-temp", "npm_config_cache": "C:/wrong-cache"}):
+                        expected_parent = dict(os.environ)
+                        build.run("path-probe", [sys.executable, "-c", probe], cwd=isolated, timeout_seconds=10)
+                        self.assertEqual(dict(os.environ), expected_parent)
+                    self.assertEqual(dict(os.environ), before)
+                    log = next((isolated / ".local/logs").glob("path-probe-*.log")).read_text(encoding="utf-8")
+                    result = next(json.loads(line) for line in log.splitlines() if line.startswith("{"))
+                    self.assertTrue(Path(result["temp"]).is_relative_to(isolated / ".local/tmp"))
+                    self.assertTrue(Path(result["temp"]).is_file())
+                    for key in ("symcache", "npm", "nuget"):
+                        self.assertTrue(Path(result[key]).is_relative_to(isolated / ".local/cache"))
+                    self.assertEqual(result["unicode"], "路径-验证")
+                    self.assertIn("descendant=" + str(isolated / ".local/tmp"), log)
                     with self.assertRaisesRegex(RuntimeError, "exit="):
                         build.run("expired-owned", [sys.executable, "-c", "import time;time.sleep(60)"],
                                   cwd=isolated, timeout_seconds=1)

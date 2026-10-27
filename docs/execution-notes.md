@@ -2,6 +2,12 @@
 
 ## 本轮收束入口与验证边界
 
+- **工具子进程路径以执行配置为准。** `next/tools/tool-paths.json`由build.py和原Invoke-TraceTool共同读取，显式传递子进程TEMP/TMP、npm/.NET/NuGet/SymCache/Python缓存；不依赖父进程默认值，不修改全局环境。离线分析器使用`python next/tools/build.py --heap-analyzer`构建，实际输出为`next/build/dotnet/bin/HeapAnalyzer/Release/net8.0/`；collect/export/contracts已同步，旧工具旁bin/obj不再加载。CDB缓存默认本轮证据目录内，越界在服务查询前拒绝。固定头文件默认`.local/cache/headers/`，搬迁已核锁定消费身份相同；普通用户npm/NuGet缓存可能属于其他项目，不能据此整体清理。详细验证及旧夹具失败见[整改报告](reviews/tool-output-paths-20261028.md)。
+
+- **符号缓存不得依赖工具的盘根默认目录。** `C:/SymCache`曾留下WVD两个旧`.symcache`派生文件，共27,732,392B；2026-10-27已整体迁入`next/.local/symbol-cache/legacy-wpa-20261006/`，逐文件SHA256相同，原路径不存在，回执为`next/.local/consolidation-261026/symbol-cache-relocation-20261027.json`。现有heap analyzer显式使用本轮output下的symcache，capture_idle_heap要求显式SymbolCache；未发现现行工具硬编码C:/SymCache，未改系统环境变量。后续调用也显式指定项目内缓存，不再使用盘根默认值；旧派生缓存不是正式配对PDB，正式符号保全路径不变。
+
+  2026-10-28已核历史缺口：`1c89a08`的旧`export_memory_stacks.ps1`设置了`_NT_SYMBOL_PATH`和报告`-outputfolder`/监测`OutputRoot`，却没有设置独立的`_NT_SYMCACHE_PATH`。[WPA官方规则](https://learn.microsoft.com/en-us/windows-hardware/test/wpt/loading-symbols)明确后者未设/为空时回退到工具所在盘根SymCache；主输出目录和工作目录都不能代替这项设置。此机制与原C盘WVD缓存及时间吻合，但缺少原创建进程回执，不能虚构具体命令；D盘空目录来源仍未证实。现行TraceProcessor入口已显式传入本轮`output/symcache`，不恢复已退出的WPA旧链。后续外部工具的输出规划须同时覆盖主结果、独立缓存、构建中间件及退出去向，不能只监测主输出目录就宣称所有写入受控。依据在`next/.local/root-artifact-audit-20261028/cache-path-provenance.json`。
+
 - 本轮范围、顺序、完成条件以 [收束计划](work-packages/consolidation-20261026.md) 及 [任务登记](work-packages/consolidation-20261026-tasks.json) 为准；先查 [当前事实](project-status.md)，再读下方有关条目。下方历史记录保留当时日期与证据，不把旧PID、旧批次或曾获授权当成当前现场及新动作许可。
 - **文档选择器已修并定向验证。** `run_contracts.select_modules()`与`source_identity()`排除`docs/`、`next/docs/`及任意层README.md/AGENTS.md；真实Git的文档、暂存/未跟踪及混合源码场景已验证。真实源码、资源、依赖或合同入口变更仍按实际影响验证，计划输出不能替代对应行为验收。
 - `source_identity()`区分产品输入与文档来源；文档HEAD改变不等于产品二进制失效。复用既有证据须核适用的输入/二进制/依赖身份和验收范围；无法证明的部分标未验，不因此无预算重建全部夹具。全新隔离根仍是测试隔离要求，结束后的大夹具去向按同一任务记录，不能靠复用污染目录或删弱真实边界节约成本。

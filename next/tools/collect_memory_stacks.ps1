@@ -6,7 +6,7 @@ param(
     [Parameter(Mandatory)][string]$CandidateRoot,
     [Parameter(Mandatory)][string]$DataRoot,
     [Parameter(Mandatory)][string]$PdbPath,
-    [string]$AnalyzerPath = (Join-Path $PSScriptRoot 'heap_analyzer/bin/Release/net8.0/HeapAnalyzer.exe'),
+    [string]$AnalyzerPath = (Join-Path $PSScriptRoot '../build/dotnet/bin/HeapAnalyzer/Release/net8.0/HeapAnalyzer.exe'),
     [ValidateRange(1024, 65535)][int]$Port = 17654,
     [string]$TaskRequestPath,
     [string]$BatchRequestId,

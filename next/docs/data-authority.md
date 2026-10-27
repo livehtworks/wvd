@@ -1,5 +1,7 @@
 # 当前数据权威
 
+工具状态单独由`tools/tool-paths.json`定义构建/诊断子进程的项目内临时与缓存位置，落在`next/.local/tmp`和`.local/cache`；`.local/dependencies.json`仅为锁定头文件缓存的派生构建路径，不是用户配置或业务权威。.NET派生输出及obj位于`next/build/dotnet/`，不参与源码加载。维护这些工具状态不能改写正式profile、workflows、requests或runs；具体执行证据见[2026-10-28整改](../../docs/reviews/tool-output-paths-20261028.md)。
+
 统一入口为 [根数据职责](../../docs/data-authority.md)；本页补充具体字段与消费关系，沿用同一运行和生命周期所有者。现行职责按 `179cfd851877cba2f2df401d86a905ff9ae088f6` 核对，本地数量/服务状态仅引用2026-10-26盘点。后续保留与归档整改见 [收束计划](../../docs/work-packages/consolidation-20261026.md) 及 [任务登记](../../docs/work-packages/consolidation-20261026-tasks.json)；文档补全不代表已实现回收或改变正式数据保存规则。
 
 下表保留正式部署的数据解释。新候选源码另已实现`published/.asset-sets/<digest>/payload`及其manifest，派生资源集由NativePublisher唯一写入，BundleLease组合冻结并供Service/OCR/运行会话消费；请求自己的program/flow.json、identity.json及publication-layout.json保留身份和集合绑定。该候选已通过限定离线验收，但未部署或转换正式历史；C09继续保护原requests/runs权威，不增加归档数据库或另一份索引权威。

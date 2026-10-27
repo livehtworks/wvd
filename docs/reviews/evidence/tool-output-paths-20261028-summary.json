@@ -1,0 +1,170 @@
+{
+  "at": "2026-10-28T00:50:01.686800+08:00",
+  "product_source": {
+    "source_commit": "45b9b691611eeb5ca3b113c12940a17867e0aa2a",
+    "product_inputs_sha256": "469f8e6c90db5d7a70c180cce83853347df14fac481d6318db2f888cacc9c3c3",
+    "product_input_count": 1348,
+    "documentation_sha256": "5d578fb7c3a4d071b5c1f339ff1b91158f42058ccb116f25753558072d381b1d"
+  },
+  "tool_path_config_sha256": "2063eb4107bd7dbf1cac9ed423def96acbdb096beecebbaa0211c1afeed3b94a",
+  "python_tool_ast_files": 20,
+  "powershell_tool_syntax_files": 8,
+  "distinct_python_contracts_passed": 36,
+  "existing_process_guards_passed": 19,
+  "actual_tool_probes": [
+    "npm cache verify and config path",
+    "HeapAnalyzer restore/build and aggregation",
+    "analyzer_budget build and UTF8/Job budget",
+    "two MSBuild output/obj/package path properties",
+    "native CMake configure without product compile",
+    "locked consumed header identity unchanged after relocation"
+  ],
+  "protected_file_hashes_unchanged": 46,
+  "native_product_rebuilt": false,
+  "formal_service_calls": 0,
+  "formal_data_written": false,
+  "loop_started": false,
+  "online_ci_started": false,
+  "actions_repository_enabled": false,
+  "old_managed_roots_retired": 4,
+  "stale_header_extract_retired": 1,
+  "known_failed_extra_check": {
+    "path": "next/tests/test_delivery_preflight.py",
+    "unittest_attempt": "no tests ran; failed",
+    "script_attempt": "historical fixture missing current OCR lock/hash; failed before build acceptance",
+    "file_unchanged": true,
+    "production_validation_not_weakened": true
+  },
+  "evidence": [
+    {
+      "path": "next/.local/tool-path-audit-20261028/before.json",
+      "bytes": 11300,
+      "sha256": "a972f6dc6621912d16f430a8957f4061a24b7fde4628ead1ac21b90f748e4fbf"
+    },
+    {
+      "path": "next/.local/tool-path-audit-20261028/python-contracts.log",
+      "bytes": 6591,
+      "sha256": "1bea3b3a32635069b4b2cf2cda24fba32f5034f5be5c802c20270ff8cbe04334"
+    },
+    {
+      "path": "next/.local/tool-path-audit-20261028/cache-guard-contracts-final.log",
+      "bytes": 924,
+      "sha256": "4006569deeef322acec85673dad554e5d93b2fc4f08b73fb7f0936228b0c84ab"
+    },
+    {
+      "path": "next/.local/tool-path-audit-20261028/final-environment-contracts.log",
+      "bytes": 1530,
+      "sha256": "b45b11eee9a579447274ea45b2645fddf6877231413046dcb703a7e58ffdd3df"
+    },
+    {
+      "path": "next/.local/tool-path-audit-20261028/heap-build-entry.log",
+      "bytes": 202,
+      "sha256": "276bb90958d99f9c052ae04ef35f46723e39ed9d5f8d958cb5608df772333a7a"
+    },
+    {
+      "path": "next/.local/tool-path-audit-20261028/additional-contracts.log",
+      "bytes": 829,
+      "sha256": "1a92a7cded8420c4b45676919cf90979353cc5b4e194df84f49a4c09370f8a39"
+    },
+    {
+      "path": "next/.local/tool-path-audit-20261028/real-tool-probes.log",
+      "bytes": 1710,
+      "sha256": "fc717010985871fd64a194d75d525fa4af61994f18bd58b16133f1d93fb293c7"
+    },
+    {
+      "path": "next/.local/tool-path-audit-20261028/budget-tool.log",
+      "bytes": 232,
+      "sha256": "c1ac56563fa5918aaadd0167f234927a38d2e360f01e4a24930d0b22d7fff829"
+    },
+    {
+      "path": "next/.local/tool-path-audit-20261028/header-cache-before.json",
+      "bytes": 615,
+      "sha256": "950ec17aa700488ecb0644d96ee15c346245f197f6e2392dfa480dd9b0c52723"
+    },
+    {
+      "path": "next/.local/tool-path-audit-20261028/header-cache-after.json",
+      "bytes": 338,
+      "sha256": "307a9fc79073b5ed0c081449bf3f6ea079446703c84dc44adfc7c9d1975fcb35"
+    },
+    {
+      "path": "next/.local/tool-path-audit-20261028/old-dotnet-retirement.json",
+      "bytes": 3822,
+      "sha256": "bde85b789754705b2313aad833f1c202cf5f7787d843796a294bbf5b7ffe5413"
+    },
+    {
+      "path": "next/.local/tool-path-audit-20261028/stale-header-extract.json",
+      "bytes": 611,
+      "sha256": "c882201090426eeabb4f2883f7323671e6e01c7ce66af6f19004b17475b0641c"
+    },
+    {
+      "path": "next/.local/tool-path-audit-20261028/final-verification.json",
+      "bytes": 255,
+      "sha256": "fecc02488119f9de43e9c0abd62b4a99bfad6b363022855113fbb3a23ed1b081"
+    },
+    {
+      "path": "next/.local/tool-path-audit-20261028/python-tool-inventory.json",
+      "bytes": 2805,
+      "sha256": "441a0ee0330e6ac454f2c45002d01fbaafd2b8df7ec6956d80f16fd79aeffa86"
+    },
+    {
+      "path": "next/.local/tool-path-audit-20261028/trace-guards/results.json",
+      "bytes": 2417,
+      "sha256": "f6ebe2dcaecb09187223885b2b44e60865bbddc28e27b4d861fb273707a86990"
+    },
+    {
+      "path": "next/.local/logs/path-budget-build-20261027T163113715098.log",
+      "bytes": 359,
+      "sha256": "e3556d315090801438303f8c7179f9f31f53e78551c6adf0b109ee128e82affe"
+    },
+    {
+      "path": "next/.local/logs/path-budget-contract-20261027T163119729874.log",
+      "bytes": 125,
+      "sha256": "ef77ed185668b8d620e813af40ac774ae2c7acf14a8a6eebbceff259fde13bba"
+    },
+    {
+      "path": "next/.local/logs/path-delivery-cli-20261027T162756568925.log",
+      "bytes": 768,
+      "sha256": "14c7bf36054b427aa42f5c86d10d3b1c523907124212ef7b29205880d89e3da0"
+    },
+    {
+      "path": "next/.local/logs/path-delivery-contracts-20261027T162623154657.log",
+      "bytes": 113,
+      "sha256": "b0281afc5a8f851fedc2bba09c88d720f4dcc47a2a487e40928c779cb967ff8c"
+    },
+    {
+      "path": "next/.local/logs/path-heap-aggregation-20261027T162755003259.log",
+      "bytes": 146,
+      "sha256": "021bf19cba6f1039fe193f9923faf4ce6786083be0856d97676ae5c6eddf7819"
+    },
+    {
+      "path": "next/.local/logs/path-managed-properties-analyzer_budget-20261027T164100875138.log",
+      "bytes": 319,
+      "sha256": "ef3547aeb41b4e8d59b7a6f6732a5dfb0292aff9d7d92ef18133dc0a3e66da01"
+    },
+    {
+      "path": "next/.local/logs/path-managed-properties-HeapAnalyzer-20261027T164058659632.log",
+      "bytes": 313,
+      "sha256": "beb3e4a46387106b96a960cf0c8d1a35b15f2cdcce1ffba05f1bbe89f7a255ee"
+    },
+    {
+      "path": "next/.local/logs/path-native-configure-20261027T164044432344.log",
+      "bytes": 203,
+      "sha256": "2055e4cb628a6f7433ccecb9546a3fc84a60e549d9a289e1c04d5bdc9a3ae576"
+    },
+    {
+      "path": "next/.local/logs/path-npm-cache-20261027T162745445232.log",
+      "bytes": 155,
+      "sha256": "1d22acf4943c034ac7531da25d9086707ddff91ccdb6a54ae9eb166fa87e6f3e"
+    },
+    {
+      "path": "next/.local/logs/path-npm-location-20261027T162752930257.log",
+      "bytes": 48,
+      "sha256": "f536212c342cbec8e8f08c855df338f7956c1f3350195fc72be8fd436b7243cc"
+    },
+    {
+      "path": "next/.local/logs/path-trace-guards-20261027T162610741938.log",
+      "bytes": 34,
+      "sha256": "f920b2b2f6c4258408da832fda4d7dd2fdace4972747c275e778cbecabd4b670"
+    }
+  ]
+}

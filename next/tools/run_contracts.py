@@ -411,7 +411,7 @@ def execute(modules, output):
                 "-p", "test_*analysis.py"], timeout_seconds=120)
             proof("resource-tools", [sys.executable, "-m", "unittest", "discover", "-s", "tests",
                 "-p", "test_build_resource_contract.py"], timeout_seconds=120)
-            for pattern in ("test_contract_artifact_lifecycle.py", "test_diagnostic_io.py", "test_crash_plan_contract.py", "test_service_binding_contract.py"):
+            for pattern in ("test_contract_artifact_lifecycle.py", "test_diagnostic_io.py", "test_crash_plan_contract.py", "test_service_binding_contract.py", "test_tool_environment.py"):
                 proof(pattern, [sys.executable, "-m", "unittest", "discover", "-s", "tests",
                     "-p", pattern], timeout_seconds=150 if pattern == "test_service_binding_contract.py" else 120)
             for script in ("verify_bounded_trace_input.ps1", "verify_measurement_endpoints.ps1", "verify_trace_guards.ps1"):
@@ -425,13 +425,13 @@ def execute(modules, output):
                 "--packages", ROOT / ".local/cache/nuget"], timeout_seconds=120)
             proof("heap-build", ["dotnet", "build", ROOT / "tools/heap_analyzer/HeapAnalyzer.csproj",
                 "-c", "Release", "--no-restore"], timeout_seconds=120)
-            heap_root = ROOT / "tools/heap_analyzer/bin/Release/net8.0"
+            heap_root = ROOT / "build/dotnet/bin/HeapAnalyzer/Release/net8.0"
             heap_identity = {}
             for name in ("HeapAnalyzer.exe", "HeapAnalyzer.dll", "HeapAnalyzer.deps.json", "HeapAnalyzer.runtimeconfig.json"):
                 with (heap_root / name).open("rb") as source:
                     heap_identity[name] = hashlib.file_digest(source, "sha256").hexdigest()
             receipt["tool_binaries"] = heap_identity
-            proof("heap-aggregation", [ROOT / "tools/heap_analyzer/bin/Release/net8.0/HeapAnalyzer.exe",
+            proof("heap-aggregation", [heap_root / "HeapAnalyzer.exe",
                 "--aggregation-contract", output / "heap-aggregation"], timeout_seconds=120)
             for name, expected in heap_identity.items():
                 with (heap_root / name).open("rb") as source:
