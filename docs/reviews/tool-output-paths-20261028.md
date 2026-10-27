@@ -30,3 +30,11 @@
 额外尝试旧`test_delivery_preflight.py`时，首次以unittest调用未发现用例，随后按脚本入口执行，发现其原有夹具缺少后来新增的OCR锁/编译哈希，故失败。文件本轮未改，属历史夹具与现行校验失配；失败日志原样保留，没有跳过或伪造该脚本成功，也没有为修无关旧夹具放宽生产校验。本轮构建/目录/进程行为由上述实际入口和定向合同覆盖。
 
 证据摘要：[可核验摘要](evidence/tool-output-paths-20261028-summary.json)。原始小回执及日志在`next/.local/tool-path-audit-20261028/`和该摘要列出的`.local/logs/`路径。工具构建产物约15.89MiB，验证小产物不足1MiB；不保留新的完整生产快照。Actions仓库开关核对为false，仅推送个人远端，正式历史C09及T0关闭状态不因本轮工具整改改变。
+
+## 补做遗漏：旧AppData运行数据
+
+上一轮修复了工具缓存，却未将启动入口的默认运行数据及已遗留目录一并收束，这是检查遗漏。用户随后明确要求整树迁入trash：旧`C:/Users/thevil/AppData/Local/WvdNext`已同盘移动至`C:/trash/wvd-legacy-appdata-20261028/Users/thevil/AppData/Local/WvdNext`，65,147文件/9,759,357,869逻辑字节，无reparse点；根FileID与原profile/workflows哈希保持，原路径不存在。没有复制完整快照或永久删除，恢复清单在该trash根和项目`.local/legacy-appdata-retirement-20261028/manifest.json`。
+
+源码管理入口取消默认AppData路径：没有显式DataRoot或有效现存绑定时失败关闭，绑定目录已归档/缺失也不能默默重建，卷根路径拒绝；原生CLI已要求显式路径，无需另改执行器。15项真实管理脚本/隔离候选合同通过，随后新增卷根拒绝用例并扩展现有有效绑定省参复用断言，分别通过（当前16项不同用例）；没有删弱原有显式路径复用断言。正式进程PID47024/创建身份/EXE仍为原D盘实例，未发正式服务请求、未重打包或改写冻结候选、未启动循环或CI。这次归档不关闭仍待处理的D盘正式历史C09。
+
+本项的[独立补充证据](evidence/legacy-appdata-retirement-20261028-summary.json)保留目录迁移和各次验证范围；原始小回执留在项目控制目录，已退出的三个可重建测试payload根另移入D盘trash，不与C盘历史数据混放。

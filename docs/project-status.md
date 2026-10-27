@@ -2,6 +2,8 @@
 
 ## 本轮收束入口与状态
 
+- 2026-10-28按用户明确要求，旧`C:/Users/thevil/AppData/Local/WvdNext`整体同盘迁至`C:/trash/wvd-legacy-appdata-20261028/Users/thevil/AppData/Local/WvdNext`：65,147文件、9,759,357,869逻辑字节；根FileID及原配置/工作流SHA保持，原路径不存在，未永久删除。同盘迁移释放空间0。源码管理入口已取消AppData默认落点，首次运行须显式DataRoot；仅可复用仍存在的候选绑定，缺失绑定目录不自动重建。15项隔离管理合同及补充复用检查通过；当前D盘正式服务未停止/替换，已打包候选未改写。该旧目录归档不等于D盘正式C09历史处置完成，恢复清单在trash根及`next/.local/legacy-appdata-retirement-20261028/manifest.json`独立保留。
+
 - 2026-10-28已完成[工具输出路径整改](reviews/tool-output-paths-20261028.md)：构建/诊断子进程实际使用项目内TEMP及缓存，.NET输出统一到`next/build/dotnet/`；固定头文件缓存从用户目录迁入项目并核内容身份不变，旧bin/obj及遗留解压目录移入D盘trash。真实工具与定向合同通过，46份受保护文件SHA保持，未操作正式服务、循环或线上CI。原有旧交付预检夹具失败如实登记，不冒称全矩阵通过。
 
 - 2026-10-27按用户要求将盘根`C:/SymCache`的两份旧WVD符号派生缓存整体迁至`next/.local/symbol-cache/legacy-wpa-20261006/`，27,732,392B逐文件SHA一致。2026-10-28再查C/D/E/F/G/S六盘根目录，原C路径仍不存在、迁入两文件SHA保持；未找到其他可确认属于本项目的散落缓存/测试/构建产物。D盘另有空`SymCache`但归属未证实，保持原样；系统/其他项目/未知目录及链接不移动。证据见`next/.local/root-artifact-audit-20261028/summary.json`；本轮迁移/删除0项，未调用或修改正式服务。此项不代表C09正式处置或循环恢复授权。

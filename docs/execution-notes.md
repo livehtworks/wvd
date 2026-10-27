@@ -2,9 +2,11 @@
 
 ## 本轮收束入口与验证边界
 
+- **服务数据目录不再有AppData默认值。** 源码`manage_service.ps1`首次Start/Deploy需显式`-DataRoot`；后续省略时只能复用候选`service-launch.json`中仍存在的数据目录。缺路径/失效绑定/卷根路径在服务查询或创建数据目录前拒绝，Validate仍可不提供DataRoot。原生CLI本来就要求显式`--data-root`，不另加默认链。旧AppData全树已按用户指令迁入C盘trash，保留原始历史字节和恢复映射；不改写旧回执的绝对路径，不与当前D盘数据合并。源码已修复，旧冻结候选不回写、不假称已部署新规则。
+
 - **工具子进程路径以执行配置为准。** `next/tools/tool-paths.json`由build.py和原Invoke-TraceTool共同读取，显式传递子进程TEMP/TMP、npm/.NET/NuGet/SymCache/Python缓存；不依赖父进程默认值，不修改全局环境。离线分析器使用`python next/tools/build.py --heap-analyzer`构建，实际输出为`next/build/dotnet/bin/HeapAnalyzer/Release/net8.0/`；collect/export/contracts已同步，旧工具旁bin/obj不再加载。CDB缓存默认本轮证据目录内，越界在服务查询前拒绝。固定头文件默认`.local/cache/headers/`，搬迁已核锁定消费身份相同；普通用户npm/NuGet缓存可能属于其他项目，不能据此整体清理。详细验证及旧夹具失败见[整改报告](reviews/tool-output-paths-20261028.md)。
 
-- **符号缓存不得依赖工具的盘根默认目录。** `C:/SymCache`曾留下WVD两个旧`.symcache`派生文件，共27,732,392B；2026-10-27已整体迁入`next/.local/symbol-cache/legacy-wpa-20261006/`，逐文件SHA256相同，原路径不存在，回执为`next/.local/consolidation-261026/symbol-cache-relocation-20261027.json`。现有heap analyzer显式使用本轮output下的symcache，capture_idle_heap要求显式SymbolCache；未发现现行工具硬编码C:/SymCache，未改系统环境变量。后续调用也显式指定项目内缓存，不再使用盘根默认值；旧派生缓存不是正式配对PDB，正式符号保全路径不变。
+- **符号缓存不得依赖工具的盘根默认目录。** `C:/SymCache`曾留下WVD两个旧`.symcache`派生文件，共27,732,392B；2026-10-27已整体迁入`next/.local/symbol-cache/legacy-wpa-20261006/`，逐文件SHA256相同，原路径不存在，回执为`next/.local/consolidation-261026/symbol-cache-relocation-20261027.json`。现有heap analyzer显式使用本轮output下的symcache，capture_idle_heap的SymbolCache默认落在本轮证据目录内并检查显式路径边界；未发现现行工具硬编码C:/SymCache，未改系统环境变量。后续调用也显式指定项目内缓存，不再使用盘根默认值；旧派生缓存不是正式配对PDB，正式符号保全路径不变。
 
   2026-10-28已核历史缺口：`1c89a08`的旧`export_memory_stacks.ps1`设置了`_NT_SYMBOL_PATH`和报告`-outputfolder`/监测`OutputRoot`，却没有设置独立的`_NT_SYMCACHE_PATH`。[WPA官方规则](https://learn.microsoft.com/en-us/windows-hardware/test/wpt/loading-symbols)明确后者未设/为空时回退到工具所在盘根SymCache；主输出目录和工作目录都不能代替这项设置。此机制与原C盘WVD缓存及时间吻合，但缺少原创建进程回执，不能虚构具体命令；D盘空目录来源仍未证实。现行TraceProcessor入口已显式传入本轮`output/symcache`，不恢复已退出的WPA旧链。后续外部工具的输出规划须同时覆盖主结果、独立缓存、构建中间件及退出去向，不能只监测主输出目录就宣称所有写入受控。依据在`next/.local/root-artifact-audit-20261028/cache-path-provenance.json`。
 

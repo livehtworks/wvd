@@ -921,5 +921,23 @@
     "formal_service_changed": false,
     "loop_started": false,
     "online_ci_started": false
+  },
+  "legacy_appdata_retirement_20261028": {
+    "source": "C:\\Users\\thevil\\AppData\\Local\\WvdNext",
+    "destination": "C:\\trash\\wvd-legacy-appdata-20261028\\Users\\thevil\\AppData\\Local\\WvdNext",
+    "state": "moved_and_verified",
+    "files": 65147,
+    "logical_bytes": 9759357869,
+    "same_volume_space_reclaimed_bytes": 0,
+    "root_identity_preserved": true,
+    "profile_workflow_hashes_preserved": true,
+    "current_formal_service_changed": false,
+    "source_manager_appdata_default_removed": true,
+    "missing_binding_directory_not_recreated": true,
+    "validation": "15 isolated manager contracts plus existing-binding reuse and volume-root guards passed",
+    "packaged_candidates_modified": false,
+    "evidence": "next/.local/legacy-appdata-retirement-20261028/manifest.json",
+    "test_payloads_retired_to": "D:/trash/wvd-legacy-appdata-tests-20261028",
+    "original_failure": "Tool-output audit omitted previous runtime default and old AppData data root; now explicitly retired by user"
   }
 }

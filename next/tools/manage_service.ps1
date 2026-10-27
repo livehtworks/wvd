@@ -1,7 +1,7 @@
 ﻿param(
     [ValidateSet('Start', 'Stop', 'Deploy', 'Validate')][string]$Action = 'Start',
     [string]$CandidateRoot = (Split-Path -Parent $PSScriptRoot),
-    [string]$DataRoot = (Join-Path $env:LOCALAPPDATA 'WvdNext'),
+    [string]$DataRoot,
     [ValidateRange(1, 65535)][int]$Port = 17652,
     [ValidateRange(5, 600)][int]$WaitSeconds = 120,
     [switch]$OpenBrowser
@@ -146,11 +146,18 @@ $launch = $null
 if (Test-Path -LiteralPath $launchPath -PathType Leaf) {
     $launch = Get-Content -LiteralPath $launchPath -Raw -Encoding UTF8 | ConvertFrom-Json
     if ($launch.service -ne 'automationd') { throw 'INVALID_LAUNCH_SETTINGS' }
-    if (-not $PSBoundParameters.ContainsKey('DataRoot')) { $DataRoot = $launch.data_root }
+    if (-not $PSBoundParameters.ContainsKey('DataRoot')) {
+        if (-not $launch.data_root -or -not [IO.Directory]::Exists($launch.data_root)) {
+            throw 'SERVICE_BOUND_DATA_ROOT_MISSING'
+        }
+        $DataRoot = $launch.data_root
+    }
     if (-not $PSBoundParameters.ContainsKey('Port')) { $Port = [int]$launch.port }
     if ($Port -lt 1 -or $Port -gt 65535) { throw 'INVALID_LAUNCH_PORT' }
 }
+if ([string]::IsNullOrWhiteSpace($DataRoot)) { throw 'SERVICE_DATA_ROOT_REQUIRED' }
 $DataRoot = [IO.Path]::GetFullPath($DataRoot).TrimEnd('\', '/')
+if ($DataRoot -eq [IO.Path]::GetPathRoot($DataRoot).TrimEnd('\','/')) { throw 'SERVICE_DATA_ROOT_MUST_NOT_BE_VOLUME_ROOT' }
 $url = "http://127.0.0.1:$Port"
 
 function Read-Service {

@@ -200,6 +200,35 @@ class ServiceBindingContract(unittest.TestCase):
         self.assertIn(b"process_started=unconfirmed", result.stderr)
         self.assertEqual(self.binding.read_bytes(), self.before)
 
+    def test_missing_data_root_has_no_appdata_fallback(self):
+        self.binding.unlink()  # This test's own fresh candidate binding only.
+        command = self.command()
+        index = command.index("-DataRoot")
+        del command[index:index + 2]
+        result = subprocess.run(command, capture_output=True, timeout=20)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(b"SERVICE_DATA_ROOT_REQUIRED", result.stderr)
+        self.assertFalse((self.case / "new-data").exists())
+        self.assertFalse((self.candidate / "fixture-pids.txt").exists())
+
+    def test_missing_bound_data_root_is_not_recreated(self):
+        command = self.command()
+        index = command.index("-DataRoot")
+        del command[index:index + 2]
+        result = subprocess.run(command, capture_output=True, timeout=20)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(b"SERVICE_BOUND_DATA_ROOT_MISSING", result.stderr)
+        self.assertFalse((self.case / "old-data").exists())
+        self.assertEqual(self.binding.read_bytes(), self.before)
+        self.assertFalse((self.candidate / "fixture-pids.txt").exists())
+
+    def test_volume_root_is_rejected_before_launcher(self):
+        result = subprocess.run(self.command(data=Path(self.case.anchor)), capture_output=True, timeout=20)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(b"SERVICE_DATA_ROOT_MUST_NOT_BE_VOLUME_ROOT", result.stderr)
+        self.assertEqual(self.binding.read_bytes(), self.before)
+        self.assertFalse((self.candidate / "fixture-pids.txt").exists())
+
     def test_background_early_exit_preserves_previous_bytes(self):
         result = self.invoke("early_exit")
         self.assertNotEqual(result.returncode, 0)
@@ -228,6 +257,15 @@ class ServiceBindingContract(unittest.TestCase):
         after = self.binding.read_bytes(); self.assertNotEqual(after, self.before)
         second = subprocess.run(command, capture_output=True, timeout=30)
         self.assertEqual(second.returncode, 0, second.stderr.decode(errors="replace"))
+        self.assertEqual(self.binding.read_bytes(), after)
+        self.assertEqual(len((self.candidate / "fixture-pids.txt").read_text().splitlines()), 1)
+        # A known existing binding remains usable without repeating its paths.
+        implicit = list(command)
+        for option in ("-DataRoot", "-Port"):
+            index = implicit.index(option)
+            del implicit[index:index + 2]
+        third = subprocess.run(implicit, capture_output=True, timeout=30)
+        self.assertEqual(third.returncode, 0, third.stderr.decode(errors="replace"))
         self.assertEqual(self.binding.read_bytes(), after)
         self.assertEqual(len((self.candidate / "fixture-pids.txt").read_text().splitlines()), 1)
 

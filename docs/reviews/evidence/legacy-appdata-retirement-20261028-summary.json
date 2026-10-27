@@ -1,0 +1,44 @@
+{
+  "at": "2026-10-28T01:08:30.168235+08:00",
+  "old_data_source": "C:\\Users\\thevil\\AppData\\Local\\WvdNext",
+  "trash_destination": "C:\\trash\\wvd-legacy-appdata-20261028\\Users\\thevil\\AppData\\Local\\WvdNext",
+  "root_identity": [
+    12819636165312258475,
+    5066549582742649
+  ],
+  "files": 65147,
+  "logical_bytes": 9759357869,
+  "source_absent": true,
+  "current_formal_service_unchanged": {
+    "pid": 47024,
+    "start_utc": "2026-10-25T12:11:43.902606Z",
+    "data_root": "D:/programcode/python/wvd/next/.local/c11-flow-product/data"
+  },
+  "unique_service_contracts_passed": 16,
+  "existing_binding_extended_assertions_passed": true,
+  "native_or_packaged_candidate_modified": false,
+  "formal_service_api_calls": 0,
+  "ci_started": false,
+  "evidence": [
+    {
+      "path": "next/.local/legacy-appdata-retirement-20261028/manifest.json",
+      "bytes": 4342,
+      "sha256": "3c38285ab734f4c06dd0bc31a81d66b71540a80fdd95c690cec30f4cc1a3f34a"
+    },
+    {
+      "path": "next/.local/legacy-appdata-retirement-20261028/service-binding-contracts.log",
+      "bytes": 2650,
+      "sha256": "a830ef6c53c836c5793880548bdf61ff42a9f851ef20cfa21de9f3ffea16d49e"
+    },
+    {
+      "path": "next/.local/legacy-appdata-retirement-20261028/existing-binding-contract.log",
+      "bytes": 283,
+      "sha256": "268da8240754b2a28a81c5b520f1714bc08ca17bb79887179947ed9e8860170b"
+    },
+    {
+      "path": "next/.local/legacy-appdata-retirement-20261028/volume-root-contract.log",
+      "bytes": 255,
+      "sha256": "780604dd6c22778eb68b4b9eceb54e76ba8c792d9c412a8702cc3562e4ec6843"
+    }
+  ]
+}
