@@ -10,7 +10,7 @@
 
   2026-10-28已核历史缺口：`1c89a08`的旧`export_memory_stacks.ps1`设置了`_NT_SYMBOL_PATH`和报告`-outputfolder`/监测`OutputRoot`，却没有设置独立的`_NT_SYMCACHE_PATH`。[WPA官方规则](https://learn.microsoft.com/en-us/windows-hardware/test/wpt/loading-symbols)明确后者未设/为空时回退到工具所在盘根SymCache；主输出目录和工作目录都不能代替这项设置。此机制与原C盘WVD缓存及时间吻合，但缺少原创建进程回执，不能虚构具体命令；D盘空目录来源仍未证实。现行TraceProcessor入口已显式传入本轮`output/symcache`，不恢复已退出的WPA旧链。后续外部工具的输出规划须同时覆盖主结果、独立缓存、构建中间件及退出去向，不能只监测主输出目录就宣称所有写入受控。依据在`next/.local/root-artifact-audit-20261028/cache-path-provenance.json`。
 
-- 本轮范围、顺序、完成条件以 [收束计划](work-packages/consolidation-20261026.md) 及 [任务登记](work-packages/consolidation-20261026-tasks.json) 为准；先查 [当前事实](project-status.md)，再读下方有关条目。下方历史记录保留当时日期与证据，不把旧PID、旧批次或曾获授权当成当前现场及新动作许可。
+- 本轮范围、顺序、完成条件以 [收束计划](work-packages/consolidation-20261026.md) 及 [任务登记](work-packages/consolidation-20261026-tasks.json) 为准；先查 [当前事实](project-status.md)，再读下方有关条目。下方历史记录保留当时日期与证据，不把旧PID、旧批次或曾获授权当成当前现场及新动作许可。服务创建身份用Get-Process.StartTime.ToFileTimeUtc()与process_start_filetime核对；CIM CreationDate可能截掉100ns尾数，不能转回FILETIME作精确等值判断。
 - **文档选择器已修并定向验证。** `run_contracts.select_modules()`与`source_identity()`排除`docs/`、`next/docs/`及任意层README.md/AGENTS.md；真实Git的文档、暂存/未跟踪及混合源码场景已验证。真实源码、资源、依赖或合同入口变更仍按实际影响验证，计划输出不能替代对应行为验收。
 - `source_identity()`区分产品输入与文档来源；文档HEAD改变不等于产品二进制失效。复用既有证据须核适用的输入/二进制/依赖身份和验收范围；无法证明的部分标未验，不因此无预算重建全部夹具。全新隔离根仍是测试隔离要求，结束后的大夹具去向按同一任务记录，不能靠复用污染目录或删弱真实边界节约成本。
 - 原始盘点保留2026-10-26的时点；本轮迁移结果见任务登记和[执行报告](reviews/consolidation-execution-20261026.md)。同盘trash移动释放空间为0，不能以逻辑字节冒充实占或回收量。默认候选、正式候选、EXE/PDB配对及启动绑定分别核验；`-Action Validate`不代表部署或游戏验收。旧候选不得补造标记，匹配符号保全前不得清理对应build。
@@ -18,7 +18,7 @@
 
 ## 按问题查阅的执行记录
 
-- 2026-10-27用户明确退役线上CI：个人仓库Actions总开关false、原生及旧Python两工作流disabled_manually。失败run40354209693只作历史证据，不重跑、不为修绿改变锁值或削弱本地验证。历史故障为词表哈希失败且PowerShell连续原生命令掩盖前错；行尾原因未取得runner字节证明，不写成已证实。本地脚本仍须正确传播非零退出。
+- 2026-10-27用户明确退役线上CI：个人仓库Actions总开关false、原生及旧Python两工作流disabled_manually。失败run40354209693只作历史证据，不重跑、不为修绿改变锁值或削弱本地验证。历史故障为词表哈希失败且PowerShell连续原生命令掩盖前错；行尾原因未取得runner字节证明，不写成已证实。本地脚本仍须正确传播非零退出。 Git推送前只读复核Actions总开关与工作流状态；本机全局代理17897失效、直连DNS失败时，已验证环境HTTPS_PROXY对应7897可用，单次使用git -c http.proxy=$env:HTTPS_PROXY，不修改全局Git代理或游戏VPN。
 - C09新Windows IO边界已实际复现：MSVC目录迭代器可能返回extended namespace路径；交给原RunStore前须用普通root与instance/run文件名重建，不能把`\\?\D:`当成可打开的父目录。只在系统IO边界加native前缀，持久记录/公用路径保持普通DOS/UNC表示。同类处理沿C08已验证方式，不修改原RunStore读取保护。
 - `S:/trash/wvd-old-worktree-20261027/`包含原17处用户修改和忽略独有材料，属于受保护封存，不是普通临时垃圾；恢复用该根RESTORE-MANIFEST及Git工作区迁移。未来正式`wvd-publication-history`同样是受保护回滚材料，不能被普通trash清理带走。
 - 2026-10-26已确认[T0产物生命周期事故](reviews/t0-storage-lifecycle-20261026.md)：发布历史与隔离测试/候选持续累积。新增长期运行、大文件边界或完整构建/验收前，先核本轮文件/空间增量、输出位置、必要证据集合和结束后的处置，优先复用仍有效的验证；不得靠不断新建目录或永久保留每轮完整树代替收尾。核心边界仍须真实验证，不删测试、不改弱断言。正式历史/未知所有权不得盲删，必须形成有引用依据和恢复位置的处置清单。现有配额不等于全工作区有界，不能将局部通过写作治理完成。Windows DirEntry.stat本机FileID/链接数为0，禁止用其去重容量；逻辑量、FileID去重内容量和实占/可回收量分开报告。
@@ -116,7 +116,7 @@
 
 - 单击送达不是菜单切页成功。新增/修改菜单入口需声明同页重试，统一复用retry_menu_input；先查结果、同帧重认原页/按钮并排除阻挡，转场后不能沿用旧坐标。公用定义修改须同步发布资源和通过revision比较交换更新正式保存定义；只改工厂或包内JSON不足以修复用户流程。Auto脉冲、技能效果、领奖和物品转移按各自回执约束，不能自动套普通菜单重试。排查见docs/reviews/menu-input-retry-audit-20261009.md。
 
-- 战斗行动条仍在但菜单未出现可能是动画/结算等待，不能只因菜单NoHit记未知异常，更不能点Auto。已知等待需正向场景及无阻挡条件，保留同层结束/菜单/事件出口和真实无进展恢复。Poll不要经无条件Entry重新进入自身以刷新期限；直接使用同一候选集合，只有真实进度续期。
+- 战斗行动条仍在但攻击/技能操作菜单未出现可能是动画/结算等待，不能仅凭一帧NoHit记未知异常或点Auto。原轮询持续重认菜单/结束/阻挡；菜单恢复立即交回策略。2026-10-30已复现头像发光及未来行动队列令原区域探针误报6.8%变化、不断刷新局部期限直至父调用超时；本轮原生战斗工厂改用combat_progress/combat_stalled，以当前角色头像和队伍HP/MP/SP稳定特征核真实进展；实机补充复现卡片高亮脉动误报后，数值采样进一步排除边框并去除局部背景，不能用仅两帧通过替代实机验收。保留原60秒无进展及15秒采样缺口规则、Scope限制和原游戏恢复链；旧帧不能靠时间流逝取得证据，Unknown/死亡/付款保护不放宽。导航通用区域探针保持。详见[修复报告](reviews/combat-animation-stall-20261030.md)，正式切换及成功数以当前事实为准。
 - 停止当前循环的API请求若传request_id，应从当前submission读取匹配值；临时生成新ID会被SUBMISSION_ID_MISMATCH拒绝。停止后必须回读busy=false、quiescent=true及repeat inactive，不能只凭发出请求认定停止，也不能把确认前发生的恢复记成已阻止。
 
 - 未执行节点的选择不是业务承诺：BusinessConfirm、带条件Call、业务守卫等必须保留同层候选来源。NotApplicable保证尚未产生效果，可重选；Waiting表示操作可能已开始，不能退回重放。正常重选先于异常计时，过期Poll及60秒重启前复查共用局部候选规则；已发送输入仍核对后置。不得因重选重置原分派期限或把候选命中记成业务完成。目标战重启丢失身份后可处理当前战斗，但须另行重新导航，不能凭再起/战斗结束恢复目标击杀授权。

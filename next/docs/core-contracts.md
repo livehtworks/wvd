@@ -2,7 +2,7 @@
 
 本页规定现行产品合同。2026-10-26工程收束与生命周期整改见[统一推进计划](../../docs/work-packages/consolidation-20261026.md)；待实施策略不得作为已通过的合同或正式历史删除依据。调整资源物理布局时仍须保持原身份、租约、调用链和业务验收语义，验证结果回填原合同及任务登记。
 
-候选源码的共享布局已完成限定离线验收，合同见[C07资源消费](../../docs/work-packages/consolidation-20261026-resource-contract.md)：请求保留独立flow/identity，资源集按digest封存一次，识别与OCR三个模型输入都经同一组合租约解析；原程序revision和mod选择语义保持。有marker错误即拒绝，无marker旧包继续严格校验。逻辑引用累计与新增物化预算分别报告，保留16GiB硬限、14GiB续轮门禁及卷2GiB加最坏物化空间准入。正式部署和历史处置尚未执行，旧历史不得据此迁出或失去请求防重。
+共享布局合同见[C07资源消费](../../docs/work-packages/consolidation-20261026-resource-contract.md)：请求保留独立flow/identity，资源集按digest封存一次，识别与OCR三个模型输入都经同一组合租约解析；原程序revision和mod选择语义保持。有marker错误即拒绝，无marker旧包继续严格校验。逻辑引用累计与新增物化预算分别报告，保留16GiB硬限、14GiB续轮门禁及卷2GiB加最坏物化空间准入。部署事实见项目当前状态；正式旧历史转换尚未执行，旧历史不得据此迁出或失去请求防重。
 
 2026-10-27候选的显式`--maintenance-publication`入口先持有原service.lock，不构造Application或设备。仅处理资格明确的已完成、已保存、静止且业务清账历史；repeat要求显式root-request-id/cycle及完整成功前缀，与watcher共用原ID算法和清账判据。保持请求根、flow/identity/provenance及原revision；requests/runs原始字节不改，不将停止半轮计成功。固定持久门禁及全事务journal先于目录变更落盘，源FileID与冻结句柄同卷不覆盖移动；旧完整树进入受保护盘根trash后再次核验，才安装并回读新根。未知位置、篡改、低空间、锁占用和未完成登记均拒绝继续；只能显式finish/rollback且重新核验证据。正常入口在Application及新准备前检查门禁，无旁路或自动回退。正式启用仍待维护窗口及实际证据。
 
@@ -17,6 +17,8 @@
 | 资源闭包 | CompiledWorkflow/builtin_probes/ModelContract/manifest | 实际语言、隐式模板/OCR模型均须冻结且哈希一致；缺失为Error并拒绝发布，不当NoHit，不靠完整基础包掩盖遗漏 |
 
 ## 运行与读取
+
+- 战斗菜单持续重认，短暂缺失是有正向战斗证据的等待；菜单/战斗结束优先交回原分派。原生战斗等待以combat_progress/combat_stalled的当前行动角色和队伍数值特征计进展，头像发光、未来队列和背景动画不续期；数值采样排除卡片边框，并去除局部背景高亮保留文字笔画。保留原60秒无进展恢复与新鲜采样、15秒观测缺口边界；同一旧帧不增加时间证据，探针不取得输入权限。恢复仍经原协调器游戏生命周期与同unit责任，未知输入、实际死亡、未确认业务效果及人工停止的保护不变。
 
 - 发布由NativePublisher的唯一目录所有权token连续覆盖到Coordinator明确接管；接管前释放本次租约再按身份撤回，接管后快速完成或响应抛错也不得撤包。清理失败须保留primary/cleanup两项及持久阻断材料，不以quiescent判断是否曾运行，不通过新UUID绕过。
 - 建硬链接仅将原始`STATUS_TOO_MANY_LINKS`转为同一冻结BundleLease的64KiB流式复制；其它错误原样失败。发布前按逻辑别名的最坏复制量、缺失对象和生成/事务余量加2GiB准入，未知及溢出在staging前拒绝；空间快照不等于预分配。

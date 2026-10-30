@@ -252,7 +252,7 @@ inline int giant_linkage(const char *profile_path, const char *saved_public_root
             }
             if (mode == "auto_route_moving") return screen == "dungeon";
             if (mode == "auto_route_post") return screen == "battle" || screen == "dungeon" || screen == "harken";
-            if (mode == "region_changed") return true;
+            if (mode == "region_changed" || mode == "combat_progress") return true;
             if (mode == "navigation_resume_unavailable" || mode == "movement_stopped")
                 return scenario == "black-destination" && destination_pending && destination_reads >= 2;
             return std::nullopt;

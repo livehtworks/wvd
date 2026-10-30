@@ -90,7 +90,7 @@ tasks::CompiledWorkflow take_turn(const J &profile, const std::set<std::string> 
     // The action bar can outlive enemies while the game settles a turn or
     // battle. No menu is not an unknown scene or permission to press Auto.
     graph.poll("AnimationWait", 250, entry_choices, C::all({clear, C::absent(menu)}),
-        J{{"mode", "region_changed"}, {"channel", "combat"}, {"roi", {15, 40, 145, 800}}});
+        vision::combat_progress());
     graph.failure_route("AnimationWait", {"AnimationStalled"});
     graph.recovery("AnimationStalled", "combat.auto_progress_timeout");
     const auto unintended_auto = C::all({clear, enabled, C::absent(disabled), C::business("/strategy/automatic", false)});

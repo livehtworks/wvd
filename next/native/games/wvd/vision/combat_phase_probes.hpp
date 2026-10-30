@@ -6,6 +6,9 @@ namespace wvd::games::vision {
 inline nlohmann::json combat_phase(const char *phase) {
     return {{"mode", "combat_phase"}, {"phase", phase}};
 }
+inline nlohmann::json combat_progress() {
+    return {{"mode", "combat_progress"}};
+}
 inline nlohmann::json combat_popup_probes() {
     using J = nlohmann::json;
     return J::array({J{{"mode", "template"}, {"image", "combat_skill_detail"}, {"threshold", .8}},

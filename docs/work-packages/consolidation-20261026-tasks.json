@@ -12,17 +12,15 @@
     "production_source_changed": true,
     "cleanup_executed": true,
     "committed_or_pushed": true,
-    "deployed": false,
+    "deployed": true,
     "incident_status": "OPEN",
     "engineering_milestone": "completed"
   },
   "current_request_scope": [
-    "disable_all_personal_repository_online_ci",
-    "resolve_formal_history_lifecycle_item2",
-    "resolve_old_worktree_and_retained_material_item3",
-    "defer_disk_reclamation_item4",
-    "defer_historical_game_emulator_faults_item5",
-    "do_not_start_game_loop_or_monitor"
+    "review_commit_push_this_combat_fix_tests_fixtures_docs_to_personal_fork",
+    "exclude_vscode_and_local_runtime_artifacts",
+    "preserve_running_service_and_existing200_loop",
+    "do_not_start_online_ci_or_monitor"
   ],
   "authorization_rule": "本包不新增生产写入、迁移、提交/推送、部署、游戏或监控权限；已有会话授权按实际范围持续有效，不重复请求。",
   "status_values": [
@@ -328,14 +326,19 @@
         "D:\\programcode\\python\\wvd\\next\\.local\\consolidation-261026\\protected-resources-evidence\\resources-checks-final-a3\\receipt-continuation-a8.json",
         "D:\\programcode\\python\\wvd\\next\\.local\\consolidation-261026\\protected-resources-evidence\\resources-checks-final-a3\\app-batch\\result.json",
         "D:\\programcode\\python\\wvd\\next\\.local\\consolidation-261026\\protected-resources-evidence\\resources-inventory-final\\receipt.json",
-        "D:\\programcode\\python\\wvd\\next\\.local\\consolidation-261026\\resources-evidence-extraction.json"
+        "D:\\programcode\\python\\wvd\\next\\.local\\consolidation-261026\\resources-evidence-extraction.json",
+        "next/.local/giant-200-20261030/release/deployment-confirmation.json",
+        "next/.local/giant-200-20261030/live-shared-layout-proof.json",
+        "next/.local/giant-200-20261030/running-confirmation.json",
+        "next/.local/giant-200-20261030/resume-1/first-success.json",
+        "next/.local/giant-200-20261030/resume-1/running-confirmation.json"
       ],
       "artifacts_remaining": [
         "Small receipts and source snapshots retained; all six large generated fixture roots moved to same-volume trash.",
         "Recorded-frame CLI adapted and compiled; its actual frame sample was not rerun."
       ],
       "blocker": null,
-      "next_action": "Source and limited offline acceptance complete; deploy/history changes remain separate C09.",
+      "next_action": "Shared layout and current combat repair evidence recorded; total success count uses real disk receipts in current goal ledger. No offline PASS or Running label counts as success.",
       "artifact_prepared": false,
       "scope_definition": "consolidation-20261026.md 第4节 C08"
     },
@@ -368,8 +371,8 @@
         "next/.local/consolidation-261026/history-repeat-default-symbol-pair-20261027.json"
       ],
       "artifacts_remaining": [],
-      "blocker": "Formal service/data remain unchanged under prior explicit user decision; one-request maintenance window requires its scope changed. Archive whereabouts also pending clarification.",
-      "next_action": "On explicit maintenance decision only, recheck live identity/config, stop through manage_service, locked plan/budget<=512MiB+2GiB reserve, convert/rollback/reconvert one clean cycle39, deploy idle new reader. Do not bulk migrate, start game loop, or monitor.",
+      "blocker": "New reader deployed; current independent200 goal active. Formal old-history migration remains unauthorized/unexecuted; archive whereabouts unresolved.",
+      "next_action": "Do not interrupt active200 goal or migrate old history. Only on separately authorized idle maintenance window recheck identity/config/leases and original one-request maintenance plan.",
       "artifact_prepared": true,
       "scope_definition": "consolidation-20261026.md 第4节 C09"
     },
@@ -430,7 +433,7 @@
       "validation": [],
       "evidence": [],
       "artifacts_remaining": [],
-      "blocker": "C09 formal migration/service takeover not executed; archived original tree whereabouts pending clarification. Neither local tests nor historical trash move PASS closes production T0.",
+      "blocker": "C09 old-history migration and archive whereabouts unresolved; current200 goal incomplete; game-engine stall trigger itself unproven. T0 remainsOPEN.",
       "next_action": "Review actual authorized formal migration evidence before closing production lifecycle branches; do not equate tiny tests/trash moves with T0 closure.",
       "artifact_prepared": false,
       "scope_definition": "consolidation-20261026.md 第4节 C11"
@@ -939,5 +942,74 @@
     "evidence": "next/.local/legacy-appdata-retirement-20261028/manifest.json",
     "test_payloads_retired_to": "D:/trash/wvd-legacy-appdata-tests-20261028",
     "original_failure": "Tool-output audit omitted previous runtime default and old AppData data root; now explicitly retired by user"
+  },
+  "runtime_followup_20261030": {
+    "state": "running_full_cycle_and_automatic_next_inputs_verified",
+    "source_commit": "2f70858f97795c54d152e0adda961b79b24e3266",
+    "scope": [
+      "combat_stall_detector_and_original_recovery",
+      "local_build_package_deploy",
+      "continue_same200_goal_remaining_only"
+    ],
+    "evidence": "next/.local/giant-200-20261030/",
+    "excluded": [
+      "formal_history_migration",
+      "monitor_resume",
+      "online_ci"
+    ],
+    "authorization": "User2026-10-30: fix stall before restart; deploy then restart/continue; continuously check missing attack/skill menu",
+    "exe_sha256": "15670137f3229039d088363af5580cf72665857b3a0a0af767f955c96811fa75",
+    "instance_id": "7FFEDDFD-AFD6-469B-95A8-14D4ED7122B0",
+    "request_id": "giant-200-20261030-a81556d0ff4449fea1fd1294c2779065",
+    "completed_successes": 24,
+    "target_successes": 200,
+    "accepted_inputs_at_confirmation": 17,
+    "config_hashes_unchanged": 41,
+    "live_shared_layout": "request 3 files; shared set 600 files",
+    "confirmation": "next/.local/giant-200-20261030/stall-fix/acceptance2/running-confirmation.json",
+    "remaining": "176 successes remain; total24 verified from disk at2026-10-30T21:49:21+08:00, active run5 Completed. Commit/push review is source-only; deployed candidate/loop remain unchanged. MonitorPAUSED, C09/T0 storage closure separate.",
+    "failed_run_id": 1,
+    "failure_receipt": "next/.local/giant-200-20261030/hang-check-1/failed-receipt-reference.json",
+    "game_restart_count": 2,
+    "game_recovery": "New semantic no-progress detector triggered automatic app restart after62.3246s; menu returned and battle input results confirmed",
+    "pending_combat_preserved": true,
+    "continuation_submitted": true,
+    "active_segment_request_id": "giant-200-stallfix2-20261030-39faac202a3b485aa4e18ffa455e91dc",
+    "current_cycle_request_id": "repeat-18da01848606a3aad839301448ff35f0330bbf23ba718d48e8a311615fce313e",
+    "current_run_id": 5,
+    "remaining_successes": 176,
+    "restoration_authorization": "User2026-10-30: 恢复200轮循环，确认有实际进展再告诉我",
+    "first_verified_completed_run_id": 1,
+    "first_success_receipt": "next/.local/giant-200-20261030/stall-fix/acceptance2/verified-new-successes.json",
+    "accepted_inputs_in_next_cycle": 17,
+    "prior_failure_reason": "FLOW_INVOCATION_TIMEOUT:Task_FirstDungeon_Entry",
+    "stall_repair": {
+      "report": "docs/reviews/combat-animation-stall-20261030.md",
+      "evidence": "next/.local/giant-200-20261030/stall-fix/",
+      "old_failed_run": 21,
+      "menu_polling": "original continuous polling retained",
+      "progress": "current actor and party values; idle glow excluded",
+      "restart": "Original Native coordinator confirmed StopApplication/StartApplication; emulator2/VPN stayed running",
+      "first_live_acceptance": "FAILED and zero-input stopped; old a500 not accepted",
+      "automatic_recovery_proof": "next/.local/giant-200-20261030/stall-fix/acceptance2/automatic-recovery-proof.json",
+      "post_restart_confirmed_battle_inputs": 18,
+      "full_live_acceptance": "PASS: real automatic restart, complete clean cycle, automatic next-cycle confirmed inputs",
+      "intermediate_retired": "D:/trash/wvd-combat-stall-intermediate-20261030; only failed a500 candidate621 files and matching PDB, restore manifest retained",
+      "latest_progress": "next/.local/giant-200-20261030/stall-fix/acceptance2/final-live-progress.json"
+    },
+    "commit_review": {
+      "authorization": "User explicitly requests commit/push fix, test materials and docs to personal fork; exclude.vscode; preserve loop; no online CI",
+      "target": "fork/codex/t0-lifecycle-repair-20261025",
+      "included": "this commit",
+      "source_inputs_sha256": "fc734057b1a2f39358a8609930afa9df75546b83fd80abfb2aa3e5aaf93eb72c",
+      "fixture_count": 5,
+      "fixture_bytes": 5045598,
+      "ci_enabled": false,
+      "workflows": "both disabled_manually",
+      "runtime_instance_unchanged": "7FFEDDFD-AFD6-469B-95A8-14D4ED7122B0",
+      "runtime_snapshot": "D:\\programcode\\python\\wvd\\next\\.local\\giant-200-20261030\\stall-fix\\commit-review\\runtime-review.json",
+      "verification": "exact product bytes + fixture SHA/dimensions + reused final real Service/FlowExecutor/production receipts",
+      "at": "2026-10-30T21:49:21+08:00"
+    }
   }
 }

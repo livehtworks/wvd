@@ -1625,6 +1625,73 @@ int run_author_cases(int argc, char **argv) {
             check(d.last.state == runtime::TickState::Completed && d.ports.inputs.empty(),
                 "ANIMATION_END_MUST_RETURN_WITHOUT_AUTO");
             d.evidence("combat-animation-wait");
+            auto bounded = games::combat::take_turn(profile, {});
+            check(bounded.nodes.at("AnimationWait").at("timeout") == 60000 &&
+                bounded.nodes.at("AnimationWait").at("operation_args").at("progress").at("parameters").at("mode") == "combat_progress",
+                "ANIMATION_PROGRESS_MUST_USE_SEMANTIC_EVIDENCE_AND_ORIGINAL_DEADLINE");
+            // Exercise the real configurable FlowExecutor deadline without a60s
+            // sleep here; the Service contract separately verifies the real60s clock.
+            bounded.nodes.at("AnimationWait")["timeout"] = 400;
+            Driver stalled(bounded, profile);
+            stalled.ports.combat = true;
+            stalled.ports.images = {"spellskill/CombatAutoDisable", "combat_speed_on_zh_hant"};
+            stalled.ports.semantic_leaf = [](const J &probe) -> std::optional<bool> {
+                if (probe.value("mode", "") == "region_changed") return true; // cosmetic-only pixels
+                if (probe.value("mode", "") == "combat_progress") return false;
+                return std::nullopt;
+            };
+            stalled.finish();
+            check(stalled.last.state == runtime::TickState::Failed &&
+                stalled.last.code == "combat.auto_progress_timeout" && stalled.ports.inputs.empty(),
+                "ANIMATION_STALL_MUST_REACH_EXISTING_RECOVERY_WITHOUT_INPUT");
+            contracts::SessionResult failure;
+            failure.end = contracts::SessionEnd::Failed;
+            failure.reason = stalled.last.code;
+            failure.quiescent = true;
+            failure.unresolved_inputs = J::array();
+            const auto before_policy = stalled.ports.business.summary();
+            const auto policy = games::tasks::recovery_policy({"closure", "2", "game", "", false}, true);
+            const auto plan = policy(failure, stalled.ports.business, 1);
+            check(plan.has_value(), "COMBAT_STALL_MUST_REQUEST_EXISTING_GAME_RECOVERY");
+            check(plan->operations == std::vector<devices::LifecycleOperation>{
+                devices::LifecycleOperation::StopApplication, devices::LifecycleOperation::StartApplication},
+                "COMBAT_STALL_MUST_NOT_RESTART_EMULATOR_OR_VPN");
+            const auto after_policy = stalled.ports.business.summary();
+            // summary() also reports live elapsed time; compare business facts,
+            // not the wall clock that necessarily advances across these reads.
+            for (const auto *field : {"pending_combat", "bounty_cycle", "bounty_report_pending",
+                    "inn_payment_pending", "last_confirmation", "unit_index", "strategy"})
+                check(after_policy.at(field) == before_policy.at(field),
+                    "COMBAT_RECOVERY_MUST_PRESERVE_BUSINESS:" + std::string(field));
+            stalled.evidence("combat-animation-stalled");
+            Driver advancing(bounded, profile);
+            advancing.ports.combat = true;
+            advancing.ports.images = {"spellskill/CombatAutoDisable", "combat_speed_on_zh_hant"};
+            advancing.ports.semantic_leaf = [](const J &probe) -> std::optional<bool> {
+                if (probe.value("mode", "") == "combat_progress") return true;
+                return std::nullopt;
+            };
+            advancing.until([&] { return advancing.executor.current_step_id() == "AnimationWait"; });
+            const auto moving_since = std::chrono::steady_clock::now();
+            advancing.until([&] { return std::chrono::steady_clock::now() - moving_since >= 1200ms; }, 2s);
+            check(!advancing.terminal(), "REAL_TURN_PROGRESS_MUST_KEEP_NORMAL_WAIT_ALIVE");
+            advancing.ports.scene("ended");
+            advancing.finish();
+            check(advancing.last.state == runtime::TickState::Completed && advancing.ports.inputs.empty(),
+                "PROGRESS_WAIT_MUST_KEEP_BATTLE_END_EXIT");
+            advancing.evidence("combat-animation-progress");
+            Driver menu_returned(bounded, profile);
+            menu_returned.ports.combat = true;
+            menu_returned.ports.images = {"spellskill/CombatAutoDisable", "combat_speed_on_zh_hant"};
+            menu_returned.until([&] { return menu_returned.executor.current_step_id() == "AnimationWait"; });
+            menu_returned.ports.images.insert("flee");
+            menu_returned.until([&] { return menu_returned.executor.current_step_id() == "Prepare"; });
+            check(menu_returned.ports.inputs.empty(), "RETURNED_MENU_MUST_RESELECT_STRATEGY_WITHOUT_AUTO");
+            menu_returned.ports.scene("ended");
+            menu_returned.finish();
+            check(menu_returned.last.state == runtime::TickState::Completed && menu_returned.ports.inputs.empty(),
+                "RETURNED_MENU_MUST_KEEP_FRESH_BATTLE_END_EXIT");
+            menu_returned.evidence("combat-animation-menu-returned");
             return 0;
         }
         if (argc == 2 && std::string(argv[1]) == "--menu-retry-closure") {
@@ -3332,6 +3399,122 @@ int run_author_cases(int argc, char **argv) {
                 ":inputs=" + std::to_string(ports.inputs) + ":stopped=" + ports.last_stopped.dump());
             std::cout << "movement: real frame and auto-route executor, cross-composite/cross-frame stop, motion/device/viewport/context/map/network/combat negatives PASS; device transport isolated; recognition_calls="
                 << ports.recognition_calls << "; recognition_ms=" << ports.recognition_ns / 1000000 << '\n';
+            return 0;
+        }
+        if ((argc == 6 || argc == 7) && std::string(argv[1]) == "--combat-progress-contract") {
+            using namespace closure;
+            const auto cases = read("tests/fixtures/combat-progress/cases.json");
+            for (int i = 0; i < 3; ++i)
+                check(platform::file_sha256(argv[i + 2]) == cases.at(i).at("sha256").get<std::string>(), "PROGRESS_FIXTURE_CHANGED");
+            const auto first = cv::imread(argv[2], cv::IMREAD_COLOR);
+            const auto idle = cv::imread(argv[3], cv::IMREAD_COLOR);
+            const auto advanced = cv::imread(argv[4], cv::IMREAD_COLOR);
+            std::vector<cv::Mat> glow_frames;
+            for (std::size_t i = 3; i < cases.size(); ++i) {
+                const auto path = cases.at(i).at("frame").get<std::string>();
+                check(platform::file_sha256(path) == cases.at(i).at("sha256").get<std::string>(), "PROGRESS_GLOW_FIXTURE_CHANGED");
+                auto pixels = cv::imread(path, cv::IMREAD_COLOR);
+                check(!pixels.empty() && pixels.size() == cv::Size(900,1600), "PROGRESS_GLOW_FRAME_INVALID");
+                glow_frames.push_back(std::move(pixels));
+            }
+            check(glow_frames.size() == 2, "PROGRESS_GLOW_PAIR_REQUIRED");
+            for (const auto *pixels : {&first, &idle, &advanced})
+                check(!pixels->empty() && pixels->size() == cv::Size(900, 1600), "PROGRESS_FRAME_INVALID");
+            const auto profile = argc == 7 ? read(argv[6]).at("values") :
+                storage::LegacyConfigImporter(read("packs/wvd/parameters/legacy-config-fields.json"))
+                    .parse({{"GENERAL", J::object()}}).values;
+            J documents = J::object();
+            for (const auto &document : read("resources/authoring/public-flows.json"))
+                documents[document.at("flow").at("id").get<std::string>()] = document;
+            const games::tasks::PublicFlowLibrary library(documents, read("resources/authoring/semantic-assets.json"));
+            const games::tasks::PublicStepScope public_steps([&](const auto &id, const auto &arguments) {
+                return library.compile_step(id, arguments, "zh-Hant");
+            });
+            const auto graph = games::combat::take_turn(profile, {});
+            auto probe = graph.nodes.at("AnimationWait").at("operation_args").at("progress").at("parameters");
+            const auto owned = std::filesystem::absolute(argv[5]);
+            const auto root = owned / "progress-service";
+            check(!std::filesystem::exists(root), "PROGRESS_TEST_ROOT_MUST_BE_NEW");
+            const std::string member = "image/inn_leave_zh_hant.png";
+            std::filesystem::create_directories(root / "image");
+            std::filesystem::copy_file(std::filesystem::path("packs/wvd") / member, root / member);
+            recognition::Service service({root, "combat-progress-test", {{member, platform::file_sha256(root / member)}}},
+                games::vision::native_handlers(J::object(), "zh-Hant"));
+            contracts::FrameEnvelope frame;
+            frame.identity.device_id = "isolated-combat-progress";
+            frame.identity.game_id = "wvd";
+            frame.identity.pack_revision = "combat-progress-test";
+            frame.identity.viewport_id = "900x1600";
+            frame.identity.generation = frame.identity.connection_generation = 1;
+            frame.identity.raw_size = frame.identity.recognition_size = {900,1600};
+            const auto fresh = [&](const cv::Mat &pixels) {
+                ++frame.identity.frame_id;
+                frame.identity.captured_at = frame.identity.capture_finished_at = std::chrono::steady_clock::now();
+                frame.raw_bgr = std::make_shared<const std::vector<std::uint8_t>>(
+                    pixels.data, pixels.data + pixels.total() * pixels.elemSize());
+            };
+            const auto evaluate = [&](const J &parameters) {
+                recognition::Request request{"combat-progress", "1", {0,0,900,1600},
+                    recognition::CustomParameters{"WvdVision", parameters}};
+                return service.evaluate(frame, frame.identity, request);
+            };
+            using O = contracts::RecognitionOutcome;
+            auto baseline = probe; baseline["reset"] = true;
+            fresh(first);
+            check(evaluate(baseline).outcome == O::Hit, "PROGRESS_BASELINE");
+            std::this_thread::sleep_for(1100ms); fresh(idle);
+            const auto unchanged = evaluate(probe);
+            check(unchanged.outcome == O::NoHit,
+                "IDLE_GLOW_MUST_NOT_RENEW_BATTLE_PROGRESS:" + unchanged.evidence.dump());
+            fresh(glow_frames.front()); check(evaluate(baseline).outcome == O::Hit, "HUD_GLOW_BASELINE");
+            std::this_thread::sleep_for(1100ms); fresh(glow_frames.back());
+            const auto hud_glow = evaluate(probe);
+            check(hud_glow.outcome == O::NoHit,
+                "HUD_HIGHLIGHT_MUST_NOT_RENEW_PROGRESS:" + hud_glow.evidence.dump());
+            std::this_thread::sleep_for(1100ms);
+            check(evaluate(probe).outcome == O::NoHit, "OLD_FRAME_MUST_NOT_GAIN_PROGRESS");
+            fresh(advanced);
+            check(evaluate(probe).outcome == O::Hit, "REAL_PARTY_CHANGE_MUST_RENEW_PROGRESS");
+            std::this_thread::sleep_for(1100ms); fresh(first);
+            check(evaluate(baseline).outcome == O::Hit, "PROGRESS_RESET");
+            auto actor_changed = first.clone();
+            first(cv::Rect{40,165,48,48}).copyTo(actor_changed(cv::Rect{45,60,48,48}));
+            std::this_thread::sleep_for(1100ms); fresh(actor_changed);
+            check(evaluate(probe).outcome == O::Hit, "ACTOR_CHANGE_MUST_RENEW_PROGRESS");
+            fresh(first); check(evaluate(baseline).outcome == O::Hit, "COSMETIC_BASELINE");
+            auto queue_animation = first.clone();
+            cv::RNG random(42);
+            random.fill(queue_animation(cv::Rect{15,155,145,690}), cv::RNG::UNIFORM, 0, 256);
+            std::this_thread::sleep_for(1100ms); fresh(queue_animation);
+            check(evaluate(probe).outcome == O::NoHit, "FUTURE_QUEUE_ANIMATION_IS_NOT_TURN_PROGRESS");
+            cv::Mat brightness;
+            first.convertTo(brightness, CV_8UC3, .9, 8);
+            std::this_thread::sleep_for(1100ms); fresh(brightness);
+            check(evaluate(probe).outcome == O::NoHit, "UNIFORM_LIGHT_CHANGE_IS_NOT_TURN_PROGRESS");
+            recognition::Request restricted{"combat-progress", "1", {15,40,145,800},
+                recognition::CustomParameters{"WvdVision", probe}};
+            const auto outside = service.evaluate(frame, frame.identity, restricted);
+            check(outside.outcome == O::Error && outside.error_code.find("WVD_ROI_OUTSIDE_SCOPE") != std::string::npos,
+                "COMBAT_PROGRESS_MUST_NOT_READ_OUTSIDE_SCOPE");
+            fresh(first); check(evaluate(baseline).outcome == O::Hit, "STALLED_BASELINE");
+            const auto began = std::chrono::steady_clock::now();
+            const J stalled{{"mode", "combat_stalled"}};
+            unsigned samples{};
+            while (std::chrono::steady_clock::now() - began < 61s) {
+                std::this_thread::sleep_for(1050ms); ++samples;
+                fresh(samples % 4 == 0 ? first : samples % 4 == 1 ? idle : glow_frames.at(samples % 4 - 2));
+                check(evaluate(probe).outcome == O::NoHit, "COSMETIC_ANIMATION_RENEWED_TIMEOUT");
+                const auto result = evaluate(stalled);
+                check(result.outcome != O::Error, "STALLED_PROBE_ERROR");
+                if (std::chrono::steady_clock::now() - began < 59s)
+                    check(result.outcome == O::NoHit, "PREMATURE_COMBAT_STALL");
+            }
+            check(evaluate(stalled).outcome == O::Hit, "SIXTY_SECOND_STALL_NOT_OBSERVED");
+            std::ofstream(owned / "combat-progress.json") << J{
+                {"scope","production combat factory + real Service + recorded idle/changed frames; no device"},
+                {"samples",samples}, {"idle_glow_rejected",true}, {"hud_highlight_rejected",true}, {"party_change_observed",true},
+                {"actor_change_observed",true}, {"sixty_second_stall_observed",true}}.dump(2);
+            std::cout << "combat progress: recorded idle glow ignored, actor/stats change accepted, real60s deadline PASS\n";
             return 0;
         }
         if (argc == 3 && std::string(argv[1]) == "--temporal") {

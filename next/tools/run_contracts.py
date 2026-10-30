@@ -31,7 +31,10 @@ CASES = {
     "recognition": [("test_native_author", ["--" + flag]) for flag in
         ("pressure-contract", "builtin-resource-closure", "healing-effect-contract", "target-chest-completion",
          "combat-open-repair", "single-auto-progress")] +
-        [("test_native_author", ["--skill-level-contract", "{pack}", "{output}/skill-level"]),
+        [("test_native_author", ["--combat-progress-contract",
+            "tests/fixtures/combat-progress/idle-a.png", "tests/fixtures/combat-progress/idle-b.png",
+            "tests/fixtures/combat-progress/party-changed.png", "{output}/combat-progress"]),
+         ("test_native_author", ["--skill-level-contract", "{pack}", "{output}/skill-level"]),
          ("test_recognition_methods", ["--recorded-input-contract", "{pack}",
             "tests/fixtures/rescue-marker/cases.json", "{output}/rescue-marker"]),
          ("test_recognition_methods", ["--recorded-input-contract", "{pack}",

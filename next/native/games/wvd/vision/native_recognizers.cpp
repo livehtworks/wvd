@@ -61,6 +61,36 @@ struct ProgressRegionSample {
     std::chrono::steady_clock::time_point sampled_at, changed_at;
     std::string frame_key;
 };
+struct CombatProgressSample {
+    std::array<cv::Mat, 7> signature;
+    std::chrono::steady_clock::time_point sampled_at, changed_at;
+    std::string frame_key;
+};
+// The future turn queue and portrait border glow animate while a turn is stuck.
+// Observe the current actor's face and each party member's HP/MP/SP text instead.
+// Fixed 900x1600 viewport; seven normalized patches retain about13KiB per Service.
+const std::array<cv::Rect, 7> combat_progress_regions{{
+    {45,60,48,48},
+    {140,1310,132,85}, {440,1310,132,85}, {740,1310,132,85},
+    {140,1490,132,85}, {440,1490,132,85}, {740,1490,132,85}}};
+std::array<cv::Mat, 7> combat_progress_signature(const cv::Mat &image) {
+    std::array<cv::Mat, 7> result;
+    for (std::size_t i = 0; i < result.size(); ++i) {
+        cv::Mat gray, small, centered;
+        cv::cvtColor(image(combat_progress_regions[i]), gray, cv::COLOR_BGR2GRAY);
+        // The active party card pulses behind unchanged digits. Exclude its
+        // border and remove the local background; only the text strokes vote.
+        if (i != 0)
+            cv::morphologyEx(gray, gray, cv::MORPH_TOPHAT,
+                cv::getStructuringElement(cv::MORPH_RECT, {9,9}));
+        cv::resize(gray, small, i == 0 ? cv::Size{16,16} : cv::Size{32,16}, 0, 0, cv::INTER_AREA);
+        small.convertTo(centered, CV_32F);
+        centered -= cv::mean(centered)[0];
+        cv::normalize(centered, centered, 1, 0, cv::NORM_L2);
+        result[i] = centered.reshape(1, 1);
+    }
+    return result;
+}
 void check(bool ok, const char *error) {
     if (!ok)
         throw std::runtime_error(error);
@@ -1444,6 +1474,47 @@ J evaluate_uncached(const recognition::Bundle &bundle, recognition::Pixels pixel
         auto result = matches.at(*selected);
         result["evidence"]["selected"] = name;
         return result;
+    }
+    if (mode == "combat_progress" || mode == "combat_stalled") {
+        check(image.size() == cv::Size(900,1600), "WVD_COMBAT_PROGRESS_VIEWPORT_INVALID");
+        for (const auto &area : combat_progress_regions)
+            check((area & allowed_rect) == area, "WVD_ROI_OUTSIDE_SCOPE");
+        const auto now = std::chrono::steady_clock::now();
+        const bool reset = p.value("reset", false);
+        // One fixed semantic sample, separate from the two generic region channels.
+        const std::string key = "progress.combat_turn";
+        auto found = cache.assets.find(key);
+        if (found == cache.assets.end() || reset) {
+            cache.assets.insert_or_assign(key, CombatProgressSample{
+                combat_progress_signature(image), now, now, cache.frame_key});
+            return decision(reset, allowed_rect, {{"reason", "combat_progress_baseline_recorded"}}, false);
+        }
+        auto &sample = std::any_cast<CombatProgressSample &>(found->second);
+        if (sample.frame_key == cache.frame_key || now - sample.sampled_at < std::chrono::seconds{1}) {
+            const auto idle = std::chrono::duration_cast<std::chrono::milliseconds>(sample.sampled_at - sample.changed_at).count();
+            return decision(mode == "combat_stalled" && idle >= 60000, allowed_rect,
+                {{"reason", "awaiting_combat_progress_sample"}, {"idle_ms", idle}}, false);
+        }
+        if (now - sample.sampled_at > std::chrono::seconds{15}) sample.changed_at = now;
+        auto signature = combat_progress_signature(image);
+        bool changed = false;
+        J similarities = J::array();
+        for (std::size_t i = 0; i < signature.size(); ++i) {
+            const bool was_empty = cv::norm(sample.signature[i]) < 1e-6;
+            const bool is_empty = cv::norm(signature[i]) < 1e-6;
+            const double similarity = was_empty || is_empty ? (was_empty == is_empty ? 1. : 0.) :
+                std::clamp(sample.signature[i].dot(signature[i]), -1., 1.);
+            similarities.push_back(similarity);
+            changed |= similarity < (i == 0 ? .90 : .995);
+        }
+        if (changed) sample.changed_at = now;
+        sample.signature = std::move(signature);
+        sample.sampled_at = now;
+        sample.frame_key = cache.frame_key;
+        const auto idle = std::chrono::duration_cast<std::chrono::milliseconds>(now - sample.changed_at).count();
+        return decision(mode == "combat_stalled" ? idle >= 60000 : changed, allowed_rect,
+            {{"basis", "current_actor_party_values"}, {"similarities", std::move(similarities)},
+             {"idle_ms", idle}}, false);
     }
     if (mode == "region_changed" || mode == "region_stalled") {
         const auto area = rect(p.at("roi"), image.size());

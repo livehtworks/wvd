@@ -1,0 +1,42 @@
+[
+  {
+    "frame": "tests/fixtures/combat-progress/idle-a.png",
+    "sha256": "b720dd55cc61d03cf9c2b799e7f886dcd7b4032f69180330cf062cbeaa78994b",
+    "source": "D:\\programcode\\python\\wvd\\next\\.local\\giant-200-20261030\\stall-fix\\idle-a.png",
+    "provenance": "Original MuMu2 frames; idle pair after stopped run21; party-change comparison from prior run1 evidence",
+    "expected": "same_actor_and_values_no_progress",
+    "id": "same-turn-idle-a"
+  },
+  {
+    "frame": "tests/fixtures/combat-progress/idle-b.png",
+    "sha256": "2ec4163ec3bd91ce7d855363882718c85be01a2d710262469c468b451577eabd",
+    "source": "D:\\programcode\\python\\wvd\\next\\.local\\giant-200-20261030\\stall-fix\\idle-b.png",
+    "provenance": "Original MuMu2 frames; idle pair after stopped run21; party-change comparison from prior run1 evidence",
+    "expected": "same_actor_and_values_no_progress",
+    "id": "same-turn-idle-b"
+  },
+  {
+    "frame": "tests/fixtures/combat-progress/party-changed.png",
+    "sha256": "fbae11937bd6b74ea162311d4670c0b4033090c4ff7fa760ce8759a97ae0bd5f",
+    "source": "D:\\programcode\\python\\wvd\\next\\.local\\giant-200-20261030\\hang-check-1\\current.png",
+    "provenance": "Original MuMu2 frames; idle pair after stopped run21; party-change comparison from prior run1 evidence",
+    "expected": "progress",
+    "id": "different-party-values"
+  },
+  {
+    "frame": "tests/fixtures/combat-progress/glow-low.jpg",
+    "provenance": "Production recent-frame JPEG from zero-input failed acceptance, strong party HUD highlight pulse; unedited bytes copied once",
+    "sha256": "3f361fbc30e04cd8c39bb33de8265c971b0601766e93e0e9e383aca69217b868",
+    "id": "glow-low",
+    "source": "B1512572/run1/frame251/20261030T124905374.jpg",
+    "expected": "same_actor_and_values_no_progress"
+  },
+  {
+    "frame": "tests/fixtures/combat-progress/glow-high.jpg",
+    "provenance": "Production recent-frame JPEG from zero-input failed acceptance, strong party HUD highlight pulse; unedited bytes copied once",
+    "sha256": "6f82206d7ab9f99e3fe4d41e4c2f25c763d9efee811eb744a0cddbb3104ac3e4",
+    "id": "glow-high",
+    "source": "B1512572/run1/frame272/20261030T124920587.jpg",
+    "expected": "same_actor_and_values_no_progress"
+  }
+]

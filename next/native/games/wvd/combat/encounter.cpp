@@ -12,10 +12,10 @@ tasks::CompiledWorkflow fight_encounter(const nlohmann::json &profile,
     C graph("combat.encounter");
     graph.check_policy("combat", {"wvd-network-retry", "wvd-pause", "wvd-download", "wvd-party-death", "wvd-party-defeat"});
     const J battle{{"mode", "combat_active"}};
-    const J progress{{"mode", "region_changed"}, {"channel", "combat"}, {"roi", {15, 40, 145, 800}}};
+    const J progress = vision::combat_progress();
     auto baseline = progress, stalled = progress;
     baseline["reset"] = true;
-    stalled["mode"] = "region_stalled";
+    stalled["mode"] = "combat_stalled";
     graph.observe("StartProgress", baseline, {"Turn0"});
     graph.observe("NoProgress", C::all({battle, stalled}), {"AutoTimeout"});
     const auto dungeon = vision::combat_phase("dungeon");
@@ -63,7 +63,7 @@ tasks::CompiledWorkflow fight_encounter(const nlohmann::json &profile,
         graph.poll("WaitingForMenu", 500,
             branches,
             C::all({battle, C::absent(flee)}),
-            J{{"mode", "region_changed"}, {"channel", "combat"}, {"roi", {15, 40, 145, 800}}});
+            vision::combat_progress());
         graph.failure_route("WaitingForMenu", {"AutoTimeout"});
     } else {
         graph.route("Entry", {"Observed", "Dungeon", "Chest", "Revive"});
@@ -97,7 +97,7 @@ tasks::CompiledWorkflow fight_encounter(const nlohmann::json &profile,
         // full_auto 只证明正常自动执行，不能当作“战斗已结束”或输入许可。
         graph.poll(name + "Poll", 250,
             {"Dungeon", "Chest", "Revive", name + "AutoOff", name + "Poll"}, full_auto,
-            J{{"mode", "region_changed"}, {"channel", "combat"}, {"roi", {15, 40, 145, 800}}});
+            vision::combat_progress());
         graph.failure_route(name + "Poll", {"AutoTimeout"});
         graph.observe(name + "AutoOff", C::all({clear, disabled, C::absent(enabled)}), {after});
         graph.route(name, {"Dungeon", "Chest", "Revive", "NoProgress", name + "Action"});
