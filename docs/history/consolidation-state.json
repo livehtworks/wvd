@@ -1,0 +1,193 @@
+{
+  "schema": 2,
+  "role": "minimal_pending_incident_and_latest_environment_receipt; not an executable work package",
+  "updated_on": "2026-10-31",
+  "current_navigation": "docs/maintenance.md",
+  "full_original_ledger_in_git": "https://github.com/livehtworks/wvd/blob/f4bc8f9e0d94035d1ed906516b7e37c30378581c/docs/history/consolidation-state.json",
+  "incident_items": [
+    {
+      "id": "A1",
+      "tasks": [
+        "C01",
+        "C06",
+        "C09"
+      ],
+      "status": "OPEN",
+      "evidence": [
+        "docs/reviews/engineering/consolidation-execution-20261026.md"
+      ],
+      "closed_at": null
+    },
+    {
+      "id": "A2",
+      "tasks": [
+        "C07",
+        "C08",
+        "C09"
+      ],
+      "status": "OPEN",
+      "evidence": [
+        "docs/reviews/engineering/consolidation-execution-20261026.md"
+      ],
+      "closed_at": null
+    },
+    {
+      "id": "A3",
+      "tasks": [
+        "C02",
+        "C05"
+      ],
+      "status": "CLOSED",
+      "evidence": [
+        "D:\\programcode\\python\\wvd\\next\\.local\\consolidation-261026\\C05-core-evidence-bridge.json",
+        "D:\\programcode\\python\\wvd\\next\\.local\\consolidation-261026\\tools-validation\\review-fixes-freeze.json",
+        "D:\\programcode\\python\\wvd\\next\\.local\\consolidation-261026\\current-fixtures-retired.json"
+      ],
+      "closed_at": "2026-10-26T23:52:06.800235+08:00"
+    },
+    {
+      "id": "A4",
+      "tasks": [
+        "C01",
+        "C04",
+        "C06",
+        "C10"
+      ],
+      "status": "OPEN",
+      "evidence": [
+        "docs/reviews/engineering/consolidation-execution-20261026.md"
+      ],
+      "closed_at": null
+    },
+    {
+      "id": "A5",
+      "tasks": [
+        "C06",
+        "C09"
+      ],
+      "status": "OPEN",
+      "evidence": [
+        "docs/reviews/engineering/consolidation-execution-20261026.md"
+      ],
+      "closed_at": null
+    },
+    {
+      "id": "A6",
+      "tasks": [
+        "D00",
+        "C02",
+        "C05",
+        "C08",
+        "C09"
+      ],
+      "status": "OPEN",
+      "evidence": [
+        "docs/reviews/engineering/consolidation-execution-20261026.md"
+      ],
+      "closed_at": null
+    }
+  ],
+  "preceding_uncommitted_changes_preserved": {
+    "current_request_scope": [
+      "execute_user_approved_mumu_migration_toF",
+      "preserve_three_original_instances_and_game_data",
+      "verify_original_use_and_future_instances_real_F_directory",
+      "shut_down_after_validation_no_loop_no_ci"
+    ],
+    "runtime_followup_20261030": {
+      "state": "user_paused_service_and_emulator_stopped",
+      "source_commit": "2f70858f97795c54d152e0adda961b79b24e3266",
+      "scope": [
+        "combat_stall_detector_and_original_recovery",
+        "local_build_package_deploy",
+        "continue_same200_goal_remaining_only"
+      ],
+      "evidence": "next/.local/giant-200-20261030/",
+      "excluded": [
+        "formal_history_migration",
+        "monitor_resume",
+        "online_ci"
+      ],
+      "authorization": "User2026-10-30: fix stall before restart; deploy then restart/continue; continuously check missing attack/skill menu",
+      "exe_sha256": "15670137f3229039d088363af5580cf72665857b3a0a0af767f955c96811fa75",
+      "instance_id": "7FFEDDFD-AFD6-469B-95A8-14D4ED7122B0",
+      "request_id": "giant-200-20261030-a81556d0ff4449fea1fd1294c2779065",
+      "completed_successes": 24,
+      "target_successes": 200,
+      "accepted_inputs_at_confirmation": 17,
+      "config_hashes_unchanged": 41,
+      "live_shared_layout": "request 3 files; shared set 600 files",
+      "confirmation": "next/.local/giant-200-20261030/stall-fix/acceptance2/running-confirmation.json",
+      "remaining": "User stopped for MuMu migration; migration now completed and all original instances/formal service stopped. run6 stopped at2units excluded,24/200 valid, remaining176. No auto resume.",
+      "failed_run_id": 1,
+      "failure_receipt": "next/.local/giant-200-20261030/hang-check-1/failed-receipt-reference.json",
+      "game_restart_count": 2,
+      "game_recovery": "New semantic no-progress detector triggered automatic app restart after62.3246s; menu returned and battle input results confirmed",
+      "pending_combat_preserved": true,
+      "continuation_submitted": true,
+      "active_segment_request_id": "giant-200-stallfix2-20261030-39faac202a3b485aa4e18ffa455e91dc",
+      "current_cycle_request_id": "repeat-18da01848606a3aad839301448ff35f0330bbf23ba718d48e8a311615fce313e",
+      "current_run_id": 6,
+      "remaining_successes": 176,
+      "restoration_authorization": "User2026-10-30: 恢复200轮循环，确认有实际进展再告诉我",
+      "first_verified_completed_run_id": 1,
+      "first_success_receipt": "next/.local/giant-200-20261030/stall-fix/acceptance2/verified-new-successes.json",
+      "accepted_inputs_in_next_cycle": 17,
+      "prior_failure_reason": "FLOW_INVOCATION_TIMEOUT:Task_FirstDungeon_Entry",
+      "stall_repair": {
+        "report": "docs/reviews/runtime/combat-animation-stall-20261030.md",
+        "evidence": "next/.local/giant-200-20261030/stall-fix/",
+        "old_failed_run": 21,
+        "menu_polling": "original continuous polling retained",
+        "progress": "current actor and party values; idle glow excluded",
+        "restart": "Original Native coordinator confirmed StopApplication/StartApplication; emulator2/VPN stayed running",
+        "first_live_acceptance": "FAILED and zero-input stopped; old a500 not accepted",
+        "automatic_recovery_proof": "next/.local/giant-200-20261030/stall-fix/acceptance2/automatic-recovery-proof.json",
+        "post_restart_confirmed_battle_inputs": 18,
+        "full_live_acceptance": "PASS: real automatic restart, complete clean cycle, automatic next-cycle confirmed inputs",
+        "intermediate_retired": "D:/trash/wvd-combat-stall-intermediate-20261030; only failed a500 candidate621 files and matching PDB, restore manifest retained",
+        "latest_progress": "next/.local/giant-200-20261030/stall-fix/acceptance2/final-live-progress.json"
+      },
+      "commit_review": {
+        "authorization": "User explicitly requests commit/push fix, test materials and docs to personal fork; exclude.vscode; preserve loop; no online CI",
+        "target": "fork/codex/t0-lifecycle-repair-20261025",
+        "included": "this commit",
+        "source_inputs_sha256": "fc734057b1a2f39358a8609930afa9df75546b83fd80abfb2aa3e5aaf93eb72c",
+        "fixture_count": 5,
+        "fixture_bytes": 5045598,
+        "ci_enabled": false,
+        "workflows": "both disabled_manually",
+        "runtime_instance_unchanged": "7FFEDDFD-AFD6-469B-95A8-14D4ED7122B0",
+        "runtime_snapshot": "D:\\programcode\\python\\wvd\\next\\.local\\giant-200-20261030\\stall-fix\\commit-review\\runtime-review.json",
+        "verification": "exact product bytes + fixture SHA/dimensions + reused final real Service/FlowExecutor/production receipts",
+        "at": "2026-10-30T21:49:21+08:00"
+      }
+    },
+    "mumu_migration_review_20261030": {
+      "state": "completed_and_shutdown",
+      "blocker": "No migration blocker. One cold first-connect test was inconclusive because external adb probes overlapped; ready-state original entry and game IPC passed, evidence retained without speculative patch. Recovery set kept because native importFilePath references remain; shared adb has unrelated device and was not stopped.",
+      "active_target": "F:/Applications/MuMuPlayer",
+      "source_install_removed": "C:/soft/MuMu Player 12",
+      "version": "6.8.8.0",
+      "original_instance_count": 3,
+      "original_indexes_and_names_preserved": true,
+      "original_data_vdi_bytes": 144711498240,
+      "whole_vdi_SHA_equal_before_first_boot": 3,
+      "new_instance_default_F_verified": true,
+      "emulators_and_manager_stopped": true,
+      "formal_and_test_WVD_stopped": true,
+      "monitor": "PAUSED",
+      "formal_configuration_semantic_change": "EMU_PATH only; values/default_values/revision persisted by original CAS; other40 config files SHA unchanged",
+      "recovery_set": "F:/Applications/MuMuPlayer-migration-20261030",
+      "temporary_trash": "F:/trash/mumu-migration-temporary-20261031-7e5f8c72",
+      "cwd_artifact_trash": "D:/trash/mumu-cli-cwd-20261031-7e5f8c72",
+      "temporary_files_retired": 739,
+      "temporary_logical_bytes_retired": 118239218,
+      "same_volume_cleanup_space_released": 0,
+      "commit_push_online_CI": false,
+      "report": "docs/reviews/engineering/mumu-f-migration-20261030.md",
+      "evidence": "next/.local/mumu-f-migration-20261030/completed-migration.json",
+      "authorization": "User explicitly approves actual migration, preserve all3 instances/data, verify new default onF, final shutdown, no loop"
+    }
+  }
+}

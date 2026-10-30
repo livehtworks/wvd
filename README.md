@@ -7,9 +7,7 @@
 
 当前维护产品是 [WVD Next Windows 工作台](next/README.md)，使用 C++20/CMake、Vue、OpenCV 和 ONNX Runtime。设备链为 MuMu IPC 取图、ADB 元数据/生命周期及 scrcpy 输入；旧 Python 程序和 Maa 阶段资料保留其历史用途，不参与当前原生构建运行。
 
-当前状态与实际部署入口见 [项目当前事实](docs/project-status.md)，配置、用户流程及运行记录的归属见 [持久数据职责](docs/data-authority.md)，执行前按任务查阅 [执行注意项](docs/execution-notes.md)。维护收束的任务顺序、验收与未结事项统一见 [2026-10-26 收束计划](docs/work-packages/consolidation-20261026.md)。
-
-截至 2026-10-26 盘点，当前正式候选与默认打包目录尚未统一，产物生命周期 T0 事故仍未关闭。具体现场与证据见 [收束盘点](docs/reviews/consolidation-inventory-20261026.md) 和 [事故报告](docs/reviews/t0-storage-lifecycle-20261026.md)。文档补全不代表清理、重新部署或事故整改已经执行；不要把默认输出目录直接当作最新正式部署。
+当前状态、架构、资料分类与维护事项统一从[项目文档](docs/README.md)进入。正式候选已统一到 `next/dist/wvd-next-native`；MuMu 已迁至 F 盘，当前循环及监控暂停。存储生命周期 T0 仍未关闭，具体部署身份和剩余问题见[项目状态](docs/project-status.md)。
 
 ## 旧 Python 版说明
 

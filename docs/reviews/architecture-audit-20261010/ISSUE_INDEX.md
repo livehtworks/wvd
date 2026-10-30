@@ -2,9 +2,9 @@
 
 基线4c466e14fa514fa177380e902afe373c8f20c3b2。源码改动、限定断言通过、整包验收、部署、实机和归因分别登记；没有将43项批量关闭。
 
-完整字段、原审计来源和当前实现文件见[ISSUES.json](ISSUES.json)，验收边界见[主报告](../architecture-audit-remediation-20261010.md)。`source_repaired_acceptance_partial`表示已有修复与部分真实生产代码断言，但尚有回执所列的必需覆盖缺口；不是已完成生产验收。`source_repaired_targeted_verified`也仅证明列出的限定离线合同。
+完整字段、原审计来源和当前实现文件见[ISSUES.json](ISSUES.json)，验收边界见[主报告](../runtime/architecture-audit-remediation-20261010.md)。`source_repaired_acceptance_partial`表示已有修复与部分真实生产代码断言，但尚有回执所列的必需覆盖缺口；不是已完成生产验收。`source_repaired_targeted_verified`也仅证明列出的限定离线合同。
 
-2026-10-10继续修复勘误：EX07/EX08/R03/R07的现行剩余义务不再包含“没有疗效素材就保持healing_required”。补给遵循尽力尝试、效果分别记账；R07的统一输入许可及EX05的三处消费端复制已经进入首份离线补丁，真实Service/现场/分配净增仍未代验。原来源、原回执和撤回原因留在JSON的`guidance_errata`，当前继续证据见[继续修复回执](../critical-followup-v2-20261010.md)。
+2026-10-10继续修复勘误：EX07/EX08/R03/R07的现行剩余义务不再包含“没有疗效素材就保持healing_required”。补给遵循尽力尝试、效果分别记账；R07的统一输入许可及EX05的三处消费端复制已经进入首份离线补丁，真实Service/现场/分配净增仍未代验。原来源、原回执和撤回原因留在JSON的`guidance_errata`，当前继续证据见[继续修复回执](../runtime/critical-followup-v2-20261010.md)。
 
 2026-10-11 Windows承接：六模块contracts-final-7回执complete=true；43个原ID和历史状态保留，JSON逐项补RA承接方向，V2包的新发现独立登记，不混入43项数量。模块回归不是每项验收关闭，内存仍RESOURCE_UNRESOLVED；本机原帧/职责/部署与未完成条件见继续修复回执第十一节。
 

@@ -1,8 +1,10 @@
 # 废弃素材与待确认清单
 
-## 2026-10-26 当前复核状态
+## 当前保留决定与历史盘点
 
-复核基线为 `179cfd851877cba2f2df401d86a905ff9ae088f6`。本页登记素材的已知引用、替代证据与未确认事项。2026-10-26执行C03已修正24条来源元数据并重算manifest revision；没有删除、搬移图片或改变PNG字节。具体推进、验收及停止条件见 [收束计划](../../docs/work-packages/consolidation-20261026.md)，来源事实见 [收束盘点](../../docs/reviews/consolidation-inventory-20261026.md)，资产和正式配置职责见 [持久数据职责](../../docs/data-authority.md)。
+以下数量为2026-10-26历史盘点；本轮仅核对重复隔离夹具，未重做全包判废。当前可见相同图片仍可能承担不同用例，不能按重复SHA删除测试源。最近处置见[资料管理](../../docs/material-retention.md)。
+
+历史复核基线为 `179cfd851877cba2f2df401d86a905ff9ae088f6`。本页登记素材的已知引用、替代证据与未确认事项。2026-10-26执行C03已修正24条来源元数据并重算manifest revision；没有删除、搬移图片或改变PNG字节。具体推进、验收及停止条件见 [收束计划](../../docs/maintenance.md)，来源事实见 [收束盘点](../../docs/reviews/engineering/consolidation-inventory-20261026.md)，资产和正式配置职责见 [持久数据职责](../../docs/data-authority.md)。
 
 | 当前核查项 | 已确认事实 | 整理结论 |
 | --- | --- | --- |

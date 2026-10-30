@@ -112,12 +112,12 @@ RESOURCE_UNRESOLVED、PERFORMANCE_UNRESOLVED保留。静态覆盖完成不等于
 ## 验证失败不等于没有实现
 
 分项结论来自本地执行证据，不是用户提供的外部结果；汇总入口为
-[m4-business-validation.md](../m4-business-validation.md)，具体轮次、输入数、失败原因及
+[m4-business-validation.md](https://github.com/livehtworks/wvd/blob/f4bc8f9e0d94035d1ed906516b7e37c30378581c/next/docs/m4-business-validation.md)，具体轮次、输入数、失败原因及
 EXE身份/真静止证据以各专题当前报告为准，本表不复制会随复验过期的计数：
 
-- [7000G](../m4-gold-income-validation.md)、[Golden](../m4-golden-chest-validation.md)、[牛洞](../m4-bull-cave-validation.md)。
-- [沙人](../m4-sandman-validation.md)、[钢试炼](../m4-steel-trial-validation.md)。
-- [默认对话](../m4-default-dialogue-validation.md)、[时间跳跃](../m4-time-leap-validation.md)；因果链分项见业务汇总及对应任务专题。
+- [7000G](https://github.com/livehtworks/wvd/blob/f4bc8f9e0d94035d1ed906516b7e37c30378581c/next/docs/m4-gold-income-validation.md)、[Golden](https://github.com/livehtworks/wvd/blob/f4bc8f9e0d94035d1ed906516b7e37c30378581c/next/docs/m4-golden-chest-validation.md)、[牛洞](https://github.com/livehtworks/wvd/blob/f4bc8f9e0d94035d1ed906516b7e37c30378581c/next/docs/m4-bull-cave-validation.md)。
+- [沙人](https://github.com/livehtworks/wvd/blob/f4bc8f9e0d94035d1ed906516b7e37c30378581c/next/docs/m4-sandman-validation.md)、[钢试炼](https://github.com/livehtworks/wvd/blob/f4bc8f9e0d94035d1ed906516b7e37c30378581c/next/docs/m4-steel-trial-validation.md)。
+- [默认对话](https://github.com/livehtworks/wvd/blob/f4bc8f9e0d94035d1ed906516b7e37c30378581c/next/docs/m4-default-dialogue-validation.md)、[时间跳跃](https://github.com/livehtworks/wvd/blob/f4bc8f9e0d94035d1ed906516b7e37c30378581c/next/docs/m4-time-leap-validation.md)；因果链分项见业务汇总及对应任务专题。
 
 夹具自检、发布校验、业务输入/后置失败及UserStopped分别解释，不能合并成全通过。
 局部分项PASS不解除其他完整流程的阻断，也不改变完整任务验收 **0/58**。

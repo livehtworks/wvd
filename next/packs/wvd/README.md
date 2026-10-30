@@ -1,10 +1,10 @@
 # WVD 游戏包
 
-本目录是当前原生产品的清单管理包输入。作者源、生成包、候选包与运行发布分别承担职责；当前规则以 [持久数据职责](../../../docs/data-authority.md) 为准，维护任务见 [2026-10-26 收束计划](../../../docs/work-packages/consolidation-20261026.md)。
+本目录是当前原生产品的清单管理包输入。作者源、生成包、候选包与运行发布分别承担职责；当前规则以 [持久数据职责](../../../docs/data-authority.md) 为准，维护任务见 [维护事项](../../../docs/maintenance.md)。
 
 ## 当前基线与职责
 
-以下数字固定于提交 `179cfd851877cba2f2df401d86a905ff9ae088f6`，依据 [2026-10-26 收束盘点](../../../docs/reviews/consolidation-inventory-20261026.md) 及该提交 Git 树、JSON 复核，不代表后续清理或索引修复已经完成。
+以下数字固定于提交 `179cfd851877cba2f2df401d86a905ff9ae088f6`，依据 [2026-10-26 收束盘点](../../../docs/reviews/engineering/consolidation-inventory-20261026.md) 及该提交 Git 树、JSON 复核，不代表后续清理或索引修复已经完成。
 
 | 对象 | 当前内容与用途 |
 | --- | --- |

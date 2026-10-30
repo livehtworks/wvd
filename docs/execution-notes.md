@@ -1,32 +1,38 @@
 # 当前执行注意项
 
-## 本轮收束入口与验证边界
+## 工具、路径与验证边界
+
+- **MuMu原生导出超时不代表导出已停止。** 6.8.8的`mumu-cli export`实测返回`-502/mainnx request failed`后，管理器仍继续写入`.mumudata`；文件长度和时间戳也可能暂时不更新。不得因此重复提交导出、关闭管理器或移动源数据。须等文件可独占只读打开、7z目录可读，再以完整`7za t` CRC校验判定备份完整。迁移前记录源VDI的SHA256，恢复后、首次启动前核对。安装位置切换须由原生安装/导入入口重建绝对路径，不直接覆盖带旧C盘路径的`.nemu`。
+
+- **MuMu模块安装包不是独立安装向导。** `MuMu-setup-nxmain/nemux/mumu15-*.exe`的签名、SHA与版本相符，只能证明材料身份；不能证明可双击完成全新安装。6.8.8实测仅确认UAC后退出，原生日志为`from_orchestrator != 1, exit 1`。实际原生链以同一事务ID先准备main/两个engine，再提交engine、最后提交main；必须核对应版本的真实调用日志、目标路径及组件事务状态，不凭镜像页面“完整安装包”标签跳过入口核查。当前迁移使用本机原6.8.8安装日志核对原生参数，单次有界执行脚本及TEMP/日志集中于F盘迁移工作区；不使用第三方便携化脚本、不手工注册驱动或伪造安装配置。
+
+- **MuMu CLI还须显式约束工作目录。** 本轮两次导入后，仓库根新出现`configs/vm_config.json`和`configs/customer_config.json`共407B，创建时间分别紧随原1/2导入提交，内容为MuMu手机/reset配置；原始FileCreate进程未捕获，不虚构具体子进程。初始Git状态无该目录，正式配置权威仍是`next/.local/.../data`；两文件已按精确清单、逐文件SHA同盘归D盘trash，未动旧`config/`。后续MuMu CLI使用显式的`F:/Applications/MuMuPlayer/nx_main`工作目录，迁移/批量操作另核本轮工作区，不能只设置TEMP。实际在F目录执行info核对，仓库根未重建configs。共享ADB先核5037所有者及设备清单；本轮发现非本轮设备，保留daemon及其日志目录，不因目录属于本轮就停止共享服务。
 
 - **服务数据目录不再有AppData默认值。** 源码`manage_service.ps1`首次Start/Deploy需显式`-DataRoot`；后续省略时只能复用候选`service-launch.json`中仍存在的数据目录。缺路径/失效绑定/卷根路径在服务查询或创建数据目录前拒绝，Validate仍可不提供DataRoot。原生CLI本来就要求显式`--data-root`，不另加默认链。旧AppData全树已按用户指令迁入C盘trash，保留原始历史字节和恢复映射；不改写旧回执的绝对路径，不与当前D盘数据合并。源码已修复，旧冻结候选不回写、不假称已部署新规则。
 
-- **工具子进程路径以执行配置为准。** `next/tools/tool-paths.json`由build.py和原Invoke-TraceTool共同读取，显式传递子进程TEMP/TMP、npm/.NET/NuGet/SymCache/Python缓存；不依赖父进程默认值，不修改全局环境。离线分析器使用`python next/tools/build.py --heap-analyzer`构建，实际输出为`next/build/dotnet/bin/HeapAnalyzer/Release/net8.0/`；collect/export/contracts已同步，旧工具旁bin/obj不再加载。CDB缓存默认本轮证据目录内，越界在服务查询前拒绝。固定头文件默认`.local/cache/headers/`，搬迁已核锁定消费身份相同；普通用户npm/NuGet缓存可能属于其他项目，不能据此整体清理。详细验证及旧夹具失败见[整改报告](reviews/tool-output-paths-20261028.md)。
+- **工具子进程路径以执行配置为准。** `next/tools/tool-paths.json`由build.py和原Invoke-TraceTool共同读取，显式传递子进程TEMP/TMP、npm/.NET/NuGet/SymCache/Python缓存；不依赖父进程默认值，不修改全局环境。离线分析器使用`python next/tools/build.py --heap-analyzer`构建，实际输出为`next/build/dotnet/bin/HeapAnalyzer/Release/net8.0/`；collect/export/contracts已同步，旧工具旁bin/obj不再加载。CDB缓存默认本轮证据目录内，越界在服务查询前拒绝。固定头文件默认`.local/cache/headers/`，搬迁已核锁定消费身份相同；普通用户npm/NuGet缓存可能属于其他项目，不能据此整体清理。详细验证及旧夹具失败见[整改报告](reviews/engineering/tool-output-paths-20261028.md)。
 
 - **符号缓存不得依赖工具的盘根默认目录。** `C:/SymCache`曾留下WVD两个旧`.symcache`派生文件，共27,732,392B；2026-10-27已整体迁入`next/.local/symbol-cache/legacy-wpa-20261006/`，逐文件SHA256相同，原路径不存在，回执为`next/.local/consolidation-261026/symbol-cache-relocation-20261027.json`。现有heap analyzer显式使用本轮output下的symcache，capture_idle_heap的SymbolCache默认落在本轮证据目录内并检查显式路径边界；未发现现行工具硬编码C:/SymCache，未改系统环境变量。后续调用也显式指定项目内缓存，不再使用盘根默认值；旧派生缓存不是正式配对PDB，正式符号保全路径不变。
 
   2026-10-28已核历史缺口：`1c89a08`的旧`export_memory_stacks.ps1`设置了`_NT_SYMBOL_PATH`和报告`-outputfolder`/监测`OutputRoot`，却没有设置独立的`_NT_SYMCACHE_PATH`。[WPA官方规则](https://learn.microsoft.com/en-us/windows-hardware/test/wpt/loading-symbols)明确后者未设/为空时回退到工具所在盘根SymCache；主输出目录和工作目录都不能代替这项设置。此机制与原C盘WVD缓存及时间吻合，但缺少原创建进程回执，不能虚构具体命令；D盘空目录来源仍未证实。现行TraceProcessor入口已显式传入本轮`output/symcache`，不恢复已退出的WPA旧链。后续外部工具的输出规划须同时覆盖主结果、独立缓存、构建中间件及退出去向，不能只监测主输出目录就宣称所有写入受控。依据在`next/.local/root-artifact-audit-20261028/cache-path-provenance.json`。
 
-- 本轮范围、顺序、完成条件以 [收束计划](work-packages/consolidation-20261026.md) 及 [任务登记](work-packages/consolidation-20261026-tasks.json) 为准；先查 [当前事实](project-status.md)，再读下方有关条目。下方历史记录保留当时日期与证据，不把旧PID、旧批次或曾获授权当成当前现场及新动作许可。服务创建身份用Get-Process.StartTime.ToFileTimeUtc()与process_start_filetime核对；CIM CreationDate可能截掉100ns尾数，不能转回FILETIME作精确等值判断。
+- 执行边界以用户本次要求、[维护事项](maintenance.md)和[当前事实](project-status.md)为准；旧[最小证据登记](history/consolidation-state.json)只追溯未结事项，不再安排每轮工作包。下方历史记录保留当时日期与证据，不把旧PID、旧批次或曾获授权当成当前现场及新动作许可。服务创建身份用Get-Process.StartTime.ToFileTimeUtc()与process_start_filetime核对；CIM CreationDate可能截掉100ns尾数，不能转回FILETIME作精确等值判断。
 - **文档选择器已修并定向验证。** `run_contracts.select_modules()`与`source_identity()`排除`docs/`、`next/docs/`及任意层README.md/AGENTS.md；真实Git的文档、暂存/未跟踪及混合源码场景已验证。真实源码、资源、依赖或合同入口变更仍按实际影响验证，计划输出不能替代对应行为验收。
 - `source_identity()`区分产品输入与文档来源；文档HEAD改变不等于产品二进制失效。复用既有证据须核适用的输入/二进制/依赖身份和验收范围；无法证明的部分标未验，不因此无预算重建全部夹具。全新隔离根仍是测试隔离要求，结束后的大夹具去向按同一任务记录，不能靠复用污染目录或删弱真实边界节约成本。
-- 原始盘点保留2026-10-26的时点；本轮迁移结果见任务登记和[执行报告](reviews/consolidation-execution-20261026.md)。同盘trash移动释放空间为0，不能以逻辑字节冒充实占或回收量。默认候选、正式候选、EXE/PDB配对及启动绑定分别核验；`-Action Validate`不代表部署或游戏验收。旧候选不得补造标记，匹配符号保全前不得清理对应build。
+- 原始盘点保留2026-10-26的时点；历史迁移结果见最小证据登记和[执行报告](reviews/engineering/consolidation-execution-20261026.md)。同盘trash移动释放空间为0，不能以逻辑字节冒充实占或回收量。默认候选、正式候选、EXE/PDB配对及启动绑定分别核验；`-Action Validate`不代表部署或游戏验收。旧候选不得补造标记，匹配符号保全前不得清理对应build。
 - Windows本机`DirEntry.stat()`可能缺少有效FileID/链接数；目录身份和容量去重须使用`os.stat()`或Win32实证。真实拒删测试先确认DELETE-open返回32；只读元数据句柄不一定复现生产租约。迁移遇到重解析点只处理已证实普通的兄弟子树，不递归跟随链接。完整恢复清单同时保存在每个盘符的trash根。
 
 ## 按问题查阅的执行记录
 
-- 2026-10-27用户明确退役线上CI：个人仓库Actions总开关false、原生及旧Python两工作流disabled_manually。失败run40354209693只作历史证据，不重跑、不为修绿改变锁值或削弱本地验证。历史故障为词表哈希失败且PowerShell连续原生命令掩盖前错；行尾原因未取得runner字节证明，不写成已证实。本地脚本仍须正确传播非零退出。 Git推送前只读复核Actions总开关与工作流状态；本机全局代理17897失效、直连DNS失败时，已验证环境HTTPS_PROXY对应7897可用，单次使用git -c http.proxy=$env:HTTPS_PROXY，不修改全局Git代理或游戏VPN。
+- 2026-10-27用户明确退役线上CI：个人仓库Actions总开关false、原生及旧Python两工作流disabled_manually。失败run40354209693只作历史证据，不重跑、不为修绿改变锁值或削弱本地验证。历史故障为词表哈希失败且PowerShell连续原生命令掩盖前错；行尾原因未取得runner字节证明，不写成已证实。本地脚本仍须正确传播非零退出。 Git推送前只读复核Actions总开关与工作流状态；2026-10-30此前全局17897失效，按用户后续明确授权已将Git全局http/https代理统一为Clash7897，并以无覆盖的git ls-remote验证；Windows代理同端口，安卓VPN保持。以后先核当前Clash监听与环境，不沿用已失效端口。
 - C09新Windows IO边界已实际复现：MSVC目录迭代器可能返回extended namespace路径；交给原RunStore前须用普通root与instance/run文件名重建，不能把`\\?\D:`当成可打开的父目录。只在系统IO边界加native前缀，持久记录/公用路径保持普通DOS/UNC表示。同类处理沿C08已验证方式，不修改原RunStore读取保护。
-- `S:/trash/wvd-old-worktree-20261027/`包含原17处用户修改和忽略独有材料，属于受保护封存，不是普通临时垃圾；恢复用该根RESTORE-MANIFEST及Git工作区迁移。未来正式`wvd-publication-history`同样是受保护回滚材料，不能被普通trash清理带走。
-- 2026-10-26已确认[T0产物生命周期事故](reviews/t0-storage-lifecycle-20261026.md)：发布历史与隔离测试/候选持续累积。新增长期运行、大文件边界或完整构建/验收前，先核本轮文件/空间增量、输出位置、必要证据集合和结束后的处置，优先复用仍有效的验证；不得靠不断新建目录或永久保留每轮完整树代替收尾。核心边界仍须真实验证，不删测试、不改弱断言。正式历史/未知所有权不得盲删，必须形成有引用依据和恢复位置的处置清单。现有配额不等于全工作区有界，不能将局部通过写作治理完成。Windows DirEntry.stat本机FileID/链接数为0，禁止用其去重容量；逻辑量、FileID去重内容量和实占/可回收量分开报告。
-- 代理读取按2026-10-21用户要求减负：先读精简project-status及本轮计划/任务登记，handoff-20261021只按需查历史；专项文档只读本任务相关段落。正常巡检不默认取图/看图，不重放长心跳上下文，不展开完整combat头像证据或长JSON。先文字序号/时间/步骤/回执，只有明确疑点需要像素才能区分原因时查看1张对应原帧，必要时才比较第2张；相同SHA不重复打开。本地证据保留不等于必须送入模型，生产截图/日志策略不关闭。
+- `S:/trash/wvd-old-worktree-20261027/`是旧工作区原登记位置，后续复核已发现该根缺失，不能再宣称整树可恢复；17处修改三版本独立备份仍受保护，原件去向待确认。未来正式`wvd-publication-history`同样是受保护回滚材料，不能被普通trash清理带走。
+- 2026-10-26已确认[T0产物生命周期事故](reviews/incidents/t0-storage-lifecycle-20261026.md)：发布历史与隔离测试/候选持续累积。新增长期运行、大文件边界或完整构建/验收前，先核本轮文件/空间增量、输出位置、必要证据集合和结束后的处置，优先复用仍有效的验证；不得靠不断新建目录或永久保留每轮完整树代替收尾。核心边界仍须真实验证，不删测试、不改弱断言。正式历史/未知所有权不得盲删，必须形成有引用依据和恢复位置的处置清单。现有配额不等于全工作区有界，不能将局部通过写作治理完成。Windows DirEntry.stat本机FileID/链接数为0，禁止用其去重容量；逻辑量、FileID去重内容量和实占/可回收量分开报告。
+- 代理读取按2026-10-21用户要求减负：先读精简project-status及维护事项，handoff-20261021只按需查历史；专项文档只读本任务相关段落。正常巡检不默认取图/看图，不重放长心跳上下文，不展开完整combat头像证据或长JSON。先文字序号/时间/步骤/回执，只有明确疑点需要像素才能区分原因时查看1张对应原帧，必要时才比较第2张；相同SHA不重复打开。本地证据保留不等于必须送入模型，生产截图/日志策略不关闭。
 - 原rescue-marker-resume-261020/inspect.ps1会复制最近原图且逐次复核全部完成回执，不是低成本文字摘要入口。恢复监控须先有新的人工要求；正常运行按游标读取新增事件和新增回执，保留既有已核账目，不每10分钟重新读全历史。真正终核、身份变化或账目不一致时再作完整审计；不得为省资源跳过异常诊断。
 - 重启检查同时筛选FlowExecutor的`observation.recovery`和Coordinator的`recovery.plan`、`lifecycle.*`；后者以同generation的StopApplication/StartApplication真实confirmed区分游戏主动重启，不能只搜`bound_game.restart`或用generation/失败会话数推算次数。2026-10-22 run1已验证上述两类事件不等价；运行中execution-events.jsonl尚为空、API事件环resync时须保留缺口并结合已落盘诊断，不宣称无重启。
 - `NATIVE_BUNDLE_LINK_FAILED:NTSTATUS=3221226085`对应`0xC0000265/STATUS_TOO_MANY_LINKS`，不是通用缺资源。实测可从1023增加至1024，再加才容量错误；双别名失败回滚后恢复1023。仅按实际系统错误从同一冻结租约复制回退，不按预读计数分支；重启不减少链接，不能擅删正式历史。2026-10-25修复已正式部署，首轮1024链接及独立复制的同SHA实证见`.local/giant-200-t0-261025/live-model-capacity-proof.json`；原诊断及离线补证仍保留。
-- 完整build已生成BUILT而默认package被旧dist历史缺交付字段阻止时，不篡改旧标记或清理未知目录。2026-10-25保留97份历史，以原受限inventory只读核清87,334项及14.8GB逻辑字节，再将旧占用/元数据加入额外保守空间准入，使用原package事务在明确的新版本目标`.local/t0-candidate-261025`完成构建物打包。该历史默认目标仍保持阻断，归档需独立授权；不能用不断换UUID掩盖当前事务的journal/cleanup错误。
+- 完整build已生成BUILT而默认package被旧dist历史缺交付字段阻止时，不篡改旧标记或清理未知目录。2026-10-25保留97份历史，以原受限inventory只读核清87,334项及14.8GB逻辑字节，再将旧占用/元数据加入额外保守空间准入，使用原package事务在明确的新版本目标`.local/t0-candidate-261025`完成构建物打包。这是2026-10-25当时的阻断；当前默认候选已统一，旧未知事务仍须逐项核对，不能用不断换UUID掩盖当前事务的journal/cleanup错误。
 - `tools/build.py`没有参数解析，直接传`--help`仍会进入完整build；查看用法应读源码。定向构建通过现有`build.run`/`cmake_path`导入调用，保持有界Job和完整日志；从`tools`导入时先加入工具目录，不能假定`tools.build`支持包内绝对导入。
 - `run_contracts.materialize_pack`只复制资源清单内成员；原帧验证用`materialize_recorded_models`核锁定模型哈希后复制到本轮隔离pack。Application发布组装还须经`materialize_preparation_models`将真实模型加入隔离manifest并重算一致revision；只复制模型仍会被未登记成员门禁拒绝。缺模型导致准备钩子未到达属于夹具前提失败，不得改弱发布断言或向正式包写素材。
 - Windows拒删夹具不能只用`FILE_READ_ATTRIBUTES`：本机实测即使该句柄未给删除共享，另一个DELETE-open仍可成功。使用与真实租约相同的`GENERIC_READ`及`FILE_SHARE_READ`，并先断言DELETE-open实际返回32/ERROR_SHARING_VIOLATION，才用于清理失败验收；证据`.local/t0-repair-261025/wp01-sharing-probe-a1/receipt.json`。
@@ -75,7 +81,7 @@
 - Windows承接本包：Python3.14在本机同一路径lstat与打开句柄fstat的ctime不同，原只读校验器误报FILE_CHANGED_DURING_READ。外部包原字节不改；独立适配保留dev/ino/size/mtime/mode/birthtime及完整内容哈希，回执明确标注适配。导入校验器禁用pycache写入，否则额外pyc会被包完整性检查拒绝。CRLF checkout须与规范Git blob区分，资源清单仍按原始载荷字节验证，不能以Git blob相同放行资源哈希。
 - V2测试集中内联使MSVC对象节数溢出C1128：共享页面测试移入独立.cpp，原入口/断言保留，test_native_author使用/bigobj；不删除测试或调整业务预期规避构建失败。资源生成事务先验证既有pack，不能用生成工具修补未经核对的坏载荷；本轮仅对明确LF匹配的文本做EOL规范化后再生成。
 - Windows定向夹具必须保证故障前提实际成立：Unknown计时用例原10ms/90ms安排会先触发合法场景重分类，现明确检查首次提交时计时已启动，再测试未知送达下不重启及局部期限。只调整受控测试时序，不改生产期限。Coordinator的直接Fail夹具必须移除旧正常后继；有guard及后继的是另一种恢复重查合同。共享工厂须装配原PublicStepScope，Handoff不能按RequireRecovery出口绑定。原帧Service租约还须登记测试目录中manifest、额外参数和锁定模型；不通过放宽租约检查排除缺成员错误。
-- 当前继续工作为基于d03a765及首份26文件补丁的离线修复。现行输入、Unknown和尽力补给语义统一引用`next/docs/core-contracts.md`；旧部署/100轮授权及历史失败指导不覆盖T0后的停止要求。后续回执见`docs/reviews/critical-followup-v2-20261010.md`，不把受控测试写成Windows/Service/现场通过。
+- d03a765及首份26文件补丁是早期离线修复的历史基线，不再作为当前待办。现行输入、Unknown和尽力补给语义统一引用`next/docs/core-contracts.md`；旧部署/100轮授权及历史失败指导不覆盖T0后的停止要求。后续回执见[专项说明](reviews/runtime/critical-followup-v2-20261010.md)，不把受控测试写成Windows/Service/现场通过。
 - 作者源、pack参数和manifest须作为同一候选核对。d03基线的semantic-assets参数已是84283字节，manifest却记录86509字节；首份补丁通过原生成器同步这项既有失配及public-flows变更。不要把旧manifest复原回来，也不能用部分缓存成员校验冒充完整资源包验证。
 - 现行堆比较资格以export_memory_stacks.ps1和measurement_endpoint.psm1为准：可比较已持有并确认的worker_joined_1/2，或同范围batch_payloads_released_1/2；两者不能混合，也不能把joined改名为整批释放。旧记录里只写batch端点的要求不覆盖新屏障合同；analysis_complete不等于comparison_eligible，更不等于已归因。
 
@@ -114,9 +120,9 @@
 - 排查恢复识别耗时时先分开wall_ns、exclusive_ns与worker_exclusive_ns；worker时间标明不可叠加墙钟。actual_matches是实际比对计数，不是不同模板或测试数量。不得靠跨失效截图缓存压计数，也不得把短路后的未执行Error说成已检查；正常all与any/not的资格边界须分别验收。第8轮Heal约46.35秒/1199次仍是历史失败证据，af8离线改善不冒充该现场同条件通过，详见reviews/action-first-chain-20261011.md与reviews/runtime-issues-handoff-20261009.md。
 - 性能趋势须比较同类节点而非仅比较整轮：旧版巨人前六轮时长8.49–19.03分钟、战斗Entry均值475–500ms，没有持续递增。外层选中即返回不表示复合条件按需计算。当前战斗改用combat_phase的局部阶段门禁，不改通用all/any契约；其可达资源同时进入collect_images与publisher的模型闭包，不能只登记模板而漏掉内部再起OCR。模型依赖按实际locale/phase展开一次；不能全阶段强制引入未使用语言。验证用真正的战斗菜单/详情原图；黑屏只能作未知反例，不能因历史文档称其战斗就算正例。新旧结果一致与match计数分别核对，不以热缓存耗时冒充实机提速。
 
-- 单击送达不是菜单切页成功。新增/修改菜单入口需声明同页重试，统一复用retry_menu_input；先查结果、同帧重认原页/按钮并排除阻挡，转场后不能沿用旧坐标。公用定义修改须同步发布资源和通过revision比较交换更新正式保存定义；只改工厂或包内JSON不足以修复用户流程。Auto脉冲、技能效果、领奖和物品转移按各自回执约束，不能自动套普通菜单重试。排查见docs/reviews/menu-input-retry-audit-20261009.md。
+- 单击送达不是菜单切页成功。新增/修改菜单入口需声明同页重试，统一复用retry_menu_input；先查结果、同帧重认原页/按钮并排除阻挡，转场后不能沿用旧坐标。公用定义修改须同步发布资源和通过revision比较交换更新正式保存定义；只改工厂或包内JSON不足以修复用户流程。Auto脉冲、技能效果、领奖和物品转移按各自回执约束，不能自动套普通菜单重试。排查见docs/reviews/runtime/menu-input-retry-audit-20261009.md。
 
-- 战斗行动条仍在但攻击/技能操作菜单未出现可能是动画/结算等待，不能仅凭一帧NoHit记未知异常或点Auto。原轮询持续重认菜单/结束/阻挡；菜单恢复立即交回策略。2026-10-30已复现头像发光及未来行动队列令原区域探针误报6.8%变化、不断刷新局部期限直至父调用超时；本轮原生战斗工厂改用combat_progress/combat_stalled，以当前角色头像和队伍HP/MP/SP稳定特征核真实进展；实机补充复现卡片高亮脉动误报后，数值采样进一步排除边框并去除局部背景，不能用仅两帧通过替代实机验收。保留原60秒无进展及15秒采样缺口规则、Scope限制和原游戏恢复链；旧帧不能靠时间流逝取得证据，Unknown/死亡/付款保护不放宽。导航通用区域探针保持。详见[修复报告](reviews/combat-animation-stall-20261030.md)，正式切换及成功数以当前事实为准。
+- 战斗行动条仍在但攻击/技能操作菜单未出现可能是动画/结算等待，不能仅凭一帧NoHit记未知异常或点Auto。原轮询持续重认菜单/结束/阻挡；菜单恢复立即交回策略。2026-10-30已复现头像发光及未来行动队列令原区域探针误报6.8%变化、不断刷新局部期限直至父调用超时；本轮原生战斗工厂改用combat_progress/combat_stalled，以当前角色头像和队伍HP/MP/SP稳定特征核真实进展；实机补充复现卡片高亮脉动误报后，数值采样进一步排除边框并去除局部背景，不能用仅两帧通过替代实机验收。保留原60秒无进展及15秒采样缺口规则、Scope限制和原游戏恢复链；旧帧不能靠时间流逝取得证据，Unknown/死亡/付款保护不放宽。导航通用区域探针保持。详见[修复报告](reviews/runtime/combat-animation-stall-20261030.md)，正式切换及成功数以当前事实为准。
 - 停止当前循环的API请求若传request_id，应从当前submission读取匹配值；临时生成新ID会被SUBMISSION_ID_MISMATCH拒绝。停止后必须回读busy=false、quiescent=true及repeat inactive，不能只凭发出请求认定停止，也不能把确认前发生的恢复记成已阻止。
 
 - 未执行节点的选择不是业务承诺：BusinessConfirm、带条件Call、业务守卫等必须保留同层候选来源。NotApplicable保证尚未产生效果，可重选；Waiting表示操作可能已开始，不能退回重放。正常重选先于异常计时，过期Poll及60秒重启前复查共用局部候选规则；已发送输入仍核对后置。不得因重选重置原分派期限或把候选命中记成业务完成。目标战重启丢失身份后可处理当前战斗，但须另行重新导航，不能凭再起/战斗结束恢复目标击杀授权。
@@ -128,7 +134,7 @@
 
 - 实例退出不能与旧技能成功混为一谈：只有业务明确标记instance_exit_discardable的会话动作，或有既定重启选路许可的普通菜单，才可在绑定实例退出证据及输入通道静止后转新Session。旧回执保存在sessions.unresolved_inputs及recovery.input_interrupted，不能算成功或重放。读取恢复已重启实例时需携带同创建身份/连接代次证明；单纯应用重启、断线、身份不符及持久副作用未知仍沿原保护。MuMu error900/901在进程或Android已退出时元数据仍可验证身份；进程已退出而Android标记暂未清除时不得要求在线ADB端口。
 
-- 通用金色“重试”可被技能“确认”模板匹配到0.899671，不得仅凭按钮认定技能详情；宽泛弹窗排除只用于禁止输入，正向分类需技能独有明细证据。条件恢复节点需同帧重查，事件处理成功不代表旧错误仍成立；带恢复后继的RequireRecovery属于本子流程，不能沿用无条件终止出口的跨作用域共享规则。真实样本和修复见docs/reviews/combat-popup-recovery-repair-20261007.md。
+- 通用金色“重试”可被技能“确认”模板匹配到0.899671，不得仅凭按钮认定技能详情；宽泛弹窗排除只用于禁止输入，正向分类需技能独有明细证据。条件恢复节点需同帧重查，事件处理成功不代表旧错误仍成立；带恢复后继的RequireRecovery属于本子流程，不能沿用无条件终止出口的跨作用域共享规则。真实样本和修复见docs/reviews/runtime/combat-popup-recovery-repair-20261007.md。
 - 用户暂停后，watch_task_session不能因cancel先退出而遗漏尚未terminal的worker；保留原监视线程等待并join，控制API不等待此过程。正式29轮停止现场曾仅有worker_definition_released、PrivateUsage约267.6MiB。停止时的busy要覆盖收尾窗口，不能用输入已静止冒充线程及堆页已回收。
 - Windows SegmentHeap由产品manifest声明（Windows 10 2004起支持），不是替换C++/OpenCV或注入第三方分配器。隔离内存/生命周期测试需同一manifest；短期准备A/B不证明完整游戏长期稳定。复制诊断EXE必须放独立目录并配原锁定DLL，不能直接放.local：该目录有旧onnxruntime.dll会优先加载，出现API22/17冲突须拒绝该结果。mt资源写入复制EXE在原同源EXE仍运行时本机曾报共享冲突，原进程结束后才成功，不杀产品进程绕过。
 - 技能灰态只在同一行动角色、无弹窗的正常菜单下连续两帧确认；量四个技能标签内部，不含边框/图标，必须有亮字同伴和真实暗字边缘。全屏暗、空字、其它不确定状态仍沿原开启等待，不以SP数字猜技能成本，不消费未施放动作，不启用Auto。
@@ -238,7 +244,7 @@
 
 - Windows PowerShell 5.1按本地代码页读取无BOM的.ps1，中文注释可能造成解析错误；`manage_service.ps1`和`service_lifecycle.ps1`采用UTF-8 BOM。批处理内容为ASCII命令，不能带UTF-8 BOM，否则首行@echo被当成未知命令。5.1的Start-Process返回对象须提前取得Handle再等待短命子进程，否则ExitCode可能为空；修正后的实际生命周期检查已通过，不将测试对象读取问题误报为重复后台运行。
 - 不用Windows PowerShell 5.1的Start-Process启动常驻后台：实测即使重定向stdin/stdout/stderr，仍会继承额外Shell管道句柄，后台已READY但调用批处理迟迟不返回。管理脚本调用同一EXE的`--launch`，复用原生Windows进程封装，以`PROC_THREAD_ATTRIBUTE_HANDLE_LIST`只继承NUL输入和两条日志句柄；启动器返回PID后退出，后台独立运行。最终candidate53真实启动批处理返回0且后台存活，不能以仅看到READY代替此检查。
-- 工具部署使用`next/tools/manage_service.ps1`的Start/Deploy/Stop，核对实时实例ID、数据目录、EXE、PID与进程创建时间后走正式退出接口，并等待对应进程真正结束。管理锁与数据锁分别防重复操作和重复后台；监听已关但旧实例仍清理时等待数据锁释放，不启动旁路实例。成功启动保存候选的`service-launch.json`，打包双击入口复用实际目录/端口，不误读默认LOCALAPPDATA配置。候选53已绑定正式data目录和17654；界面也提供“退出工具”。退出超时保留诊断且不启动第二后台，不按同名全局杀进程。详见`docs/reviews/service-lifecycle-20261001.md`。
+- 工具部署使用`next/tools/manage_service.ps1`的Start/Deploy/Stop，核对实时实例ID、数据目录、EXE、PID与进程创建时间后走正式退出接口，并等待对应进程真正结束。管理锁与数据锁分别防重复操作和重复后台；监听已关但旧实例仍清理时等待数据锁释放，不启动旁路实例。成功启动保存候选的`service-launch.json`，打包双击入口复用实际目录/端口，不误读默认LOCALAPPDATA配置。候选53已绑定正式data目录和17654；界面也提供“退出工具”。退出超时保留诊断且不启动第二后台，不按同名全局杀进程。详见[历史说明](https://github.com/livehtworks/wvd/blob/f4bc8f9e0d94035d1ed906516b7e37c30378581c/docs/reviews/service-lifecycle-20261001.md)。
 
 - 技能详情的“明細”图标会随布局下移：2026-10-01实帧模板46×80位于y=1004到1084，ROI截至1050会误判详情已关闭，进而重复打开技能并在详情内点击Auto。共用详情控件带现为`[720,750,180,430]`，不降阈值；核对详情、当前行动者和目标箭头后，还须查实机选敌输入及施放结果，不能仅以识图Hit代替链路通过。
 - 冷启动悬赏任务必须承接游戏仍在战斗/宝箱/迷宫的现场，也要承接已打开的繁中“委託清單”：先把委托页认作已知入口，再交既有公共公会开页链切到悬赏页，不能在InspectBoard只读等待。复用正式副本已定义的子流程及Return出口，避免重复展开全部策略触发节点上限；Call需绑定全部handoff。返哈肯中的encounter/stopped交回遭遇/续行处理，不接通用RecoveryRequired，否则会把正常宝箱误报为budget_exhausted。共享“關閉”按钮不证明公会页面，公会关闭步骤必须排除战斗。
@@ -270,7 +276,7 @@
 
 - 2026-09-27用户明确区分货币：G是普通金币，既定任务中几百/几千G的支出和少量重复恢复成本可接受；禁止自动点击关联绿色或紫色宝石的“購買”。已接入住宿实际提交账目及有限补试，送达未知只核对结果。不扩展到卖装备、抽卡、任意购买或无限重复扣款。历史“付款全部不可重复”不能充当最新需求。
 
-- 动作耗时扩展见`docs/reviews/action-timing-20260927.md`。原256条事件窗口会淘汰早期事件，不是完整时间线；新候选每轮另由同一RunStore保存`action-timing.jsonl`，64MiB上限及丢失/失败计数明确落盘。核对实际EXE后才能声称记录已启用，不能把新源码功能套到仍在运行的旧候选。
+- 动作耗时扩展见[历史说明](https://github.com/livehtworks/wvd/blob/f4bc8f9e0d94035d1ed906516b7e37c30378581c/docs/reviews/action-timing-20260927.md)。原256条事件窗口会淘汰早期事件，不是完整时间线；新候选每轮另由同一RunStore保存`action-timing.jsonl`，64MiB上限及丢失/失败计数明确落盘。核对实际EXE后才能声称记录已启用，不能把新源码功能套到仍在运行的旧候选。
 - 工作台循环模式为一直循环/指定次数，API为`repeat:true`及可选`repeat_count`。更新候选不会热替换后台；不可在付款或未决输入中强杀服务。浏览器自动化曾出现截图坐标偏移导致click落到邻近控件，可对已确认语义按钮使用键盘Enter，并核对API结果；工具返回click成功不等于页面发起了请求，不要误存偏移操作改动的配置。
 - `/api/v1/device/connect`需要模拟器路径、实例、ADB地址等请求字段，应读取当前profile组装，不能发送空对象后把缺path异常当设备连接失败；任务启动入口会从冻结profile自行连接。部署后从郊外独立启动曾停在Boot，不可仅因任务内部有InspectOutside就声称启动入口接受郊外，必须区分前置检查和后续业务。
 - 事件priority有效区间为0–1000，不能靠1100抢优先级绕过校验。MSVC C++20下JSON对象与字符串直接比较可能触发重载歧义，按实际字段类型用`get<std::string>()`后比较。
@@ -317,3 +323,7 @@
 - scrcpy的远端jar未删除与输入未释放必须区分；ADB离线无法rm静态文件，不能因此永久卡住任务准入。实例确实退出后，可撤销该实例的旧按键持有状态；本地子进程退出和自有转发消失仍需确认，业务输入是否生效的未知记录不能被清除。
 - `INPUT_CONTEXT_CHANGED`是门禁在底层发送前拒绝旧帧，不是送达未知：丢弃旧证据、使设备元数据缓存失效，再沿原选择节点重新取帧，保留原期限；菜单重试期间保留既有pending。其它拒绝仍失败，已发送/未知输入不适用。已按此规则恢复并真实Completed的轮次可续轮，不能再用累计rejected非零否决最终业务回执；拒绝仍如实计入日志。
 - 蝎女普通路线已有正式 API 完整循环证据；更换 EXE 后必须记录新候选身份及本轮实际范围，不能沿用旧 PASS。其它任务、随机事件和长期稳定性不能由普通一轮外推。实机范围由用户当轮指定，不自行扩展领奖、购买、复活、额外跳轮或刷怪。
+
+## 资料收尾
+
+同一问题只维护一份记录。已完成报告回到 Git，主题结论原位更新，不按日期新建完整交接、工作包或截图合集。当前保留与处置事实见[资料管理](material-retention.md)；当前测试用例引用的素材与未解决问题的最小证据继续保护。

@@ -26,7 +26,7 @@
 
 已测：真实 Gateway 快照初始化、文件写/删/替换拒绝、作者副本变更隔离、成员增加拒绝、
 关闭后释放、旧清单拒绝、revision 重用拒绝、单次 direct→Custom 完整性边界。
-最终结果与固定性能窗口见 [M3 修复报告](m3-fix-validation.md)。
+最终结果与固定性能窗口见 [M3 修复报告](https://github.com/livehtworks/wvd/blob/f4bc8f9e0d94035d1ed906516b7e37c30378581c/next/docs/m3-fix-validation.md)。
 
 仍需补齐：可写父目录竞态与完整重解析/路径矩阵、初始化各失败点、共享写入冲突、
 延迟模型读取、跨 pack/revision 缓存组合、STOP_TIMEOUT 的专门资源锁断言，以及目录模板的编译期展开。
