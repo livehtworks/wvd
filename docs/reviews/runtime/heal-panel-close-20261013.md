@@ -4,7 +4,7 @@
 
 用户2026-10-13明确要求：恢复两次返回后仍停在角色界面则点击左下X；提示可能自行消失，恢复期间遇敌应中断并进入战斗。旧src/script.py:3243附近为尽力恢复，五次PressReturn后返回主循环，没有recover_panel_not_closed硬停止。本轮采用用户指定的两次BACK加现有关闭动作，不照搬旧固定等待。
 
-故障证据next/.local/wvd-check-20261013-2001/：实例0DE7D06D/run2最后五次BACK均accepted，post允许原面板所以记录confirmed；五次后ReturnFailed终止。原图是角色强度页并显示连接中。不能据此断定“没必要恢复”提示曾出现，或认定网络/官方卡死是根因。
+故障证据已收束至next/.local/retained-evidence/inspection-issues/recover-panel-failure.png及index.json，原RunStore结果/日志保持：实例0DE7D06D/run2最后五次BACK均accepted，post允许原面板所以记录confirmed；五次后ReturnFailed终止。原图是角色强度页并显示连接中。不能据此断定“没必要恢复”提示曾出现，或认定网络/官方卡死是根因。
 
 ## 修改
 

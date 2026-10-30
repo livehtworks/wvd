@@ -44,7 +44,7 @@
 
 - 补给等待的宝箱阶段必须覆盖奖励/陷阱说明页：短暂迷宫后奖励可能迟到，旧三个开箱图标不能代替原chest_phase(reward)。复用该原配方并经原encounter交回Box，不能新增盲点或为等待调阈值/期限。原帧、完整Service/门禁/工厂回放及夹具前提失败见reviews/healing-reward-handoff-20261020.md；奖励步骤输入后直接切无HUD哈肯不符合其原后置，回放应提供实际迷宫中间帧，不放宽公共流程断言。
 
-- 只读巡检复制recent-frames时只选择最终扩展名为.png/.jpg/.jpeg的已发布文件，排除正在写入的.png.<UUID>.tmp；临时文件被占用不等于游戏、输入或截图归档故障，不因取证复制失败停止或重启循环。2026-10-20两次巡检已确认该并发窗口，修正后的巡检样例见next/.local/wvd-check-261020-0657/inspect.ps1。
+- 只读巡检复制recent-frames时只选择最终扩展名为.png/.jpg/.jpeg的已发布文件，排除正在写入的.png.<UUID>.tmp；临时文件被占用不等于游戏、输入或截图归档故障，不因取证复制失败停止或重启循环。2026-10-20两次巡检已确认该并发窗口，修正后的历史巡检样例已归D:/trash/wvd-materials-20261031/remaining-inspections/wvd-check-261020-0657/inspect.ps1；仅作故障历史，不再作为当前执行入口。
 
 - 友方选人页的buff图标可能同时连接上排左右卡片轮廓，只剩上排中间及下排三个完整框。不能以完整轮廓少于5个就等待至重启：现有support_cards须允许下排水平锚点，缺失框仍逐条核实际四边，遮掉卡片不准推断点击。原帧及Service/门禁回归见tests/fixtures/support-grid和reviews/support-grid-buff-20261020.md。既有test_support_selection三图入口的第三图要求有X的敌方单体选择页；全体技能的取消/确认页没有X时，support_selection的present/absent均unknown，不能将该前提不符的传参失败当作友方误识别。
 

@@ -4,7 +4,7 @@
 
 用户授权排查、修复、部署并续跑原100成功轮次目标，不新开100轮，不自动commit/push。正式profile和保存流程不修改，失败回执保留。已核原run1–18及续跑run20–27的保存Completed，共26成功；run19、run28失败均排除，待续74轮。
 
-原实例5D313D2F-33ED-4BCB-B390-4F0F7EB8BE2F/run28，最终INPUT_RESULT_UNCONFIRMED:AWAIT_RESULT_TIMEOUT。截图是繁中启动“請注意”，不是死亡页；frame475/generation2是失败前最后有效帧，不是点击依据frame287。原图、13字段pending、结果、日志见next/.local/wvd-check-20261013-1612/。本轮另保存next/.local/sc-261013/device-diagnostics-before.json及40份用户配置/流程的哈希索引。
+原实例5D313D2F-33ED-4BCB-B390-4F0F7EB8BE2F/run28，最终INPUT_RESULT_UNCONFIRMED:AWAIT_RESULT_TIMEOUT。截图是繁中启动“請注意”，不是死亡页；frame475/generation2是失败前最后有效帧，不是点击依据frame287。原图现为next/.local/retained-evidence/inspection-issues/startup-input-last-valid.png；13字段pending、必要事件/输入耗时及正式原结果/日志路径和SHA统一见next/.local/retained-evidence/inspection-issues/index.json。本轮另保存next/.local/sc-261013/device-diagnostics-before.json及40份用户配置/流程的哈希索引。
 
 ## 已确认的故障链
 

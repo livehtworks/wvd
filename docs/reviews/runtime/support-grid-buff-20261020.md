@@ -28,9 +28,9 @@ recognition模块首轮在独立support-contracts-261020-c1运行，既有技能
 
 最终support-contracts-261020-c2的recognition模块22个入口全部通过，complete=true、device_actions=false。产品输入64742a3af1fa8776c161dbae2f7b2902c5f5f188dd2de886df4042a71e1808bb/1321，与正式构建打包相同；模块入口数量不是游戏轮数。
 
-代理为修复重复主动恢复而停止run11。终态UserStopped/STOP_REQUESTED、result_saved/quiescent=true、成功仍28。停止时ReconnectBoot_Title有一份Sent且delivery_unknown=false的原输入，全部13字段和原结果保存在next/.local/wvd-check-261020-0350/stopped-result.json；保留原账，不伪造确认或删除。
+代理为修复重复主动恢复而停止run11。终态UserStopped/STOP_REQUESTED、result_saved/quiescent=true、成功仍28。停止时ReconnectBoot_Title有一份Sent且delivery_unknown=false的原输入，全部13字段和原结果保存在next/.local/retained-evidence/inspection-issues/index.json的maintenance_stop及正式RunStore原结果；保留原账，不伪造确认或删除。
 
-证据目录next/.local/wvd-check-261020-0350/保存原执行日志、耗时、诊断、帧、完整pending、原停止结果及验收日志。先前整链修复保留，profile/workflows未改，未commit/push。内存归因仍RESOURCE_UNRESOLVED。
+取证已于2026-10-31收束：next/.local/retained-evidence/inspection-issues/index.json保留完整停点pending及原生结果/日志路径和SHA；baseline/fixed日志与当前tests/fixtures/support-grid原帧承接回归证据，其余重复日志/帧和脚本移入D盘trash。先前整链修复保留，profile/workflows未改，未commit/push。内存归因仍RESOURCE_UNRESOLVED。
 
 ## 部署与续跑
 
@@ -46,4 +46,4 @@ recognition模块首轮在独立support-contracts-261020-c1运行，既有技能
 
 2026-10-20 12:08巡检确认本段run1–72全部保存Completed；原5+13+10份与本段72份共100份逐份核三业务单元、result_saved、quiescent，无重复计入segments。旧181ACEA2/run11半轮及其它失败/历史目标排除。最终run72 Completed/busy=false，repeat inactive/state=completed/completed_cycles=72/target_cycles=72，无未决输入、次要或存储错误。
 
-本段72轮执行事件核recovery为0，27份正式profile/workflow哈希保持。这不抹去前段故障，不等于全部历史100轮连续无故障，亦不证明MuMu渲染器内因或RESOURCE_UNRESOLVED解决。wvd定时监看已暂停，没有追加批次、重启设备或自动提交推送。最终证据在next/.local/wvd-check-261020-1208/：completed-batch-audit.json保存100份路径/哈希及权威文件核对，completed-current.json、completed-run72-result.json保存终态。初次内联审计因PowerShell将@($null).Count计为1而拒绝空pending，实际API为null；独立final-audit.ps1显式过滤null后重核通过，未改生产或放宽成功断言。
+本段72轮执行事件核recovery为0，27份正式profile/workflow哈希保持。这不抹去前段故障，不等于全部历史100轮连续无故障，亦不证明MuMu渲染器内因或RESOURCE_UNRESOLVED解决。wvd定时监看已暂停，没有追加批次、重启设备或自动提交推送。最终审计原件已移至next/.local/retained-evidence/inspection-issues/old100-completed-audit.json，保存100份路径/哈希及当时权威核对；2026-10-31逐份重核正式结果通过，重复current/result副本已收尾。初次内联审计因PowerShell将@($null).Count计为1而拒绝空pending，实际API为null；独立final-audit.ps1显式过滤null后重核通过，未改生产或放宽成功断言。

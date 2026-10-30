@@ -2,7 +2,7 @@
 
 ## 现场证据
 
-本次承接用户继续排查、修复并推进的指令。正式100轮仍累计27成功、剩余73；02C237E9/run3失败原账保留。原导航图及运行日志见next/.local/wvd-check-20261013-2128/。
+本次承接用户继续排查、修复并推进的指令。正式100轮仍累计27成功、剩余73；02C237E9/run3失败原账保留。原导航图现为next/.local/retained-evidence/inspection-issues/navigation-stall.png；原RunStore日志/结果路径和SHA见同目录index.json。
 
 MuMu实例2的宿主日志已独立保存到next/.local/lr-261013/。shell.log在21:27:18明确记录Graphics Driver crash、errorCode=901、crashModule=nvoglv64.dll、isGraphicsCrash=1；shell.log.1的21:01:50及shell.log.2的20:54:08也为同一模块。可以确认MuMu报告的显卡模块崩溃，不能据此断言具体驱动缺陷、显存泄漏或脚本取图是根因。Windows对应时间范围的Application 1000/1001查询未取得额外记录；本轮没有调整驱动、渲染模式、VPN或内存采集方案。
 
