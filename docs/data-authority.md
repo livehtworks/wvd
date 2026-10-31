@@ -13,9 +13,9 @@
 | workflows/.builtin-transactions | pending意图/completed历史、前后版本/哈希 | 仓库写入/构造时恢复 | 有界核验完成或拒绝；禁止覆盖未知本地修改 |
 | requests/<request-id-sha256>.json | 原始请求意图、原run、接受/终态回执 | SubmissionStore/Application；重试查询 | 持久幂等事实，1MiB/条、256MiB总量、65,536条；替换不增加条数。内部SHA/UUID临时文件共同计量；未完成/未知或超额时只读，旧ID仍按需核验读取，不重执行未知意图 |
 | runs/<instance>/<run>/ | run定义、result、事件、输入、诊断/计时/内存边界 | Coordinator/Session/RunStore；API/诊断工具 | 运行证据；instance/run/gen绑定，result.json才是根终态 |
-| execution-publication/current/ | 当前一个程序版本的完整冻结包及共享资源集合 | Application/ExecutionPublication/NativePublisher；Coordinator/Session/BundleLease | 新源码的派生执行槽位，尚未部署；同版本跨请求复用，换版本先核原终态及租约再退出旧槽位，不逐轮新增包 |
+| execution-publication/current/ | 当前一个程序版本的完整冻结包及共享资源集合 | Application/ExecutionPublication/NativePublisher；Coordinator/Session/BundleLease | 当前部署的派生执行槽位；同版本跨请求复用，换版本先核原终态及租约再退出旧槽位，不逐轮新增包 |
 | execution-publication/state.json | 槽位阶段、目录FileID和最近run/request/revision关联 | ExecutionPublication；Coordinator接管回调、下一次准备 | 有界生命周期记录；原run/result仍是判定依据。缺失/损坏或未结副作用阻止覆盖；回收意图先落盘，失败不换UUID继续堆积 |
-| published/<request>/ | 现行正式版本及旧历史的冻结IR、manifest及资源引用 | 正式旧NativePublisher；显式历史读取 | 新源码的任务/工作流入口不再写此处；已有历史保持，不由新槽位回收器接管；活动租约禁止修改/删除 |
+| published/<request>/ | 此前正式版本留下的冻结IR、manifest及资源引用 | 正式旧NativePublisher；显式历史读取 | 当前任务/工作流入口不再写此处；已有历史保持，不由新槽位回收器接管；活动租约禁止修改/删除 |
 | published/.asset-sets/<digest>/ | 按成员路径、SHA及字节长度确定的冻结资源集合 | NativePublisher/显式历史维护；组合BundleLease读取识别和模型 | 派生共享资源；当前请求与历史引用共同保护，不按文件年龄或零活跃进程直接删除 |
 | published/<request>/publication-layout.json | 请求到共享资源集合的显式布局标记，保持独立flow/identity与原revision | NativePublisher/历史维护；BundleLease | 标记错误拒绝读取，无隐式回退；转换不创建业务请求或改成功计数 |
 | .publication-maintenance.json、.publication-maintenance-journal.json | 维护门禁、事务ID、原/新目录身份、请求资格摘要及阶段 | PublicationMaintenance；Application启动/准备门禁 | 正式恢复权威；原service.lock独占下写入，未完成事务须显式finish/rollback，禁止直接清空以解除阻断 |
@@ -38,7 +38,7 @@
 
 现行准入与保护：每轮准入至少2GiB可用，整批引用字节16GiB上限，必要输入/终态与关键失败图预留；普通采样有界降采样并报告。这些是局部准入限制，不是磁盘物理预分配、全工作区预算或已实施的历史退出策略；不保证外部程序抢占空间后仍能写入。低空间保留旧权威并停止新轮，历史不擅删。
 
-上表区分正式版本与尚未部署的执行槽位源码。正式版本仍使用`published/.asset-sets/<digest>/`及请求独立program/identity；新源码只向`execution-publication/current/`写入当前一个版本，组合租约、revision与mod语义保持。marker无效时拒绝读取；新槽位损坏不回到旧published寻找替代包。原requests/runs与旧发布历史保持原权威和原字节，不以新源码通过隔离验证推定正式数据已清理或服务已切换。
+当前部署使用执行槽位；此前版本使用`published/.asset-sets/<digest>/`及请求独立program/identity；当前版本只向`execution-publication/current/`写入当前一个版本，组合租约、revision与mod语义保持。marker无效时拒绝读取；新槽位损坏不回到旧published寻找替代包。原requests/runs与旧发布历史保持原权威和原字节，本次已核正式空闲部署，未清理或转换旧数据。
 
 有界保留、历史引用退出、测试产物收尾与可恢复迁移的实际进度见 [维护事项](maintenance.md) 及 [任务登记](history/consolidation-state.json)。本页不规定新的保留天数、回滚份数或自动删除阈值，也不授予生产清理权限。各项须承接活动租约、未结副作用、请求幂等、历史查询与恢复能力，沿现有Application/Coordinator/RunStore/Publisher职责落实；不得新增外部清理守护器或第二份权威。
 

@@ -275,7 +275,7 @@
   },
   "execution_publication_fix_current": {
     "date": "2026-10-31",
-    "state": "source_fixed_isolated_verified_not_deployed",
+    "state": "source_fixed_isolated_verified_deployed_idle",
     "slot": "execution-publication/current",
     "same_revision_rounds": 8,
     "independent_batches": 2,
@@ -288,16 +288,40 @@
     "budget_actual_file_size_verified": true,
     "business_success_claimed": false,
     "protected_SHA_unchanged": 74,
-    "formal_service_changed": false,
+    "formal_service_changed": true,
     "old_history_converted": false,
     "loops_monitor_online_CI_started": false,
-    "commit_push_performed": false,
+    "commit_push_performed": true,
     "receipt": "next/.local/retained-evidence/publication-lifecycle.json",
     "disposable_files_moved": 40655,
     "disposable_logical_bytes_moved": 1572660018,
     "ordinary_trash": "D:\\trash\\wvd-execution-slot-tests-20261031-b913d2",
     "space_reclaimed_by_move": 0,
     "aborted_capacity_test_files": 32364,
-    "T0_overall": "OPEN; deployed version and historical recovery/retention issues not closed"
+    "T0_overall": "OPEN; historical recovery/retention issues not closed",
+    "source_commit": "3dd90b5d8c98b24ed2426086f2b5943b00a5c16a",
+    "deployed_exe_sha256": "8203a84e45c921d5f20630f87f5875f85f787aa56d7c96f68e44feba4a9c0753",
+    "service_instance": "74FB6855-B6FB-4301-B82D-87413693AEC5",
+    "formal_run_state": {
+      "state": "Idle",
+      "run_id": 0,
+      "busy": false,
+      "quiescent": true,
+      "coherent": true,
+      "repeat": null
+    },
+    "configuration_unchanged": 41,
+    "other_protected_sha_unchanged": 72,
+    "launch_binding_semantics_unchanged": true,
+    "previous_candidate": "D:\\programcode\\python\\wvd\\next\\dist\\.wvd-next-native.transactions\\previous-172152ed442943549bea59583029b8c5",
+    "protected_deployment_recovery": "D:\\programcode\\python\\wvd\\next\\.local\\deployment-recovery\\execution-publication",
+    "current_pdb": {
+      "path": "D:\\programcode\\python\\wvd\\next\\.local\\deployment-recovery\\execution-publication\\current-symbols\\automationd.pdb",
+      "sha256": "7fa49cae99ac0826ff97229b86a0b7e62f2188ef278edfc3437193868203b936",
+      "bytes": 178335744,
+      "guid": "92997ab5-efb2-4e86-a59a-520d07dca97c",
+      "age": 8,
+      "exe_sha256": "8203a84e45c921d5f20630f87f5875f85f787aa56d7c96f68e44feba4a9c0753"
+    }
   }
 }

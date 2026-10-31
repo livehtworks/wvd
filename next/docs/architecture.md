@@ -1,6 +1,6 @@
 # 当前架构
 
-本页维护当前源码与原生架构。部署及批次见[项目状态](../../docs/project-status.md)，当前剩余工作见[维护入口](../../docs/maintenance.md)，数据权威见[数据职责](../../docs/data-authority.md)。2026-10-31的执行包槽位改动尚未部署；正式旧发布历史已部分转换并停止，不能把源码修改或资料收束记为 T0 关闭。
+本页维护当前源码与原生架构。部署及批次见[项目状态](../../docs/project-status.md)，当前剩余工作见[维护入口](../../docs/maintenance.md)，数据权威见[数据职责](../../docs/data-authority.md)。2026-10-31的执行包槽位改动已部署并核正式服务空闲；正式旧发布历史已部分转换并停止，不能把源码修改或资料收束记为 T0 关闭。
 
 ## 唯一执行链
 
@@ -28,7 +28,7 @@ Vue 工作台 -> 同源 HTTP API -> Application
 
 作者文档仍由唯一 WorkflowRepository 保存。运行前封存作者闭包、资源内容与版本，编译为 FlowProgram；历史 Maa 结果只读。正式 CMake 和打包只链接原生目标。旧 SDK 集成源码及过时验证工具位于 `next/archive/`，不是当前程序或测试的执行路径。
 
-执行包由任务和工作流装配共同使用 `ExecutionPublication` 管理，仍调用唯一 `NativePublisher` 写入和 `BundleLease` 校验。派生目录固定为 `execution-publication/current/`：相同程序revision复用完整冻结包，新的请求ID不产生新的包目录；版本变化时退出上一个已清账且无活动租约的槽位，资源集合随同退出。槽位保留当前版本用于复用及最近运行诊断，不按运行次数、天数累计副本。此源码改动已通过定向隔离验收，未替换正式服务；结果及适用范围见维护事项。
+执行包由任务和工作流装配共同使用 `ExecutionPublication` 管理，仍调用唯一 `NativePublisher` 写入和 `BundleLease` 校验。派生目录固定为 `execution-publication/current/`：相同程序revision复用完整冻结包，新的请求ID不产生新的包目录；版本变化时退出上一个已清账且无活动租约的槽位，资源集合随同退出。槽位保留当前版本用于复用及最近运行诊断，不按运行次数、天数累计副本。此改动已通过定向隔离验收及正式空闲部署；未运行游戏任务，结果及适用范围见维护事项。
 
 `execution-publication/state.json`仅保存槽位目录身份、阶段和最后一次运行关联，不保存第二份业务结果。Coordinator在worker输入前绑定实际RunStore目录；创建worker失败则撤回绑定。回收重新读取原run/result核对请求、程序版本、静止、结果已保存、细节完整和未结副作用；缺失/损坏、Unknown和pending保留现场。回收意图先持久化，再经原Windows目录身份及共享锁规则删除；中断只重试已登记的派生槽位，不扫描或转换旧published历史。业务查询、防重和诊断仍读取原requests/runs，历史完整包不作为防重权威。
 

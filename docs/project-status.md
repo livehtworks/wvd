@@ -5,10 +5,10 @@
 ## 当前产品与部署
 
 - 产品为 `next/` 的 C++20/CMake、Vue、OpenCV、ONNX Runtime；唯一执行链为 Application → NativeRunCoordinator → NativeExecutionSession → FlowExecutor。详见[架构](../next/docs/architecture.md)。
-- 正式候选 `next/dist/wvd-next-native/`；EXE SHA256 `15670137f3229039d088363af5580cf72665857b3a0a0af767f955c96811fa75`，产品输入 `fc734057…3eb72c`/1354，619 成员。本轮另在build目录构建执行包生命周期修复；未打包、部署或替换此正式候选。
+- 正式候选 `next/dist/wvd-next-native/` 已部署执行包生命周期修复，源码提交 `3dd90b5`；EXE SHA256 `8203a84e45c921d5f20630f87f5875f85f787aa56d7c96f68e44feba4a9c0753`，产品输入 `214fbb20…04d1`/1357，619成员。本地构建、打包、候选预检与正式空闲启动通过，未进行游戏验收。
 - 正式 data-root `D:/programcode/python/wvd/next/.local/c11-flow-product/data`，端口 17654。`profile.json`、`workflows/` 为配置及用户流程权威；[数据职责](data-authority.md)维护其解释。
-- 2026-10-31 有限实机诊断结束，原三实例已关闭，监控 `PAUSED`。历史转换已停止，未结维护事务已显式回滚；原管理入口再次启动服务并核Idle/run0/busy=false/quiescent=true/repeat=null后关闭。当前无维护CLI或业务循环运行。
-- 匹配 PDB GUID `92997ab5-efb2-4e86-a59a-520d07dca97c` / Age 4，位于 `next/.local/giant-200-20261030/stall-fix/release2/automationd.pdb`。旧49ad/Age2及284e候选材料仍受保护；历史转换恢复区被清空后，不能保证恢复原旧布局，也不能据候选文件仍在宣称当前数据具备整体回滚能力。
+- 2026-10-31正式服务实例 `74FB6855-B6FB-4301-B82D-87413693AEC5` 运行于原17654/data-root，已核Idle/run0/busy=false/quiescent=true/repeat=null及页面HTTP 200；设备未连接，原三实例关闭，监控保持PAUSED。旧历史转换已停止，本次未执行维护CLI或业务任务。
+- 当前PDB GUID `92997ab5-efb2-4e86-a59a-520d07dca97c` / Age 8，已与新版EXE核对，保存在 `next/.local/deployment-recovery/execution-publication/current-symbols/automationd.pdb`。本次旧正式15670137候选由原打包事务保留，41份配置快照位于同一受保护恢复根；旧49ad/284e材料保持。此前旧历史恢复原件缺失的问题仍不能由本次部署补齐。
 
 ## 设备与批次
 
@@ -21,7 +21,7 @@
 
 - 战斗 HUD/攻击选项消失的停滞恢复已修复并部署；选人网格、迟到奖励、同 owner Boot 恢复及救人标记沿原链。最近范围见[战斗修复](reviews/runtime/combat-animation-stall-20261030.md)，不声称 200 轮已完成。
 - 发布资源共享及组合租约早已部署，新任务不依赖旧历史转换。正式旧发布历史已转换494份（含先行1份）；505份批次内493份提交、1份显式回滚、11份未执行，批次未续转。存储生命周期T0仍OPEN，不能将布局统一当作新增业务能力或事故关闭。
-- 正式部署版本仍逐轮写完整flow/identity及布局标记，真实样本3文件/30,069,620字节（28.68MiB）。本轮源码已将任务/工作流/续轮统一到一个派生执行槽位：同revision复用原文件，版本改变前核原始终态、未结副作用和活动租约，再退出旧槽位及资源；requests/runs历史保留原权威。隔离验收结果见[维护事项](maintenance.md)。源码修复不等于正式部署或整个历史保留T0关闭。
+- 当前部署的任务/工作流/续轮统一使用一个派生执行槽位：同revision复用原文件，版本改变前核原始终态、未结副作用和活动租约，再退出旧槽位及资源；requests/runs历史保留原权威。隔离验收及空闲部署结果见[维护事项](maintenance.md)。本次没有转换、清理旧正式published目录，也不代表整个历史保留T0关闭。
 - 原MuMu实例2冷启动及原VPN就绪后的游戏前台IPC取图已通过本轮有限诊断；历史 `libRenderer.dll` 与当前库SHA不同，不能用旧栈定位当前库。收尾内存377,114字节存活分配差额尚无归因，历史厂商崩溃与首次迁移冷连接失败仍保留原回执；已修复的旧导航缺口不重复列为现行故障。
 - Unknown、未结付款/报告、低意志力和多人死亡保留原保护语义；不改设备版本、渲染、CPU/内存、驱动或 VPN。不关闭诊断及 240 张/128 MiB 生产最近截图策略。
 - 线上 CI 已按用户决定退役；只做本地定向验收。`.vscode/` 和用户未提交修改继续保护。

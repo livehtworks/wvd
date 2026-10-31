@@ -2,7 +2,7 @@
 
 本页规定现行产品合同。当前维护与生命周期剩余事项见[维护入口](../../docs/maintenance.md)，旧设计按下方固定 Git 链接追溯；待实施策略不得作为已通过的合同或正式历史删除依据。调整资源物理布局时仍须保持原身份、租约、调用链和业务验收语义，验证结果更新本合同及当前维护事项。
 
-共享资源与组合租约继续遵循[C07资源消费](https://github.com/livehtworks/wvd/blob/f4bc8f9e0d94035d1ed906516b7e37c30378581c/docs/work-packages/consolidation-20261026-resource-contract.md)。2026-10-31源码将新执行的逐请求完整包改为唯一 `execution-publication/current/bundle`：同revision复用flow/identity、provenance及资源集合；换版本先退出已清账且释放租约的旧槽位，不再增加逐轮published目录。原程序revision、语言、mod选择和完整资源闭包保持；marker错误必须拒绝，不按缺包回到旧published查找。此源码改动尚未部署，隔离验收结果见当前维护事项。
+共享资源与组合租约继续遵循[C07资源消费](https://github.com/livehtworks/wvd/blob/f4bc8f9e0d94035d1ed906516b7e37c30378581c/docs/work-packages/consolidation-20261026-resource-contract.md)。2026-10-31源码将新执行的逐请求完整包改为唯一 `execution-publication/current/bundle`：同revision复用flow/identity、provenance及资源集合；换版本先退出已清账且释放租约的旧槽位，不再增加逐轮published目录。原程序revision、语言、mod选择和完整资源闭包保持；marker错误必须拒绝，不按缺包回到旧published查找。此改动已完成隔离验收及正式空闲部署，未启动游戏任务；结果见当前维护事项。
 
 新槽位的生命周期记录只关联原RunStore，不替代requests/runs。Coordinator接管前写关联，worker创建失败撤回；未静止、终态缺失/损坏、未保存、细节不完整、Unknown或未结业务副作用不准覆盖。版本退出先写持久意图并绑定目录FileID，再由Windows句柄删除，活动租约拒绝删除；重启只能继续已登记派生槽位的回收，不推断旧历史所有权。只保留一个当前版本，不累计成功版本或测试快照。旧正式published、历史维护journal及业务事实不迁移、不修改。
 
