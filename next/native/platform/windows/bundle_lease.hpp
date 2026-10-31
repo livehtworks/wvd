@@ -9,6 +9,7 @@
 #include <stdexcept>
 #include <functional>
 #include <exception>
+#include <array>
 
 namespace wvd::platform {
 class BundleLinkError final : public std::runtime_error {
@@ -49,6 +50,11 @@ class OwnedBundleDirectory final {
     void rename_to(const std::filesystem::path &destination);
     void accept() noexcept;
     void rollback();
+    using DirectoryIdentity = std::array<std::uint32_t, 3>;
+    DirectoryIdentity directory_identity() const;
+    // Only for a derived cache whose retirement intent and original identity
+    // have already been persisted. Live BundleLease handles veto deletion.
+    static void erase_retired(const std::filesystem::path &path, const DirectoryIdentity &identity);
     [[noreturn]] void rethrow_with_cleanup(std::exception_ptr primary);
   private:
     friend struct OwnedBundleDirectoryTestAccess;

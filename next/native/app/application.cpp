@@ -54,6 +54,7 @@
 #include <limits>
 #include <opencv2/imgcodecs.hpp>
 #include <windows.h>
+#include "games/wvd/tasks/execution_publication.hpp"
 
 #include <commdlg.h>
 
@@ -77,7 +78,21 @@ std::uint64_t storage_tree_bytes(const std::filesystem::path &root) {
         require(++entries <= 65536 &&
             !(GetFileAttributesW(entry.path().c_str()) & FILE_ATTRIBUTE_REPARSE_POINT),
             "BATCH_STORAGE_INVENTORY_INVALID");
-        if (entry.is_regular_file()) budget_add(bytes, entry.file_size());
+        if (entry.is_regular_file()) {
+            // Directory enumeration may cache an open writer's old file size.
+            // Read the actual stream size, including flushed run event bytes.
+            const auto file = CreateFileW(entry.path().c_str(), FILE_READ_ATTRIBUTES,
+                FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING,
+                FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+            BY_HANDLE_FILE_INFORMATION info{};
+            LARGE_INTEGER size{};
+            const bool valid = file != INVALID_HANDLE_VALUE && GetFileInformationByHandle(file, &info) &&
+                !(info.dwFileAttributes & (FILE_ATTRIBUTE_REPARSE_POINT | FILE_ATTRIBUTE_DIRECTORY)) &&
+                GetFileType(file) == FILE_TYPE_DISK && GetFileSizeEx(file, &size) && size.QuadPart >= 0;
+            if (file != INVALID_HANDLE_VALUE) CloseHandle(file);
+            require(valid, "BATCH_STORAGE_INVENTORY_INVALID");
+            budget_add(bytes, static_cast<std::uint64_t>(size.QuadPart));
+        }
         else require(entry.is_directory(), "BATCH_STORAGE_INVENTORY_INVALID");
     }
     return bytes;
@@ -87,7 +102,7 @@ std::uint64_t retained_storage_bytes(const std::filesystem::path &data) {
     // Persistent caches remain chargeable across batches, including verified
     // sets retained after a request rolls back. No SHA/FileID discount here.
     for (const auto &root : {data / "published" / "asset-objects",
-                             data / "asset-cache", data / "active-snapshots"})
+                             data / "asset-cache", data / "active-snapshots", data / "execution-publication"})
         budget_add(bytes, storage_tree_bytes(root));
     return bytes;
 }
@@ -1674,6 +1689,8 @@ runtime::NativeRunDefinition Application::assemble_task(const J &request, const 
     bool continuation, std::optional<games::tasks::CompiledWorkflow> prepared,
     const platform::PreparationObserver &diagnostic, std::uint64_t retained_request_run_bytes) {
     require_preparation_ready();
+    if (coordinator_->snapshot().run_id)
+        require(coordinator_->collect_finished_worker(), "NATIVE_RUN_ACTIVE_OR_CLEANUP_PENDING");
     const auto observer = diagnostic ? diagnostic : preparation_observer(stored);
     if (stopping_ || cancel_operation_) throw std::runtime_error("PREPARATION_CANCELLED");
     const auto &stored_values = stored.at("values");
@@ -1702,14 +1719,15 @@ runtime::NativeRunDefinition Application::assemble_task(const J &request, const 
     auto workflow = prepared ? std::move(*prepared) : compile_task_graph(request, task, values, observer);
     games::tasks::require_locale_asset_coverage(workflow, resource_locale);
     const auto request_id = checked_request_id(request);
-    const auto destination = paths_.data_root / "published" / request_id;
+    const games::tasks::ExecutionPublication execution_publication(paths_.data_root);
+    const auto destination = execution_publication.destination();
     const auto portraits = portrait_bundle(values);
     auto publication = games::tasks::publish_native(workflow, author_bundle_,
         destination, aliases_, J::object(), portraits ? &*portraits : nullptr,
         [this] { require(!stopping_ && !cancel_operation_, "PREPARATION_CANCELLED"); }, observer, [&](const J &cost) {
             (void)publication_budget(paths_.data_root, retained_request_run_bytes, cost);
-        });
-    const auto ownership = publication.ownership->receipt();
+        }, [&](const std::string &revision) { execution_publication.prepare(revision); });
+    const auto ownership = publication.ownership ? publication.ownership->receipt() : nullptr;
     try {
     if (preparation_fault_) preparation_fault_("task.after_publication");
     const auto &root = publication.program.definitions.at(publication.program.root_definition);
@@ -1767,6 +1785,9 @@ runtime::NativeRunDefinition Application::assemble_task(const J &request, const 
         };
     }
     definition.publication_ownership = std::move(publication.ownership);
+    definition.bind_publication = [execution_publication, request_id, revision = unit.bundle.revision](const auto &run) {
+        return execution_publication.bind(run, request_id, revision);
+    };
     return definition;
     } catch (...) {
         const auto failure = std::current_exception();
@@ -1813,7 +1834,7 @@ Application::J Application::prepare_task(const J &request, const J &stored,
     backend->set_vpn_required(stored.at("values").at("AUTO_START_CLASH").get<bool>());
     auto definition = assemble_task(request, stored, backend->lifecycle_target(),
         std::move(frozen_values), handoff_parent.is_object(), std::move(prepared), {}, retained_request_run_bytes);
-    const auto ownership = definition.publication_ownership->receipt();
+    const auto ownership = definition.publication_ownership ? definition.publication_ownership->receipt() : nullptr;
     try {
     definition.handoff_parent = std::move(handoff_parent);
     const auto &stored_values = stored.at("values");
@@ -1898,11 +1919,9 @@ void Application::watch_task_session(const J &request, const J &stored, J source
                 snapshot->storage_error.empty(), "HANDOFF_SOURCE_NOT_COMMITTED");
             // Account retained run facts and resource references, not just one
             // file's limit. Never delete history to make a new round admissible.
-            const auto published = paths_.data_root / "published" / request_id;
-            const auto publication = platform::BundleLease::open_publication(published);
-            const auto request_bytes = storage_tree_bytes(published);
+            const auto published = games::tasks::ExecutionPublication(paths_.data_root).destination();
+            auto publication = platform::BundleLease::open_publication(published);
             const auto run_bytes = storage_tree_bytes(coordinator_->run_directory());
-            budget_add(request_run_bytes, request_bytes);
             budget_add(request_run_bytes, run_bytes);
             // Old field remains the cumulative path-reference measure.
             // It may exceed the physical budget after resource sharing.
@@ -1915,6 +1934,8 @@ void Application::watch_task_session(const J &request, const J &stored, J source
                 (void)hash;
                 logical_add(publication->member_size(name));
             }
+            // Release this accounting reader before a handoff replaces the slot.
+            publication.reset();
             logical_add(run_bytes);
             budget_bytes = retained_storage_bytes(paths_.data_root);
             budget_add(budget_bytes, request_run_bytes);
@@ -1922,7 +1943,7 @@ void Application::watch_task_session(const J &request, const J &stored, J source
                 std::lock_guard lock(mutex_);
                 repeat_status_["retained_reference_bytes"] = batch_bytes;
                 repeat_status_["retained_budget_bytes"] = budget_bytes;
-                repeat_status_["retained_budget_basis"] = "unique_resource_sets_request_run_v1";
+                repeat_status_["retained_budget_basis"] = "bounded_execution_slot_and_run_v2";
                 repeat_status_["batch_storage_limit_bytes"] = batch_limit;
                 repeat_status_["batch_storage_reserve_bytes"] = 2ULL * 1024 * 1024 * 1024;
             }
@@ -2195,7 +2216,7 @@ Application::J Application::prepare_workflow(const std::string &flow_id, const J
     J source_paths = J::object();
     auto definition = assemble_workflow(request, stored, std::move(document),
         backend->lifecycle_target(), &pipeline_to_node, library_snapshot, &source_paths, std::move(prepared));
-    const auto ownership = definition.publication_ownership->receipt();
+    const auto ownership = definition.publication_ownership ? definition.publication_ownership->receipt() : nullptr;
     try {
     const auto request_id = definition.request_id;
     std::lock_guard handoff(command_mutex_);
@@ -2285,6 +2306,8 @@ runtime::NativeRunDefinition Application::assemble_workflow(
     std::map<std::string, std::string> *pipeline_to_node, const J &library_snapshot, J *source_paths,
     std::optional<PreparedWorkflow> prepared) {
     require_preparation_ready();
+    if (coordinator_->snapshot().run_id)
+        require(coordinator_->collect_finished_worker(), "NATIVE_RUN_ACTIVE_OR_CLEANUP_PENDING");
     auto graph = prepared ? std::move(*prepared) : compile_workflow_graph(request, stored, document, library_snapshot);
     auto &executable = graph.executable;
     const auto &values = graph.values;
@@ -2293,14 +2316,17 @@ runtime::NativeRunDefinition Application::assemble_workflow(
     const bool combat_debug = request.value("mode", "workflow") == "combat_debug";
     games::tasks::require_locale_asset_coverage(executable, locale);
     const auto request_id = checked_request_id(request);
-    const auto destination = paths_.data_root / "published" / request_id;
+    const games::tasks::ExecutionPublication execution_publication(paths_.data_root);
+    const auto destination = execution_publication.destination();
     const auto provenance = executable.authoring.value("source_paths", J::object());
     const auto portraits = portrait_bundle(values);
     auto publication = games::tasks::publish_native(executable, author_bundle_,
         destination, aliases_, provenance, portraits ? &*portraits : nullptr,
         [this] { require(!stopping_ && !cancel_operation_, "PREPARATION_CANCELLED"); },
-        preparation_observer(stored));
-    const auto ownership = publication.ownership->receipt();
+        preparation_observer(stored), [&](const J &cost) {
+            (void)publication_budget(paths_.data_root, 0, cost);
+        }, [&](const std::string &revision) { execution_publication.prepare(revision); });
+    const auto ownership = publication.ownership ? publication.ownership->receipt() : nullptr;
     try {
     if (preparation_fault_) preparation_fault_("workflow.after_publication");
     const auto &root = publication.program.definitions.at(publication.program.root_definition);
@@ -2352,6 +2378,10 @@ runtime::NativeRunDefinition Application::assemble_workflow(
             (*pipeline_to_node)["Task_" + pipeline] = node;
     }
     definition.publication_ownership = std::move(publication.ownership);
+    definition.bind_publication = [execution_publication, request_id,
+        revision = definition.units.front().bundle.revision](const auto &run) {
+        return execution_publication.bind(run, request_id, revision);
+    };
     return definition;
     } catch (...) {
         const auto failure = std::current_exception();

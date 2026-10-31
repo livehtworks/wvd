@@ -154,12 +154,13 @@ NativePublication publish_native(const CompiledWorkflow &workflow,
     const recognition::Bundle &baseline, const std::filesystem::path &destination,
     const J &aliases, const J &source_paths, const recognition::Bundle *mod,
     const std::function<void()> &check_cancel, const platform::PreparationObserver &observer,
-    const std::function<void(const J &)> &admit_storage) {
+    const std::function<void(const J &)> &admit_storage,
+    const std::function<void(const std::string &)> &prepare_destination) {
     platform::PreparationTimer total_timer("publish_native", observer);
     platform::PreparationTimer input_timer("publisher_inputs", observer);
     if (check_cancel) check_cancel();
     workflow.validate();
-    if (!destination.is_absolute() || std::filesystem::exists(platform::extended_path(destination)) ||
+    if (!destination.is_absolute() || (!prepare_destination && std::filesystem::exists(platform::extended_path(destination))) ||
         !aliases.is_object() || !source_paths.is_object())
         throw std::runtime_error("NATIVE_PUBLICATION_ARGUMENT_INVALID");
     const auto base_manifest = manifest(baseline);
@@ -247,6 +248,25 @@ NativePublication publish_native(const CompiledWorkflow &workflow,
         {reinterpret_cast<const std::uint8_t *>(material.data()), material.size()});
     program.revision = revision;
     preparation["publication_identity"] = identity_timer.sample();
+    if (prepare_destination) {
+        if (check_cancel) check_cancel();
+        prepare_destination(revision);
+        if (std::filesystem::exists(platform::extended_path(destination))) {
+            auto lease = platform::BundleLease::open_publication(destination, check_cancel);
+            if (lease->revision() != revision) throw std::runtime_error("EXECUTION_PUBLICATION_REVISION_MISMATCH");
+            // Verify the same identity/bytes, not a filename or mutable source.
+            if (J::parse(lease->bytes("program/identity.json")) != identity)
+                throw std::runtime_error("PUBLICATION_IDENTITY_MISMATCH");
+            if (admit_storage) admit_storage({{"resource_new", false}, {"metadata_bytes", 0}, {"overhead_bytes", 0}});
+            recognition::Bundle bundle{destination, revision, {}};
+            for (const auto &[name, hash] : lease->manifest()) bundle.files.push_back({name, hash});
+            bundle.lease = std::move(lease);
+            preparation["publication_reused"] = true;
+            preparation["publication_materialized_bytes"] = 0;
+            preparation["publish_native"] = total_timer.sample();
+            return {std::move(program), std::move(bundle), std::move(identity), std::move(preparation)};
+        }
+    }
     auto published_manifest = base_manifest;
     platform::PreparationTimer source_timer("source_validation", observer);
     platform::BundleLease origin(baseline.root, baseline.revision, base_manifest, check_cancel);
@@ -352,6 +372,9 @@ NativePublication publish_native(const CompiledWorkflow &workflow,
     write_bytes(staging, "publication-layout.json", reinterpret_cast<const std::uint8_t *>(layout_text.data()), layout_text.size());
     if (NativePublication::fault_) NativePublication::fault_("after_layout_marker");
     preparation["files"] = bundle.files.size();
+    preparation["publication_reused"] = false;
+    preparation["publication_materialized_bytes"] = program_text.size() + identity_text.size() +
+        provenance_text.size() + layout_text.size() + (shared_exists ? 0 : logical_bytes + resource_text.size());
     if (check_cancel)
         check_cancel();
     platform::PreparationTimer validation_timer("staging_validation", observer);

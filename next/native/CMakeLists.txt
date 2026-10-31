@@ -100,7 +100,7 @@ add_library(wvd_native_games STATIC
   games/wvd/recovery/leap_wait_state.cpp games/wvd/combat/turn.cpp
   games/wvd/combat/auto_combat.cpp games/wvd/chest/chest.cpp
   games/wvd/chest/selection.cpp games/wvd/native_operations.cpp
-  games/wvd/tasks/native_program.cpp games/wvd/tasks/native_publisher.cpp
+  games/wvd/tasks/native_program.cpp games/wvd/tasks/native_publisher.cpp games/wvd/tasks/execution_publication.cpp
   games/wvd/vision/native_asset_resolver.cpp games/wvd/vision/native_recognizers.cpp
   games/wvd/vision/bobber.cpp games/wvd/vision/unknown_window.cpp)
 target_sources(wvd_native_games PRIVATE

@@ -211,7 +211,8 @@
       "transaction_directories": 4,
       "files": 1797,
       "logical_bytes": 423829542,
-      "complete_recovery_not_assumed": true
+      "complete_recovery_not_assumed": true,
+      "disposition": "All remaining files verified duplicate; moved with discarded operational folder to ordinary clearable trash"
     },
     "native_interruption_rollback": "C9491051-DEF5-4806-9867-B0DA0D2A5244",
     "idle_service_verified_then_stopped": "7F44685B-94A5-451C-AF6C-52CDFE768FA6",
@@ -219,7 +220,84 @@
     "business_loop_started": false,
     "monitor": "PAUSED",
     "online_CI_started": false,
-    "evidence": "next/.local/consolidation-261026/formal-maintenance/receipt.json",
-    "remaining": "C09 retention/archive/query/idempotency/exit contract incomplete; no overall T0 closure. Historical conversion added no current task functionality; bulk conversion over-prioritized and active recovery material misplaced in ordinary trash."
+    "evidence": "docs/reviews/incidents/t0-storage-lifecycle-20261026.md",
+    "remaining": "C09 retention/archive/query/idempotency/exit contract incomplete; no overall T0 closure. Historical conversion added no current task functionality; bulk conversion over-prioritized and active recovery material misplaced in ordinary trash.",
+    "cleanup_current": {
+      "state": "moved_to_disposable_trash_and_verified",
+      "authorization": "User2026-10-31: 把这些垃圾给我彻底清掉",
+      "approved_scope": "D:\\programcode\\python\\wvd\\next\\.local\\consolidation-261026\\formal-maintenance",
+      "no_formal_authority_inside": true,
+      "verified_duplicate_rescue_files": 1797,
+      "verified_duplicate_configuration_files": 41,
+      "garbage_files": 1852,
+      "garbage_logical_bytes": 424033874,
+      "compact_receipt_bytes": 28867,
+      "entire_disposable_folder_files": 1853,
+      "entire_disposable_folder_logical_bytes": 424062741,
+      "native_journal_path": "D:\\programcode\\python\\wvd\\next\\.local\\c11-flow-product\\data\\.publication-maintenance-journal.json",
+      "native_journal_sha256": "19f7c3bbc70bdb40cfbe751b18bc5f12e484c2c0971d1fa6fa1b189ef267190f",
+      "keep_formal_journal": true,
+      "canonical_resource_match": "Every rescued file matched actual active resource/control SHA before deletion attempt; configuration copies matched formal originals",
+      "execution_cost": {
+        "summed_cli_seconds": 12862.73,
+        "attempts": 494,
+        "log_created_at": "2026-10-31T06:23:43+08:00",
+        "log_last_write_at": "2026-10-31T09:58:13+08:00",
+        "prior_full_receipt_bytes": 446610,
+        "token_or_billing_cost": "not measured"
+      },
+      "deletion_attempts": [
+        {
+          "method": "PowerShell checked bounded manifest, 16 exact children",
+          "result": "blocked by policy; process not started"
+        },
+        {
+          "method": "PowerShell literal single verified directory",
+          "result": "approval required by policy, but AskForApproval is set to Never; process not started"
+        }
+      ],
+      "manual_completion": "Not required for project removal: user explicitly directed trash movement; same-volume move completed and verified. Ordinary disposal destination may be cleared and is not a recovery authority.",
+      "destination": "D:\\trash\\wvd-discard-maintenance-20261031",
+      "source_directory_identity": [
+        2601833944757569262,
+        11258999069344757
+      ],
+      "disposal": "Ordinary disposable garbage; no runtime or recovery consumer depends on this location. Essential incident facts retained in this ledger and incident report.",
+      "source_absent": true,
+      "destination_directory_identity_unchanged": true,
+      "files_verified": 1853,
+      "logical_bytes_verified": 424062741,
+      "protected_SHA_unchanged": 74,
+      "native_journal_unchanged": true,
+      "space_reclaimed_by_same_volume_move_bytes": 0,
+      "permanent_delete_performed": false
+    }
+  },
+  "execution_publication_fix_current": {
+    "date": "2026-10-31",
+    "state": "source_fixed_isolated_verified_not_deployed",
+    "slot": "execution-publication/current",
+    "same_revision_rounds": 8,
+    "independent_batches": 2,
+    "versions_replaced_bounded": 6,
+    "application_preparation_ownership_cases": 13,
+    "real_giant_new_id_reuses_file": true,
+    "cold_reopen_and_unsettled_lease_guards": "passed",
+    "historical_readonly_and_binding_rollback": "passed",
+    "locale_audit_cases": 5,
+    "budget_actual_file_size_verified": true,
+    "business_success_claimed": false,
+    "protected_SHA_unchanged": 74,
+    "formal_service_changed": false,
+    "old_history_converted": false,
+    "loops_monitor_online_CI_started": false,
+    "commit_push_performed": false,
+    "receipt": "next/.local/retained-evidence/publication-lifecycle.json",
+    "disposable_files_moved": 40655,
+    "disposable_logical_bytes_moved": 1572660018,
+    "ordinary_trash": "D:\\trash\\wvd-execution-slot-tests-20261031-b913d2",
+    "space_reclaimed_by_move": 0,
+    "aborted_capacity_test_files": 32364,
+    "T0_overall": "OPEN; deployed version and historical recovery/retention issues not closed"
   }
 }

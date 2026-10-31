@@ -9,6 +9,7 @@
 #include "devices/lifecycle_execution.hpp"
 #include "submission_store_contract.hpp"
 #include "publication_maintenance_contract.hpp"
+#include "games/wvd/tasks/execution_publication.hpp"
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
 #include <iostream>
@@ -317,8 +318,14 @@ void require_closure(bool value, const std::string &code) { if (!value) throw st
 class CompletedCycle final : public wvd::contracts::BusinessRunState {
     void on_segment(wvd::contracts::SegmentBoundary, std::uint64_t, std::size_t) override {}
     J summarize() const override {
-        return {{"bounty_cycle", {{"completed_cycles", 1}, {"reports_remaining", 0}}},
+        J facts{{"bounty_cycle", {{"completed_cycles", 1}, {"reports_remaining", 0}}},
             {"bounty_report_pending", false}, {"inn_payment_pending", false}};
+        for (const char *pointer : {"/karma_pending", "/special_dialogue_pending", "/manual_separation/transfer_pending",
+            "/featured_visit/pending", "/golden_chest/leap_pending", "/sandman/leap_pending", "/gold_income/pending",
+            "/bull_cave/leap_pending", "/steel_trial/pending", "/repel_forces/pending", "/bounty_cycle/transfer_pending",
+            "/fishing/casting_pending", "/fordraig/pending", "/cave_of_separation/pending", "/fishing/reward_pending",
+            "/fishing/transfer_pending"}) facts[J::json_pointer(pointer)] = false;
+        return facts;
     }
 };
 wvd::runtime::NativeRunDefinition closure_definition(const std::filesystem::path &root, const std::string &id,
@@ -426,7 +433,7 @@ __declspec(noinline) int preparation_ownership_contract(const std::filesystem::p
                 else { auto prepared = A::prepare_debug(app, stored); }
             } catch (const std::exception &e) { actual_error = e.what(); failed = actual_error == "ASSEMBLY_FAULT:" + phase; }
             A::preparation_fault(app, {});
-            const auto target = published / (phase.starts_with("task.") ? "p01-giant-preparation" : "combat-editor-debug");
+            const auto target = wvd::games::tasks::ExecutionPublication(data).destination();
             require_closure(reached && failed && !std::filesystem::exists(target), "ASSEMBLY_FAILURE_LEFT_PUBLICATION:" + phase +
                 ";hook_reached=" + std::to_string(reached) + ";target_exists=" + std::to_string(std::filesystem::exists(target)) +
                 ";actual_error=" + actual_error);
@@ -440,6 +447,10 @@ __declspec(noinline) int preparation_ownership_contract(const std::filesystem::p
             auto owner = Owner::create(target); const auto receipt = owner->receipt();
             auto definition = closure_definition(target, "unaccepted-" + phase);
             definition.publication_ownership = std::move(owner);
+            unsigned bindings{}, withdrawals{};
+            definition.bind_publication = [&](const auto &) -> std::function<void()> {
+                ++bindings; return [&] { ++withdrawals; };
+            };
             bool reached{};
             const auto inject = [&](const char *at) {
                 if (phase == at) { reached = true; throw std::runtime_error("BEFORE_ADOPTION_FAULT:" + phase); }
@@ -452,6 +463,8 @@ __declspec(noinline) int preparation_ownership_contract(const std::filesystem::p
             A::preparation_fault(app, {}); C::start_fault(coordinator, {});
             require_closure(reached && failed && !receipt->accepted && !receipt->cleanup_pending &&
                 !std::filesystem::exists(target), "PRE_ADOPTION_FAILURE_DID_NOT_WITHDRAW:" + phase);
+            require_closure(bindings == (phase == "before_worker" ? 1u : 0u) && withdrawals == bindings,
+                "PRE_ADOPTION_PUBLICATION_BINDING_NOT_WITHDRAWN");
             require_closure(backend->inputs == 0 && backend->captures == original_captures && backend->connections == original_connections,
                 "PRE_ADOPTION_FAILURE_STARTED_WORKER:" + phase);
             historical_unchanged();
@@ -482,7 +495,7 @@ __declspec(noinline) int preparation_ownership_contract(const std::filesystem::p
         }
         {
             HANDLE held = INVALID_HANDLE_VALUE;
-            const auto target = published / "p01-giant-preparation";
+            const auto target = wvd::games::tasks::ExecutionPublication(data).destination();
             A::preparation_fault(app, [&](const char *at) {
                 if (std::string(at) != "task.after_publication") return;
                 held = CreateFileW(target.c_str(), GENERIC_READ, FILE_SHARE_READ,
@@ -690,6 +703,10 @@ int resource_application_batch(const std::filesystem::path &pack, const std::fil
     first.policy.pack_revision=resources.revision;first.startup.reset();first.total_time_limit=15s;
     first.create_state=std::move(external.create_state);first.operations=std::move(external.operations);
     first.recovery={};first.handoff_ready={};first.logging=logging;
+    const games::tasks::ExecutionPublication execution_slot(data);
+    first.bind_publication = [execution_slot, revision = resources.revision](const auto &run) {
+        return execution_slot.bind(run, "batch-first", revision);
+    };
     auto &coordinator=A::coordinator(application);
     const auto started=A::commit(application,std::move(first),backend);resources.lease.reset();
     require_closure(coordinator.wait_for(10s),"BATCH_FIRST_NOT_QUIESCENT");
@@ -708,17 +725,22 @@ int resource_application_batch(const std::filesystem::path &pack, const std::fil
         std::uint64_t size=0;if(!std::filesystem::exists(platform::extended_path(path)))return size;
         for(const auto &entry:std::filesystem::recursive_directory_iterator(platform::extended_path(path))) {
             require_closure(!(GetFileAttributesW(entry.path().c_str())&FILE_ATTRIBUTE_REPARSE_POINT),"BATCH_TEST_REPARSE");
-            if(entry.is_regular_file())size+=entry.file_size();
+            if(entry.is_regular_file()) {
+                std::ifstream stream(entry.path(), std::ios::binary | std::ios::ate);
+                require_closure(bool(stream) && stream.tellg() >= 0, "BATCH_TEST_SIZE_UNREADABLE");
+                size += static_cast<std::uint64_t>(stream.tellg());
+            }
         }return size;
     };
     const auto cache_bytes = [&] {
-        std::uint64_t bytes=0;for(const auto &path:{data/"published/.asset-sets",data/"published/asset-objects",data/"asset-cache",data/"active-snapshots"})bytes+=tree_bytes(path);return bytes;
+        std::uint64_t bytes=0;for(const auto &path:{data/"published/.asset-sets",data/"published/asset-objects",data/"asset-cache",data/"active-snapshots",data/"execution-publication"})bytes+=tree_bytes(path);return bytes;
     };
     A::watch_budget(application,backend,"batch-first",stored);
     J before;
     const auto deadline=std::chrono::steady_clock::now()+90s;
     while(std::chrono::steady_clock::now()<deadline) {
         before=call(application,api::http::verb::get,"/api/v1/runs/current");
+        if (!before.value("coherent", false)) { std::this_thread::sleep_for(20ms); continue; }
         if(before.at("repeat").value("state","")=="waiting")break;
         std::this_thread::sleep_for(20ms);
     }
@@ -731,6 +753,7 @@ int resource_application_batch(const std::filesystem::path &pack, const std::fil
     J after;
     while(std::chrono::steady_clock::now()<deadline) {
         after=call(application,api::http::verb::get,"/api/v1/runs/current");
+        if (!after.value("coherent", false)) { std::this_thread::sleep_for(20ms); continue; }
         if(!after.at("repeat").value("active",true))break;
         std::this_thread::sleep_for(20ms);
     }
@@ -740,11 +763,12 @@ int resource_application_batch(const std::filesystem::path &pack, const std::fil
         second_view.snapshot.result_saved && second_view.snapshot.quiescent && second_view.snapshot.storage_error.empty() && second_view.worker_joined &&
         !after.at("repeat").value("active",true) && after.at("repeat").at("completed_cycles")==1,
         "BATCH_SECOND_NOT_ACTUAL_ADOPTED_STOPPED_JOINED_RUN:"+after.dump());
-    const auto second_root=data/"published"/second_view.request_id;
+    const auto second_root=execution_slot.destination();
     const auto second=platform::BundleLease::open_publication(second_root);
     require_closure(second->resource_digest()==digest && second->resource_bytes()==resource_bytes &&
-        ownership_file_id(second->physical_member("model/ocr/det.onnx"))==model_id && links(model_path)==model_links,
-        "BATCH_RESOURCE_DIGEST_FILEID_OR_LINKS_CHANGED");
+        links(second->physical_member("model/ocr/det.onnx"))==model_links &&
+        second->revision()!=frozen->revision,
+        "BATCH_REPLACEMENT_RESOURCE_IDENTITY_CHANGED_OR_OLD_PROGRAM_REUSED");
     const auto after_cache=cache_bytes();
     require_closure(after.at("repeat").at("retained_reference_bytes").get<std::uint64_t>()>
         before.at("repeat").at("retained_reference_bytes").get<std::uint64_t>(),"BATCH_LOGICAL_REFERENCE_DID_NOT_GROW");
@@ -752,16 +776,37 @@ int resource_application_batch(const std::filesystem::path &pack, const std::fil
         before.at("repeat").at("retained_budget_bytes").get<std::uint64_t>(),"BATCH_RETAINED_BUDGET_DID_NOT_GROW");
     const auto ref_delta=after.at("repeat").at("retained_reference_bytes").get<std::uint64_t>()-before.at("repeat").at("retained_reference_bytes").get<std::uint64_t>();
     const auto budget_delta=after.at("repeat").at("retained_budget_bytes").get<std::uint64_t>()-before.at("repeat").at("retained_budget_bytes").get<std::uint64_t>();
-    const auto marker=std::filesystem::file_size(second_root/"publication-layout.json");
-    require_closure(after_cache==before_cache && tree_bytes(first_run)==stable_first_run && ref_delta>budget_delta &&
-        ref_delta-budget_delta==resource_bytes-marker,"BATCH_LOGICAL_AND_RETAINED_GROWTH_NOT_DISTINCT");
+    std::uint64_t second_logical{};
+    for (const auto &[name, hash] : second->manifest()) { (void)hash; second_logical += second->member_size(name); }
+    const auto second_run_bytes=tree_bytes(second_view.store->directory());
+    const J accounting{{"before", before.at("repeat")}, {"after", after.at("repeat")},
+        {"first_run_before", stable_first_run}, {"first_run_after", tree_bytes(first_run)},
+        {"second_run_bytes", second_run_bytes}, {"second_logical", second_logical},
+        {"before_cache", before_cache}, {"after_cache", after_cache},
+        {"reference_delta", ref_delta}, {"budget_delta", budget_delta}};
+    std::ofstream(root/"budget-observation.json") << accounting.dump(2);
+    require_closure(tree_bytes(first_run)==stable_first_run,"BATCH_PRIOR_RUN_CHANGED:"+accounting.dump());
+    require_closure(ref_delta==second_logical+second_run_bytes,"BATCH_LOGICAL_DELTA_MISMATCH:"+accounting.dump());
+    require_closure(after.at("repeat").at("retained_budget_bytes")==after_cache+stable_first_run+second_run_bytes,
+        "BATCH_RETAINED_BYTES_MISMATCH:"+accounting.dump());
+    require_closure(!std::filesystem::exists(data/"published"/second_view.request_id),"BATCH_CREATED_REQUEST_DIRECTORY");
     const auto stable_second=tree_bytes(second_view.store->directory());std::this_thread::sleep_for(100ms);
     require_closure(stable_second==tree_bytes(second_view.store->directory()),"BATCH_TERMINAL_FACTS_STILL_WRITING");
+    const auto actual_flow_id = ownership_file_id(second->physical_member("program/flow.json"));
+    {
+        // A new ID with the real GiantBounty graph reuses the accepted slot.
+        // Preparation only: do not start another worker or device operation.
+        auto reused = A::prepare_giant(application, stored, {}, "independent-next-batch");
+        require_closure(!reused.publication_ownership && reused.units.front().program->revision == second->revision() &&
+            ownership_file_id(reused.units.front().bundle.lease->physical_member("program/flow.json")) == actual_flow_id &&
+            cache_bytes() == after_cache, "REAL_GIANT_NEW_REQUEST_DID_NOT_REUSE_SLOT");
+    }
     std::ofstream(root/"result.json")<<J{{"passed",true},{"first_business","existing external three-checkpoint fixture"},
         {"first",before},{"second",after},{"first_run_id",started.run_id},{"second_run_id",second_view.snapshot.run_id},
         {"second_request_id",second_view.request_id},{"second_state","UserStopped"},{"completed_cycles",1},
         {"resource_digest",digest},{"resource_bytes",resource_bytes},{"reference_delta",ref_delta},{"budget_delta",budget_delta},
-        {"new_marker_bytes",marker},{"other_cache_delta",0},{"file_id",model_id},{"links",model_links},
+        {"before_cache",before_cache},{"after_cache",after_cache},{"old_file_id",model_id},{"links",model_links},
+        {"real_giant_new_request_reused",true},{"same_flow_file_id",actual_flow_id},
         {"game_success_claimed",false},{"real_device_actions",0}}.dump(2);
     std::cout<<"PASS actual Application two-publication continuation, first external fixture Completed, second adopted UserStopped, distinct logical/budget growth\n";
     return 0;
@@ -842,6 +887,39 @@ int closure_application(const std::filesystem::path &pack, const std::filesystem
 
 int main(int argc, char **argv) {
     try {
+        if (argc == 4 && std::string(argv[1]) == "--publication-binding-failure") {
+            using namespace wvd;
+            const auto root = std::filesystem::absolute(argv[3]);
+            require_closure(!std::filesystem::exists(root), "BINDING_TEST_FRESH_ROOT_REQUIRED");
+            std::filesystem::create_directories(root);
+            auto backend = std::make_shared<OfflineConnection>(std::filesystem::absolute(argv[2]));
+            runtime::NativeRunCoordinator coordinator(root / "runs", 32, "binding-test");
+            auto owner = platform::OwnedBundleDirectory::create(root / "publication");
+            const auto receipt = owner->receipt();
+            auto definition = closure_definition(root / "publication", "binding-fault");
+            definition.publication_ownership = std::move(owner);
+            unsigned binds{}, withdrawals{};
+            definition.bind_publication = [&](const auto &) -> std::function<void()> {
+                ++binds;
+                return [&] { ++withdrawals; throw std::runtime_error("BINDING_WITHDRAWAL_FAILURE"); };
+            };
+            runtime::NativeCoordinatorTestAccess::start_fault(coordinator, [](const char *at) {
+                if (std::string_view(at) == "before_worker") throw std::runtime_error("WORKER_CREATION_FAILURE");
+            });
+            std::string error;
+            try { coordinator.start(std::move(definition), backend); }
+            catch (const std::exception &e) { error = e.what(); }
+            runtime::NativeCoordinatorTestAccess::start_fault(coordinator, {});
+            require_closure(error.find("primary=WORKER_CREATION_FAILURE") != std::string::npos &&
+                error.find("cleanup=BINDING_WITHDRAWAL_FAILURE") != std::string::npos && binds == 1 && withdrawals == 1 &&
+                !receipt->accepted && !receipt->cleanup_pending && !std::filesystem::exists(root / "publication") &&
+                backend->inputs == 0 && backend->captures == 0 && backend->connections == 0 &&
+                coordinator.snapshot().state == contracts::RunState::Failed && coordinator.snapshot().quiescent,
+                "PUBLICATION_BINDING_DUAL_ERROR_OR_NO_INPUT_PROOF_LOST");
+            std::ofstream(root / "result.json") << J{{"passed", true}, {"error", error},
+                {"binds", binds}, {"withdrawals", withdrawals}, {"device_inputs", 0}}.dump(2);
+            return 0;
+        }
         if (argc == 3 && std::string(argv[1]) == "--publication-maintenance-repeat-cli-fixture") {
             const auto fixture = publication_maintenance_contract::repeat_fixture(std::filesystem::absolute(wvd::platform::path_from_utf8(argv[2])));
             std::cout << fixture.dump() << '\n'; return 0;

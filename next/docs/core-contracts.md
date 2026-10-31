@@ -2,9 +2,13 @@
 
 本页规定现行产品合同。当前维护与生命周期剩余事项见[维护入口](../../docs/maintenance.md)，旧设计按下方固定 Git 链接追溯；待实施策略不得作为已通过的合同或正式历史删除依据。调整资源物理布局时仍须保持原身份、租约、调用链和业务验收语义，验证结果更新本合同及当前维护事项。
 
-共享布局合同见[C07资源消费](https://github.com/livehtworks/wvd/blob/f4bc8f9e0d94035d1ed906516b7e37c30378581c/docs/work-packages/consolidation-20261026-resource-contract.md)：请求保留独立flow/identity，资源集按digest封存一次，识别与OCR三个模型输入都经同一组合租约解析；原程序revision和mod选择语义保持。有marker错误即拒绝，无marker旧包继续严格校验。逻辑引用累计与新增物化预算分别报告，保留16GiB硬限、14GiB续轮门禁及卷2GiB加最坏物化空间准入。部署事实见项目当前状态；正式历史维护只按原生资格及事务执行，进度见当前维护事项；旧历史不得仅凭布局升级迁出或失去请求防重。
+共享资源与组合租约继续遵循[C07资源消费](https://github.com/livehtworks/wvd/blob/f4bc8f9e0d94035d1ed906516b7e37c30378581c/docs/work-packages/consolidation-20261026-resource-contract.md)。2026-10-31源码将新执行的逐请求完整包改为唯一 `execution-publication/current/bundle`：同revision复用flow/identity、provenance及资源集合；换版本先退出已清账且释放租约的旧槽位，不再增加逐轮published目录。原程序revision、语言、mod选择和完整资源闭包保持；marker错误必须拒绝，不按缺包回到旧published查找。此源码改动尚未部署，隔离验收结果见当前维护事项。
 
-2026-10-27候选的显式`--maintenance-publication`入口先持有原service.lock，不构造Application或设备。仅处理资格明确的已完成、已保存、静止且业务清账历史；repeat要求显式root-request-id/cycle及完整成功前缀，与watcher共用原ID算法和清账判据。保持请求根、flow/identity/provenance及原revision；requests/runs原始字节不改，不将停止半轮计成功。固定持久门禁及全事务journal先于目录变更落盘，源FileID与冻结句柄同卷不覆盖移动；旧完整树进入受保护盘根trash后再次核验，才安装并回读新根。未知位置、篡改、低空间、锁占用和未完成登记均拒绝继续；只能显式finish/rollback且重新核验证据。正常入口在Application及新准备前检查门禁，无旁路或自动回退。共享读取已在当前候选部署；当前候选已通过独立小夹具和首份正式历史的转换/回读/显式回滚验证；其余历史逐份资格及事务仍须核验，不以先行通过推定全部可迁。plan/status也取得service.lock，禁止将其当作不写正式目录的只读查询。 已提交的journal登记不能证明trash中的原件仍在；正常启动的终态门禁与实际回滚材料完整性须分别核验。当前恢复区缺失及停止范围见[维护事项](../../docs/maintenance.md)，不因历史先行验证通过而自动续转。
+新槽位的生命周期记录只关联原RunStore，不替代requests/runs。Coordinator接管前写关联，worker创建失败撤回；未静止、终态缺失/损坏、未保存、细节不完整、Unknown或未结业务副作用不准覆盖。版本退出先写持久意图并绑定目录FileID，再由Windows句柄删除，活动租约拒绝删除；重启只能继续已登记派生槽位的回收，不推断旧历史所有权。只保留一个当前版本，不累计成功版本或测试快照。旧正式published、历史维护journal及业务事实不迁移、不修改。
+
+逻辑引用累计与实际保留预算分别报告，保留16GiB硬限、14GiB续轮门禁及卷2GiB加最坏物化空间准入。`retained_reference_bytes`仍按每轮引用累计；`retained_budget_basis=bounded_execution_slot_and_run_v2`表示执行槽位只计一次、运行事实分别计量，不把复用或同盘移动当成删除了业务历史。
+
+2026-10-27候选的显式`--maintenance-publication`入口先持有原service.lock，不构造Application或设备。仅处理资格明确的已完成、已保存、静止且业务清账历史；repeat要求显式root-request-id/cycle及完整成功前缀，与watcher共用原ID算法和清账判据。保持请求根、flow/identity/provenance及原revision；requests/runs原始字节不改，不将停止半轮计成功。固定持久门禁及全事务journal先于目录变更落盘，源FileID与冻结句柄同卷不覆盖移动；现有维护实现将旧完整树移到普通盘根trash再核验并安装新根；该恢复位置设计已造成原件丢失，不能再称为受保护恢复区，当前禁止继续旧历史转换。未知位置、篡改、低空间、锁占用和未完成登记均拒绝继续；只能显式finish/rollback且重新核验证据。正常入口在Application及新准备前检查门禁，无旁路或自动回退。共享读取已在当前候选部署；当前候选已通过独立小夹具和首份正式历史的转换/回读/显式回滚验证；其余历史逐份资格及事务仍须核验，不以先行通过推定全部可迁。plan/status也取得service.lock，禁止将其当作不写正式目录的只读查询。 已提交的journal登记不能证明trash中的原件仍在；正常启动的终态门禁与实际回滚材料完整性须分别核验。当前恢复区缺失及停止范围见[维护事项](../../docs/maintenance.md)，不因历史先行验证通过而自动续转。
 
 解释入口与真实调用链对应，不另建产品执行器，不依赖历史报告猜许可。
 

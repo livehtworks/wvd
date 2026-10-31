@@ -53,6 +53,9 @@ struct NativeRunDefinition {
         const contracts::SessionResult &, const contracts::BusinessRunState &, unsigned)> recovery;
     std::function<bool(const contracts::SessionResult &,
                        const contracts::BusinessRunState &)> handoff_ready;
+    // Persist the derived publication's run binding before any worker input.
+    // The returned rollback is used only when worker creation is not accepted.
+    std::function<std::function<void()>(const std::filesystem::path &)> bind_publication;
     // Declared last so move assignment replaces dependent leases first. The
     // destructor clears units before an unaccepted token can withdraw a package.
     std::unique_ptr<platform::OwnedBundleDirectory> publication_ownership;

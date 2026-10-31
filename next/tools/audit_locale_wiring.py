@@ -22,6 +22,38 @@ def walk(value, path=""):
 
 
 def latest_publication(runtime):
+    """Use the current execution slot when its authority marker exists.
+
+    An empty/retiring/damaged slot must never select a stale historical request.
+    Native BundleLease remains the cryptographic and live-lock validator.
+    """
+    slot = runtime / "execution-publication"
+    if not slot.exists() and not slot.is_symlink():
+        return _latest_legacy_publication(runtime)
+    for path, directory in ((slot, True), (slot / "state.json", False)):
+        info = path.lstat()
+        if (getattr(info, "st_file_attributes", 0) & 0x400 or stat.S_ISLNK(info.st_mode) or
+                not (stat.S_ISDIR(info.st_mode) if directory else stat.S_ISREG(info.st_mode)) or
+                (not directory and info.st_size > 65536)):
+            raise RuntimeError("PUBLICATION_AUDIT_SLOT_INVALID")
+    state = read(slot / "state.json")
+    if state.get("schema") != 1 or state.get("kind") != "derived_execution_slot":
+        raise RuntimeError("PUBLICATION_AUDIT_SLOT_INVALID")
+    if state.get("phase") == "empty" and not (slot / "current").exists():
+        return None
+    if state.get("phase") != "ready":
+        raise RuntimeError("PUBLICATION_AUDIT_SLOT_NOT_READY")
+    chosen = slot / "current/bundle"
+    for path in (slot / "current", chosen):
+        info = path.lstat()
+        if not stat.S_ISDIR(info.st_mode) or getattr(info, "st_file_attributes", 0) & 0x400:
+            raise RuntimeError("PUBLICATION_AUDIT_SLOT_INVALID")
+    if not (chosen / "publication-layout.json").is_file():
+        raise RuntimeError("PUBLICATION_AUDIT_LAYOUT_INVALID")
+    return _validate_program(chosen)
+
+
+def _latest_legacy_publication(runtime):
     """Select a request's program, never a shared/private directory.
 
     This is a structural audit selection, not a replacement for BundleLease's
@@ -44,6 +76,10 @@ def latest_publication(runtime):
     if not candidates:
         return None
     chosen = max(candidates)[2]
+    return _validate_program(chosen)
+
+
+def _validate_program(chosen):
     for path, directory in ((chosen / "program", True), (chosen / "program/flow.json", False),
                             (chosen / "program/identity.json", False)):
         info = path.lstat()

@@ -289,7 +289,10 @@ contracts::RunSnapshot NativeRunCoordinator::start(
     }
     auto *publication_owner = definition.publication_ownership.get();
     const auto publication_receipt = publication_owner ? publication_owner->receipt() : nullptr;
+    std::function<void()> rollback_publication_binding;
     try {
+        if (definition.bind_publication)
+            rollback_publication_binding = definition.bind_publication(store_->directory());
         if (start_fault_) start_fault_("before_worker");
         worker_ = std::jthread([this, definition = std::move(definition),
                                 backend = std::move(backend), worker_gate]() mutable {
@@ -305,8 +308,16 @@ contracts::RunSnapshot NativeRunCoordinator::start(
         // The worker exists, but cannot touch the backend before this explicit
         // acceptance point. Later snapshot/allocation failure cannot revoke it.
         if (publication_owner) publication_owner->accept();
+        rollback_publication_binding = {};
         worker_gate->count_down();
     } catch (...) {
+        const auto failure = std::current_exception();
+        std::string binding_error;
+        if (rollback_publication_binding) {
+            try { rollback_publication_binding(); }
+            catch (const std::exception &error) { binding_error = error.what(); }
+            catch (...) { binding_error = "NON_STANDARD_EXCEPTION"; }
+        }
         std::lock_guard lock(mutex_);
         active_ = false;
         terminal_recorded_ = true;
@@ -315,7 +326,15 @@ contracts::RunSnapshot NativeRunCoordinator::start(
         snapshot_.quiescent = true;
         lease_.reset();
         complete_.notify_all();
-        throw;
+        if (!binding_error.empty()) {
+            std::string primary = "NON_STANDARD_EXCEPTION";
+            try { std::rethrow_exception(failure); }
+            catch (const std::exception &error) { primary = error.what(); }
+            catch (...) {}
+            throw std::runtime_error("EXECUTION_PUBLICATION_BINDING_ROLLBACK_FAILED:primary=" + primary +
+                ";cleanup=" + binding_error);
+        }
+        std::rethrow_exception(failure);
     }
     if (publication_receipt) publication_receipt->require_clean_acceptance();
     if (start_fault_) start_fault_("after_adoption");

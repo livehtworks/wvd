@@ -326,6 +326,37 @@ class LocalePublicationSelectionContract(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, "PUBLICATION_AUDIT_LAYOUT_INVALID"):
                     audit_locale_wiring.latest_publication(root)
 
+    def test_current_execution_slot_wins_over_old_request_timestamps(self):
+        with tempfile.TemporaryDirectory(prefix="wvd-locale-slot-") as directory:
+            root = Path(directory)
+            self.publication(root, "old-history", shared=True)
+            staged = self.publication(root, "new-slot", shared=True)
+            slot = root / "execution-publication"
+            (slot / "current").mkdir(parents=True)
+            chosen = slot / "current/bundle"
+            staged.rename(chosen)
+            (slot / "state.json").write_text(json.dumps({"schema": 1,
+                "kind": "derived_execution_slot", "phase": "ready"}), encoding="utf-8")
+            self.assertEqual(audit_locale_wiring.latest_publication(root), chosen)
+            (chosen / "publication-layout.json").write_text("{}", encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, "PUBLICATION_AUDIT_LAYOUT_INVALID"):
+                audit_locale_wiring.latest_publication(root)
+
+    def test_empty_or_retiring_slot_does_not_fall_back_to_old_history(self):
+        with tempfile.TemporaryDirectory(prefix="wvd-locale-slot-") as directory:
+            root = Path(directory)
+            self.publication(root, "old-history", shared=True)
+            slot = root / "execution-publication"
+            slot.mkdir()
+            for phase in ("empty", "retiring"):
+                (slot / "state.json").write_text(json.dumps({"schema": 1,
+                    "kind": "derived_execution_slot", "phase": phase}), encoding="utf-8")
+                if phase == "empty":
+                    self.assertIsNone(audit_locale_wiring.latest_publication(root))
+                else:
+                    with self.assertRaisesRegex(RuntimeError, "PUBLICATION_AUDIT_SLOT_NOT_READY"):
+                        audit_locale_wiring.latest_publication(root)
+
 
 class DirectoryFailureContract(unittest.TestCase):
     """Faults use the real transaction and filesystem in explicitly disposable roots."""

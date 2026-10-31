@@ -10,6 +10,7 @@
 #include <windows.h>
 #include "publication_t0_contract.hpp"
 #include "resource_set_contract.hpp"
+#include "execution_publication_contract.hpp"
 
 namespace {
 using J = nlohmann::json;
@@ -49,6 +50,10 @@ std::pair<DWORD, std::uint64_t> file_identity(const fs::path &path) {
 
 int main(int argc, char **argv) {
     try {
+        if (argc == 3 && std::string(argv[1]) == "--execution-slot")
+            return execution_publication_contract::run(fs::absolute(wvd::platform::path_from_utf8(argv[2])));
+        if (argc == 3 && std::string(argv[1]) == "--execution-slot-reopen")
+            return execution_publication_contract::reopen(fs::absolute(wvd::platform::path_from_utf8(argv[2])));
         if (argc == 4 && std::string(argv[1]) == "--resource-sets-ocr")
             return resource_set_contract::ocr(fs::absolute(wvd::platform::path_from_utf8(argv[2])),
                 fs::absolute(wvd::platform::path_from_utf8(argv[3])));

@@ -266,6 +266,20 @@ void OwnedBundleDirectory::rollback() {
         throw;
     }
 }
+OwnedBundleDirectory::DirectoryIdentity OwnedBundleDirectory::directory_identity() const {
+    require(receipt_->identity_confirmed, "OWNED_DIRECTORY_IDENTITY_UNCONFIRMED");
+    return {impl_->identity.dwVolumeSerialNumber, impl_->identity.nFileIndexHigh, impl_->identity.nFileIndexLow};
+}
+void OwnedBundleDirectory::erase_retired(const std::filesystem::path &path, const DirectoryIdentity &identity) {
+    require(path.is_absolute(), "OWNED_DIRECTORY_PATH_INVALID");
+    std::vector<std::unique_ptr<Held>> parents;
+    for (const auto &parent : ancestors(path.parent_path())) parents.push_back(std::make_unique<Held>(parent, true));
+    BY_HANDLE_FILE_INFORMATION expected{};
+    expected.dwVolumeSerialNumber = identity[0];
+    expected.nFileIndexHigh = identity[1];
+    expected.nFileIndexLow = identity[2];
+    erase_owned_tree(path, &expected);
+}
 [[noreturn]] void OwnedBundleDirectory::rethrow_with_cleanup(std::exception_ptr primary) {
     try { rollback(); }
     catch (...) { throw DirectoryCleanupPending(exception_text(primary),

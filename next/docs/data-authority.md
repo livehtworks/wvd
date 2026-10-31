@@ -4,7 +4,7 @@
 
 统一入口为 [根数据职责](../../docs/data-authority.md)；本页补充具体字段与消费关系，沿用同一运行和生命周期所有者。现行职责核对当前存储调用链，部署与现场状态见[项目状态](../../docs/project-status.md)。后续保留与归档整改见 [维护事项](../../docs/maintenance.md) 及 [任务登记](../../docs/history/consolidation-state.json)；文档补全不代表已实现回收或改变正式数据保存规则。
 
-下表保留正式部署的数据解释。当前产品实现`published/.asset-sets/<digest>/payload`及其manifest，派生资源集由NativePublisher唯一写入，BundleLease组合冻结并供Service/OCR/运行会话消费；请求自己的program/flow.json、identity.json及publication-layout.json保留身份和集合绑定。正式旧历史已部分转换并停止，原恢复区被清空，实际范围和恢复限制见[维护事项](../../docs/maintenance.md)；原requests/runs继续作为权威，不增加归档数据库或另一份索引权威。
+下表区分正式版本和未部署的新源码。正式版本仍有逐请求program/identity及共享资源集合；新源码沿同一NativePublisher/BundleLease把完整冻结内容放入唯一`execution-publication/current/`槽位，同revision跨请求复用，版本替换时经终态及租约证明退出旧槽位。原revision、mod、Service/OCR输入和资源闭包保持。旧正式published历史不参与此回收；其历史转换已停止，范围和恢复限制见[维护事项](../../docs/maintenance.md)。原requests/runs继续作为权威，不增加归档数据库或另一份业务索引。
 
 维护器独占原`service.lock`；固定`.publication-maintenance.json`门禁与`.publication-maintenance-journal.json`（2048笔/16MiB上限）只登记维护事务，不替代SubmissionStore/RunStore。每笔绑定源FileID、原始控制文件/历史SHA、资源集合及阶段；旧完整树同卷迁往盘根`trash/wvd-publication-history/<data-root身份>/<事务>/`作为受保护回滚材料。未完成、缺失、损坏或未知登记阻止正常服务和新准备，显式finish/rollback重核证据，不自动回退。单请求须具备唯一干净终态；repeat另绑定根请求三处ID、接受回执与完整有序成功前缀，内部轮不得伪造独立submission。当前EXE的隔离链和正式先行转换/回滚已验证；完整批次以原生journal终态为准，不能把部分通过解释为全部历史已转换。
 
@@ -29,7 +29,9 @@
 | `requests/<request-id-sha256>.json` | 原请求意图、原run及接受/终态回执，持久幂等权威。1MiB/条、256MiB总量、65,536条；替换不增加条数，内部SHA/UUID临时文件共同计量。未完成/未知或超额时只读，旧ID仍按需核验读取，不重执行未知意图。 | `SubmissionStore` / `Application` | 重试查询、请求与run恢复核对 |
 | `asset-cache/` | 按候选 manifest 从只读资源包冻结的派生资产，非源素材权威。 | `Application` 的 manifest 冻结过程 | 发布器、识别服务 |
 | `asset-cache/portraits-<digest>/` | 从profile嵌入PNG派生的只读、内容寻址图像包；与既有发布器一起冻结，不能反向回写profile或作为独立素材注册表。解码前检查PNG头和尺寸，发布核对哈希。 | `Application::portrait_bundle` | 原生发布器、运行租约 |
-| `published/<request_id>/` | 本次编译封存的程序与资源身份，不替代作者原文档。先在本次唯一staging复制/校验，释放临时锁后同盘rename，再按最终路径冻结；唯一所有权token随组装传递，明确接管前的取消/失败只按身份撤回本次目录。接管后即使快速完成也保留，活动租约禁止修改/删除；现行行为没有历史自动退出。 | `NativePublisher` / `publish_native`；准备撤回由Application门禁 | 本次 `NativeRunDefinition`、Coordinator/Session |
+| `execution-publication/current/` | 新源码的唯一派生槽位，包含bundle及其.asset-sets。相同revision校验后复用，版本改变时依据原终态和租约退出旧槽位。源码尚未部署，不等同于正式历史已清理。 | Application/ExecutionPublication调用唯一NativePublisher；组合BundleLease冻结 | 任务/工作流/续轮/交接的NativeRunDefinition、Coordinator/Session |
+| `execution-publication/state.json` | schema/kind、phase、目录FileID、最近run/request/revision；不复制结果或维护另一份成功账本。worker输入前关联真实RunStore，未接管失败撤回；退役意图持久化后才按目录身份回收，失败或重启只处理同一槽位。 | ExecutionPublication及Coordinator接管回调 | 下一次准备核原run/result；Unknown、pending、缺终态/细节或活动租约保护现场 |
+| `published/<request_id>/` | 正式旧版本及既有历史冻结包。新源码入口已退出逐请求写入；原文件不参与新槽位回收，不因新规则删除、转换或失去防重。 | 正式旧发布器、显式历史读取/维护 | 原历史证据与组合租约读取 |
 | `published/asset-objects/<hash>/` | 从锁定原始字节复制的派生模型对象，同盘发布优先创建硬链接；仅真实 `STATUS_TOO_MANY_LINKS` 时从同一冻结租约流式复制。不得硬链接用户可变原件；链接容量回退不等于历史存储治理。 | `NativePublisher` | 发布成员、运行租约 |
 | `published`、`asset-objects`、`asset-cache`中的`.cleanup-pending-*`及本次staging | 改名前准备意图、源/目标身份或清理故障现场。接管或完整撤回后才移除本次索引；遗留意图不是当前接管结论，阻止新准备，重启需核持久run/request引用。双错误分别报告，不猜所有权或批量清理。 | `OwnedBundleDirectory` / `Application` | 准备准入、恢复和故障核对 |
 | `active-snapshots/` | 运行时物化快照，供原生会话读取；不是用户编辑入口。 | Bundle 发布/租约 | 识别与诊断 |

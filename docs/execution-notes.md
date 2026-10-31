@@ -2,6 +2,10 @@
 
 ## 工具、路径与验证边界
 
+- `test_native_application --submission-history`包含真实65,536记录的容量边界，不是小量请求回读测试；只有修改该容量/计量合同才运行这一大夹具。普通防重与历史回读选`--submission-readonly <隔离pack> <quests> <全新data-root>`。本次误启动容量用例后已中止，生成的32,364个临时文件迁入普通D盘trash，不能记为容量验证通过；不删除或改弱原边界断言。手动运行单个原生测试也必须自行完成产物收尾，不能假定它执行了聚合runner的artifact-lifecycle步骤。
+- 执行包稳定占用在Coordinator接管、临时准备意图移除后计量；不能把接管前后不同阶段的文件数直接相减判为增长。`runs/current`可能返回`coherent=false`的过渡快照，此时没有`repeat`字段；等待连贯快照后仍须核真实run/request、终态、成功计数和预算，不能将缺字段或accepted当完成。
+- Windows目录枚举可能保留仍打开文件的旧长度，即使事件流已flush。本轮续轮核对观察到首轮事件日志少计10,642字节；预算改由文件句柄GetFileSizeEx读取实际长度，测试用独立流seek-to-end核对，不以等待句柄关闭或放宽误差代替真实计量。
+
 - **维护CLI的plan/status也会取得正式数据锁。** `--maintenance-publication`入口先构造ServiceInstance；不能把plan/status当作无副作用的普通文件读取，正式根须在授权维护窗口且HTTP服务退出后操作。部分事务失败先核原生journal，再决定finish或rollback；不得重复convert生成新事务绕过现场。
 
 - **旧历史批量转换不是新任务共享资源的前置条件。** 2026-10-31逐份转换耗时过重，且保留整树回滚材料，同盘移动并未释放空间。当前维护器把原件写入普通`D:/trash/wvd-publication-history`；用户清空trash后owner缺失造成READ_FAILED，原生intent已显式rollback，当前服务可空闲启动，但丢失的恢复原件不能补造。恢复区职责、路径与退出合同未重新核定前，不再批量使用该转换入口，不重建owner或篡改FileID绕过缺失证据。
