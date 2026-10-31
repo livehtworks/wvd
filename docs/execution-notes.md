@@ -2,6 +2,12 @@
 
 ## 工具、路径与验证边界
 
+- **维护CLI的plan/status也会取得正式数据锁。** `--maintenance-publication`入口先构造ServiceInstance；不能把plan/status当作无副作用的普通文件读取，正式根须在授权维护窗口且HTTP服务退出后操作。部分事务失败先核原生journal，再决定finish或rollback；不得重复convert生成新事务绕过现场。
+
+- **旧历史批量转换不是新任务共享资源的前置条件。** 2026-10-31逐份转换耗时过重，且保留整树回滚材料，同盘移动并未释放空间。当前维护器把原件写入普通`D:/trash/wvd-publication-history`；用户清空trash后owner缺失造成READ_FAILED，原生intent已显式rollback，当前服务可空闲启动，但丢失的恢复原件不能补造。恢复区职责、路径与退出合同未重新核定前，不再批量使用该转换入口，不重建owner或篡改FileID绕过缺失证据。
+
+- **设备API的202仅表示已接受。** connect/disconnect/capture之后通过原GET device等待busy=false且operation完成，再提交依赖操作。模拟器冷启动和方向切换期间的`CAPTURE_METADATA_NOT_READY`不能直接当作卡死；设备connect的vpn_required标志不等同业务生命周期EnsureVpn已经执行。有限诊断须核原VPN实际就绪与当前前台身份，不用重叠ADB探测掩盖原入口结果。
+
 - **MuMu原生导出超时不代表导出已停止。** 6.8.8的`mumu-cli export`实测返回`-502/mainnx request failed`后，管理器仍继续写入`.mumudata`；文件长度和时间戳也可能暂时不更新。不得因此重复提交导出、关闭管理器或移动源数据。须等文件可独占只读打开、7z目录可读，再以完整`7za t` CRC校验判定备份完整。迁移前记录源VDI的SHA256，恢复后、首次启动前核对。安装位置切换须由原生安装/导入入口重建绝对路径，不直接覆盖带旧C盘路径的`.nemu`。
 
 - **MuMu模块安装包不是独立安装向导。** `MuMu-setup-nxmain/nemux/mumu15-*.exe`的签名、SHA与版本相符，只能证明材料身份；不能证明可双击完成全新安装。6.8.8实测仅确认UAC后退出，原生日志为`from_orchestrator != 1, exit 1`。实际原生链以同一事务ID先准备main/两个engine，再提交engine、最后提交main；必须核对应版本的真实调用日志、目标路径及组件事务状态，不凭镜像页面“完整安装包”标签跳过入口核查。当前迁移使用本机原6.8.8安装日志核对原生参数，单次有界执行脚本及TEMP/日志集中于F盘迁移工作区；不使用第三方便携化脚本、不手工注册驱动或伪造安装配置。

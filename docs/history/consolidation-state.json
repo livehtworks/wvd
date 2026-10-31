@@ -55,9 +55,13 @@
       ],
       "status": "OPEN",
       "evidence": [
-        "docs/reviews/engineering/consolidation-execution-20261026.md"
+        "docs/project-status.md",
+        "docs/maintenance.md",
+        "next/.local/consolidation-261026/c09-default-previous-readonly-20261027.json",
+        "next/.local/giant-200-20261030/stall-fix/release2/automationd.pdb"
       ],
-      "closed_at": null
+      "closed_at": null,
+      "conclusion": "Default/formal EXE and matching PDB agree; three superseded candidates were validated and moved. Subsequent user trash clearance removed recovery originals; whole-current-data rollback is not proven. Candidate alignment alone no longer supports closure."
     },
     {
       "id": "A5",
@@ -189,5 +193,33 @@
       "evidence": "next/.local/mumu-f-migration-20261030/completed-migration.json",
       "authorization": "User explicitly approves actual migration, preserve all3 instances/data, verify new default onF, final shutdown, no loop"
     }
+  },
+  "formal_history_maintenance_current": {
+    "state": "stopped_no_resume",
+    "candidate_batch": 505,
+    "batch_committed": 493,
+    "batch_rolled_back": 1,
+    "batch_unattempted": 11,
+    "canary_committed": 1,
+    "native_journal": {
+      "committed": 494,
+      "rolled_back": 2,
+      "pending": 0
+    },
+    "recovery_original_paths_missing": 494,
+    "emergency_residue": {
+      "transaction_directories": 4,
+      "files": 1797,
+      "logical_bytes": 423829542,
+      "complete_recovery_not_assumed": true
+    },
+    "native_interruption_rollback": "C9491051-DEF5-4806-9867-B0DA0D2A5244",
+    "idle_service_verified_then_stopped": "7F44685B-94A5-451C-AF6C-52CDFE768FA6",
+    "protected_SHA_unchanged": 74,
+    "business_loop_started": false,
+    "monitor": "PAUSED",
+    "online_CI_started": false,
+    "evidence": "next/.local/consolidation-261026/formal-maintenance/receipt.json",
+    "remaining": "C09 retention/archive/query/idempotency/exit contract incomplete; no overall T0 closure. Historical conversion added no current task functionality; bulk conversion over-prioritized and active recovery material misplaced in ordinary trash."
   }
 }

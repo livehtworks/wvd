@@ -4,9 +4,9 @@
 
 统一入口为 [根数据职责](../../docs/data-authority.md)；本页补充具体字段与消费关系，沿用同一运行和生命周期所有者。现行职责核对当前存储调用链，部署与现场状态见[项目状态](../../docs/project-status.md)。后续保留与归档整改见 [维护事项](../../docs/maintenance.md) 及 [任务登记](../../docs/history/consolidation-state.json)；文档补全不代表已实现回收或改变正式数据保存规则。
 
-下表保留正式部署的数据解释。新候选源码另已实现`published/.asset-sets/<digest>/payload`及其manifest，派生资源集由NativePublisher唯一写入，BundleLease组合冻结并供Service/OCR/运行会话消费；请求自己的program/flow.json、identity.json及publication-layout.json保留身份和集合绑定。当前候选已部署，正式旧历史仍未转换；C09继续保护原requests/runs权威，不增加归档数据库或另一份索引权威。
+下表保留正式部署的数据解释。当前产品实现`published/.asset-sets/<digest>/payload`及其manifest，派生资源集由NativePublisher唯一写入，BundleLease组合冻结并供Service/OCR/运行会话消费；请求自己的program/flow.json、identity.json及publication-layout.json保留身份和集合绑定。正式旧历史已部分转换并停止，原恢复区被清空，实际范围和恢复限制见[维护事项](../../docs/maintenance.md)；原requests/runs继续作为权威，不增加归档数据库或另一份索引权威。
 
-2026-10-27候选维护器独占原`service.lock`；固定`.publication-maintenance.json`门禁与`.publication-maintenance-journal.json`（2048笔/16MiB上限）只登记维护事务，不替代SubmissionStore/RunStore。每笔绑定源FileID、原始控制文件/历史SHA、资源集合及阶段；旧完整树同卷迁往盘根`trash/wvd-publication-history/<data-root身份>/<事务>/`作为受保护回滚材料。未完成、缺失、损坏或未知登记阻止正常服务和新准备，显式finish/rollback重核证据，不自动回退。单请求须具备唯一干净终态；repeat另绑定根请求三处ID、接受回执与完整有序成功前缀，内部轮不得伪造独立submission。当前候选已部署；正式旧历史转换仍未执行。
+维护器独占原`service.lock`；固定`.publication-maintenance.json`门禁与`.publication-maintenance-journal.json`（2048笔/16MiB上限）只登记维护事务，不替代SubmissionStore/RunStore。每笔绑定源FileID、原始控制文件/历史SHA、资源集合及阶段；旧完整树同卷迁往盘根`trash/wvd-publication-history/<data-root身份>/<事务>/`作为受保护回滚材料。未完成、缺失、损坏或未知登记阻止正常服务和新准备，显式finish/rollback重核证据，不自动回退。单请求须具备唯一干净终态；repeat另绑定根请求三处ID、接受回执与完整有序成功前缀，内部轮不得伪造独立submission。当前EXE的隔离链和正式先行转换/回滚已验证；完整批次以原生journal终态为准，不能把部分通过解释为全部历史已转换。
 
 收尾堆诊断的heap_summary_before/after记录HeapSummary可用性、完整性、堆数、失败数、allocated/committed/reserved及微秒耗时；per_heap以同进程堆地址区分主堆与其它堆，最多64条，包含各自API失败和耗时，失败的字节数为null。仍由原RunStore按memory/info写入同一固定生命周期槽；关闭采集时跳过逐堆查询，空闲页回收仍执行。不增加配置或另一运行所有者，不将堆内部提交当进程PrivateUsage。停止请求不等于收尾完成，原Application监视线程必须等任务线程终态、join及批次释放后才结束。独立ProcDump诊断转储可能含用户配置/进程内容，仅保留在忽略的next/.local，禁止当普通报告提交或上传；无效小转储及超时原始日志保留负证据，不改变正式结果。
 

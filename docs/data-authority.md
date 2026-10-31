@@ -14,6 +14,10 @@
 | requests/<request-id-sha256>.json | 原始请求意图、原run、接受/终态回执 | SubmissionStore/Application；重试查询 | 持久幂等事实，1MiB/条、256MiB总量、65,536条；替换不增加条数。内部SHA/UUID临时文件共同计量；未完成/未知或超额时只读，旧ID仍按需核验读取，不重执行未知意图 |
 | runs/<instance>/<run>/ | run定义、result、事件、输入、诊断/计时/内存边界 | Coordinator/Session/RunStore；API/诊断工具 | 运行证据；instance/run/gen绑定，result.json才是根终态 |
 | published/<request>/ | 冻结IR、manifest及资源引用 | NativePublisher；Coordinator/Session | 派生不可变发布，唯一所有权token随组装传递；明确接管前失败只按身份撤回本次目录，接管后即使快速完成也保留；活跃租约禁止修改/删除 |
+| published/.asset-sets/<digest>/ | 按成员路径、SHA及字节长度确定的冻结资源集合 | NativePublisher/显式历史维护；组合BundleLease读取识别和模型 | 派生共享资源；当前请求与历史引用共同保护，不按文件年龄或零活跃进程直接删除 |
+| published/<request>/publication-layout.json | 请求到共享资源集合的显式布局标记，保持独立flow/identity与原revision | NativePublisher/历史维护；BundleLease | 标记错误拒绝读取，无隐式回退；转换不创建业务请求或改成功计数 |
+| .publication-maintenance.json、.publication-maintenance-journal.json | 维护门禁、事务ID、原/新目录身份、请求资格摘要及阶段 | PublicationMaintenance；Application启动/准备门禁 | 正式恢复权威；原service.lock独占下写入，未完成事务须显式finish/rollback，禁止直接清空以解除阻断 |
+| D:/trash/wvd-publication-history/<data-root身份>/<事务>/ | 当前维护代码使用的原树恢复路径 | 原生历史维护/显式回滚 | 2026-10-31用户清空trash后原路径缺失；此位置不能作为可靠长期恢复区，不再据journal中的路径宣称原件仍可恢复。原requests/runs仍留正式根 |
 | published/asset-objects/<hash>/ | 从锁定原始字节复制的一份模型 | NativePublisher；同盘发布硬链接 | 派生内容缓存；仅系统真实STATUS_TOO_MANY_LINKS时从同一冻结租约流式复制；不得硬链接用户可变原件，无自动历史删除 |
 | published、asset-objects、asset-cache中的.cleanup-pending-*及本次staging | 改名前准备意图/源目标身份，或清理故障/残留现场；双错误另由原异常及Application状态报告 | OwnedBundleDirectory/Application；准备准入 | 派生事务留证；接管或完整撤回后才移除本次索引。遗留意图不是当前接管结论，阻止新准备，重启需核持久run/request引用，不猜所有权或批量清理 |
 | recent-frames/ | 全局普通JPG/动作PNG及内部未提交tmp | RunStore原有recent worker；诊断查询 | 可选有界诊断；240张/128MiB、单张8MiB、队列4张。先核身份/计量/回收预留再写；失败阻断新增，重建不清零，显式重新核验后才可恢复 |
@@ -28,7 +32,7 @@
 
 本次文档收束没有迁移或改写正式数据。新requests历史只由原生Application写入，不复制猜测旧内存幂等表；进程退出留下preparing意图表示已接受但结果未知，不能自动重执行。达到总额度停止接受新意图，既有回执仍可读取。移出活动目录不能抹掉旧ID的幂等事实、业务未知或恢复引用。
 
-当前代码及候选包含显式历史维护入口，正式旧历史尚未执行转换。`data-root/.publication-maintenance.json`为持久门禁，`.publication-maintenance-journal.json`为其唯一事务登记（最多2048笔/16MiB）；维护器持有同一`service.lock`，记录源目录身份、原始控制文件/历史证据SHA、共享集合及阶段，不成为请求或业务结果权威。未知、缺件、损坏或未终结事务阻止正常启动与新准备，须显式finish/rollback，不自动解锁或回退。原树保存在同卷`trash/wvd-publication-history/<data-root身份>/<事务>/`，属于受保护恢复材料。requests/runs不写入、不移动；repeat必须显式提供根请求与轮次，并核验完整成功前缀，停止半轮原样保留。
+当前维护已转换494份旧发布，批次因恢复区缺失而停止，未结事务经原生rollback撤回。`data-root/.publication-maintenance.json`为持久门禁，`.publication-maintenance-journal.json`为唯一事务登记（最多2048笔/16MiB）；维护器持有同一`service.lock`，登记目录身份、控制文件/历史SHA和阶段，不成为请求或业务结果权威。门禁或登记未知、缺失、损坏及未终结事务阻止正常启动与新准备。当前494 committed/2 rolled_back，无pending，服务空闲读取已通过；这不代表已清理的回滚原件可恢复。requests/runs不写入、不移动；repeat仍须核完整成功前缀，停止半轮原样保留。
 
 现行准入与保护：每轮准入至少2GiB可用，整批引用字节16GiB上限，必要输入/终态与关键失败图预留；普通采样有界降采样并报告。这些是局部准入限制，不是磁盘物理预分配、全工作区预算或已实施的历史退出策略；不保证外部程序抢占空间后仍能写入。低空间保留旧权威并停止新轮，历史不擅删。
 
